@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { TextInput } from "../common/TextInput";
-import { Icon } from "../common/Icon";
+import { Icon, TextInput } from "../base";
 import type {
   ConnectionModelsResult,
   ConnectionTestResult,

@@ -5,7 +5,7 @@ import { PlaythroughActionsMenu } from "../common/PlaythroughActionsMenu";
 import { CharacterLibrary } from "../library/CharacterLibrary";
 import { LorebookLibrary } from "../library/LorebookLibrary";
 import { PersonaLibrary } from "../library/PersonaLibrary";
-import { Icon } from "../common/Icon";
+import { Icon } from "../base";
 
 export type HomeTab = "playthroughs" | "characters" | "lorebooks" | "personas";
 

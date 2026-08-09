@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { Playthrough, Quest } from "../../../../schemas";
 import type { QuestAction } from "../../../api";
 import { MiniMap } from "../../common/MiniMap";
-import { Icon } from "../../common/Icon";
+import { Icon } from "../../base";
 
 export type ScenePanelProps = {
   playthrough: Playthrough;

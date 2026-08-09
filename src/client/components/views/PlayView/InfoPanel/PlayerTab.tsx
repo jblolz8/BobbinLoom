@@ -1,6 +1,6 @@
 import type { InventoryRef, Item, Playthrough } from "../../../../../schemas";
 import { ITEMS } from "../../../../../engine/demoData";
-import { Icon } from "../../../common/Icon";
+import { Icon } from "../../../base";
 
 function getItemDef(ref: InventoryRef, catalog: Item[] | undefined): { name: string; type: string; description?: string } {
   const def = catalog?.find((i) => i.id === ref.itemId) ?? ITEMS.find((i) => i.id === ref.itemId);

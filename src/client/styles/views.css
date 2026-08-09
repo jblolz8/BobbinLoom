@@ -1304,6 +1304,25 @@
   .mobile-hidden {
     display: none !important;
   }
+
+  .mobile-tab-bar {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: calc(58px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: rgba(21, 25, 35, 0.88);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.35);
+    z-index: 50;
+    gap: 6px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -1356,25 +1375,6 @@
 
   .top-actions .toggle {
     white-space: nowrap;
-  }
-
-  .mobile-tab-bar {
-    display: flex;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: calc(58px + env(safe-area-inset-bottom, 0px));
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-    background: rgba(21, 25, 35, 0.88);
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.35);
-    z-index: 50;
-    gap: 6px;
-    padding-left: 8px;
-    padding-right: 8px;
   }
 }
 

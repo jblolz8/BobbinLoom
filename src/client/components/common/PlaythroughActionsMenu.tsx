@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import type { Playthrough } from "../../../schemas";
 import { deletePlaythrough, duplicatePlaythrough } from "../../api";
 import { ConfirmModal } from "./ConfirmModal";
-import { Icon } from "./Icon";
+import { Icon } from "../base";
 
 export type PlaythroughActionsMenuProps = {
   playthroughId: string;

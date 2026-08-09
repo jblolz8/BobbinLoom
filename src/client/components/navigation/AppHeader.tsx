@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { HomeTab } from "../views/HomeView";
-import { Icon } from "../common/Icon";
+import { Icon } from "../base";
 
 export type AppHeaderProps = {
   view: "home" | "play" | "setup";

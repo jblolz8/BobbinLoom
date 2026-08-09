@@ -8,7 +8,7 @@ import {
   updatePersona,
   type Persona
 } from "../../api";
-import { Icon } from "../common/Icon";
+import { Icon } from "../base";
 
 export type PersonaLibraryProps = {
   isModal?: boolean;

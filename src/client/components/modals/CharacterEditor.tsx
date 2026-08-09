@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import type { CharacterInstance, ClothingItem, Playthrough } from "../../../schemas";
-import { TagInput } from "../common/TagInput";
+import { TagInput } from "../base";
 import { CHARACTER_SECTION_HEADERS, splitContentSections, joinContentSections, parseClothingFromContent } from "../../../engine/characterSections";
 
 export type CharacterEditorProps = {

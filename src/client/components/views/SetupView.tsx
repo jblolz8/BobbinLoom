@@ -1,6 +1,6 @@
 import type { CharacterTemplate, LorebookSummary } from "../../../schemas";
 import type { Persona } from "../../api";
-import { Icon } from "../common/Icon";
+import { Icon } from "../base";
 
 export type SetupFormState = {
   name: string;

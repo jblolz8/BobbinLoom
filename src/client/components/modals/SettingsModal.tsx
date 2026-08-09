@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { PlaythroughPromptSettings } from "../../api";
 import { PresetEditor } from "./PresetEditor";
 import { ProviderConnections } from "./ProviderConnections";
-import { Icon } from "../common/Icon";
+import { Icon } from "../base";
 
 type SettingsTab = "provider" | "prompts" | "chat";
 
