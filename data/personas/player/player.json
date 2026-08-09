@@ -1,0 +1,22 @@
+{
+  "id": "persona_default",
+  "name": "Player",
+  "description": "A newcomer to the region with no grand title and no agenda beyond seeing what the world holds. Curious, adaptable, and quick to lend a hand — or to ask the question nobody else will. How they act from here is up to the story.",
+  "bodyType": "average",
+  "appearance": "Practical traveler's clothes worn with an easy, unhurried posture. Alert eyes that notice details. A well-worn pack suggests miles already walked.",
+  "initialClothing": [
+    {
+      "slot": "Top",
+      "name": "Simple linen shirt"
+    },
+    {
+      "slot": "Bottom",
+      "name": "Durable travel trousers"
+    },
+    {
+      "slot": "Feet",
+      "name": "Sturdy walking boots"
+    }
+  ],
+  "isDefault": true
+}

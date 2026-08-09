@@ -1,0 +1,26 @@
+node_modules/
+dist/
+.env
+.DS_Store
+.vscode/
+*.log
+
+# Personal / runtime data — never commit
+data/*.json
+!data/prompt-presets.json
+!data/settings.json
+data/*.bak
+data/playthroughs/
+data/lorebooks/
+data/.providers-key
+
+# Seed defaults are committed; user-created entities stay ignored.
+data/characters/*
+!data/characters/mira/
+!data/characters/mira/**
+data/personas/*
+!data/personas/player/
+!data/personas/player/**
+
+# Agent workspace
+.hermes/
