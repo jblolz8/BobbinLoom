@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { HomeTab } from "../views/HomeView";
+import { Icon } from "../common/Icon";
 
 export type AppHeaderProps = {
   view: "home" | "play" | "setup";
@@ -33,12 +34,13 @@ export function AppHeader({
   return (
     <header className={`top-bar app-unified-header ${isMobile ? "is-mobile" : ""}`}>
       <div className="header-brand-group">
-        <h1 className="header-logo" onClick={onGoHome} style={{ cursor: "pointer" }}>
-          🧵 BobbinLoom
+        <h1 className="header-logo flex items-center gap-2" onClick={onGoHome} style={{ cursor: "pointer" }}>
+          <span>🧵</span>
+          <span>BobbinLoom</span>
         </h1>
         {view === "play" && activePlaythroughName ? (
-          <div className="active-playthrough-badge" title={`Active playthrough: ${activePlaythroughName}`}>
-            <span className="badge-icon">📖</span>
+          <div className="active-playthrough-badge flex items-center gap-1.5" title={`Active playthrough: ${activePlaythroughName}`}>
+            <span className="badge-icon"><Icon name="BookOpen" size={15} /></span>
             <span className="badge-name">{activePlaythroughName}</span>
           </div>
         ) : null}
@@ -57,7 +59,7 @@ export function AppHeader({
               }
             }}
           >
-            <span className="tab-icon">🎮</span>
+            <span className="tab-icon"><Icon name="Gamepad2" size={18} /></span>
             <span className="tab-label">Playthroughs</span>
           </button>
 
@@ -72,7 +74,7 @@ export function AppHeader({
               }
             }}
           >
-            <span className="tab-icon">👥</span>
+            <span className="tab-icon"><Icon name="Users" size={18} /></span>
             <span className="tab-label">Characters</span>
           </button>
 
@@ -87,7 +89,7 @@ export function AppHeader({
               }
             }}
           >
-            <span className="tab-icon">📚</span>
+            <span className="tab-icon"><Icon name="BookMarked" size={18} /></span>
             <span className="tab-label">Lorebooks</span>
           </button>
 
@@ -102,7 +104,7 @@ export function AppHeader({
               }
             }}
           >
-            <span className="tab-icon">👤</span>
+            <span className="tab-icon"><Icon name="User" size={18} /></span>
             <span className="tab-label">Personas</span>
           </button>
         </nav>
@@ -111,21 +113,21 @@ export function AppHeader({
       <div className="top-actions">
         {view === "play" || view === "setup" ? (
           <button onClick={onGoHome} title="Return to Home">
-            <span className="btn-label">← Home</span>
-            <span className="btn-icon" aria-hidden="true">🏠</span>
+            <span className="btn-label flex items-center gap-1.5"><Icon name="Home" size={15} /> Home</span>
+            <span className="btn-icon" aria-hidden="true"><Icon name="Home" size={16} /></span>
           </button>
         ) : null}
 
         {view !== "setup" ? (
           <button className="primary-btn new-playthrough-btn" onClick={onNewPlaythrough}>
-            <span className="btn-label">+ New Playthrough</span>
-            <span className="btn-icon" aria-hidden="true">✚</span>
+            <span className="btn-label flex items-center gap-1.5"><Icon name="Plus" size={15} /> New Playthrough</span>
+            <span className="btn-icon" aria-hidden="true"><Icon name="Plus" size={16} /></span>
           </button>
         ) : null}
 
         <button className="settings-btn" onClick={onOpenSettings} title="Settings">
-          <span className="btn-label">Settings</span>
-          <span className="btn-icon" aria-hidden="true">⚙</span>
+          <span className="btn-label flex items-center gap-1.5"><Icon name="Settings" size={15} /> Settings</span>
+          <span className="btn-icon" aria-hidden="true"><Icon name="Settings" size={16} /></span>
         </button>
 
         {view === "play" && isMobile ? (
@@ -136,15 +138,15 @@ export function AppHeader({
             aria-label="Toggle navigation bar"
             aria-expanded={showPlayNavTabs}
           >
-            <span className="btn-label">Nav</span>
-            <span className="btn-icon" aria-hidden="true">⋮</span>
+            <span className="btn-label flex items-center gap-1.5"><Icon name="MoreVertical" size={15} /> Nav</span>
+            <span className="btn-icon" aria-hidden="true"><Icon name="MoreVertical" size={16} /></span>
           </button>
         ) : null}
       </div>
 
       {view === "play" && activePlaythroughName ? (
-        <div className="playthrough-title-banner" title={`Active playthrough: ${activePlaythroughName}`}>
-          <span className="banner-icon">📖</span>
+        <div className="playthrough-title-banner flex items-center gap-1.5" title={`Active playthrough: ${activePlaythroughName}`}>
+          <span className="banner-icon"><Icon name="BookOpen" size={15} /></span>
           <span className="banner-text">{activePlaythroughName}</span>
         </div>
       ) : null}

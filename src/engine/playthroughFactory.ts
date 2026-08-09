@@ -246,7 +246,16 @@ export function createPlaythroughFromSeed(
     itemCatalog: items,
     promptSettings: { presetId, presetName, modules },
     memoryEvents: [],
-    messages: [],
+    messages: seed.openingText?.trim()
+      ? [
+          {
+            id: newId("msg"),
+            role: "assistant",
+            content: seed.openingText.trim(),
+            createdAt,
+          },
+        ]
+      : [],
     snapshots: {},
     lorebookIds: [],
     chapters: [],

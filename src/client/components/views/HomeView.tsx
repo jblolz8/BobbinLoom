@@ -5,6 +5,7 @@ import { PlaythroughActionsMenu } from "../common/PlaythroughActionsMenu";
 import { CharacterLibrary } from "../library/CharacterLibrary";
 import { LorebookLibrary } from "../library/LorebookLibrary";
 import { PersonaLibrary } from "../library/PersonaLibrary";
+import { Icon } from "../common/Icon";
 
 export type HomeTab = "playthroughs" | "characters" | "lorebooks" | "personas";
 
@@ -129,7 +130,7 @@ export function HomeView({
                   onClick={() => setFailuresDismissed(true)}
                   aria-label="Dismiss load warnings"
                 >
-                  ×
+                  <Icon name="X" size={16} />
                 </button>
               </div>
               <details className="load-failure-details">
@@ -155,8 +156,8 @@ export function HomeView({
           ) : playthroughs.length === 0 ? (
             <div className="home-empty">
               <p>No playthroughs yet. Create one to get started.</p>
-              <button className="primary-btn" onClick={onNewPlaythrough}>
-                + New Playthrough
+              <button className="primary-btn flex items-center gap-1.5 justify-center mx-auto" onClick={onNewPlaythrough}>
+                <Icon name="Plus" size={16} /> New Playthrough
               </button>
             </div>
           ) : (
@@ -186,7 +187,7 @@ export function HomeView({
                             autoFocus
                           />
                           <span
-                            className="rename-actions"
+                            className="rename-actions flex items-center gap-1"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <span
@@ -202,7 +203,7 @@ export function HomeView({
                                 }
                               }}
                             >
-                              ✓
+                              <Icon name="Check" size={14} />
                             </span>
                             <span
                               role="button"
@@ -217,7 +218,7 @@ export function HomeView({
                                 }
                               }}
                             >
-                              ✕
+                              <Icon name="X" size={14} />
                             </span>
                           </span>
                         </>
@@ -236,10 +237,10 @@ export function HomeView({
                       )}
                     </div>
                     <div className="playthrough-card-meta">
-                      <span>📍 {locationName}</span>
+                      <span className="inline-flex items-center gap-1"><Icon name="MapPin" size={14} className="text-slate-400" /> {locationName}</span>
                       <span>Turn {p.turn}</span>
-                      <span>
-                        👤 {p.characters.length}{" "}
+                      <span className="inline-flex items-center gap-1">
+                        <Icon name="User" size={14} className="text-slate-400" /> {p.characters.length}{" "}
                         {p.characters.length === 1 ? "character" : "characters"}
                       </span>
                     </div>

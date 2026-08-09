@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import type { Playthrough } from "../../../schemas";
 import { deletePlaythrough, duplicatePlaythrough } from "../../api";
 import { ConfirmModal } from "./ConfirmModal";
+import { Icon } from "./Icon";
 
 export type PlaythroughActionsMenuProps = {
   playthroughId: string;
@@ -83,13 +84,13 @@ export function PlaythroughActionsMenu(props: PlaythroughActionsMenuProps) {
         aria-haspopup="true"
         aria-expanded={open}
       >
-        ⋮
+        <Icon name="MoreVertical" size={16} />
       </span>
       {open ? (
         <div className="playthrough-actions-dropdown" role="menu" onClick={(e) => e.stopPropagation()}>
-          <button role="menuitem" onClick={handleRename}>✎ Rename</button>
-          <button role="menuitem" onClick={handleDuplicate}>⧉ Duplicate</button>
-          <button role="menuitem" className="danger" onClick={handleDeleteClick}>✕ Delete</button>
+          <button role="menuitem" className="flex items-center gap-1.5" onClick={handleRename}><Icon name="Pencil" size={14} /> Rename</button>
+          <button role="menuitem" className="flex items-center gap-1.5" onClick={handleDuplicate}><Icon name="Copy" size={14} /> Duplicate</button>
+          <button role="menuitem" className="danger flex items-center gap-1.5" onClick={handleDeleteClick}><Icon name="Trash2" size={14} /> Delete</button>
         </div>
       ) : null}
       {deleteConfirm

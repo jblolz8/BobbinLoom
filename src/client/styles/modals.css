@@ -21,6 +21,10 @@
   padding: 1rem;
 }
 
+.modal.setup-modal {
+  width: min(780px, 100%);
+}
+
 .modal-header {
   display: flex;
   justify-content: space-between;

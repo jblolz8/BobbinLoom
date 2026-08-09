@@ -59,7 +59,7 @@ export default function App() {
   }) {
     setSetupForm({ ...defaultSetupForm, ...initial?.form });
     setGenError(null);
-    setView("setup");
+    modalHook.openSetup();
     if (initial?.personaId) setSelectedPersonaId(initial.personaId);
     void loadPersonasForPicker();
     void loadCastLibrary(initial?.castIds);
@@ -132,6 +132,7 @@ export default function App() {
       playthroughHook.setTokenUsage(response.tokenUsage ?? null);
       playthroughHook.setRawInput(response.rawInput ?? null);
       playthroughHook.setRawOutput(response.rawOutput ?? null);
+      modalHook.closeModal();
       setView("play");
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
@@ -160,6 +161,7 @@ export default function App() {
         setupForm.setting || undefined
       );
       playthroughHook.resetTurnState(created);
+      modalHook.closeModal();
       setView("play");
     } catch (e) {
       playthroughHook.setError(e instanceof Error ? e.message : String(e));
@@ -233,67 +235,17 @@ export default function App() {
         isMobile={responsiveHook.isMobile}
       />
 
-      {currentView === "setup" ? (
-        <SetupView
-          personas={personas}
-          selectedPersonaId={selectedPersonaId}
-          onSelectPersona={setSelectedPersonaId}
-          castLibrary={castLibrary}
-          selectedCastIds={selectedCastIds}
-          onToggleCastId={toggleCastId}
-          lorebookLibrary={lorebookLibrary}
-          selectedLorebookIds={selectedLorebookIds}
-          onToggleLorebookId={toggleLorebookId}
-          setupForm={setupForm}
-          onSetupFormChange={setSetupForm}
-          generating={generating}
-          genError={genError}
-          onGenerate={() => { void handleGenerate(); }}
-          onCancelGenerate={handleCancelGenerate}
-          onStartBlank={() => { void handleStartBlank(); }}
-          onBack={() => setView("home")}
-          onOpenPersonaManager={modalHook.openPersona}
-          onOpenLorebookManager={modalHook.openLorebook}
+      {currentView === "home" ? (
+        <HomeView
+          activeTab={homeTab}
+          onOpenPlaythrough={(p) => {
+            playthroughHook.resetTurnState(p);
+            setView("play");
+          }}
+          onNewPlaythrough={openSetup}
+          onOpenSettings={modalHook.openSettings}
+          onPersonasChanged={handlePersonasChanged}
         />
-      ) : currentView === "home" ? (
-        <>
-          <HomeView
-            activeTab={homeTab}
-            onOpenPlaythrough={(p) => {
-              playthroughHook.resetTurnState(p);
-              setView("play");
-            }}
-            onNewPlaythrough={openSetup}
-            onOpenSettings={modalHook.openSettings}
-            onPersonasChanged={handlePersonasChanged}
-          />
-          <SettingsModal
-            open={modalHook.settingsOpen}
-            onClose={modalHook.closeModal}
-            playthroughId={null}
-            playthroughPromptSettings={null}
-            onPlaythroughPromptSettings={handlePlaythroughPromptSettings}
-            choicesEnabled={playthroughHook.choicesEnabled}
-            setChoicesEnabled={playthroughHook.setChoicesEnabled}
-            showDebug={playthroughHook.showDebug}
-            setShowDebug={playthroughHook.setShowDebug}
-            showContextUsage={playthroughHook.showContextUsage}
-            setShowContextUsage={playthroughHook.setShowContextUsage}
-          />
-          <PersonaManager
-            open={modalHook.personaManagerOpen}
-            onClose={modalHook.closeModal}
-            onPersonasChanged={handlePersonasChanged}
-          />
-          <CharacterManager
-            open={modalHook.characterManagerOpen}
-            onClose={modalHook.closeModal}
-          />
-          <LorebookManager
-            open={modalHook.lorebookManagerOpen}
-            onClose={modalHook.closeModal}
-          />
-        </>
       ) : (
         <PlayView
           playthrough={playthroughHook.playthrough!}
@@ -360,6 +312,56 @@ export default function App() {
           setSaveLoadOpen={setSaveLoadOpen}
         />
       )}
+
+      <SetupView
+        open={modalHook.setupOpen}
+        onClose={modalHook.closeModal}
+        personas={personas}
+        selectedPersonaId={selectedPersonaId}
+        onSelectPersona={setSelectedPersonaId}
+        castLibrary={castLibrary}
+        selectedCastIds={selectedCastIds}
+        onToggleCastId={toggleCastId}
+        lorebookLibrary={lorebookLibrary}
+        selectedLorebookIds={selectedLorebookIds}
+        onToggleLorebookId={toggleLorebookId}
+        setupForm={setupForm}
+        onSetupFormChange={setSetupForm}
+        generating={generating}
+        genError={genError}
+        onGenerate={() => { void handleGenerate(); }}
+        onCancelGenerate={handleCancelGenerate}
+        onStartBlank={() => { void handleStartBlank(); }}
+        onBack={modalHook.closeModal}
+        onOpenPersonaManager={modalHook.openPersona}
+        onOpenLorebookManager={modalHook.openLorebook}
+      />
+      <SettingsModal
+        open={modalHook.settingsOpen}
+        onClose={modalHook.closeModal}
+        playthroughId={null}
+        playthroughPromptSettings={null}
+        onPlaythroughPromptSettings={handlePlaythroughPromptSettings}
+        choicesEnabled={playthroughHook.choicesEnabled}
+        setChoicesEnabled={playthroughHook.setChoicesEnabled}
+        showDebug={playthroughHook.showDebug}
+        setShowDebug={playthroughHook.setShowDebug}
+        showContextUsage={playthroughHook.showContextUsage}
+        setShowContextUsage={playthroughHook.setShowContextUsage}
+      />
+      <PersonaManager
+        open={modalHook.personaManagerOpen}
+        onClose={modalHook.closeModal}
+        onPersonasChanged={handlePersonasChanged}
+      />
+      <CharacterManager
+        open={modalHook.characterManagerOpen}
+        onClose={modalHook.closeModal}
+      />
+      <LorebookManager
+        open={modalHook.lorebookManagerOpen}
+        onClose={modalHook.closeModal}
+      />
     </div>
   );
 }

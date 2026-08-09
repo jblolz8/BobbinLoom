@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { TextInput } from "../common/TextInput";
+import { Icon } from "../common/Icon";
 import type {
   ConnectionModelsResult,
   ConnectionTestResult,
@@ -253,7 +254,7 @@ export function ProviderConnections() {
                           title={isActive ? "Active connection" : "Activate connection"}
                         >
                           <span className="btn-label">{isActive ? "Active" : "Activate"}</span>
-                          <span className="btn-icon">{isActive ? "✓" : "⚡"}</span>
+                          <span className="btn-icon">{isActive ? <Icon name="Check" size={14} /> : <Icon name="Zap" size={14} />}</span>
                         </button>
                         <button
                           type="button"
@@ -261,7 +262,7 @@ export function ProviderConnections() {
                           title="Edit connection"
                         >
                           <span className="btn-label">Edit</span>
-                          <span className="btn-icon">✏</span>
+                          <span className="btn-icon"><Icon name="Pencil" size={14} /></span>
                         </button>
                         <button
                           type="button"
@@ -269,7 +270,7 @@ export function ProviderConnections() {
                           title="Duplicate connection"
                         >
                           <span className="btn-label">Duplicate</span>
-                          <span className="btn-icon">📋</span>
+                          <span className="btn-icon"><Icon name="Copy" size={14} /></span>
                         </button>
                         <button
                           type="button"
@@ -278,19 +279,21 @@ export function ProviderConnections() {
                           title="Delete connection"
                         >
                           <span className="btn-label">Delete</span>
-                          <span className="btn-icon">🗑</span>
+                          <span className="btn-icon"><Icon name="Trash2" size={14} /></span>
                         </button>
                       </div>
                     </div>
                     <div className="conn-tags">
                       <span className="conn-tag" title={`Base URL: ${c.baseUrl}`}>
-                        <span className="tag-icon">🌐</span> {c.baseUrl}
+                        <span className="tag-icon"><Icon name="Globe" size={13} className="text-slate-400" /></span> {c.baseUrl}
                       </span>
                       <span className="conn-tag" title={`Model: ${c.model}`}>
-                        <span className="tag-icon">⚡</span> {c.model}
+                        <span className="tag-icon"><Icon name="Zap" size={13} className="text-amber-400" /></span> {c.model}
                       </span>
                       <span className={`conn-tag ${c.hasApiKey ? "has-key" : "no-key"}`}>
-                        <span className="tag-icon">{c.hasApiKey ? "🔑" : "🔓"}</span>{" "}
+                        <span className="tag-icon">
+                          {c.hasApiKey ? <Icon name="KeyRound" size={13} className="text-lime-400" /> : <Icon name="LockKeyholeOpen" size={13} className="text-slate-500" />}
+                        </span>{" "}
                         {c.hasApiKey ? c.apiKeyMasked : "No key"}
                       </span>
                     </div>
@@ -299,7 +302,9 @@ export function ProviderConnections() {
               );
             })}
           </div>
-          <button className="conn-add" onClick={openCreate}>+ Add connection</button>
+          <button className="conn-add flex items-center justify-center gap-1.5" onClick={openCreate}>
+            <Icon name="Plus" size={16} /> Add connection
+          </button>
         </>
       )}
 
@@ -425,12 +430,20 @@ export function ProviderConnections() {
           {test && <p className={`conn-status ${test.kind}`}>{test.text}</p>}
           <div className="settings-actions conn-actions-bar">
             <div className="actions-left">
-              <button type="submit" className="primary-btn" disabled={busy}>{busy ? "Saving…" : "Save"}</button>
-              <button type="button" className="btn-secondary" onClick={(e) => void testCurrent(e)} disabled={busy}>Test connection</button>
-              <button type="button" className="btn-ghost" onClick={closeEditor}>Cancel</button>
+              <button type="submit" className="primary-btn flex items-center gap-1.5" disabled={busy}>
+                <Icon name="Save" size={14} /> {busy ? "Saving…" : "Save"}
+              </button>
+              <button type="button" className="btn-secondary flex items-center gap-1.5" onClick={(e) => void testCurrent(e)} disabled={busy}>
+                <Icon name="Activity" size={14} /> Test connection
+              </button>
+              <button type="button" className="btn-ghost flex items-center gap-1.5" onClick={closeEditor}>
+                <Icon name="X" size={14} /> Cancel
+              </button>
             </div>
             {editor.mode === "edit" && (
-              <button type="button" className="danger" onClick={() => { if (editor.mode === "edit") void confirmRemove(editor.connection); }}>Delete</button>
+              <button type="button" className="danger flex items-center gap-1.5" onClick={() => { if (editor.mode === "edit") void confirmRemove(editor.connection); }}>
+                <Icon name="Trash2" size={14} /> Delete
+              </button>
             )}
           </div>
         </form>

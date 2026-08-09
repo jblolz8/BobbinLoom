@@ -13,6 +13,11 @@ body {
   margin: 0;
 }
 
+svg {
+  display: inline-block;
+  vertical-align: middle;
+}
+
 button,
 textarea,
 input,

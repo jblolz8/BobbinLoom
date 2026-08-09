@@ -591,11 +591,12 @@ export const ScenarioSeedSchema = z.object({
   character: ScenarioSeedCharacterSchema,
   quest: ScenarioSeedQuestSchema,
   items: z.array(ScenarioSeedItemSchema),
-  startingFlags: z.array(z.string()),
+  startingFlags: z.array(z.string()).default([]),
   npcs: z.array(z.object({
     name: z.string(),
     description: z.string(),
     disposition: z.string().optional()
-  })).default([])
+  })).default([]),
+  openingText: z.string().optional()
 });
 export type ScenarioSeed = z.infer<typeof ScenarioSeedSchema>;

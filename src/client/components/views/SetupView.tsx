@@ -1,5 +1,6 @@
 import type { CharacterTemplate, LorebookSummary } from "../../../schemas";
 import type { Persona } from "../../api";
+import { Icon } from "../common/Icon";
 
 export type SetupFormState = {
   name: string;
@@ -12,6 +13,8 @@ export const defaultSetupForm: SetupFormState = {
 };
 
 export type SetupViewProps = {
+  open: boolean;
+  onClose: () => void;
   personas: Persona[];
   selectedPersonaId: string;
   onSelectPersona: (id: string) => void;
@@ -35,6 +38,7 @@ export type SetupViewProps = {
 
 export function SetupView(props: SetupViewProps) {
   const {
+    open, onClose,
     personas, selectedPersonaId, onSelectPersona,
     castLibrary, selectedCastIds, onToggleCastId,
     lorebookLibrary, selectedLorebookIds, onToggleLorebookId,
@@ -42,11 +46,20 @@ export function SetupView(props: SetupViewProps) {
     generating, genError, onGenerate, onCancelGenerate, onStartBlank, onOpenPersonaManager, onOpenLorebookManager
   } = props;
 
+  if (!open) return null;
+
   return (
-    <main className="app-shell setup-view-shell">
-      <section className="setup-page">
-        <h2>Create New Playthrough</h2>
-        <p className="setup-subtitle">Describe your world and let the AI generate a starting scenario, or start with a blank slate.</p>
+    <div className="modal-backdrop">
+      <section className="modal setup-modal">
+        <header className="modal-header">
+          <div>
+            <h2>Create New Playthrough</h2>
+            <p className="setup-subtitle">Describe your world and let the AI generate a starting scenario, or start with a blank slate.</p>
+          </div>
+          <button className="flex items-center gap-1" onClick={onClose} disabled={generating}>
+            <Icon name="X" size={16} /> Close
+          </button>
+        </header>
 
         <div className="persona-picker-section">
           <h3>Choose a Persona</h3>
@@ -64,7 +77,9 @@ export function SetupView(props: SetupViewProps) {
               ))}
             </div>
           )}
-          <button className="inline-action" onClick={onOpenPersonaManager}>Manage Personas →</button>
+          <button className="inline-action flex items-center gap-1" onClick={onOpenPersonaManager}>
+            Manage Personas <Icon name="ArrowRight" size={14} />
+          </button>
         </div>
 
         <div className="cast-picker-section">
@@ -101,7 +116,9 @@ export function SetupView(props: SetupViewProps) {
               ))}
             </div>
           )}
-          <button className="inline-action" onClick={onOpenLorebookManager}>Manage Lorebooks →</button>
+          <button className="inline-action flex items-center gap-1" onClick={onOpenLorebookManager}>
+            Manage Lorebooks <Icon name="ArrowRight" size={14} />
+          </button>
         </div>
 
         <div className="settings-form setup-form">
@@ -119,7 +136,7 @@ export function SetupView(props: SetupViewProps) {
                 e.target.style.height = "auto";
                 e.target.style.height = e.target.scrollHeight + "px";
               }}
-              rows={6}
+              rows={4}
               placeholder="Describe the world and starting situation. Include genre, tone, location, factions, or anything that sets the stage. The AI uses this to generate your scenario."
               className="auto-grow-textarea"
             />
@@ -130,26 +147,34 @@ export function SetupView(props: SetupViewProps) {
           </label>
         </div>
 
-        <div className="setup-actions">
-          <button className="primary-btn" onClick={onGenerate} disabled={generating}>
-            {generating ? "Generating…" : "Generate Scenario"}
+        <div className="setup-actions flex items-center gap-2 mt-4">
+          <button className="primary-btn flex items-center gap-1.5" onClick={onGenerate} disabled={generating}>
+            <Icon name="Wand2" size={16} /> {generating ? "Generating…" : "Generate Scenario"}
           </button>
           {generating ? (
-            <button className="danger" onClick={onCancelGenerate}>Cancel</button>
+            <button className="danger flex items-center gap-1.5" onClick={onCancelGenerate}>
+              <Icon name="X" size={16} /> Cancel
+            </button>
           ) : null}
-          <button onClick={onStartBlank} disabled={generating}>
-            Start Blank
+          <button className="btn-secondary flex items-center gap-1.5" onClick={onStartBlank} disabled={generating}>
+            <Icon name="FilePlus" size={16} /> Start Blank
           </button>
         </div>
 
         {genError ? (
           <div className="error-box setup-error">
             <p>{genError}</p>
-            <button onClick={onGenerate} disabled={generating}>Retry</button>
-            <button onClick={onStartBlank}>Use Start Blank Instead</button>
+            <div className="flex items-center gap-2 mt-2">
+              <button className="flex items-center gap-1" onClick={onGenerate} disabled={generating}>
+                <Icon name="RotateCcw" size={14} /> Retry
+              </button>
+              <button className="flex items-center gap-1" onClick={onStartBlank}>
+                <Icon name="FilePlus" size={14} /> Use Start Blank Instead
+              </button>
+            </div>
           </div>
         ) : null}
       </section>
-    </main>
+    </div>
   );
 }

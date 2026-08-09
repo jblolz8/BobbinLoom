@@ -4,7 +4,7 @@ import { DEMO_TEMPLATE } from "../src/engine/demoData";
 import { OpenAICompatibleProvider, assembleTurnPrompt, extractJsonPayload, repairRawControlChars } from "../src/server/openAiCompatibleProvider";
 import { normalizeBaseUrl, resolveConnectionConfig } from "../src/server/providerConfig";
 import type { ResolvedProviderConfig } from "../src/server/providerConfig";
-import { EMPTY_MODULE_SET, PlaythroughPromptSettingsSchema } from "../src/schemas";
+import { EMPTY_MODULE_SET, PlaythroughPromptSettingsSchema, ScenarioSeedSchema } from "../src/schemas";
 import type { ProviderConnection } from "../src/schemas";
 import type { CharacterTemplate } from "../src/schemas";
 import type { PromptPresetModule } from "../src/schemas";
@@ -52,6 +52,23 @@ const VALID_SEED = {
   startingFlags: [],
   npcs: []
 };
+
+describe("ScenarioSeedSchema", () => {
+  it("parses seed missing startingFlags by defaulting startingFlags to []", () => {
+    const seedWithoutFlags = {
+      locations: VALID_SEED.locations,
+      character: VALID_SEED.character,
+      quest: VALID_SEED.quest,
+      items: [],
+    };
+    const parsed = ScenarioSeedSchema.safeParse(seedWithoutFlags);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.startingFlags).toEqual([]);
+      expect(parsed.data.npcs).toEqual([]);
+    }
+  });
+});
 
 describe("provider config", () => {
   it("normalizes OpenAI-compatible base URLs", () => {

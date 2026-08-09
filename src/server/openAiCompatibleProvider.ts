@@ -145,6 +145,7 @@ export class OpenAICompatibleProvider {
       '  "items": [',
       '    { "id": "item_id", "name": "Item Name", "type": "weapon", "description": "What it does.", "quantity": 1 }',
       "  ],",
+      '  "startingFlags": [],',
       '  "npcs": [',
       '    { "name": "Borg", "description": "Gruff blacksmith at the forge.", "disposition": "gruff" }',
       "  ],",
@@ -200,7 +201,7 @@ export class OpenAICompatibleProvider {
       if (parsed.success) return parsed.data;
 
       if (parsed.error) {
-        throw new Error(`Generated scenario failed validation: ${parsed.error.issues.map((i) => i.message).join("; ")}`);
+        throw new Error(`Generated scenario failed validation: ${parsed.error.issues.map((i) => `${i.path.join(".") || "root"}: ${i.message}`).join("; ")}`);
       }
     }
 

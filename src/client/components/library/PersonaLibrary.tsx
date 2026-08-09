@@ -8,6 +8,7 @@ import {
   updatePersona,
   type Persona
 } from "../../api";
+import { Icon } from "../common/Icon";
 
 export type PersonaLibraryProps = {
   isModal?: boolean;
@@ -152,8 +153,8 @@ export function PersonaLibrary({ isModal, onPersonasChanged }: PersonaLibraryPro
   return (
     <div className={`persona-library-container ${isModal ? "is-modal" : "is-workspace"}`}>
       {isModal ? (
-        <div className="global-scope-badge" title="Personas represent player identity templates">
-          👤 User Personas
+        <div className="global-scope-badge flex items-center gap-1.5" title="Personas represent player identity templates">
+          <Icon name="User" size={16} /> User Personas
         </div>
       ) : null}
 
@@ -162,7 +163,7 @@ export function PersonaLibrary({ isModal, onPersonasChanged }: PersonaLibraryPro
           {personas.map((p) => (
             <div key={p.id} className={`persona-row ${p.isDefault ? "default" : ""}`}>
               <div className="persona-row-info">
-                <strong>{p.name}</strong> {p.isDefault ? <span className="default-star" title="Default persona">★</span> : null}
+                <strong>{p.name}</strong> {p.isDefault ? <span className="default-star" title="Default persona"><Icon name="Star" size={14} className="text-amber-400 fill-amber-400" /></span> : null}
                 <span className="persona-row-desc">{p.description || <em>No description</em>}</span>
                 <span className="persona-row-meta">
                   {p.bodyType}{p.initialClothing.length > 0 ? ` · ${p.initialClothing.length} clothing item${p.initialClothing.length === 1 ? "" : "s"}` : " · no clothing"}
@@ -175,12 +176,16 @@ export function PersonaLibrary({ isModal, onPersonasChanged }: PersonaLibraryPro
               </div>
             </div>
           ))}
-          <button className="primary-btn add-module-btn" onClick={startCreatePersona} disabled={personaSaving}>+ Create New Persona</button>
+          <button className="primary-btn add-module-btn flex items-center gap-1.5 justify-center" onClick={startCreatePersona} disabled={personaSaving}>
+            <Icon name="Plus" size={16} /> Create New Persona
+          </button>
         </div>
       ) : (
         <div className="persona-editor">
           <div className="persona-editor-header">
-            <button className="inline-action" onClick={closePersonaEditor} disabled={personaSaving}>← Back to list</button>
+            <button className="inline-action flex items-center gap-1" onClick={closePersonaEditor} disabled={personaSaving}>
+              <Icon name="ArrowLeft" size={16} /> Back to list
+            </button>
             <h3>{editingPersonaId ? `Edit: ${personaForm.name || "Persona"}` : "New Persona"}</h3>
           </div>
           <div className="settings-form">
@@ -194,7 +199,7 @@ export function PersonaLibrary({ isModal, onPersonasChanged }: PersonaLibraryPro
             {personaForm.initialClothing.map((c) => (
               <div key={c.slot} className="clothing-row">
                 <span>{c.slot}: {c.name}{c.state ? ` (${c.state})` : ""}</span>
-                <button className="icon-btn danger-icon" onClick={() => removeClothingItem(c.slot)}>✕</button>
+                <button className="icon-btn danger-icon" onClick={() => removeClothingItem(c.slot)}><Icon name="X" size={14} /></button>
               </div>
             ))}
             <div className="clothing-add">

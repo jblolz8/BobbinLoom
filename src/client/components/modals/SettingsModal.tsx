@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { PlaythroughPromptSettings } from "../../api";
 import { PresetEditor } from "./PresetEditor";
 import { ProviderConnections } from "./ProviderConnections";
+import { Icon } from "../common/Icon";
 
 type SettingsTab = "provider" | "prompts" | "chat";
 
@@ -44,7 +45,7 @@ export function SettingsModal(props: SettingsModalProps) {
           <div>
             <h2>Settings</h2>
           </div>
-          <button onClick={onClose}>Close</button>
+          <button className="flex items-center gap-1" onClick={onClose}><Icon name="X" size={16} /> Close</button>
         </header>
         <div className="settings-tabs">
           <button className={`tab ${settingsTab === "provider" ? "active" : ""}`} onClick={() => setSettingsTab("provider")}>
@@ -73,7 +74,9 @@ export function SettingsModal(props: SettingsModalProps) {
 
             <label className="chat-setting-card">
               <div className="chat-setting-main">
-                <div className="chat-setting-icon" aria-hidden="true">💬</div>
+                <div className="chat-setting-icon" aria-hidden="true">
+                  <Icon name="MessageSquare" size={20} className="text-blue-400" />
+                </div>
                 <div className="chat-setting-info">
                   <span className="chat-setting-title">Show Choices</span>
                   <span className="chat-setting-desc">Display suggested action choice buttons below turn responses</span>
@@ -91,7 +94,9 @@ export function SettingsModal(props: SettingsModalProps) {
 
             <label className="chat-setting-card">
               <div className="chat-setting-main">
-                <div className="chat-setting-icon" aria-hidden="true">📊</div>
+                <div className="chat-setting-icon" aria-hidden="true">
+                  <Icon name="BarChart2" size={20} className="text-emerald-400" />
+                </div>
                 <div className="chat-setting-info">
                   <span className="chat-setting-title">Show Context Usage</span>
                   <span className="chat-setting-desc">Display the Context Meter token and memory usage indicator</span>
@@ -109,7 +114,9 @@ export function SettingsModal(props: SettingsModalProps) {
 
             <label className="chat-setting-card">
               <div className="chat-setting-main">
-                <div className="chat-setting-icon" aria-hidden="true">🛠️</div>
+                <div className="chat-setting-icon" aria-hidden="true">
+                  <Icon name="Wrench" size={20} className="text-amber-400" />
+                </div>
                 <div className="chat-setting-info">
                   <span className="chat-setting-title">Show Debug Accordion</span>
                   <span className="chat-setting-desc">Display the expandable raw prompt, response, and patch inspector</span>

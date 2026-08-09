@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Playthrough, Quest } from "../../../../schemas";
 import type { QuestAction } from "../../../api";
 import { MiniMap } from "../../common/MiniMap";
+import { Icon } from "../../common/Icon";
 
 export type ScenePanelProps = {
   playthrough: Playthrough;
@@ -54,56 +55,123 @@ export function ScenePanel({ playthrough, actionLoading, onQuestAction, classNam
         locations={playthrough.locationCatalog ?? []}
         currentLocationId={playthrough.locationId}
       />
-      <h2>Scene</h2>
-      <p><strong>Location:</strong> {currentLocation ? currentLocation.name : playthrough.locationId}</p>
-      <p><strong>Turn:</strong> {playthrough.turn}</p>
 
-      <h3>Flags</h3>
-      {playthrough.flags.length ? <ul>{playthrough.flags.map((f) => <li key={f}>{f}</li>)}</ul> : <p>No flags yet.</p>}
-
-      <h3>Quests</h3>
-      {quests.length === 0 ? (
-        <p>No quests yet — they'll appear as the story develops.</p>
-      ) : (
-        quests.map((quest) => (
-          <div key={quest.id} className="quest-row">
-            <input
-              type="checkbox"
-              checked={quest.tracking}
-              onChange={() => handleToggle(quest.id)}
-              disabled={actionLoading}
-              title={quest.tracking ? "Untrack quest" : "Track quest"}
-            />
-            <div className="quest-info">
-              <span className="quest-name">{quest.name}</span>
-              <span className="quest-status">{quest.status}</span>
-              <span className="quest-summary">{quest.summary}</span>
+      <div className="scene-panel-content">
+        <article className="card scene-overview-card">
+          <div className="scene-card-header">
+            <div className="scene-avatar-badge">
+              <Icon name="Compass" size={18} />
             </div>
-            <button
-              className="quest-icon-btn"
-              disabled={actionLoading}
-              onClick={() => setEditing({ questId: quest.id, name: quest.name, summary: quest.summary })}
-              title="Edit quest"
-            >
-              ✏
-            </button>
-            <button
-              className="quest-icon-btn quest-delete-btn"
-              disabled={actionLoading}
-              onClick={() => setDeleting({ questId: quest.id, name: quest.name })}
-              title="Abandon quest"
-            >
-              ✕
-            </button>
+            <div>
+              <h3 className="scene-title">Scene Overview</h3>
+              <p className="scene-subtitle-text">Current environment status</p>
+            </div>
           </div>
-        ))
-      )}
+
+          <div className="scene-meta-grid">
+            <div className="scene-meta-item">
+              <span className="meta-label"><Icon name="MapPin" size={13} /> Location</span>
+              <span className="meta-val flex items-center gap-1">
+                {currentLocation?.icon ? <span className="location-icon">{currentLocation.icon}</span> : null}
+                <strong>{currentLocation ? currentLocation.name : playthrough.locationId}</strong>
+              </span>
+            </div>
+
+            <div className="scene-meta-item">
+              <span className="meta-label"><Icon name="Clock" size={13} /> Turn</span>
+              <span className="meta-val turn-badge">#{playthrough.turn}</span>
+            </div>
+          </div>
+        </article>
+
+        <section className="scene-section">
+          <h3 className="section-subtitle flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <Icon name="Flag" size={15} /> World Flags
+            </span>
+            <span className="badge-count">{playthrough.flags.length}</span>
+          </h3>
+          {playthrough.flags.length > 0 ? (
+            <div className="flags-grid">
+              {playthrough.flags.map((f) => (
+                <div key={f} className="flag-chip">
+                  <Icon name="Flag" size={13} className="flag-chip-icon" />
+                  <span className="flag-chip-text">{f}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="info-empty-state">
+              <Icon name="BookmarkCheck" size={15} />
+              <span>No active world flags</span>
+            </div>
+          )}
+        </section>
+
+        <section className="scene-section">
+          <h3 className="section-subtitle flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <Icon name="Scroll" size={15} /> Quests
+            </span>
+            <span className="badge-count">{quests.length}</span>
+          </h3>
+          {quests.length > 0 ? (
+            <div className="quests-container">
+              {quests.map((quest) => (
+                <div key={quest.id} className={`quest-card ${quest.tracking ? "tracking" : ""}`}>
+                  <div className="quest-card-header">
+                    <label className="quest-checkbox-label" title={quest.tracking ? "Untrack quest" : "Track quest"}>
+                      <input
+                        type="checkbox"
+                        checked={quest.tracking}
+                        onChange={() => handleToggle(quest.id)}
+                        disabled={actionLoading}
+                      />
+                      <strong className="quest-title">{quest.name}</strong>
+                    </label>
+                    <span className={`quest-status-badge ${quest.status}`}>{quest.status}</span>
+                  </div>
+
+                  {quest.summary ? <p className="quest-summary">{quest.summary}</p> : null}
+
+                  <div className="quest-card-actions">
+                    <button
+                      className="quest-action-btn flex items-center gap-1"
+                      disabled={actionLoading}
+                      onClick={() => setEditing({ questId: quest.id, name: quest.name, summary: quest.summary })}
+                      title="Edit quest"
+                    >
+                      <Icon name="Pencil" size={13} /> Edit
+                    </button>
+                    <button
+                      className="quest-action-btn danger flex items-center gap-1"
+                      disabled={actionLoading}
+                      onClick={() => setDeleting({ questId: quest.id, name: quest.name })}
+                      title="Abandon quest"
+                    >
+                      <Icon name="Trash2" size={13} /> Abandon
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="info-empty-state">
+              <Icon name="BookOpen" size={15} />
+              <span>No quests active</span>
+            </div>
+          )}
+        </section>
+      </div>
 
       {editing ? (
         <div className="modal-backdrop" onClick={() => setEditing(null)}>
           <section className="modal quest-edit-modal" onClick={(e) => e.stopPropagation()}>
             <header className="modal-header">
               <h2>Edit Quest</h2>
+              <button className="flex items-center gap-1" onClick={() => setEditing(null)}>
+                <Icon name="X" size={16} /> Close
+              </button>
             </header>
             <div className="settings-form">
               <label>
@@ -122,9 +190,9 @@ export function ScenePanel({ playthrough, actionLoading, onQuestAction, classNam
                 />
               </label>
             </div>
-            <div className="settings-actions">
-              <button className="primary-btn" onClick={handleEditSave} disabled={actionLoading || !editing.name.trim()}>
-                Save
+            <div className="settings-actions flex items-center gap-2 mt-4">
+              <button className="primary-btn flex items-center gap-1.5" onClick={handleEditSave} disabled={actionLoading || !editing.name.trim()}>
+                <Icon name="Save" size={15} /> Save Changes
               </button>
               <button onClick={() => setEditing(null)} disabled={actionLoading}>Cancel</button>
             </div>
@@ -140,9 +208,14 @@ export function ScenePanel({ playthrough, actionLoading, onQuestAction, classNam
                 <h2>Abandon Quest?</h2>
                 <p>This will permanently remove <strong>{deleting.name}</strong> from your quest list and log it in the chat.</p>
               </div>
+              <button className="flex items-center gap-1" onClick={() => setDeleting(null)}>
+                <Icon name="X" size={16} />
+              </button>
             </header>
-            <div className="settings-actions">
-              <button className="danger" onClick={handleDelete} disabled={actionLoading}>Yes, abandon</button>
+            <div className="settings-actions flex items-center gap-2 mt-4">
+              <button className="danger flex items-center gap-1.5" onClick={handleDelete} disabled={actionLoading}>
+                <Icon name="Trash2" size={15} /> Yes, abandon
+              </button>
               <button onClick={() => setDeleting(null)} disabled={actionLoading}>Cancel</button>
             </div>
           </section>
