@@ -92,7 +92,7 @@ export function SetupView(props: SetupViewProps) {
               {castLibrary.map((t) => (
                 <label key={t.id} className={`persona-pick-card cast-pick-card ${selectedCastIds.includes(t.id) ? "selected" : ""}`}>
                   <input type="checkbox" checked={selectedCastIds.includes(t.id)} onChange={() => onToggleCastId(t.id)} />
-                  <strong>{t.name}</strong> <span className="version-badge">v{t.version}</span>
+                  <strong>{t.name}</strong> {t.format === "ccv2" ? <span className="ccv2-badge">CCv2</span> : null} <span className="version-badge">v{t.version}</span>
                   <span className="persona-pick-desc">{t.content.split("\n").find(l => l.trim() && !l.startsWith("["))?.trim().slice(0, 80) || "No description."}</span>
                 </label>
               ))}

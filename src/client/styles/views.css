@@ -1743,6 +1743,125 @@
   font-size: 0.85rem;
 }
 
+/* ── Character library: CCv2 card display (avatars, notes, tags, badges) ── */
+.version-group-header {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.version-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.library-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #1a1e2b;
+  border: 1px solid #3a4150;
+}
+
+.avatar-placeholder {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(96, 165, 250, 0.15);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  color: #60a5fa;
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.creator-notes-line {
+  margin: 0.35rem 0 0;
+  font-size: 0.82rem;
+  color: #94a3b8;
+  line-height: 1.45;
+}
+
+.creator-notes-label {
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.ccv2-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border-radius: 4px;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  vertical-align: middle;
+}
+
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+/* Scoped so the base .tag-chip (TagInput) stays untouched. */
+.version-group button.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: #222838;
+  border: 1px solid #3a4150;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  color: #a9b4c8;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.version-group button.tag-chip:hover {
+  background: #2d3547;
+  color: #eceff4;
+}
+
+.version-group button.tag-chip.active {
+  background: rgba(96, 165, 250, 0.18);
+  border-color: rgba(96, 165, 250, 0.45);
+  color: #93c5fd;
+}
+
+.import-btn {
+  padding: 0.5rem 0.9rem;
+  background: #222838;
+  border: 1px solid #3a4150;
+  border-radius: 8px;
+  color: #eceff4;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.import-btn:hover:not(:disabled) {
+  background: #2d3547;
+  border-color: #4a5266;
+}
+
+.import-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .global-scope-badge {
   display: inline-flex;
   align-items: center;

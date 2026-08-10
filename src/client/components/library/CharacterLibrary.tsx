@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
 import type { CharacterTemplate } from "../../../schemas";
-import { createCharacter, deleteCharacter, listCharacters, updateCharacter } from "../../api";
+import { createCharacter, deleteCharacter, importCharacter, listCharacters, updateCharacter } from "../../api";
 import type { CharacterTemplateUpdate } from "../../api";
 import { CHARACTER_SHEET_EXAMPLE } from "../../../engine/characterSections";
+import { displayTitle, entryKind, filterLibraryEntries } from "../../../engine/characterCards";
 
 export type CharacterLibraryProps = {
   isModal?: boolean;
@@ -49,6 +51,29 @@ function groupByLineage(templates: CharacterTemplate[]): VersionGroup[] {
   return groups;
 }
 
+/** Avatar for a library card: the record's PNG (imported CCv2 cards), falling
+ *  back to a letter placeholder when the route 404s (BL-native records). */
+function CharacterAvatar({ template }: { template: CharacterTemplate }) {
+  const [failed, setFailed] = useState(false);
+
+  // Reset the fallback when the card changes (list reloads reuse components).
+  useEffect(() => {
+    setFailed(false);
+  }, [template.id]);
+
+  if (failed) {
+    return <div className="avatar-placeholder">{displayTitle(template).charAt(0).toUpperCase()}</div>;
+  }
+  return (
+    <img
+      className="library-avatar"
+      src={`/api/characters/${template.id}/avatar`}
+      alt=""
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
   const [templates, setTemplates] = useState<CharacterTemplate[]>([]);
   const [form, setForm] = useState<CharacterForm>(blankForm());
@@ -57,6 +82,8 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function loadData() {
     try {
@@ -123,15 +150,31 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
     setTemplates(await listCharacters());
   }
 
-  const filteredTemplates = useMemo(() => {
-    if (!search.trim()) return templates;
-    const query = search.toLowerCase().trim();
-    return templates.filter((t) =>
-      t.name.toLowerCase().includes(query) ||
-      t.content.toLowerCase().includes(query) ||
-      (t.summary && t.summary.toLowerCase().includes(query))
-    );
-  }, [templates, search]);
+  async function handleImportFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-importing the same file
+    if (!file) return;
+    setImporting(true);
+    setStatus(null);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result ?? ""));
+        reader.onerror = () => reject(reader.error ?? new Error("Could not read file."));
+        reader.readAsDataURL(file);
+      });
+      const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1); // strip data: prefix
+      const result = await importCharacter(file.name, base64);
+      setTemplates(await listCharacters());
+      setStatus(`Imported "${displayTitle(result.record)}".`);
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : String(e));
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  const filteredTemplates = useMemo(() => filterLibraryEntries(templates, search), [templates, search]);
 
   const groups = useMemo(() => groupByLineage(filteredTemplates), [filteredTemplates]);
 
@@ -172,10 +215,20 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
           <>
             <div className="library-toolbar">
               <button className="primary-btn" onClick={openCreate}>+ New Character</button>
+              <button className="import-btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+                {importing ? "Importing…" : "Import Card"}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".png,.json"
+                style={{ display: "none" }}
+                onChange={handleImportFile}
+              />
               <div className="library-search-wrapper">
                 <input
                   type="text"
-                  placeholder="Search characters by name or content…"
+                  placeholder="Search name, tags, creator:…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="library-search-input"
@@ -197,12 +250,36 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                   return (
                     <div key={group.key} className="version-group">
                       <div className="version-group-header">
-                        <strong>{latest.name}</strong> <span className="version-badge">v{latest.version}</span>
-                        {group.versions.length > 1 ? (
-                          <span className="version-count">({group.versions.length} versions)</span>
-                        ) : null}
+                        <CharacterAvatar template={latest} />
+                        <div className="version-group-title">
+                          <strong>{displayTitle(latest)}</strong>
+                          {entryKind(latest) === "ccv2" ? <span className="ccv2-badge">CCv2</span> : null}
+                          <span className="version-badge">v{latest.cardVersion ?? String(latest.version)}</span>
+                          {group.versions.length > 1 ? (
+                            <span className="version-count">({group.versions.length} versions)</span>
+                          ) : null}
+                        </div>
                       </div>
+                      {latest.creatorNotes?.trim() ? (
+                        <p className="creator-notes-line">
+                          <span className="creator-notes-label">Creator's Notes:</span> {latest.creatorNotes.trim()}
+                        </p>
+                      ) : null}
                       <p className="content-preview">{latest.summary?.trim() ? latest.summary.trim().slice(0, 100) : (latest.content.split("\n").find(l => l.trim() && !l.startsWith("["))?.trim().slice(0, 100) || "(empty)")}</p>
+                      {(latest.tags ?? []).length > 0 ? (
+                        <div className="tag-chips">
+                          {(latest.tags ?? []).map((tag) => (
+                            <button
+                              key={tag}
+                              type="button"
+                              className={`tag-chip${search.trim().toLowerCase() === tag.toLowerCase() ? " active" : ""}`}
+                              onClick={() => setSearch((s) => (s.trim().toLowerCase() === tag.toLowerCase() ? "" : tag))}
+                            >
+                              {tag}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
                       <div className="version-group-actions">
                         <button onClick={() => openEdit(latest)}>Edit</button>
                         <button className="danger" onClick={() => handleDelete(latest.id, latest.name)}>Delete</button>
