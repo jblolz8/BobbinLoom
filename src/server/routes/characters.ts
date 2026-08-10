@@ -5,10 +5,13 @@ import {
   deleteCharacterTemplateRecord,
   getCharacterTemplate,
   getPlaythroughRecord,
+  importCharacterCard,
   listCharacterTemplates,
   updateCharacterTemplateRecord,
   updatePlaythroughRecord
 } from "../store";
+import { parseCard } from "../characterCards/parseCard";
+import { PNG_SIG } from "../characterCards/pngText";
 import { saveToLibraryAction } from "../stateActions";
 import { dataDir } from "./helpers";
 
@@ -75,6 +78,25 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
     const deleted = deleteCharacterTemplateRecord(params.id);
     if (!deleted) return reply.code(404).send({ error: "Character not found" });
     return { ok: true };
+  });
+
+  // Import a CCv2 card (PNG with embedded `chara` JSON, or standalone JSON).
+  // Route-level bodyLimit override: Fastify 4 only honors the TOP-LEVEL option,
+  // so multi-MB card PNGs are accepted here even though the default is 1MB.
+  app.post("/api/characters/import", { bodyLimit: 10 * 1024 * 1024 }, async (request, reply) => {
+    const body = z.object({
+      fileName: z.string().min(1),
+      dataBase64: z.string().min(1),   // base64 of the raw PNG or JSON file
+    }).parse(request.body ?? {});
+    const bytes = Buffer.from(body.dataBase64, "base64");
+    const kind = bytes.length >= 8 && bytes.subarray(0, 8).equals(PNG_SIG) ? "png" : "json";
+    try {
+      const card = parseCard(body.fileName, bytes);
+      const result = importCharacterCard(card, bytes, kind);
+      return reply.code(result.created ? 201 : 200).send({ record: result.record, created: result.created });
+    } catch (e) {
+      return reply.code(400).send({ error: e instanceof Error ? e.message : "Import failed." });
+    }
   });
 
   app.post("/api/playthroughs/:id/characters/:characterId/save-to-library", async (request, reply) => {
