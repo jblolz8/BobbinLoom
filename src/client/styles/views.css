@@ -1809,6 +1809,29 @@
   vertical-align: middle;
 }
 
+/* Read-only notice shown wherever a CCv2 sheet's content/clothing are locked (C4). */
+.ccv2-readonly-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: 999px;
+  color: #aab6c4;
+  background: #1f2530;
+  border: 1px solid #3a4150;
+  vertical-align: middle;
+  margin-left: 8px;
+  line-height: 1.4;
+}
+
+/* On the compact cast card the badge sits on its own line under the name. */
+.character-card .ccv2-readonly-badge {
+  margin-left: 0;
+  margin-bottom: 4px;
+}
+
 .tag-chips {
   display: flex;
   flex-wrap: wrap;

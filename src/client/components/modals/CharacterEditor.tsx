@@ -79,6 +79,8 @@ export function CharacterEditor({
   onSaveToLibrary,
   onClose,
 }: CharacterEditorProps) {
+  // CCv2-backed sheets are read-only in play (D9): content + clothing are locked.
+  const isReadOnlySheet = playthrough.characterTemplates.find((t) => t.id === character.templateId)?.format === "ccv2";
   const initialForm = useRef<EditorForm>(instanceToForm(character, playthrough));
   const [form, setForm] = useState<EditorForm>(initialForm.current);
   const [structuredMode, setStructuredMode] = useState(() => splitContentSections(form.content).sections.length >= 2);
@@ -119,15 +121,15 @@ export function CharacterEditor({
         form.clothing.map((c) => (
           <div key={c.slot} className="clothing-row">
             <span>{c.slot}: {c.name}{c.state ? ` (${c.state})` : ""}</span>
-            <button className="icon-btn danger-icon" onClick={() => removeClothingItem(c.slot)}>✕</button>
+            <button className="icon-btn danger-icon" onClick={() => removeClothingItem(c.slot)} disabled={isReadOnlySheet}>✕</button>
           </div>
         ))
       )}
       <div className="clothing-add">
-        <input placeholder="Slot" value={clothingSlot} onChange={(e) => setClothingSlot(e.target.value)} />
-        <input placeholder="Name" value={clothingName} onChange={(e) => setClothingName(e.target.value)} />
-        <input placeholder="State (optional)" value={clothingState} onChange={(e) => setClothingState(e.target.value)} />
-        <button onClick={addClothingItem}>Add</button>
+        <input placeholder="Slot" value={clothingSlot} onChange={(e) => setClothingSlot(e.target.value)} disabled={isReadOnlySheet} />
+        <input placeholder="Name" value={clothingName} onChange={(e) => setClothingName(e.target.value)} disabled={isReadOnlySheet} />
+        <input placeholder="State (optional)" value={clothingState} onChange={(e) => setClothingState(e.target.value)} disabled={isReadOnlySheet} />
+        <button onClick={addClothingItem} disabled={isReadOnlySheet}>Add</button>
       </div>
     </>
   );
@@ -158,8 +160,14 @@ export function CharacterEditor({
     setSaving(true);
     setStatus(null);
     try {
-      const clothing = structuredMode ? form.clothing : parseClothingFromContent(form.content);
-      const payload = { ...formToPayload(form), clothing };
+      const payload = formToPayload(form);
+      if (isReadOnlySheet) {
+        // CCv2 sheets are read-only (D9): never submit the sheet blob or clothing.
+        delete payload.content;
+        delete payload.clothing;
+      } else {
+        payload.clothing = structuredMode ? form.clothing : parseClothingFromContent(form.content);
+      }
       await onSave(payload);
 
       let libMsg = "";
@@ -230,7 +238,7 @@ export function CharacterEditor({
         <div className="character-editor-body">
           {mode === "view" ? (
             <>
-              <h4>Character Sheet</h4>
+              <h4>Character Sheet{isReadOnlySheet ? <span className="ccv2-readonly-badge">Read-only CCv2 sheet — conversion coming later</span> : null}</h4>
               <pre className="content-view">{form.content || <em className="empty-value">No character data.</em>}</pre>
 
               {renderReadOnly("Summary", form.summary || null)}
@@ -253,7 +261,7 @@ export function CharacterEditor({
                 <input value={form.summary} onChange={(e) => setForm((f) => ({ ...f, summary: e.target.value }))} />
               ))}
 
-              <h4>Character Sheet</h4>
+              <h4>Character Sheet{isReadOnlySheet ? <span className="ccv2-readonly-badge">Read-only CCv2 sheet — conversion coming later</span> : null}</h4>
               <div className="section-mode-toggle">
                 <button className={structuredMode ? "active" : ""} onClick={() => setStructuredMode(true)}>Sections</button>
                 <button className={!structuredMode ? "active" : ""} onClick={() => setStructuredMode(false)}>Raw</button>
@@ -277,6 +285,7 @@ export function CharacterEditor({
                           value={s.body ?? ""}
                           onChange={(e) => updateSection(i, e.target.value)}
                           className="content-textarea"
+                          disabled={isReadOnlySheet}
                         />
                       </label>
                       )
@@ -297,6 +306,7 @@ export function CharacterEditor({
                     onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
                     placeholder={"[Species]: ..."}
                     className="content-textarea"
+                    disabled={isReadOnlySheet}
                   />
                 ))
               )}

@@ -1057,6 +1057,13 @@
   width: 70px;
 }
 
+/* Locked CCv2 sheet fields (C4): visually muted, no text cursor. */
+.editor-field textarea:disabled,
+.editor-field input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .toggle-field {
   display: flex;
   align-items: center;

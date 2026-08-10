@@ -79,6 +79,7 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
   const [form, setForm] = useState<CharacterForm>(blankForm());
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingIsCcv2, setEditingIsCcv2] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -100,6 +101,7 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
   function openCreate() {
     setForm(blankForm());
     setEditingId(null);
+    setEditingIsCcv2(false);
     setEditorOpen(true);
     setStatus(null);
   }
@@ -107,6 +109,7 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
   function openEdit(t: CharacterTemplate) {
     setForm(templateToForm(t));
     setEditingId(t.id);
+    setEditingIsCcv2(t.format === "ccv2");
     setEditorOpen(true);
     setStatus(null);
   }
@@ -114,6 +117,7 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
   function closeEditor() {
     setEditorOpen(false);
     setEditingId(null);
+    setEditingIsCcv2(false);
     setStatus(null);
   }
 
@@ -124,7 +128,7 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
     try {
       const update = formToUpdate(form);
       if (editingId) {
-        await updateCharacter(editingId, update);
+        await updateCharacter(editingId, editingIsCcv2 ? { name: update.name } : update);
         setStatus(`"${form.name}" updated.`);
       } else {
         await createCharacter(form.name);
@@ -198,10 +202,16 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
             </label>
 
             <label className="editor-field">
-              <span className="editor-field-label">Content (full character sheet)</span>
+              <span className="editor-field-label">
+                Content (full character sheet)
+                {editingIsCcv2 ? (
+                  <span className="ccv2-readonly-badge">Read-only CCv2 sheet — conversion coming later</span>
+                ) : null}
+              </span>
               <textarea rows={20} value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
                 placeholder={CHARACTER_SHEET_EXAMPLE}
-                className="content-textarea" />
+                className="content-textarea"
+                disabled={editingIsCcv2} />
             </label>
 
             <div className="modal-actions">

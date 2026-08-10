@@ -127,6 +127,7 @@ export function CharsTab({ playthrough, onPlaythroughChange }: { playthrough: Pl
         playthrough.characters.map((character) => {
           const localTpl = playthrough.characterTemplates.find((t) => t.id === character.templateId);
           const libTpl = library.find((t) => t.id === character.templateId);
+          const isCcv2 = localTpl?.format === "ccv2";
           const libraryStale = !!localTpl && !!libTpl
             && JSON.stringify({ content: localTpl.content, summary: localTpl.summary, startingClothing: localTpl.startingClothing })
             !== JSON.stringify({ content: libTpl.content, summary: libTpl.summary, startingClothing: libTpl.startingClothing });
@@ -139,6 +140,7 @@ export function CharsTab({ playthrough, onPlaythroughChange }: { playthrough: Pl
               present={character.currentLocationId === playthrough.locationId}
               locationName={playthrough.locationCatalog?.find((l) => l.id === character.currentLocationId)?.name ?? character.currentLocationId}
               libraryStale={libraryStale}
+              readOnlySheet={isCcv2}
               feedback={saveFeedback[character.id] ?? null}
               saving={savingId === character.id}
               onSave={(mode) => { void handleSave(character.id, mode); }}
@@ -213,13 +215,17 @@ export function CharacterCard(props: {
   present: boolean;
   locationName: string;
   libraryStale: boolean;
+  readOnlySheet: boolean;
 }) {
-  const { character, content, inLibrary, feedback, saving, onSave, onEdit, present, locationName, libraryStale } = props;
+  const { character, content, inLibrary, feedback, saving, onSave, onEdit, present, locationName, libraryStale, readOnlySheet } = props;
 
   return (
     <article className="card character-card">
       <h3>{character.name}</h3>
       <p className="presence-badge">{present ? "● present" : "○ away"} · at {locationName}</p>
+      {readOnlySheet ? (
+        <span className="ccv2-readonly-badge">Read-only CCv2 sheet — conversion coming later</span>
+      ) : null}
       <CharacterSheetSections content={content} />
       <p><strong>Mood:</strong> {character.mood}</p>
       <p><strong>Towards Player:</strong> {character.towardPlayer}</p>
