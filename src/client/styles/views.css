@@ -356,6 +356,16 @@
   font: inherit;
 }
 
+.setup-form select {
+  width: 100%;
+  background: #1a1e2b;
+  border: 1px solid #3a4150;
+  color: #eceff4;
+  border-radius: 8px;
+  padding: 0.6rem;
+  font: inherit;
+}
+
 .field-hint {
   display: block;
   font-size: 0.8rem;

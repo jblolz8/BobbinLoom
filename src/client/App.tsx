@@ -10,6 +10,7 @@ import {
   type ScenarioPreferences
 } from "./api";
 import type { CharacterTemplate, LorebookSummary } from "../schemas";
+import { collectCardSettings } from "../engine/characterCards";
 import { usePlaythrough } from "./hooks/usePlaythrough";
 import { useResponsive } from "./hooks/useResponsive";
 import { useModalState } from "./hooks/useModalState";
@@ -50,6 +51,9 @@ export default function App() {
   const [lorebookLibrary, setLorebookLibrary] = useState<LorebookSummary[]>([]);
   const [selectedLorebookIds, setSelectedLorebookIds] = useState<string[]>([]);
 
+  // Existing-setting selector fed by imported CCv2 card scenarios (D7/F6)
+  const [cardSettings, setCardSettings] = useState<Array<{ title: string; scenario: string }>>([]);
+
   // --- New Playthrough Setup ---
 
   function openSetup(initial?: {
@@ -64,6 +68,15 @@ export default function App() {
     void loadPersonasForPicker();
     void loadCastLibrary(initial?.castIds);
     void loadLorebookLibrary();
+    void loadCardSettings();
+  }
+
+  async function loadCardSettings() {
+    try {
+      setCardSettings(collectCardSettings(await listCharacters()));
+    } catch {
+      setCardSettings([]);
+    }
   }
 
   async function loadPersonasForPicker() {
@@ -325,6 +338,7 @@ export default function App() {
         lorebookLibrary={lorebookLibrary}
         selectedLorebookIds={selectedLorebookIds}
         onToggleLorebookId={toggleLorebookId}
+        cardSettings={cardSettings}
         setupForm={setupForm}
         onSetupFormChange={setSetupForm}
         generating={generating}

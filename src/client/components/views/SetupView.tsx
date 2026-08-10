@@ -24,6 +24,7 @@ export type SetupViewProps = {
   lorebookLibrary: LorebookSummary[];
   selectedLorebookIds: string[];
   onToggleLorebookId: (id: string) => void;
+  cardSettings: Array<{ title: string; scenario: string }>;
   setupForm: SetupFormState;
   onSetupFormChange: (updater: (f: SetupFormState) => SetupFormState) => void;
   generating: boolean;
@@ -42,6 +43,7 @@ export function SetupView(props: SetupViewProps) {
     personas, selectedPersonaId, onSelectPersona,
     castLibrary, selectedCastIds, onToggleCastId,
     lorebookLibrary, selectedLorebookIds, onToggleLorebookId,
+    cardSettings,
     setupForm, onSetupFormChange,
     generating, genError, onGenerate, onCancelGenerate, onStartBlank, onOpenPersonaManager, onOpenLorebookManager
   } = props;
@@ -141,6 +143,24 @@ export function SetupView(props: SetupViewProps) {
               className="auto-grow-textarea"
             />
           </label>
+          {cardSettings.length > 0 ? (
+            <label>
+              <span className="field-hint">…or use an existing setting from an imported card</span>
+              <select
+                value=""
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  const picked = cardSettings.find((s) => s.scenario === e.target.value);
+                  if (picked) onSetupFormChange((f) => ({ ...f, setting: picked.scenario }));
+                }}
+              >
+                <option value="">Choose a card scenario…</option>
+                {cardSettings.map((s) => (
+                  <option key={s.scenario} value={s.scenario}>{s.title}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <label className="toggle">
             <input type="checkbox" checked={setupForm.generateOpeningChoices} onChange={(e) => onSetupFormChange((f) => ({ ...f, generateOpeningChoices: e.target.checked }))} />
             Generate initial choices
