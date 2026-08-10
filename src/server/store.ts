@@ -402,6 +402,14 @@ export function getCharacterTemplate(id: string, dir: string = CHARACTERS_DIR): 
   return listCharacterTemplates(dir).find((t) => t.id === id) ?? null;
 }
 
+export function getCharacterAvatarPath(id: string, dir: string = CHARACTERS_DIR): string | null {
+  const record = listCharacterTemplates(dir).find((t) => t.id === id);
+  const ref = record?.cardRef;
+  if (!record || !ref || ref.kind !== "png") return null;
+  const file = join(characterFolderPath(dir, slugify(record.name)), ref.file);
+  return existsSync(file) ? file : null;
+}
+
 export function createCharacterTemplateRecord(name: string, dir: string = CHARACTERS_DIR): CharacterTemplate {
   const template: CharacterTemplate = {
     id: `char_${Date.now()}`,

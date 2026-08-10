@@ -1,8 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { createReadStream } from "node:fs";
 import {
   createCharacterTemplateRecord,
   deleteCharacterTemplateRecord,
+  getCharacterAvatarPath,
   getCharacterTemplate,
   getPlaythroughRecord,
   importCharacterCard,
@@ -97,6 +99,17 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
     } catch (e) {
       return reply.code(400).send({ error: e instanceof Error ? e.message : "Import failed." });
     }
+  });
+
+  // Serve the raw PNG of an imported CCv2 card as its avatar (D13).
+  // BL-native records (no cardRef) and non-PNG cards 404 — the client falls
+  // back to a letter placeholder. Path is resolved from the record, never the
+  // request, so the slug can't be used to read arbitrary files.
+  app.get("/api/characters/:id/avatar", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const file = getCharacterAvatarPath(params.id);
+    if (!file) return reply.code(404).send({ error: "No avatar" });
+    return reply.type("image/png").send(createReadStream(file));
   });
 
   app.post("/api/playthroughs/:id/characters/:characterId/save-to-library", async (request, reply) => {
