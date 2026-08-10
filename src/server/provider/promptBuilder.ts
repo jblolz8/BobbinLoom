@@ -1,11 +1,32 @@
 import { joinContentSections, splitContentSections, summaryFromContent } from "../../engine/characterSections";
 import { ITEMS } from "../../engine/demoData";
 import { retrieveMemoriesVector, scanLorebooks } from "../../engine/engine";
+import { expandMacros } from "../../engine/macros";
 import type { EntryTimingState, LorebookEntry } from "../../schemas";
-import type { ParsedUserInput, Playthrough, PromptPresetModule } from "../../schemas";
+import type { CharacterInstance, CharacterTemplate, ParsedUserInput, Playthrough, PromptPresetModule } from "../../schemas";
 import type { PromptUsage, PromptUsageBreakdown } from "../provider";
 import { VERBATIM_CHAPTER_LIMIT } from "../provider";
 import { getLorebook } from "../store";
+
+/**
+ * Render one character's sheet blob for the prompt (D6/D9/D10).
+ * BL sheets with structured clothing drop the [Clothing] section (rendered as a
+ * derived line outside this helper); CCv2 sheets are verbatim raw blobs (no
+ * structured clothing). Macros are expanded at prompt-build time only — source
+ * and stored data are never modified.
+ */
+function renderCharacterSheet(tpl: CharacterTemplate | undefined, instance: CharacterInstance, playerName: string): string {
+  if (!tpl) return "(no character data)";
+  let blob = tpl.content ?? "(no character data)";
+  if (tpl.format !== "ccv2" && instance.clothing.length > 0) {
+    const { preamble, sections } = splitContentSections(blob);
+    blob = joinContentSections(
+      sections.filter((s) => s.header.toLowerCase() !== "clothing"),
+      preamble
+    );
+  }
+  return expandMacros(blob, instance.name, playerName); // D10: runtime-only
+}
 
 export function summarizePlaythrough(state: Playthrough): string {
   const present = state.characters.filter((c) => c.currentLocationId === state.locationId);
@@ -15,15 +36,12 @@ export function summarizePlaythrough(state: Playthrough): string {
 
   const characterLines = present.map((character) => {
     const tpl = state.characterTemplates.find((t) => t.id === character.templateId);
-    let contentBlob = tpl?.content ?? "(no character data)";
+    const contentBlob = renderCharacterSheet(tpl, character, state.playerCharacter.name);
 
     let clothingLine = "";
     if (character.clothing.length > 0) {
-      const { preamble, sections } = splitContentSections(contentBlob);
-      contentBlob = joinContentSections(
-        sections.filter((s) => s.header.toLowerCase() !== "clothing"),
-        preamble
-      );
+      // The [Clothing] section was already dropped (BL only) inside
+      // renderCharacterSheet; only the derived line is built here.
       clothingLine = `Clothing: ${character.clothing.map((c) => `${c.slot}: ${c.name}${c.state ? ` (${c.state})` : ""}`).join("; ")}`;
     }
 
@@ -48,7 +66,7 @@ export function summarizePlaythrough(state: Playthrough): string {
 
   const absentLines = absent.map((character) => {
     const tpl = state.characterTemplates.find((t) => t.id === character.templateId);
-    const summary = tpl?.summary || summaryFromContent(tpl?.content ?? "") || "no details";
+    const summary = expandMacros(tpl?.summary || summaryFromContent(tpl?.content ?? "") || "no details", character.name, state.playerCharacter.name);
     const locName = catalog.find((l) => l.id === character.currentLocationId)?.name ?? character.currentLocationId;
     return [
       `- ${character.name} (${character.id})`,

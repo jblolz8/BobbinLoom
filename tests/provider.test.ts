@@ -902,6 +902,56 @@ describe("presence-gated character injection", () => {
   });
 });
 
+describe("CCv2 runtime macros (D10)", () => {
+  const CCV2_TEMPLATE: CharacterTemplate = {
+    id: "tmpl_ccv2_macro",
+    name: "Mira",
+    version: 1,
+    summary: "",
+    startingClothing: [],
+    content: "{{char}} loves {{user}}",
+    format: "ccv2"
+  };
+
+  const BL_MACRO_TEMPLATE: CharacterTemplate = {
+    id: "tmpl_bl_macro",
+    name: "Mira",
+    version: 1,
+    summary: "",
+    startingClothing: [],
+    content: "{{Char}} greets {{User}} warmly."
+  };
+
+  it("expands {{char}}/{{user}} for a CCv2-backed sheet at prompt build time", () => {
+    const pt = createInitialPlaythrough("CCv2 Macro Test", EMPTY_MODULE_SET, "default", "Default", undefined, [CCV2_TEMPLATE]);
+    pt.playerCharacter.name = "Anon";
+    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
+    // Sheet is rendered verbatim + macros expanded (D6/D10).
+    expect(assembled.user).toContain("CHARACTER: Mira");
+    expect(assembled.user).toContain("Mira loves Anon");
+    // Raw macros never leak into the prompt.
+    expect(assembled.user).not.toContain("{{char}}");
+    expect(assembled.user).not.toContain("{{user}}");
+  });
+
+  it("expands macros in BL sheets too (shared path, case-insensitive)", () => {
+    const pt = createInitialPlaythrough("BL Macro Test", EMPTY_MODULE_SET, "default", "Default", undefined, [BL_MACRO_TEMPLATE]);
+    pt.playerCharacter.name = "Anon";
+    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
+    expect(assembled.user).toContain("Mira greets Anon warmly.");
+    expect(assembled.user).not.toContain("{{Char}}");
+  });
+
+  it("expands macros in the absent-character one-liner summary", () => {
+    const pt = createInitialPlaythrough("CCv2 Absent Macro Test", EMPTY_MODULE_SET, "default", "Default", undefined, [CCV2_TEMPLATE]);
+    pt.playerCharacter.name = "Anon";
+    pt.characters[0].currentLocationId = "loc_other";
+    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
+    expect(assembled.user).toContain("ABSENT CHARACTERS");
+    expect(assembled.user).not.toContain("{{char}}");
+  });
+});
+
 describe("per-context prompt modules", () => {
   it("injects seed-context modules into the scenario-seed prompt but not the turn prompt", async () => {
     let sentPrompt = "";
