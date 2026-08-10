@@ -130,6 +130,19 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
     const character = playthrough.characters.find((c) => c.id === params.characterId);
     if (!character) return reply.code(404).send({ error: "Character not found" });
 
+    // CCv2 sheets are read-only (D9/C3): the PUT route applies content/clothing
+    // edits directly, bypassing applyStatePatch, so guard here — but only the
+    // sheet fields. Name and runtime fields (mood, towardPlayer, memorySummary,
+    // conditions, flags, currentLocationId) remain editable.
+    const template = playthrough.characterTemplates.find((t) => t.id === character.templateId);
+    const attemptsSheetEdit =
+      body.content !== undefined || body.startingClothing !== undefined || body.clothing !== undefined;
+    if (template?.format === "ccv2" && attemptsSheetEdit) {
+      return reply.code(400).send({
+        error: "Character has a read-only CCv2 sheet — content/clothing edits are not allowed."
+      });
+    }
+
     const updated = { ...character, updatedAt: new Date().toISOString() };
 
     if (body.mood !== undefined) updated.mood = body.mood;
@@ -149,7 +162,7 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
       body.startingClothing !== undefined || body.summary !== undefined;
 
     if (hasTemplateUpdate) {
-      const tpl = playthrough.characterTemplates.find((t) => t.id === updated.templateId);
+      const tpl = template;
       if (tpl) {
         if (body.name !== undefined) { tpl.name = body.name; updated.name = body.name; }
         if (body.content !== undefined) tpl.content = body.content;
