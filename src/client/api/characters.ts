@@ -5,6 +5,17 @@ export type CharacterTemplateUpdate = Partial<Pick<CharacterTemplate, "name" | "
 
 export type SaveToLibraryResult = { template: CharacterTemplate; created: boolean };
 
+export type ImportCharacterResult = { record: CharacterTemplate; created: boolean };
+
+/** Import a CCv2 card (PNG with embedded `chara` JSON, or standalone JSON).
+ *  `dataBase64` is the raw file content base64-encoded (no data: prefix). */
+export function importCharacter(fileName: string, dataBase64: string): Promise<ImportCharacterResult> {
+  return request<ImportCharacterResult>("/api/characters/import", {
+    method: "POST",
+    body: JSON.stringify({ fileName, dataBase64 })
+  });
+}
+
 export type CharacterEditPayload = {
   mood?: string;
   towardPlayer?: string;
