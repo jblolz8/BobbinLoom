@@ -249,6 +249,8 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
               </div>
             </div>
 
+            {status ? <p className={`status-message ${status.startsWith("Imported") ? "" : "status-error"}`}>{status}</p> : null}
+
             {groups.length === 0 ? (
               <p className="empty-value">
                 {search ? "No characters found matching search." : "No characters in the library yet."}

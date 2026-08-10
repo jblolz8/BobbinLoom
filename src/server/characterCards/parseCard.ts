@@ -11,11 +11,21 @@ export function parseCard(fileName: string, bytes: Buffer): ParsedCard {
   if (isPng) {
     const payload = extractCharaPayload(bytes);
     if (!payload) throw new Error("PNG has no embedded `chara` card data (or is not a valid PNG).");
-    try {
-      raw = JSON.parse(payload);
-    } catch {
-      throw new Error("Card data is not valid JSON.");
+    // Real CCv2 cards base64-encode the card JSON inside the `chara` chunk.
+    // Try base64 first, then fall back to raw JSON for non-conforming cards.
+    const candidates = [
+      Buffer.from(payload, "base64").toString("utf8"),
+      payload
+    ];
+    for (const candidate of candidates) {
+      try {
+        raw = JSON.parse(candidate);
+        break;
+      } catch {
+        // try next candidate
+      }
     }
+    if (raw === undefined) throw new Error("Card data is not valid JSON.");
   } else {
     try {
       raw = JSON.parse(bytes.toString("utf8"));

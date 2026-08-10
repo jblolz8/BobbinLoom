@@ -31,6 +31,17 @@ describe("parseCard (CCv2 card parsing + validation)", () => {
     expect(card.characterVersion).toBe("1.2");
   });
 
+  it("parses a base64-encoded tEXt PNG card (real SillyTavern format)", () => {
+    // Real CCv2 cards base64-encode the card JSON inside the `chara` chunk.
+    const bytes = makePng(Buffer.from(JSON.stringify(v2Card), "utf8").toString("base64"));
+    const card = parseCard("mira.png", bytes);
+
+    expect(card.name).toBe("Mira");
+    expect(card.description).toBe("A curious fox girl. {{char}} loves exploring.");
+    expect(card.creatorNotes).toBe("My first card.");
+    expect(card.scenario).toBe("A misty forest at dawn.");
+  });
+
   it("parses a raw JSON buffer (non-PNG)", () => {
     const bytes = Buffer.from(JSON.stringify(v2Card), "utf8");
     const card = parseCard("mira.json", bytes);
