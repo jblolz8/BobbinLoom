@@ -405,6 +405,10 @@ export function createCharacterTemplateRecord(name: string, dir: string = CHARAC
     version: 1,
     summary: "",
     startingClothing: [],
+    spec: "bobbinloom_chara",
+    specVersion: "1.0",
+    tags: [],
+    extensions: {},
     content: "[Species]: (unknown)\\n[Gender]: (unknown)\\n\\n[Body]\\n(no details recorded yet)\\n\\n[Personality]\\n(no details recorded yet)\\n\\n[Communication]\\n(no details recorded yet)\\n\\n[Likes]\\n(not established)\\n\\n[Dislikes]\\n(not established)",
   };
   const slug = uniqueSlug(slugify(name), characterSlugs(dir));

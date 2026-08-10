@@ -271,3 +271,23 @@ describe("playthrough store — validate on write", () => {
     expect(onDisk.name).toBe("Valid Run");
   });
 });
+
+describe("character library — CCv2 metadata stamping (A1)", () => {
+  it("createCharacterTemplateRecord stamps spec/specVersion/tags/extensions and round-trips", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bobbinloom-chars-stamp-"));
+    tempDirs.push(dir);
+
+    const t = createCharacterTemplateRecord("Mira", dir);
+
+    expect(t.spec).toBe("bobbinloom_chara");
+    expect(t.specVersion).toBe("1.0");
+    expect(t.tags).toEqual([]);
+    expect(t.extensions).toEqual({});
+
+    const loaded = getCharacterTemplate(t.id, dir);
+    expect(loaded?.spec).toBe("bobbinloom_chara");
+    expect(loaded?.specVersion).toBe("1.0");
+    expect(loaded?.tags).toEqual([]);
+    expect(loaded?.extensions).toEqual({});
+  });
+});

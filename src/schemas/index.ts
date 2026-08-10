@@ -73,6 +73,22 @@ export const CharacterTemplateSchema = z.object({
   content: z.string(),
   summary: z.string().default(""),
   startingClothing: z.array(ClothingItemSchema).default([]),
+  // CCv2 card metadata. ALL fields are .optional() (NO .default()) — typed
+  // literals like DEMO_TEMPLATE must keep parsing; zod .default() would make
+  // fields REQUIRED in the output type. Writes stamp explicitly
+  // (createCharacterTemplateRecord, importCharacterCard); readers use
+  // (t.tags ?? []) / (t.extensions ?? {}).
+  spec: z.literal("bobbinloom_chara").optional(),
+  specVersion: z.string().optional(),
+  title: z.string().optional(),
+  creatorNotes: z.string().optional(),
+  creator: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  extensions: z.record(z.any()).optional(),
+  format: z.literal("ccv2").optional(),
+  cardRef: z.object({ file: z.string(), kind: z.enum(["png", "json"]) }).optional(),
+  cardVersion: z.string().optional(),
+  scenario: z.string().optional(),
 });
 export type CharacterTemplate = z.infer<typeof CharacterTemplateSchema>;
 
