@@ -2,9 +2,11 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSyn
 import { randomUUID } from "node:crypto";
 import { basename, join } from "node:path";
 import { z } from "zod";
-import { atomicWriteJson, cleanupStaleTmp, quarantineFile, readJsonFile, timestampSuffix } from "./persistence";
+import { atomicWriteFile, atomicWriteJson, cleanupStaleTmp, quarantineFile, readJsonFile, timestampSuffix } from "./persistence";
 import { migratePlaythrough } from "./dataMigrations";
 import { slugify, uniqueSlug } from "./slugs";
+import { normalizeCreator, normalizeTags } from "../engine/characterCards";
+import type { ParsedCard } from "./characterCards/parseCard";
 import { createBlankPlaythrough, createInitialPlaythrough, createPlaythroughFromSeed } from "../engine/engine";
 import { DEMO_TEMPLATE } from "../engine/demoData";
 import type { CharacterTemplate, LoadFailure, LorebookFile, LorebookSummary, PlayerPersona, Playthrough, PlaythroughListResponse, PromptModuleSet, PromptPreset, ScenarioSeed } from "../schemas";
@@ -349,7 +351,8 @@ function moveCharacterFolder(dir: string, oldSlug: string, newSlug: string): voi
     if (m) {
       renameSync(join(to, f), join(to, `${newSlug}.v${m[2]}.json`));
     } else {
-      renameSync(join(to, f), join(to, `${newSlug}.json`));
+      // Rename only the slug prefix so .bl.json / .v<N>.json suffixes survive.
+      renameSync(join(to, f), join(to, f.replace(new RegExp("^" + oldSlug), newSlug)));
     }
   }
 }
@@ -374,6 +377,7 @@ export function listCharacterTemplates(dir: string = CHARACTERS_DIR): CharacterT
       continue;
     }
     for (const file of files) {
+      if (file.endsWith(".card.json")) continue; // raw CCv2 card sidecar (D17)
       const filePath = join(folderDir, file);
       const result = readJsonFile(filePath);
       if (!result.ok) {
@@ -472,6 +476,52 @@ export function saveCharacterTemplateRecord(template: CharacterTemplate, dir: st
     atomicWriteJson(characterFilePath(dir, slug, template.version), template);
   }
   return template;
+}
+
+export interface ImportResult { record: CharacterTemplate; created: boolean }
+
+/** Persist an imported CCv2 card: untouched original file + .bl.json record.
+ *  Upserts when a record with the same name+creator exists (D11). */
+export function importCharacterCard(
+  card: ParsedCard,
+  originalBytes: Buffer,
+  kind: "png" | "json",
+  dir: string = CHARACTERS_DIR
+): ImportResult {
+  const existing = listCharacterTemplates(dir).find(
+    (t) => t.format === "ccv2" && t.name === card.name && (t.creator ?? "") === normalizeCreator(card.creator)
+  );
+  let slug: string;
+  if (existing) {
+    slug = slugify(existing.name);
+  } else {
+    slug = uniqueSlug(slugify(card.name), characterSlugs(dir));
+    ensureStoreDir(characterFolderPath(dir, slug));
+  }
+  const folder = characterFolderPath(dir, slug);
+  const originalFile = kind === "png" ? `${slug}.png` : `${slug}.card.json`;
+  atomicWriteFile(join(folder, originalFile), originalBytes); // raw, untouched
+  const record: CharacterTemplate = {
+    id: existing?.id ?? `char_${Date.now()}`,
+    name: card.name,
+    version: 1,
+    content: card.description,
+    summary: "",
+    startingClothing: [],
+    spec: "bobbinloom_chara",
+    specVersion: "1.0",
+    title: card.name,                 // D16
+    creatorNotes: card.creatorNotes,
+    creator: normalizeCreator(card.creator),  // D4
+    tags: normalizeTags(card.tags),           // D4
+    extensions: {},
+    format: "ccv2",
+    cardRef: { file: originalFile, kind },
+    cardVersion: card.characterVersion || undefined,
+    scenario: card.scenario || undefined,     // D7
+  };
+  atomicWriteJson(join(folder, `${slug}.bl.json`), record);
+  return { record, created: !existing };
 }
 
 /** Resolve castIds against the library; unknown ids are skipped. Undefined = no picker involvement (engine default applies). */

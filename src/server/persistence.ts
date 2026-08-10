@@ -27,6 +27,14 @@ export function atomicWriteText(path: string, text: string): void {
   renameSync(tmp, path);
 }
 
+/** Write raw bytes to `path` atomically (tmp + rename). */
+export function atomicWriteFile(path: string, data: Buffer): void {
+  mkdirSync(dirname(path), { recursive: true });
+  const tmp = path + ".tmp";
+  writeFileSync(tmp, data);
+  renameSync(tmp, path);
+}
+
 /** Format a timestamp suffix like `.bak.20260808-101530`. */
 export function timestampSuffix(): string {
   const d = new Date();

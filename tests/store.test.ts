@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { CharacterTemplateSchema } from "../src/schemas";
 import type { Playthrough } from "../src/schemas";
 import {
   createCharacterTemplateRecord,
@@ -13,6 +14,7 @@ import {
   getCharacterTemplate,
   getPersona,
   getPlaythroughRecord,
+  importCharacterCard,
   listCharacterTemplates,
   listPersonas,
   listPlaythroughRecords,
@@ -22,6 +24,7 @@ import {
   updatePersonaRecord,
   updatePlaythroughRecord
 } from "../src/server/store";
+import type { ParsedCard } from "../src/server/characterCards/parseCard";
 
 let tempDirs: string[] = [];
 
@@ -289,5 +292,119 @@ describe("character library — CCv2 metadata stamping (A1)", () => {
     expect(loaded?.specVersion).toBe("1.0");
     expect(loaded?.tags).toEqual([]);
     expect(loaded?.extensions).toEqual({});
+  });
+});
+
+describe("character library — CCv2 import (A5)", () => {
+  const card: ParsedCard = {
+    name: "Mira",
+    description: "A curious fox girl.\n{{char}} loves exploring.",
+    personality: "Friendly",
+    scenario: "A misty forest.",
+    creator: "PPLong",
+    creatorNotes: "My first card.",
+    tags: ["Fox Girl", "Adventure", "fox girl"],
+    characterVersion: "1.2",
+  };
+
+  it("import writes the untouched original + .bl.json and lists the record", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bobbinloom-ccv2-import-"));
+    tempDirs.push(dir);
+    const bytes = Buffer.from("fake-png-bytes");
+    const result = importCharacterCard(card, bytes, "png", dir);
+
+    expect(result.created).toBe(true);
+    expect(existsSync(join(dir, "mira", "mira.png"))).toBe(true);
+    expect(existsSync(join(dir, "mira", "mira.bl.json"))).toBe(true);
+    // Original bytes are preserved verbatim (D5).
+    expect(readFileSync(join(dir, "mira", "mira.png"))).toEqual(bytes);
+
+    const record = result.record;
+    expect(record.format).toBe("ccv2");
+    expect(record.spec).toBe("bobbinloom_chara");
+    expect(record.specVersion).toBe("1.0");
+    expect(record.title).toBe("Mira"); // D16
+    expect(record.content).toBe(card.description); // D6: raw description blob
+    expect(record.creator).toBe("pplong"); // D4
+    expect(record.tags).toEqual(["fox_girl", "adventure"]); // D4: normalize + dedupe
+    expect(record.cardRef).toEqual({ file: "mira.png", kind: "png" });
+    expect(record.cardVersion).toBe("1.2");
+    expect(record.scenario).toBe("A misty forest."); // D7
+
+    // The .bl.json record round-trips through the schema and the scanner.
+    const listed = listCharacterTemplates(dir);
+    expect(listed.map((t) => t.id)).toEqual([record.id]);
+    const raw = JSON.parse(readFileSync(join(dir, "mira", "mira.bl.json"), "utf8"));
+    expect(CharacterTemplateSchema.safeParse(raw).success).toBe(true);
+  });
+
+  it("json cards land in <slug>.card.json — skipped by the scanner, never quarantined", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bobbinloom-ccv2-json-"));
+    tempDirs.push(dir);
+    const rawCard = Buffer.from(
+      JSON.stringify({ spec: "chara_card_v2", data: { name: "Flora", description: "hi" } }),
+      "utf8"
+    );
+    const result = importCharacterCard({ ...card, name: "Flora", creator: "" }, rawCard, "json", dir);
+
+    const sidecar = join(dir, "flora", "flora.card.json");
+    expect(existsSync(sidecar)).toBe(true);
+    expect(existsSync(join(dir, "flora", "flora.bl.json"))).toBe(true);
+
+    // The raw CCv2 JSON is NOT a valid template — without the *.card.json skip
+    // rule it would fail validation and get quarantined (D17).
+    const listed = listCharacterTemplates(dir);
+    expect(listed.map((t) => t.id)).toEqual([result.record.id]);
+    expect(existsSync(sidecar)).toBe(true); // not quarantined
+    expect(existsSync(sidecar + ".bak")).toBe(false);
+  });
+
+  it("re-importing the same name+creator upserts in place (same id, created:false)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bobbinloom-ccv2-upsert-"));
+    tempDirs.push(dir);
+    const first = importCharacterCard(card, Buffer.from("png-v1"), "png", dir);
+    const second = importCharacterCard({ ...card, description: "updated" }, Buffer.from("png-v2"), "png", dir);
+
+    expect(second.created).toBe(false); // D11
+    expect(second.record.id).toBe(first.record.id);
+    expect(second.record.content).toBe("updated");
+    expect(listCharacterTemplates(dir)).toHaveLength(1);
+    expect(readdirSync(join(dir, "mira"))).toEqual(expect.arrayContaining(["mira.png", "mira.bl.json"]));
+  });
+
+  it("a different creator gets a new unique slug", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bobbinloom-ccv2-slug-"));
+    tempDirs.push(dir);
+    const a = importCharacterCard(card, Buffer.from("a"), "png", dir);
+    const b = importCharacterCard({ ...card, creator: "Someone Else" }, Buffer.from("b"), "png", dir);
+
+    expect(existsSync(join(dir, "mira"))).toBe(true);
+    expect(existsSync(join(dir, "mira-2"))).toBe(true);
+    expect(b.record.id).not.toBe(a.record.id);
+    expect(b.record.creator).toBe("someone else");
+  });
+
+  it("renaming an imported character keeps .bl.json and .v<N>.json suffixes", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bobbinloom-ccv2-rename-"));
+    tempDirs.push(dir);
+    const imported = importCharacterCard(card, Buffer.from("png"), "png", dir);
+    // Simulate an older BL version file inside the imported folder.
+    writeFileSync(
+      join(dir, "mira", "mira.v2.json"),
+      JSON.stringify({ id: "char_old_v2", name: "Mira", version: 2, content: "old" }),
+      "utf8"
+    );
+
+    const renamed = updateCharacterTemplateRecord(imported.record.id, { name: "Mira II" }, dir);
+
+    expect(renamed?.name).toBe("Mira II");
+    expect(existsSync(join(dir, "mira"))).toBe(false);
+    // Suffixes survive the rename — .bl.json must NOT become plain .json.
+    expect(existsSync(join(dir, "mira-ii", "mira-ii.bl.json"))).toBe(true);
+    expect(existsSync(join(dir, "mira-ii", "mira-ii.v2.json"))).toBe(true);
+    expect(existsSync(join(dir, "mira-ii", "mira.bl.json"))).toBe(false);
+    expect(existsSync(join(dir, "mira-ii", "mira.v2.json"))).toBe(false);
+    // The raw PNG sidecar keeps its name; cardRef still resolves.
+    expect(existsSync(join(dir, "mira-ii", "mira.png"))).toBe(true);
   });
 });
