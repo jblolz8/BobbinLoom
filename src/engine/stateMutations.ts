@@ -58,6 +58,11 @@ function newId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2)}`;
 }
 
+/** CCv2 sheets are read-only in play (D9): no section or clothing patches. */
+function isReadOnlySheet(next: Playthrough, character: CharacterInstance): boolean {
+  return next.characterTemplates.find((t) => t.id === character.templateId)?.format === "ccv2";
+}
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -242,6 +247,10 @@ export function applyStatePatch(state: Playthrough, patchInput: unknown): ApplyP
       rejected.push("unknown character for sectionUpdate: " + entry.characterId);
       continue;
     }
+    if (isReadOnlySheet(next, character)) {
+      rejected.push("section update rejected: " + character.name + " has a read-only CCv2 sheet");
+      continue;
+    }
     const tplIdx = next.characterTemplates.findIndex(
       (t) => t.id === character.templateId
     );
@@ -325,6 +334,7 @@ export function applyStatePatch(state: Playthrough, patchInput: unknown): ApplyP
   for (const entry of patch.characterClothingAdd ?? []) {
     const character = findCharacter(entry.characterId);
     if (!character) { rejected.push("unknown character for clothing add: " + entry.characterId); continue; }
+    if (isReadOnlySheet(next, character)) { rejected.push("clothing patch rejected: " + character.name + " has a read-only CCv2 sheet"); continue; }
     for (const item of entry.items) {
       if (!character.clothing.some((c) => c.slot.toLowerCase() === item.slot.toLowerCase())) {
         character.clothing.push(clone(item));
@@ -336,6 +346,7 @@ export function applyStatePatch(state: Playthrough, patchInput: unknown): ApplyP
   for (const entry of patch.characterClothingRemove ?? []) {
     const character = findCharacter(entry.characterId);
     if (!character) { rejected.push("unknown character for clothing remove: " + entry.characterId); continue; }
+    if (isReadOnlySheet(next, character)) { rejected.push("clothing patch rejected: " + character.name + " has a read-only CCv2 sheet"); continue; }
     for (const slot of entry.slots) {
       const idx = character.clothing.findIndex((c) => c.slot.toLowerCase() === slot.toLowerCase());
       if (idx >= 0) {
@@ -350,6 +361,7 @@ export function applyStatePatch(state: Playthrough, patchInput: unknown): ApplyP
   for (const entry of patch.characterClothingSetState ?? []) {
     const character = findCharacter(entry.characterId);
     if (!character) { rejected.push("unknown character for clothing state: " + entry.characterId); continue; }
+    if (isReadOnlySheet(next, character)) { rejected.push("clothing patch rejected: " + character.name + " has a read-only CCv2 sheet"); continue; }
     for (const item of entry.items) {
       const worn = character.clothing.find((c) => c.slot.toLowerCase() === item.slot.toLowerCase());
       if (worn) {
@@ -364,6 +376,7 @@ export function applyStatePatch(state: Playthrough, patchInput: unknown): ApplyP
   for (const entry of patch.characterClothingSet ?? []) {
     const character = findCharacter(entry.characterId);
     if (!character) { rejected.push("unknown character for clothing set: " + entry.characterId); continue; }
+    if (isReadOnlySheet(next, character)) { rejected.push("clothing patch rejected: " + character.name + " has a read-only CCv2 sheet"); continue; }
     character.clothing = clone(entry.items);
     applied.push("outfit replaced: " + character.name);
   }

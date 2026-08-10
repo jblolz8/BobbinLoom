@@ -263,3 +263,68 @@ describe("applyStatePatch — character clothing", () => {
     expect(r.state.characterTemplates[0].content).not.toContain("New vest");
   });
 });
+
+describe("applyStatePatch — CCv2 read-only sheets (D9)", () => {
+  const CCV2_TEMPLATE: CharacterTemplate = {
+    id: "tmpl_ccv2_readonly",
+    name: "Kira",
+    version: 1,
+    summary: "",
+    startingClothing: [],
+    content: "{{char}} is a mysterious wanderer.",
+    format: "ccv2"
+  };
+
+  function withCcV2Cast(): Playthrough {
+    const pt = createInitialPlaythrough("CCv2 Read-Only Test");
+    pt.characterTemplates.push(CCV2_TEMPLATE);
+    pt.characters.push(instantiateTemplate(CCV2_TEMPLATE, pt.id, pt.branchId, pt.locationId));
+    return pt;
+  }
+
+  it("rejects characterSectionUpdate and characterClothingAdd for CCv2-backed characters", () => {
+    const pt = withCcV2Cast();
+    const ccv2 = pt.characters[1];
+    const contentBefore = pt.characterTemplates[1].content;
+    const clothingBefore = ccv2.clothing.map((c) => ({ ...c }));
+
+    const r = applyStatePatch(pt, {
+      characterSectionUpdate: [{ characterId: ccv2.id, section: "Appearance", content: "- Tall" }],
+      characterClothingAdd: [{ characterId: ccv2.id, items: [{ slot: "Top", name: "Cloak" }] }]
+    });
+
+    expect(r.applied).toEqual([]);
+    expect(r.rejected).toHaveLength(2);
+    expect(r.rejected[0]).toContain("read-only CCv2 sheet");
+    expect(r.rejected[1]).toContain("read-only CCv2 sheet");
+    // State unchanged: sheet content and clothing untouched.
+    expect(r.state.characterTemplates[1].content).toBe(contentBefore);
+    expect(r.state.characters[1].clothing).toEqual(clothingBefore);
+  });
+
+  it("rejects characterClothingRemove/SetState/Set for CCv2-backed characters", () => {
+    const pt = withCcV2Cast();
+    const ccv2 = pt.characters[1];
+    const r = applyStatePatch(pt, {
+      characterClothingRemove: [{ characterId: ccv2.id, slots: ["Top"] }],
+      characterClothingSetState: [{ characterId: ccv2.id, items: [{ slot: "Top", state: "torn" }] }],
+      characterClothingSet: [{ characterId: ccv2.id, items: [{ slot: "Dress", name: "Gown" }] }]
+    });
+    expect(r.applied).toEqual([]);
+    expect(r.rejected).toHaveLength(3);
+    expect(r.rejected.every((m) => m.includes("read-only CCv2 sheet"))).toBe(true);
+    expect(r.state.characters[1].clothing).toEqual([]);
+  });
+
+  it("still applies the same patches to BL-backed characters", () => {
+    const pt = withCcV2Cast();
+    const bl = pt.characters[0]; // Mira (DEMO_TEMPLATE, BL)
+    const r = applyStatePatch(pt, {
+      characterSectionUpdate: [{ characterId: bl.id, section: "Appearance", content: "- Tall and weathered" }],
+      characterClothingAdd: [{ characterId: bl.id, items: [{ slot: "Head", name: "Hood" }] }]
+    });
+    expect(r.rejected).toEqual([]);
+    expect(r.state.characterTemplates[0].content).toContain("- Tall and weathered");
+    expect(r.state.characters[0].clothing.find((c) => c.slot === "Head")?.name).toBe("Hood");
+  });
+});
