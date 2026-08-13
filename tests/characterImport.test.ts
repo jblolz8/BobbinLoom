@@ -50,6 +50,58 @@ describe("parseCard (CCv2 card parsing + validation)", () => {
     expect(card.description).toBe("A curious fox girl. {{char}} loves exploring.");
   });
 
+  const v1Card = {
+    name: "Old Pygmalion Bot",
+    description: "A grumpy tavern keeper. {{char}} hates rain.",
+    personality: "Grumpy, secretly soft-hearted.",
+    scenario: "A rainy night at the tavern.",
+    first_mes: "What'll it be?",
+    creatorcomment: "Made back in 2023.",
+    tags: "fantasy, tavern, grumpy",
+    creator: "PPLong",
+    character_version: "1.0",
+  };
+
+  it("parses a flat V1 card (no spec / no data wrapper)", () => {
+    const bytes = Buffer.from(JSON.stringify(v1Card), "utf8");
+    const card = parseCard("old.json", bytes);
+
+    expect(card.name).toBe("Old Pygmalion Bot");
+    expect(card.description).toBe("A grumpy tavern keeper. {{char}} hates rain.");
+    expect(card.personality).toBe("Grumpy, secretly soft-hearted.");
+    expect(card.scenario).toBe("A rainy night at the tavern.");
+    expect(card.creator).toBe("PPLong");
+    expect(card.characterVersion).toBe("1.0");
+  });
+
+  it("splits a V1 comma-separated tags string into an array", () => {
+    const bytes = Buffer.from(JSON.stringify(v1Card), "utf8");
+    const card = parseCard("old.json", bytes);
+    expect(card.tags).toEqual(["fantasy", "tavern", "grumpy"]);
+  });
+
+  it("maps the legacy creatorcomment field to creatorNotes", () => {
+    const bytes = Buffer.from(JSON.stringify(v1Card), "utf8");
+    const card = parseCard("old.json", bytes);
+    expect(card.creatorNotes).toBe("Made back in 2023.");
+  });
+
+  it("prefers creator_notes over creatorcomment when both are present", () => {
+    const bytes = Buffer.from(
+      JSON.stringify({ ...v1Card, creator_notes: "modern notes" }),
+      "utf8"
+    );
+    const card = parseCard("old.json", bytes);
+    expect(card.creatorNotes).toBe("modern notes");
+  });
+
+  it("parses a flat V1 card from a base64 PNG chara chunk", () => {
+    const bytes = makePng(Buffer.from(JSON.stringify(v1Card), "utf8").toString("base64"));
+    const card = parseCard("old.png", bytes);
+    expect(card.name).toBe("Old Pygmalion Bot");
+    expect(card.tags).toEqual(["fantasy", "tavern", "grumpy"]);
+  });
+
   it("accepts chara_card_v3 cards (v2 fields parsed, v3 assets ignored)", () => {
     const bytes = Buffer.from(
       JSON.stringify({ spec: "chara_card_v3", data: { name: "Flora", description: "Leafy." } }),
@@ -66,12 +118,12 @@ describe("parseCard (CCv2 card parsing + validation)", () => {
     expect(() => parseCard("broken.json", bytes)).toThrow(/no `data` object/);
   });
 
-  it("rejects an unsupported card spec", () => {
+  it("rejects an unknown spec", () => {
     const bytes = Buffer.from(
-      JSON.stringify({ spec: "chara_card_v1", data: { name: "Old", description: "x" } }),
+      JSON.stringify({ spec: "chara_card_v9", data: { name: "Future", description: "x" } }),
       "utf8"
     );
-    expect(() => parseCard("old.json", bytes)).toThrow(/Unsupported card spec "chara_card_v1"/);
+    expect(() => parseCard("future.json", bytes)).toThrow(/Unsupported card spec "chara_card_v9"/);
   });
 
   it("throws a readable error when the card has no name", () => {

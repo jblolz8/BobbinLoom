@@ -33,23 +33,52 @@ export function parseCard(fileName: string, bytes: Buffer): ParsedCard {
       throw new Error("Card data is not valid JSON.");
     }
   }
-  const data = (raw as { spec?: string; data?: Record<string, unknown> }).data;
   const spec = (raw as { spec?: string }).spec;
-  if (!data || typeof data !== "object") throw new Error("Card JSON has no `data` object.");
-  if (spec !== "chara_card_v2" && spec !== "chara_card_v3") {
-    throw new Error(`Unsupported card spec "${String(spec)}" — expected chara_card_v2.`);
+  let data: Record<string, unknown>;
+
+  if (spec !== undefined) {
+    // Spec'd card: V2/V3 (and future) nest fields under `data`.
+    const nested = (raw as { data?: unknown }).data;
+    if (!nested || typeof nested !== "object") {
+      throw new Error("Card JSON has no `data` object.");
+    }
+    if (spec !== "chara_card_v2" && spec !== "chara_card_v3") {
+      throw new Error(`Unsupported card spec "${String(spec)}" — expected chara_card_v2.`);
+    }
+    data = nested as Record<string, unknown>;
+  } else {
+    // V1 (TavernAI / pygmalion-era) card: flat object, no `spec`, no `data`
+    // wrapper. The top-level object IS the field map (matches SillyTavern's
+    // `jsonData.spec === undefined` → v1 import gate).
+    if (typeof raw !== "object" || raw === null) {
+      throw new Error("Card JSON has no `data` object.");
+    }
+    data = raw as Record<string, unknown>;
   }
+
   const str = (v: unknown): string => (typeof v === "string" ? v : "");
   const name = str(data.name).trim();
   if (!name) throw new Error("Card has no name.");
+
+  // V1 used `creatorcomment` before `creator_notes` was standardized.
+  const creatorNotes = str(data.creator_notes) || str((data as { creatorcomment?: unknown }).creatorcomment);
+
+  // V1 allowed tags as a comma-separated string; V2 uses an array.
+  const rawTags = data.tags;
+  const tags = Array.isArray(rawTags)
+    ? rawTags.filter((t): t is string => typeof t === "string")
+    : typeof rawTags === "string"
+      ? rawTags.split(",").map((t) => t.trim()).filter(Boolean)
+      : [];
+
   return {
     name,
     description: str(data.description),
     personality: str(data.personality),
     scenario: str(data.scenario),
     creator: str(data.creator),
-    creatorNotes: str(data.creator_notes),
-    tags: Array.isArray(data.tags) ? data.tags.filter((t): t is string => typeof t === "string") : [],
+    creatorNotes,
+    tags,
     characterVersion: str(data.character_version),
   };
 }

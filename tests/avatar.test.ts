@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createCharacterTemplateRecord, getCharacterAvatarPath, importCharacterCard } from "../src/server/store";
+import { parseCard } from "../src/server/characterCards/parseCard";
 import type { ParsedCard } from "../src/server/characterCards/parseCard";
 
 let tempDirs: string[] = [];
@@ -73,5 +74,33 @@ describe("getCharacterAvatarPath", () => {
     tempDirs.push(dir);
 
     expect(getCharacterAvatarPath("char_nope", dir)).toBeNull();
+  });
+});
+
+describe("V1 card import (regression)", () => {
+  it("parses a flat V1 card and imports it as a read-only ccv2 record", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bobbinloom-v1-"));
+    tempDirs.push(dir);
+
+    const v1Json = JSON.stringify({
+      name: "Old Bot",
+      description: "A grumpy bot. {{char}} hates rain.",
+      personality: "Grumpy",
+      scenario: "Rainy night",
+      creator: "PPLong",
+      creatorcomment: "legacy notes",
+      tags: "fantasy, tavern",
+    });
+
+    const card = parseCard("old.json", Buffer.from(v1Json, "utf8"));
+    const { record } = importCharacterCard(card, Buffer.from(v1Json, "utf8"), "json", dir);
+
+    expect(record.format).toBe("ccv2");
+    expect(record.spec).toBe("bobbinloom_chara");
+    expect(record.content).toBe("A grumpy bot. {{char}} hates rain.");
+    expect(record.scenario).toBe("Rainy night");
+    expect(record.creatorNotes).toBe("legacy notes");
+    expect(record.creator).toBe("pplong");
+    expect(record.tags).toEqual(["fantasy", "tavern"]);
   });
 });
