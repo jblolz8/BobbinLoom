@@ -1819,6 +1819,21 @@
   vertical-align: middle;
 }
 
+/* Converted card: originally CCv2, now has a BL-format sheet alongside. */
+.ccv2bl-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border-radius: 4px;
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.12);
+  border: 1px solid rgba(167, 139, 250, 0.35);
+  vertical-align: middle;
+}
+
 /* Read-only notice shown wherever a CCv2 sheet's content/clothing are locked (C4). */
 .ccv2-readonly-badge {
   display: inline-flex;

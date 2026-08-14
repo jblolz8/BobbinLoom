@@ -76,3 +76,35 @@ export function editCharacter(
     body: JSON.stringify(payload)
   });
 }
+
+// ── CCv2 → BL conversion ──
+
+export type ConvertGenerateResult = {
+  content: string;
+  originalContent: string;
+  record: CharacterTemplate;
+};
+
+export type ConvertApplyResult = {
+  record: CharacterTemplate;
+};
+
+export function convertCharacterGenerate(
+  id: string,
+  feedback?: string
+): Promise<ConvertGenerateResult> {
+  return request<ConvertGenerateResult>(`/api/characters/${id}/convert`, {
+    method: "POST",
+    body: JSON.stringify({ action: "generate", ...(feedback ? { feedback } : {}) }),
+  });
+}
+
+export function convertCharacterApply(
+  id: string,
+  content: string
+): Promise<ConvertApplyResult> {
+  return request<ConvertApplyResult>(`/api/characters/${id}/convert`, {
+    method: "POST",
+    body: JSON.stringify({ action: "apply", content }),
+  });
+}

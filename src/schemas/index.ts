@@ -89,7 +89,8 @@ export const CharacterTemplateSchema = z.object({
   cardRef: z.object({ file: z.string(), kind: z.enum(["png", "json"]) }).optional(),
   cardVersion: z.string().optional(),
   scenario: z.string().optional(),
-});
+    ccv2Content: z.string().optional(),
+  });
 export type CharacterTemplate = z.infer<typeof CharacterTemplateSchema>;
 
 export const LocationEntrySchema = z.object({

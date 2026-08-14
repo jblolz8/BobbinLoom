@@ -1800,3 +1800,195 @@
 .toggle-switch input:checked + .toggle-slider:before {
   transform: translateX(20px);
 }
+
+/* ── Diff Modal (CCv2 → BL conversion) ── */
+
+.diff-modal {
+  max-width: 900px;
+  max-height: 85vh;
+}
+
+.diff-header-row {
+  display: flex;
+  background: var(--bg-secondary, #1a1a2e);
+  border-bottom: 1px solid var(--border-color, #333);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.diff-pane-label {
+  flex: 1;
+  padding: 6px 12px;
+}
+
+.diff-body {
+  font-family: var(--mono-font, "Consolas", "Courier New", monospace);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  max-height: 50vh;
+  overflow-y: auto;
+  background: var(--bg-code, #0d1117);
+}
+
+/* ── Two-pane diff ── */
+.two-pane-diff {
+  width: 100%;
+  border: 1px solid var(--border-color, #333);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.two-pane-diff-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--bg-secondary, #1a1a2e);
+  border-bottom: 1px solid var(--border-color, #333);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.two-pane-diff-label {
+  padding: 6px 12px;
+  border-right: 1px solid var(--border-color, #333);
+}
+.two-pane-diff-label:last-child { border-right: none; }
+
+.two-pane-diff-body {
+  max-height: 50vh;
+  overflow-y: auto;
+  font-family: var(--mono-font, "Consolas", "Courier New", monospace);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  background: var(--bg-code, #0d1117);
+}
+
+.two-pane-diff-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.08);
+}
+.two-pane-diff-row:last-child { border-bottom: none; }
+
+.diff-cell {
+  display: flex;
+  padding: 0 4px;
+  min-height: 1.5em;
+  border-right: 1px solid rgba(128, 128, 128, 0.12);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.diff-cell:last-child { border-right: none; }
+
+.diff-cell-num {
+  width: 38px;
+  text-align: right;
+  padding-right: 8px;
+  color: var(--text-dim, #666);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.diff-cell-content {
+  flex: 1;
+}
+
+.diff-cell-empty { background: transparent; }
+.diff-cell-same { background: transparent; }
+.diff-cell-added { background: rgba(0, 255, 0, 0.10); }
+.diff-cell-added .diff-cell-num { color: #4caf50; }
+.diff-cell-removed { background: rgba(255, 0, 0, 0.10); }
+.diff-cell-removed .diff-cell-num { color: #f44336; }
+
+/* Edit-form Both-tab sizing */
+.editor-both-diff .two-pane-diff-body { max-height: 40vh; }
+
+/* ── Edit-form tabs (BL / Original / Both) ── */
+.editor-tabs-wrap { display: flex; flex-direction: column; gap: 8px; }
+.editor-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-color, #333);
+}
+.editor-tabs button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #999);
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+}
+.editor-tabs button:hover { color: var(--text-color, #ddd); }
+.editor-tabs button.active {
+  color: var(--text-color, #ddd);
+  background: var(--bg-secondary, #1a1a2e);
+  border-color: var(--border-color, #333);
+  font-weight: 600;
+}
+
+.diff-stat {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.diff-stat.added { color: #4caf50; }
+.diff-stat.removed { color: #f44336; }
+
+/* Diff footer */
+.diff-footer {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-color, #333);
+  background: var(--bg-secondary, #1a1a2e);
+}
+
+.diff-footer-left {
+  flex: 1;
+}
+
+.diff-footer-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.diff-readonly-note {
+  color: var(--text-dim, #666);
+  font-style: italic;
+  font-size: 0.85rem;
+}
+
+/* ── Convert button ── */
+.convert-btn {
+  background: var(--accent-color, #7c3aed);
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.convert-btn:hover:not(:disabled) {
+  background: var(--accent-hover, #6d28d9);
+}
+.convert-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.editor-header-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+/* ── Import notice modal ── */
+.import-notice-modal {
+  max-width: 450px;
+}

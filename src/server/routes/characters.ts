@@ -9,13 +9,15 @@ import {
   getPlaythroughRecord,
   importCharacterCard,
   listCharacterTemplates,
+  removeCharacterImportRecord,
   updateCharacterTemplateRecord,
   updatePlaythroughRecord
 } from "../store";
 import { parseCard } from "../characterCards/parseCard";
+import { convertCardApply, convertCardGenerate } from "../characterCards/convertCard";
 import { PNG_SIG } from "../characterCards/pngText";
 import { saveToLibraryAction } from "../stateActions";
-import { dataDir } from "./helpers";
+import { abortOnClientDisconnect, dataDir, providerManager } from "./helpers";
 
 const UpdateCharacterBody = z.object({
   name: z.string().min(1).optional(),
@@ -94,6 +96,21 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
     const kind = bytes.length >= 8 && bytes.subarray(0, 8).equals(PNG_SIG) ? "png" : "json";
     try {
       const card = parseCard(body.fileName, bytes);
+
+      // Check if a BL-converted record with matching name+creator already exists.
+      // Importing a CCv2 card that was already converted would be a no-op.
+      const existingConverted = listCharacterTemplates().find(
+        (t) => t.name === card.name && t.format !== "ccv2" && t.ccv2Content !== undefined
+      );
+      if (existingConverted) {
+        return reply.code(200).send({
+          record: existingConverted,
+          created: false,
+          notice: "already_converted",
+          existingRecord: existingConverted,
+        });
+      }
+
       const result = importCharacterCard(card, bytes, kind);
       return reply.code(result.created ? 201 : 200).send({ record: result.record, created: result.created });
     } catch (e) {
@@ -110,6 +127,59 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
     const file = getCharacterAvatarPath(params.id);
     if (!file) return reply.code(404).send({ error: "No avatar" });
     return reply.type("image/png").send(createReadStream(file));
+  });
+
+  // ── CCv2 → BL conversion ──
+  const ConvertActionBody = z.object({
+    action: z.enum(["generate", "apply"]),
+    content: z.string().optional(),       // required for "apply"
+    feedback: z.string().optional(),      // optional retry feedback for "generate"
+  });
+
+  app.post("/api/characters/:id/convert", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const body = ConvertActionBody.parse(request.body ?? {});
+
+    if (body.action === "apply" && !body.content) {
+      return reply.code(400).send({ error: "content is required for apply action" });
+    }
+
+    const template = getCharacterTemplate(params.id);
+    if (!template) return reply.code(404).send({ error: "Character not found" });
+    if (template.format !== "ccv2") {
+      return reply.code(400).send({ error: "Only CCv2 cards can be converted" });
+    }
+
+    if (body.action === "generate") {
+      try {
+        const controller = abortOnClientDisconnect(reply);
+        const provider = providerManager.getProvider();
+        const result = await convertCardGenerate(provider, {
+          template,
+          feedback: body.feedback,
+        }, controller.signal);
+        return {
+          content: result.content,
+          originalContent: template.content,
+          record: template,
+        };
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        if (message.includes("abort")) {
+          return reply.code(499).send({ error: "Request aborted" });
+        }
+        return reply.code(502).send({ error: `Conversion failed: ${message}` });
+      }
+    }
+
+    // action === "apply"
+    const updates = convertCardApply({ template, content: body.content! });
+    const updated = updateCharacterTemplateRecord(params.id, updates);
+    if (!updated) return reply.code(404).send({ error: "Character not found" });
+    // The converted record now lives at <slug>.json; drop the stale CCv2 import
+    // record (.bl.json) so the library reads exactly one record for the card.
+    removeCharacterImportRecord(params.id);
+    return { record: updated };
   });
 
   app.post("/api/playthroughs/:id/characters/:characterId/save-to-library", async (request, reply) => {

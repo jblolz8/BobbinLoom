@@ -18,6 +18,7 @@ import {
   listCharacterTemplates,
   listPersonas,
   listPlaythroughRecords,
+  removeCharacterImportRecord,
   resolvePresetForGeneration,
   setDefaultPersonaRecord,
   updateCharacterTemplateRecord,
@@ -406,5 +407,35 @@ describe("character library — CCv2 import (A5)", () => {
     expect(existsSync(join(dir, "mira-ii", "mira.v2.json"))).toBe(false);
     // The raw PNG sidecar keeps its name; cardRef still resolves.
     expect(existsSync(join(dir, "mira-ii", "mira.png"))).toBe(true);
+  });
+
+  it("conversion apply removes the stale .bl.json import record so the card reads as one BL record", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bobbinloom-ccv2-convert-cleanup-"));
+    tempDirs.push(dir);
+    const imported = importCharacterCard(card, Buffer.from("png"), "png", dir);
+
+    // Simulate the conversion apply: write the BL record to <slug>.json while
+    // the original <slug>.bl.json (format "ccv2", same id) is still on disk.
+    updateCharacterTemplateRecord(imported.record.id, {
+      content: "[Species]: Fox Girl\n[Personality]\nFriendly",
+      format: undefined,
+      ccv2Content: card.description,
+    }, dir);
+
+    // Before cleanup: the scanner reads both records (the duplicate bug).
+    expect(readdirSync(join(dir, "mira")).filter((f) => f.endsWith(".json"))).toContain("mira.bl.json");
+    expect(listCharacterTemplates(dir)).toHaveLength(2);
+
+    removeCharacterImportRecord(imported.record.id, dir);
+
+    // After cleanup: only the converted <slug>.json remains, one record total.
+    expect(existsSync(join(dir, "mira", "mira.bl.json"))).toBe(false);
+    expect(existsSync(join(dir, "mira", "mira.json"))).toBe(true);
+    // The raw original PNG (avatar source) is untouched.
+    expect(existsSync(join(dir, "mira", "mira.png"))).toBe(true);
+    const list = listCharacterTemplates(dir);
+    expect(list).toHaveLength(1);
+    expect(list[0].format).toBeUndefined();
+    expect(list[0].ccv2Content).toBe(card.description);
   });
 });

@@ -438,6 +438,25 @@ export function updateCharacterTemplateRecord(id: string, updates: Partial<Chara
   return updated;
 }
 
+/** After a CCv2 card is converted to BL, the converted record is written to
+ *  `<slug>.json` (via saveCharacterTemplateRecord), but the original import
+ *  record at `<slug>.bl.json` (same id, still `format:"ccv2"`) would otherwise
+ *  remain. That leaves two records for one card — making converted cards show
+ *  "(2 versions)" and still display as CCv2 (the `.bl.json` sorts first).
+ *  Remove the stale import record, keeping the raw original (.png/.card.json). */
+export function removeCharacterImportRecord(id: string, dir: string = CHARACTERS_DIR): void {
+  const folder = findFolderContainingId(dir, id);
+  if (!folder) return;
+  const slug = basename(folder);
+  const importRecord = join(folder, `${slug}.bl.json`);
+  if (!existsSync(importRecord)) return;
+  const r = readJsonFile(importRecord);
+  if (r.ok && (r.data as { id?: unknown }).id === id) {
+    unlinkSync(importRecord);
+    console.log(`[store] removed stale CCv2 import record ${importRecord} (id ${id})`);
+  }
+}
+
 export function deleteCharacterTemplateRecord(id: string, dir: string = CHARACTERS_DIR): boolean {
   if (!listCharacterTemplates(dir).some((t) => t.id === id)) return false;
   const folder = findFolderContainingId(dir, id);

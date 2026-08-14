@@ -21,6 +21,16 @@ export function entryKind(t: CharacterTemplate): LibraryEntryKind {
   return t.format === "ccv2" ? "ccv2" : "bl";
 }
 
+export type CardBadgeKind = "ccv2" | "ccv2bl" | null;
+
+/** Library card badge: unconverted CCv2 = "CCv2"; converted (has ccv2Content,
+ *  format dropped to BL) = "CCv2 / BL"; native BL with no original = null. */
+export function cardBadgeLabel(t: CharacterTemplate): CardBadgeKind {
+  if (t.format === "ccv2") return "ccv2";
+  if (t.ccv2Content !== undefined) return "ccv2bl";
+  return null;
+}
+
 export function displayTitle(t: CharacterTemplate): string {
   return (t.title ?? "").trim() || t.name;
 }
