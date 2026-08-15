@@ -211,6 +211,17 @@ describe("character library — folder-per-entity", () => {
     expect(getCharacterTemplate(created.id, dir)?.name).toBe("Mira II");
   });
 
+  it("updates creatorNotes on an existing character template", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bobbinloom-chars-notes-"));
+    tempDirs.push(dir);
+    const created = createCharacterTemplateRecord("Mira", dir);
+
+    const updated = updateCharacterTemplateRecord(created.id, { creatorNotes: "Author comments and lore notes." }, dir);
+
+    expect(updated?.creatorNotes).toBe("Author comments and lore notes.");
+    expect(getCharacterTemplate(created.id, dir)?.creatorNotes).toBe("Author comments and lore notes.");
+  });
+
   it("delete quarantines the folder to .bak", () => {
     const dir = mkdtempSync(join(tmpdir(), "bobbinloom-chars-delete-"));
     tempDirs.push(dir);

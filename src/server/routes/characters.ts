@@ -22,6 +22,8 @@ import { abortOnClientDisconnect, dataDir, providerManager } from "./helpers";
 const UpdateCharacterBody = z.object({
   name: z.string().min(1).optional(),
   content: z.string().optional(),
+  creatorNotes: z.string().optional(),
+  tags: z.array(z.string()).optional(),
   startingClothing: z.array(z.object({
     slot: z.string(),
     name: z.string(),
@@ -132,8 +134,9 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
   // ── CCv2 → BL conversion ──
   const ConvertActionBody = z.object({
     action: z.enum(["generate", "apply"]),
-    content: z.string().optional(),       // required for "apply"
-    feedback: z.string().optional(),      // optional retry feedback for "generate"
+    content: z.string().optional(),        // required for "apply"
+    currentContent: z.string().optional(), // active draft for targeted retry "generate"
+    feedback: z.string().optional(),       // optional retry feedback for "generate"
   });
 
   app.post("/api/characters/:id/convert", async (request, reply) => {
@@ -157,6 +160,7 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
         const result = await convertCardGenerate(provider, {
           template,
           feedback: body.feedback,
+          currentContent: body.currentContent,
         }, controller.signal);
         return {
           content: result.content,
@@ -180,6 +184,41 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
     // record (.bl.json) so the library reads exactly one record for the card.
     removeCharacterImportRecord(params.id);
     return { record: updated };
+  });
+
+  const SuggestTagsBody = z.object({
+    name: z.string().default(""),
+    content: z.string().default(""),
+    creatorNotes: z.string().optional(),
+    currentTags: z.array(z.string()).optional(),
+    guidance: z.string().optional(),
+    libraryTags: z.array(z.string()).optional(),
+  });
+
+  app.post("/api/characters/suggest-tags", async (request, reply) => {
+    const body = SuggestTagsBody.parse(request.body ?? {});
+    const controller = abortOnClientDisconnect(reply);
+    const provider = providerManager.getProvider();
+    try {
+      const tags = await provider.suggestCharacterTags(
+        {
+          name: body.name,
+          content: body.content,
+          creatorNotes: body.creatorNotes,
+          currentTags: body.currentTags,
+          guidance: body.guidance,
+        },
+        body.libraryTags ?? [],
+        controller.signal
+      );
+      return { tags };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (message.includes("abort")) {
+        return reply.code(499).send({ error: "Request aborted" });
+      }
+      return reply.code(502).send({ error: `Tag suggestion failed: ${message}` });
+    }
   });
 
   app.post("/api/playthroughs/:id/characters/:characterId/save-to-library", async (request, reply) => {

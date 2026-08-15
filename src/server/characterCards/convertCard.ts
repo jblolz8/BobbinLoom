@@ -5,6 +5,7 @@ import type { TurnProvider } from "../provider";
 export interface ConvertGenerateInput {
   template: CharacterTemplate;
   feedback?: string;
+  currentContent?: string;
   modules?: PromptPresetModule[];
 }
 
@@ -13,8 +14,9 @@ export interface ConvertGenerateOutput {
 }
 
 /**
- * Generate a BL-format character sheet from a CCv2 card.
- * Calls the AI provider's generateCharacterSheet with card metadata as context.
+ * Generate or refine a BL-format character sheet from a CCv2 card.
+ * Calls the AI provider's generateCharacterSheet (for initial conversion)
+ * or refineCharacterSheet (for targeted feedback retries).
  */
 export async function convertCardGenerate(
   provider: TurnProvider,
@@ -32,24 +34,27 @@ export async function convertCardGenerate(
   }
   const context = contextParts.join("\n") || "(no additional context)";
 
-  // Build description: use feedback-augmented prompt if retrying
-  let description = t.content;
-  if (input.feedback) {
-    description = [
-      "PREVIOUS ATTEMPT:",
-      t.content,
-      "",
-      "USER FEEDBACK — improve the following:",
-      input.feedback,
-    ].join("\n");
-  }
+  let content: string;
 
-  let content = await provider.generateCharacterSheet(
-    { name: t.name, description },
-    context,
-    input.modules,
-    signal
-  );
+  // If retrying with feedback and an existing draft, perform targeted refinement
+  if (input.feedback && input.currentContent) {
+    content = await provider.refineCharacterSheet(
+      input.currentContent,
+      t.content,
+      input.feedback,
+      context,
+      input.modules,
+      signal
+    );
+  } else {
+    // Initial generation from source CCv2 card
+    content = await provider.generateCharacterSheet(
+      { name: t.name, description: t.content },
+      context,
+      input.modules,
+      signal
+    );
+  }
 
   // Post-process: fill missing canonical sections
   content = ensureAllSections(content);
@@ -70,6 +75,8 @@ export function convertCardApply(input: ConvertApplyInput): Partial<CharacterTem
     content: input.content,
     format: undefined,           // drops the "ccv2" literal → becomes BL-native
     ccv2Content: input.template.content,  // cache original for comparison
+    ccv2CreatorNotes: input.template.creatorNotes, // cache original creator notes for comparison
+    ccv2Tags: input.template.tags,        // cache original tags for comparison / restoration
     summary: "",                 // reset summary — BL-native re-derives it
     // Preserve: name, tags, scenario, creator, cardRef, spec, specVersion, etc.
   };

@@ -279,6 +279,225 @@ export class OpenAICompatibleProvider {
     );
   }
 
+  async refineCharacterSheet(
+    currentContent: string,
+    originalCardContent: string,
+    feedback: string,
+    storyContext: string,
+    modules?: PromptPresetModule[],
+    signal?: AbortSignal
+  ): Promise<string> {
+    const sheetModules = renderModules(modules);
+    const prompt = [
+      "You are an expert character sheet editor for a local RPG chat engine called BobbinLoom.",
+      "Your task is to refine and revise an existing BobbinLoom character sheet draft based on user feedback.",
+      "",
+      "Return ONLY a JSON object with this exact shape:",
+      "{",
+      `  "content": "${toJsonExampleContent(CHARACTER_SHEET_EXAMPLE)}"`,
+      "}",
+      "",
+      "CRITICAL INSTRUCTIONS FOR TARGETED EDITING:",
+      "1. Apply the USER FEEDBACK precisely to the relevant sections or lines of the character sheet.",
+      "2. PRESERVE all parts, sections, and details of the CURRENT DRAFT that were not criticized or targeted by the feedback verbatim. Do NOT unnecessarily rewrite, shuffle, or delete good existing sections.",
+      "3. Use the standard BobbinLoom section headers: [Species], [Gender], [Body], [Appearance], [Clothing], [Personality], [Communication - Public], [Communication - Private], [Likes], [Dislikes].",
+      "4. The [Clothing] section should be a bulleted list describing what the character wears (- Top: ..., - Bottom: ..., - Feet: ...).",
+      "5. Reference the ORIGINAL SOURCE CARD if additional source lore is needed.",
+      "",
+      ...(sheetModules ? [sheetModules] : []),
+      "",
+      "--- CURRENT DRAFT SHEET ---",
+      currentContent,
+      "",
+      "--- ORIGINAL SOURCE CARD (REFERENCE) ---",
+      originalCardContent,
+      "",
+      "--- USER FEEDBACK (APPLY THIS) ---",
+      feedback,
+      "",
+      ...(storyContext && storyContext !== "(no additional context)" ? ["--- ADDITIONAL CONTEXT ---", storyContext, ""] : []),
+      "Return ONLY the JSON object. No markdown, no explanation.",
+    ].join("\n");
+
+    const messages: ChatMessage[] = [
+      { role: "user", content: prompt }
+    ];
+
+    const body: Record<string, unknown> = {
+      model: this.config.model,
+      messages,
+      temperature: 0.5,
+      max_tokens: Math.min(4000, this.config.maxTokens),
+      response_format: { type: "json_object" }
+    };
+
+    const response = await this.executeRequest(body, "/chat/completions", undefined, signal);
+    const payload = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+
+    const rawContent = payload.choices?.[0]?.message?.content?.trim() ?? "";
+    const extracted = extractJsonPayload(rawContent);
+
+    if (extracted && typeof extracted === "object" && extracted !== null && "content" in extracted) {
+      const sheetContent = (extracted as Record<string, unknown>).content;
+      if (typeof sheetContent === "string" && sheetContent.trim()) {
+        return sheetContent.trim();
+      }
+    }
+
+    const errSnippet = rawContent ? rawContent.slice(0, 300) : "(empty response)";
+    throw new Error(
+      `The model did not return a valid revised character sheet. Raw response snippet: "${errSnippet}"`
+    );
+  }
+
+  async suggestCharacterTags(
+    character: { name: string; content: string; creatorNotes?: string; currentTags?: string[]; guidance?: string },
+    libraryTags: string[],
+    signal?: AbortSignal
+  ): Promise<string[]> {
+    const systemPrompt = "You are an expert booru-style tagger for characters in BobbinLoom RPG. You must output a valid JSON object containing a 'tags' array.";
+    const userPrompt = [
+      "Given the character's details, current tags, and library taxonomy, generate a comprehensive list of recommended tags.",
+      "",
+      "Return ONLY a JSON object with this exact shape:",
+      "{",
+      '  "tags": ["female", "elf", "mage", "introvert", "fire-magic", "adventurer"]',
+      "}",
+      "",
+      "TAGGING RULES & INSTRUCTIONS:",
+      "1. COMPREHENSIVE TAGGING: Suggest between 6 and 16 strong, relevant tags capturing:",
+      "   - Species/Race (e.g. human, elf, demon, android, beastfolk)",
+      "   - Gender/Archetype (e.g. female, male, tomboy, tsundere, hero, villain)",
+      "   - Occupation/Class (e.g. mage, knight, merchant, assassin, scholar)",
+      "   - Personality Traits (e.g. stoic, cheerful, brooding, playful, sarcastic)",
+      "   - Key Physical/Clothing Features (e.g. silver-hair, red-eyes, armored, cloaked)",
+      "   - Abilities/Themes (e.g. pyromancy, swordsman, stealth, royalty, cyberpunk, fantasy)",
+      "2. CURRENT TAGS: If current tags are provided, retain the accurate ones, but actively ADD new missing descriptive tags from the character sheet and creator notes.",
+      "3. TAXONOMY REUSE: Reuse existing tags from the LIBRARY TAXONOMY where appropriate, but feel free to introduce new specific tags when the character possesses distinct traits not in the taxonomy.",
+      "4. FORMAT: Lowercase, concise (1-3 words max, kebab-case or space-separated), no generic filler tags like 'character' or 'person'.",
+      ...(character.guidance ? ["", `USER GUIDANCE: ${character.guidance}`] : []),
+      "",
+      `CHARACTER NAME: ${character.name || "Unnamed"}`,
+      character.creatorNotes ? `CREATOR'S NOTES: ${character.creatorNotes}` : "",
+      character.currentTags && character.currentTags.length > 0
+        ? `CURRENT CARD TAGS: ${character.currentTags.join(", ")}`
+        : "",
+      "CHARACTER CONTENT / SHEET:",
+      character.content || "(no content provided)",
+      "",
+      libraryTags.length > 0 ? `LIBRARY TAXONOMY (FOR REFERENCE / CONSISTENCY):\n${libraryTags.join(", ")}` : "",
+      "",
+      "Return ONLY the JSON object. No markdown, no explanation.",
+    ].filter(Boolean).join("\n");
+
+    const messages: ChatMessage[] = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ];
+
+    const maxTokens = Math.max(4000, this.config.maxTokens || 4000);
+
+    // Attempt 1: Standard with response_format: { type: "json_object" }
+    try {
+      const bodyWithFormat: Record<string, unknown> = {
+        model: this.config.model,
+        messages,
+        temperature: 0.5,
+        max_tokens: maxTokens,
+        response_format: { type: "json_object" }
+      };
+
+      const response = await this.executeRequest(bodyWithFormat, "/chat/completions", undefined, signal);
+      const rawText = await response.text();
+      let payload: {
+        choices?: Array<{
+          message?: { content?: string | null; reasoning_content?: string | null };
+          text?: string | null;
+          delta?: { content?: string | null };
+          finish_reason?: string | null;
+        }>;
+        text?: string;
+        content?: string;
+      } = {};
+
+      try {
+        payload = JSON.parse(rawText) as typeof payload;
+      } catch {
+        // Fallback to plain text if endpoint returned non-JSON
+      }
+
+      const rawContent = (
+        payload.choices?.[0]?.message?.content ??
+        payload.choices?.[0]?.text ??
+        payload.choices?.[0]?.delta?.content ??
+        payload.choices?.[0]?.message?.reasoning_content ??
+        payload.content ??
+        payload.text ??
+        rawText ??
+        ""
+      ).trim();
+
+      const tags = parseTagsFromModelOutput(rawContent);
+      if (tags.length > 0) {
+        return tags;
+      }
+    } catch {
+      // Fall through to Attempt 2
+    }
+
+    // Attempt 2: Fallback without response_format for models/proxies that don't support structured output
+    const bodyFallback: Record<string, unknown> = {
+      model: this.config.model,
+      messages,
+      temperature: 0.5,
+      max_tokens: maxTokens
+    };
+
+    const fallbackResponse = await this.executeRequest(bodyFallback, "/chat/completions", undefined, signal);
+    const fallbackRawText = await fallbackResponse.text();
+    let fallbackPayload: {
+      choices?: Array<{
+        message?: { content?: string | null; reasoning_content?: string | null };
+        text?: string | null;
+        delta?: { content?: string | null };
+        finish_reason?: string | null;
+      }>;
+      text?: string;
+      content?: string;
+    } = {};
+
+    try {
+      fallbackPayload = JSON.parse(fallbackRawText) as typeof fallbackPayload;
+    } catch {
+      // Plain text fallback
+    }
+
+    const finishReason = fallbackPayload.choices?.[0]?.finish_reason;
+    const fallbackRawContent = (
+      fallbackPayload.choices?.[0]?.message?.content ??
+      fallbackPayload.choices?.[0]?.text ??
+      fallbackPayload.choices?.[0]?.delta?.content ??
+      fallbackPayload.choices?.[0]?.message?.reasoning_content ??
+      fallbackPayload.content ??
+      fallbackPayload.text ??
+      fallbackRawText ??
+      ""
+    ).trim();
+
+    const fallbackTags = parseTagsFromModelOutput(fallbackRawContent);
+    if (fallbackTags.length > 0) {
+      return fallbackTags;
+    }
+
+    const truncationHint = finishReason === "length"
+      ? " (The model response was truncated due to token limit: finish_reason='length'. Please increase Max Tokens in Settings.)"
+      : "";
+    const errSnippet = fallbackRawContent ? fallbackRawContent.slice(0, 300) : "(empty response)";
+    throw new Error(`The model did not return any recognized tags. Raw model output: "${errSnippet}"${truncationHint}`);
+  }
+
   async summarizeChapter(transcript: string, modules?: PromptPresetModule[], signal?: AbortSignal): Promise<{ name: string; shortDescription: string; fullSummary: string }> {
     const summaryModules = renderModules(modules);
     const summaryPrompt = [
@@ -406,4 +625,107 @@ export class OpenAICompatibleProvider {
       return [];
     }
   }
+}
+
+function sanitizeTags(rawList: unknown[]): string[] {
+  return rawList
+    .filter((t): t is string => typeof t === "string" && t.trim().length > 0)
+    .map((t) => t.trim().toLowerCase().replace(/^[#\s]+/, ""))
+    .filter((t) => t.length > 0 && t.length < 50)
+    .filter((t, idx, arr) => arr.indexOf(t) === idx);
+}
+
+function parseTagsFromCleanString(rawContent: string): string[] {
+  if (!rawContent || !rawContent.trim()) return [];
+
+  // Strategy 1: Standard JSON extraction
+  const extracted = extractJsonPayload(rawContent);
+  if (extracted) {
+    if (Array.isArray(extracted)) {
+      const sanitized = sanitizeTags(extracted);
+      if (sanitized.length > 0) return sanitized;
+    }
+    if (typeof extracted === "object" && extracted !== null) {
+      for (const key of ["tags", "suggestedTags", "recommendedTags", "characterTags", "results", "output"]) {
+        if (key in extracted && Array.isArray((extracted as Record<string, unknown>)[key])) {
+          const sanitized = sanitizeTags((extracted as Record<string, unknown>)[key] as unknown[]);
+          if (sanitized.length > 0) return sanitized;
+        }
+      }
+      const values = Object.values(extracted);
+      for (const v of values) {
+        if (Array.isArray(v)) {
+          const sanitized = sanitizeTags(v);
+          if (sanitized.length > 0) return sanitized;
+        }
+      }
+    }
+  }
+
+  // Strategy 2: Look for JSON array in text [ "tag1", "tag2", ... ]
+  const arrayMatch = rawContent.match(/\[\s*(?:"[^"]*"|'[^']*'|[\w-]+)(?:\s*,\s*(?:"[^"]*"|'[^']*'|[\w-]+))*\s*\]/);
+  if (arrayMatch) {
+    try {
+      const parsed = JSON.parse(arrayMatch[0].replace(/'/g, '"'));
+      if (Array.isArray(parsed)) {
+        const sanitized = sanitizeTags(parsed);
+        if (sanitized.length > 0) return sanitized;
+      }
+    } catch {
+      // continue to next fallback strategy
+    }
+  }
+
+  // Strategy 3: Line-based bullet extraction (e.g. "- female", "1. elf", "* mage")
+  const lines = rawContent.split(/\r?\n/);
+  const lineTags: string[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const bulletMatch = trimmed.match(/^(?:[-*•+]|\d+\.)\s*["']?([^"',\n]+)["']?/);
+    if (bulletMatch?.[1]) {
+      const tag = bulletMatch[1].trim();
+      if (tag && tag.length < 40 && !tag.toLowerCase().includes("tags:")) {
+        lineTags.push(tag);
+      }
+    }
+  }
+  if (lineTags.length >= 2) {
+    const sanitized = sanitizeTags(lineTags);
+    if (sanitized.length > 0) return sanitized;
+  }
+
+  // Strategy 4: Comma-separated list
+  const commaSeparated = rawContent
+    .replace(/^.*tags:?\s*/i, "")
+    .split(/[,;\n]/)
+    .map((t) => t.trim().replace(/^["'\s]+|["'\s]+$/g, ""))
+    .filter((t) => t && t.length > 1 && t.length < 35 && !t.includes("{") && !t.includes("}"));
+  if (commaSeparated.length >= 2) {
+    const sanitized = sanitizeTags(commaSeparated);
+    if (sanitized.length > 0) return sanitized;
+  }
+
+  return [];
+}
+
+export function parseTagsFromModelOutput(rawContent: string): string[] {
+  if (!rawContent || !rawContent.trim()) return [];
+
+  // If content contains reasoning tags (<think>...</think>), test content after </think> first
+  if (rawContent.includes("</think>")) {
+    const afterThink = rawContent.split("</think>")[1]?.trim();
+    if (afterThink) {
+      const parsedAfter = parseTagsFromCleanString(afterThink);
+      if (parsedAfter.length > 0) return parsedAfter;
+    }
+  }
+
+  const cleanContent = rawContent.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  if (cleanContent) {
+    const parsed = parseTagsFromCleanString(cleanContent);
+    if (parsed.length > 0) return parsed;
+  }
+
+  // Fallback to original raw content
+  return parseTagsFromCleanString(rawContent);
 }

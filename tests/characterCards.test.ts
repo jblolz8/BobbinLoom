@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { CharacterTemplate } from "../src/schemas";
 import {
   collectCardSettings,
@@ -107,6 +107,35 @@ describe("filterLibraryEntries", () => {
     expect(filterLibraryEntries(entries, "format:bl").map((e) => e.id)).toEqual(["char_2", "char_3"]);
   });
 
+  it("tag: virtual namespace", () => {
+    expect(filterLibraryEntries(entries, "tag:elf").map((e) => e.id).sort()).toEqual(["char_1", "char_3"]);
+    expect(filterLibraryEntries(entries, "tag:merchant").map((e) => e.id)).toEqual(["char_2"]);
+    expect(filterLibraryEntries(entries, "tag:elf -tag:knight").map((e) => e.id)).toEqual(["char_1"]);
+  });
+
+  it("tag: virtual namespace does exact matching without false substring hits", () => {
+    const tailEntries = [
+      makeEntry({ id: "char_tail", name: "Kitsune", tags: ["tail", "fox"] }),
+      makeEntry({ id: "char_twin", name: "Hatsune", tags: ["twin-tails", "vocalist"] }),
+      makeEntry({ id: "char_pony", name: "Rider", tags: ["ponytail", "spear"] }),
+    ];
+    // Exact tag match: tag:tail matches ONLY char_tail
+    expect(filterLibraryEntries(tailEntries, "tag:tail").map((e) => e.id)).toEqual(["char_tail"]);
+    // Exact tag match: tag:twin-tails matches ONLY char_twin
+    expect(filterLibraryEntries(tailEntries, "tag:twin-tails").map((e) => e.id)).toEqual(["char_twin"]);
+    // Space and underscore variants of twin-tails
+    expect(filterLibraryEntries(tailEntries, "tag:twin_tails").map((e) => e.id)).toEqual(["char_twin"]);
+    // Wildcard match tag:*tail* matches all 3
+    expect(filterLibraryEntries(tailEntries, "tag:*tail*").map((e) => e.id).sort()).toEqual(["char_pony", "char_tail", "char_twin"]);
+  });
+
+  it("matches tags with spaces and underscores interchangeably", () => {
+    const spaceEntry = makeEntry({ id: "char_space", tags: ["dark fantasy", "magic user"] });
+    expect(filterLibraryEntries([spaceEntry], "tag:dark_fantasy").map((e) => e.id)).toEqual(["char_space"]);
+    expect(filterLibraryEntries([spaceEntry], 'tag:"dark fantasy"').map((e) => e.id)).toEqual(["char_space"]);
+    expect(filterLibraryEntries([spaceEntry], "dark_fantasy").map((e) => e.id)).toEqual(["char_space"]);
+  });
+
   it("negated namespace terms work", () => {
     expect(filterLibraryEntries(entries, "elf -format:ccv2").map((e) => e.id)).toEqual(["char_3"]);
   });
@@ -130,5 +159,146 @@ describe("collectCardSettings", () => {
   it("returns [] when no ccv2 scenarios exist", () => {
     expect(collectCardSettings([makeEntry()])).toEqual([]);
     expect(collectCardSettings([makeEntry({ format: "ccv2" })])).toEqual([]);
+  });
+});
+
+describe("convertCardApply", () => {
+  it("caches original content and creatorNotes onto ccv2Content and ccv2CreatorNotes", async () => {
+    const { convertCardApply } = await import("../src/server/characterCards/convertCard");
+    const tpl = makeEntry({
+      format: "ccv2",
+      content: "Original tavern description",
+      creatorNotes: "Original author notes",
+    });
+
+    const updates = convertCardApply({
+      template: tpl,
+      content: "[Species]: Fox\n[Personality]\nClever",
+    });
+
+    expect(updates.content).toBe("[Species]: Fox\n[Personality]\nClever");
+    expect(updates.format).toBeUndefined();
+    expect(updates.ccv2Content).toBe("Original tavern description");
+    expect(updates.ccv2CreatorNotes).toBe("Original author notes");
+  });
+});
+
+describe("convertCardGenerate", () => {
+  it("calls generateCharacterSheet on initial conversion without feedback", async () => {
+    const { convertCardGenerate } = await import("../src/server/characterCards/convertCard");
+    const mockProvider = {
+      generateCharacterSheet: vi.fn().mockResolvedValue("[Species]: Cat\n[Appearance]\nCute ears"),
+      refineCharacterSheet: vi.fn(),
+    } as any;
+
+    const tpl = makeEntry({
+      name: "Whiskers",
+      format: "ccv2",
+      content: "A playful stray cat in the city alleyways.",
+      scenario: "Rainy cyberpunk alley",
+      creatorNotes: "Use playful emotes",
+      tags: ["cat", "cyberpunk"],
+    });
+
+    const result = await convertCardGenerate(mockProvider, { template: tpl });
+
+    expect(mockProvider.generateCharacterSheet).toHaveBeenCalledTimes(1);
+    expect(mockProvider.refineCharacterSheet).not.toHaveBeenCalled();
+    expect(mockProvider.generateCharacterSheet).toHaveBeenCalledWith(
+      { name: "Whiskers", description: "A playful stray cat in the city alleyways." },
+      expect.stringContaining("Setting/Scenario: Rainy cyberpunk alley"),
+      undefined,
+      undefined
+    );
+    expect(result.content).toContain("[Species]: Cat");
+  });
+
+  it("calls refineCharacterSheet when both feedback and currentContent are provided", async () => {
+    const { convertCardGenerate } = await import("../src/server/characterCards/convertCard");
+    const mockProvider = {
+      generateCharacterSheet: vi.fn(),
+      refineCharacterSheet: vi.fn().mockResolvedValue("[Species]: Cat\n[Appearance]\nCute silver ears\n[Personality]\nEnergetic"),
+    } as any;
+
+    const tpl = makeEntry({
+      name: "Whiskers",
+      format: "ccv2",
+      content: "A playful stray cat in the city alleyways.",
+    });
+
+    const currentDraft = "[Species]: Cat\n[Appearance]\nCute ears\n[Personality]\nLazy";
+    const feedback = "Make the ears silver and make personality energetic";
+
+    const result = await convertCardGenerate(mockProvider, {
+      template: tpl,
+      currentContent: currentDraft,
+      feedback,
+    });
+
+    expect(mockProvider.generateCharacterSheet).not.toHaveBeenCalled();
+    expect(mockProvider.refineCharacterSheet).toHaveBeenCalledTimes(1);
+    expect(mockProvider.refineCharacterSheet).toHaveBeenCalledWith(
+      currentDraft,
+      "A playful stray cat in the city alleyways.",
+      feedback,
+      "(no additional context)",
+      undefined,
+      undefined
+    );
+    expect(result.content).toContain("Cute silver ears");
+  });
+
+  it("preserves ccv2Tags and ccv2CreatorNotes when convertCardApply is executed", async () => {
+    const { convertCardApply } = await import("../src/server/characterCards/convertCard");
+    const tpl = makeEntry({
+      name: "Sylvia",
+      format: "ccv2",
+      content: "Original CCv2 content",
+      creatorNotes: "Original notes",
+      tags: ["elf", "archer", "forest"],
+    });
+
+    const applied = convertCardApply({
+      template: tpl,
+      content: "[Species]: Elf\n[Class]: Archer",
+    });
+
+    expect(applied.content).toBe("[Species]: Elf\n[Class]: Archer");
+    expect(applied.format).toBeUndefined();
+    expect(applied.ccv2Content).toBe("Original CCv2 content");
+    expect(applied.ccv2CreatorNotes).toBe("Original notes");
+    expect(applied.ccv2Tags).toEqual(["elf", "archer", "forest"]);
+  });
+
+  describe("parseTagsFromModelOutput", () => {
+    it("parses standard JSON object with tags array", async () => {
+      const { parseTagsFromModelOutput } = await import("../src/server/openAiCompatibleProvider");
+      const output = JSON.stringify({ tags: ["female", "elf", "mage", "introvert"] });
+      expect(parseTagsFromModelOutput(output)).toEqual(["female", "elf", "mage", "introvert"]);
+    });
+
+    it("parses markdown-fenced JSON object or array", async () => {
+      const { parseTagsFromModelOutput } = await import("../src/server/openAiCompatibleProvider");
+      const output = "```json\n{\n  \"tags\": [\"cyberpunk\", \"hacker\", \"female\"]\n}\n```";
+      expect(parseTagsFromModelOutput(output)).toEqual(["cyberpunk", "hacker", "female"]);
+    });
+
+    it("parses raw JSON array output", async () => {
+      const { parseTagsFromModelOutput } = await import("../src/server/openAiCompatibleProvider");
+      const output = '["dragon", "warrior", "fire-magic"]';
+      expect(parseTagsFromModelOutput(output)).toEqual(["dragon", "warrior", "fire-magic"]);
+    });
+
+    it("parses bullet point text lists from LLMs", async () => {
+      const { parseTagsFromModelOutput } = await import("../src/server/openAiCompatibleProvider");
+      const output = "- Female\n- Elf\n- Pyromancer\n- Royalty";
+      expect(parseTagsFromModelOutput(output)).toEqual(["female", "elf", "pyromancer", "royalty"]);
+    });
+
+    it("parses outputs from reasoning models containing <think> blocks", async () => {
+      const { parseTagsFromModelOutput } = await import("../src/server/openAiCompatibleProvider");
+      const output = "<think>\nThe character is a fox kitsune with magical tail abilities.\nI should output tags for kitsune, fox, magic.\n</think>\n```json\n{\n  \"tags\": [\"kitsune\", \"fox\", \"tail\", \"magic\"]\n}\n```";
+      expect(parseTagsFromModelOutput(output)).toEqual(["kitsune", "fox", "tail", "magic"]);
+    });
   });
 });

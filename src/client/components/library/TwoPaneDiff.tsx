@@ -32,18 +32,20 @@ export function TwoPaneDiff({
     [leftContent, rightContent]
   );
   return (
-    <div className={`two-pane-diff ${className ?? ""}`}>
-      <div className="two-pane-diff-header">
-        <span className="two-pane-diff-label">{leftLabel}</span>
-        <span className="two-pane-diff-label">{rightLabel}</span>
-      </div>
-      <div className="two-pane-diff-body">
-        {rows.map((row, i) => (
-          <div className="two-pane-diff-row" key={i}>
-            <Cell cell={row.left} />
-            <Cell cell={row.right} />
-          </div>
-        ))}
+    <div className={`two-pane-diff-scroll ${className ?? ""}`}>
+      <div className="two-pane-diff">
+        <div className="two-pane-diff-header">
+          <span className="two-pane-diff-label">{leftLabel}</span>
+          <span className="two-pane-diff-label">{rightLabel}</span>
+        </div>
+        <div className="two-pane-diff-body">
+          {rows.map((row, i) => (
+            <div className="two-pane-diff-row" key={i}>
+              <Cell cell={row.left} />
+              <Cell cell={row.right} />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

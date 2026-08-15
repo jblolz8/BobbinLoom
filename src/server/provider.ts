@@ -87,6 +87,25 @@ export interface TurnProvider {
     modules?: PromptPresetModule[],
     signal?: AbortSignal
   ): Promise<string>;
+
+  /** Refine an existing character sheet draft based on targeted user feedback and
+   *  original card reference. Preserves untouched sections while applying requested changes. */
+  refineCharacterSheet(
+    currentContent: string,
+    originalCardContent: string,
+    feedback: string,
+    storyContext: string,
+    modules?: PromptPresetModule[],
+    signal?: AbortSignal
+  ): Promise<string>;
+
+  /** Suggest a list of relevant tags for a character based on its sheet, notes,
+   *  and the existing library taxonomy. */
+  suggestCharacterTags(
+    character: { name: string; content: string; creatorNotes?: string; currentTags?: string[]; guidance?: string },
+    libraryTags: string[],
+    signal?: AbortSignal
+  ): Promise<string[]>;
 }
 
 export class MockProvider implements TurnProvider {
@@ -117,5 +136,13 @@ export class MockProvider implements TurnProvider {
 
   async generateCharacterSheet(_npc: { name: string; description: string; disposition?: string }, _storyContext: string, _modules?: PromptPresetModule[], _signal?: AbortSignal): Promise<string> {
     throw new Error("Character sheet generation is not available with the Mock provider. Switch to a real provider in Settings.");
+  }
+
+  async refineCharacterSheet(_currentContent: string, _originalCardContent: string, _feedback: string, _storyContext: string, _modules?: PromptPresetModule[], _signal?: AbortSignal): Promise<string> {
+    throw new Error("Character sheet refinement is not available with the Mock provider. Switch to a real provider in Settings.");
+  }
+
+  async suggestCharacterTags(_character: { name: string; content: string; creatorNotes?: string; currentTags?: string[]; guidance?: string }, _libraryTags: string[], _signal?: AbortSignal): Promise<string[]> {
+    throw new Error("Tag suggestion is not available with the Mock provider. Switch to a real provider in Settings.");
   }
 }

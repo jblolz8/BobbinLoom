@@ -1,7 +1,7 @@
 import type { CharacterTemplate, ClothingItem, Playthrough } from "../../schemas";
 import { request } from "./client";
 
-export type CharacterTemplateUpdate = Partial<Pick<CharacterTemplate, "name" | "content">>;
+export type CharacterTemplateUpdate = Partial<Pick<CharacterTemplate, "name" | "content" | "creatorNotes" | "tags">>;
 
 export type SaveToLibraryResult = { template: CharacterTemplate; created: boolean };
 
@@ -89,13 +89,24 @@ export type ConvertApplyResult = {
   record: CharacterTemplate;
 };
 
+export type ConvertGenerateOptions = {
+  feedback?: string;
+  currentContent?: string;
+  signal?: AbortSignal;
+};
+
 export function convertCharacterGenerate(
   id: string,
-  feedback?: string
+  options?: ConvertGenerateOptions
 ): Promise<ConvertGenerateResult> {
   return request<ConvertGenerateResult>(`/api/characters/${id}/convert`, {
     method: "POST",
-    body: JSON.stringify({ action: "generate", ...(feedback ? { feedback } : {}) }),
+    body: JSON.stringify({
+      action: "generate",
+      ...(options?.feedback ? { feedback: options.feedback } : {}),
+      ...(options?.currentContent ? { currentContent: options.currentContent } : {}),
+    }),
+    signal: options?.signal,
   });
 }
 
@@ -106,5 +117,27 @@ export function convertCharacterApply(
   return request<ConvertApplyResult>(`/api/characters/${id}/convert`, {
     method: "POST",
     body: JSON.stringify({ action: "apply", content }),
+  });
+}
+
+// ── AI Tag Suggestion ──
+
+export type SuggestTagsPayload = {
+  name: string;
+  content: string;
+  creatorNotes?: string;
+  currentTags?: string[];
+  guidance?: string;
+  libraryTags?: string[];
+};
+
+export function suggestCharacterTags(
+  payload: SuggestTagsPayload,
+  options?: { signal?: AbortSignal }
+): Promise<{ tags: string[] }> {
+  return request<{ tags: string[] }>("/api/characters/suggest-tags", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    signal: options?.signal,
   });
 }
