@@ -16,13 +16,6 @@ export type DiffModalProps = {
   error?: string | null;
 };
 
-const GUIDANCE_PRESETS = [
-  { label: "🎭 Personality Focus", text: "Focus more on personality traits, demeanor, and behavioral quirks" },
-  { label: "👗 Detailed Appearance", text: "Make appearance, outfit, and physical descriptions more detailed" },
-  { label: "📋 Bulleted Stats", text: "Format inventory, weapons, and abilities clearly with bullet points" },
-  { label: "📖 Expand Lore", text: "Expand on background lore, origin, and relationship notes" },
-];
-
 export function DiffModal({
   title,
   oldLabel,
@@ -46,15 +39,6 @@ export function DiffModal({
   const addedCount = diffLines.filter((l) => l.type === "added").length;
   const removedCount = diffLines.filter((l) => l.type === "removed").length;
   const isReadOnly = !onAccept && !onRetry;
-
-  function handleApplyPreset(presetText: string) {
-    setFeedback((prev) => {
-      const trimmed = prev.trim();
-      if (!trimmed) return presetText;
-      if (trimmed.includes(presetText)) return prev;
-      return `${trimmed}; ${presetText}`;
-    });
-  }
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !loading) onClose(); }}>
@@ -207,25 +191,6 @@ export function DiffModal({
                   disabled={loading}
                   className="diff-feedback-textarea"
                 />
-
-                {/* Quick Guidance Presets */}
-                <div className="diff-presets-row">
-                  <span className="diff-presets-label">Quick Ideas:</span>
-                  <div className="diff-presets-list">
-                    {GUIDANCE_PRESETS.map((preset) => (
-                      <button
-                        key={preset.label}
-                        type="button"
-                        className="diff-preset-chip-btn"
-                        onClick={() => handleApplyPreset(preset.text)}
-                        disabled={loading}
-                        title={`Add "${preset.text}" to guidance`}
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </div>
             </div>
 

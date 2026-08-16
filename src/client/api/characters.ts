@@ -141,3 +141,48 @@ export function suggestCharacterTags(
     signal: options?.signal,
   });
 }
+
+// ── AI Character Brainstorming ──
+
+export type ProposedSectionChange = {
+  header: string;
+  body: string;
+};
+
+export type CharacterBrainstormPayload = {
+  character: {
+    name: string;
+    content: string;
+    creatorNotes?: string;
+    tags?: string[];
+    ccv2Content?: string;
+  };
+  chatHistory: Array<{
+    role: "user" | "assistant";
+    content: string;
+  }>;
+  userMessage: string;
+  includeOriginalCard?: boolean;
+};
+
+export type CharacterBrainstormResult = {
+  reply: string;
+  proposedChanges?: {
+    sections?: ProposedSectionChange[];
+    name?: string;
+    creatorNotes?: string;
+    tags?: string[];
+    fullContent?: string;
+  };
+};
+
+export function brainstormCharacter(
+  payload: CharacterBrainstormPayload,
+  options?: { signal?: AbortSignal }
+): Promise<CharacterBrainstormResult> {
+  return request<CharacterBrainstormResult>("/api/characters/brainstorm", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    signal: options?.signal,
+  });
+}

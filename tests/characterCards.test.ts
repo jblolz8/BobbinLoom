@@ -301,4 +301,108 @@ describe("convertCardGenerate", () => {
       expect(parseTagsFromModelOutput(output)).toEqual(["kitsune", "fox", "tail", "magic"]);
     });
   });
+
+  describe("brainstormCharacter", () => {
+    it("parses structured reply with surgical proposedChanges", async () => {
+      const { OpenAICompatibleProvider } = await import("../src/server/openAiCompatibleProvider");
+      const payload = {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                reply: "I've revised the Personality and Likes to make her more cheerful and fond of stargazing.",
+                proposedChanges: {
+                  sections: [
+                    { header: "Personality", body: "- Cheerful and optimistic\n- Always looks on the bright side" },
+                    { header: "Likes", body: "- Stargazing\n- Sweet pastries" }
+                  ],
+                  tags: ["cheerful", "stargazer"]
+                }
+              })
+            }
+          }
+        ]
+      };
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => payload,
+        text: async () => JSON.stringify(payload),
+      });
+
+      const provider = new OpenAICompatibleProvider(
+        {
+          providerType: "openai-compatible",
+          baseUrl: "http://localhost:1234/v1",
+          apiKey: "test",
+          model: "test-model",
+          temperature: 0.7,
+          maxTokens: 2000
+        },
+        mockFetch as unknown as typeof fetch
+      );
+
+      const result = await provider.brainstormCharacter({
+        character: {
+          name: "Mira",
+          content: "[Species]: Elf\n[Gender]: Female\n\n[Personality]\n- Quiet",
+          tags: ["elf"]
+        },
+        chatHistory: [],
+        userMessage: "Make her cheerful and add hobbies"
+      });
+
+      expect(result.reply).toContain("cheerful");
+      expect(result.proposedChanges?.sections).toHaveLength(2);
+      expect(result.proposedChanges?.sections?.[0].header).toBe("Personality");
+      expect(result.proposedChanges?.sections?.[0].body).toContain("Cheerful and optimistic");
+      expect(result.proposedChanges?.tags).toEqual(["cheerful", "stargazer"]);
+    });
+
+    it("handles conversational brainstorming responses with no proposed card edits", async () => {
+      const { OpenAICompatibleProvider } = await import("../src/server/openAiCompatibleProvider");
+      const payload = {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                reply: "Here are 3 possible backstory ideas for an ex-pirate navigator...",
+                proposedChanges: null
+              })
+            }
+          }
+        ]
+      };
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => payload,
+        text: async () => JSON.stringify(payload),
+      });
+
+      const provider = new OpenAICompatibleProvider(
+        {
+          providerType: "openai-compatible",
+          baseUrl: "http://localhost:1234/v1",
+          apiKey: "test",
+          model: "test-model",
+          temperature: 0.7,
+          maxTokens: 2000
+        },
+        mockFetch as unknown as typeof fetch
+      );
+
+      const result = await provider.brainstormCharacter({
+        character: {
+          name: "Captain Jack",
+          content: "[Species]: Human"
+        },
+        chatHistory: [],
+        userMessage: "Give me some backstory ideas"
+      });
+
+      expect(result.reply).toContain("Here are 3 possible backstory ideas");
+      expect(result.proposedChanges).toBeUndefined();
+    });
+  });
 });

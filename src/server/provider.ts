@@ -106,6 +106,45 @@ export interface TurnProvider {
     libraryTags: string[],
     signal?: AbortSignal
   ): Promise<string[]>;
+
+  /** Interactive brainstorming and refinement session for character cards. */
+  brainstormCharacter(
+    input: CharacterBrainstormInput,
+    signal?: AbortSignal
+  ): Promise<CharacterBrainstormOutput>;
+}
+
+export interface ProposedSectionChange {
+  header: string;
+  body: string;
+}
+
+export interface CharacterBrainstormInput {
+  character: {
+    name: string;
+    content: string;
+    creatorNotes?: string;
+    tags?: string[];
+    ccv2Content?: string;
+  };
+  chatHistory: Array<{
+    role: "user" | "assistant";
+    content: string;
+  }>;
+  userMessage: string;
+  includeOriginalCard?: boolean;
+  modules?: PromptPresetModule[];
+}
+
+export interface CharacterBrainstormOutput {
+  reply: string;
+  proposedChanges?: {
+    sections?: ProposedSectionChange[];
+    name?: string;
+    creatorNotes?: string;
+    tags?: string[];
+    fullContent?: string;
+  };
 }
 
 export class MockProvider implements TurnProvider {
@@ -144,5 +183,9 @@ export class MockProvider implements TurnProvider {
 
   async suggestCharacterTags(_character: { name: string; content: string; creatorNotes?: string; currentTags?: string[]; guidance?: string }, _libraryTags: string[], _signal?: AbortSignal): Promise<string[]> {
     throw new Error("Tag suggestion is not available with the Mock provider. Switch to a real provider in Settings.");
+  }
+
+  async brainstormCharacter(_input: CharacterBrainstormInput, _signal?: AbortSignal): Promise<CharacterBrainstormOutput> {
+    throw new Error("Character brainstorming is not available with the Mock provider. Switch to a real provider in Settings.");
   }
 }

@@ -2,15 +2,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import type { CharacterTemplate } from "../../../schemas";
 import { createCharacter, deleteCharacter, importCharacter, listCharacters, updateCharacter } from "../../api";
-import { convertCharacterApply, convertCharacterGenerate, suggestCharacterTags } from "../../api";
-import type { CharacterTemplateUpdate } from "../../api";
-import { CHARACTER_SHEET_EXAMPLE } from "../../../engine/characterSections";
+import { convertCharacterApply, convertCharacterGenerate, suggestCharacterTags, brainstormCharacter } from "../../api";
+import type { CharacterTemplateUpdate, ProposedSectionChange, CharacterBrainstormResult } from "../../api";
+import { CHARACTER_SHEET_EXAMPLE, applySectionChanges } from "../../../engine/characterSections";
 import { displayTitle, entryKind, filterLibraryEntries, cardBadgeLabel } from "../../../engine/characterCards";
 import { Icon, TagChip } from "../base";
 import { DiffModal } from "./DiffModal";
 import { TwoPaneDiff } from "./TwoPaneDiff";
 import { TagSuggestionModal } from "./TagSuggestionModal";
 import { TagTaxonomyModal } from "./TagTaxonomyModal";
+import { CharacterBrainstormPanel, type BrainstormChatMessage } from "./CharacterBrainstormPanel";
 import { getTagTaxonomy } from "../../api";
 import { groupTagsByCategory, type TagTaxonomyConfig } from "../../../engine/tagTaxonomy";
 
@@ -418,6 +419,14 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [mobileSidebarExpanded, setMobileSidebarExpanded] = useState(false);
 
+  // ── AI Brainstorming State ──
+  const [aiBrainstormOpen, setAiBrainstormOpen] = useState(false);
+  const [aiMessages, setAiMessages] = useState<BrainstormChatMessage[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [includeOriginalCcv2, setIncludeOriginalCcv2] = useState(false);
+  const aiAbortControllerRef = useRef<AbortController | null>(null);
+
   const isFormDirty = useMemo(() => {
     if (!editorOpen) return false;
     if (form.name !== initialForm.name) return true;
@@ -429,6 +438,8 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
     }
     return false;
   }, [form, initialForm, editorOpen]);
+
+  const hasUnsavedSession = isFormDirty || aiMessages.length > 0;
 
   const convertingCharacter = useMemo(() => {
     if (!convertingId) return null;
@@ -478,13 +489,26 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
     setSuggestedTags([]);
   }
 
+  function handleCancelBrainstorm() {
+    if (aiAbortControllerRef.current) {
+      aiAbortControllerRef.current.abort();
+      aiAbortControllerRef.current = null;
+    }
+    setAiLoading(false);
+  }
+
   function openCreate() {
     handleCancelTagSuggest();
+    handleCancelBrainstorm();
     const blank = blankForm();
     setForm(blank);
     setInitialForm(blank);
     setEditingId(null);
     setEditingIsCcv2(false);
+    setAiBrainstormOpen(false);
+    setAiMessages([]);
+    setAiError(null);
+    setIncludeOriginalCcv2(false);
     setEditorOpen(true);
     setStatus(null);
     setConvertedSuccess(null);
@@ -493,12 +517,17 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
 
   function openEdit(t: CharacterTemplate) {
     handleCancelTagSuggest();
+    handleCancelBrainstorm();
     const initial = templateToForm(t);
     setForm(initial);
     setInitialForm(initial);
     setEditingId(t.id);
     setEditingIsCcv2(t.format === "ccv2");
     setViewTab("bl");
+    setAiBrainstormOpen(false);
+    setAiMessages([]);
+    setAiError(null);
+    setIncludeOriginalCcv2(false);
     setEditorOpen(true);
     setStatus(null);
     setConvertedSuccess(null);
@@ -507,16 +536,21 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
 
   function closeEditor() {
     handleCancelTagSuggest();
+    handleCancelBrainstorm();
     setEditorOpen(false);
     setEditingId(null);
     setEditingIsCcv2(false);
     setViewTab("bl");
     setStatus(null);
     setShowDiscardConfirm(false);
+    setAiBrainstormOpen(false);
+    setAiMessages([]);
+    setAiError(null);
+    setIncludeOriginalCcv2(false);
   }
 
   function handleCancelClick() {
-    if (isFormDirty) {
+    if (hasUnsavedSession) {
       setShowDiscardConfirm(true);
     } else {
       closeEditor();
@@ -526,6 +560,150 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
   function handleConfirmDiscard() {
     setShowDiscardConfirm(false);
     closeEditor();
+  }
+
+  async function handleSendBrainstormMessage(userText: string) {
+    if (aiAbortControllerRef.current) {
+      aiAbortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    aiAbortControllerRef.current = controller;
+
+    const userMsg: BrainstormChatMessage = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      content: userText,
+    };
+
+    const nextHistory = [...aiMessages, userMsg];
+    setAiMessages(nextHistory);
+    setAiLoading(true);
+    setAiError(null);
+
+    try {
+      const activeTpl = editingId ? templates.find((t) => t.id === editingId) : undefined;
+      const res = await brainstormCharacter(
+        {
+          character: {
+            name: form.name,
+            content: form.content,
+            creatorNotes: form.creatorNotes,
+            tags: form.tags,
+            ccv2Content: activeTpl?.ccv2Content,
+          },
+          chatHistory: aiMessages.map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+          userMessage: userText,
+          includeOriginalCard: includeOriginalCcv2,
+        },
+        { signal: controller.signal }
+      );
+
+      const assistantMsg: BrainstormChatMessage = {
+        id: `assistant-${Date.now()}`,
+        role: "assistant",
+        content: res.reply,
+        proposedChanges: res.proposedChanges,
+        appliedChanges: {},
+      };
+
+      setAiMessages([...nextHistory, assistantMsg]);
+    } catch (e) {
+      if (
+        (e instanceof Error && (e.name === "AbortError" || e.message.includes("abort") || e.message.includes("cancelled"))) ||
+        controller.signal.aborted
+      ) {
+        return;
+      }
+      setAiError(e instanceof Error ? e.message : String(e));
+    } finally {
+      if (aiAbortControllerRef.current === controller) {
+        setAiLoading(false);
+        aiAbortControllerRef.current = null;
+      }
+    }
+  }
+
+  function handleApplySection(section: ProposedSectionChange, messageId: string) {
+    const updatedContent = applySectionChanges(form.content, [section]);
+    setForm((f) => ({ ...f, content: updatedContent }));
+
+    setAiMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === messageId
+          ? {
+              ...msg,
+              appliedChanges: {
+                ...msg.appliedChanges,
+                [`section:${section.header.toLowerCase()}`]: true,
+              },
+            }
+          : msg
+      )
+    );
+  }
+
+  function handleApplyAllProposed(
+    proposed: CharacterBrainstormResult["proposedChanges"],
+    messageId: string
+  ) {
+    if (!proposed) return;
+
+    setForm((f) => {
+      let content = f.content;
+      if (proposed.fullContent) {
+        content = proposed.fullContent;
+      } else if (proposed.sections && proposed.sections.length > 0) {
+        content = applySectionChanges(content, proposed.sections);
+      }
+
+      let tags = f.tags;
+      if (proposed.tags && proposed.tags.length > 0) {
+        const tagSet = new Set(f.tags.map((t) => t.toLowerCase()));
+        const merged = [...f.tags];
+        for (const t of proposed.tags) {
+          if (!tagSet.has(t.toLowerCase())) {
+            tagSet.add(t.toLowerCase());
+            merged.push(t);
+          }
+        }
+        tags = merged;
+      }
+
+      return {
+        ...f,
+        content,
+        tags,
+        ...(proposed.creatorNotes ? { creatorNotes: proposed.creatorNotes } : {}),
+        ...(proposed.name ? { name: proposed.name } : {}),
+      };
+    });
+
+    setAiMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === messageId
+          ? {
+              ...msg,
+              appliedChanges: {
+                ...msg.appliedChanges,
+                all: true,
+                ...(proposed.sections
+                  ? Object.fromEntries(
+                      proposed.sections.map((s) => [`section:${s.header.toLowerCase()}`, true])
+                    )
+                  : {}),
+              },
+            }
+          : msg
+      )
+    );
+  }
+
+  function handleClearBrainstormChat() {
+    setAiMessages([]);
+    setAiError(null);
   }
 
   async function handleOpenAiTagSuggestions(guidance?: unknown) {
@@ -559,7 +737,6 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
         (e instanceof Error && (e.name === "AbortError" || e.message.includes("abort") || e.message.includes("cancelled"))) ||
         controller.signal.aborted
       ) {
-        // Cancelled cleanly by user
         return;
       }
       setTagSuggestError(e instanceof Error ? e.message : String(e));
@@ -579,7 +756,7 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
       const update = formToUpdate(form);
       if (editingId) {
         await updateCharacter(editingId, editingIsCcv2 ? { name: update.name } : update);
-        setStatus(`"${form.name}" updated.`);
+        setStatus(`"${form.name}" saved successfully.`);
       } else {
         const created = await createCharacter(form.name);
         await updateCharacter(created.id, {
@@ -587,10 +764,11 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
           creatorNotes: form.creatorNotes,
           tags: form.tags,
         });
-        setStatus(`"${form.name}" created.`);
+        setEditingId(created.id);
+        setStatus(`"${form.name}" created and saved successfully.`);
       }
+      setInitialForm({ ...form });
       setTemplates(await listCharacters());
-      closeEditor();
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e));
     } finally {
@@ -902,209 +1080,252 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
         ) : null}
 
         {editorOpen ? (
-          <div className="character-editor-inline">
-            <h3>{editingId ? `Edit: ${form.name}` : "New Character"}</h3>
-            {status ? <p className="status-message">{status}</p> : null}
+          <div className={`character-editor-inline ${aiBrainstormOpen ? "split-layout" : ""}`}>
+            <div className="editor-top-bar">
+              <div className="editor-title-wrap">
+                <h3>{editingId ? `Edit: ${form.name}` : "New Character"}</h3>
+                {status ? <span className="editor-status-toast">{status}</span> : null}
+              </div>
 
-            <div className="editor-header-actions">
-              {editingIsCcv2 ? (
-                <button
-                  className="convert-btn"
-                  onClick={() => {
-                    const tpl = templates.find(t => t.id === editingId);
-                    if (tpl) handleConvert(tpl);
-                  }}
-                  disabled={convertLoading}
-                >
-                  {convertLoading ? "Converting…" : "Convert to BL Format"}
-                </button>
-              ) : null}
+              <div className="editor-header-actions">
+                {!editingIsCcv2 ? (
+                  <button
+                    type="button"
+                    className={`ai-brainstorm-toggle-btn ${aiBrainstormOpen ? "active" : ""}`}
+                    onClick={() => setAiBrainstormOpen(!aiBrainstormOpen)}
+                    title={aiBrainstormOpen ? "Hide AI Assistant" : "Open AI Brainstorm Assistant"}
+                  >
+                    <Icon name="Sparkles" size={14} className={aiLoading ? "sparkle-pulse" : ""} />
+                    <span>AI Assistant</span>
+                    {aiMessages.length > 0 && (
+                      <span className="ai-msg-count-badge">{aiMessages.length}</span>
+                    )}
+                  </button>
+                ) : null}
+
+                {editingIsCcv2 ? (
+                  <button
+                    className="convert-btn"
+                    onClick={() => {
+                      const tpl = templates.find(t => t.id === editingId);
+                      if (tpl) handleConvert(tpl);
+                    }}
+                    disabled={convertLoading}
+                  >
+                    {convertLoading ? "Converting…" : "Convert to BL Format"}
+                  </button>
+                ) : null}
+              </div>
             </div>
 
-            <label className="editor-field">
-              <span className="editor-field-label">Name</span>
-              <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-            </label>
+            <div className="editor-split-container">
+              <div className="editor-main-pane">
+                <label className="editor-field">
+                  <span className="editor-field-label">Name</span>
+                  <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+                </label>
 
-            {(() => {
-              const tpl = editingId ? templates.find(t => t.id === editingId) : undefined;
-              const isConverted = editingId !== null && !!tpl?.ccv2Content && !editingIsCcv2;
-              const originalCreatorNotes = tpl?.ccv2CreatorNotes ?? tpl?.creatorNotes ?? "";
-              const originalTags = tpl?.ccv2Tags ?? (tpl?.format === "ccv2" ? (tpl.tags ?? []) : []) ?? [];
+                {(() => {
+                  const tpl = editingId ? templates.find(t => t.id === editingId) : undefined;
+                  const isConverted = editingId !== null && !!tpl?.ccv2Content && !editingIsCcv2;
+                  const originalCreatorNotes = tpl?.ccv2CreatorNotes ?? tpl?.creatorNotes ?? "";
+                  const originalTags = tpl?.ccv2Tags ?? (tpl?.format === "ccv2" ? (tpl.tags ?? []) : []) ?? [];
 
-              if (!isConverted) {
-                // Unconverted CCv2 (read-only) or native BL (editable) — single view.
-                return (
-                  <>
-                    <label className="editor-field">
-                      <span className="editor-field-label">
-                        Creator's Notes
-                        {editingIsCcv2 ? <span className="ccv2-readonly-badge">Read-only CCv2 sheet</span> : null}
-                      </span>
-                      <textarea
-                        rows={3}
-                        value={form.creatorNotes}
-                        onChange={e => setForm(f => ({ ...f, creatorNotes: e.target.value }))}
-                        placeholder="Optional notes from the creator (e.g. usage guidelines, character background, tags)..."
-                        className="creator-notes-textarea"
-                        disabled={editingIsCcv2}
-                      />
-                    </label>
+                  if (!isConverted) {
+                    // Unconverted CCv2 (read-only) or native BL (editable) — single view.
+                    return (
+                      <>
+                        <label className="editor-field">
+                          <span className="editor-field-label">
+                            Creator's Notes
+                            {editingIsCcv2 ? <span className="ccv2-readonly-badge">Read-only CCv2 sheet</span> : null}
+                          </span>
+                          <textarea
+                            rows={3}
+                            value={form.creatorNotes}
+                            onChange={e => setForm(f => ({ ...f, creatorNotes: e.target.value }))}
+                            placeholder="Optional notes from the creator (e.g. usage guidelines, character background, tags)..."
+                            className="creator-notes-textarea"
+                            disabled={editingIsCcv2}
+                          />
+                        </label>
 
-                    <TagChipEditor
-                      tags={form.tags}
-                      onChange={tags => setForm(f => ({ ...f, tags }))}
-                      allLibraryTags={allTagCounts.map(t => t.tag)}
-                      disabled={editingIsCcv2}
-                      onSuggestAI={!editingIsCcv2 ? () => void handleOpenAiTagSuggestions() : undefined}
-                      suggestingAI={tagSuggestLoading}
-                      taxonomyConfig={taxonomyConfig}
-                    />
-
-                    <label className="editor-field">
-                      <span className="editor-field-label">
-                        Content (full character sheet)
-                        {editingIsCcv2 ? <span className="ccv2-readonly-badge">Read-only CCv2 sheet</span> : null}
-                      </span>
-                      <textarea rows={20} value={form.content}
-                        onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
-                        placeholder={CHARACTER_SHEET_EXAMPLE}
-                        className="content-textarea"
-                        disabled={editingIsCcv2} />
-                    </label>
-                  </>
-                );
-              }
-
-              // Converted → tabs: BL Format (editable) / Original (read-only) / Both (live).
-              return (
-                <div className="editor-tabs-wrap">
-                  <div className="editor-tabs" role="tablist">
-                    <button className={viewTab === "bl" ? "active" : ""} onClick={() => setViewTab("bl")} role="tab">BL Format</button>
-                    <button className={viewTab === "original" ? "active" : ""} onClick={() => setViewTab("original")} role="tab">Original</button>
-                    <button className={viewTab === "both" ? "active" : ""} onClick={() => setViewTab("both")} role="tab">Both</button>
-                  </div>
-                  {viewTab === "bl" ? (
-                    <>
-                      <label className="editor-field">
-                        <span className="editor-field-label">Creator's Notes (BL format — editable)</span>
-                        <textarea
-                          rows={3}
-                          value={form.creatorNotes}
-                          onChange={e => setForm(f => ({ ...f, creatorNotes: e.target.value }))}
-                          placeholder="Optional notes from the creator (e.g. usage guidelines, character background, tags)..."
-                          className="creator-notes-textarea"
+                        <TagChipEditor
+                          tags={form.tags}
+                          onChange={tags => setForm(f => ({ ...f, tags }))}
+                          allLibraryTags={allTagCounts.map(t => t.tag)}
+                          disabled={editingIsCcv2}
+                          onSuggestAI={!editingIsCcv2 ? () => void handleOpenAiTagSuggestions() : undefined}
+                          suggestingAI={tagSuggestLoading}
+                          taxonomyConfig={taxonomyConfig}
                         />
-                      </label>
 
-                      <TagChipEditor
-                        tags={form.tags}
-                        onChange={tags => setForm(f => ({ ...f, tags }))}
-                        allLibraryTags={allTagCounts.map(t => t.tag)}
-                        onSuggestAI={() => void handleOpenAiTagSuggestions()}
-                        suggestingAI={tagSuggestLoading}
-                        taxonomyConfig={taxonomyConfig}
-                      />
+                        <label className="editor-field">
+                          <span className="editor-field-label">
+                            Content (full character sheet)
+                            {editingIsCcv2 ? <span className="ccv2-readonly-badge">Read-only CCv2 sheet</span> : null}
+                          </span>
+                          <textarea rows={20} value={form.content}
+                            onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
+                            placeholder={CHARACTER_SHEET_EXAMPLE}
+                            className="content-textarea"
+                            disabled={editingIsCcv2} />
+                        </label>
+                      </>
+                    );
+                  }
 
-                      <label className="editor-field">
-                        <span className="editor-field-label">Content (BL format — editable)</span>
-                        <textarea rows={20} value={form.content}
-                          onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
-                          className="content-textarea" />
-                      </label>
-                    </>
-                  ) : viewTab === "original" ? (
-                    <>
-                      <div className="editor-field read-only">
-                        <span className="editor-field-label">Original Creator's Notes</span>
-                        <pre className="content-view notes-view">{originalCreatorNotes || "(no original creator notes)"}</pre>
+                  // Converted → tabs: BL Format (editable) / Original (read-only) / Both (live).
+                  return (
+                    <div className="editor-tabs-wrap">
+                      <div className="editor-tabs" role="tablist">
+                        <button className={viewTab === "bl" ? "active" : ""} onClick={() => setViewTab("bl")} role="tab">BL Format</button>
+                        <button className={viewTab === "original" ? "active" : ""} onClick={() => setViewTab("original")} role="tab">Original</button>
+                        <button className={viewTab === "both" ? "active" : ""} onClick={() => setViewTab("both")} role="tab">Both</button>
                       </div>
+                      {viewTab === "bl" ? (
+                        <>
+                          <label className="editor-field">
+                            <span className="editor-field-label">Creator's Notes (BL format — editable)</span>
+                            <textarea
+                              rows={3}
+                              value={form.creatorNotes}
+                              onChange={e => setForm(f => ({ ...f, creatorNotes: e.target.value }))}
+                              placeholder="Optional notes from the creator (e.g. usage guidelines, character background, tags)..."
+                              className="creator-notes-textarea"
+                            />
+                          </label>
 
-                      <div className="editor-field read-only">
-                        <div className="editor-field-header-row">
-                          <span className="editor-field-label">Original CCv2 Tags</span>
-                          {originalTags.length > 0 ? (
-                            <button
-                              type="button"
-                              className="restore-tags-btn"
-                              onClick={() => setForm(f => ({ ...f, tags: [...originalTags] }))}
-                              title="Restore original CCv2 tags to current character sheet"
-                            >
-                              <Icon name="RotateCcw" size={13} /> Restore Original Tags
-                            </button>
-                          ) : null}
-                        </div>
-                        <div className="read-only-tags-wrap">
-                          {originalTags.length > 0 ? (
-                            originalTags.map(tag => (
-                              <TagChip key={tag} tag={tag} userConfig={taxonomyConfig} size="sm" />
-                            ))
-                          ) : (
-                            <span className="empty-tags-hint">(no original tags)</span>
-                          )}
-                        </div>
-                      </div>
+                          <TagChipEditor
+                            tags={form.tags}
+                            onChange={tags => setForm(f => ({ ...f, tags }))}
+                            allLibraryTags={allTagCounts.map(t => t.tag)}
+                            onSuggestAI={() => void handleOpenAiTagSuggestions()}
+                            suggestingAI={tagSuggestLoading}
+                            taxonomyConfig={taxonomyConfig}
+                          />
 
-                      <div className="editor-field read-only">
-                        <span className="editor-field-label">Original CCv2 Content</span>
-                        <pre className="content-view">{tpl!.ccv2Content!}</pre>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="editor-field">
-                        <span className="editor-field-label">Creator's Notes</span>
-                        <TwoPaneDiff
-                          leftLabel="Original Creator's Notes"
-                          rightLabel="BL Format"
-                          leftContent={originalCreatorNotes}
-                          rightContent={form.creatorNotes}
-                          className="editor-both-diff notes-diff"
-                        />
-                      </div>
+                          <label className="editor-field">
+                            <span className="editor-field-label">Content (BL format — editable)</span>
+                            <textarea rows={20} value={form.content}
+                              onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
+                              className="content-textarea" />
+                          </label>
+                        </>
+                      ) : viewTab === "original" ? (
+                        <>
+                          <div className="editor-field read-only">
+                            <span className="editor-field-label">Original Creator's Notes</span>
+                            <pre className="content-view notes-view">{originalCreatorNotes || "(no original creator notes)"}</pre>
+                          </div>
 
-                      <TagDiffViewer
-                        originalTags={originalTags}
-                        currentTags={form.tags}
-                        onRestore={() => setForm(f => ({ ...f, tags: [...originalTags] }))}
-                        taxonomyConfig={taxonomyConfig}
-                      />
+                          <div className="editor-field read-only">
+                            <div className="editor-field-header-row">
+                              <span className="editor-field-label">Original CCv2 Tags</span>
+                              {originalTags.length > 0 ? (
+                                <button
+                                  type="button"
+                                  className="restore-tags-btn"
+                                  onClick={() => setForm(f => ({ ...f, tags: [...originalTags] }))}
+                                  title="Restore original CCv2 tags to current character sheet"
+                                >
+                                  <Icon name="RotateCcw" size={13} /> Restore Original Tags
+                                </button>
+                              ) : null}
+                            </div>
+                            <div className="read-only-tags-wrap">
+                              {originalTags.length > 0 ? (
+                                originalTags.map(tag => (
+                                  <TagChip key={tag} tag={tag} userConfig={taxonomyConfig} size="sm" />
+                                ))
+                              ) : (
+                                <span className="empty-tags-hint">(no original tags)</span>
+                              )}
+                            </div>
+                          </div>
 
-                      <div className="editor-field">
-                        <span className="editor-field-label">Content</span>
-                        <TwoPaneDiff
-                          leftLabel="Original CCv2"
-                          rightLabel="BL Format"
-                          leftContent={tpl!.ccv2Content!}
-                          rightContent={form.content}
-                          className="editor-both-diff"
-                        />
-                      </div>
-                    </>
-                  )}
+                          <div className="editor-field read-only">
+                            <span className="editor-field-label">Original CCv2 Content</span>
+                            <pre className="content-view">{tpl!.ccv2Content!}</pre>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="editor-field">
+                            <span className="editor-field-label">Creator's Notes</span>
+                            <TwoPaneDiff
+                              leftLabel="Original Creator's Notes"
+                              rightLabel="BL Format"
+                              leftContent={originalCreatorNotes}
+                              rightContent={form.creatorNotes}
+                              className="editor-both-diff notes-diff"
+                            />
+                          </div>
+
+                          <TagDiffViewer
+                            originalTags={originalTags}
+                            currentTags={form.tags}
+                            onRestore={() => setForm(f => ({ ...f, tags: [...originalTags] }))}
+                            taxonomyConfig={taxonomyConfig}
+                          />
+
+                          <div className="editor-field">
+                            <span className="editor-field-label">Content</span>
+                            <TwoPaneDiff
+                              leftLabel="Original CCv2"
+                              rightLabel="BL Format"
+                              leftContent={tpl!.ccv2Content!}
+                              rightContent={form.content}
+                              className="editor-both-diff"
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                <div className="modal-actions editor-footer-actions">
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    onClick={handleCancelClick}
+                    disabled={saving}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-btn editor-save-btn"
+                    onClick={handleSave}
+                    disabled={saving || !form.name.trim() || !isFormDirty}
+                    title={!isFormDirty ? "No changes to save" : "Save character card"}
+                  >
+                    <Icon name="Check" size={14} />
+                    {saving ? "Saving…" : "Save"}
+                  </button>
                 </div>
-              );
-            })()}
+              </div>
 
-            <div className="modal-actions editor-footer-actions">
-              <button
-                type="button"
-                className="secondary-btn"
-                onClick={handleCancelClick}
-                disabled={saving}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="primary-btn editor-save-btn"
-                onClick={handleSave}
-                disabled={saving || !form.name.trim() || !isFormDirty}
-                title={!isFormDirty ? "No changes to save" : "Save character card"}
-              >
-                <Icon name="Check" size={14} />
-                {saving ? "Saving…" : "Save"}
-              </button>
+              {aiBrainstormOpen && (
+                <div className="editor-ai-pane">
+                  <CharacterBrainstormPanel
+                    characterName={form.name}
+                    hasOriginalCcv2={!!templates.find(t => t.id === editingId)?.ccv2Content}
+                    includeOriginalCcv2={includeOriginalCcv2}
+                    onToggleIncludeOriginalCcv2={setIncludeOriginalCcv2}
+                    messages={aiMessages}
+                    onSendMessage={handleSendBrainstormMessage}
+                    onApplySection={handleApplySection}
+                    onApplyAll={handleApplyAllProposed}
+                    onClearChat={handleClearBrainstormChat}
+                    onClose={() => setAiBrainstormOpen(false)}
+                    loading={aiLoading}
+                    error={aiError}
+                    onCancel={handleCancelBrainstorm}
+                  />
+                </div>
+              )}
             </div>
           </div>
         ) : (
@@ -1918,9 +2139,19 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
               </button>
             </header>
             <div className="discard-warning-body">
-              <p>
-                You have unsaved changes to <strong>&quot;{form.name || "New Character"}&quot;</strong>. If you leave now, all your temporary edits will be lost.
-              </p>
+              {aiMessages.length > 0 && isFormDirty ? (
+                <p>
+                  You have unsaved changes to <strong>&quot;{form.name || "New Character"}&quot;</strong> and an active AI brainstorming session ({aiMessages.length} message{aiMessages.length === 1 ? "" : "s"}). If you leave now, all your edits and AI chat history will be discarded.
+                </p>
+              ) : aiMessages.length > 0 ? (
+                <p>
+                  You have an active AI brainstorming session ({aiMessages.length} message{aiMessages.length === 1 ? "" : "s"}). If you leave now, your chat session will be discarded.
+                </p>
+              ) : (
+                <p>
+                  You have unsaved changes to <strong>&quot;{form.name || "New Character"}&quot;</strong>. If you leave now, all your temporary edits will be lost.
+                </p>
+              )}
             </div>
             <footer className="discard-warning-footer">
               <button

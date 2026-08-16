@@ -221,6 +221,48 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
+  const BrainstormCharacterBody = z.object({
+    character: z.object({
+      name: z.string().default(""),
+      content: z.string().default(""),
+      creatorNotes: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+      ccv2Content: z.string().optional(),
+    }),
+    chatHistory: z.array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string(),
+      })
+    ).default([]),
+    userMessage: z.string().min(1),
+    includeOriginalCard: z.boolean().optional(),
+  });
+
+  app.post("/api/characters/brainstorm", async (request, reply) => {
+    const body = BrainstormCharacterBody.parse(request.body ?? {});
+    const controller = abortOnClientDisconnect(reply);
+    const provider = providerManager.getProvider();
+    try {
+      const result = await provider.brainstormCharacter(
+        {
+          character: body.character,
+          chatHistory: body.chatHistory,
+          userMessage: body.userMessage,
+          includeOriginalCard: body.includeOriginalCard,
+        },
+        controller.signal
+      );
+      return result;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (message.includes("abort")) {
+        return reply.code(499).send({ error: "Request aborted" });
+      }
+      return reply.code(502).send({ error: `Brainstorming failed: ${message}` });
+    }
+  });
+
   app.post("/api/playthroughs/:id/characters/:characterId/save-to-library", async (request, reply) => {
     const params = z.object({ id: z.string(), characterId: z.string() }).parse(request.params);
     const body = z.object({ mode: z.enum(["update", "newVersion"]).optional() }).parse(request.body ?? {});

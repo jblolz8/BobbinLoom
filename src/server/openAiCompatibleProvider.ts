@@ -8,7 +8,13 @@ import {
   ScenarioSeed,
   ScenarioSeedSchema
 } from "../schemas";
-import type { ChapterCompactionInput, ProviderTurn } from "./provider";
+import type {
+  ChapterCompactionInput,
+  CharacterBrainstormInput,
+  CharacterBrainstormOutput,
+  ProposedSectionChange,
+  ProviderTurn
+} from "./provider";
 import type { ResolvedProviderConfig } from "./providerConfig";
 import { buildLorebookContext, lorebookBudgetChars } from "./lorebookContext";
 import { completionValidator, extractJsonPayload, repairRawControlChars } from "./provider/patchParser";
@@ -498,6 +504,166 @@ export class OpenAICompatibleProvider {
       : "";
     const errSnippet = fallbackRawContent ? fallbackRawContent.slice(0, 300) : "(empty response)";
     throw new Error(`The model did not return any recognized tags. Raw model output: "${errSnippet}"${truncationHint}`);
+  }
+
+  async brainstormCharacter(
+    input: CharacterBrainstormInput,
+    signal?: AbortSignal
+  ): Promise<CharacterBrainstormOutput> {
+    const sheetModules = renderModules(input.modules);
+    const c = input.character;
+
+    const contextParts: string[] = [
+      "--- ACTIVE CHARACTER CARD ---",
+      `Name: ${c.name || "(unnamed)"}`,
+    ];
+    if (c.creatorNotes) {
+      contextParts.push(`Creator's Notes: ${c.creatorNotes}`);
+    }
+    if ((c.tags ?? []).length > 0) {
+      contextParts.push(`Tags: ${c.tags!.join(", ")}`);
+    }
+    contextParts.push(`\n--- CURRENT CHARACTER SHEET CONTENT ---\n${c.content || "(empty sheet)"}`);
+
+    if (input.includeOriginalCard && c.ccv2Content) {
+      contextParts.push(`\n--- ORIGINAL CCV2 CARD (REFERENCE) ---\n${c.ccv2Content}`);
+    }
+
+    const systemPrompt = [
+      "You are an expert character designer and creative co-writer for BobbinLoom, a local RPG chat engine.",
+      "Your role is to brainstorm, refine, and co-create character cards with the user in a natural, multi-turn dialogue.",
+      "",
+      "BOBBINLOOM CHARACTER SHEET FORMAT RULES:",
+      "- Standard canonical section headers: [Species], [Gender], [Body], [Appearance], [Clothing], [Personality], [Communication - Public], [Communication - Private], [Likes], [Dislikes], [Sexual Capabilities].",
+      "- [Species]: ... and [Gender]: ... are inline headers on single lines.",
+      "- Other sections use block headers [SectionName] followed by bulleted traits ('- Top: ...', '- Trait: ...') or descriptive text.",
+      "",
+      "RESPONSE GUIDELINES:",
+      "1. Reply conversationally, constructively, and creatively to the user's questions, feedback, or brainstorming ideas in the 'reply' field. Markdown formatting is encouraged.",
+      "2. If proposing specific edits or additions to the character card, include them in 'proposedChanges':",
+      "   - 'sections': array of objects { \"header\": \"SectionName\", \"body\": \"updated section body content WITHOUT the [SectionName] header\" }.",
+      "   - 'tags': optional updated array of string tags if tag changes are suggested.",
+      "   - 'creatorNotes': optional updated creator notes.",
+      "   - 'name': optional updated character name.",
+      "3. SURGICAL EDITING: When the user asks to modify specific attributes (e.g., 'Change her personality to be sarcastic', 'Update her outfit for winter', 'Add tea brewing to Likes'), return ONLY the affected section(s) in 'proposedChanges.sections'. Do NOT duplicate or rewrite untouched sections.",
+      "4. If no direct card changes are being proposed (e.g. general brainstorming, answering lore questions, comparing ideas), set 'proposedChanges' to null or omit it.",
+      "",
+      "RESPONSE JSON FORMAT:",
+      "{",
+      '  "reply": "Conversational reply, advice, or suggestions here...",',
+      '  "proposedChanges": {',
+      '    "sections": [',
+      '      { "header": "Personality", "body": "- Sarcastic and sharp-witted\\n- Secretly protective" }',
+      "    ],",
+      '    "tags": ["elf", "mage"]',
+      "  }",
+      "}",
+      "",
+      ...(sheetModules ? [sheetModules, ""] : []),
+      ...contextParts
+    ].join("\n");
+
+    const messages: ChatMessage[] = [
+      { role: "system", content: systemPrompt }
+    ];
+
+    for (const msg of input.chatHistory) {
+      if (msg.content) {
+        messages.push({ role: msg.role, content: msg.content });
+      }
+    }
+    messages.push({ role: "user", content: input.userMessage });
+
+    const maxTokens = Math.max(4000, this.config.maxTokens || 4000);
+
+    const body: Record<string, unknown> = {
+      model: this.config.model,
+      messages,
+      temperature: 0.7,
+      max_tokens: maxTokens,
+      response_format: { type: "json_object" }
+    };
+
+    let rawContent = "";
+    try {
+      const response = await this.executeRequest(body, "/chat/completions", undefined, signal);
+      const payload = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      rawContent = payload.choices?.[0]?.message?.content?.trim() ?? "";
+    } catch {
+      const bodyFallback = { ...body };
+      delete bodyFallback.response_format;
+      const response = await this.executeRequest(bodyFallback, "/chat/completions", undefined, signal);
+      const payload = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      rawContent = payload.choices?.[0]?.message?.content?.trim() ?? "";
+    }
+
+    const extracted = extractJsonPayload(rawContent);
+
+    if (extracted && typeof extracted === "object") {
+      const extObj = extracted as Record<string, unknown>;
+      const reply = typeof extObj.reply === "string"
+        ? extObj.reply
+        : (typeof extObj.message === "string" ? extObj.message : "");
+      let proposedChanges: CharacterBrainstormOutput["proposedChanges"] = undefined;
+
+      if (extObj.proposedChanges && typeof extObj.proposedChanges === "object") {
+        const propObj = extObj.proposedChanges as Record<string, unknown>;
+        const sections: ProposedSectionChange[] = [];
+
+        if (Array.isArray(propObj.sections)) {
+          for (const s of propObj.sections) {
+            if (s && typeof s === "object" && typeof s.header === "string" && typeof s.body === "string") {
+              sections.push({
+                header: s.header.replace(/^\[|\]$/g, "").trim(),
+                body: s.body.trim()
+              });
+            }
+          }
+        }
+
+        const tags = Array.isArray(propObj.tags)
+          ? sanitizeTags(propObj.tags)
+          : undefined;
+
+        const creatorNotes = typeof propObj.creatorNotes === "string" && propObj.creatorNotes.trim()
+          ? propObj.creatorNotes.trim()
+          : undefined;
+
+        const name = typeof propObj.name === "string" && propObj.name.trim()
+          ? propObj.name.trim()
+          : undefined;
+
+        const fullContent = typeof propObj.fullContent === "string" && propObj.fullContent.trim()
+          ? propObj.fullContent.trim()
+          : undefined;
+
+        if (sections.length > 0 || (tags && tags.length > 0) || creatorNotes || name || fullContent) {
+          proposedChanges = {
+            ...(sections.length > 0 ? { sections } : {}),
+            ...(tags && tags.length > 0 ? { tags } : {}),
+            ...(creatorNotes ? { creatorNotes } : {}),
+            ...(name ? { name } : {}),
+            ...(fullContent ? { fullContent } : {})
+          };
+        }
+      }
+
+      if (reply || proposedChanges) {
+        return {
+          reply: reply || "Here are the suggested changes for the character sheet.",
+          proposedChanges
+        };
+      }
+    }
+
+    return {
+      reply: rawContent || "No response received from the model.",
+      proposedChanges: undefined
+    };
   }
 
   async summarizeChapter(transcript: string, modules?: PromptPresetModule[], signal?: AbortSignal): Promise<{ name: string; shortDescription: string; fullSummary: string }> {

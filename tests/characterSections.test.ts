@@ -12,7 +12,8 @@ import {
   summaryFromContent,
   pickSections,
   isStubSection,
-  PHYSICAL_SECTION_HEADERS
+  PHYSICAL_SECTION_HEADERS,
+  applySectionChanges
 } from "../src/engine/characterSections";
 
 describe("characterSections", () => {
@@ -139,5 +140,44 @@ describe("summaryFromContent", () => {
 
   it("returns \"\" when there is no Personality section", () => {
     expect(summaryFromContent("[Body]\n- Tall")).toBe("");
+  });
+});
+
+describe("applySectionChanges", () => {
+  it("surgically updates an existing section while keeping others untouched", () => {
+    const original = "[Species]: Elf\n[Gender]: Female\n\n[Personality]\n- Timid and quiet\n\n[Likes]\n- Reading";
+    const updated = applySectionChanges(original, [
+      { header: "Personality", body: "- Bold and adventurous\n- Loves challenges" }
+    ]);
+    expect(updated).toContain("[Species]: Elf");
+    expect(updated).toContain("[Gender]: Female");
+    expect(updated).toContain("[Personality]\n- Bold and adventurous\n- Loves challenges");
+    expect(updated).toContain("[Likes]\n- Reading");
+    expect(updated).not.toContain("Timid and quiet");
+  });
+
+  it("inserts a missing section in canonical order", () => {
+    const original = "[Species]: Elf\n[Gender]: Female\n\n[Personality]\n- Calm\n\n[Dislikes]\n- Noise";
+    const updated = applySectionChanges(original, [
+      { header: "Likes", body: "- Tea\n- Starlight" }
+    ]);
+    // [Likes] should be placed before [Dislikes] in canonical order
+    const likesIdx = updated.indexOf("[Likes]");
+    const dislikesIdx = updated.indexOf("[Dislikes]");
+    expect(likesIdx).toBeGreaterThan(-1);
+    expect(dislikesIdx).toBeGreaterThan(likesIdx);
+    expect(updated).toContain("[Likes]\n- Tea\n- Starlight");
+  });
+
+  it("applies multiple section changes at once", () => {
+    const original = "[Species]: Human\n[Gender]: Male\n\n[Body]\n- Lean\n\n[Clothing]\n- Top: Vest";
+    const updated = applySectionChanges(original, [
+      { header: "Body", body: "- Tall and muscular" },
+      { header: "Clothing", body: "- Top: Cloak\n- Bottom: Boots" },
+      { header: "Personality", body: "- Fierce" }
+    ]);
+    expect(updated).toContain("[Body]\n- Tall and muscular");
+    expect(updated).toContain("[Clothing]\n- Top: Cloak\n- Bottom: Boots");
+    expect(updated).toContain("[Personality]\n- Fierce");
   });
 });

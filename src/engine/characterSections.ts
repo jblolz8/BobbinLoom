@@ -159,6 +159,61 @@ export function ensureAllSections(content: string, includeSexualCapabilities = f
   return joinContentSections(sections);
 }
 
+/**
+ * Surgically apply changes to specific sections in a character content blob.
+ * For each change:
+ * - If the section already exists (case-insensitive header match), its body is updated.
+ * - If the section does not exist, it is inserted into the section list in canonical order
+ *   (or appended if non-canonical).
+ * Untouched sections and preambles are preserved verbatim.
+ */
+export function applySectionChanges(
+  currentContent: string,
+  changes: Array<{ header: string; body: string }>
+): string {
+  const { preamble, sections } = splitContentSections(currentContent);
+  const updatedSections: ContentSection[] = [...sections];
+
+  for (const change of changes) {
+    const trimmedHeader = change.header.trim();
+    if (!trimmedHeader) continue;
+    const normHeader = trimmedHeader.toLowerCase();
+    const existingIdx = updatedSections.findIndex((s) => s.header.toLowerCase() === normHeader);
+    const isInline = normHeader === "species" || normHeader === "gender";
+
+    const newSec: ContentSection = {
+      header: trimmedHeader,
+      body: change.body.trim(),
+      inline: isInline && !change.body.includes("\n"),
+    };
+
+    if (existingIdx >= 0) {
+      updatedSections[existingIdx] = newSec;
+    } else {
+      const canonicalIdx = CHARACTER_SECTION_HEADERS.findIndex(
+        (h) => h.toLowerCase() === normHeader
+      );
+      if (canonicalIdx >= 0) {
+        let insertPos = updatedSections.length;
+        for (let i = 0; i < updatedSections.length; i++) {
+          const currentCanonicalIdx = CHARACTER_SECTION_HEADERS.findIndex(
+            (h) => h.toLowerCase() === updatedSections[i].header.toLowerCase()
+          );
+          if (currentCanonicalIdx > canonicalIdx) {
+            insertPos = i;
+            break;
+          }
+        }
+        updatedSections.splice(insertPos, 0, newSec);
+      } else {
+        updatedSections.push(newSec);
+      }
+    }
+  }
+
+  return joinContentSections(updatedSections, preamble);
+}
+
 /** Seed a character instance memorySummary from the [Personality] section.
  *  Falls back to the existing neutral default when no bullet exists. */
 export function seedMemorySummary(name: string, content: string): string {
