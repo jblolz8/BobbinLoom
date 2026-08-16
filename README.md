@@ -8,6 +8,13 @@ A local-first AI-Roleplay Story Engine. Story-first characters with thin runtime
 - **Linux / macOS / Android (Termux):** `./start.sh` — first run installs dependencies and builds the client; later runs start instantly. Use `./start.sh --rebuild` after pulling updates.
 - **Dev:** `npm run dev` — API server on port 8787 (see `.env.example`), Vite client on its default port.
 
+## Documentation
+
+- [`docs/character-format.md`](docs/character-format.md) — character sheet, instance, and runtime-state format
+- [`docs/character-library.md`](docs/character-library.md) — Booru-style library, tags/taxonomy, CCv2 import, AI tag suggestion & brainstorming
+- [`docs/prompt-modules.md`](docs/prompt-modules.md) — the prompt-module preset system
+- [`docs/provider-setup.md`](docs/provider-setup.md) — provider connections, API keys, and the provider interface surface
+
 ### Termux (Android) setup
 
 ```sh

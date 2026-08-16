@@ -120,6 +120,30 @@ raw text as narrative and ignores the state patch for that turn.
 
 ---
 
+## Provider interface surface
+
+Beyond turn generation, the active provider implements a **broader interface**
+(`src/server/provider.ts`, `TurnProvider`). All of these are routed through the
+active connection (or the built-in Mock provider, which throws "not available"
+for the AI-only ones):
+
+| Method | Used by |
+|---|---|
+| `generateTurn` | Main turn generation (state patch + narrative) |
+| `generateScenarioSeed` | Scenario generation (setup "Generate Scenario") |
+| `summarizeChapter` | Chapter summarization |
+| `compactStorySoFar` | Story-so-far compaction (rolling meta-summary) |
+| `embedTexts` | Memory event embeddings (semantic retrieval; falls back to keyword when empty) |
+| `generateCharacterSheet` | NPC promotion / sheet drafting |
+| `refineCharacterSheet` | Targeted sheet edits from user feedback |
+| `suggestCharacterTags` | **AI tag suggestion** in the character library (`POST /api/characters/suggest-tags`) |
+| `brainstormCharacter` | **AI brainstorming assistant** for character cards (`POST /api/characters/brainstorm`) |
+
+The two library features (tag suggestion and brainstorming) are documented in
+`character-library.md`.
+
+---
+
 ## Current limitations
 
 - non-streaming only

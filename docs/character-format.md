@@ -27,6 +27,19 @@ type CharacterTemplate = {
   content: string;      // the [Section] prose blob (below)
   summary: string;      // one-line "who they are" — powers the absent representation
   startingClothing: ClothingItem[]; // base outfit (transient states cleared on save)
+  // — library / CCv2 metadata (all optional) —
+  spec?: string;        // "bobbinloom_chara" for BL-native records
+  creatorNotes?: string;
+  creator?: string;
+  tags?: string[];      // library tags, e.g. "species:fox", "rating:nsfw" (see character-library.md)
+  extensions?: Record<string, unknown>;
+  format?: "ccv2";      // present while backed by an un-converted CCv2 card
+  cardRef?: { file: string; kind: "png" | "json" };
+  cardVersion?: string;
+  scenario?: string;
+  ccv2Content?: string;        // original card content (kept after conversion)
+  ccv2CreatorNotes?: string;
+  ccv2Tags?: string[];
 };
 ```
 
@@ -35,6 +48,7 @@ type CharacterTemplate = {
   **Any additional headers are allowed** — models invent `[Voice]`/`[Quirks]` and that richness is a feature. `splitContentSections`/`joinContentSections` are exact inverses.
 - `summary` is a real field because the absent one-liner needs a stable line; fallback for old templates is the first non-stub `[Personality]` bullet (`summaryFromContent`).
 - Templates are **never mutated during play**. Each playthrough keeps a private clone in `characterTemplates[]`; in-play sheet edits touch the clone, and the library copy only changes on explicit **Save to Library** (`saveToLibraryAction`, update = upsert by id in `data/characters/<slug>/<slug>.json`, newVersion = new id + `version = max + 1` saved as `<slug>.v<N>.json` under the same `lineageId`).
+- **Library storage is folder-per-entity** — `data/characters/<slug>/<slug>.json` plus optional avatar, versioned siblings, and a transient `<slug>.bl.json` sidecar for imported-but-unconverted CCv2 cards. See `character-library.md`.
 - **Seed sync:** the committed library seed `data/characters/mira/mira.json` and the code-level `DEMO_TEMPLATE` (`src/engine/demoData.ts`, used as the default cast for fresh playthroughs) must be kept identical — update both when changing Mira's sheet.
 
 ## 2. Character Instance — the runtime state

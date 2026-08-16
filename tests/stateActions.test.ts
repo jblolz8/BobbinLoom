@@ -6,7 +6,7 @@ import { closeChapterAction, promoteNpcAction, promoteNpcDraftAction, questActio
 import { applyStatePatch, takeTurnSnapshot } from "../src/engine/engine";
 import { createPlaythroughRecord, getPlaythroughRecord, updatePlaythroughRecord } from "../src/server/store";
 import type { CharacterInstance, ParsedUserInput, Playthrough, ScenarioPreferences, ScenarioSeed } from "../src/schemas";
-import type { ProviderTurn, TurnProvider } from "../src/server/provider";
+import type { ProviderTurn, TurnProvider, CharacterBrainstormOutput } from "../src/server/provider";
 
 const tempDirs: string[] = [];
 
@@ -110,6 +110,10 @@ class MockProviderShim implements TurnProvider {
   async suggestCharacterTags(): Promise<string[]> {
     return [];
   }
+
+  async brainstormCharacter(): Promise<CharacterBrainstormOutput> {
+    throw new Error("not used in promote tests");
+  }
 }
 
 describe("promoteNpcDraftAction", () => {
@@ -166,7 +170,8 @@ describe("closeChapterAction — NPC staleness pruning (Phase E)", () => {
       async embedTexts(): Promise<number[][]> { return []; },
       async generateCharacterSheet(): Promise<string> { throw new Error("not used"); },
       async refineCharacterSheet(): Promise<string> { throw new Error("not used"); },
-      async suggestCharacterTags(): Promise<string[]> { return []; }
+      async suggestCharacterTags(): Promise<string[]> { return []; },
+      async brainstormCharacter() { throw new Error("not used"); }
     };
   }
 

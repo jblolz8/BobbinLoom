@@ -332,12 +332,16 @@ describe("convertCardGenerate", () => {
 
       const provider = new OpenAICompatibleProvider(
         {
-          providerType: "openai-compatible",
+          providerId: "openai-compatible",
+          label: "Test",
           baseUrl: "http://localhost:1234/v1",
           apiKey: "test",
           model: "test-model",
           temperature: 0.7,
-          maxTokens: 2000
+          maxTokens: 2000,
+          contextWindow: 32768,
+          maxRetries: 1,
+          timeoutMs: 120_000
         },
         mockFetch as unknown as typeof fetch
       );
@@ -382,12 +386,16 @@ describe("convertCardGenerate", () => {
 
       const provider = new OpenAICompatibleProvider(
         {
-          providerType: "openai-compatible",
+          providerId: "openai-compatible",
+          label: "Test",
           baseUrl: "http://localhost:1234/v1",
           apiKey: "test",
           model: "test-model",
           temperature: 0.7,
-          maxTokens: 2000
+          maxTokens: 2000,
+          contextWindow: 32768,
+          maxRetries: 1,
+          timeoutMs: 120_000
         },
         mockFetch as unknown as typeof fetch
       );
