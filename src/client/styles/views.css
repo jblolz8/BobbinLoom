@@ -3087,6 +3087,23 @@
   vertical-align: middle;
 }
 
+/* Disabled CCv2 cast cards in the Setup cast picker (Task 2). */
+.cast-pick-card.cast-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.cast-pick-card.cast-disabled input {
+  cursor: not-allowed;
+}
+
+.cast-warn {
+  display: block;
+  font-size: 0.75rem;
+  color: #f87171;
+  margin-top: 0.25rem;
+}
+
 /* Converted card: originally CCv2, now has a BL-format sheet alongside. */
 .ccv2bl-badge {
   display: inline-flex;

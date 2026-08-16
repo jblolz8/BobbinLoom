@@ -91,13 +91,22 @@ export function SetupView(props: SetupViewProps) {
             <p className="persona-empty">No characters in the library yet. Create some in the Character Manager, or start fresh.</p>
           ) : (
             <div className="cast-picker">
-              {castLibrary.map((t) => (
-                <label key={t.id} className={`persona-pick-card cast-pick-card ${selectedCastIds.includes(t.id) ? "selected" : ""}`}>
-                  <input type="checkbox" checked={selectedCastIds.includes(t.id)} onChange={() => onToggleCastId(t.id)} />
-                  <strong>{t.name}</strong> {t.format === "ccv2" ? <span className="ccv2-badge">CCv2</span> : null} <span className="version-badge">v{t.version}</span>
-                  <span className="persona-pick-desc">{t.content.split("\n").find(l => l.trim() && !l.startsWith("["))?.trim().slice(0, 80) || "No description."}</span>
-                </label>
-              ))}
+              {castLibrary.map((t) => {
+                const isCcv2 = t.format === "ccv2";
+                return (
+                  <label
+                    key={t.id}
+                    className={`persona-pick-card cast-pick-card ${selectedCastIds.includes(t.id) ? "selected" : ""} ${isCcv2 ? "cast-disabled" : ""}`}
+                    title={isCcv2 ? "Convert to BL first to be able to select this character" : undefined}
+                  >
+                    <input type="checkbox" disabled={isCcv2} checked={isCcv2 ? false : selectedCastIds.includes(t.id)}
+                      onChange={() => onToggleCastId(t.id)} />
+                    <strong>{t.name}</strong> {isCcv2 ? <span className="ccv2-badge">CCv2</span> : null} <span className="version-badge">v{t.version}</span>
+                    <span className="persona-pick-desc">{t.content.split("\n").find(l => l.trim() && !l.startsWith("["))?.trim().slice(0, 80) || "No description."}</span>
+                    {isCcv2 ? <span className="cast-warn">Convert to BL first to be able to select</span> : null}
+                  </label>
+                );
+              })}
             </div>
           )}
         </div>
