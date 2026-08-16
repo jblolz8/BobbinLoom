@@ -552,12 +552,12 @@ export function importCharacterCard(
 }
 
 /** Resolve castIds against the library; unknown ids are skipped. Undefined = no picker involvement (engine default applies). */
-function resolveCast(castIds?: string[]): CharacterTemplate[] | undefined {
+export function resolveCast(castIds?: string[], dir: string = CHARACTERS_DIR): CharacterTemplate[] | undefined {
   if (!castIds) return undefined;
-  const library = listCharacterTemplates();
+  const library = listCharacterTemplates(dir);
   return castIds
     .map((id) => library.find((t) => t.id === id))
-    .filter((t): t is CharacterTemplate => t !== undefined);
+    .filter((t): t is CharacterTemplate => t !== undefined && t.format !== "ccv2");
 }
 
 export function createBlankPlaythroughRecord(
@@ -566,7 +566,7 @@ export function createBlankPlaythroughRecord(
 ): Playthrough {
   const preset = presetOverride ?? loadDefaultPreset();
   const persona = personaId ? (getPersona(personaId) ?? loadDefaultPersona()) : loadDefaultPersona();
-  const cast = resolveCast(castIds) ?? [];
+  const cast = resolveCast(castIds, dir) ?? [];
   const playthrough = createBlankPlaythrough(name, preset.modules, preset.id, preset.name, persona, cast);
   if (lorebookIds) playthrough.lorebookIds = lorebookIds;
   if (scenarioDescription) playthrough.scenarioDescription = scenarioDescription;
@@ -579,7 +579,7 @@ export function createBlankPlaythroughRecord(
 export function createPlaythroughRecord(dir: string, name: string, personaId?: string, castIds?: string[], lorebookIds?: string[], scenarioDescription?: string, presetOverride?: { id: string; name: string; modules: PromptModuleSet }): Playthrough {
   const preset = presetOverride ?? loadDefaultPreset();
   const persona = personaId ? (getPersona(personaId) ?? loadDefaultPersona()) : loadDefaultPersona();
-  const cast = resolveCast(castIds);
+  const cast = resolveCast(castIds, dir);
   const playthrough = createInitialPlaythrough(name, preset.modules, preset.id, preset.name, persona, cast);
   if (lorebookIds) playthrough.lorebookIds = lorebookIds;
   if (scenarioDescription) playthrough.scenarioDescription = scenarioDescription;
@@ -601,7 +601,7 @@ export function createPlaythroughFromSeedRecord(
 ): Playthrough {
   const preset = presetOverride ?? loadDefaultPreset();
   const persona = personaId ? (getPersona(personaId) ?? loadDefaultPersona()) : loadDefaultPersona();
-  const playthrough = createPlaythroughFromSeed(name, seed, preset.modules, preset.id, preset.name, persona, resolveCast(castIds));
+  const playthrough = createPlaythroughFromSeed(name, seed, preset.modules, preset.id, preset.name, persona, resolveCast(castIds, dir));
   if (lorebookIds) playthrough.lorebookIds = lorebookIds;
   if (scenarioDescription) playthrough.scenarioDescription = scenarioDescription;
   if (personaId) playthrough.personaId = personaId;

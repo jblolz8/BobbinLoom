@@ -450,3 +450,29 @@ describe("character library — CCv2 import (A5)", () => {
     expect(list[0].ccv2Content).toBe(card.description);
   });
 });
+
+function makeCard(name: string): ParsedCard {
+  return {
+    name,
+    description: "[Species]: Test",
+    personality: "",
+    scenario: "",
+    creator: "pplong",
+    creatorNotes: "A test card.",
+    tags: ["wizard", "test"],
+    characterVersion: "1.2",
+  };
+}
+
+describe("resolveCast — CCv2 guard", () => {
+  it("skips CCv2 format records when resolving castIds (dir-aware)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bobbinloom-cast-guard-"));
+    tempDirs.push(dir);
+    const normal = createCharacterTemplateRecord("Normal Gal", dir);
+    const ccv2 = importCharacterCard(makeCard("CCv2 Gal"), Buffer.from("{}"), "json", dir).record;
+    const pt = createPlaythroughRecord(dir, "Cast Guard", undefined, [ccv2.id, normal.id]);
+    const names = pt.characters.map((c) => c.name);
+    expect(names).toContain("Normal Gal");
+    expect(names).not.toContain("CCv2 Gal");
+  });
+});
