@@ -60,11 +60,25 @@ describe("tagTaxonomy engine", () => {
 
       const ratingStyle = resolveTagStyle("rating:nsfw");
       expect(ratingStyle.categoryId).toBe("rating_nsfw");
+      expect(ratingStyle.namespace).toBe("rating");
+      expect(ratingStyle.value).toBe("nsfw");
       expect(ratingStyle.colors.text).toBe("#f87171");
 
       const ratingSfwStyle = resolveTagStyle("rating:sfw");
       expect(ratingSfwStyle.categoryId).toBe("rating_sfw");
+      expect(ratingSfwStyle.namespace).toBe("rating");
+      expect(ratingSfwStyle.value).toBe("sfw");
       expect(ratingSfwStyle.colors.text).toBe("#4ade80");
+
+      const ratingExplicitStyle = resolveTagStyle("rating:explicit");
+      expect(ratingExplicitStyle.categoryId).toBe("rating_nsfw");
+      expect(ratingExplicitStyle.namespace).toBe("rating");
+      expect(ratingExplicitStyle.value).toBe("explicit");
+
+      const ratingSafeStyle = resolveTagStyle("rating:safe");
+      expect(ratingSafeStyle.categoryId).toBe("rating_sfw");
+      expect(ratingSafeStyle.namespace).toBe("rating");
+      expect(ratingSafeStyle.value).toBe("safe");
     });
 
     it("supports custom user categories and custom namespace prefixes", () => {

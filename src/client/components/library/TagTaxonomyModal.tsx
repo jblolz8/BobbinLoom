@@ -69,10 +69,14 @@ export function TagTaxonomyPanel({
   const unmappedNamespaces = useMemo(() => {
     const allKnownPrefixes = new Set<string>();
     for (const b of BUILT_IN_CATEGORIES) {
-      for (const p of b.prefixes) allKnownPrefixes.add(p.toLowerCase());
+      for (const p of b.prefixes) {
+        allKnownPrefixes.add(p.toLowerCase().replace(/:.*$/, ""));
+      }
     }
     for (const c of config.customCategories) {
-      for (const p of c.prefixes) allKnownPrefixes.add(p.toLowerCase());
+      for (const p of c.prefixes) {
+        allKnownPrefixes.add(p.toLowerCase().replace(/:.*$/, ""));
+      }
     }
     return discoveredNamespaces.filter((d) => !allKnownPrefixes.has(d.prefix.toLowerCase()));
   }, [discoveredNamespaces, config.customCategories]);
@@ -248,9 +252,19 @@ export function TagTaxonomyPanel({
               <div className="category-prefixes-wrap">
                 {cat.prefixes.map((p) => (
                   <span key={p} className="prefix-badge" style={{ borderColor: `${cat.color}66`, color: cat.color }}>
-                    {p}:
+                    {p.endsWith(":") ? p : `${p}:`}
                   </span>
                 ))}
+                {cat.id === "rating_nsfw" && (
+                  <span className="prefix-badge" style={{ borderColor: `${cat.color}66`, color: cat.color }}>
+                    nsfw, explicit, lewd, 18+ (values)
+                  </span>
+                )}
+                {cat.id === "rating_sfw" && (
+                  <span className="prefix-badge" style={{ borderColor: `${cat.color}66`, color: cat.color }}>
+                    sfw, safe, general (values)
+                  </span>
+                )}
                 {cat.prefixes.length === 0 ? <span className="prefix-badge neutral">Standalone tags</span> : null}
               </div>
             </div>

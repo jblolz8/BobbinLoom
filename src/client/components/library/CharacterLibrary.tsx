@@ -360,6 +360,8 @@ function MoreOptionsMenu({
 export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
   const [templates, setTemplates] = useState<CharacterTemplate[]>([]);
   const [form, setForm] = useState<CharacterForm>(blankForm());
+  const [initialForm, setInitialForm] = useState<CharacterForm>(blankForm());
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingIsCcv2, setEditingIsCcv2] = useState(false);
@@ -414,6 +416,19 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
   const [taxonomyModalOpen, setTaxonomyModalOpen] = useState(false);
   const [sidebarViewMode, setSidebarViewMode] = useState<"grouped" | "flat">("grouped");
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  const [mobileSidebarExpanded, setMobileSidebarExpanded] = useState(false);
+
+  const isFormDirty = useMemo(() => {
+    if (!editorOpen) return false;
+    if (form.name !== initialForm.name) return true;
+    if (form.creatorNotes !== initialForm.creatorNotes) return true;
+    if (form.content !== initialForm.content) return true;
+    if (form.tags.length !== initialForm.tags.length) return true;
+    for (let i = 0; i < form.tags.length; i++) {
+      if (form.tags[i] !== initialForm.tags[i]) return true;
+    }
+    return false;
+  }, [form, initialForm, editorOpen]);
 
   const convertingCharacter = useMemo(() => {
     if (!convertingId) return null;
@@ -465,23 +480,29 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
 
   function openCreate() {
     handleCancelTagSuggest();
-    setForm(blankForm());
+    const blank = blankForm();
+    setForm(blank);
+    setInitialForm(blank);
     setEditingId(null);
     setEditingIsCcv2(false);
     setEditorOpen(true);
     setStatus(null);
     setConvertedSuccess(null);
+    setShowDiscardConfirm(false);
   }
 
   function openEdit(t: CharacterTemplate) {
     handleCancelTagSuggest();
-    setForm(templateToForm(t));
+    const initial = templateToForm(t);
+    setForm(initial);
+    setInitialForm(initial);
     setEditingId(t.id);
     setEditingIsCcv2(t.format === "ccv2");
     setViewTab("bl");
     setEditorOpen(true);
     setStatus(null);
     setConvertedSuccess(null);
+    setShowDiscardConfirm(false);
   }
 
   function closeEditor() {
@@ -491,6 +512,20 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
     setEditingIsCcv2(false);
     setViewTab("bl");
     setStatus(null);
+    setShowDiscardConfirm(false);
+  }
+
+  function handleCancelClick() {
+    if (isFormDirty) {
+      setShowDiscardConfirm(true);
+    } else {
+      closeEditor();
+    }
+  }
+
+  function handleConfirmDiscard() {
+    setShowDiscardConfirm(false);
+    closeEditor();
   }
 
   async function handleOpenAiTagSuggestions(guidance?: unknown) {
@@ -691,7 +726,9 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
       if (editingId === convertedRecordId) {
         setEditingIsCcv2(false);
         setViewTab("bl");
-        setForm(templateToForm(targetTpl));
+        const updated = templateToForm(targetTpl);
+        setForm(updated);
+        setInitialForm(updated);
       }
     } catch (e) {
       setConvertError(e instanceof Error ? e.message : String(e));
@@ -1049,9 +1086,23 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
               );
             })()}
 
-            <div className="modal-actions">
-              <button onClick={closeEditor}>Cancel</button>
-              <button className="primary" onClick={handleSave} disabled={saving || !form.name.trim()}>
+            <div className="modal-actions editor-footer-actions">
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={handleCancelClick}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary-btn editor-save-btn"
+                onClick={handleSave}
+                disabled={saving || !form.name.trim() || !isFormDirty}
+                title={!isFormDirty ? "No changes to save" : "Save character card"}
+              >
+                <Icon name="Check" size={14} />
                 {saving ? "Saving…" : "Save"}
               </button>
             </div>
@@ -1059,13 +1110,29 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
         ) : (
           <div className="character-booru-layout">
             {/* ── Left-side Booru Tag Sidebar ── */}
-            <aside className="character-tag-sidebar">
-              <div className="sidebar-header">
+            <aside className={`character-tag-sidebar ${mobileSidebarExpanded ? "mobile-expanded" : "mobile-collapsed"}`}>
+              <div
+                className="sidebar-header"
+                onClick={() => setMobileSidebarExpanded(!mobileSidebarExpanded)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setMobileSidebarExpanded(!mobileSidebarExpanded);
+                  }
+                }}
+              >
                 <h4>
                   <Icon name="Tag" size={15} /> Tags
                   <span className="sidebar-total-count">({allTagCounts.length})</span>
+                  {activeFilterTags.length > 0 && (
+                    <span className="sidebar-active-filter-badge" title={`${activeFilterTags.length} active tag filter(s)`}>
+                      {activeFilterTags.length} active
+                    </span>
+                  )}
                 </h4>
-                <div className="sidebar-header-actions">
+                <div className="sidebar-header-actions" onClick={(e) => e.stopPropagation()}>
                   <button
                     type="button"
                     className={`sidebar-mode-btn ${sidebarViewMode === "grouped" ? "active" : ""}`}
@@ -1095,115 +1162,148 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                       Clear
                     </button>
                   ) : null}
+                  <button
+                    type="button"
+                    className="sidebar-mobile-toggle-btn"
+                    onClick={() => setMobileSidebarExpanded(!mobileSidebarExpanded)}
+                    aria-label={mobileSidebarExpanded ? "Collapse tag filters" : "Expand tag filters"}
+                    title={mobileSidebarExpanded ? "Collapse tag filters" : "Expand tag filters"}
+                  >
+                    <span className="sidebar-toggle-text">{mobileSidebarExpanded ? "Hide" : "Filter"}</span>
+                    <Icon name={mobileSidebarExpanded ? "ChevronUp" : "ChevronDown"} size={13} />
+                  </button>
                 </div>
               </div>
 
-              {allTagCounts.length > 6 ? (
-                <div className="sidebar-tag-search-wrap">
-                  <input
-                    type="text"
-                    placeholder="Filter tags…"
-                    value={tagFilterSearch}
-                    onChange={(e) => setTagFilterSearch(e.target.value)}
-                    className="sidebar-tag-search-input"
-                  />
-                  {tagFilterSearch ? (
-                    <button
-                      type="button"
-                      className="sidebar-tag-clear"
-                      onClick={() => setTagFilterSearch("")}
-                    >
-                      ✕
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-
-              <div className="sidebar-tag-list">
-                {filteredTagCounts.length === 0 ? (
-                  <p className="sidebar-empty-tags">
-                    {tagFilterSearch ? "No matching tags." : "No tags yet."}
-                  </p>
-                ) : sidebarViewMode === "grouped" ? (
-                  groupedTagCategories.map((group) => {
-                    const isCollapsed = collapsedCategories.has(group.id);
-                    return (
-                      <div key={group.id} className="sidebar-category-group">
-                        <button
-                          type="button"
-                          className="sidebar-category-header"
-                          onClick={() => toggleCategoryCollapse(group.id)}
-                        >
-                          <div className="sidebar-cat-title-wrap">
-                            <span
-                              className="sidebar-cat-dot"
-                              style={{ backgroundColor: group.color }}
-                            />
-                            <span className="sidebar-cat-label">{group.label}</span>
-                          </div>
-                          <div className="sidebar-cat-right">
-                            <span className="sidebar-cat-count">{group.tags.length}</span>
-                            <Icon
-                              name={isCollapsed ? "ChevronRight" : "ChevronDown"}
-                              size={12}
-                              className="sidebar-cat-chevron"
-                            />
-                          </div>
-                        </button>
-                        {!isCollapsed && (
-                          <div className="sidebar-category-items">
-                            {group.tags.map(({ tag, count, style }) => {
-                              const active = isTagActive(tag);
-                              return (
-                                <button
-                                  key={tag}
-                                  type="button"
-                                  className={`sidebar-tag-item ${active ? "active" : ""}`}
-                                  onClick={() => toggleTag(tag)}
-                                  title={active ? `Remove tag "${tag}"` : `Filter by tag "${tag}"`}
-                                  style={{
-                                    borderLeftColor: active ? style.colors.text : "transparent",
-                                  }}
-                                >
-                                  <span className="sidebar-tag-name">
-                                    {style.namespace ? (
-                                      <span className="sidebar-tag-prefix" style={{ color: style.colors.text, opacity: 0.8 }}>
-                                        {style.namespace}:
-                                      </span>
-                                    ) : null}
-                                    <span style={{ color: active ? style.colors.text : undefined }}>{style.value}</span>
-                                  </span>
-                                  <span
-                                    className="sidebar-tag-count"
-                                    style={{ borderColor: active ? style.colors.text : undefined }}
-                                  >
-                                    {count}
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                ) : (
-                  filteredTagCounts.map(({ tag, count }) => {
-                    const active = isTagActive(tag);
-                    return (
+              <div className="sidebar-collapsible-body">
+                {allTagCounts.length > 6 ? (
+                  <div className="sidebar-tag-search-wrap">
+                    <input
+                      type="text"
+                      placeholder="Filter tags…"
+                      value={tagFilterSearch}
+                      onChange={(e) => setTagFilterSearch(e.target.value)}
+                      className="sidebar-tag-search-input"
+                    />
+                    {tagFilterSearch ? (
                       <button
-                        key={tag}
                         type="button"
-                        className={`sidebar-tag-item ${active ? "active" : ""}`}
-                        onClick={() => toggleTag(tag)}
-                        title={active ? `Remove tag "${tag}"` : `Filter by tag "${tag}"`}
+                        className="sidebar-tag-clear"
+                        onClick={() => setTagFilterSearch("")}
                       >
-                        <span className="sidebar-tag-name">{tag}</span>
-                        <span className="sidebar-tag-count">{count}</span>
+                        ✕
                       </button>
-                    );
-                  })
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {/* Active filter tags quick bar on mobile / narrow space */}
+                {activeFilterTags.length > 0 && (
+                  <div className="sidebar-active-tags-row">
+                    <span className="sidebar-active-tags-label">Active:</span>
+                    <div className="sidebar-active-tags-list">
+                      {activeFilterTags.map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          className="sidebar-active-tag-chip"
+                          onClick={() => removeFilterTag(tag)}
+                          title={`Remove filter "${tag}"`}
+                        >
+                          <span>{tag}</span>
+                          <Icon name="X" size={10} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
+
+                <div className="sidebar-tag-list">
+                  {filteredTagCounts.length === 0 ? (
+                    <p className="sidebar-empty-tags">
+                      {tagFilterSearch ? "No matching tags." : "No tags yet."}
+                    </p>
+                  ) : sidebarViewMode === "grouped" ? (
+                    groupedTagCategories.map((group) => {
+                      const isCollapsed = collapsedCategories.has(group.id);
+                      return (
+                        <div key={group.id} className="sidebar-category-group">
+                          <button
+                            type="button"
+                            className="sidebar-category-header"
+                            onClick={() => toggleCategoryCollapse(group.id)}
+                          >
+                            <div className="sidebar-cat-title-wrap">
+                              <span
+                                className="sidebar-cat-dot"
+                                style={{ backgroundColor: group.color }}
+                              />
+                              <span className="sidebar-cat-label">{group.label}</span>
+                            </div>
+                            <div className="sidebar-cat-right">
+                              <span className="sidebar-cat-count">{group.tags.length}</span>
+                              <Icon
+                                name={isCollapsed ? "ChevronRight" : "ChevronDown"}
+                                size={12}
+                                className="sidebar-cat-chevron"
+                              />
+                            </div>
+                          </button>
+                          {!isCollapsed && (
+                            <div className="sidebar-category-items">
+                              {group.tags.map(({ tag, count, style }) => {
+                                const active = isTagActive(tag);
+                                return (
+                                  <button
+                                    key={tag}
+                                    type="button"
+                                    className={`sidebar-tag-item ${active ? "active" : ""}`}
+                                    onClick={() => toggleTag(tag)}
+                                    title={active ? `Remove tag "${tag}"` : `Filter by tag "${tag}"`}
+                                    style={{
+                                      borderLeftColor: active ? style.colors.text : "transparent",
+                                    }}
+                                  >
+                                    <span className="sidebar-tag-name">
+                                      {style.namespace ? (
+                                        <span className="sidebar-tag-prefix" style={{ color: style.colors.text, opacity: 0.8 }}>
+                                          {style.namespace}:
+                                        </span>
+                                      ) : null}
+                                      <span style={{ color: active ? style.colors.text : undefined }}>{style.value}</span>
+                                    </span>
+                                    <span
+                                      className="sidebar-tag-count"
+                                      style={{ borderColor: active ? style.colors.text : undefined }}
+                                    >
+                                      {count}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    filteredTagCounts.map(({ tag, count }) => {
+                      const active = isTagActive(tag);
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          className={`sidebar-tag-item ${active ? "active" : ""}`}
+                          onClick={() => toggleTag(tag)}
+                          title={active ? `Remove tag "${tag}"` : `Filter by tag "${tag}"`}
+                        >
+                          <span className="sidebar-tag-name">{tag}</span>
+                          <span className="sidebar-tag-count">{count}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             </aside>
 
@@ -1383,15 +1483,6 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                                 </p>
                               ) : null}
 
-                              <p className="card-summary-snippet">
-                                {latest.summary?.trim()
-                                  ? latest.summary.trim()
-                                  : latest.content
-                                      .split("\n")
-                                      .find((l) => l.trim() && !l.startsWith("["))
-                                      ?.trim() || "(empty content)"}
-                              </p>
-
                               {(latest.tags ?? []).length > 0 ? (
                                 <div className="tag-chips" onClick={(e) => e.stopPropagation()}>
                                   {(latest.tags ?? []).map((tag) => {
@@ -1525,15 +1616,6 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                                   {latest.creatorNotes.trim()}
                                 </p>
                               ) : null}
-
-                              <p className="card-summary-snippet">
-                                {latest.summary?.trim()
-                                  ? latest.summary.trim()
-                                  : latest.content
-                                      .split("\n")
-                                      .find((l) => l.trim() && !l.startsWith("["))
-                                      ?.trim() || "(empty content)"}
-                              </p>
 
                               {(latest.tags ?? []).length > 0 ? (
                                 <div className="tag-chips" onClick={(e) => e.stopPropagation()}>
@@ -1808,6 +1890,57 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
         currentConfig={taxonomyConfig}
         onConfigUpdated={(newCfg) => setTaxonomyConfig(newCfg)}
       />
+
+      {/* Discard Changes Warning Modal */}
+      {showDiscardConfirm && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setShowDiscardConfirm(false);
+          }}
+        >
+          <section className="modal discard-warning-modal" aria-labelledby="discard-modal-title">
+            <header className="modal-header discard-warning-header">
+              <div className="discard-warning-title-wrap">
+                <span className="discard-warning-icon-badge">
+                  <Icon name="AlertTriangle" size={20} />
+                </span>
+                <h3 id="discard-modal-title">Discard unsaved changes?</h3>
+              </div>
+              <button
+                type="button"
+                className="diff-close-btn"
+                onClick={() => setShowDiscardConfirm(false)}
+                title="Close dialog"
+                aria-label="Close dialog"
+              >
+                <Icon name="X" size={16} />
+              </button>
+            </header>
+            <div className="discard-warning-body">
+              <p>
+                You have unsaved changes to <strong>&quot;{form.name || "New Character"}&quot;</strong>. If you leave now, all your temporary edits will be lost.
+              </p>
+            </div>
+            <footer className="discard-warning-footer">
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => setShowDiscardConfirm(false)}
+              >
+                Keep Editing
+              </button>
+              <button
+                type="button"
+                className="discard-confirm-btn"
+                onClick={handleConfirmDiscard}
+              >
+                <Icon name="Trash2" size={14} /> Discard Changes
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

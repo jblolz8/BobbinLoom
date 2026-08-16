@@ -16,6 +16,13 @@ export type DiffModalProps = {
   error?: string | null;
 };
 
+const GUIDANCE_PRESETS = [
+  { label: "🎭 Personality Focus", text: "Focus more on personality traits, demeanor, and behavioral quirks" },
+  { label: "👗 Detailed Appearance", text: "Make appearance, outfit, and physical descriptions more detailed" },
+  { label: "📋 Bulleted Stats", text: "Format inventory, weapons, and abilities clearly with bullet points" },
+  { label: "📖 Expand Lore", text: "Expand on background lore, origin, and relationship notes" },
+];
+
 export function DiffModal({
   title,
   oldLabel,
@@ -34,21 +41,31 @@ export function DiffModal({
   );
 
   const [feedback, setFeedback] = useState("");
+  const [paneViewMode, setPaneViewMode] = useState<"split" | "left" | "right">("split");
 
   const addedCount = diffLines.filter((l) => l.type === "added").length;
   const removedCount = diffLines.filter((l) => l.type === "removed").length;
   const isReadOnly = !onAccept && !onRetry;
 
+  function handleApplyPreset(presetText: string) {
+    setFeedback((prev) => {
+      const trimmed = prev.trim();
+      if (!trimmed) return presetText;
+      if (trimmed.includes(presetText)) return prev;
+      return `${trimmed}; ${presetText}`;
+    });
+  }
+
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !loading) onClose(); }}>
-      <section className="modal diff-modal">
+      <section className="modal diff-modal" aria-labelledby="diff-modal-title">
         <header className="modal-header diff-modal-header">
           <div className="diff-modal-title-wrap">
             <div className="diff-modal-title-row">
               <span className="diff-modal-icon-badge">
                 <Icon name="Sparkles" size={18} />
               </span>
-              <h2>{title}</h2>
+              <h2 id="diff-modal-title">{title}</h2>
             </div>
             <div className="diff-stats-pills">
               <span className="diff-stat-pill added">
@@ -62,15 +79,48 @@ export function DiffModal({
               ) : null}
             </div>
           </div>
-          <button
-            type="button"
-            className="diff-close-btn"
-            onClick={onClose}
-            disabled={loading}
-            title="Close modal"
-          >
-            <Icon name="X" size={16} />
-          </button>
+
+          <div className="diff-header-right-actions">
+            {/* View Mode Toggle */}
+            <div className="diff-pane-toggle-group" role="tablist" aria-label="Diff View Mode">
+              <button
+                type="button"
+                className={`diff-pane-toggle-btn ${paneViewMode === "split" ? "active" : ""}`}
+                onClick={() => setPaneViewMode("split")}
+                title="View side-by-side comparison"
+              >
+                <Icon name="Columns" size={12} />
+                <span>Split</span>
+              </button>
+              <button
+                type="button"
+                className={`diff-pane-toggle-btn ${paneViewMode === "right" ? "active" : ""}`}
+                onClick={() => setPaneViewMode("right")}
+                title={`View only ${newLabel}`}
+              >
+                <span>{newLabel}</span>
+              </button>
+              <button
+                type="button"
+                className={`diff-pane-toggle-btn ${paneViewMode === "left" ? "active" : ""}`}
+                onClick={() => setPaneViewMode("left")}
+                title={`View only ${oldLabel}`}
+              >
+                <span>{oldLabel}</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              className="diff-close-btn"
+              onClick={onClose}
+              disabled={loading}
+              title="Close modal"
+              aria-label="Close modal"
+            >
+              <Icon name="X" size={16} />
+            </button>
+          </div>
         </header>
 
         {/* Active AI Retry / Generation Status Banner */}
@@ -107,6 +157,7 @@ export function DiffModal({
             rightLabel={newLabel}
             leftContent={oldContent}
             rightContent={newContent}
+            viewMode={paneViewMode}
           />
           {loading ? (
             <div className="diff-loading-overlay">
@@ -132,25 +183,59 @@ export function DiffModal({
         ) : (
           <footer className="diff-footer">
             <div className="diff-footer-left">
-              <label className="diff-feedback-label">
-                <span className="diff-feedback-title">
-                  <Icon name="MessageSquare" size={14} /> Guidance for AI retry (optional)
-                </span>
+              <div className="diff-feedback-label">
+                <div className="diff-feedback-header-row">
+                  <span className="diff-feedback-title">
+                    <Icon name="MessageSquare" size={13} /> Guidance for AI retry (optional)
+                  </span>
+                  {feedback.trim() && !loading && (
+                    <button
+                      type="button"
+                      className="diff-feedback-clear-btn"
+                      onClick={() => setFeedback("")}
+                      title="Clear guidance input"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={feedback}
                   onChange={(e) => setFeedback(e.target.value)}
                   placeholder="e.g. Focus more on personality quirks, make appearance description more detailed, format inventory items as bullet points..."
                   disabled={loading}
                   className="diff-feedback-textarea"
                 />
-                <span className="diff-feedback-hint">
-                  Tip: Provide specific instructions on what to change or improve before clicking Retry.
-                </span>
-              </label>
+
+                {/* Quick Guidance Presets */}
+                <div className="diff-presets-row">
+                  <span className="diff-presets-label">Quick Ideas:</span>
+                  <div className="diff-presets-list">
+                    {GUIDANCE_PRESETS.map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        className="diff-preset-chip-btn"
+                        onClick={() => handleApplyPreset(preset.text)}
+                        disabled={loading}
+                        title={`Add "${preset.text}" to guidance`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
+
             <div className="diff-footer-right">
-              <button type="button" onClick={onClose} disabled={loading} className="diff-cancel-btn">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={loading}
+                className="diff-cancel-btn"
+              >
                 Cancel
               </button>
               <button
@@ -158,6 +243,7 @@ export function DiffModal({
                 className="diff-retry-btn"
                 onClick={() => onRetry?.(feedback)}
                 disabled={loading}
+                title="Regenerate BL character sheet with optional feedback"
               >
                 {loading ? (
                   <>
@@ -175,7 +261,7 @@ export function DiffModal({
                 onClick={onAccept}
                 disabled={loading}
               >
-                <Icon name="Check" size={15} /> Accept & Apply
+                <Icon name="Check" size={15} /> Accept &amp; Apply
               </button>
             </div>
           </footer>

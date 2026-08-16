@@ -75,7 +75,7 @@ export const BUILT_IN_CATEGORIES: TagCategoryDefinition[] = [
   {
     id: "rating_nsfw",
     label: "Rating: NSFW",
-    prefixes: ["rating:nsfw", "rating:explicit", "rating:questionable", "rating:lewd", "rating:mature", "rating:18+"],
+    prefixes: ["rating"],
     color: "#f87171",
     colors: {
       text: "#f87171",
@@ -85,12 +85,12 @@ export const BUILT_IN_CATEGORIES: TagCategoryDefinition[] = [
     },
     order: 10,
     isBuiltIn: true,
-    description: "Adult, explicit, or mature content tags",
+    description: "Adult, explicit, or mature content tags (e.g. rating:nsfw, rating:explicit, rating:lewd, or standalone nsfw)",
   },
   {
     id: "rating_sfw",
     label: "Rating: SFW",
-    prefixes: ["rating:sfw", "rating:general", "rating:safe", "rating:all_ages"],
+    prefixes: ["rating"],
     color: "#4ade80",
     colors: {
       text: "#4ade80",
@@ -100,7 +100,7 @@ export const BUILT_IN_CATEGORIES: TagCategoryDefinition[] = [
     },
     order: 20,
     isBuiltIn: true,
-    description: "Safe for work or general audience tags",
+    description: "Safe for work or general audience tags (e.g. rating:sfw, rating:safe, rating:general, or standalone sfw)",
   },
   {
     id: "copyright",
@@ -228,7 +228,6 @@ const KNOWN_SFW_STANDALONE = new Set([
   "sfw",
   "safe",
   "general_audience",
-  "all_ages",
   "family_friendly",
 ]);
 
@@ -297,20 +296,37 @@ export function resolveTagStyle(rawTag: string, userConfig?: TagTaxonomyConfig |
     }
   }
 
-  // 2. Standalone well-known ratings
-  if (
-    KNOWN_NSFW_STANDALONE.has(norm) ||
-    norm.startsWith("rating:nsfw") ||
-    norm.startsWith("rating:explicit") ||
-    norm.startsWith("rating:lewd") ||
-    norm.startsWith("rating:18")
-  ) {
-    const nsfwCat = BUILT_IN_CATEGORIES.find((c) => c.id === "rating_nsfw")!;
-    const colonIdx = norm.indexOf(":");
+  // 2. Rating tags (namespaced "rating:*" or standalone well-known ratings)
+  if (norm.startsWith("rating:")) {
+    const value = norm.slice(7);
+    const isNsfw =
+      KNOWN_NSFW_STANDALONE.has(value) ||
+      value.startsWith("18") ||
+      value.startsWith("r18") ||
+      value.startsWith("r-18") ||
+      value.includes("nsfw") ||
+      value.includes("explicit") ||
+      value.includes("lewd") ||
+      value.includes("mature");
+
+    const cat = BUILT_IN_CATEGORIES.find((c) => c.id === (isNsfw ? "rating_nsfw" : "rating_sfw"))!;
     return {
       raw: norm,
-      namespace: colonIdx > 0 ? norm.slice(0, colonIdx) : undefined,
-      value: colonIdx > 0 ? norm.slice(colonIdx + 1) : norm,
+      namespace: "rating",
+      value,
+      displayLabel: norm,
+      categoryId: cat.id,
+      categoryLabel: cat.label,
+      colors: cat.colors,
+    };
+  }
+
+  // Standalone rating values without "rating:" prefix (e.g. "nsfw", "sfw", "explicit", "safe")
+  if (KNOWN_NSFW_STANDALONE.has(norm)) {
+    const nsfwCat = BUILT_IN_CATEGORIES.find((c) => c.id === "rating_nsfw")!;
+    return {
+      raw: norm,
+      value: norm,
       displayLabel: norm,
       categoryId: nsfwCat.id,
       categoryLabel: nsfwCat.label,
@@ -318,18 +334,11 @@ export function resolveTagStyle(rawTag: string, userConfig?: TagTaxonomyConfig |
     };
   }
 
-  if (
-    KNOWN_SFW_STANDALONE.has(norm) ||
-    norm.startsWith("rating:sfw") ||
-    norm.startsWith("rating:safe") ||
-    norm.startsWith("rating:general")
-  ) {
+  if (KNOWN_SFW_STANDALONE.has(norm)) {
     const sfwCat = BUILT_IN_CATEGORIES.find((c) => c.id === "rating_sfw")!;
-    const colonIdx = norm.indexOf(":");
     return {
       raw: norm,
-      namespace: colonIdx > 0 ? norm.slice(0, colonIdx) : undefined,
-      value: colonIdx > 0 ? norm.slice(colonIdx + 1) : norm,
+      value: norm,
       displayLabel: norm,
       categoryId: sfwCat.id,
       categoryLabel: sfwCat.label,

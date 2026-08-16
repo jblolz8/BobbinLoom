@@ -1762,10 +1762,90 @@
   font-weight: normal;
 }
 
+.sidebar-active-filter-badge {
+  font-size: 0.7rem;
+  color: #c4b5fd;
+  background: rgba(147, 51, 234, 0.22);
+  border: 1px solid rgba(167, 139, 250, 0.4);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .sidebar-header-actions {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.sidebar-mobile-toggle-btn {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #cbd5e1;
+  font-size: 0.74rem;
+  padding: 3px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.sidebar-mobile-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.sidebar-toggle-text {
+  font-weight: 500;
+}
+
+.sidebar-collapsible-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebar-active-tags-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 2px 0;
+}
+
+.sidebar-active-tags-label {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.sidebar-active-tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.sidebar-active-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(167, 139, 250, 0.45);
+  color: #c4b5fd;
+  font-size: 0.74rem;
+  padding: 2px 7px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.sidebar-active-tag-chip:hover {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #fca5a5;
 }
 
 .sidebar-mode-btn,
@@ -2512,13 +2592,16 @@
 
 .card-list-avatar {
   width: 72px !important;
-  height: 72px !important;
+  height: 108px !important;
   min-width: 72px !important;
-  min-height: 72px !important;
+  min-height: 108px !important;
+  aspect-ratio: 2 / 3 !important;
   border-radius: 8px !important;
   object-fit: cover !important;
+  object-position: center top !important;
   flex-shrink: 0;
   border: 1px solid #334155 !important;
+  background: #0a0d14;
   display: block;
 }
 
@@ -2811,20 +2894,88 @@
 @media (max-width: 860px) {
   .character-booru-layout {
     flex-direction: column;
+    gap: 0.85rem;
   }
+
   .character-tag-sidebar {
     width: 100%;
     position: static;
     max-height: none;
     box-sizing: border-box;
+    padding: 8px 12px;
+    gap: 0;
+    border-radius: 8px;
+    background: rgba(18, 22, 34, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
   }
+
+  .character-tag-sidebar .sidebar-header {
+    cursor: pointer;
+    padding: 2px 0;
+    user-select: none;
+  }
+
+  .character-tag-sidebar .sidebar-mobile-toggle-btn {
+    display: inline-flex;
+  }
+
+  .character-tag-sidebar.mobile-collapsed .sidebar-collapsible-body {
+    display: none;
+  }
+
+  .character-tag-sidebar.mobile-expanded .sidebar-collapsible-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 10px;
+    margin-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    animation: accordion-slide-down 0.2s ease-out;
+  }
+
+  @keyframes accordion-slide-down {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   .sidebar-tag-list {
-    flex-direction: row;
-    flex-wrap: wrap;
-    max-height: 120px;
+    max-height: 42vh;
+    overflow-y: auto;
+    padding-right: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
+
+  .sidebar-category-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 4px 0 6px 4px;
+    border-left: none;
+    margin-left: 0;
+  }
+
   .sidebar-tag-item {
     width: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 9px;
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    font-size: 0.78rem;
+  }
+
+  .sidebar-tag-item:hover {
+    background: rgba(30, 41, 59, 0.9);
   }
 }
 
@@ -2892,10 +3043,11 @@
 
 .avatar-placeholder.card-list-avatar {
   width: 72px !important;
-  height: 72px !important;
+  height: 108px !important;
   min-width: 72px !important;
-  min-height: 72px !important;
-  font-size: 1.6rem;
+  min-height: 108px !important;
+  aspect-ratio: 2 / 3 !important;
+  font-size: 1.8rem;
   border-radius: 8px !important;
   border: 1px solid rgba(96, 165, 250, 0.3) !important;
 }
