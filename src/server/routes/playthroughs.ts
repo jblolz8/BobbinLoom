@@ -12,6 +12,7 @@ import {
   getPlaythroughRecord,
   listPlaythroughRecords,
   renamePlaythroughRecord,
+  resolveCast,
   resolvePresetForGeneration,
   updatePlaythroughRecord
 } from "../store";
@@ -22,7 +23,7 @@ import {
   questAction,
   resummarizeChapterAction
 } from "../stateActions";
-import { executeTurn } from "../turnActions";
+import { buildOpeningPrompt, executeTurn } from "../turnActions";
 import { abortOnClientDisconnect, dataDir, loadPresets, providerManager } from "./helpers";
 
 const CreatePlaythroughBody = z.object({
@@ -43,6 +44,7 @@ const GenerateBody = z.object({
   personaId: z.string().optional(),
   castIds: z.array(z.string()).optional(),
   generateOpeningChoices: z.boolean().optional(),
+  openingMode: z.enum(["quick", "fleshedOut"]).default("fleshedOut"),
   lorebookIds: z.array(z.string()).optional(),
   presetId: z.string().optional(),
 });
@@ -111,6 +113,10 @@ export async function playthroughRoutes(app: FastifyInstance): Promise<void> {
       name: body.name,
       setting: body.setting,
     };
+    if (body.castIds && body.castIds.length) {
+      const castTemplates = resolveCast(body.castIds) ?? [];
+      preferences.cast = castTemplates.map((t) => ({ name: t.name, summary: t.summary }));
+    }
 
     const controller = abortOnClientDisconnect(reply);
 
@@ -118,14 +124,23 @@ export async function playthroughRoutes(app: FastifyInstance): Promise<void> {
       const seed = await providerManager.getProvider().generateScenarioSeed(preferences, body.lorebookIds, preset?.modules.seed, controller.signal);
       if (controller.signal.aborted) return;
 
-      const playthrough = createPlaythroughFromSeedRecord(dataDir, body.name, seed, body.personaId, body.castIds, body.lorebookIds, body.setting, preset ?? undefined);
+      const openingMode = body.openingMode ?? "fleshedOut";
 
-      const openingPrompt = "Begin the story. Introduce the world to the player character — describe their current location, the atmosphere, and any immediate surroundings. Write in second person. Do not take actions on behalf of the player. End by presenting the current moment as an invitation for the player to act.";
+      if (openingMode === "quick") {
+        // Single first message = seed.openingText (createPlaythroughFromSeedRecord seeds it by default).
+        const playthrough = createPlaythroughFromSeedRecord(dataDir, body.name, seed, body.personaId, body.castIds, body.lorebookIds, body.setting, preset ?? undefined);
+        updatePlaythroughRecord(dataDir, playthrough);
+        return reply.code(201).send({
+          state: playthrough, tokenUsage: null, rawInput: null, rawOutput: null, finishReason: null,
+        });
+      }
+
+      // fleshedOut: create WITHOUT seeding the opening text, then run a setting-aware opening turn.
+      const fleshed = createPlaythroughFromSeedRecord(dataDir, body.name, seed, body.personaId, body.castIds, body.lorebookIds, body.setting, preset ?? undefined, /* includeOpening */ false);
       const openingChoices = body.generateOpeningChoices ?? false;
-
       const result = await executeTurn(
-        playthrough,
-        openingPrompt,
+        fleshed,
+        buildOpeningPrompt(body.setting, seed),
         providerManager.getProvider(),
         openingChoices,
         providerManager.getContextWindow(),
