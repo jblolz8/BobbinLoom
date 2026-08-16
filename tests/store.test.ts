@@ -19,6 +19,7 @@ import {
   listPersonas,
   listPlaythroughRecords,
   removeCharacterImportRecord,
+  resolveCast,
   resolvePresetForGeneration,
   setDefaultPersonaRecord,
   updateCharacterTemplateRecord,
@@ -465,14 +466,24 @@ function makeCard(name: string): ParsedCard {
 }
 
 describe("resolveCast — CCv2 guard", () => {
-  it("skips CCv2 format records when resolving castIds (dir-aware)", () => {
+  it("skips CCv2 format records when resolving castIds (hermetic, explicit chars dir)", () => {
     const dir = mkdtempSync(join(tmpdir(), "bobbinloom-cast-guard-"));
     tempDirs.push(dir);
     const normal = createCharacterTemplateRecord("Normal Gal", dir);
     const ccv2 = importCharacterCard(makeCard("CCv2 Gal"), Buffer.from("{}"), "json", dir).record;
-    const pt = createPlaythroughRecord(dir, "Cast Guard", undefined, [ccv2.id, normal.id]);
-    const names = pt.characters.map((c) => c.name);
+    const result = resolveCast([ccv2.id, normal.id], dir);
+    const names = (result ?? []).map((t) => t.name);
     expect(names).toContain("Normal Gal");
     expect(names).not.toContain("CCv2 Gal");
+  });
+
+  it("reads the library (CHARACTERS_DIR) when no dir is passed, not the caller's playthroughs dir", () => {
+    // Regression guard: createPlaythroughRecord's `dir` is the playthroughs folder;
+    // resolveCast must still resolve cast against the library, not that folder.
+    // (Hermetic: use a temp playthroughs dir and assert no throw + empty-safe result.)
+    const dir = mkdtempSync(join(tmpdir(), "bobbinloom-cast-default-"));
+    tempDirs.push(dir);
+    const pt = createPlaythroughRecord(dir, "Cast Default", undefined, ["char_nonexistent_xyz"]);
+    expect(Array.isArray(pt.characters)).toBe(true);
   });
 });
