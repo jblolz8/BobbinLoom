@@ -102,6 +102,14 @@ class MockProviderShim implements TurnProvider {
   async generateCharacterSheet(_npc: { name: string; description: string; disposition?: string }, _storyContext: string): Promise<string> {
     return "[Species]: Human\n\n[Personality]\n- Cheerful shopkeeper";
   }
+
+  async refineCharacterSheet(_c: string, _o: string, _f: string, _s: string): Promise<string> {
+    throw new Error("not used in promote tests");
+  }
+
+  async suggestCharacterTags(): Promise<string[]> {
+    return [];
+  }
 }
 
 describe("promoteNpcDraftAction", () => {
@@ -156,7 +164,9 @@ describe("closeChapterAction — NPC staleness pruning (Phase E)", () => {
       async summarizeChapter(): Promise<{ name: string; shortDescription: string; fullSummary: string }> { throw new Error("not used"); },
       async compactStorySoFar(): Promise<{ summary: string }> { return { summary: "compacted" }; },
       async embedTexts(): Promise<number[][]> { return []; },
-      async generateCharacterSheet(): Promise<string> { throw new Error("not used"); }
+      async generateCharacterSheet(): Promise<string> { throw new Error("not used"); },
+      async refineCharacterSheet(): Promise<string> { throw new Error("not used"); },
+      async suggestCharacterTags(): Promise<string[]> { return []; }
     };
   }
 

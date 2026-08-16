@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { EMPTY_MODULE_SET, PromptModuleSetSchema, type PromptModuleSet, type PromptPreset } from "../../schemas";
+import { EMPTY_MODULE_SET, PromptModuleSetSchema, TagTaxonomyConfigSchema, type PromptModuleSet, type PromptPreset } from "../../schemas";
 import { loadPresets, savePresets, loadAppSettings, saveAppSettings, settingsDir } from "./helpers";
 
 const CreatePresetBody = z.object({
@@ -92,5 +92,18 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
     const body = DefaultPresetBody.parse(request.body ?? {});
     saveAppSettings(settingsDir, { defaultPresetId: body.defaultPresetId });
     return { defaultPresetId: body.defaultPresetId };
+  });
+
+  app.get("/api/settings/tag-taxonomy", async () => {
+    const settings = loadAppSettings(settingsDir);
+    return {
+      tagTaxonomy: settings.tagTaxonomy ?? { customCategories: [], tagOverrides: {} },
+    };
+  });
+
+  app.put("/api/settings/tag-taxonomy", async (request) => {
+    const body = TagTaxonomyConfigSchema.parse(request.body ?? {});
+    const updated = saveAppSettings(settingsDir, { tagTaxonomy: body });
+    return { tagTaxonomy: updated.tagTaxonomy ?? { customCategories: [], tagOverrides: {} } };
   });
 }

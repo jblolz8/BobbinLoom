@@ -35,6 +35,8 @@ function makeProvider(overrides: Partial<TurnProvider> = {}): TurnProvider & { c
     async compactStorySoFar(input) { compactCalls.push(input); return { summary: `compacted(${input.chapterTranscriptions.length})` }; },
     async embedTexts() { return []; },
     async generateCharacterSheet() { throw new Error("not used"); },
+    async refineCharacterSheet() { throw new Error("not used"); },
+    async suggestCharacterTags() { return []; },
     compactCalls,
     ...overrides
   };

@@ -1,4 +1,5 @@
 import { useState, useRef, type KeyboardEvent } from "react";
+import { TagChip } from "./TagChip";
 
 export type TagInputProps = {
   value: string[];
@@ -55,31 +56,13 @@ export function TagInput({ value, onChange, placeholder, disabled }: TagInputPro
       onClick={focusInput}
     >
       {value.map((tag, i) => (
-        <span key={`${tag}-${i}`} className="tag-chip">
-          {tag}
-          <span
-            role="button"
-            tabIndex={disabled ? -1 : 0}
-            className={`tag-remove ${disabled ? "disabled" : ""}`}
-            aria-label={`Remove ${tag}`}
-            aria-disabled={disabled || undefined}
-            onClick={(e) => {
-              if (disabled) return;
-              e.stopPropagation();
-              removeTag(i);
-            }}
-            onKeyDown={(e) => {
-              if (disabled) return;
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                e.stopPropagation();
-                removeTag(i);
-              }
-            }}
-          >
-            ×
-          </span>
-        </span>
+        <TagChip
+          key={`${tag}-${i}`}
+          tag={tag}
+          size="sm"
+          disabled={disabled}
+          onRemove={!disabled ? () => removeTag(i) : undefined}
+        />
       ))}
       <input
         ref={inputRef}

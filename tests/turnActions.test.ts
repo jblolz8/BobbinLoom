@@ -285,7 +285,9 @@ describe("executeTurn tokenUsage", () => {
       async summarizeChapter() { throw new Error("not needed"); },
       async compactStorySoFar() { throw new Error("not needed"); },
       async embedTexts() { return []; },
-      async generateCharacterSheet() { throw new Error("not needed"); }
+      async generateCharacterSheet() { throw new Error("not needed"); },
+      async refineCharacterSheet() { throw new Error("not needed"); },
+      async suggestCharacterTags() { return []; }
     };
 
     const result = await executeTurn(playthrough, "hello", provider, false, 65536);

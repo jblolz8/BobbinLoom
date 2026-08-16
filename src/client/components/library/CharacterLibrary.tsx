@@ -6,10 +6,13 @@ import { convertCharacterApply, convertCharacterGenerate, suggestCharacterTags }
 import type { CharacterTemplateUpdate } from "../../api";
 import { CHARACTER_SHEET_EXAMPLE } from "../../../engine/characterSections";
 import { displayTitle, entryKind, filterLibraryEntries, cardBadgeLabel } from "../../../engine/characterCards";
-import { Icon } from "../base";
+import { Icon, TagChip } from "../base";
 import { DiffModal } from "./DiffModal";
 import { TwoPaneDiff } from "./TwoPaneDiff";
 import { TagSuggestionModal } from "./TagSuggestionModal";
+import { TagTaxonomyModal } from "./TagTaxonomyModal";
+import { getTagTaxonomy } from "../../api";
+import { groupTagsByCategory, type TagTaxonomyConfig } from "../../../engine/tagTaxonomy";
 
 export type CharacterLibraryProps = {
   isModal?: boolean;
@@ -54,6 +57,7 @@ function TagChipEditor({
   disabled,
   onSuggestAI,
   suggestingAI,
+  taxonomyConfig,
 }: {
   tags: string[];
   onChange: (tags: string[]) => void;
@@ -61,6 +65,7 @@ function TagChipEditor({
   disabled?: boolean;
   onSuggestAI?: () => void;
   suggestingAI?: boolean;
+  taxonomyConfig?: TagTaxonomyConfig | null;
 }) {
   const [inputVal, setInputVal] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -108,26 +113,21 @@ function TagChipEditor({
       <div className="tag-chip-editor-box">
         <div className="tag-chip-list">
           {tags.map((tag) => (
-            <span key={tag} className="editable-tag-chip">
-              <span className="editable-tag-text">{tag}</span>
-              {!disabled ? (
-                <button
-                  type="button"
-                  className="editable-tag-remove"
-                  onClick={() => removeTag(tag)}
-                  title={`Remove "${tag}"`}
-                >
-                  ✕
-                </button>
-              ) : null}
-            </span>
+            <TagChip
+              key={tag}
+              tag={tag}
+              userConfig={taxonomyConfig}
+              disabled={disabled}
+              size="md"
+              onRemove={!disabled ? () => removeTag(tag) : undefined}
+            />
           ))}
 
           {!disabled ? (
             <div className="tag-input-wrap">
               <input
                 type="text"
-                placeholder={tags.length === 0 ? "Add tags (press Enter or comma)…" : "Add tag…"}
+                placeholder={tags.length === 0 ? "Add tags (e.g. species:elf, rating:sfw)…" : "Add tag…"}
                 value={inputVal}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -168,7 +168,7 @@ function TagChipEditor({
                         addTag(sug);
                       }}
                     >
-                      + {sug}
+                      <TagChip tag={sug} userConfig={taxonomyConfig} size="xs" />
                     </button>
                   ))}
                 </div>
@@ -186,10 +186,12 @@ function TagDiffViewer({
   originalTags,
   currentTags,
   onRestore,
+  taxonomyConfig,
 }: {
   originalTags: string[];
   currentTags: string[];
   onRestore: () => void;
+  taxonomyConfig?: TagTaxonomyConfig | null;
 }) {
   const normOriginal = useMemo(() => originalTags.map((t) => t.toLowerCase()), [originalTags]);
   const normCurrent = useMemo(() => currentTags.map((t) => t.toLowerCase()), [currentTags]);
@@ -223,10 +225,9 @@ function TagDiffViewer({
               originalTags.map((tag) => (
                 <span
                   key={tag}
-                  className={`diff-tag-chip ${removed.includes(tag.toLowerCase()) ? "removed" : "same"}`}
+                  className={`diff-tag-chip-wrap ${removed.includes(tag.toLowerCase()) ? "removed" : "same"}`}
                 >
-                  {removed.includes(tag.toLowerCase()) ? "- " : ""}
-                  {tag}
+                  <TagChip tag={tag} userConfig={taxonomyConfig} size="sm" />
                 </span>
               ))
             )}
@@ -242,10 +243,9 @@ function TagDiffViewer({
               currentTags.map((tag) => (
                 <span
                   key={tag}
-                  className={`diff-tag-chip ${added.includes(tag.toLowerCase()) ? "added" : "same"}`}
+                  className={`diff-tag-chip-wrap ${added.includes(tag.toLowerCase()) ? "added" : "same"}`}
                 >
-                  {added.includes(tag.toLowerCase()) ? "+ " : ""}
-                  {tag}
+                  <TagChip tag={tag} userConfig={taxonomyConfig} size="sm" />
                 </span>
               ))
             )}
@@ -409,6 +409,12 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
   const tagSuggestAbortControllerRef = useRef<AbortController | null>(null);
 
+  // ── Tag Taxonomy & Categorization State ──
+  const [taxonomyConfig, setTaxonomyConfig] = useState<TagTaxonomyConfig | null>(null);
+  const [taxonomyModalOpen, setTaxonomyModalOpen] = useState(false);
+  const [sidebarViewMode, setSidebarViewMode] = useState<"grouped" | "flat">("grouped");
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+
   const convertingCharacter = useMemo(() => {
     if (!convertingId) return null;
     return templates.find((t) => t.id === convertingId) ?? null;
@@ -416,7 +422,14 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
 
   async function loadData() {
     try {
-      setTemplates(await listCharacters());
+      const [chars, taxRes] = await Promise.all([
+        listCharacters(),
+        getTagTaxonomy().catch(() => ({ tagTaxonomy: { customCategories: [], tagOverrides: {} } })),
+      ]);
+      setTemplates(chars);
+      if (taxRes?.tagTaxonomy) {
+        setTaxonomyConfig(taxRes.tagTaxonomy);
+      }
     } catch {
       setTemplates([]);
     }
@@ -716,6 +729,19 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
     return allTagCounts.filter(item => item.tag.includes(q));
   }, [allTagCounts, tagFilterSearch]);
 
+  const groupedTagCategories = useMemo(() => {
+    return groupTagsByCategory(filteredTagCounts, taxonomyConfig);
+  }, [filteredTagCounts, taxonomyConfig]);
+
+  function toggleCategoryCollapse(categoryId: string) {
+    setCollapsedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(categoryId)) next.delete(categoryId);
+      else next.add(categoryId);
+      return next;
+    });
+  }
+
   const activeFilterTags = useMemo(() => {
     return search
       .split(/\s+/)
@@ -895,6 +921,7 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                       disabled={editingIsCcv2}
                       onSuggestAI={!editingIsCcv2 ? () => void handleOpenAiTagSuggestions() : undefined}
                       suggestingAI={tagSuggestLoading}
+                      taxonomyConfig={taxonomyConfig}
                     />
 
                     <label className="editor-field">
@@ -939,6 +966,7 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                         allLibraryTags={allTagCounts.map(t => t.tag)}
                         onSuggestAI={() => void handleOpenAiTagSuggestions()}
                         suggestingAI={tagSuggestLoading}
+                        taxonomyConfig={taxonomyConfig}
                       />
 
                       <label className="editor-field">
@@ -972,7 +1000,7 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                         <div className="read-only-tags-wrap">
                           {originalTags.length > 0 ? (
                             originalTags.map(tag => (
-                              <span key={tag} className="read-only-tag-chip">{tag}</span>
+                              <TagChip key={tag} tag={tag} userConfig={taxonomyConfig} size="sm" />
                             ))
                           ) : (
                             <span className="empty-tags-hint">(no original tags)</span>
@@ -1002,6 +1030,7 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                         originalTags={originalTags}
                         currentTags={form.tags}
                         onRestore={() => setForm(f => ({ ...f, tags: [...originalTags] }))}
+                        taxonomyConfig={taxonomyConfig}
                       />
 
                       <div className="editor-field">
@@ -1036,22 +1065,40 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                   <Icon name="Tag" size={15} /> Tags
                   <span className="sidebar-total-count">({allTagCounts.length})</span>
                 </h4>
-                {search.trim() ? (
+                <div className="sidebar-header-actions">
                   <button
                     type="button"
-                    className="sidebar-clear-btn"
-                    onClick={() => {
-                      setSearch("");
-                      setCurrentPage(1);
-                    }}
-                    title="Clear search and tag filters"
+                    className={`sidebar-mode-btn ${sidebarViewMode === "grouped" ? "active" : ""}`}
+                    onClick={() => setSidebarViewMode(sidebarViewMode === "grouped" ? "flat" : "grouped")}
+                    title={sidebarViewMode === "grouped" ? "Switch to flat tag list" : "Switch to category grouped tags"}
                   >
-                    Clear
+                    <Icon name={sidebarViewMode === "grouped" ? "Layers" : "List"} size={13} />
                   </button>
-                ) : null}
+                  <button
+                    type="button"
+                    className="sidebar-settings-btn"
+                    onClick={() => setTaxonomyModalOpen(true)}
+                    title="Configure Tag Taxonomy & Colors"
+                  >
+                    <Icon name="Sliders" size={13} />
+                  </button>
+                  {search.trim() ? (
+                    <button
+                      type="button"
+                      className="sidebar-clear-btn"
+                      onClick={() => {
+                        setSearch("");
+                        setCurrentPage(1);
+                      }}
+                      title="Clear search and tag filters"
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
               </div>
 
-              {allTagCounts.length > 8 ? (
+              {allTagCounts.length > 6 ? (
                 <div className="sidebar-tag-search-wrap">
                   <input
                     type="text"
@@ -1077,6 +1124,69 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                   <p className="sidebar-empty-tags">
                     {tagFilterSearch ? "No matching tags." : "No tags yet."}
                   </p>
+                ) : sidebarViewMode === "grouped" ? (
+                  groupedTagCategories.map((group) => {
+                    const isCollapsed = collapsedCategories.has(group.id);
+                    return (
+                      <div key={group.id} className="sidebar-category-group">
+                        <button
+                          type="button"
+                          className="sidebar-category-header"
+                          onClick={() => toggleCategoryCollapse(group.id)}
+                        >
+                          <div className="sidebar-cat-title-wrap">
+                            <span
+                              className="sidebar-cat-dot"
+                              style={{ backgroundColor: group.color }}
+                            />
+                            <span className="sidebar-cat-label">{group.label}</span>
+                          </div>
+                          <div className="sidebar-cat-right">
+                            <span className="sidebar-cat-count">{group.tags.length}</span>
+                            <Icon
+                              name={isCollapsed ? "ChevronRight" : "ChevronDown"}
+                              size={12}
+                              className="sidebar-cat-chevron"
+                            />
+                          </div>
+                        </button>
+                        {!isCollapsed && (
+                          <div className="sidebar-category-items">
+                            {group.tags.map(({ tag, count, style }) => {
+                              const active = isTagActive(tag);
+                              return (
+                                <button
+                                  key={tag}
+                                  type="button"
+                                  className={`sidebar-tag-item ${active ? "active" : ""}`}
+                                  onClick={() => toggleTag(tag)}
+                                  title={active ? `Remove tag "${tag}"` : `Filter by tag "${tag}"`}
+                                  style={{
+                                    borderLeftColor: active ? style.colors.text : "transparent",
+                                  }}
+                                >
+                                  <span className="sidebar-tag-name">
+                                    {style.namespace ? (
+                                      <span className="sidebar-tag-prefix" style={{ color: style.colors.text, opacity: 0.8 }}>
+                                        {style.namespace}:
+                                      </span>
+                                    ) : null}
+                                    <span style={{ color: active ? style.colors.text : undefined }}>{style.value}</span>
+                                  </span>
+                                  <span
+                                    className="sidebar-tag-count"
+                                    style={{ borderColor: active ? style.colors.text : undefined }}
+                                  >
+                                    {count}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
                 ) : (
                   filteredTagCounts.map(({ tag, count }) => {
                     const active = isTagActive(tag);
@@ -1187,15 +1297,14 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                 <div className="active-filters-bar">
                   <span className="active-filters-label">Active filters:</span>
                   {activeFilterTags.map((tag) => (
-                    <button
+                    <TagChip
                       key={tag}
-                      type="button"
-                      className="active-filter-chip"
-                      onClick={() => removeFilterTag(tag)}
-                      title={`Remove filter "${tag}"`}
-                    >
-                      tag:{tag} <span className="chip-remove">✕</span>
-                    </button>
+                      tag={tag}
+                      userConfig={taxonomyConfig}
+                      active={true}
+                      size="sm"
+                      onRemove={() => removeFilterTag(tag)}
+                    />
                   ))}
                   <button
                     type="button"
@@ -1288,18 +1397,17 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                                   {(latest.tags ?? []).map((tag) => {
                                     const active = isTagActive(tag);
                                     return (
-                                      <button
+                                      <TagChip
                                         key={tag}
-                                        type="button"
-                                        className={`tag-chip ${active ? "active" : ""}`}
+                                        tag={tag}
+                                        userConfig={taxonomyConfig}
+                                        active={active}
+                                        size="xs"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           toggleTag(tag);
                                         }}
-                                        title={active ? `Remove "${tag}" from search` : `Add "${tag}" to search`}
-                                      >
-                                        {tag}
-                                      </button>
+                                      />
                                     );
                                   })}
                                 </div>
@@ -1432,18 +1540,17 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                                   {(latest.tags ?? []).map((tag) => {
                                     const active = isTagActive(tag);
                                     return (
-                                      <button
+                                      <TagChip
                                         key={tag}
-                                        type="button"
-                                        className={`tag-chip ${active ? "active" : ""}`}
+                                        tag={tag}
+                                        userConfig={taxonomyConfig}
+                                        active={active}
+                                        size="xs"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           toggleTag(tag);
                                         }}
-                                        title={active ? `Remove "${tag}" from search` : `Add "${tag}" to search`}
-                                      >
-                                        {tag}
-                                      </button>
+                                      />
                                     );
                                   })}
                                 </div>
@@ -1680,6 +1787,7 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
           currentTags={form.tags}
           loading={tagSuggestLoading}
           error={tagSuggestError}
+          taxonomyConfig={taxonomyConfig}
           onApply={(selectedTags) => {
             setForm((f) => ({ ...f, tags: selectedTags }));
             setTagSuggestModalOpen(false);
@@ -1691,6 +1799,15 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
           onClose={handleCancelTagSuggest}
         />
       ) : null}
+
+      {/* Tag Taxonomy & Color Settings Modal */}
+      <TagTaxonomyModal
+        open={taxonomyModalOpen}
+        onClose={() => setTaxonomyModalOpen(false)}
+        allLibraryTags={allTagCounts.map((t) => t.tag)}
+        currentConfig={taxonomyConfig}
+        onConfigUpdated={(newCfg) => setTaxonomyConfig(newCfg)}
+      />
     </div>
   );
 }

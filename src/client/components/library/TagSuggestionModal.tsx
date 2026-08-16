@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "../base";
+import { resolveTagStyle, type TagTaxonomyConfig } from "../../../engine/tagTaxonomy";
 
 export type TagSuggestionModalProps = {
   characterName: string;
@@ -7,6 +8,7 @@ export type TagSuggestionModalProps = {
   currentTags: string[];
   loading: boolean;
   error: string | null;
+  taxonomyConfig?: TagTaxonomyConfig | null;
   onApply: (selectedTags: string[]) => void;
   onRegenerate: (guidance?: string) => void;
   onClose: () => void;
@@ -18,6 +20,7 @@ export function TagSuggestionModal({
   currentTags,
   loading,
   error,
+  taxonomyConfig,
   onApply,
   onRegenerate,
   onClose,
@@ -103,6 +106,54 @@ export function TagSuggestionModal({
     onRegenerate(guidanceInput.trim() || undefined);
   }
 
+  function renderTagToggle(tag: string, source: "ai_new" | "ai_confirmed" | "saved" | "custom") {
+    const isChecked = selectedTags.has(tag);
+    const tagStyle = resolveTagStyle(tag, taxonomyConfig);
+
+    return (
+      <button
+        key={tag}
+        type="button"
+        className={`tag-suggestion-toggle ${source === "ai_new" ? "new-ai-tag" : ""} ${isChecked ? "checked" : ""}`}
+        onClick={() => toggleTag(tag)}
+        style={{
+          borderColor: isChecked ? tagStyle.colors.text : tagStyle.colors.border,
+          backgroundColor: isChecked ? (tagStyle.colors.glow || tagStyle.colors.bg) : tagStyle.colors.bg,
+        }}
+      >
+        <span
+          className="tag-checkbox-indicator"
+          style={{ borderColor: tagStyle.colors.border, color: tagStyle.colors.text }}
+        >
+          {isChecked ? <Icon name="Check" size={12} /> : null}
+        </span>
+        <span className="tag-label-text" style={{ color: tagStyle.colors.text }}>
+          {tagStyle.namespace ? (
+            <span className="tag-toggle-namespace" style={{ opacity: 0.75 }}>
+              {tagStyle.namespace}:
+            </span>
+          ) : null}
+          <span className="tag-toggle-value">{tagStyle.value}</span>
+        </span>
+        {source === "ai_new" ? (
+          <span className="tag-source-badge ai" title="New tag suggested by AI">
+            New AI
+          </span>
+        ) : source === "ai_confirmed" ? (
+          <span className="tag-source-badge confirmed" title="AI also recommends keeping this tag">
+            AI Confirmed
+          </span>
+        ) : source === "saved" ? (
+          <span className="tag-source-badge current" title="Previously saved on card">
+            Saved
+          </span>
+        ) : (
+          <span className="tag-source-badge custom">Custom</span>
+        )}
+      </button>
+    );
+  }
+
   return (
     <div
       className="modal-backdrop"
@@ -149,9 +200,9 @@ export function TagSuggestionModal({
                 type="button"
                 className="tag-mini-btn tag-regenerate-btn"
                 onClick={handleRegenerateClick}
-                title="Re-run AI tag generation with character details and optional focus"
+                title="Regenerate tag suggestions with optional guidance"
               >
-                <Icon name="RefreshCw" size={12} /> Re-generate
+                <Icon name="Sparkles" size={12} /> Regenerate Suggestions
               </button>
             )}
           </div>
@@ -160,43 +211,38 @@ export function TagSuggestionModal({
               <input
                 type="text"
                 className="tag-guidance-input"
-                placeholder="e.g. Focus on combat style, specific aesthetic tropes, clothing details..."
+                placeholder="e.g. Focus on species:demon traits, gothic outfit, magical combat abilities, rating:sfw..."
                 value={guidanceInput}
                 onChange={(e) => setGuidanceInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !loading) {
-                    e.preventDefault();
                     handleRegenerateClick();
                   }
                 }}
               />
               <button
                 type="button"
-                className="secondary-btn tag-guidance-submit-btn"
+                className="primary-btn tag-guidance-apply-btn"
                 onClick={handleRegenerateClick}
                 disabled={loading}
               >
-                <Icon name="Sparkles" size={13} /> Run AI
+                Apply &amp; Regenerate
               </button>
             </div>
           )}
         </div>
 
+        {/* Modal Main Content */}
         {loading ? (
-          <div className="tag-modal-loading-state">
-            <Icon name="Sparkles" size={28} className="sparkle-pulse" />
-            <p>Analyzing character sheet & library taxonomy to suggest tags…</p>
-            <button
-              type="button"
-              className="secondary-btn tag-cancel-generation-btn"
-              onClick={onClose}
-              title="Cancel tag generation"
-            >
-              <Icon name="X" size={13} /> Cancel Generation
-            </button>
+          <div className="tag-suggestion-loading-state">
+            <div className="tag-loading-spinner-wrap">
+              <Icon name="Sparkles" size={32} className="sparkle-pulse text-amber-400" />
+            </div>
+            <h3>Analyzing Character Sheet…</h3>
+            <p>Our AI tagger is evaluating personality, species, abilities, and library taxonomy.</p>
           </div>
         ) : error ? (
-          <div className="tag-modal-error-container">
+          <div className="tag-suggestion-error-state">
             <div className="diff-error-banner">
               <Icon name="AlertCircle" size={18} />
               <span>{error}</span>
@@ -258,7 +304,7 @@ export function TagSuggestionModal({
               </div>
             </div>
 
-            {/* AI Suggested Tags (All tags returned by AI) */}
+            {/* AI Suggested Tags */}
             {aiSuggestedTagsList.length > 0 ? (
               <div className="tag-modal-group">
                 <div className="tag-modal-group-title">
@@ -267,32 +313,14 @@ export function TagSuggestionModal({
                 </div>
                 <div className="tag-suggestion-chips-grid">
                   {aiSuggestedTagsList.map((tag) => {
-                    const isChecked = selectedTags.has(tag);
                     const isNew = !currentTags.includes(tag);
-                    return (
-                      <button
-                        key={tag}
-                        type="button"
-                        className={`tag-suggestion-toggle ${isNew ? "new-ai-tag" : ""} ${isChecked ? "checked" : ""}`}
-                        onClick={() => toggleTag(tag)}
-                      >
-                        <span className="tag-checkbox-indicator">
-                          {isChecked ? <Icon name="Check" size={12} /> : null}
-                        </span>
-                        <span className="tag-label-text">{tag}</span>
-                        {isNew ? (
-                          <span className="tag-source-badge ai" title="New tag suggested by AI">New AI</span>
-                        ) : (
-                          <span className="tag-source-badge confirmed" title="AI also recommends keeping this tag">AI Confirmed</span>
-                        )}
-                      </button>
-                    );
+                    return renderTagToggle(tag, isNew ? "ai_new" : "ai_confirmed");
                   })}
                 </div>
               </div>
             ) : null}
 
-            {/* Other Existing Tags (on card, but not suggested by AI) */}
+            {/* Other Existing Tags */}
             {otherCardTags.length > 0 ? (
               <div className="tag-modal-group">
                 <div className="tag-modal-group-title">
@@ -300,23 +328,7 @@ export function TagSuggestionModal({
                   <span>Other Saved Card Tags ({otherCardTags.length})</span>
                 </div>
                 <div className="tag-suggestion-chips-grid">
-                  {otherCardTags.map((tag) => {
-                    const isChecked = selectedTags.has(tag);
-                    return (
-                      <button
-                        key={tag}
-                        type="button"
-                        className={`tag-suggestion-toggle ${isChecked ? "checked" : ""}`}
-                        onClick={() => toggleTag(tag)}
-                      >
-                        <span className="tag-checkbox-indicator">
-                          {isChecked ? <Icon name="Check" size={12} /> : null}
-                        </span>
-                        <span className="tag-label-text">{tag}</span>
-                        <span className="tag-source-badge current" title="Previously saved on card">Saved</span>
-                      </button>
-                    );
-                  })}
+                  {otherCardTags.map((tag) => renderTagToggle(tag, "saved"))}
                 </div>
               </div>
             ) : null}
@@ -329,23 +341,7 @@ export function TagSuggestionModal({
                   <span>Custom Added Tags ({customTagsList.length})</span>
                 </div>
                 <div className="tag-suggestion-chips-grid">
-                  {customTagsList.map((tag) => {
-                    const isChecked = selectedTags.has(tag);
-                    return (
-                      <button
-                        key={tag}
-                        type="button"
-                        className={`tag-suggestion-toggle ${isChecked ? "checked" : ""}`}
-                        onClick={() => toggleTag(tag)}
-                      >
-                        <span className="tag-checkbox-indicator">
-                          {isChecked ? <Icon name="Check" size={12} /> : null}
-                        </span>
-                        <span className="tag-label-text">{tag}</span>
-                        <span className="tag-source-badge custom">Custom</span>
-                      </button>
-                    );
-                  })}
+                  {customTagsList.map((tag) => renderTagToggle(tag, "custom"))}
                 </div>
               </div>
             ) : null}

@@ -186,9 +186,25 @@ export const ProviderRegistryFileSchema = z.object({
 });
 export type ProviderRegistryFile = z.infer<typeof ProviderRegistryFileSchema>;
 
+export const CustomCategoryConfigSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  prefixes: z.array(z.string()).default([]),
+  color: z.string(),
+  description: z.string().optional(),
+});
+export type CustomCategoryConfig = z.infer<typeof CustomCategoryConfigSchema>;
+
+export const TagTaxonomyConfigSchema = z.object({
+  customCategories: z.array(CustomCategoryConfigSchema).default([]),
+  tagOverrides: z.record(z.string()).default({}),
+});
+export type TagTaxonomyConfig = z.infer<typeof TagTaxonomyConfigSchema>;
+
 export const AppSettingsSchema = z.object({
   schemaVersion: z.number().int().min(1).default(1),
   defaultPresetId: z.string().optional(),
+  tagTaxonomy: TagTaxonomyConfigSchema.optional(),
   updatedAt: z.string().optional()
 });
 export type AppSettings = z.infer<typeof AppSettingsSchema>;

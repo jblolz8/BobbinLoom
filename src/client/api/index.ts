@@ -6,3 +6,4 @@ export * from "./personas";
 export * from "./characters";
 export * from "./lorebooks";
 export * from "./providers";
+export * from "./settings";

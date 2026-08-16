@@ -2,9 +2,10 @@ import { useState } from "react";
 import type { PlaythroughPromptSettings } from "../../api";
 import { PresetEditor } from "./PresetEditor";
 import { ProviderConnections } from "./ProviderConnections";
+import { TagTaxonomyPanel } from "../library/TagTaxonomyModal";
 import { Icon } from "../base";
 
-type SettingsTab = "provider" | "prompts" | "chat";
+type SettingsTab = "provider" | "prompts" | "tags" | "chat";
 
 export type SettingsModalProps = {
   open: boolean;
@@ -54,6 +55,9 @@ export function SettingsModal(props: SettingsModalProps) {
           <button className={`tab ${settingsTab === "prompts" ? "active" : ""}`} onClick={() => setSettingsTab("prompts")}>
             Prompt Configuration
           </button>
+          <button className={`tab ${settingsTab === "tags" ? "active" : ""}`} onClick={() => setSettingsTab("tags")}>
+            Tags &amp; Taxonomy
+          </button>
           <button className={`tab ${settingsTab === "chat" ? "active" : ""}`} onClick={() => setSettingsTab("chat")}>
             Chat
           </button>
@@ -66,6 +70,10 @@ export function SettingsModal(props: SettingsModalProps) {
             playthroughPromptSettings={playthroughPromptSettings}
             onPlaythroughPromptSettings={onPlaythroughPromptSettings}
           />
+        ) : settingsTab === "tags" ? (
+          <div className="settings-tab-panel" style={{ maxHeight: "70vh", overflowY: "auto", paddingRight: "4px" }}>
+            <TagTaxonomyPanel />
+          </div>
         ) : (
           <div className="chat-settings-group">
             <p className="chat-settings-intro">
