@@ -6,14 +6,14 @@ import { convertCharacterApply, convertCharacterGenerate, suggestCharacterTags, 
 import type { CharacterTemplateUpdate, ProposedSectionChange, CharacterBrainstormResult } from "../../api";
 import { CHARACTER_SHEET_EXAMPLE, applySectionChanges } from "../../../engine/characterSections";
 import { displayTitle, entryKind, filterLibraryEntries, cardBadgeLabel } from "../../../engine/characterCards";
-import { Icon, TagChip } from "../base";
+import { Icon, SearchBar, TagChip } from "../base";
 import { DiffModal } from "./DiffModal";
 import { TwoPaneDiff } from "./TwoPaneDiff";
 import { TagSuggestionModal } from "./TagSuggestionModal";
 import { TagTaxonomyModal } from "./TagTaxonomyModal";
 import { CharacterBrainstormPanel, type BrainstormChatMessage } from "./CharacterBrainstormPanel";
 import { getTagTaxonomy } from "../../api";
-import { groupTagsByCategory, type TagTaxonomyConfig } from "../../../engine/tagTaxonomy";
+import { groupTagsByCategory, sortTags, type TagTaxonomyConfig } from "../../../engine/tagTaxonomy";
 
 export type CharacterLibraryProps = {
   isModal?: boolean;
@@ -70,6 +70,7 @@ function TagChipEditor({
 }) {
   const [inputVal, setInputVal] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [focusedSuggestionIdx, setFocusedSuggestionIdx] = useState(-1);
 
   const availableSuggestions = useMemo(() => {
     const q = inputVal.trim().toLowerCase();
@@ -79,18 +80,24 @@ function TagChipEditor({
       .slice(0, 10);
   }, [allLibraryTags, tags, inputVal]);
 
+  // Reset focus index when suggestions change
+  useEffect(() => {
+    setFocusedSuggestionIdx(-1);
+  }, [availableSuggestions]);
+
   function addTag(raw: string) {
     const norm = raw.trim().toLowerCase();
     if (!norm) return;
     if (!tags.includes(norm)) {
-      onChange([...tags, norm]);
+      onChange(sortTags([...tags, norm], taxonomyConfig));
     }
     setInputVal("");
     setShowSuggestions(false);
+    setFocusedSuggestionIdx(-1);
   }
 
   function removeTag(tagToRemove: string) {
-    onChange(tags.filter((t) => t !== tagToRemove));
+    onChange(sortTags(tags.filter((t) => t !== tagToRemove), taxonomyConfig));
   }
 
   return (
@@ -144,11 +151,57 @@ function TagChipEditor({
                   }
                 }}
                 onFocus={() => setShowSuggestions(true)}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                onBlur={() => {
+                  setTimeout(() => {
+                    setShowSuggestions(false);
+                    setFocusedSuggestionIdx(-1);
+                  }, 200);
+                }}
                 onKeyDown={(e) => {
+                  if (showSuggestions && availableSuggestions.length > 0) {
+                    if (e.key === "Tab") {
+                      e.preventDefault();
+                      if (e.shiftKey) {
+                        setFocusedSuggestionIdx((prev) =>
+                          prev <= 0 ? availableSuggestions.length - 1 : prev - 1
+                        );
+                      } else {
+                        setFocusedSuggestionIdx((prev) =>
+                          prev >= availableSuggestions.length - 1 ? 0 : prev + 1
+                        );
+                      }
+                      return;
+                    } else if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      setFocusedSuggestionIdx((prev) =>
+                        prev >= availableSuggestions.length - 1 ? 0 : prev + 1
+                      );
+                      return;
+                    } else if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setFocusedSuggestionIdx((prev) =>
+                        prev <= 0 ? availableSuggestions.length - 1 : prev - 1
+                      );
+                      return;
+                    } else if (e.key === "Escape") {
+                      e.preventDefault();
+                      setShowSuggestions(false);
+                      setFocusedSuggestionIdx(-1);
+                      return;
+                    }
+                  }
+
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    if (inputVal.trim()) addTag(inputVal);
+                    if (
+                      showSuggestions &&
+                      focusedSuggestionIdx >= 0 &&
+                      focusedSuggestionIdx < availableSuggestions.length
+                    ) {
+                      addTag(availableSuggestions[focusedSuggestionIdx]);
+                    } else if (inputVal.trim()) {
+                      addTag(inputVal);
+                    }
                   } else if (e.key === "Backspace" && !inputVal && tags.length > 0) {
                     removeTag(tags[tags.length - 1]);
                   }
@@ -157,17 +210,20 @@ function TagChipEditor({
               />
 
               {showSuggestions && availableSuggestions.length > 0 ? (
-                <div className="tag-autocomplete-dropdown">
+                <div className="tag-autocomplete-dropdown" role="listbox">
                   <span className="autocomplete-header">Library Suggestions:</span>
-                  {availableSuggestions.map((sug) => (
+                  {availableSuggestions.map((sug, idx) => (
                     <button
                       key={sug}
                       type="button"
-                      className="autocomplete-item"
+                      role="option"
+                      aria-selected={idx === focusedSuggestionIdx}
+                      className={`autocomplete-item ${idx === focusedSuggestionIdx ? "selected focused" : ""}`}
                       onMouseDown={(e) => {
                         e.preventDefault();
                         addTag(sug);
                       }}
+                      onMouseEnter={() => setFocusedSuggestionIdx(idx)}
                     >
                       <TagChip tag={sug} userConfig={taxonomyConfig} size="xs" />
                     </button>
@@ -290,7 +346,7 @@ function getPageNumbers(current: number, total: number): number[] {
 
 /** Avatar for a library card: the record's PNG (imported CCv2 cards), falling
  *  back to a letter placeholder when the route 404s (BL-native records). */
-function CharacterAvatar({ template, className }: { template: CharacterTemplate; className?: string }) {
+export function CharacterAvatar({ template, className }: { template: CharacterTemplate; className?: string }) {
   const [failed, setFailed] = useState(false);
 
   // Reset the fallback when the card changes (list reloads reuse components).
@@ -313,6 +369,7 @@ function CharacterAvatar({ template, className }: { template: CharacterTemplate;
 
 /** Card dropdown "more options" menu */
 function MoreOptionsMenu({
+  template,
   isOpen,
   onToggle,
   onEdit,
@@ -329,7 +386,7 @@ function MoreOptionsMenu({
   converting?: boolean;
 }) {
   return (
-    <div className="card-more-menu-container" onClick={(e) => e.stopPropagation()}>
+    <div className="more-options-container" onClick={(e) => e.stopPropagation()}>
       <button
         type="button"
         className={`more-options-btn ${isOpen ? "active" : ""}`}
@@ -371,7 +428,20 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
   const [search, setSearch] = useState("");
   const [tagFilterSearch, setTagFilterSearch] = useState("");
   const [importing, setImporting] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("portrait");
+  const [viewMode, setViewModeState] = useState<ViewMode>(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const saved = localStorage.getItem("bobbinloom_library_view_mode");
+      if (saved === "portrait" || saved === "list" || saved === "grid") return saved;
+    }
+    return "portrait";
+  });
+
+  const setViewMode = (mode: ViewMode) => {
+    setViewModeState(mode);
+    try {
+      localStorage.setItem("bobbinloom_library_view_mode", mode);
+    } catch { /* silent */ }
+  };
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -669,7 +739,7 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
             merged.push(t);
           }
         }
-        tags = merged;
+        tags = sortTags(merged, taxonomyConfig);
       }
 
       return {
@@ -753,7 +823,8 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
     setSaving(true);
     setStatus(null);
     try {
-      const update = formToUpdate(form);
+      const canonicalTags = sortTags(form.tags, taxonomyConfig);
+      const update = formToUpdate({ ...form, tags: canonicalTags });
       if (editingId) {
         await updateCharacter(editingId, editingIsCcv2 ? { name: update.name } : update);
         setStatus(`"${form.name}" saved successfully.`);
@@ -762,12 +833,13 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
         await updateCharacter(created.id, {
           content: form.content,
           creatorNotes: form.creatorNotes,
-          tags: form.tags,
+          tags: canonicalTags,
         });
         setEditingId(created.id);
         setStatus(`"${form.name}" created and saved successfully.`);
       }
-      setInitialForm({ ...form });
+      setForm((prev) => ({ ...prev, tags: canonicalTags }));
+      setInitialForm({ ...form, tags: canonicalTags });
       setTemplates(await listCharacters());
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e));
@@ -1548,32 +1620,17 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                   />
                 </div>
 
-                <div className="library-search-wrapper">
-                  <span className="search-icon-prefix">
-                    <Icon name="Search" size={15} />
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="Search name, tags, creator:…"
-                    value={search}
-                    onChange={(e) => {
-                      setSearch(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="library-search-input"
-                  />
-                  {search ? (
-                    <button
-                      className="clear-search-btn"
-                      onClick={() => {
-                        setSearch("");
-                        setCurrentPage(1);
-                      }}
-                    >
-                      ✕
-                    </button>
-                  ) : null}
-                </div>
+                <SearchBar
+                  value={search}
+                  onChange={(val) => {
+                    setSearch(val);
+                    setCurrentPage(1);
+                  }}
+                  onClear={() => setCurrentPage(1)}
+                  placeholder="Search name, tags, creator:…"
+                  size="md"
+                  containerClassName="library-search-wrapper"
+                />
 
                 {/* View Mode Switcher */}
                 <div className="view-mode-switcher" role="group" aria-label="View mode">
@@ -1706,7 +1763,7 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
 
                               {(latest.tags ?? []).length > 0 ? (
                                 <div className="tag-chips" onClick={(e) => e.stopPropagation()}>
-                                  {(latest.tags ?? []).map((tag) => {
+                                  {sortTags(latest.tags ?? [], taxonomyConfig).map((tag) => {
                                     const active = isTagActive(tag);
                                     return (
                                       <TagChip
@@ -1840,7 +1897,7 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
 
                               {(latest.tags ?? []).length > 0 ? (
                                 <div className="tag-chips" onClick={(e) => e.stopPropagation()}>
-                                  {(latest.tags ?? []).map((tag) => {
+                                  {sortTags(latest.tags ?? [], taxonomyConfig).map((tag) => {
                                     const active = isTagActive(tag);
                                     return (
                                       <TagChip
@@ -2092,7 +2149,7 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
           error={tagSuggestError}
           taxonomyConfig={taxonomyConfig}
           onApply={(selectedTags) => {
-            setForm((f) => ({ ...f, tags: selectedTags }));
+            setForm((f) => ({ ...f, tags: sortTags(selectedTags, taxonomyConfig) }));
             setTagSuggestModalOpen(false);
             setSuggestedTags([]);
           }}

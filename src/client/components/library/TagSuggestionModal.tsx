@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "../base";
-import { resolveTagStyle, type TagTaxonomyConfig } from "../../../engine/tagTaxonomy";
+import { resolveTagStyle, sortTags, type TagTaxonomyConfig } from "../../../engine/tagTaxonomy";
 
 export type TagSuggestionModalProps = {
   characterName: string;
@@ -74,8 +74,8 @@ export function TagSuggestionModal({
   }, [onClose]);
 
   const allAvailableTags = useMemo(() => {
-    return Array.from(new Set([...suggestedTags, ...currentTags, ...customTags]));
-  }, [suggestedTags, currentTags, customTags]);
+    return sortTags(Array.from(new Set([...suggestedTags, ...currentTags, ...customTags])), taxonomyConfig);
+  }, [suggestedTags, currentTags, customTags, taxonomyConfig]);
 
   const filteredTags = useMemo(() => {
     const q = filterQuery.trim().toLowerCase();
@@ -84,23 +84,26 @@ export function TagSuggestionModal({
   }, [allAvailableTags, filterQuery]);
 
   const aiSuggestedTagsList = useMemo(() => {
+    const sorted = sortTags(suggestedTags, taxonomyConfig);
     const q = filterQuery.trim().toLowerCase();
-    if (!q) return suggestedTags;
-    return suggestedTags.filter((t) => t.toLowerCase().includes(q));
-  }, [suggestedTags, filterQuery]);
+    if (!q) return sorted;
+    return sorted.filter((t) => t.toLowerCase().includes(q));
+  }, [suggestedTags, filterQuery, taxonomyConfig]);
 
   const otherCardTags = useMemo(() => {
     const unmatched = currentTags.filter((t) => !suggestedTags.includes(t));
+    const sorted = sortTags(unmatched, taxonomyConfig);
     const q = filterQuery.trim().toLowerCase();
-    if (!q) return unmatched;
-    return unmatched.filter((t) => t.toLowerCase().includes(q));
-  }, [currentTags, suggestedTags, filterQuery]);
+    if (!q) return sorted;
+    return sorted.filter((t) => t.toLowerCase().includes(q));
+  }, [currentTags, suggestedTags, filterQuery, taxonomyConfig]);
 
   const customTagsList = useMemo(() => {
+    const sorted = sortTags(customTags, taxonomyConfig);
     const q = filterQuery.trim().toLowerCase();
-    if (!q) return customTags;
-    return customTags.filter((t) => t.toLowerCase().includes(q));
-  }, [customTags, filterQuery]);
+    if (!q) return sorted;
+    return sorted.filter((t) => t.toLowerCase().includes(q));
+  }, [customTags, filterQuery, taxonomyConfig]);
 
   // Count breakdown for footer status
   const aiSelectedCount = useMemo(() => {
@@ -187,7 +190,7 @@ export function TagSuggestionModal({
   }
 
   function handleConfirm() {
-    onApply(Array.from(selectedTags));
+    onApply(sortTags(Array.from(selectedTags), taxonomyConfig));
   }
 
   function handleRegenerateClick() {

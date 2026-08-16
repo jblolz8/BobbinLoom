@@ -339,7 +339,7 @@ describe("character library — CCv2 import (A5)", () => {
     expect(record.title).toBe("Mira"); // D16
     expect(record.content).toBe(card.description); // D6: raw description blob
     expect(record.creator).toBe("pplong"); // D4
-    expect(record.tags).toEqual(["fox_girl", "adventure"]); // D4: normalize + dedupe
+    expect(record.tags).toEqual(["adventure", "fox_girl"]); // D4: normalize + dedupe + canonical category sort
     expect(record.cardRef).toEqual({ file: "mira.png", kind: "png" });
     expect(record.cardVersion).toBe("1.2");
     expect(record.scenario).toBe("A misty forest."); // D7

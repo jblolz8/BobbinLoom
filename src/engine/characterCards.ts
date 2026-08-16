@@ -1,14 +1,9 @@
 import type { CharacterTemplate } from "../schemas";
+import { sortTags } from "./tagTaxonomy";
 
-/** Booru-style tag normalization: lowercase, trim, spaces→underscores, dedupe. */
+/** Booru-style tag normalization: lowercase, trim, spaces→underscores, dedupe, and canonical category sort. */
 export function normalizeTags(tags: string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const t of tags) {
-    const n = t.trim().toLowerCase().replace(/\s+/g, "_");
-    if (n && !seen.has(n)) { seen.add(n); out.push(n); }
-  }
-  return out;
+  return sortTags(tags);
 }
 
 /** Creator normalization: lowercase, trim, strip leading @/URLs, "" when empty. */

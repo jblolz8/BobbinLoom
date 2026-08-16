@@ -4,6 +4,8 @@ import {
   discoverLibraryNamespaces,
   groupTagsByCategory,
   resolveTagStyle,
+  sortTags,
+  getCategoryOrder,
   type TagTaxonomyConfig,
 } from "../src/engine/tagTaxonomy";
 import { loadAppSettings, saveAppSettings } from "../src/server/appSettingsStore";
@@ -213,6 +215,84 @@ describe("tagTaxonomy engine", () => {
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
+    });
+  });
+
+  describe("sortTags", () => {
+    it("sorts tags canonically by category priority then alphabetically", () => {
+      const unsorted = [
+        "solo",
+        "species:elf",
+        "theme:magic",
+        "rating:sfw",
+        "artist:wlop",
+        "copyright:touhou",
+        "species:dragon",
+        "char:reimu",
+        "meta:bl_v1",
+      ];
+
+      const sorted = sortTags(unsorted);
+
+      // Expected order:
+      // Rating (rating:sfw) -> Copyright (copyright:touhou) -> Character (char:reimu)
+      // -> Species (species:dragon, species:elf) -> Artist (artist:wlop)
+      // -> Theme (theme:magic) -> Meta (meta:bl_v1) -> General (solo)
+      expect(sorted).toEqual([
+        "rating:sfw",
+        "copyright:touhou",
+        "char:reimu",
+        "species:dragon",
+        "species:elf",
+        "artist:wlop",
+        "theme:magic",
+        "meta:bl_v1",
+        "solo",
+      ]);
+    });
+
+    it("puts NSFW ratings at the very top (priority order 10)", () => {
+      const tags = ["blue_eyes", "nsfw", "species:cat-girl"];
+      expect(sortTags(tags)).toEqual([
+        "nsfw",
+        "species:cat-girl",
+        "blue_eyes",
+      ]);
+    });
+
+    it("handles custom categories and dynamic namespaces correctly", () => {
+      const config: TagTaxonomyConfig = {
+        customCategories: [
+          {
+            id: "faction",
+            label: "Faction",
+            prefixes: ["clan"],
+            color: "#f43f5e",
+          },
+        ],
+        tagOverrides: {},
+      };
+
+      const tags = ["solo", "unknown_ns:val", "clan:uchiha", "rating:sfw", "species:human"];
+      const sorted = sortTags(tags, config);
+
+      // Rating (20) -> Species (50) -> Custom clan (100) -> Dynamic unknown_ns (200) -> General (999)
+      expect(sorted).toEqual([
+        "rating:sfw",
+        "species:human",
+        "clan:uchiha",
+        "unknown_ns:val",
+        "solo",
+      ]);
+    });
+
+    it("deduplicates and normalizes tags during sort", () => {
+      const tags = [" SPECIES:Elf ", "species:elf", "Rating:SFW", "solo", " SOLO "];
+      expect(sortTags(tags)).toEqual([
+        "rating:sfw",
+        "species:elf",
+        "solo",
+      ]);
     });
   });
 });

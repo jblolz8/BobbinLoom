@@ -336,9 +336,11 @@ export default function App() {
         castLibrary={castLibrary}
         selectedCastIds={selectedCastIds}
         onToggleCastId={toggleCastId}
+        setSelectedCastIds={setSelectedCastIds}
         lorebookLibrary={lorebookLibrary}
         selectedLorebookIds={selectedLorebookIds}
         onToggleLorebookId={toggleLorebookId}
+        setSelectedLorebookIds={setSelectedLorebookIds}
         cardSettings={cardSettings}
         setupForm={setupForm}
         onSetupFormChange={setSetupForm}

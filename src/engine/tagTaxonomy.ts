@@ -536,3 +536,54 @@ export function discoverLibraryNamespaces(tags: string[]): Array<{ prefix: strin
     .map(([prefix, { count, sampleTag }]) => ({ prefix, count, sampleTag }))
     .sort((a, b) => b.count - a.count || a.prefix.localeCompare(b.prefix));
 }
+
+/**
+ * Return numerical ordering weight for a given categoryId.
+ */
+export function getCategoryOrder(categoryId: string, userConfig?: TagTaxonomyConfig | null): number {
+  if (categoryId === "custom_override") return 250;
+  const builtIn = BUILT_IN_CATEGORIES.find((c) => c.id === categoryId);
+  if (builtIn) return builtIn.order;
+  if (userConfig?.customCategories) {
+    const idx = userConfig.customCategories.findIndex((c) => c.id === categoryId);
+    if (idx >= 0) return 100 + idx;
+  }
+  if (categoryId.startsWith("ns_")) return 200;
+  if (categoryId === "general") return 999;
+  return 500;
+}
+
+/**
+ * Canonical sorting for a list of tags:
+ * 1. Lowercase, trim, deduplicate.
+ * 2. Primary sort by taxonomy category order (Ratings first -> Copyright -> Character -> Species -> Artist -> Theme -> Meta -> Custom -> Dynamic -> General).
+ * 3. Secondary sort alphabetically by clean tag string.
+ */
+export function sortTags(tags: string[], userConfig?: TagTaxonomyConfig | null): string[] {
+  if (!tags || tags.length === 0) return [];
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const raw of tags) {
+    const norm = cleanTag(raw);
+    if (norm && !seen.has(norm)) {
+      seen.add(norm);
+      normalized.push(norm);
+    }
+  }
+
+  const resolved = normalized.map((tag) => ({
+    tag,
+    style: resolveTagStyle(tag, userConfig),
+  }));
+
+  resolved.sort((a, b) => {
+    const orderA = getCategoryOrder(a.style.categoryId, userConfig);
+    const orderB = getCategoryOrder(b.style.categoryId, userConfig);
+    if (orderA !== orderB) {
+      return orderA - orderB;
+    }
+    return a.tag.localeCompare(b.tag);
+  });
+
+  return resolved.map((r) => r.tag);
+}
