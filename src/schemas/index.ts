@@ -458,6 +458,22 @@ export const StatePatchSchema = z.object({
     section: z.string(),
     content: z.string(),
   })).optional(),
+  characterSectionItemAdd: z.array(z.object({
+    characterId: z.string(),
+    section: z.string(),
+    item: z.string(),
+  })).optional(),
+  characterSectionItemRemove: z.array(z.object({
+    characterId: z.string(),
+    section: z.string(),
+    item: z.string(),
+  })).optional(),
+  characterSectionItemReplace: z.array(z.object({
+    characterId: z.string(),
+    section: z.string(),
+    from: z.string(),
+    to: z.string(),
+  })).optional(),
   characterTowardPlayer: z.array(z.object({
     characterId: z.string(),
     towardPlayer: z.string(),
