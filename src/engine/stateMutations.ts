@@ -8,7 +8,12 @@ import {
   SimpleNPC,
   StatePatchSchema
 } from "../schemas";
-import { parseClothingFromContent } from "./characterSections";
+import {
+  addSectionItem,
+  parseClothingFromContent,
+  removeSectionItem,
+  replaceSectionItem
+} from "./characterSections";
 import { ITEMS, LOCATIONS } from "./demoData";
 import { instantiateTemplate } from "./playthroughFactory";
 
@@ -282,6 +287,48 @@ export function applyStatePatch(state: Playthrough, patchInput: unknown): ApplyP
         "section update failed for " + character.name + ": " + (e as Error).message
       );
     }
+  }
+
+  for (const entry of patch.characterSectionItemAdd ?? []) {
+    const character = findCharacter(entry.characterId);
+    if (!character) { rejected.push("unknown character for sectionItemAdd: " + entry.characterId); continue; }
+    if (isReadOnlySheet(next, character)) { rejected.push("section item add rejected: " + character.name + " has a read-only CCv2 sheet"); continue; }
+    if (entry.section.trim().toLowerCase() === "clothing") { rejected.push("section item add rejected: use characterClothing* patches for Clothing"); continue; }
+    if (character.currentLocationId !== next.locationId) { rejected.push("section item add rejected: " + character.name + " is not present (absent characters' sections aren't in context)"); continue; }
+    const tplIdx = next.characterTemplates.findIndex((t) => t.id === character.templateId);
+    if (tplIdx < 0) { rejected.push("no template found for character: " + character.name); continue; }
+    const r = addSectionItem(next.characterTemplates[tplIdx].content, entry.section, entry.item);
+    if (!r.applied) { rejected.push("section item add failed: " + (r.rejectedReason ?? "unknown")); continue; }
+    next.characterTemplates[tplIdx] = { ...next.characterTemplates[tplIdx], content: r.content };
+    applied.push("section item added: " + character.name + " → [" + entry.section + "] " + entry.item);
+  }
+
+  for (const entry of patch.characterSectionItemRemove ?? []) {
+    const character = findCharacter(entry.characterId);
+    if (!character) { rejected.push("unknown character for sectionItemRemove: " + entry.characterId); continue; }
+    if (isReadOnlySheet(next, character)) { rejected.push("section item remove rejected: " + character.name + " has a read-only CCv2 sheet"); continue; }
+    if (entry.section.trim().toLowerCase() === "clothing") { rejected.push("section item remove rejected: use characterClothing* patches for Clothing"); continue; }
+    if (character.currentLocationId !== next.locationId) { rejected.push("section item remove rejected: " + character.name + " is not present (absent characters' sections aren't in context)"); continue; }
+    const tplIdx = next.characterTemplates.findIndex((t) => t.id === character.templateId);
+    if (tplIdx < 0) { rejected.push("no template found for character: " + character.name); continue; }
+    const r = removeSectionItem(next.characterTemplates[tplIdx].content, entry.section, entry.item);
+    if (!r.applied) { rejected.push("section item remove failed: " + (r.rejectedReason ?? "unknown")); continue; }
+    next.characterTemplates[tplIdx] = { ...next.characterTemplates[tplIdx], content: r.content };
+    applied.push("section item removed: " + character.name + " → [" + entry.section + "] " + entry.item);
+  }
+
+  for (const entry of patch.characterSectionItemReplace ?? []) {
+    const character = findCharacter(entry.characterId);
+    if (!character) { rejected.push("unknown character for sectionItemReplace: " + entry.characterId); continue; }
+    if (isReadOnlySheet(next, character)) { rejected.push("section item replace rejected: " + character.name + " has a read-only CCv2 sheet"); continue; }
+    if (entry.section.trim().toLowerCase() === "clothing") { rejected.push("section item replace rejected: use characterClothing* patches for Clothing"); continue; }
+    if (character.currentLocationId !== next.locationId) { rejected.push("section item replace rejected: " + character.name + " is not present (absent characters' sections aren't in context)"); continue; }
+    const tplIdx = next.characterTemplates.findIndex((t) => t.id === character.templateId);
+    if (tplIdx < 0) { rejected.push("no template found for character: " + character.name); continue; }
+    const r = replaceSectionItem(next.characterTemplates[tplIdx].content, entry.section, entry.from, entry.to);
+    if (!r.applied) { rejected.push("section item replace failed: " + (r.rejectedReason ?? "unknown")); continue; }
+    next.characterTemplates[tplIdx] = { ...next.characterTemplates[tplIdx], content: r.content };
+    applied.push("section item replaced: " + character.name + " → [" + entry.section + "] " + entry.from + " ⇒ " + entry.to);
   }
 
   for (const entry of patch.characterConditionsAdd ?? []) {

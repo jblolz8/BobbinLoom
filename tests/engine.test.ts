@@ -362,3 +362,77 @@ describe("createPlaythroughFromSeed — cast reuse", () => {
     expect(pt.messages.map((m) => m.content)).toContain("Open.");
   });
 });
+describe("applyStatePatch — character section item ops", () => {
+  it("adds an item to a present character's section", () => {
+    const pt = createInitialPlaythrough("Item Test");
+    const mira = pt.characters[0];
+    expect(mira.currentLocationId).toBe(pt.locationId);
+    const res = applyStatePatch(pt, {
+      characterSectionItemAdd: [{ characterId: mira.id, section: "Likes", item: "Stargazing" }]
+    });
+    expect(res.rejected).toEqual([]);
+    const tpl = res.state.characterTemplates.find((t) => t.id === mira.templateId)!;
+    expect(tpl.content).toContain("- Stargazing");
+  });
+
+  it("rejects item add for an ABSENT character", () => {
+    const pt = createInitialPlaythrough("Absent Test");
+    const mira = pt.characters[0];
+    const absentPt = structuredClone(pt);
+    absentPt.characters[0] = { ...mira, currentLocationId: "loc_elsewhere" };
+    expect(absentPt.characters[0].currentLocationId).not.toBe(absentPt.locationId);
+    const res = applyStatePatch(absentPt, {
+      characterSectionItemAdd: [{ characterId: mira.id, section: "Likes", item: "Stargazing" }]
+    });
+    expect(res.rejected.some((r) => /absent/i.test(r))).toBe(true);
+    const tpl = res.state.characterTemplates.find((t) => t.id === mira.templateId)!;
+    expect(tpl.content).not.toContain("- Stargazing");
+  });
+
+  it("rejects item ops on a read-only CCv2 sheet", () => {
+    const pt = createInitialPlaythrough("CCv2 Test");
+    const mira = pt.characters[0];
+    const state = {
+      ...pt,
+      characterTemplates: pt.characterTemplates.map((t) =>
+        t.id === mira.templateId ? { ...t, format: "ccv2" as const } : t
+      ),
+    };
+    const res = applyStatePatch(state, {
+      characterSectionItemRemove: [{ characterId: mira.id, section: "Likes", item: "x" }]
+    });
+    expect(res.rejected.some((r) => /read-only/i.test(r))).toBe(true);
+  });
+
+  it("rejects item ops on the Clothing section (structured pipeline)", () => {
+    const pt = createInitialPlaythrough("Clothing Test");
+    const mira = pt.characters[0];
+    const res = applyStatePatch(pt, {
+      characterSectionItemAdd: [{ characterId: mira.id, section: "Clothing", item: "Hat" }]
+    });
+    expect(res.rejected.some((r) => /clothing/i.test(r))).toBe(true);
+  });
+
+  it("remove + replace report rejected when no exact match", () => {
+    const pt = createInitialPlaythrough("No Match");
+    const mira = pt.characters[0];
+    const res = applyStatePatch(pt, {
+      characterSectionItemRemove: [{ characterId: mira.id, section: "Likes", item: "Skydiving" }],
+      characterSectionItemReplace: [{ characterId: mira.id, section: "Personality", from: "Nope", to: "Yes" }]
+    });
+    expect(res.rejected.length).toBeGreaterThan(0);
+  });
+
+  it("applies remove + replace to a present character", () => {
+    const pt = createInitialPlaythrough("Mutate");
+    const mira = pt.characters[0];
+    const res = applyStatePatch(pt, {
+      characterSectionItemReplace: [{ characterId: mira.id, section: "Personality", from: "Disciplined, guarded, fair, and direct.", to: "Cautious, slow to trust" }],
+      characterSectionItemRemove: [{ characterId: mira.id, section: "Likes", item: "Competence and quick thinking" }]
+    });
+    expect(res.rejected).toEqual([]);
+    const tpl = res.state.characterTemplates.find((t) => t.id === mira.templateId)!;
+    expect(tpl.content).toContain("- Cautious, slow to trust");
+    expect(tpl.content).not.toContain("- Competence and quick thinking");
+  });
+});
