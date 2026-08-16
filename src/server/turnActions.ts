@@ -9,7 +9,7 @@ import {
   takeTurnSnapshot,
   updateTimingStates
 } from "../engine/engine";
-import type { Playthrough } from "../schemas";
+import type { Playthrough, ScenarioSeed } from "../schemas";
 import type { EntryTimingState, LorebookEntry } from "../schemas";
 import type { TurnProvider } from "./provider";
 import type { PromptUsageBreakdown } from "./provider";
@@ -396,4 +396,17 @@ export function editChatMessage(
 
   updatePlaythroughRecord(dataDir, playthrough);
   return { ok: true, state: playthrough };
+}
+
+export function buildOpeningPrompt(scenarioDescription: string | undefined, seed: ScenarioSeed): string {
+  const parts: string[] = [];
+  if (scenarioDescription?.trim()) parts.push(`World context: ${scenarioDescription.trim()}`);
+  const start = seed.locations[0];
+  if (start) parts.push(`You are opening at "${start.name}" — ${start.description}`);
+  parts.push(
+    "Introduce the scene to the player character. Establish the atmosphere and immediate surroundings. " +
+    "Write in second person. Do not take actions on behalf of the player. " +
+    "End by presenting the current moment as an invitation for the player to act."
+  );
+  return parts.join("\n\n");
 }

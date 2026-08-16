@@ -4,12 +4,14 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { MockProvider } from "../src/server/provider";
 import type { ProviderTurn, TurnProvider } from "../src/server/provider";
+import type { ScenarioSeed } from "../src/schemas";
 import {
   createPlaythroughRecord,
   getPlaythroughRecord,
   updatePlaythroughRecord
 } from "../src/server/store";
 import {
+  buildOpeningPrompt,
   editChatMessage,
   executeTurn,
   retryAssistantTurn
@@ -329,5 +331,30 @@ describe("executeTurn tokenUsage", () => {
     expect(absentResult.tokenUsage.breakdown.stateSummary).toBeLessThan(
       presentResult.tokenUsage.breakdown.stateSummary
     );
+  });
+});
+
+describe("buildOpeningPrompt", () => {
+  it("includes the setting and starting location, and is second person", () => {
+    const seed = {
+      locations: [{ id: "loc_a", name: "The Fox Den", description: "A mossy burrow.", state: "", icon: "", connections: [] }],
+      character: { name: "Mira", content: "x" },
+      quest: { id: "q", name: "Q", summary: "s" },
+      items: [], npcs: [], startingFlags: [], openingText: "",
+    } as ScenarioSeed;
+    const out = buildOpeningPrompt("A fog-wrapped valley.", seed);
+    expect(out).toContain("A fog-wrapped valley.");
+    expect(out).toContain("The Fox Den");
+    expect(out).toContain("second person");
+  });
+
+  it("omits the world context when no setting is given", () => {
+    const seed = {
+      locations: [{ id: "loc_a", name: "A", description: "", state: "", icon: "", connections: [] }],
+      character: { name: "Mira", content: "x" }, quest: { id: "q", name: "Q", summary: "s" },
+      items: [], npcs: [], startingFlags: [], openingText: "",
+    } as ScenarioSeed;
+    const out = buildOpeningPrompt(undefined, seed);
+    expect(out).not.toContain("World context");
   });
 });
