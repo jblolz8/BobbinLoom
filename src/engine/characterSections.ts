@@ -283,3 +283,72 @@ export function isStubSection(section: ContentSection): boolean {
   if (trimmed.length === 0) return true;
   return trimmed.split("\n").every((line) => STUB_BODY_RE.test(line.replace(/^-\s*/, "")));
 }
+/** Normalize a bullet line for exact-match comparison: trim, strip one leading dash+space, lowercase. Never fuzzy. */
+export function normalizeBullet(text: string): string {
+  return text.replace(/^\s*-\s+/, "").trim().toLowerCase();
+}
+
+/** Split a section body (or full content blob — headers ignored) into its bullet items. Stub lines like "(not established)" are excluded. */
+export function parseSectionItems(body: string): string[] {
+  return body
+    .split("\n")
+    .map((l) => l.trim().replace(/^-\s+/, ""))
+    .filter((l) => l.length > 0 && !/^\(\s*not established\s*\)$/i.test(l) && !/^\[[^\]]+\]\s*:?\s*$/i.test(l));
+}
+
+type SectionItemResult = { content: string; applied: boolean; rejectedReason?: string };
+
+function sectionBodyOf(content: string, section: string): { body: string; present: boolean } {
+  const { sections } = splitContentSections(content);
+  const hit = sections.find((s) => s.header.toLowerCase() === section.toLowerCase());
+  return hit ? { body: hit.body, present: true } : { body: "", present: false };
+}
+
+function rebuildSection(content: string, section: string, newBody: string): string {
+  return applySectionChanges(content, [{ header: section, body: newBody }]);
+}
+
+/** Append one bullet to a section. Creates the section in canonical order if missing. Idempotent on exact duplicate. */
+export function addSectionItem(content: string, section: string, item: string): SectionItemResult {
+  const trimmed = item.trim();
+  if (!trimmed) return { content, applied: false, rejectedReason: "empty item" };
+  const { body, present } = sectionBodyOf(content, section);
+  const items = parseSectionItems(body);
+  if (items.some((it) => it.toLowerCase() === trimmed.toLowerCase())) {
+    return { content, applied: true };
+  }
+  const nextBody = (present && body.trim() && body.trim() !== "(not established)"
+    ? body.replace(/\s*$/, "\n")
+    : "") + `- ${trimmed}`;
+  return { content: rebuildSection(content, section, nextBody), applied: true };
+}
+
+/** Remove one bullet by normalized exact match. Rejects if missing/stub/no match. */
+export function removeSectionItem(content: string, section: string, item: string): SectionItemResult {
+  const { body, present } = sectionBodyOf(content, section);
+  if (!present || parseSectionItems(body).length === 0) {
+    return { content, applied: false, rejectedReason: "section has no items to remove" };
+  }
+  const target = normalizeBullet(item);
+  const lines = body.split("\n");
+  const next = lines.filter((l) => normalizeBullet(l) !== target);
+  if (next.length === lines.length) {
+    return { content, applied: false, rejectedReason: "no matching item" };
+  }
+  return { content: rebuildSection(content, section, next.join("\n")), applied: true };
+}
+
+/** Replace one bullet's text by normalized exact match on from. */
+export function replaceSectionItem(content: string, section: string, from: string, to: string): SectionItemResult {
+  const { body, present } = sectionBodyOf(content, section);
+  if (!present || parseSectionItems(body).length === 0) {
+    return { content, applied: false, rejectedReason: "section has no items to replace" };
+  }
+  const target = normalizeBullet(from);
+  const lines = body.split("\n");
+  const idx = lines.findIndex((l) => normalizeBullet(l) === target);
+  if (idx < 0) return { content, applied: false, rejectedReason: "no matching item" };
+  const next = [...lines];
+  next[idx] = `- ${to.trim()}`;
+  return { content: rebuildSection(content, section, next.join("\n")), applied: true };
+}

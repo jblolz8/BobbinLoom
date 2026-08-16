@@ -13,7 +13,11 @@ import {
   pickSections,
   isStubSection,
   PHYSICAL_SECTION_HEADERS,
-  applySectionChanges
+  applySectionChanges,
+  parseSectionItems,
+  addSectionItem,
+  removeSectionItem,
+  replaceSectionItem
 } from "../src/engine/characterSections";
 
 describe("characterSections", () => {
@@ -179,5 +183,84 @@ describe("applySectionChanges", () => {
     expect(updated).toContain("[Body]\n- Tall and muscular");
     expect(updated).toContain("[Clothing]\n- Top: Cloak\n- Bottom: Boots");
     expect(updated).toContain("[Personality]\n- Fierce");
+  });
+});
+
+describe("sectionItemOps", () => {
+  const likes = "[Species]: Elf\n[Gender]: Female\n\n[Personality]\n- Timid and quiet\n\n[Likes]\n- Reading\n- Going outside";
+
+  it("parseSectionItems splits a body into trimmed, dash-stripped bullets", () => {
+    expect(parseSectionItems("[Likes]\n- Reading\n- Going outside")).toEqual(["Reading", "Going outside"]);
+    expect(parseSectionItems("[Likes]\n- Reading\n(not established)")).toEqual(["Reading"]);
+    expect(parseSectionItems("[Personality]\n(not established)")).toEqual([]);
+  });
+
+  it("addSectionItem appends a bullet to an existing section", () => {
+    const out = addSectionItem(likes, "Likes", "Stargazing");
+    expect(out.applied).toBe(true);
+    expect(out.content).toContain("[Likes]\n- Reading\n- Going outside\n- Stargazing");
+  });
+
+  it("addSectionItem is idempotent when the item already exists", () => {
+    const out = addSectionItem(likes, "Likes", "Reading");
+    expect(out.applied).toBe(true);
+    expect(out.content).toBe(likes);
+  });
+
+  it("addSectionItem creates a missing section in canonical order", () => {
+    const base = "[Species]: Elf\n[Gender]: Female\n\n[Personality]\n- Timid";
+    const out = addSectionItem(base, "Dislikes", "Loud crowds");
+    expect(out.applied).toBe(true);
+    const dislikesIdx = out.content.indexOf("[Dislikes]");
+    expect(dislikesIdx).toBeGreaterThan(-1);
+    expect(out.content).toContain("[Dislikes]\n- Loud crowds");
+  });
+
+  it("addSectionItem refuses a stub target section", () => {
+    const base = "[Species]: Elf\n\n[Personality]\n(not established)";
+    const out = addSectionItem(base, "Personality", "Quiet");
+    expect(out.applied).toBe(true);
+    expect(out.content).not.toContain("(not established)");
+  });
+
+  it("removeSectionItem deletes the matching bullet", () => {
+    const out = removeSectionItem(likes, "Likes", "Going outside");
+    expect(out.applied).toBe(true);
+    expect(out.content).toContain("- Reading");
+    expect(out.content).not.toContain("Going outside");
+  });
+
+  it("removeSectionItem rejects when no exact match exists", () => {
+    const out = removeSectionItem(likes, "Likes", "Skydiving");
+    expect(out.applied).toBe(false);
+    expect(out.rejectedReason).toBeTruthy();
+    expect(out.content).toBe(likes);
+  });
+
+  it("removeSectionItem rejects when the section is missing or a stub", () => {
+    const noSection = removeSectionItem("[Personality]\n- Quiet", "Dislikes", "Noise");
+    expect(noSection.applied).toBe(false);
+    const stub = removeSectionItem("[Personality]\n(not established)", "Personality", "Quiet");
+    expect(stub.applied).toBe(false);
+  });
+
+  it("replaceSectionItem swaps the matching bullet text", () => {
+    const out = replaceSectionItem(likes, "Personality", "Timid and quiet", "Cautious, slow to trust");
+    expect(out.applied).toBe(true);
+    expect(out.content).toContain("- Cautious, slow to trust");
+    expect(out.content).not.toContain("Timid and quiet");
+  });
+
+  it("replaceSectionItem rejects when from has no exact match", () => {
+    const out = replaceSectionItem(likes, "Personality", "Nothing matches", "Nope");
+    expect(out.applied).toBe(false);
+    expect(out.content).toBe(likes);
+  });
+
+  it("matching is normalized: trims, strips leading dash, case-insensitive", () => {
+    const content = "[Likes]\n-  Going Outside";
+    const out = removeSectionItem(content, "Likes", "going outside");
+    expect(out.applied).toBe(true);
+    expect(out.content).not.toContain("Going Outside");
   });
 });
