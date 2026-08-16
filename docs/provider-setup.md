@@ -142,6 +142,20 @@ for the AI-only ones):
 The two library features (tag suggestion and brainstorming) are documented in
 `character-library.md`.
 
+### Scenario opening modes
+
+"Generate New Scenario" offers two opening modes (Setup form):
+
+- **Quick start** — one model call: the scenario seed is created and the seed's
+  `openingText` becomes the single first message. Faster/cheaper, less fleshed out.
+- **Fleshed-out opening** (default) — two calls: the scenario is generated, then a
+  setting-aware opening turn (`buildOpeningPrompt(setting, seed)` + `executeTurn`)
+  writes a richer first scene. Both modes produce exactly **one** first message.
+
+When a cast is selected, the seed generation receives the chosen characters
+(`preferences.cast`) so it doesn't invent a conflicting lead, and the selected
+library card is reused as the lead rather than cloned.
+
 ---
 
 ## Current limitations

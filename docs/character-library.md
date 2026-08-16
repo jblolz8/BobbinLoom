@@ -117,6 +117,10 @@ uploads (`bodyLimit: 10MB`) because card PNGs exceed the default 1MB.
   engine `applyStatePatch` level and the PUT route). Runtime fields (mood,
   towardPlayer, memorySummary, conditions, flags, location) and name remain
   editable.
+- **Not cast-selectable:** CCv2 cards are **disabled in the Setup cast picker**
+  (with a "Convert to BL first to be able to select" warning) and `resolveCast`
+  skips them server-side, so they can never enter a playthrough cast. Convert the
+  card to BL before you can start a scenario with it.
 
 ### Conversion (`POST /api/characters/:id/convert`)
 
