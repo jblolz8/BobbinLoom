@@ -590,6 +590,10 @@ export type AssistantTurn = z.infer<typeof AssistantTurnSchema>;
 export const ScenarioPreferencesSchema = z.object({
   name: z.string().min(1).default("New Adventure"),
   setting: z.string().optional(),
+  cast: z.array(z.object({
+    name: z.string(),
+    summary: z.string().optional(),
+  })).optional(),
 });
 export type ScenarioPreferences = z.infer<typeof ScenarioPreferencesSchema>;
 
