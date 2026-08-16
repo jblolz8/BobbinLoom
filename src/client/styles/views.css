@@ -4786,6 +4786,12 @@ button.tag-chip.active {
     max-height: 600px;
   }
 }
+.opening-mode-picker { margin-top: .5rem; }
+.opening-mode-options { display:flex; flex-direction:column; gap:.5rem; margin-top:.5rem; }
+.opening-mode-option { display:flex; gap:.5rem; align-items:flex-start; border:1px solid var(--border-color, #3a4150); border-radius:8px; padding:.6rem .75rem; cursor:pointer; }
+.opening-mode-option.selected { border-color: var(--primary-color, #88c0d0); background: rgba(136,192,208,.08); }
+.opening-mode-option strong { display:block; }
+.opening-mode-sub { display:block; font-size:.78rem; opacity:.75; }
 
 
 

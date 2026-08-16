@@ -137,6 +137,7 @@ export default function App() {
         selectedPersonaId,
         selectedCastIds,
         setupForm.generateOpeningChoices,
+        setupForm.openingMode,
         selectedLorebookIds,
         undefined,
         controller.signal

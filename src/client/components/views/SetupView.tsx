@@ -6,10 +6,11 @@ export type SetupFormState = {
   name: string;
   setting: string;
   generateOpeningChoices: boolean;
+  openingMode: "quick" | "fleshedOut";
 };
 
 export const defaultSetupForm: SetupFormState = {
-  name: "", setting: "", generateOpeningChoices: false
+  name: "", setting: "", generateOpeningChoices: false, openingMode: "fleshedOut",
 };
 
 export type SetupViewProps = {
@@ -170,6 +171,27 @@ export function SetupView(props: SetupViewProps) {
               </select>
             </label>
           ) : null}
+          <div className="opening-mode-picker">
+            <span className="field-hint">How should the opening be written?</span>
+            <div className="opening-mode-options">
+              <label className={`opening-mode-option ${setupForm.openingMode === "quick" ? "selected" : ""}`}>
+                <input type="radio" name="openingMode" checked={setupForm.openingMode === "quick"}
+                  onChange={() => onSetupFormChange((f) => ({ ...f, openingMode: "quick" }))} />
+                <div>
+                  <strong>Quick start</strong>
+                  <span className="opening-mode-sub">Scenario + short opening · 1 call · faster/cheaper</span>
+                </div>
+              </label>
+              <label className={`opening-mode-option ${setupForm.openingMode === "fleshedOut" ? "selected" : ""}`}>
+                <input type="radio" name="openingMode" checked={setupForm.openingMode === "fleshedOut"}
+                  onChange={() => onSetupFormChange((f) => ({ ...f, openingMode: "fleshedOut" }))} />
+                <div>
+                  <strong>Fleshed-out opening</strong>
+                  <span className="opening-mode-sub">Generate, then write the first scene · 2 calls · richer</span>
+                </div>
+              </label>
+            </div>
+          </div>
           <label className="toggle">
             <input type="checkbox" checked={setupForm.generateOpeningChoices} onChange={(e) => onSetupFormChange((f) => ({ ...f, generateOpeningChoices: e.target.checked }))} />
             Generate initial choices

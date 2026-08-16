@@ -162,13 +162,14 @@ export function generatePlaythrough(
   personaId?: string,
   castIds?: string[],
   generateOpeningChoices?: boolean,
+  openingMode?: "quick" | "fleshedOut",
   lorebookIds?: string[],
   presetId?: string,
   signal?: AbortSignal
 ): Promise<GeneratePlaythroughResponse> {
   return request<GeneratePlaythroughResponse>("/api/playthroughs/generate", {
     method: "POST",
-    body: JSON.stringify({ ...preferences, personaId, castIds, generateOpeningChoices, lorebookIds, ...(presetId ? { presetId } : {}) }),
+    body: JSON.stringify({ ...preferences, personaId, castIds, generateOpeningChoices, openingMode, lorebookIds, ...(presetId ? { presetId } : {}) }),
     signal
   });
 }
