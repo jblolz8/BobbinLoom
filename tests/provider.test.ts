@@ -995,6 +995,28 @@ describe("per-context prompt modules", () => {
     expect(assembled.system).not.toContain("SEED MARKER");
   });
 
+  it("makes the scenario-seed prompt cast-aware and names the lead companion", async () => {
+    let sentPrompt = "";
+    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
+      sentPrompt = body.messages[0]?.content ?? "";
+      return jsonResponse({
+        choices: [{ message: { content: JSON.stringify(VALID_SEED) } }]
+      });
+    });
+    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+
+    await provider.generateScenarioSeed({
+      name: "Test World",
+      setting: "A quiet starting village.",
+      cast: [{ name: "Mira", summary: "a fox companion" }]
+    });
+    expect(sentPrompt).toContain("EXISTING CAST");
+    expect(sentPrompt).toContain("Mira");
+    expect(sentPrompt).toContain("a fox companion");
+    expect(sentPrompt).toContain("lead companion is Mira");
+  });
+
   it("injects sheet-context modules into the character-sheet prompt", async () => {
     let sentPrompt = "";
     const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
