@@ -3,10 +3,12 @@ import {
   applyStatePatch,
   buildMockAssistantTurn,
   createInitialPlaythrough,
+  createPlaythroughFromSeed,
   instantiateTemplate,
   parseUserInput
 } from "../src/engine/engine";
-import type { CharacterTemplate, Playthrough } from "../src/schemas";
+import { EMPTY_MODULE_SET } from "../src/schemas";
+import type { CharacterTemplate, Playthrough, ScenarioSeed } from "../src/schemas";
 import { DEMO_TEMPLATE } from "../src/engine/demoData";
 
 describe("parseUserInput", () => {
@@ -326,5 +328,37 @@ describe("applyStatePatch — CCv2 read-only sheets (D9)", () => {
     expect(r.rejected).toEqual([]);
     expect(r.state.characterTemplates[0].content).toContain("- Tall and weathered");
     expect(r.state.characters[0].clothing.find((c) => c.slot === "Head")?.name).toBe("Hood");
+  });
+});
+
+describe("createPlaythroughFromSeed — cast reuse", () => {
+  it("reuses the selected library template as the lead instead of a fresh AI clone", () => {
+    const cast = [{ id: "tmpl_mira", name: "Mira", version: 1, content: "[Species]: Fox\n\n[Personality]\n- Original library sheet", summary: "the fox companion", startingClothing: [] }];
+    const seed = {
+      locations: [{ id: "loc_a", name: "A", description: "", state: "", icon: "", connections: [] }],
+      character: { name: "Mira", content: "[Species]: Fox\n\n[Personality]\n- AI-paraphrased clone sheet" },
+      quest: { id: "q", name: "Q", summary: "s" }, items: [], npcs: [], startingFlags: [], openingText: "",
+    } as ScenarioSeed;
+    const pt = createPlaythroughFromSeed("T", seed, EMPTY_MODULE_SET, "default", "Default", undefined, cast);
+    expect(pt.characters).toHaveLength(1);
+    expect(pt.characters[0].name).toBe("Mira");
+    expect(pt.characterTemplates).toHaveLength(1);
+    expect(pt.characterTemplates[0].id).toBe("tmpl_mira");
+    expect(pt.characterTemplates[0].content).toContain("Original library sheet");
+  });
+
+  it("includeOpening=false does not seed the opening message even when openingText is set", () => {
+    const cast = [{ id: "tmpl_x", name: "X", version: 1, content: "[Species]: Human", summary: "", startingClothing: [] }];
+    const seed = { locations: [{ id: "loc_a", name: "A", description: "", state: "", icon: "", connections: [] }], character: { name: "X", content: "c" }, quest: { id: "q", name: "Q", summary: "s" }, items: [], npcs: [], startingFlags: [], openingText: "A seeded opening." } as ScenarioSeed;
+    const pt = createPlaythroughFromSeed("T", seed, EMPTY_MODULE_SET, "default", "Default", undefined, cast, false);
+    expect(pt.messages).toHaveLength(0);
+  });
+
+  it("no cast => still seeds the AI lead and uses the seed opening text by default", () => {
+    const seed = { locations: [{ id: "loc_a", name: "A", description: "", state: "", icon: "", connections: [] }], character: { name: "Mira", content: "c" }, quest: { id: "q", name: "Q", summary: "s" }, items: [], npcs: [], startingFlags: [], openingText: "Open." } as ScenarioSeed;
+    const pt = createPlaythroughFromSeed("T", seed, EMPTY_MODULE_SET, "default", "Default", undefined, undefined);
+    expect(pt.characters).toHaveLength(1);
+    expect(pt.characters[0].name).toBe("Mira");
+    expect(pt.messages.map((m) => m.content)).toContain("Open.");
   });
 });

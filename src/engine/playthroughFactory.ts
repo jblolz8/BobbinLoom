@@ -147,35 +147,38 @@ export function createPlaythroughFromSeed(
   presetId = "default",
   presetName = "Default",
   persona?: PlayerPersona,
-  cast?: CharacterTemplate[]
+  cast?: CharacterTemplate[],
+  includeOpening = true
 ): Playthrough {
   const createdAt = nowIso();
   const playthroughId = newId("play");
   const branchId = newId("branch");
 
-  const template: CharacterTemplate = {
-    id: newId("tmpl"),
-    name: seed.character.name,
-    version: 1,
-    content: seed.character.content,
-    summary: "",
-    startingClothing: [],
-  };
-
   const startLocationId = seed.locations[0].id;
-
-  const seedCharacter = instantiateTemplate(template, playthroughId, branchId, startLocationId);
   const castTemplates = cast ?? [];
-  const castCharacters = castTemplates.map((t) => instantiateTemplate(t, playthroughId, branchId, startLocationId));
+  const castNames = new Set(castTemplates.map((t) => t.name.trim().toLowerCase()));
 
-  const npcs: SimpleNPC[] = seed.npcs.map((n) => ({
-    id: newId("npc"),
-    name: n.name,
-    description: n.description,
-    disposition: n.disposition,
-    locationId: startLocationId,
-    createdAt
-  }));
+  let characters: CharacterInstance[];
+  let characterTemplates: CharacterTemplate[];
+
+  if (castTemplates.length === 0) {
+    const template: CharacterTemplate = {
+      id: newId("tmpl"), name: seed.character.name, version: 1,
+      content: seed.character.content, summary: "", startingClothing: [],
+    };
+    characters = [instantiateTemplate(template, playthroughId, branchId, startLocationId)];
+    characterTemplates = [template];
+  } else {
+    const lead = castTemplates.find((t) => t.name.trim().toLowerCase() === seed.character.name.trim().toLowerCase())
+      ?? castTemplates[0];
+    const ordered = [lead, ...castTemplates.filter((t) => t.id !== lead.id)];
+    characters = ordered.map((t) => instantiateTemplate(t, playthroughId, branchId, startLocationId));
+    characterTemplates = clone(ordered);
+  }
+
+  const npcs: SimpleNPC[] = seed.npcs
+    .filter((n) => !castNames.has(n.name.trim().toLowerCase()))
+    .map((n) => ({ id: newId("npc"), name: n.name, description: n.description, disposition: n.disposition, locationId: startLocationId, createdAt }));
 
   const items: Item[] = seed.items.map((si) => ({
     id: si.id,
@@ -229,8 +232,8 @@ export function createPlaythroughFromSeed(
         flags: [],
       };
     })(),
-    characters: [seedCharacter, ...castCharacters],
-    characterTemplates: clone([template, ...castTemplates]),
+    characters,
+    characterTemplates,
     npcs,
     inventory,
     quests: [
@@ -246,15 +249,8 @@ export function createPlaythroughFromSeed(
     itemCatalog: items,
     promptSettings: { presetId, presetName, modules },
     memoryEvents: [],
-    messages: seed.openingText?.trim()
-      ? [
-          {
-            id: newId("msg"),
-            role: "assistant",
-            content: seed.openingText.trim(),
-            createdAt,
-          },
-        ]
+    messages: includeOpening && seed.openingText?.trim()
+      ? [{ id: newId("msg"), role: "assistant", content: seed.openingText.trim(), createdAt }]
       : [],
     snapshots: {},
     lorebookIds: [],

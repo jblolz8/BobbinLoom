@@ -597,11 +597,12 @@ export function createPlaythroughRecord(dir: string, name: string, personaId?: s
  */
 export function createPlaythroughFromSeedRecord(
   dir: string, name: string, seed: ScenarioSeed, personaId?: string, castIds?: string[], lorebookIds?: string[],
-  scenarioDescription?: string, presetOverride?: { id: string; name: string; modules: PromptModuleSet }
+  scenarioDescription?: string, presetOverride?: { id: string; name: string; modules: PromptModuleSet },
+  includeOpening = true
 ): Playthrough {
   const preset = presetOverride ?? loadDefaultPreset();
   const persona = personaId ? (getPersona(personaId) ?? loadDefaultPersona()) : loadDefaultPersona();
-  const playthrough = createPlaythroughFromSeed(name, seed, preset.modules, preset.id, preset.name, persona, resolveCast(castIds, dir));
+  const playthrough = createPlaythroughFromSeed(name, seed, preset.modules, preset.id, preset.name, persona, resolveCast(castIds, dir), includeOpening);
   if (lorebookIds) playthrough.lorebookIds = lorebookIds;
   if (scenarioDescription) playthrough.scenarioDescription = scenarioDescription;
   if (personaId) playthrough.personaId = personaId;
