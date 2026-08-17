@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { basename, join } from "node:path";
 import { z } from "zod";
@@ -392,7 +392,44 @@ export function listCharacterTemplates(dir: string = CHARACTERS_DIR): CharacterT
         console.error(`[store] character file ${filePath} failed validation${backupPath ? ` — quarantined to ${backupPath}` : ""}`);
         continue;
       }
-      templates.push(parsed.data);
+      const template: CharacterTemplate = { ...parsed.data };
+      if (!template.createdAt) {
+        const m = template.id.match(/^char_(\d{10,13})$/);
+        if (m) {
+          const epoch = parseInt(m[1], 10);
+          if (!isNaN(epoch) && epoch > 1000000000) {
+            template.createdAt = new Date(epoch).toISOString();
+          }
+        }
+        if (!template.createdAt) {
+          try {
+            const stat = statSync(filePath);
+            template.createdAt = stat.birthtime && stat.birthtime.getTime() > 0
+              ? stat.birthtime.toISOString()
+              : stat.mtime.toISOString();
+          } catch {
+            /* ignore fallback */
+          }
+        }
+      }
+      if (!template.updatedAt) {
+        if (template.avatarUpdatedAt) {
+          try {
+            template.updatedAt = new Date(template.avatarUpdatedAt).toISOString();
+          } catch {
+            /* ignore */
+          }
+        }
+        if (!template.updatedAt) {
+          try {
+            const stat = statSync(filePath);
+            template.updatedAt = stat.mtime ? stat.mtime.toISOString() : (template.createdAt ?? new Date().toISOString());
+          } catch {
+            template.updatedAt = template.createdAt ?? new Date().toISOString();
+          }
+        }
+      }
+      templates.push(template);
     }
   }
   return templates;
@@ -529,6 +566,7 @@ export function removeCharacterProfileAvatar(
 }
 
 export function createCharacterTemplateRecord(name: string, dir: string = CHARACTERS_DIR): CharacterTemplate {
+  const now = new Date().toISOString();
   const template: CharacterTemplate = {
     id: `char_${Date.now()}`,
     name,
@@ -540,6 +578,8 @@ export function createCharacterTemplateRecord(name: string, dir: string = CHARAC
     tags: [],
     extensions: {},
     content: "[Species]: (unknown)\\n[Gender]: (unknown)\\n\\n[Body]\\n(no details recorded yet)\\n\\n[Personality]\\n(no details recorded yet)\\n\\n[Communication]\\n(no details recorded yet)\\n\\n[Likes]\\n(not established)\\n\\n[Dislikes]\\n(not established)",
+    createdAt: now,
+    updatedAt: now,
   };
   const slug = uniqueSlug(slugify(name), characterSlugs(dir));
   ensureStoreDir(characterFolderPath(dir, slug));
@@ -551,7 +591,14 @@ export function updateCharacterTemplateRecord(id: string, updates: Partial<Chara
   const templates = listCharacterTemplates(dir);
   const index = templates.findIndex((t) => t.id === id);
   if (index === -1) return null;
-  const updated = { ...templates[index], ...updates, id };
+  const now = new Date().toISOString();
+  const updated: CharacterTemplate = {
+    ...templates[index],
+    ...updates,
+    id,
+    createdAt: templates[index].createdAt ?? now,
+    updatedAt: updates.updatedAt ?? now,
+  };
   saveCharacterTemplateRecord(updated, dir);
   return updated;
 }
@@ -603,24 +650,30 @@ export function saveCharacterTemplateRecord(template: CharacterTemplate, dir: st
     slug = uniqueSlug(nameSlug, slugs);
   }
   ensureStoreDir(characterFolderPath(dir, slug));
+  const now = new Date().toISOString();
+  const recordToSave: CharacterTemplate = {
+    ...template,
+    createdAt: template.createdAt ?? existing?.createdAt ?? now,
+    updatedAt: template.updatedAt ?? now,
+  };
   const maxV = folderMaxVersion(dir, slug);
-  if (template.version >= maxV) {
+  if (recordToSave.version >= maxV) {
     // Latest lands at <slug>.json — demote the previous holder first.
     const latestPath = characterFilePath(dir, slug);
     if (existsSync(latestPath)) {
       const r = readJsonFile(latestPath);
       if (r.ok) {
         const oldV = (r.data as { version?: unknown }).version;
-        if (typeof oldV === "number" && oldV < template.version) {
+        if (typeof oldV === "number" && oldV < recordToSave.version) {
           renameSync(latestPath, characterFilePath(dir, slug, oldV));
         }
       }
     }
-    atomicWriteJson(latestPath, template);
+    atomicWriteJson(latestPath, recordToSave);
   } else {
-    atomicWriteJson(characterFilePath(dir, slug, template.version), template);
+    atomicWriteJson(characterFilePath(dir, slug, recordToSave.version), recordToSave);
   }
-  return template;
+  return recordToSave;
 }
 
 export interface ImportResult { record: CharacterTemplate; created: boolean }
@@ -646,6 +699,7 @@ export function importCharacterCard(
   const folder = characterFolderPath(dir, slug);
   const originalFile = kind === "png" ? `${slug}.png` : `${slug}.card.json`;
   atomicWriteFile(join(folder, originalFile), originalBytes); // raw, untouched
+  const now = new Date().toISOString();
   const record: CharacterTemplate = {
     id: existing?.id ?? `char_${Date.now()}`,
     name: card.name,
@@ -664,6 +718,8 @@ export function importCharacterCard(
     cardRef: { file: originalFile, kind },
     cardVersion: card.characterVersion || undefined,
     scenario: card.scenario || undefined,     // D7
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
   };
   atomicWriteJson(join(folder, `${slug}.bl.json`), record);
   return { record, created: !existing };

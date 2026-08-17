@@ -95,6 +95,8 @@ export const CharacterTemplateSchema = z.object({
   customPortrait: z.string().optional(),
   profileImage: z.string().optional(),
   avatarUpdatedAt: z.number().optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
 });
 export type CharacterTemplate = z.infer<typeof CharacterTemplateSchema>;
 

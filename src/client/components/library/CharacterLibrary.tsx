@@ -15,8 +15,9 @@ import {
 import { convertCharacterApply, convertCharacterGenerate, suggestCharacterTags, brainstormCharacter } from "../../api";
 import type { CharacterTemplateUpdate, ProposedSectionChange, CharacterBrainstormResult } from "../../api";
 import { CHARACTER_SHEET_EXAMPLE, applySectionChanges } from "../../../engine/characterSections";
-import { displayTitle, entryKind, filterLibraryEntries, cardBadgeLabel } from "../../../engine/characterCards";
-import { Icon, SearchBar, TagChip } from "../base";
+import { displayTitle, entryKind, filterLibraryEntries, cardBadgeLabel, groupByLineage, getGroupCreatedAt, getGroupUpdatedAt, type CharacterSortOption, type SortDirection } from "../../../engine/characterCards";
+import { Icon, SearchBar, TagChip, CharacterAvatar } from "../base";
+export { CharacterAvatar } from "../base";
 import { ConfirmModal } from "../common/ConfirmModal";
 import { DiffModal } from "./DiffModal";
 import { TwoPaneDiff } from "./TwoPaneDiff";
@@ -326,22 +327,19 @@ function TagDiffViewer({
   );
 }
 
-type VersionGroup = { key: string; versions: CharacterTemplate[] };
-
-function groupByLineage(templates: CharacterTemplate[]): VersionGroup[] {
-  const map = new Map<string, CharacterTemplate[]>();
-  for (const t of templates) {
-    const key = t.lineageId ?? t.id;
-    const list = map.get(key) ?? [];
-    list.push(t);
-    map.set(key, list);
+function formatLibraryDate(isoOrStr?: string): string {
+  if (!isoOrStr) return "";
+  try {
+    const d = new Date(isoOrStr);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return "";
   }
-  const groups = [...map.entries()].map(([key, versions]) => ({
-    key,
-    versions: versions.sort((a, b) => b.version - a.version)
-  }));
-  groups.sort((a, b) => a.versions[0].name.localeCompare(b.versions[0].name));
-  return groups;
 }
 
 function getPageNumbers(current: number, total: number): number[] {
@@ -357,36 +355,7 @@ function getPageNumbers(current: number, total: number): number[] {
   return [1, -1, current - 1, current, current + 1, -1, total];
 }
 
-/** Avatar for a library card: serves full portrait or 1:1 face profile image,
- *  falling back to letter placeholder when unavailable. */
-export function CharacterAvatar({
-  template,
-  className,
-  type = "portrait",
-}: {
-  template: CharacterTemplate;
-  className?: string;
-  type?: "portrait" | "profile" | "original";
-}) {
-  const [failed, setFailed] = useState(false);
 
-  // Reset the fallback when the card or its avatar changes
-  useEffect(() => {
-    setFailed(false);
-  }, [template.id, template.avatarUpdatedAt, type]);
-
-  if (failed) {
-    return <div className={`avatar-placeholder ${className ?? ""}`}>{displayTitle(template).charAt(0).toUpperCase()}</div>;
-  }
-  return (
-    <img
-      className={`library-avatar ${className ?? ""}`}
-      src={getCharacterAvatarUrl(template.id, type, template.avatarUpdatedAt)}
-      alt=""
-      onError={() => setFailed(true)}
-    />
-  );
-}
 
 /** Card dropdown "more options" menu */
 function MoreOptionsMenu({
@@ -450,7 +419,24 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
   const [editingIsCcv2, setEditingIsCcv2] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearchState] = useState(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      return localStorage.getItem("bobbinloom_library_search") ?? "";
+    }
+    return "";
+  });
+
+  const setSearch = (val: string) => {
+    setSearchState(val);
+    try {
+      if (val) {
+        localStorage.setItem("bobbinloom_library_search", val);
+      } else {
+        localStorage.removeItem("bobbinloom_library_search");
+      }
+    } catch { /* silent */ }
+  };
+
   const [tagFilterSearch, setTagFilterSearch] = useState("");
   const [importing, setImporting] = useState(false);
   const [viewMode, setViewModeState] = useState<ViewMode>(() => {
@@ -467,8 +453,68 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
       localStorage.setItem("bobbinloom_library_view_mode", mode);
     } catch { /* silent */ }
   };
+
+  const [sortBy, setSortByState] = useState<CharacterSortOption>(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const saved = localStorage.getItem("bobbinloom_library_sort_by");
+      if (saved === "name" || saved === "createdAt" || saved === "updatedAt") return saved;
+    }
+    return "name";
+  });
+
+  const [sortDirection, setSortDirectionState] = useState<SortDirection>(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const saved = localStorage.getItem("bobbinloom_library_sort_dir");
+      if (saved === "asc" || saved === "desc") return saved;
+    }
+    return "asc";
+  });
+
+  const setSortBy = (option: CharacterSortOption) => {
+    setSortByState(option);
+    let nextDir: SortDirection = "asc";
+    if (option === "createdAt" || option === "updatedAt") {
+      nextDir = "desc";
+    } else {
+      nextDir = "asc";
+    }
+    setSortDirectionState(nextDir);
+    try {
+      localStorage.setItem("bobbinloom_library_sort_by", option);
+      localStorage.setItem("bobbinloom_library_sort_dir", nextDir);
+    } catch { /* silent */ }
+    setCurrentPage(1);
+  };
+
+  const toggleSortDirection = () => {
+    const nextDir: SortDirection = sortDirection === "asc" ? "desc" : "asc";
+    setSortDirectionState(nextDir);
+    try {
+      localStorage.setItem("bobbinloom_library_sort_dir", nextDir);
+    } catch { /* silent */ }
+    setCurrentPage(1);
+  };
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(12);
+  const [pageSize, setPageSizeState] = useState<number>(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const saved = localStorage.getItem("bobbinloom_library_page_size");
+      if (saved) {
+        const parsed = Number(saved);
+        if (!isNaN(parsed) && [12, 24, 48, 96, 1000].includes(parsed)) {
+          return parsed;
+        }
+      }
+    }
+    return 12;
+  });
+
+  const setPageSize = (size: number) => {
+    setPageSizeState(size);
+    try {
+      localStorage.setItem("bobbinloom_library_page_size", String(size));
+    } catch { /* silent */ }
+  };
+
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -525,8 +571,33 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
   // ── Tag Taxonomy & Categorization State ──
   const [taxonomyConfig, setTaxonomyConfig] = useState<TagTaxonomyConfig | null>(null);
   const [taxonomyModalOpen, setTaxonomyModalOpen] = useState(false);
-  const [sidebarViewMode, setSidebarViewMode] = useState<"grouped" | "flat">("grouped");
-  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  const [sidebarViewMode, setSidebarViewModeState] = useState<"grouped" | "flat">(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const saved = localStorage.getItem("bobbinloom_library_sidebar_view_mode");
+      if (saved === "grouped" || saved === "flat") return saved;
+    }
+    return "grouped";
+  });
+
+  const setSidebarViewMode = (mode: "grouped" | "flat") => {
+    setSidebarViewModeState(mode);
+    try {
+      localStorage.setItem("bobbinloom_library_sidebar_view_mode", mode);
+    } catch { /* silent */ }
+  };
+
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      try {
+        const saved = localStorage.getItem("bobbinloom_library_collapsed_categories");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) return new Set(parsed);
+        }
+      } catch { /* silent */ }
+    }
+    return new Set();
+  });
   const [mobileSidebarExpanded, setMobileSidebarExpanded] = useState(false);
 
   // ── AI Brainstorming State ──
@@ -1103,6 +1174,9 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
       const next = new Set(prev);
       if (next.has(categoryId)) next.delete(categoryId);
       else next.add(categoryId);
+      try {
+        localStorage.setItem("bobbinloom_library_collapsed_categories", JSON.stringify([...next]));
+      } catch { /* silent */ }
       return next;
     });
   }
@@ -1153,7 +1227,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
 
   // ── Filtering and Pagination ──
   const filteredTemplates = useMemo(() => filterLibraryEntries(templates, search), [templates, search]);
-  const groups = useMemo(() => groupByLineage(filteredTemplates), [filteredTemplates]);
+  const groups = useMemo(() => groupByLineage(filteredTemplates, sortBy, sortDirection), [filteredTemplates, sortBy, sortDirection]);
 
   const totalPages = Math.max(1, Math.ceil(groups.length / pageSize));
   useEffect(() => {
@@ -1839,6 +1913,44 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                   containerClassName="library-search-wrapper"
                 />
 
+                {/* Sort Controls */}
+                <div className="library-sort-control-group" role="group" aria-label="Sort library">
+                  <div className="library-sort-select-wrapper">
+                    <Icon name="ArrowUpDown" size={13} className="library-sort-icon" />
+                    <select
+                      className="library-sort-select"
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as CharacterSortOption)}
+                      aria-label="Sort characters by"
+                    >
+                      <option value="name">Name</option>
+                      <option value="createdAt">Created Date</option>
+                      <option value="updatedAt">Updated Date</option>
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    className="library-sort-dir-btn"
+                    onClick={toggleSortDirection}
+                    title={
+                      sortBy === "name"
+                        ? (sortDirection === "asc" ? "Sort A to Z (click for Z to A)" : "Sort Z to A (click for A to Z)")
+                        : (sortDirection === "desc" ? "Newest first (click for Oldest first)" : "Oldest first (click for Newest first)")
+                    }
+                    aria-label="Toggle sort order"
+                  >
+                    <Icon
+                      name={sortDirection === "asc" ? "ArrowUpNarrowWide" : "ArrowDownWideNarrow"}
+                      size={14}
+                    />
+                    <span className="sort-dir-label">
+                      {sortBy === "name"
+                        ? (sortDirection === "asc" ? "A-Z" : "Z-A")
+                        : (sortDirection === "desc" ? "Newest" : "Oldest")}
+                    </span>
+                  </button>
+                </div>
+
                 {/* View Mode Switcher */}
                 <div className="view-mode-switcher" role="group" aria-label="View mode">
                   <button
@@ -1939,7 +2051,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                             }}
                           >
                             <div className="card-portrait-image-wrap">
-                              <CharacterAvatar template={latest} className="card-portrait-avatar" type="portrait" />
+                              <CharacterAvatar template={latest} variant="portrait" />
                             </div>
 
                             <div className="card-portrait-body">
@@ -1989,6 +2101,16 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                                   {badge === "ccv2" ? <span className="ccv2-badge">CCv2</span> : null}
                                   {badge === "ccv2bl" ? <span className="ccv2bl-badge">CCv2 / BL</span> : null}
                                   <span className="version-badge">v{latest.cardVersion ?? String(latest.version)}</span>
+                                  {sortBy === "createdAt" && getGroupCreatedAt(group) ? (
+                                    <span className="card-timestamp-badge" title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}>
+                                      <Icon name="Calendar" size={10} /> {formatLibraryDate(getGroupCreatedAt(group))}
+                                    </span>
+                                  ) : null}
+                                  {sortBy === "updatedAt" && getGroupUpdatedAt(group) ? (
+                                    <span className="card-timestamp-badge" title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}>
+                                      <Icon name="Clock" size={10} /> {formatLibraryDate(getGroupUpdatedAt(group))}
+                                    </span>
+                                  ) : null}
                                 </div>
                                 <MoreOptionsMenu
                                   template={latest}
@@ -2044,7 +2166,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                               if (e.key === "Enter") openEdit(latest);
                             }}
                           >
-                            <CharacterAvatar template={latest} className="card-list-avatar" type="profile" />
+                            <CharacterAvatar template={latest} variant="list" />
                             <div className="card-list-content">
                               <div className="card-list-header-row">
                                 <div className="card-list-title-wrap">
@@ -2057,6 +2179,16 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                                   ) : null}
                                   {latest.creator?.trim() ? (
                                     <span className="card-creator-tag">by {latest.creator.trim()}</span>
+                                  ) : null}
+                                  {sortBy === "createdAt" && getGroupCreatedAt(group) ? (
+                                    <span className="card-timestamp-tag" title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}>
+                                      <Icon name="Calendar" size={11} /> {formatLibraryDate(getGroupCreatedAt(group))}
+                                    </span>
+                                  ) : null}
+                                  {sortBy === "updatedAt" && getGroupUpdatedAt(group) ? (
+                                    <span className="card-timestamp-tag" title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}>
+                                      <Icon name="Clock" size={11} /> {formatLibraryDate(getGroupUpdatedAt(group))}
+                                    </span>
                                   ) : null}
                                 </div>
 
@@ -2142,7 +2274,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                             }}
                           >
                             <div className="card-grid-thumb-wrap">
-                              <CharacterAvatar template={latest} className="card-grid-thumb" type="profile" />
+                              <CharacterAvatar template={latest} variant="grid" />
                             </div>
                             <div className="card-grid-body">
                               <strong className="card-grid-title" title={displayTitle(latest)}>
@@ -2155,6 +2287,16 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                                   <span className="version-badge">v{latest.cardVersion ?? String(latest.version)}</span>
                                   {group.versions.length > 1 ? (
                                     <span className="version-count">({group.versions.length} v)</span>
+                                  ) : null}
+                                  {sortBy === "createdAt" && getGroupCreatedAt(group) ? (
+                                    <span className="card-grid-timestamp" title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}>
+                                      {formatLibraryDate(getGroupCreatedAt(group))}
+                                    </span>
+                                  ) : null}
+                                  {sortBy === "updatedAt" && getGroupUpdatedAt(group) ? (
+                                    <span className="card-grid-timestamp" title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}>
+                                      {formatLibraryDate(getGroupUpdatedAt(group))}
+                                    </span>
                                   ) : null}
                                 </div>
                                 <MoreOptionsMenu
@@ -2323,7 +2465,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
             <p>{importNotice.message}</p>
             <div className="version-group" style={{ margin: "12px 0", padding: "12px", border: "1px solid var(--border-color, #333)", borderRadius: "6px" }}>
               <div className="version-group-header">
-                <CharacterAvatar template={importNotice.existingRecord} />
+                <CharacterAvatar template={importNotice.existingRecord} variant="portrait" />
                 <div className="version-group-title">
                   <strong>{displayTitle(importNotice.existingRecord)}</strong>
                 </div>

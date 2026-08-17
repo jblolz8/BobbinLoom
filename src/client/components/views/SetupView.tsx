@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import type { CharacterTemplate, LorebookSummary } from "../../../schemas";
 import type { Persona } from "../../api";
 import { getTagTaxonomy } from "../../api";
-import { AvatarBadge, Icon, SearchBar, TagChip } from "../base";
-import { CharacterAvatar, type ViewMode } from "../library/CharacterLibrary";
-import { cardBadgeLabel, displayTitle, entryKind, filterLibraryEntries } from "../../../engine/characterCards";
+import { AvatarBadge, Icon, SearchBar, TagChip, CharacterAvatar } from "../base";
+import type { ViewMode } from "../library/CharacterLibrary";
+import { cardBadgeLabel, displayTitle, entryKind, filterLibraryEntries, groupByLineage, getGroupCreatedAt, getGroupUpdatedAt, type CharacterSortOption, type SortDirection } from "../../../engine/characterCards";
 import { groupTagsByCategory, sortTags, type TagTaxonomyConfig } from "../../../engine/tagTaxonomy";
 
 export type SetupFormState = {
@@ -50,20 +50,19 @@ export type SetupViewProps = {
   onOpenLorebookManager: () => void;
 };
 
-function groupTemplates(templates: CharacterTemplate[]): Array<{ key: string; versions: CharacterTemplate[] }> {
-  const map = new Map<string, CharacterTemplate[]>();
-  for (const t of templates) {
-    const key = t.lineageId ?? t.id;
-    const list = map.get(key) ?? [];
-    list.push(t);
-    map.set(key, list);
+function formatCastDate(isoOrStr?: string): string {
+  if (!isoOrStr) return "";
+  try {
+    const d = new Date(isoOrStr);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return "";
   }
-  const groups = [...map.entries()].map(([key, versions]) => ({
-    key,
-    versions: versions.sort((a, b) => b.version - a.version),
-  }));
-  groups.sort((a, b) => a.versions[0].name.localeCompare(b.versions[0].name));
-  return groups;
 }
 
 function getPageNumbers(current: number, total: number): number[] {
@@ -104,16 +103,105 @@ export function SetupView(props: SetupViewProps) {
   } = props;
 
   const [activeTab, setActiveTab] = useState<SetupStepTab>("persona");
-  const [castSearch, setCastSearch] = useState("");
-  const [castPage, setCastPage] = useState(1);
-  const [pageSize] = useState(12);
-  const [taxonomyConfig, setTaxonomyConfig] = useState<TagTaxonomyConfig | null>(null);
-  const [showTagFilters, setShowTagFilters] = useState(false);
+  const [castSearch, setCastSearchState] = useState(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      return localStorage.getItem("bobbinloom_setup_cast_search") ?? "";
+    }
+    return "";
+  });
 
-  // Global persistent view mode shared with Character Library
+  const setCastSearch = (val: string) => {
+    setCastSearchState(val);
+    try {
+      if (val) {
+        localStorage.setItem("bobbinloom_setup_cast_search", val);
+      } else {
+        localStorage.removeItem("bobbinloom_setup_cast_search");
+      }
+    } catch { /* silent */ }
+  };
+
+  const [sortBy, setSortByState] = useState<CharacterSortOption>(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const saved = localStorage.getItem("bobbinloom_setup_cast_sort_by");
+      if (saved === "name" || saved === "createdAt" || saved === "updatedAt") return saved;
+    }
+    return "name";
+  });
+
+  const [sortDirection, setSortDirectionState] = useState<SortDirection>(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const saved = localStorage.getItem("bobbinloom_setup_cast_sort_dir");
+      if (saved === "asc" || saved === "desc") return saved;
+    }
+    return "asc";
+  });
+
+  const setSortBy = (option: CharacterSortOption) => {
+    setSortByState(option);
+    let nextDir: SortDirection = "asc";
+    if (option === "createdAt" || option === "updatedAt") {
+      nextDir = "desc";
+    } else {
+      nextDir = "asc";
+    }
+    setSortDirectionState(nextDir);
+    try {
+      localStorage.setItem("bobbinloom_setup_cast_sort_by", option);
+      localStorage.setItem("bobbinloom_setup_cast_sort_dir", nextDir);
+    } catch { /* silent */ }
+    setCastPage(1);
+  };
+
+  const toggleSortDirection = () => {
+    const nextDir: SortDirection = sortDirection === "asc" ? "desc" : "asc";
+    setSortDirectionState(nextDir);
+    try {
+      localStorage.setItem("bobbinloom_setup_cast_sort_dir", nextDir);
+    } catch { /* silent */ }
+    setCastPage(1);
+  };
+
+  const [castPage, setCastPage] = useState(1);
+  const [pageSize, setPageSizeState] = useState<number>(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const saved = localStorage.getItem("bobbinloom_setup_cast_page_size");
+      if (saved) {
+        const parsed = Number(saved);
+        if (!isNaN(parsed) && [12, 24, 48, 96, 1000].includes(parsed)) {
+          return parsed;
+        }
+      }
+    }
+    return 12;
+  });
+
+  const setPageSize = (size: number) => {
+    setPageSizeState(size);
+    try {
+      localStorage.setItem("bobbinloom_setup_cast_page_size", String(size));
+    } catch { /* silent */ }
+  };
+
+  const [taxonomyConfig, setTaxonomyConfig] = useState<TagTaxonomyConfig | null>(null);
+  const [showTagFilters, setShowTagFiltersState] = useState<boolean>(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      return localStorage.getItem("bobbinloom_setup_cast_show_tag_filters") === "true";
+    }
+    return false;
+  });
+
+  const setShowTagFilters = (val: boolean) => {
+    setShowTagFiltersState(val);
+    try {
+      localStorage.setItem("bobbinloom_setup_cast_show_tag_filters", String(val));
+    } catch { /* silent */ }
+  };
+
+  // View mode with independent SetupView persistence
   const [viewMode, setViewModeState] = useState<ViewMode>(() => {
     if (typeof window !== "undefined" && window.localStorage) {
-      const saved = localStorage.getItem("bobbinloom_library_view_mode");
+      const saved = localStorage.getItem("bobbinloom_setup_cast_view_mode");
       if (saved === "portrait" || saved === "list" || saved === "grid") return saved;
     }
     return "portrait";
@@ -122,7 +210,7 @@ export function SetupView(props: SetupViewProps) {
   const setViewMode = (mode: ViewMode) => {
     setViewModeState(mode);
     try {
-      localStorage.setItem("bobbinloom_library_view_mode", mode);
+      localStorage.setItem("bobbinloom_setup_cast_view_mode", mode);
     } catch { /* silent */ }
   };
 
@@ -135,13 +223,11 @@ export function SetupView(props: SetupViewProps) {
     }
   }, [open]);
 
-  // Reset tab and cast search when modal opens
+  // Reset tab when modal opens
   useEffect(() => {
     if (open) {
       setActiveTab("persona");
-      setCastSearch("");
       setCastPage(1);
-      setShowTagFilters(false);
     }
   }, [open]);
 
@@ -216,8 +302,8 @@ export function SetupView(props: SetupViewProps) {
   }, [castLibrary, castSearch]);
 
   const castGroups = useMemo(() => {
-    return groupTemplates(filteredCast);
-  }, [filteredCast]);
+    return groupByLineage(filteredCast, sortBy, sortDirection);
+  }, [filteredCast, sortBy, sortDirection]);
 
   const totalPages = Math.max(1, Math.ceil(castGroups.length / pageSize));
   const paginatedCastGroups = useMemo(() => {
@@ -469,7 +555,7 @@ export function SetupView(props: SetupViewProps) {
                       <div className="selected-cast-scroll">
                         {selectedCastTemplates.map((t) => (
                           <div key={t.id} className="selected-cast-chip">
-                            <CharacterAvatar template={t} className="selected-cast-avatar" />
+                            <CharacterAvatar template={t} variant="chip" />
                             <span className="selected-cast-name" title={displayTitle(t)}>{displayTitle(t)}</span>
                             <button
                               type="button"
@@ -525,6 +611,44 @@ export function SetupView(props: SetupViewProps) {
                       >
                         Select All
                       </button>
+
+                      {/* Sort Controls */}
+                      <div className="library-sort-control-group setup-cast-sort-group" role="group" aria-label="Sort cast">
+                        <div className="library-sort-select-wrapper">
+                          <Icon name="ArrowUpDown" size={12} className="library-sort-icon" />
+                          <select
+                            className="library-sort-select"
+                            value={sortBy}
+                            onChange={(e) => setSortBy(e.target.value as CharacterSortOption)}
+                            aria-label="Sort cast by"
+                          >
+                            <option value="name">Name</option>
+                            <option value="createdAt">Created Date</option>
+                            <option value="updatedAt">Updated Date</option>
+                          </select>
+                        </div>
+                        <button
+                          type="button"
+                          className="library-sort-dir-btn"
+                          onClick={toggleSortDirection}
+                          title={
+                            sortBy === "name"
+                              ? (sortDirection === "asc" ? "Sort A to Z (click for Z to A)" : "Sort Z to A (click for A to Z)")
+                              : (sortDirection === "desc" ? "Newest first (click for Oldest first)" : "Oldest first (click for Newest first)")
+                          }
+                          aria-label="Toggle sort order"
+                        >
+                          <Icon
+                            name={sortDirection === "asc" ? "ArrowUpNarrowWide" : "ArrowDownWideNarrow"}
+                            size={13}
+                          />
+                          <span className="sort-dir-label">
+                            {sortBy === "name"
+                              ? (sortDirection === "asc" ? "A-Z" : "Z-A")
+                              : (sortDirection === "desc" ? "Newest" : "Oldest")}
+                          </span>
+                        </button>
+                      </div>
 
                       {/* View Mode Buttons */}
                       <div className="view-mode-selector">
@@ -666,7 +790,7 @@ export function SetupView(props: SetupViewProps) {
                                 }}
                               >
                                 <div className="card-portrait-image-wrap">
-                                  <CharacterAvatar template={latest} className="card-portrait-avatar" />
+                                  <CharacterAvatar template={latest} variant="portrait" />
                                   <div className={`card-selection-badge ${isSelected ? "checked" : ""}`}>
                                     {isSelected ? <Icon name="Check" size={13} strokeWidth={3} /> : null}
                                   </div>
@@ -716,6 +840,16 @@ export function SetupView(props: SetupViewProps) {
                                       {badge === "ccv2" ? <span className="ccv2-badge">CCv2</span> : null}
                                       {badge === "ccv2bl" ? <span className="ccv2bl-badge">CCv2 / BL</span> : null}
                                       <span className="version-badge">v{latest.cardVersion ?? String(latest.version)}</span>
+                                      {sortBy === "createdAt" && getGroupCreatedAt(group) ? (
+                                        <span className="card-timestamp-badge" title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}>
+                                          <Icon name="Calendar" size={10} /> {formatCastDate(getGroupCreatedAt(group))}
+                                        </span>
+                                      ) : null}
+                                      {sortBy === "updatedAt" && getGroupUpdatedAt(group) ? (
+                                        <span className="card-timestamp-badge" title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}>
+                                          <Icon name="Clock" size={10} /> {formatCastDate(getGroupUpdatedAt(group))}
+                                        </span>
+                                      ) : null}
                                     </div>
                                   </div>
                                 </div>
@@ -749,7 +883,7 @@ export function SetupView(props: SetupViewProps) {
                                   }
                                 }}
                               >
-                                <CharacterAvatar template={latest} className="card-list-avatar" />
+                                <CharacterAvatar template={latest} variant="list" />
                                 <div className="card-list-content">
                                   <div className="card-list-header-row">
                                     <div className="card-list-title-wrap">
@@ -762,6 +896,16 @@ export function SetupView(props: SetupViewProps) {
                                       ) : null}
                                       {latest.creator?.trim() ? (
                                         <span className="card-creator-tag">by {latest.creator.trim()}</span>
+                                      ) : null}
+                                      {sortBy === "createdAt" && getGroupCreatedAt(group) ? (
+                                        <span className="card-timestamp-tag" title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}>
+                                          <Icon name="Calendar" size={11} /> {formatCastDate(getGroupCreatedAt(group))}
+                                        </span>
+                                      ) : null}
+                                      {sortBy === "updatedAt" && getGroupUpdatedAt(group) ? (
+                                        <span className="card-timestamp-tag" title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}>
+                                          <Icon name="Clock" size={11} /> {formatCastDate(getGroupUpdatedAt(group))}
+                                        </span>
                                       ) : null}
                                     </div>
 
@@ -826,7 +970,7 @@ export function SetupView(props: SetupViewProps) {
                                 }}
                               >
                                 <div className="card-grid-thumb-wrap">
-                                  <CharacterAvatar template={latest} className="card-grid-thumb" />
+                                  <CharacterAvatar template={latest} variant="grid" />
                                   <div className={`card-selection-badge ${isSelected ? "checked" : ""}`}>
                                     {isSelected ? <Icon name="Check" size={13} strokeWidth={3} /> : null}
                                   </div>
@@ -840,6 +984,16 @@ export function SetupView(props: SetupViewProps) {
                                       {badge === "ccv2" ? <span className="ccv2-badge">CCv2</span> : null}
                                       {badge === "ccv2bl" ? <span className="ccv2bl-badge">CCv2 / BL</span> : null}
                                       <span className="version-badge">v{latest.cardVersion ?? String(latest.version)}</span>
+                                      {sortBy === "createdAt" && getGroupCreatedAt(group) ? (
+                                        <span className="card-grid-timestamp" title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}>
+                                          {formatCastDate(getGroupCreatedAt(group))}
+                                        </span>
+                                      ) : null}
+                                      {sortBy === "updatedAt" && getGroupUpdatedAt(group) ? (
+                                        <span className="card-grid-timestamp" title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}>
+                                          {formatCastDate(getGroupUpdatedAt(group))}
+                                        </span>
+                                      ) : null}
                                     </div>
                                   </div>
                                 </div>
@@ -850,27 +1004,29 @@ export function SetupView(props: SetupViewProps) {
                       )}
 
                       {/* Pagination Controls */}
-                      {totalPages > 1 ? (
-                        <div className="library-pagination setup-cast-pagination">
-                          <div className="pagination-info">
-                            Showing <strong>{(castPage - 1) * pageSize + 1}–{Math.min(castPage * pageSize, castGroups.length)}</strong> of <strong>{castGroups.length}</strong>
-                          </div>
+                      <div className="library-pagination setup-cast-pagination">
+                        <div className="pagination-info">
+                          Showing <strong>{castGroups.length === 0 ? 0 : (castPage - 1) * pageSize + 1}–{Math.min(castPage * pageSize, castGroups.length)}</strong> of <strong>{castGroups.length}</strong>
+                        </div>
+                        {totalPages > 1 ? (
                           <div className="pagination-controls">
                             <button
                               type="button"
                               className="pagination-nav-btn"
                               disabled={castPage === 1}
                               onClick={() => setCastPage(1)}
+                              title="First page"
                             >
-                              «
+                              <Icon name="ChevronsLeft" size={14} />
                             </button>
                             <button
                               type="button"
                               className="pagination-nav-btn"
                               disabled={castPage === 1}
                               onClick={() => setCastPage((p) => Math.max(1, p - 1))}
+                              title="Previous page"
                             >
-                              ‹
+                              <Icon name="ChevronLeft" size={14} />
                             </button>
                             {getPageNumbers(castPage, totalPages).map((p, idx) =>
                               p === -1 ? (
@@ -891,20 +1047,41 @@ export function SetupView(props: SetupViewProps) {
                               className="pagination-nav-btn"
                               disabled={castPage === totalPages}
                               onClick={() => setCastPage((p) => Math.min(totalPages, p + 1))}
+                              title="Next page"
                             >
-                              ›
+                              <Icon name="ChevronRight" size={14} />
                             </button>
                             <button
                               type="button"
                               className="pagination-nav-btn"
                               disabled={castPage === totalPages}
                               onClick={() => setCastPage(totalPages)}
+                              title="Last page"
                             >
-                              »
+                              <Icon name="ChevronsRight" size={14} />
                             </button>
                           </div>
+                        ) : null}
+
+                        <div className="pagination-size-selector">
+                          <label>
+                            <span>Per page:</span>
+                            <select
+                              value={pageSize}
+                              onChange={(e) => {
+                                setPageSize(Number(e.target.value));
+                                setCastPage(1);
+                              }}
+                            >
+                              <option value={12}>12</option>
+                              <option value={24}>24</option>
+                              <option value={48}>48</option>
+                              <option value={96}>96</option>
+                              <option value={1000}>All</option>
+                            </select>
+                          </label>
                         </div>
-                      ) : null}
+                      </div>
                     </>
                   )}
                 </div>

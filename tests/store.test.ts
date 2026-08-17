@@ -234,6 +234,37 @@ describe("character library — folder-per-entity", () => {
     expect(existsSync(join(dir, "mira.bak"))).toBe(true);
     expect(listCharacterTemplates(dir)).toEqual([]);
   });
+
+  it("stamps and derives createdAt and updatedAt timestamps", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bobbinloom-chars-timestamps-"));
+    tempDirs.push(dir);
+
+    // 1. Create stamps createdAt and updatedAt
+    const created = createCharacterTemplateRecord("Mira", dir);
+    expect(created.createdAt).toBeDefined();
+    expect(created.updatedAt).toBeDefined();
+    expect(new Date(created.createdAt!).getTime()).toBeGreaterThan(0);
+
+    // 2. Update refreshes updatedAt and preserves createdAt
+    const origCreated = created.createdAt;
+    const updated = updateCharacterTemplateRecord(created.id, { summary: "Updated summary" }, dir);
+    expect(updated?.createdAt).toBe(origCreated);
+    expect(updated?.updatedAt).toBeDefined();
+
+    // 3. Legacy file without timestamps derives createdAt from ID and updatedAt from file mtime
+    const legacyDir = join(dir, "legacy-char");
+    mkdirSync(legacyDir, { recursive: true });
+    writeFileSync(
+      join(legacyDir, "legacy-char.json"),
+      JSON.stringify({ id: "char_1700000000000", name: "Legacy Char", version: 1, content: "legacy" }),
+      "utf8"
+    );
+
+    const loaded = listCharacterTemplates(dir).find((t) => t.id === "char_1700000000000");
+    expect(loaded).toBeDefined();
+    expect(loaded?.createdAt).toBe("2023-11-14T22:13:20.000Z");
+    expect(loaded?.updatedAt).toBeDefined();
+  });
 });
 
 describe("persona store — folder-per-entity", () => {

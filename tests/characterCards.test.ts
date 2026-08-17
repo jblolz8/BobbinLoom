@@ -5,6 +5,12 @@ import {
   displayTitle,
   entryKind,
   filterLibraryEntries,
+  groupByLineage,
+  sortVersionGroups,
+  getCharacterCreatedAt,
+  getCharacterUpdatedAt,
+  getGroupCreatedAt,
+  getGroupUpdatedAt,
   normalizeCreator,
   normalizeTags
 } from "../src/engine/characterCards";
@@ -414,3 +420,80 @@ describe("convertCardGenerate", () => {
     });
   });
 });
+
+describe("groupByLineage and sortVersionGroups", () => {
+  const t1 = makeEntry({
+    id: "char_1700000000000",
+    name: "Zoe",
+    createdAt: "2024-01-01T00:00:00.000Z",
+    updatedAt: "2024-01-05T00:00:00.000Z",
+  });
+  const t2 = makeEntry({
+    id: "char_1700000001000",
+    name: "Alice",
+    createdAt: "2024-01-03T00:00:00.000Z",
+    updatedAt: "2024-01-03T00:00:00.000Z",
+  });
+  const t3v1 = makeEntry({
+    id: "char_1700000002000",
+    lineageId: "lineage_bob",
+    name: "Bob",
+    version: 1,
+    createdAt: "2024-01-02T00:00:00.000Z",
+    updatedAt: "2024-01-02T00:00:00.000Z",
+  });
+  const t3v2 = makeEntry({
+    id: "char_1700000003000",
+    lineageId: "lineage_bob",
+    name: "Bob Updated",
+    version: 2,
+    createdAt: "2024-01-04T00:00:00.000Z",
+    updatedAt: "2024-01-10T00:00:00.000Z",
+  });
+
+  const allTemplates = [t1, t2, t3v1, t3v2];
+
+  it("groups by lineage with latest version first inside group", () => {
+    const groups = groupByLineage(allTemplates, "name", "asc");
+    expect(groups).toHaveLength(3);
+    const bobGroup = groups.find((g) => g.key === "lineage_bob")!;
+    expect(bobGroup.versions[0].version).toBe(2);
+    expect(bobGroup.versions[0].name).toBe("Bob Updated");
+    expect(bobGroup.versions[1].version).toBe(1);
+  });
+
+  it("sorts by name ascending and descending", () => {
+    const asc = groupByLineage(allTemplates, "name", "asc");
+    expect(asc.map((g) => g.versions[0].name)).toEqual(["Alice", "Bob Updated", "Zoe"]);
+
+    const desc = groupByLineage(allTemplates, "name", "desc");
+    expect(desc.map((g) => g.versions[0].name)).toEqual(["Zoe", "Bob Updated", "Alice"]);
+  });
+
+  it("sorts by createdAt (earliest in lineage for created date)", () => {
+    // Earliest created dates: Zoe (Jan 1), Bob (Jan 2), Alice (Jan 3)
+    const asc = groupByLineage(allTemplates, "createdAt", "asc");
+    expect(asc.map((g) => g.versions[0].name)).toEqual(["Zoe", "Bob Updated", "Alice"]);
+
+    const desc = groupByLineage(allTemplates, "createdAt", "desc");
+    expect(desc.map((g) => g.versions[0].name)).toEqual(["Alice", "Bob Updated", "Zoe"]);
+  });
+
+  it("sorts by updatedAt (latest in lineage for updated date)", () => {
+    // Latest updated dates: Alice (Jan 3), Zoe (Jan 5), Bob (Jan 10)
+    const asc = groupByLineage(allTemplates, "updatedAt", "asc");
+    expect(asc.map((g) => g.versions[0].name)).toEqual(["Alice", "Zoe", "Bob Updated"]);
+
+    const desc = groupByLineage(allTemplates, "updatedAt", "desc");
+    expect(desc.map((g) => g.versions[0].name)).toEqual(["Bob Updated", "Zoe", "Alice"]);
+  });
+
+  it("falls back to timestamp extracted from char_<timestamp> ID when createdAt is missing", () => {
+    const charWithIdOnly = makeEntry({
+      id: "char_1704067200000", // 2024-01-01T00:00:00.000Z
+      name: "Fallback Test",
+    });
+    expect(getCharacterCreatedAt(charWithIdOnly)).toBe("2024-01-01T00:00:00.000Z");
+  });
+});
+

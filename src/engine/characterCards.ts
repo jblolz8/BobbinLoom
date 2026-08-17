@@ -125,3 +125,135 @@ export function collectCardSettings(entries: CharacterTemplate[]): Array<{ title
   }
   return out;
 }
+
+export type CharacterSortOption = "name" | "createdAt" | "updatedAt";
+export type SortDirection = "asc" | "desc";
+
+export type VersionGroup = { key: string; versions: CharacterTemplate[] };
+
+export function extractTimestampFromId(id: string): string | null {
+  const m = id.match(/^char_(\d{10,13})$/);
+  if (m) {
+    const epoch = parseInt(m[1], 10);
+    if (!isNaN(epoch) && epoch > 1000000000) {
+      return new Date(epoch).toISOString();
+    }
+  }
+  return null;
+}
+
+export function getCharacterCreatedAt(t: CharacterTemplate): string {
+  if (t.createdAt) return t.createdAt;
+  const fromId = extractTimestampFromId(t.id);
+  if (fromId) return fromId;
+  return "";
+}
+
+export function getCharacterUpdatedAt(t: CharacterTemplate): string {
+  if (t.updatedAt) return t.updatedAt;
+  if (t.avatarUpdatedAt) {
+    try {
+      return new Date(t.avatarUpdatedAt).toISOString();
+    } catch {
+      /* ignore */
+    }
+  }
+  return getCharacterCreatedAt(t);
+}
+
+export function getGroupCreatedAt(group: VersionGroup): string {
+  let earliest = "";
+  for (const v of group.versions) {
+    const c = getCharacterCreatedAt(v);
+    if (c && (!earliest || c < earliest)) {
+      earliest = c;
+    }
+  }
+  return earliest;
+}
+
+export function getGroupUpdatedAt(group: VersionGroup): string {
+  let latest = "";
+  for (const v of group.versions) {
+    const u = getCharacterUpdatedAt(v);
+    if (u && (!latest || u > latest)) {
+      latest = u;
+    }
+  }
+  return latest;
+}
+
+export function sortVersionGroups(
+  groups: VersionGroup[],
+  sortBy: CharacterSortOption = "name",
+  sortDirection: SortDirection = "asc"
+): VersionGroup[] {
+  const dir = sortDirection === "asc" ? 1 : -1;
+  return [...groups].sort((a, b) => {
+    const aLatest = a.versions[0];
+    const bLatest = b.versions[0];
+    if (!aLatest && !bLatest) return 0;
+    if (!aLatest) return 1;
+    if (!bLatest) return -1;
+
+    if (sortBy === "name") {
+      const aName = (displayTitle(aLatest) || aLatest.name).toLowerCase();
+      const bName = (displayTitle(bLatest) || bLatest.name).toLowerCase();
+      const cmp = aName.localeCompare(bName);
+      if (cmp !== 0) return cmp * dir;
+      return aLatest.name.localeCompare(bLatest.name) * dir;
+    }
+
+    if (sortBy === "createdAt") {
+      const aCreated = getGroupCreatedAt(a);
+      const bCreated = getGroupCreatedAt(b);
+      // If one is missing a timestamp, push it to the end regardless of direction
+      if (!aCreated && !bCreated) {
+        return (displayTitle(aLatest) || aLatest.name).localeCompare(displayTitle(bLatest) || bLatest.name);
+      }
+      if (!aCreated) return 1;
+      if (!bCreated) return -1;
+
+      const cmp = aCreated.localeCompare(bCreated);
+      if (cmp !== 0) return cmp * dir;
+      return (displayTitle(aLatest) || aLatest.name).localeCompare(displayTitle(bLatest) || bLatest.name);
+    }
+
+    if (sortBy === "updatedAt") {
+      const aUpdated = getGroupUpdatedAt(a);
+      const bUpdated = getGroupUpdatedAt(b);
+      // If one is missing a timestamp, push it to the end
+      if (!aUpdated && !bUpdated) {
+        return (displayTitle(aLatest) || aLatest.name).localeCompare(displayTitle(bLatest) || bLatest.name);
+      }
+      if (!aUpdated) return 1;
+      if (!bUpdated) return -1;
+
+      const cmp = aUpdated.localeCompare(bUpdated);
+      if (cmp !== 0) return cmp * dir;
+      return (displayTitle(aLatest) || aLatest.name).localeCompare(displayTitle(bLatest) || bLatest.name);
+    }
+
+    return 0;
+  });
+}
+
+export function groupByLineage(
+  templates: CharacterTemplate[],
+  sortBy: CharacterSortOption = "name",
+  sortDirection: SortDirection = "asc"
+): VersionGroup[] {
+  const map = new Map<string, CharacterTemplate[]>();
+  for (const t of templates) {
+    const key = t.lineageId ?? t.id;
+    const list = map.get(key) ?? [];
+    list.push(t);
+    map.set(key, list);
+  }
+  const groups = [...map.entries()].map(([key, versions]) => ({
+    key,
+    versions: versions.sort((a, b) => b.version - a.version)
+  }));
+  return sortVersionGroups(groups, sortBy, sortDirection);
+}
+
