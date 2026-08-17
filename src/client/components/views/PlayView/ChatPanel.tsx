@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ChatMessage, Playthrough } from "../../../../schemas";
 import type { TokenUsage } from "../../../api";
 import { ContextMeter } from "../../common/ContextMeter";
+import { MarkdownView } from "../../common/MarkdownView";
 
 export type ChatPanelProps = {
   playthrough: Playthrough;
@@ -37,24 +38,7 @@ export type ChatPanelProps = {
   className?: string;
 };
 
-function formatContent(content: string): (string | JSX.Element)[] {
-  const parts: (string | JSX.Element)[] = [];
-  const regex = /"([^"]+)"/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
 
-  while ((match = regex.exec(content)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(content.slice(lastIndex, match.index));
-    }
-    parts.push(<span key={match.index} className="quote-text">"{match[1]}"</span>);
-    lastIndex = match.index + match[0].length;
-  }
-  if (lastIndex < content.length) {
-    parts.push(content.slice(lastIndex));
-  }
-  return parts.length > 0 ? parts : [content];
-}
 
 function prettyJson(raw: string | null): string {
   if (!raw) return "";
@@ -202,7 +186,7 @@ export function ChatPanel(props: ChatPanelProps) {
                 </div>
               </div>
             ) : (
-              <p>{formatContent(msg.content)}</p>
+              <MarkdownView content={msg.content} />
             )}
           </article>
           );
@@ -212,7 +196,7 @@ export function ChatPanel(props: ChatPanelProps) {
           <>
             <article className="message user optimistic">
               <div className="message-header"><strong>You</strong></div>
-              <p>{formatContent(sendingMessage)}</p>
+              <MarkdownView content={sendingMessage} />
             </article>
             <article className="message assistant generating">
               <div className="message-header"><strong>BobbinLoom</strong></div>

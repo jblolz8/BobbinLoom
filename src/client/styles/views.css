@@ -166,15 +166,145 @@
 
 .message p {
   margin-bottom: 0;
-  white-space: pre-wrap;
 }
 
-.empty-chat {
-  color: #9aa4b2;
+.message-markdown {
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: #eceff4;
+}
+
+.message-paragraph {
+  margin: 0 0 0.65rem 0;
+}
+
+.message-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+.message strong {
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.message em {
+  font-style: italic;
+  color: #d8dee9;
 }
 
 .quote-text {
   color: #e2b86b;
+  font-weight: 500;
+}
+
+.inline-code {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.12rem 0.35rem;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.85em;
+  color: #8be9fd;
+}
+
+.message-code-block {
+  margin: 0.6rem 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #0d1117;
+  border: 1px solid #2d3748;
+}
+
+.message-code-block:last-child {
+  margin-bottom: 0;
+}
+
+.message-code-block:first-child {
+  margin-top: 0;
+}
+
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0.65rem;
+  background: #161b22;
+  border-bottom: 1px solid #232d3d;
+  font-size: 0.75rem;
+}
+
+.code-lang-label {
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: #899bb0;
+}
+
+.code-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: transparent;
+  border: 1px solid #2d3748;
+  color: #94a3b8;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.code-copy-btn:hover {
+  background: #212836;
+  color: #f1f5f9;
+  border-color: #4a5568;
+}
+
+.message-code-pre {
+  margin: 0;
+  padding: 0.65rem 0.8rem;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: #d8dee9;
+  background: transparent;
+}
+
+.message-blockquote {
+  margin: 0.5rem 0;
+  padding: 0.4rem 0.75rem;
+  border-left: 3px solid #e2b86b;
+  background: rgba(226, 184, 107, 0.06);
+  border-radius: 0 4px 4px 0;
+  color: #cbd5e1;
+  font-style: italic;
+}
+
+.message-blockquote:last-child {
+  margin-bottom: 0;
+}
+
+.message-list {
+  margin: 0.4rem 0 0.65rem 0;
+  padding-left: 1.4rem;
+}
+
+.message-list:last-child {
+  margin-bottom: 0;
+}
+
+.message-list li {
+  margin-bottom: 0.25rem;
+}
+
+.message-list li:last-child {
+  margin-bottom: 0;
+}
+
+.empty-chat {
+  color: #9aa4b2;
 }
 
 .message.optimistic {
