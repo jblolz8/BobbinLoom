@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { AvatarShape } from "../../../schemas";
 import { Icon } from "../base";
+import { detectSmartCrop } from "../../utils/smartCrop";
 
 export type ImageCropModalProps = {
   imageSrc: string;
@@ -238,6 +239,24 @@ export function ImageCropModal({
     onApply(base64);
   }
 
+  const [detecting, setDetecting] = useState(false);
+
+  const handleAutoDetect = useCallback(async () => {
+    if (!imageRef.current) return;
+    setDetecting(true);
+    try {
+      const result = await detectSmartCrop(imageRef.current, VIEWPORT_SIZE);
+      setZoom(result.zoom);
+      setOffset({ x: result.offsetX, y: result.offsetY });
+    } catch {
+      // Fallback to top-center bias if detection fails
+      setZoom(1.4);
+      setOffset({ x: 0, y: Math.round(VIEWPORT_SIZE * 0.2) });
+    } finally {
+      setDetecting(false);
+    }
+  }, []);
+
   function handleReset() {
     setZoom(1);
     setOffset({ x: 0, y: 0 });
@@ -345,6 +364,15 @@ export function ImageCropModal({
                     <Icon name="Plus" size={12} />
                   </button>
                   <span className="zoom-val">{Math.round(zoom * 100)}%</span>
+                  <button
+                    type="button"
+                    className="crop-auto-detect-btn"
+                    onClick={handleAutoDetect}
+                    disabled={!imageLoaded || detecting || loading}
+                    title="Auto-detect face and center crop"
+                  >
+                    <Icon name="Sparkles" size={12} className={detecting ? "sparkle-pulse" : ""} /> Auto-Detect
+                  </button>
                   <button
                     type="button"
                     className="crop-reset-btn"

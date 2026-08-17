@@ -5,6 +5,7 @@ import { Icon } from "../base";
 import { getCharacterAvatarUrl } from "../../api";
 import { ImageCropModal } from "./ImageCropModal";
 import { ImageCompareModal } from "./ImageCompareModal";
+import { generateAutoCropBase64 } from "../../utils/smartCrop";
 
 export type CharacterVisualsDrawerProps = {
   template?: CharacterTemplate | null;
@@ -79,6 +80,24 @@ export function CharacterVisualsDrawer({
       setStatus({ text: "Profile avatar updated successfully." });
     } catch (err) {
       setStatus({ text: err instanceof Error ? err.message : "Failed to upload profile avatar.", isError: true });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleAutoDetectProfile() {
+    if (!portraitUrl) return;
+    setLoading(true);
+    setStatus({ text: "Auto-detecting face and generating 1:1 profile…" });
+    try {
+      const croppedBase64 = await generateAutoCropBase64(portraitUrl, 512);
+      await onUploadProfile(croppedBase64, "profile.png");
+      setStatus({ text: "Auto-detected face and saved 1:1 profile avatar." });
+    } catch (err) {
+      setStatus({
+        text: err instanceof Error ? err.message : "Failed to auto-detect face from portrait.",
+        isError: true,
+      });
     } finally {
       setLoading(false);
     }
@@ -284,6 +303,16 @@ export function CharacterVisualsDrawer({
                 </div>
 
                 <div className="slot-actions">
+                  <button
+                    type="button"
+                    className="visual-action-btn auto-detect-action"
+                    onClick={handleAutoDetectProfile}
+                    disabled={disabled || loading || !portraitUrl}
+                    title="Automatically detect face/head and save 1:1 profile avatar"
+                  >
+                    <Icon name="Sparkles" size={13} className={loading ? "sparkle-pulse" : ""} /> Auto-Detect
+                  </button>
+
                   <button
                     type="button"
                     className="visual-action-btn primary-action"
