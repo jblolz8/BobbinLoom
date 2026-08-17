@@ -80,6 +80,17 @@ describe("app settings store", () => {
     const updated = saveAppSettings(dir, { defaultPresetId: "default" });
     expect(updated.defaultPresetId).toBe("default");
   });
+
+  it("saveAppSettings persists avatarShape and persists updates", () => {
+    const dir = tempDir();
+    const saved = saveAppSettings(dir, { avatarShape: "circle" });
+    expect(saved.avatarShape).toBe("circle");
+    expect(loadAppSettings(dir).avatarShape).toBe("circle");
+
+    const updated = saveAppSettings(dir, { avatarShape: "square" });
+    expect(updated.avatarShape).toBe("square");
+    expect(loadAppSettings(dir).avatarShape).toBe("square");
+  });
 });
 
 describe("provider manager registry integration", () => {

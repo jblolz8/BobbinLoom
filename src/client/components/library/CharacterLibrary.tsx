@@ -1,22 +1,35 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import type { CharacterTemplate } from "../../../schemas";
-import { createCharacter, deleteCharacter, importCharacter, listCharacters, updateCharacter } from "../../api";
+import {
+  createCharacter,
+  deleteCharacter,
+  importCharacter,
+  listCharacters,
+  updateCharacter,
+  uploadCharacterAvatar,
+  restoreOriginalCharacterAvatar,
+  deleteCharacterProfileAvatar,
+  getCharacterAvatarUrl,
+} from "../../api";
 import { convertCharacterApply, convertCharacterGenerate, suggestCharacterTags, brainstormCharacter } from "../../api";
 import type { CharacterTemplateUpdate, ProposedSectionChange, CharacterBrainstormResult } from "../../api";
 import { CHARACTER_SHEET_EXAMPLE, applySectionChanges } from "../../../engine/characterSections";
 import { displayTitle, entryKind, filterLibraryEntries, cardBadgeLabel } from "../../../engine/characterCards";
 import { Icon, SearchBar, TagChip } from "../base";
+import { ConfirmModal } from "../common/ConfirmModal";
 import { DiffModal } from "./DiffModal";
 import { TwoPaneDiff } from "./TwoPaneDiff";
 import { TagSuggestionModal } from "./TagSuggestionModal";
 import { TagTaxonomyModal } from "./TagTaxonomyModal";
 import { CharacterBrainstormPanel, type BrainstormChatMessage } from "./CharacterBrainstormPanel";
+import { CharacterVisualsDrawer } from "./CharacterVisualsDrawer";
 import { getTagTaxonomy } from "../../api";
 import { groupTagsByCategory, sortTags, type TagTaxonomyConfig } from "../../../engine/tagTaxonomy";
 
 export type CharacterLibraryProps = {
   isModal?: boolean;
+  initialEditingId?: string;
 };
 
 export type ViewMode = "portrait" | "list" | "grid";
@@ -344,15 +357,23 @@ function getPageNumbers(current: number, total: number): number[] {
   return [1, -1, current - 1, current, current + 1, -1, total];
 }
 
-/** Avatar for a library card: the record's PNG (imported CCv2 cards), falling
- *  back to a letter placeholder when the route 404s (BL-native records). */
-export function CharacterAvatar({ template, className }: { template: CharacterTemplate; className?: string }) {
+/** Avatar for a library card: serves full portrait or 1:1 face profile image,
+ *  falling back to letter placeholder when unavailable. */
+export function CharacterAvatar({
+  template,
+  className,
+  type = "portrait",
+}: {
+  template: CharacterTemplate;
+  className?: string;
+  type?: "portrait" | "profile" | "original";
+}) {
   const [failed, setFailed] = useState(false);
 
-  // Reset the fallback when the card changes (list reloads reuse components).
+  // Reset the fallback when the card or its avatar changes
   useEffect(() => {
     setFailed(false);
-  }, [template.id]);
+  }, [template.id, template.avatarUpdatedAt, type]);
 
   if (failed) {
     return <div className={`avatar-placeholder ${className ?? ""}`}>{displayTitle(template).charAt(0).toUpperCase()}</div>;
@@ -360,7 +381,7 @@ export function CharacterAvatar({ template, className }: { template: CharacterTe
   return (
     <img
       className={`library-avatar ${className ?? ""}`}
-      src={`/api/characters/${template.id}/avatar`}
+      src={getCharacterAvatarUrl(template.id, type, template.avatarUpdatedAt)}
       alt=""
       onError={() => setFailed(true)}
     />
@@ -386,7 +407,11 @@ function MoreOptionsMenu({
   converting?: boolean;
 }) {
   return (
-    <div className="more-options-container" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="card-more-menu-container"
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
       <button
         type="button"
         className={`more-options-btn ${isOpen ? "active" : ""}`}
@@ -415,7 +440,7 @@ function MoreOptionsMenu({
   );
 }
 
-export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
+export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibraryProps) {
   const [templates, setTemplates] = useState<CharacterTemplate[]>([]);
   const [form, setForm] = useState<CharacterForm>(blankForm());
   const [initialForm, setInitialForm] = useState<CharacterForm>(blankForm());
@@ -475,6 +500,21 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
     template: CharacterTemplate;
   } | null>(null);
 
+  // ── Import success banner state ──
+  const [importSuccess, setImportSuccess] = useState<{
+    recordId: string;
+    recordName: string;
+    template: CharacterTemplate;
+  } | null>(null);
+
+  // ── Delete success banner state ──
+  const [deleteSuccess, setDeleteSuccess] = useState<{
+    recordName: string;
+  } | null>(null);
+
+  // ── Library error banner state ──
+  const [libraryError, setLibraryError] = useState<string | null>(null);
+
   // ── AI Tag Suggestion state (Option B) ──
   const [tagSuggestModalOpen, setTagSuggestModalOpen] = useState(false);
   const [tagSuggestLoading, setTagSuggestLoading] = useState(false);
@@ -496,6 +536,9 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
   const [aiError, setAiError] = useState<string | null>(null);
   const [includeOriginalCcv2, setIncludeOriginalCcv2] = useState(false);
   const aiAbortControllerRef = useRef<AbortController | null>(null);
+
+  // ── Deletion Confirmation Modal State ──
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const isFormDirty = useMemo(() => {
     if (!editorOpen) return false;
@@ -534,6 +577,16 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
   useEffect(() => {
     void loadData();
   }, []);
+
+  // Automatically open specific template editor if initialEditingId is passed
+  useEffect(() => {
+    if (initialEditingId && templates.length > 0 && !editorOpen) {
+      const match = templates.find((t) => t.id === initialEditingId);
+      if (match) {
+        openEdit(match);
+      }
+    }
+  }, [initialEditingId, templates, editorOpen]);
 
   // Close dropdown menu when clicking outside
   useEffect(() => {
@@ -848,10 +901,27 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
     }
   }
 
-  async function handleDelete(id: string, name: string) {
-    if (!window.confirm(`Delete "${name}" from the library?`)) return;
-    await deleteCharacter(id);
-    setTemplates(await listCharacters());
+  function requestDelete(id: string, name: string) {
+    setDeleteTarget({ id, name });
+  }
+
+  async function handleConfirmDelete() {
+    if (!deleteTarget) return;
+    const { id, name } = deleteTarget;
+    setDeleteTarget(null);
+    setLibraryError(null);
+    setImportSuccess(null);
+    setConvertedSuccess(null);
+    try {
+      await deleteCharacter(id);
+      if (editingId === id) {
+        closeEditor();
+      }
+      setTemplates(await listCharacters());
+      setDeleteSuccess({ recordName: name });
+    } catch (e) {
+      setLibraryError(e instanceof Error ? e.message : String(e));
+    }
   }
 
   async function handleImportFile(e: ChangeEvent<HTMLInputElement>) {
@@ -859,7 +929,10 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
     e.target.value = ""; // allow re-importing the same file
     if (!file) return;
     setImporting(true);
-    setStatus(null);
+    setLibraryError(null);
+    setDeleteSuccess(null);
+    setImportSuccess(null);
+    setConvertedSuccess(null);
     try {
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -878,10 +951,15 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
         });
         return;
       }
-      setTemplates(await listCharacters());
-      setStatus(`Imported "${displayTitle(result.record)}".`);
+      const refreshed = await listCharacters();
+      setTemplates(refreshed);
+      setImportSuccess({
+        recordId: result.record.id,
+        recordName: displayTitle(result.record),
+        template: result.record,
+      });
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e));
+      setLibraryError(e instanceof Error ? e.message : String(e));
     } finally {
       setImporting(false);
     }
@@ -1120,6 +1198,19 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
           </div>
         ) : null}
 
+        {importing ? (
+          <div className="conversion-active-banner import-active-banner">
+            <div className="conversion-banner-content">
+              <span className="conversion-banner-spinner">
+                <Icon name="Upload" size={17} className="sparkle-pulse" />
+              </span>
+              <span className="conversion-banner-text">
+                Importing character card…
+              </span>
+            </div>
+          </div>
+        ) : null}
+
         {convertedSuccess ? (
           <div className="conversion-success-banner">
             <div className="conversion-success-content">
@@ -1144,6 +1235,79 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
               type="button"
               className="conversion-success-dismiss"
               onClick={() => setConvertedSuccess(null)}
+              title="Dismiss notification"
+            >
+              <Icon name="X" size={14} />
+            </button>
+          </div>
+        ) : null}
+
+        {importSuccess ? (
+          <div className="conversion-success-banner import-success-banner">
+            <div className="conversion-success-content">
+              <span className="conversion-success-icon">
+                <Icon name="CheckCircle2" size={18} />
+              </span>
+              <span className="conversion-success-text">
+                Successfully imported <strong>&quot;{importSuccess.recordName}&quot;</strong> into the library!
+              </span>
+              <button
+                type="button"
+                className="conversion-view-edit-link"
+                onClick={() => {
+                  openEdit(importSuccess.template);
+                  setImportSuccess(null);
+                }}
+              >
+                Open in Editor <Icon name="ArrowRight" size={13} />
+              </button>
+            </div>
+            <button
+              type="button"
+              className="conversion-success-dismiss"
+              onClick={() => setImportSuccess(null)}
+              title="Dismiss notification"
+            >
+              <Icon name="X" size={14} />
+            </button>
+          </div>
+        ) : null}
+
+        {deleteSuccess ? (
+          <div className="conversion-success-banner delete-success-banner">
+            <div className="conversion-success-content">
+              <span className="conversion-success-icon delete-icon">
+                <Icon name="Trash2" size={18} />
+              </span>
+              <span className="conversion-success-text">
+                Character card <strong>&quot;{deleteSuccess.recordName}&quot;</strong> was deleted from the library.
+              </span>
+            </div>
+            <button
+              type="button"
+              className="conversion-success-dismiss"
+              onClick={() => setDeleteSuccess(null)}
+              title="Dismiss notification"
+            >
+              <Icon name="X" size={14} />
+            </button>
+          </div>
+        ) : null}
+
+        {libraryError ? (
+          <div className="conversion-success-banner library-error-banner">
+            <div className="conversion-success-content">
+              <span className="conversion-success-icon error-icon">
+                <Icon name="AlertTriangle" size={18} />
+              </span>
+              <span className="conversion-success-text error-text">
+                {libraryError}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="conversion-success-dismiss"
+              onClick={() => setLibraryError(null)}
               title="Dismiss notification"
             >
               <Icon name="X" size={14} />
@@ -1192,6 +1356,32 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
 
             <div className="editor-split-container">
               <div className="editor-main-pane">
+                <CharacterVisualsDrawer
+                  template={editingId ? templates.find((t) => t.id === editingId) : null}
+                  characterName={form.name}
+                  onUploadPortrait={async (dataBase64, fileName) => {
+                    if (!editingId) return;
+                    const res = await uploadCharacterAvatar(editingId, "portrait", dataBase64, fileName);
+                    setTemplates((prev) => prev.map((t) => (t.id === editingId ? res.record : t)));
+                  }}
+                  onUploadProfile={async (dataBase64, fileName) => {
+                    if (!editingId) return;
+                    const res = await uploadCharacterAvatar(editingId, "profile", dataBase64, fileName);
+                    setTemplates((prev) => prev.map((t) => (t.id === editingId ? res.record : t)));
+                  }}
+                  onRestoreOriginalPortrait={async () => {
+                    if (!editingId) return;
+                    const res = await restoreOriginalCharacterAvatar(editingId);
+                    setTemplates((prev) => prev.map((t) => (t.id === editingId ? res.record : t)));
+                  }}
+                  onDeleteProfile={async () => {
+                    if (!editingId) return;
+                    const res = await deleteCharacterProfileAvatar(editingId);
+                    setTemplates((prev) => prev.map((t) => (t.id === editingId ? res.record : t)));
+                  }}
+                  disabled={saving}
+                />
+
                 <label className="editor-field">
                   <span className="editor-field-label">Name</span>
                   <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
@@ -1358,24 +1548,41 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                 })()}
 
                 <div className="modal-actions editor-footer-actions">
-                  <button
-                    type="button"
-                    className="secondary-btn"
-                    onClick={handleCancelClick}
-                    disabled={saving}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="primary-btn editor-save-btn"
-                    onClick={handleSave}
-                    disabled={saving || !form.name.trim() || !isFormDirty}
-                    title={!isFormDirty ? "No changes to save" : "Save character card"}
-                  >
-                    <Icon name="Check" size={14} />
-                    {saving ? "Saving…" : "Save"}
-                  </button>
+                  {editingId ? (
+                    <button
+                      type="button"
+                      className="danger editor-delete-btn"
+                      onClick={() => {
+                        const targetTpl = templates.find((t) => t.id === editingId);
+                        const targetName = targetTpl ? displayTitle(targetTpl) : form.name;
+                        requestDelete(editingId, targetName);
+                      }}
+                      disabled={saving}
+                      title="Delete this character card from the library"
+                    >
+                      <Icon name="Trash2" size={14} /> Delete
+                    </button>
+                  ) : <div />}
+                  <div className="editor-footer-right-actions">
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={handleCancelClick}
+                      disabled={saving}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="primary-btn editor-save-btn"
+                      onClick={handleSave}
+                      disabled={saving || !form.name.trim() || !isFormDirty}
+                      title={!isFormDirty ? "No changes to save" : "Save character card"}
+                    >
+                      <Icon name="Check" size={14} />
+                      {saving ? "Saving…" : "Save"}
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1664,12 +1871,6 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                 </div>
               </div>
 
-              {status ? (
-                <p className={`status-message ${status.startsWith("Imported") ? "" : "status-error"}`}>
-                  {status}
-                </p>
-              ) : null}
-
               {/* Active Search Summary Filter Chips */}
               {activeFilterTags.length > 0 ? (
                 <div className="active-filters-bar">
@@ -1738,7 +1939,7 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                             }}
                           >
                             <div className="card-portrait-image-wrap">
-                              <CharacterAvatar template={latest} className="card-portrait-avatar" />
+                              <CharacterAvatar template={latest} className="card-portrait-avatar" type="portrait" />
                             </div>
 
                             <div className="card-portrait-body">
@@ -1813,7 +2014,7 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                                   onDelete={(e) => {
                                     e.stopPropagation();
                                     setOpenMenuId(null);
-                                    handleDelete(latest.id, latest.name);
+                                    requestDelete(latest.id, displayTitle(latest));
                                   }}
                                   converting={isConverting}
                                 />
@@ -1843,7 +2044,7 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                               if (e.key === "Enter") openEdit(latest);
                             }}
                           >
-                            <CharacterAvatar template={latest} className="card-list-avatar" />
+                            <CharacterAvatar template={latest} className="card-list-avatar" type="profile" />
                             <div className="card-list-content">
                               <div className="card-list-header-row">
                                 <div className="card-list-title-wrap">
@@ -1883,7 +2084,7 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                                   onDelete={(e) => {
                                     e.stopPropagation();
                                     setOpenMenuId(null);
-                                    handleDelete(latest.id, latest.name);
+                                    requestDelete(latest.id, displayTitle(latest));
                                   }}
                                   converting={isConverting}
                                 />
@@ -1941,7 +2142,7 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                             }}
                           >
                             <div className="card-grid-thumb-wrap">
-                              <CharacterAvatar template={latest} className="card-grid-thumb" />
+                              <CharacterAvatar template={latest} className="card-grid-thumb" type="profile" />
                             </div>
                             <div className="card-grid-body">
                               <strong className="card-grid-title" title={displayTitle(latest)}>
@@ -1980,7 +2181,7 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
                                   onDelete={(e) => {
                                     e.stopPropagation();
                                     setOpenMenuId(null);
-                                    handleDelete(latest.id, latest.name);
+                                    requestDelete(latest.id, displayTitle(latest));
                                   }}
                                   converting={isConverting}
                                 />
@@ -2229,6 +2430,17 @@ export function CharacterLibrary({ isModal }: CharacterLibraryProps) {
           </section>
         </div>
       )}
+      {/* Confirm Delete Character Modal */}
+      {deleteTarget ? (
+        <ConfirmModal
+          title="Delete Character"
+          message={`Delete "${deleteTarget.name}" from the library? This cannot be undone.`}
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => void handleConfirmDelete()}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      ) : null}
     </div>
   );
 }

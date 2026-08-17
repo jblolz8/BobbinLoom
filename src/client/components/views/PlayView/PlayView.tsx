@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { PlaythroughPromptSettings, TokenUsage, Persona, QuestAction } from "../../../api";
 import type { ChatMessage, Playthrough } from "../../../../schemas";
 import { ScenePanel } from "./ScenePanel";
@@ -140,6 +141,8 @@ export function PlayView(props: PlayViewProps) {
     setSaveLoadOpen,
   } = props;
 
+  const [characterManagerEditingId, setCharacterManagerEditingId] = useState<string | undefined>(undefined);
+
   function handleCurrentDeleted(remaining: Playthrough[]) {
     if (remaining.length > 0) {
       setPlaythrough(remaining[0]);
@@ -211,6 +214,10 @@ export function PlayView(props: PlayViewProps) {
           onViewChapter={setViewingChapterId}
           onCloseChapterComplete={(tu) => setTokenUsage(tu)}
           onStartNewWithSameScenario={(sd, pid, cids, name) => handleStartNewWithSameScenario(sd, pid, cids, name)}
+          onOpenLibrary={(templateId) => {
+            setCharacterManagerEditingId(templateId);
+            setCharacterManagerOpen(true);
+          }}
           actionLoading={actionLoading}
           className={isMobile && mobileTab !== "info" ? "mobile-hidden" : undefined}
         />
@@ -290,7 +297,14 @@ export function PlayView(props: PlayViewProps) {
         onPersonasChanged={handlePersonasChanged}
       />
 
-      <CharacterManager open={characterManagerOpen} onClose={() => setCharacterManagerOpen(false)} />
+      <CharacterManager
+        open={characterManagerOpen}
+        onClose={() => {
+          setCharacterManagerOpen(false);
+          setCharacterManagerEditingId(undefined);
+        }}
+        initialEditingId={characterManagerEditingId}
+      />
 
       <LorebookManager
         open={lorebookManagerOpen}

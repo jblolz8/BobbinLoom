@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { EMPTY_MODULE_SET, PromptModuleSetSchema, TagTaxonomyConfigSchema, type PromptModuleSet, type PromptPreset } from "../../schemas";
+import { AvatarShapeSchema, EMPTY_MODULE_SET, PromptModuleSetSchema, TagTaxonomyConfigSchema, type PromptModuleSet, type PromptPreset } from "../../schemas";
 import { loadPresets, savePresets, loadAppSettings, saveAppSettings, settingsDir } from "./helpers";
 
 const CreatePresetBody = z.object({
@@ -105,5 +105,16 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
     const body = TagTaxonomyConfigSchema.parse(request.body ?? {});
     const updated = saveAppSettings(settingsDir, { tagTaxonomy: body });
     return { tagTaxonomy: updated.tagTaxonomy ?? { customCategories: [], tagOverrides: {} } };
+  });
+
+  app.get("/api/settings/appearance", async () => {
+    const settings = loadAppSettings(settingsDir);
+    return { avatarShape: settings.avatarShape ?? "rounded" };
+  });
+
+  app.put("/api/settings/appearance", async (request) => {
+    const body = z.object({ avatarShape: AvatarShapeSchema }).parse(request.body ?? {});
+    const updated = saveAppSettings(settingsDir, { avatarShape: body.avatarShape });
+    return { avatarShape: updated.avatarShape ?? "rounded" };
   });
 }

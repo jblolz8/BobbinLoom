@@ -13,6 +13,7 @@ export type InfoPanelProps = {
   onViewChapter: (chapterId: string) => void;
   onCloseChapterComplete: (tokenUsage: TokenUsage) => void;
   onStartNewWithSameScenario: (scenarioDescription: string, personaId: string | undefined, initialCastIds: string[] | undefined, originalName: string) => void;
+  onOpenLibrary?: (templateId: string) => void;
   actionLoading: boolean;
   className?: string;
 };
@@ -36,7 +37,13 @@ export function InfoPanel(props: InfoPanelProps) {
       </nav>
 
       {activeTab === "player" ? <PlayerTab playthrough={playthrough} /> : null}
-      {activeTab === "chars" ? <CharsTab playthrough={playthrough} onPlaythroughChange={props.onPlaythroughChange} /> : null}
+      {activeTab === "chars" ? (
+        <CharsTab
+          playthrough={playthrough}
+          onPlaythroughChange={props.onPlaythroughChange}
+          onOpenLibrary={props.onOpenLibrary}
+        />
+      ) : null}
       {activeTab === "journal" ? (
         <JournalTab
           playthrough={playthrough}

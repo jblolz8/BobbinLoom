@@ -1,3 +1,4 @@
+export * from "./AvatarBadge";
 export * from "./Icon";
 export * from "./SearchBar";
 export * from "./TagChip";

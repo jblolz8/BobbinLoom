@@ -1,7 +1,9 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  applyAvatarShapeTheme,
   createPlaythrough,
   generatePlaythrough,
+  getAppearanceSettings,
   listCharacters,
   listLorebooks,
   listPersonas,
@@ -53,6 +55,23 @@ export default function App() {
 
   // Existing-setting selector fed by imported CCv2 card scenarios (D7/F6)
   const [cardSettings, setCardSettings] = useState<Array<{ title: string; scenario: string }>>([]);
+
+  // Initialize appearance avatar shape
+  useEffect(() => {
+    const cached = typeof window !== "undefined" ? localStorage.getItem("bobbinloom_avatar_shape") : null;
+    if (cached === "square" || cached === "rounded" || cached === "circle") {
+      applyAvatarShapeTheme(cached);
+    } else {
+      applyAvatarShapeTheme("rounded");
+    }
+    getAppearanceSettings()
+      .then((res) => {
+        if (res.avatarShape) applyAvatarShapeTheme(res.avatarShape);
+      })
+      .catch(() => {
+        /* silent */
+      });
+  }, []);
 
   // --- New Playthrough Setup ---
 

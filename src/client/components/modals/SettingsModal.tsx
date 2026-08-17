@@ -3,9 +3,10 @@ import type { PlaythroughPromptSettings } from "../../api";
 import { PresetEditor } from "./PresetEditor";
 import { ProviderConnections } from "./ProviderConnections";
 import { TagTaxonomyPanel } from "../library/TagTaxonomyModal";
+import { AppearanceSettingsPanel } from "./AppearanceSettingsPanel";
 import { Icon } from "../base";
 
-type SettingsTab = "provider" | "prompts" | "tags" | "chat";
+type SettingsTab = "provider" | "prompts" | "tags" | "chat" | "appearance";
 
 export type SettingsModalProps = {
   open: boolean;
@@ -41,7 +42,7 @@ export function SettingsModal(props: SettingsModalProps) {
 
   return (
     <div className="modal-backdrop">
-      <section className="modal">
+      <section className="modal settings-modal-wide">
         <header className="modal-header">
           <div>
             <h2>Settings</h2>
@@ -61,6 +62,9 @@ export function SettingsModal(props: SettingsModalProps) {
           <button className={`tab ${settingsTab === "chat" ? "active" : ""}`} onClick={() => setSettingsTab("chat")}>
             Chat
           </button>
+          <button className={`tab ${settingsTab === "appearance" ? "active" : ""}`} onClick={() => setSettingsTab("appearance")}>
+            Appearance
+          </button>
         </div>
         {settingsTab === "provider" ? (
           <ProviderConnections />
@@ -73,6 +77,10 @@ export function SettingsModal(props: SettingsModalProps) {
         ) : settingsTab === "tags" ? (
           <div className="settings-tab-panel" style={{ maxHeight: "70vh", overflowY: "auto", paddingRight: "4px" }}>
             <TagTaxonomyPanel />
+          </div>
+        ) : settingsTab === "appearance" ? (
+          <div className="settings-tab-panel" style={{ maxHeight: "70vh", overflowY: "auto", paddingRight: "4px" }}>
+            <AppearanceSettingsPanel />
           </div>
         ) : (
           <div className="chat-settings-group">

@@ -3,9 +3,10 @@ import { CharacterLibrary } from "../library/CharacterLibrary";
 export type CharacterManagerProps = {
   open: boolean;
   onClose: () => void;
+  initialEditingId?: string;
 };
 
-export function CharacterManager({ open, onClose }: CharacterManagerProps) {
+export function CharacterManager({ open, onClose, initialEditingId }: CharacterManagerProps) {
   if (!open) return null;
 
   return (
@@ -16,7 +17,7 @@ export function CharacterManager({ open, onClose }: CharacterManagerProps) {
           <button onClick={onClose}>Close</button>
         </header>
 
-        <CharacterLibrary isModal={true} />
+        <CharacterLibrary isModal={true} initialEditingId={initialEditingId} />
       </section>
     </div>
   );

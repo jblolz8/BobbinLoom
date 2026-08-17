@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { CharacterTemplate, LorebookSummary } from "../../../schemas";
 import type { Persona } from "../../api";
 import { getTagTaxonomy } from "../../api";
-import { Icon, SearchBar, TagChip } from "../base";
+import { AvatarBadge, Icon, SearchBar, TagChip } from "../base";
 import { CharacterAvatar, type ViewMode } from "../library/CharacterLibrary";
 import { cardBadgeLabel, displayTitle, entryKind, filterLibraryEntries } from "../../../engine/characterCards";
 import { groupTagsByCategory, sortTags, type TagTaxonomyConfig } from "../../../engine/tagTaxonomy";
@@ -129,7 +129,9 @@ export function SetupView(props: SetupViewProps) {
   // Fetch taxonomy configuration for tag styling
   useEffect(() => {
     if (open) {
-      void getTagTaxonomy().then(setTaxonomyConfig).catch(() => setTaxonomyConfig(null));
+      void getTagTaxonomy()
+        .then((res) => setTaxonomyConfig(res.tagTaxonomy))
+        .catch(() => setTaxonomyConfig(null));
     }
   }, [open]);
 
@@ -415,9 +417,7 @@ export function SetupView(props: SetupViewProps) {
                             }}
                           >
                             <div className="persona-card-header">
-                              <div className="persona-avatar-circle">
-                                {p.name.charAt(0).toUpperCase()}
-                              </div>
+                              <AvatarBadge icon="User" name={p.name} size="sm" />
                               <div className="persona-card-title-wrap">
                                 <strong className="persona-card-name">
                                   {p.name}

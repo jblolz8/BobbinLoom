@@ -402,12 +402,130 @@ export function getCharacterTemplate(id: string, dir: string = CHARACTERS_DIR): 
   return listCharacterTemplates(dir).find((t) => t.id === id) ?? null;
 }
 
-export function getCharacterAvatarPath(id: string, dir: string = CHARACTERS_DIR): string | null {
+export function getCharacterAvatarPath(
+  id: string,
+  typeOrDir?: "portrait" | "profile" | "original" | string,
+  maybeDir?: string
+): string | null {
+  const isType = typeOrDir === "portrait" || typeOrDir === "profile" || typeOrDir === "original";
+  const type: "portrait" | "profile" | "original" = isType ? (typeOrDir as "portrait" | "profile" | "original") : "portrait";
+  const dir = isType ? (maybeDir ?? CHARACTERS_DIR) : (typeOrDir ?? CHARACTERS_DIR);
+
   const record = listCharacterTemplates(dir).find((t) => t.id === id);
-  const ref = record?.cardRef;
-  if (!record || !ref || ref.kind !== "png") return null;
-  const file = join(characterFolderPath(dir, slugify(record.name)), ref.file);
+  if (!record) return null;
+  const folder = findFolderContainingId(dir, id) ?? characterFolderPath(dir, slugify(record.name));
+
+  if (type === "original") {
+    const ref = record.cardRef;
+    if (!ref || ref.kind !== "png") return null;
+    const file = join(folder, ref.file);
+    return existsSync(file) ? file : null;
+  }
+
+  if (type === "profile") {
+    if (record.profileImage) {
+      const file = join(folder, record.profileImage);
+      if (existsSync(file)) return file;
+    }
+    for (const ext of ["png", "jpg", "jpeg", "webp"]) {
+      const candidate = join(folder, `profile.${ext}`);
+      if (existsSync(candidate)) return candidate;
+    }
+    // Fall back to portrait if no dedicated profile exists
+  }
+
+  // Portrait (default or fallback from profile)
+  if (record.customPortrait) {
+    const file = join(folder, record.customPortrait);
+    if (existsSync(file)) return file;
+  }
+  for (const ext of ["png", "jpg", "jpeg", "webp"]) {
+    const candidate = join(folder, `portrait.${ext}`);
+    if (existsSync(candidate)) return candidate;
+  }
+
+  const ref = record.cardRef;
+  if (!ref || ref.kind !== "png") return null;
+  const file = join(folder, ref.file);
   return existsSync(file) ? file : null;
+}
+
+export function saveCharacterAvatar(
+  id: string,
+  type: "portrait" | "profile",
+  buffer: Buffer,
+  ext: string = "png",
+  dir: string = CHARACTERS_DIR
+): CharacterTemplate | null {
+  const record = listCharacterTemplates(dir).find((t) => t.id === id);
+  if (!record) return null;
+  const folder = findFolderContainingId(dir, id) ?? characterFolderPath(dir, slugify(record.name));
+  ensureStoreDir(folder);
+
+  const cleanExt = ext.replace(/^\./, "").toLowerCase() || "png";
+  const filename = `${type}.${cleanExt}`;
+  const filePath = join(folder, filename);
+  atomicWriteFile(filePath, buffer);
+
+  const now = Date.now();
+  const updates: Partial<CharacterTemplate> = {
+    avatarUpdatedAt: now,
+    ...(type === "portrait" ? { customPortrait: filename } : { profileImage: filename }),
+  };
+  return updateCharacterTemplateRecord(id, updates, dir);
+}
+
+export function restoreCharacterOriginalAvatar(
+  id: string,
+  dir: string = CHARACTERS_DIR
+): CharacterTemplate | null {
+  const record = listCharacterTemplates(dir).find((t) => t.id === id);
+  if (!record) return null;
+  const folder = findFolderContainingId(dir, id) ?? characterFolderPath(dir, slugify(record.name));
+
+  const originalFile = record.cardRef?.kind === "png" ? record.cardRef.file : null;
+  for (const ext of ["png", "jpg", "jpeg", "webp"]) {
+    const candidate = join(folder, `portrait.${ext}`);
+    if (existsSync(candidate) && basename(candidate) !== originalFile) {
+      try {
+        unlinkSync(candidate);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  const updates: Partial<CharacterTemplate> = {
+    customPortrait: undefined,
+    avatarUpdatedAt: Date.now(),
+  };
+  return updateCharacterTemplateRecord(id, updates, dir);
+}
+
+export function removeCharacterProfileAvatar(
+  id: string,
+  dir: string = CHARACTERS_DIR
+): CharacterTemplate | null {
+  const record = listCharacterTemplates(dir).find((t) => t.id === id);
+  if (!record) return null;
+  const folder = findFolderContainingId(dir, id) ?? characterFolderPath(dir, slugify(record.name));
+
+  for (const ext of ["png", "jpg", "jpeg", "webp"]) {
+    const candidate = join(folder, `profile.${ext}`);
+    if (existsSync(candidate)) {
+      try {
+        unlinkSync(candidate);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  const updates: Partial<CharacterTemplate> = {
+    profileImage: undefined,
+    avatarUpdatedAt: Date.now(),
+  };
+  return updateCharacterTemplateRecord(id, updates, dir);
 }
 
 export function createCharacterTemplateRecord(name: string, dir: string = CHARACTERS_DIR): CharacterTemplate {

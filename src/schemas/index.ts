@@ -92,6 +92,9 @@ export const CharacterTemplateSchema = z.object({
   ccv2Content: z.string().optional(),
   ccv2CreatorNotes: z.string().optional(),
   ccv2Tags: z.array(z.string()).optional(),
+  customPortrait: z.string().optional(),
+  profileImage: z.string().optional(),
+  avatarUpdatedAt: z.number().optional(),
 });
 export type CharacterTemplate = z.infer<typeof CharacterTemplateSchema>;
 
@@ -201,10 +204,14 @@ export const TagTaxonomyConfigSchema = z.object({
 });
 export type TagTaxonomyConfig = z.infer<typeof TagTaxonomyConfigSchema>;
 
+export const AvatarShapeSchema = z.enum(["square", "rounded", "circle"]);
+export type AvatarShape = z.infer<typeof AvatarShapeSchema>;
+
 export const AppSettingsSchema = z.object({
   schemaVersion: z.number().int().min(1).default(1),
   defaultPresetId: z.string().optional(),
   tagTaxonomy: TagTaxonomyConfigSchema.optional(),
+  avatarShape: AvatarShapeSchema.optional(),
   updatedAt: z.string().optional()
 });
 export type AppSettings = z.infer<typeof AppSettingsSchema>;

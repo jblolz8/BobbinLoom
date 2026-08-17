@@ -8,7 +8,7 @@ import {
   updatePersona,
   type Persona
 } from "../../api";
-import { Icon } from "../base";
+import { AvatarBadge, Icon } from "../base";
 
 export type PersonaLibraryProps = {
   isModal?: boolean;
@@ -162,6 +162,7 @@ export function PersonaLibrary({ isModal, onPersonasChanged }: PersonaLibraryPro
         <div className="persona-list">
           {personas.map((p) => (
             <div key={p.id} className={`persona-row ${p.isDefault ? "default" : ""}`}>
+              <AvatarBadge icon="User" name={p.name} size="sm" />
               <div className="persona-row-info">
                 <strong>{p.name}</strong> {p.isDefault ? <span className="default-star" title="Default persona"><Icon name="Star" size={14} className="text-amber-400 fill-amber-400" /></span> : null}
                 <span className="persona-row-desc">{p.description || <em>No description</em>}</span>

@@ -104,3 +104,60 @@ describe("V1 card import (regression)", () => {
     expect(record.tags).toEqual(["fantasy", "tavern"]);
   });
 });
+
+describe("Character Visuals & 1:1 Profile Avatar Management", () => {
+  it("supports uploading custom portrait, 1:1 profile, comparing original, and restoring", async () => {
+    const { removeCharacterProfileAvatar, restoreCharacterOriginalAvatar, saveCharacterAvatar } = await import("../src/server/store");
+    const dir = mkdtempSync(join(tmpdir(), "bobbinloom-avatar-visuals-"));
+    tempDirs.push(dir);
+
+    // 1. Import a CCv2 card with an original PNG
+    const { record: originalRecord } = importCharacterCard(
+      makeCard("Aria the Wind Mage"),
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x01]),
+      "png",
+      dir
+    );
+
+    // Default portrait & profile path should point to the CCv2 original PNG
+    const initialPortrait = getCharacterAvatarPath(originalRecord.id, "portrait", dir);
+    const initialProfile = getCharacterAvatarPath(originalRecord.id, "profile", dir);
+    const originalPath = getCharacterAvatarPath(originalRecord.id, "original", dir);
+
+    expect(initialPortrait).toMatch(/aria-the-wind-mage\.png$/);
+    expect(initialProfile).toBe(initialPortrait); // falls back to portrait
+    expect(originalPath).toBe(initialPortrait);
+
+    // 2. Upload a custom portrait
+    const customPortraitBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x02]);
+    const updatedWithPortrait = saveCharacterAvatar(originalRecord.id, "portrait", customPortraitBytes, "png", dir);
+    expect(updatedWithPortrait?.customPortrait).toBe("portrait.png");
+
+    const customPortraitPath = getCharacterAvatarPath(originalRecord.id, "portrait", dir);
+    expect(customPortraitPath).toMatch(/portrait\.png$/);
+    // Original path still points to the pristine CCv2 card
+    expect(getCharacterAvatarPath(originalRecord.id, "original", dir)).toBe(originalPath);
+    // Profile now falls back to custom portrait
+    expect(getCharacterAvatarPath(originalRecord.id, "profile", dir)).toBe(customPortraitPath);
+
+    // 3. Upload a 1:1 square profile avatar (e.g. from cropper)
+    const profileBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x03]);
+    const updatedWithProfile = saveCharacterAvatar(originalRecord.id, "profile", profileBytes, "png", dir);
+    expect(updatedWithProfile?.profileImage).toBe("profile.png");
+
+    const profilePath = getCharacterAvatarPath(originalRecord.id, "profile", dir);
+    expect(profilePath).toMatch(/profile\.png$/);
+    expect(profilePath).not.toBe(customPortraitPath);
+
+    // 4. Remove custom profile avatar -> falls back to custom portrait
+    const afterProfileDelete = removeCharacterProfileAvatar(originalRecord.id, dir);
+    expect(afterProfileDelete?.profileImage).toBeUndefined();
+    expect(getCharacterAvatarPath(originalRecord.id, "profile", dir)).toBe(customPortraitPath);
+
+    // 5. Restore original CCv2 card artwork -> reverts custom portrait to original card art
+    const restored = restoreCharacterOriginalAvatar(originalRecord.id, dir);
+    expect(restored?.customPortrait).toBeUndefined();
+    expect(getCharacterAvatarPath(originalRecord.id, "portrait", dir)).toBe(originalPath);
+    expect(getCharacterAvatarPath(originalRecord.id, "profile", dir)).toBe(originalPath);
+  });
+});

@@ -55,6 +55,42 @@ export function deleteCharacter(id: string): Promise<void> {
   return request<void>(`/api/characters/${id}`, { method: "DELETE" });
 }
 
+export function uploadCharacterAvatar(
+  id: string,
+  type: "portrait" | "profile",
+  dataBase64: string,
+  fileName?: string
+): Promise<{ record: CharacterTemplate }> {
+  return request<{ record: CharacterTemplate }>(`/api/characters/${id}/avatar`, {
+    method: "POST",
+    body: JSON.stringify({ type, dataBase64, fileName })
+  });
+}
+
+export function restoreOriginalCharacterAvatar(id: string): Promise<{ record: CharacterTemplate }> {
+  return request<{ record: CharacterTemplate }>(`/api/characters/${id}/avatar/restore`, {
+    method: "POST"
+  });
+}
+
+export function deleteCharacterProfileAvatar(id: string): Promise<{ record: CharacterTemplate }> {
+  return request<{ record: CharacterTemplate }>(`/api/characters/${id}/avatar/profile`, {
+    method: "DELETE"
+  });
+}
+
+export function getCharacterAvatarUrl(
+  id: string,
+  type: "portrait" | "profile" | "original" = "portrait",
+  updatedAt?: number
+): string {
+  const query = new URLSearchParams();
+  if (type !== "portrait") query.set("type", type);
+  if (updatedAt) query.set("t", String(updatedAt));
+  const qs = query.toString();
+  return `/api/characters/${id}/avatar${qs ? `?${qs}` : ""}`;
+}
+
 export function saveCharacterToLibrary(
   playthroughId: string,
   characterId: string,

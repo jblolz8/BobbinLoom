@@ -1,6 +1,6 @@
 import type { InventoryRef, Item, Playthrough } from "../../../../../schemas";
 import { ITEMS } from "../../../../../engine/demoData";
-import { Icon } from "../../../base";
+import { AvatarBadge, Icon } from "../../../base";
 
 function getItemDef(ref: InventoryRef, catalog: Item[] | undefined): { name: string; type: string; description?: string } {
   const def = catalog?.find((i) => i.id === ref.itemId) ?? ITEMS.find((i) => i.id === ref.itemId);
@@ -38,9 +38,7 @@ export function PlayerTab({ playthrough }: { playthrough: Playthrough }) {
     <div className="player-tab-container">
       <article className="card player-overview-card">
         <div className="player-card-header">
-          <div className="player-avatar-badge">
-            <Icon name="User" size={18} />
-          </div>
+          <AvatarBadge name={pc.name} icon="User" size="md" />
           <div>
             <h3 className="player-name">{pc.name}</h3>
             {pc.description ? <p className="player-desc">{pc.description}</p> : null}

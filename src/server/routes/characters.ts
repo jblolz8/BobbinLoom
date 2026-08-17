@@ -10,6 +10,9 @@ import {
   importCharacterCard,
   listCharacterTemplates,
   removeCharacterImportRecord,
+  removeCharacterProfileAvatar,
+  restoreCharacterOriginalAvatar,
+  saveCharacterAvatar,
   updateCharacterTemplateRecord,
   updatePlaythroughRecord
 } from "../store";
@@ -120,15 +123,48 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  // Serve the raw PNG of an imported CCv2 card as its avatar (D13).
-  // BL-native records (no cardRef) and non-PNG cards 404 — the client falls
-  // back to a letter placeholder. Path is resolved from the record, never the
-  // request, so the slug can't be used to read arbitrary files.
+  // Serve character avatar (portrait / profile / original)
   app.get("/api/characters/:id/avatar", async (request, reply) => {
     const params = z.object({ id: z.string() }).parse(request.params);
-    const file = getCharacterAvatarPath(params.id);
+    const query = z.object({ type: z.enum(["portrait", "profile", "original"]).optional() }).parse(request.query ?? {});
+    const file = getCharacterAvatarPath(params.id, query.type ?? "portrait");
     if (!file) return reply.code(404).send({ error: "No avatar" });
-    return reply.type("image/png").send(createReadStream(file));
+    const ext = file.split(".").pop()?.toLowerCase();
+    const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "webp" ? "image/webp" : "image/png";
+    return reply.type(mime).send(createReadStream(file));
+  });
+
+  // Upload custom portrait or 1:1 profile image
+  const UploadAvatarBody = z.object({
+    type: z.enum(["portrait", "profile"]),
+    dataBase64: z.string().min(1),
+    fileName: z.string().optional(),
+  });
+
+  app.post("/api/characters/:id/avatar", { bodyLimit: 10 * 1024 * 1024 }, async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const body = UploadAvatarBody.parse(request.body ?? {});
+    const bytes = Buffer.from(body.dataBase64, "base64");
+    const ext = body.fileName?.split(".").pop() || "png";
+    const updated = saveCharacterAvatar(params.id, body.type, bytes, ext);
+    if (!updated) return reply.code(404).send({ error: "Character not found" });
+    return { record: updated };
+  });
+
+  // Restore original CCv2 card portrait
+  app.post("/api/characters/:id/avatar/restore", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const updated = restoreCharacterOriginalAvatar(params.id);
+    if (!updated) return reply.code(404).send({ error: "Character not found" });
+    return { record: updated };
+  });
+
+  // Delete custom 1:1 profile avatar (falling back to portrait)
+  app.delete("/api/characters/:id/avatar/profile", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const updated = removeCharacterProfileAvatar(params.id);
+    if (!updated) return reply.code(404).send({ error: "Character not found" });
+    return { record: updated };
   });
 
   // ── CCv2 → BL conversion ──
