@@ -20,6 +20,12 @@ export type SettingsModalProps = {
   setShowDebug: (show: boolean) => void;
   showContextUsage: boolean;
   setShowContextUsage: (show: boolean) => void;
+  showGenerationTime?: boolean;
+  setShowGenerationTime?: (show: boolean) => void;
+  showMessageTimestamps?: boolean;
+  setShowMessageTimestamps?: (show: boolean) => void;
+  showModelName?: boolean;
+  setShowModelName?: (show: boolean) => void;
 };
 
 export function SettingsModal(props: SettingsModalProps) {
@@ -34,7 +40,13 @@ export function SettingsModal(props: SettingsModalProps) {
     showDebug,
     setShowDebug,
     showContextUsage,
-    setShowContextUsage
+    setShowContextUsage,
+    showGenerationTime = true,
+    setShowGenerationTime,
+    showMessageTimestamps = true,
+    setShowMessageTimestamps,
+    showModelName = true,
+    setShowModelName,
   } = props;
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("provider");
 
@@ -91,7 +103,7 @@ export function SettingsModal(props: SettingsModalProps) {
             <label className="chat-setting-card">
               <div className="chat-setting-main">
                 <div className="chat-setting-icon" aria-hidden="true">
-                  <Icon name="MessageSquare" size={20} className="text-blue-400" />
+                  <Icon name="MessageSquare" size={16} className="text-blue-400" />
                 </div>
                 <div className="chat-setting-info">
                   <span className="chat-setting-title">Show Choices</span>
@@ -111,7 +123,7 @@ export function SettingsModal(props: SettingsModalProps) {
             <label className="chat-setting-card">
               <div className="chat-setting-main">
                 <div className="chat-setting-icon" aria-hidden="true">
-                  <Icon name="BarChart2" size={20} className="text-emerald-400" />
+                  <Icon name="BarChart2" size={16} className="text-emerald-400" />
                 </div>
                 <div className="chat-setting-info">
                   <span className="chat-setting-title">Show Context Usage</span>
@@ -131,7 +143,7 @@ export function SettingsModal(props: SettingsModalProps) {
             <label className="chat-setting-card">
               <div className="chat-setting-main">
                 <div className="chat-setting-icon" aria-hidden="true">
-                  <Icon name="Wrench" size={20} className="text-amber-400" />
+                  <Icon name="Wrench" size={16} className="text-amber-400" />
                 </div>
                 <div className="chat-setting-info">
                   <span className="chat-setting-title">Show Debug Accordion</span>
@@ -143,6 +155,66 @@ export function SettingsModal(props: SettingsModalProps) {
                   type="checkbox"
                   checked={showDebug}
                   onChange={(e) => setShowDebug(e.target.checked)}
+                />
+                <span className="toggle-slider" />
+              </div>
+            </label>
+
+            <label className="chat-setting-card">
+              <div className="chat-setting-main">
+                <div className="chat-setting-icon" aria-hidden="true">
+                  <Icon name="Clock" size={16} className="text-indigo-400" />
+                </div>
+                <div className="chat-setting-info">
+                  <span className="chat-setting-title">Display Response Generation Time</span>
+                  <span className="chat-setting-desc">Show generation duration badge on AI responses</span>
+                </div>
+              </div>
+              <div className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={showGenerationTime}
+                  onChange={(e) => setShowGenerationTime?.(e.target.checked)}
+                />
+                <span className="toggle-slider" />
+              </div>
+            </label>
+
+            <label className="chat-setting-card">
+              <div className="chat-setting-main">
+                <div className="chat-setting-icon" aria-hidden="true">
+                  <Icon name="Calendar" size={16} className="text-cyan-400" />
+                </div>
+                <div className="chat-setting-info">
+                  <span className="chat-setting-title">Display Chat Message Timestamps</span>
+                  <span className="chat-setting-desc">Show timestamps on chat messages</span>
+                </div>
+              </div>
+              <div className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={showMessageTimestamps}
+                  onChange={(e) => setShowMessageTimestamps?.(e.target.checked)}
+                />
+                <span className="toggle-slider" />
+              </div>
+            </label>
+
+            <label className="chat-setting-card">
+              <div className="chat-setting-main">
+                <div className="chat-setting-icon" aria-hidden="true">
+                  <Icon name="Bot" size={16} className="text-purple-400" />
+                </div>
+                <div className="chat-setting-info">
+                  <span className="chat-setting-title">Display AI Model Name</span>
+                  <span className="chat-setting-desc">Show model name and provider icon badge on AI responses</span>
+                </div>
+              </div>
+              <div className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={showModelName}
+                  onChange={(e) => setShowModelName?.(e.target.checked)}
                 />
                 <span className="toggle-slider" />
               </div>

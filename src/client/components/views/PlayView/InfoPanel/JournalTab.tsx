@@ -194,7 +194,12 @@ export function JournalTab({ playthrough, onPlaythroughChange, onViewChapter, on
                 <>
                   <p className="chapter-summary">{ch.fullSummary}</p>
                   <div className="chapter-actions">
-                    <span className="event-meta">T{ch.turnRange.start} – T{ch.turnRange.end}</span>
+                    <span
+                      className="event-meta"
+                      title={`Archived: ${ch.createdAt ? new Date(ch.createdAt).toLocaleString() : "Unknown"}${ch.summaryDurationMs ? ` (summarized in ${(ch.summaryDurationMs / 1000).toFixed(1)}s)` : ""}`}
+                    >
+                      T{ch.turnRange.start} – T{ch.turnRange.end}{ch.createdAt ? ` · ${new Date(ch.createdAt).toLocaleDateString()}` : ""}
+                    </span>
                     <button onClick={(e) => { e.stopPropagation(); onViewChapter(ch.id); }}>View Transcript</button>
                   </div>
                 </>

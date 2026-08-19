@@ -150,6 +150,18 @@ describe("parseMarkdown", () => {
     expect(blocks[1].type).toBe("paragraph");
   });
 
+  it("parses multiple paragraphs separated by CRLF and CR blank lines", () => {
+    const blocksCrlf = parseMarkdown("Paragraph 1.\r\n\r\nParagraph 2.");
+    expect(blocksCrlf).toHaveLength(2);
+    expect(blocksCrlf[0].type).toBe("paragraph");
+    expect(blocksCrlf[1].type).toBe("paragraph");
+
+    const blocksCr = parseMarkdown("Paragraph 1.\r\rParagraph 2.");
+    expect(blocksCr).toHaveLength(2);
+    expect(blocksCr[0].type).toBe("paragraph");
+    expect(blocksCr[1].type).toBe("paragraph");
+  });
+
   it("parses fenced code blocks with language", () => {
     const raw = "```typescript\nconst a = 1;\nconst b = 2;\n```";
     const blocks = parseMarkdown(raw);

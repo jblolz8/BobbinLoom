@@ -33,7 +33,7 @@ export function parseInline(text: string): InlineNode[] {
   if (!text) return [];
 
   const nodes: InlineNode[] = [];
-  let remaining = text;
+  let remaining = text.replace(/\r\n|\r/g, "\n");
 
   while (remaining.length > 0) {
     const candidates: MatchCandidate[] = [];
@@ -218,7 +218,7 @@ export function parseMarkdown(raw: string): BlockNode[] {
   if (!raw) return [];
 
   const blocks: BlockNode[] = [];
-  const lines = raw.replace(/\r\n/g, "\n").split("\n");
+  const lines = raw.replace(/\r\n|\r/g, "\n").split("\n");
   let i = 0;
 
   while (i < lines.length) {

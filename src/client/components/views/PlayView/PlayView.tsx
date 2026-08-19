@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { PlaythroughPromptSettings, TokenUsage, Persona, QuestAction } from "../../../api";
 import type { ChatMessage, Playthrough } from "../../../../schemas";
+import type { FailedResponseNotice } from "../../../hooks/usePlaythrough";
 import { ScenePanel } from "./ScenePanel";
 import { ChatPanel } from "./ChatPanel";
 import { InfoPanel } from "./InfoPanel/InfoPanel";
@@ -21,6 +22,12 @@ export type PlayViewProps = {
   setShowDebug: (val: boolean) => void;
   showContextUsage: boolean;
   setShowContextUsage: (val: boolean) => void;
+  showGenerationTime?: boolean;
+  setShowGenerationTime?: (val: boolean) => void;
+  showMessageTimestamps?: boolean;
+  setShowMessageTimestamps?: (val: boolean) => void;
+  showModelName?: boolean;
+  setShowModelName?: (val: boolean) => void;
   choices: string[];
   input: string;
   setInput: (val: string) => void;
@@ -30,6 +37,7 @@ export type PlayViewProps = {
   lastPatchInfo: { applied: string[]; rejected: string[]; warnings: string[] };
   sendingMessage: string | null;
   cancelledNotice: string | null;
+  failedNotice?: FailedResponseNotice | null;
   tokenUsage: TokenUsage | null;
   setTokenUsage: (tu: TokenUsage | null) => void;
   rawInput: string | null;
@@ -53,6 +61,7 @@ export type PlayViewProps = {
   handleResummarizeChapter: (chapterId: string) => Promise<void>;
   handleQuestAction: (questId: string, action: QuestAction, name?: string, summary?: string) => Promise<void>;
   handleDismissNotice: () => void;
+  handleDismissFailedNotice?: () => void;
   openPersonaManager: () => void;
   handlePersonasChanged: (refreshed: Persona[]) => void;
   handlePlaythroughPromptSettings: (updated: PlaythroughPromptSettings) => void;
@@ -91,6 +100,12 @@ export function PlayView(props: PlayViewProps) {
     setShowDebug,
     showContextUsage,
     setShowContextUsage,
+    showGenerationTime,
+    setShowGenerationTime,
+    showMessageTimestamps,
+    setShowMessageTimestamps,
+    showModelName,
+    setShowModelName,
     choices,
     input,
     setInput,
@@ -100,6 +115,7 @@ export function PlayView(props: PlayViewProps) {
     lastPatchInfo,
     sendingMessage,
     cancelledNotice,
+    failedNotice,
     tokenUsage,
     setTokenUsage,
     rawInput,
@@ -123,6 +139,7 @@ export function PlayView(props: PlayViewProps) {
     handleResummarizeChapter,
     handleQuestAction,
     handleDismissNotice,
+    handleDismissFailedNotice,
     handlePersonasChanged,
     handlePlaythroughPromptSettings,
     handleStartNewWithSameScenario,
@@ -185,6 +202,9 @@ export function PlayView(props: PlayViewProps) {
           choicesEnabled={choicesEnabled}
           showDebug={showDebug}
           showContextUsage={showContextUsage}
+          showGenerationTime={showGenerationTime}
+          showMessageTimestamps={showMessageTimestamps}
+          showModelName={showModelName}
           onChoiceSelect={setInput}
           editingMessageId={editingMessageId}
           editDraft={editDraft}
@@ -196,7 +216,9 @@ export function PlayView(props: PlayViewProps) {
           lastPatchInfo={lastPatchInfo}
           sendingMessage={sendingMessage}
           cancelledNotice={cancelledNotice}
+          failedNotice={failedNotice}
           onDismissNotice={handleDismissNotice}
+          onDismissFailedNotice={handleDismissFailedNotice}
           onCancel={handleCancel}
           tokenUsage={tokenUsage}
           rawInput={rawInput}
@@ -289,6 +311,12 @@ export function PlayView(props: PlayViewProps) {
         setShowDebug={setShowDebug}
         showContextUsage={showContextUsage}
         setShowContextUsage={setShowContextUsage}
+        showGenerationTime={showGenerationTime}
+        setShowGenerationTime={setShowGenerationTime}
+        showMessageTimestamps={showMessageTimestamps}
+        setShowMessageTimestamps={setShowMessageTimestamps}
+        showModelName={showModelName}
+        setShowModelName={setShowModelName}
       />
 
       <PersonaManager

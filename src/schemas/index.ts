@@ -314,6 +314,8 @@ export const ChatMessageSchema = z.object({
   content: z.string(),
   createdAt: z.string(),
   editedAt: z.string().optional(),
+  durationMs: z.number().int().nonnegative().optional(),
+  model: z.string().optional(),
   hidden: z.boolean().optional(),
   chapterId: z.string().optional(),
   /** Marks the assistant message that opens a new chapter after the previous
@@ -333,7 +335,9 @@ export const ChapterSchema = z.object({
   }),
   messageIds: z.array(z.string()),
   memoryEventIds: z.array(z.string()),
-  createdAt: z.string()
+  createdAt: z.string(),
+  updatedAt: z.string().optional(),
+  summaryDurationMs: z.number().int().nonnegative().optional()
 });
 export type Chapter = z.infer<typeof ChapterSchema>;
 
@@ -371,10 +375,12 @@ export const TurnSnapshotSchema = z.object({
   npcs: z.array(SimpleNPCSchema),
   inventory: z.array(InventoryRefSchema),
   quests: z.array(QuestSchema),
+  locationCatalog: z.array(LocationEntrySchema).optional(),
+  itemCatalog: z.array(ItemSchema).optional(),
   memoryEvents: z.array(MemoryEventSchema),
   memoryLayers: MemoryLayersSchema.optional(),
   lorebookIds: z.array(z.string()),
-  locationCatalog: z.array(LocationEntrySchema).optional(),
+  lorebookTimingStates: z.record(z.number().or(z.string()), EntryTimingStateSchema).optional(),
   chapters: z.array(ChapterSchema).default([]),
   storyMetaSummaries: z.array(ChapterMetaSummarySchema).default([]),
   currentChapterStartedAtTurn: z.number().default(1),

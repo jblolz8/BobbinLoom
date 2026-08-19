@@ -265,8 +265,11 @@ export async function playthroughRoutes(app: FastifyInstance): Promise<void> {
     const controller = abortOnClientDisconnect(reply);
 
     let summary: { name: string; shortDescription: string; fullSummary: string };
+    let summaryDurationMs: number | undefined;
     try {
+      const summaryStartTime = performance.now();
       summary = await provider.summarizeChapter(transcript, playthrough.promptSettings?.modules.summary, controller.signal);
+      summaryDurationMs = Math.round(performance.now() - summaryStartTime);
     } catch (error) {
       if (controller.signal.aborted) return;
       const message = error instanceof Error ? error.message : "Chapter summarization failed";
@@ -275,7 +278,7 @@ export async function playthroughRoutes(app: FastifyInstance): Promise<void> {
 
     if (controller.signal.aborted) return;
 
-    const result = await closeChapterAction(dataDir, params.id, summary, provider, true, providerManager.getContextWindow(), controller.signal);
+    const result = await closeChapterAction(dataDir, params.id, summary, provider, true, providerManager.getContextWindow(), controller.signal, summaryDurationMs);
 
     if (controller.signal.aborted) return;
 

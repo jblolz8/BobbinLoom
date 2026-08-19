@@ -41,6 +41,8 @@ export type ProviderTurn = {
   turn: AssistantTurn;
   /** Real measured prompt usage. Absent from providers that don't assemble a prompt (mock). */
   promptUsage?: PromptUsage;
+  /** Model name or ID that generated this turn. */
+  model?: string;
   /** Raw request body sent to the provider — for the Debug → Input tab. */
   rawInput?: string;
   /** Raw response body from the provider — for the Debug → Output tab. */

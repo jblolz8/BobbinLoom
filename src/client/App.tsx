@@ -291,6 +291,12 @@ export default function App() {
           setShowDebug={playthroughHook.setShowDebug}
           showContextUsage={playthroughHook.showContextUsage}
           setShowContextUsage={playthroughHook.setShowContextUsage}
+          showGenerationTime={playthroughHook.showGenerationTime}
+          setShowGenerationTime={playthroughHook.setShowGenerationTime}
+          showMessageTimestamps={playthroughHook.showMessageTimestamps}
+          setShowMessageTimestamps={playthroughHook.setShowMessageTimestamps}
+          showModelName={playthroughHook.showModelName}
+          setShowModelName={playthroughHook.setShowModelName}
           choices={playthroughHook.choices}
           input={playthroughHook.input}
           setInput={playthroughHook.setInput}
@@ -300,6 +306,7 @@ export default function App() {
           lastPatchInfo={playthroughHook.lastPatchInfo}
           sendingMessage={playthroughHook.sendingMessage}
           cancelledNotice={playthroughHook.cancelledNotice}
+          failedNotice={playthroughHook.failedNotice}
           tokenUsage={playthroughHook.tokenUsage}
           setTokenUsage={playthroughHook.setTokenUsage}
           rawInput={playthroughHook.rawInput}
@@ -323,6 +330,7 @@ export default function App() {
           handleResummarizeChapter={playthroughHook.handleResummarizeChapter}
           handleQuestAction={playthroughHook.handleQuestAction}
           handleDismissNotice={() => playthroughHook.setCancelledNotice(null)}
+          handleDismissFailedNotice={() => playthroughHook.setFailedNotice(null)}
           openPersonaManager={modalHook.openPersona}
           handlePersonasChanged={handlePersonasChanged}
           handlePlaythroughPromptSettings={handlePlaythroughPromptSettings}
@@ -384,6 +392,12 @@ export default function App() {
         setShowDebug={playthroughHook.setShowDebug}
         showContextUsage={playthroughHook.showContextUsage}
         setShowContextUsage={playthroughHook.setShowContextUsage}
+        showGenerationTime={playthroughHook.showGenerationTime}
+        setShowGenerationTime={playthroughHook.setShowGenerationTime}
+        showMessageTimestamps={playthroughHook.showMessageTimestamps}
+        setShowMessageTimestamps={playthroughHook.setShowMessageTimestamps}
+        showModelName={playthroughHook.showModelName}
+        setShowModelName={playthroughHook.setShowModelName}
       />
       <PersonaManager
         open={modalHook.personaManagerOpen}

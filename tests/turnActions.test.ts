@@ -155,6 +155,59 @@ describe("retryAssistantTurn", () => {
     expect(result.state.memoryEvents).toHaveLength(1);
   });
 
+  it("captures and restores itemCatalog and lorebookTimingStates across turns and retry", async () => {
+    const dir = tempDir();
+    const provider = new MockProvider();
+    let playthrough = createPlaythroughRecord(dir, "Item and Timing Snapshot Test");
+
+    playthrough.itemCatalog = [
+      { id: "item_sword", name: "Iron Sword", type: "weapon", description: "A simple blade", stackable: false }
+    ];
+    playthrough.lorebookTimingStates = {
+      "100": { lastActivatedAt: 1, stickyCount: 0, delayRemaining: 0, cooldownRemaining: 2 }
+    };
+    updatePlaythroughRecord(dir, playthrough);
+
+    playthrough = (await executeTurn(playthrough, "first input", provider, false)).state;
+    const firstAssistantId = playthrough.messages[1].id;
+    const snapshot1 = playthrough.snapshots?.[firstAssistantId];
+    expect(snapshot1?.itemCatalog).toHaveLength(1);
+    expect(snapshot1?.itemCatalog?.[0].id).toBe("item_sword");
+    expect(snapshot1?.lorebookTimingStates?.["100"]).toBeDefined();
+
+    // Mutate items and timing on turn 2
+    playthrough.itemCatalog.push({
+      id: "item_shield",
+      name: "Wooden Shield",
+      type: "armor",
+      description: "A wooden shield",
+      stackable: false
+    });
+    playthrough.lorebookTimingStates["200"] = {
+      lastActivatedAt: 2,
+      stickyCount: 1,
+      delayRemaining: 0,
+      cooldownRemaining: 0
+    };
+    updatePlaythroughRecord(dir, playthrough);
+
+    playthrough = (await executeTurn(playthrough, "second input", provider, false)).state;
+    updatePlaythroughRecord(dir, playthrough);
+    const secondAssistantId = playthrough.messages[3].id;
+    expect(playthrough.itemCatalog).toHaveLength(2);
+    expect(playthrough.lorebookTimingStates?.["200"]).toBeDefined();
+
+    // Retry turn 1: should restore turn 1's snapshot (1 item, only timing for 100)
+    const result = await retryAssistantTurn(dir, playthrough.id, firstAssistantId, provider, false);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.state.itemCatalog).toHaveLength(1);
+    expect(result.state.itemCatalog?.[0].id).toBe("item_sword");
+    expect(result.state.lorebookTimingStates?.["100"]).toBeDefined();
+    expect(result.state.lorebookTimingStates?.["200"]).toBeUndefined();
+  });
+
   it("still truncates when no snapshot exists, without touching state", async () => {
     const dir = tempDir();
     const provider = new MockProvider();
@@ -331,6 +384,47 @@ describe("executeTurn tokenUsage", () => {
     expect(absentResult.tokenUsage.breakdown.stateSummary).toBeLessThan(
       presentResult.tokenUsage.breakdown.stateSummary
     );
+  });
+
+  it("measures and stamps durationMs on assistant message and records createdAt on all messages", async () => {
+    const dir = tempDir();
+    const provider = new MockProvider();
+    const pt = createPlaythroughRecord(dir, "Timestamps Test");
+
+    const result = await executeTurn(pt, "look around", provider, false);
+    expect(result.durationMs).toBeTypeOf("number");
+    expect(result.durationMs).toBeGreaterThanOrEqual(0);
+
+    const userMsg = result.state.messages.find(m => m.role === "user");
+    const assistantMsg = result.state.messages.find(m => m.role === "assistant");
+
+    expect(userMsg).toBeDefined();
+    expect(userMsg?.createdAt).toBeDefined();
+    expect(userMsg?.durationMs).toBeUndefined();
+
+    expect(assistantMsg).toBeDefined();
+    expect(assistantMsg?.createdAt).toBeDefined();
+    expect(assistantMsg?.durationMs).toBeTypeOf("number");
+    expect(assistantMsg?.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("captures model identifier from provider and stamps on assistant message and TurnExecution", async () => {
+    const dir = tempDir();
+    class NamedModelProvider extends MockProvider {
+      override async generateTurn(): Promise<ProviderTurn> {
+        return {
+          turn: { narrative: "A turn from deepseek." },
+          model: "deepseek/deepseek-chat"
+        };
+      }
+    }
+
+    const pt = createPlaythroughRecord(dir, "Model Test");
+    const result = await executeTurn(pt, "hello", new NamedModelProvider(), false);
+
+    expect(result.model).toBe("deepseek/deepseek-chat");
+    const assistantMsg = result.state.messages.find(m => m.role === "assistant");
+    expect(assistantMsg?.model).toBe("deepseek/deepseek-chat");
   });
 });
 

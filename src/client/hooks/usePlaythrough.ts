@@ -18,6 +18,9 @@ type ChatSettings = {
   choicesEnabled: boolean;
   showDebug: boolean;
   showContextUsage: boolean;
+  showGenerationTime: boolean;
+  showMessageTimestamps: boolean;
+  showModelName: boolean;
 };
 
 function loadChatSettings(): ChatSettings {
@@ -29,10 +32,20 @@ function loadChatSettings(): ChatSettings {
         choicesEnabled: typeof parsed.choicesEnabled === "boolean" ? parsed.choicesEnabled : true,
         showDebug: typeof parsed.showDebug === "boolean" ? parsed.showDebug : true,
         showContextUsage: typeof parsed.showContextUsage === "boolean" ? parsed.showContextUsage : true,
+        showGenerationTime: typeof parsed.showGenerationTime === "boolean" ? parsed.showGenerationTime : true,
+        showMessageTimestamps: typeof parsed.showMessageTimestamps === "boolean" ? parsed.showMessageTimestamps : true,
+        showModelName: typeof parsed.showModelName === "boolean" ? parsed.showModelName : true,
       };
     }
   } catch {}
-  return { choicesEnabled: true, showDebug: true, showContextUsage: true };
+  return {
+    choicesEnabled: true,
+    showDebug: true,
+    showContextUsage: true,
+    showGenerationTime: true,
+    showMessageTimestamps: true,
+    showModelName: true,
+  };
 }
 
 function saveChatSettings(settings: ChatSettings) {
@@ -49,6 +62,9 @@ export function usePlaythrough() {
   const choicesEnabled = chatSettings.choicesEnabled;
   const showDebug = chatSettings.showDebug;
   const showContextUsage = chatSettings.showContextUsage;
+  const showGenerationTime = chatSettings.showGenerationTime;
+  const showMessageTimestamps = chatSettings.showMessageTimestamps;
+  const showModelName = chatSettings.showModelName;
 
   const setChoicesEnabled = (val: boolean) => {
     setChatSettingsState((prev) => {
@@ -73,6 +89,30 @@ export function usePlaythrough() {
       return next;
     });
   };
+
+  const setShowGenerationTime = (val: boolean) => {
+    setChatSettingsState((prev) => {
+      const next = { ...prev, showGenerationTime: val };
+      saveChatSettings(next);
+      return next;
+    });
+  };
+
+  const setShowMessageTimestamps = (val: boolean) => {
+    setChatSettingsState((prev) => {
+      const next = { ...prev, showMessageTimestamps: val };
+      saveChatSettings(next);
+      return next;
+    });
+  };
+
+  const setShowModelName = (val: boolean) => {
+    setChatSettingsState((prev) => {
+      const next = { ...prev, showModelName: val };
+      saveChatSettings(next);
+      return next;
+    });
+  };
   const [choices, setChoices] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +123,7 @@ export function usePlaythrough() {
   });
   const [sendingMessage, setSendingMessage] = useState<string | null>(null);
   const [cancelledNotice, setCancelledNotice] = useState<string | null>(null);
+  const [failedNotice, setFailedNotice] = useState<FailedResponseNotice | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
   const [rawInput, setRawInput] = useState<string | null>(null);
@@ -113,6 +154,8 @@ export function usePlaythrough() {
         setLastPatchInfo({ applied: [], rejected: [], warnings: [] });
         setRawInput(null);
         setRawOutput(null);
+        setCancelledNotice(null);
+        setFailedNotice(null);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -127,9 +170,11 @@ export function usePlaythrough() {
     setLoading(true);
     setError(null);
     setCancelledNotice(null);
+    setFailedNotice(null);
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
+    const startTime = performance.now();
 
     try {
       const response = await sendTurn(playthrough.id, currentInput, choicesEnabled, controller.signal);
@@ -140,11 +185,18 @@ export function usePlaythrough() {
       setRawInput(response.rawInput ?? null);
       setRawOutput(response.rawOutput ?? null);
     } catch (e) {
+      const durationMs = Math.round(performance.now() - startTime);
+      setInput(currentInput);
       if (e instanceof DOMException && e.name === "AbortError") {
-        setInput(currentInput);
         setCancelledNotice("Response cancelled — message restored to input.");
+        setFailedNotice(null);
       } else {
-        setError(e instanceof Error ? e.message : String(e));
+        const rawErr = e instanceof Error ? e.message : String(e);
+        setFailedNotice({
+          message: "Generation failed — your message was restored to the input box.",
+          rawError: rawErr,
+          durationMs
+        });
       }
     } finally {
       setLoading(false);
@@ -186,6 +238,9 @@ export function usePlaythrough() {
     if (!playthrough || !retryTarget || actionLoading) return;
     setActionLoading(true);
     setError(null);
+    setFailedNotice(null);
+    setCancelledNotice(null);
+    const startTime = performance.now();
     try {
       const response = await retryTurn(playthrough.id, retryTarget.id, choicesEnabled);
       setPlaythrough(response.state);
@@ -197,7 +252,13 @@ export function usePlaythrough() {
       setRetryTarget(null);
       cancelEdit();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const durationMs = Math.round(performance.now() - startTime);
+      const rawErr = e instanceof Error ? e.message : String(e);
+      setFailedNotice({
+        message: "Retry failed — world state was not changed.",
+        rawError: rawErr,
+        durationMs
+      });
     } finally {
       setActionLoading(false);
     }
@@ -252,6 +313,12 @@ export function usePlaythrough() {
     setShowDebug,
     showContextUsage,
     setShowContextUsage,
+    showGenerationTime,
+    setShowGenerationTime,
+    showMessageTimestamps,
+    setShowMessageTimestamps,
+    showModelName,
+    setShowModelName,
     choices,
     setChoices,
     loading,
@@ -262,6 +329,8 @@ export function usePlaythrough() {
     sendingMessage,
     cancelledNotice,
     setCancelledNotice,
+    failedNotice,
+    setFailedNotice,
     tokenUsage,
     setTokenUsage,
     rawInput,

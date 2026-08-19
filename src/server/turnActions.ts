@@ -34,6 +34,8 @@ export type TurnExecution = {
   rejected: string[];
   warnings: string[];
   tokenUsage: TokenUsage;
+  durationMs?: number;
+  model?: string;
   /** Raw request body sent to the provider — for the Debug → Input tab. */
   rawInput?: string;
   /** Raw response body from the provider — for the Debug → Output tab. */
@@ -81,7 +83,9 @@ export async function executeTurn(
 ): Promise<TurnExecution> {
   const snapshot = takeTurnSnapshot(playthrough);
   const parsedInput = parseUserInput(input);
-  const { turn: assistantTurn, promptUsage, rawInput, rawOutput, finishReason } = await provider.generateTurn(parsedInput, playthrough, suggestedChoicesEnabled, options?.signal);
+  const startTime = performance.now();
+  const { turn: assistantTurn, promptUsage, model, rawInput, rawOutput, finishReason } = await provider.generateTurn(parsedInput, playthrough, suggestedChoicesEnabled, options?.signal);
+  const durationMs = Math.round(performance.now() - startTime);
 
   const patchResult = assistantTurn.statePatch
     ? applyStatePatch(playthrough, assistantTurn.statePatch)
@@ -127,6 +131,8 @@ export async function executeTurn(
       role: "assistant",
       content: narrative,
       createdAt: now,
+      durationMs,
+      ...(model ? { model } : {}),
       ...(options?.chapterOpening ? { chapterOpening: true } : {})
     }
   );
@@ -199,6 +205,8 @@ export async function executeTurn(
     rejected: patchResult.rejected,
     warnings: patchResult.warnings,
     tokenUsage,
+    durationMs,
+    model,
     rawInput,
     rawOutput,
     finishReason,
@@ -340,7 +348,13 @@ export async function retryAssistantTurn(
     base.quests = structuredClone(snapshot.quests);
     base.memoryEvents = structuredClone(snapshot.memoryEvents);
     base.lorebookIds = snapshot.lorebookIds ?? [];
+    base.lorebookTimingStates = snapshot.lorebookTimingStates
+      ? structuredClone(snapshot.lorebookTimingStates)
+      : undefined;
     base.locationCatalog = structuredClone(snapshot.locationCatalog ?? []);
+    base.itemCatalog = snapshot.itemCatalog
+      ? structuredClone(snapshot.itemCatalog)
+      : undefined;
     base.chapters = structuredClone(snapshot.chapters ?? []);
     base.storyMetaSummaries = structuredClone(snapshot.storyMetaSummaries ?? []);
     base.currentChapterStartedAtTurn = snapshot.currentChapterStartedAtTurn ?? 1;

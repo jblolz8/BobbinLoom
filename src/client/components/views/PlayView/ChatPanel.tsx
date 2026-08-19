@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChatMessage, Playthrough } from "../../../../schemas";
 import type { TokenUsage } from "../../../api";
+import type { FailedResponseNotice } from "../../../hooks/usePlaythrough";
 import { ContextMeter } from "../../common/ContextMeter";
 import { MarkdownView } from "../../common/MarkdownView";
+import { Icon, ModelBadge } from "../../base";
 
 export type ChatPanelProps = {
   playthrough: Playthrough;
@@ -15,6 +17,9 @@ export type ChatPanelProps = {
   choicesEnabled: boolean;
   showDebug: boolean;
   showContextUsage: boolean;
+  showGenerationTime?: boolean;
+  showMessageTimestamps?: boolean;
+  showModelName?: boolean;
   onChoiceSelect: (text: string) => void;
   editingMessageId: string | null;
   editDraft: string;
@@ -26,7 +31,9 @@ export type ChatPanelProps = {
   lastPatchInfo: { applied: string[]; rejected: string[]; warnings: string[] };
   sendingMessage: string | null;
   cancelledNotice: string | null;
+  failedNotice?: FailedResponseNotice | null;
   onDismissNotice: () => void;
+  onDismissFailedNotice?: () => void;
   onCancel: () => void;
   tokenUsage: TokenUsage | null;
   viewingChapterId: string | null;
@@ -47,6 +54,49 @@ function prettyJson(raw: string | null): string {
   } catch {
     return raw;
   }
+}
+
+function formatMessageTime(iso?: string): string {
+  if (!iso) return "";
+  try {
+    const date = new Date(iso);
+    if (isNaN(date.getTime())) return "";
+    return date.toLocaleString([], {
+      weekday: "short",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit"
+    });
+  } catch {
+    return "";
+  }
+}
+
+function formatMessageFullDate(iso?: string): string {
+  if (!iso) return "";
+  try {
+    const date = new Date(iso);
+    if (isNaN(date.getTime())) return "";
+    return date.toLocaleString([], {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      second: "2-digit"
+    });
+  } catch {
+    return "";
+  }
+}
+
+function formatDuration(ms?: number): string {
+  if (ms === undefined || ms === null) return "";
+  if (ms < 100) return "<0.1s";
+  return `${(ms / 1000).toFixed(1)}s`;
 }
 
 function DebugBox(props: {
@@ -103,13 +153,116 @@ function DebugBox(props: {
   );
 }
 
+function ErrorNotice({
+  notice,
+  onDismiss,
+  onRetry,
+  disabled
+}: {
+  notice: FailedResponseNotice;
+  onDismiss: () => void;
+  onRetry?: () => void;
+  disabled?: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const formattedError = useMemo(() => {
+    if (!notice.rawError) return "";
+    try {
+      const parsed = JSON.parse(notice.rawError);
+      return JSON.stringify(parsed, null, 2);
+    } catch {
+      return notice.rawError;
+    }
+  }, [notice.rawError]);
+
+  const handleCopy = () => {
+    if (formattedError) {
+      navigator.clipboard.writeText(formattedError);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  return (
+    <article className="message system error-notice">
+      <div className="error-notice-header">
+        <div className="error-notice-title">
+          <span className="error-notice-icon">⚠️</span>
+          <strong>{notice.message}</strong>
+          {notice.durationMs !== undefined && notice.durationMs > 0 ? (
+            <span className="error-notice-duration">({(notice.durationMs / 1000).toFixed(1)}s)</span>
+          ) : null}
+        </div>
+        <button className="dismiss-notice" onClick={onDismiss} title="Dismiss" aria-label="Dismiss notice">✕</button>
+      </div>
+
+      {formattedError ? (
+        <div className="error-code-wrapper">
+          <div className="error-code-header">
+            <span className="error-code-label">Error Details</span>
+            <button type="button" className="error-copy-btn" onClick={handleCopy} title="Copy error details">
+              <Icon name={copied ? "Check" : "Copy"} size={13} />
+              <span>{copied ? "Copied" : "Copy"}</span>
+            </button>
+          </div>
+          <pre className="error-code-block">
+            <code>{formattedError}</code>
+          </pre>
+        </div>
+      ) : null}
+
+      {onRetry ? (
+        <div className="error-notice-actions">
+          <button type="button" className="error-retry-btn" onClick={onRetry} disabled={disabled}>
+            <Icon name="RotateCcw" size={13} />
+            <span>Send Again</span>
+          </button>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function GeneratingResponse({ showGenerationTime }: { showGenerationTime: boolean }) {
+  const [elapsedMs, setElapsedMs] = useState(0);
+
+  useEffect(() => {
+    const start = performance.now();
+    const interval = setInterval(() => {
+      setElapsedMs(Math.round(performance.now() - start));
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <article className="message assistant generating">
+      <div className="message-header">
+        <div className="message-header-info">
+          <strong>BobbinLoom</strong>
+          {showGenerationTime ? (
+            <span className="message-duration generating" title="Elapsed generation time">
+              <Icon name="Clock" size={10} />
+              <span>{(elapsedMs / 1000).toFixed(1)}s</span>
+            </span>
+          ) : null}
+        </div>
+      </div>
+      <p className="generating-placeholder">Generating response…</p>
+    </article>
+  );
+}
+
 export function ChatPanel(props: ChatPanelProps) {
   const {
     playthrough, input, onInputChange, onSend, loading, actionLoading,
-    choices, choicesEnabled, showDebug, showContextUsage, onChoiceSelect,
+    choices, choicesEnabled, showDebug, showContextUsage,
+    showGenerationTime = true, showMessageTimestamps = true, showModelName = true,
+    onChoiceSelect,
     editingMessageId, editDraft, onEditDraftChange, onStartEdit, onSaveEdit, onCancelEdit,
     onRetryRequest, lastPatchInfo,
-    sendingMessage, cancelledNotice, onDismissNotice, onCancel, tokenUsage,
+    sendingMessage, cancelledNotice, failedNotice, onDismissNotice, onDismissFailedNotice, onCancel, tokenUsage,
     viewingChapterId, onReturnToCurrentChapter,
     onResummarizeChapter, resummarizingChapterId,
     rawInput, rawOutput, className
@@ -119,7 +272,7 @@ export function ChatPanel(props: ChatPanelProps) {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [playthrough.messages.length, loading, sendingMessage, cancelledNotice]);
+  }, [playthrough.messages.length, loading, sendingMessage, cancelledNotice, failedNotice]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -132,7 +285,7 @@ export function ChatPanel(props: ChatPanelProps) {
 
   const isViewingArchive = viewingChapterId !== null;
   const chapterName = isViewingArchive
-    ? (playthrough.chapters ?? []).find(ch => ch.id === viewingChapterId)?.name ?? "Archived Chapter"
+    ? (playthrough.chapters ?? [])[(playthrough.chapters ?? []).findIndex(ch => ch.id === viewingChapterId)]?.name ?? "Archived Chapter"
     : "";
 
   const showRealMessages = isViewingArchive
@@ -161,7 +314,24 @@ export function ChatPanel(props: ChatPanelProps) {
           return (
           <article key={msg.id} className={`message ${msg.role}`}>
             <div className="message-header">
-              <strong>{msg.role === "user" ? "You" : "BobbinLoom"}{msg.editedAt ? <span className="edited-tag"> (edited)</span> : null}</strong>
+              <div className="message-header-info">
+                <strong>{msg.role === "user" ? "You" : "BobbinLoom"}</strong>
+                {showModelName && msg.role === "assistant" && msg.model ? (
+                  <ModelBadge model={msg.model} />
+                ) : null}
+                {msg.editedAt ? <span className="edited-tag" title={`Edited: ${formatMessageFullDate(msg.editedAt)}`}>(edited)</span> : null}
+                {showMessageTimestamps && msg.createdAt ? (
+                  <span className="message-timestamp" title={formatMessageFullDate(msg.createdAt)}>
+                    {formatMessageTime(msg.createdAt)}
+                  </span>
+                ) : null}
+                {showGenerationTime && msg.role === "assistant" && msg.durationMs !== undefined ? (
+                  <span className="message-duration" title={`Response generation time: ${(msg.durationMs / 1000).toFixed(2)}s`}>
+                    <Icon name="Clock" size={10} />
+                    <span>{formatDuration(msg.durationMs)}</span>
+                  </span>
+                ) : null}
+              </div>
               <div className="message-actions">
                 <button className="message-action" onClick={() => onStartEdit(msg)} disabled={actionLoading || editingMessageId === msg.id || loading}>Edit</button>
                 {msg.role === "assistant" ? <button className="message-action retry" onClick={() => onRetryRequest(msg)} disabled={actionLoading || loading}>Retry</button> : null}
@@ -195,13 +365,17 @@ export function ChatPanel(props: ChatPanelProps) {
         {sendingMessage ? (
           <>
             <article className="message user optimistic">
-              <div className="message-header"><strong>You</strong></div>
+              <div className="message-header">
+                <div className="message-header-info">
+                  <strong>You</strong>
+                  {showMessageTimestamps ? (
+                    <span className="message-timestamp sending">Sending…</span>
+                  ) : null}
+                </div>
+              </div>
               <MarkdownView content={sendingMessage} />
             </article>
-            <article className="message assistant generating">
-              <div className="message-header"><strong>BobbinLoom</strong></div>
-              <p className="generating-placeholder">Generating response…</p>
-            </article>
+            <GeneratingResponse showGenerationTime={showGenerationTime} />
           </>
         ) : null}
 
@@ -210,6 +384,15 @@ export function ChatPanel(props: ChatPanelProps) {
             <p>{cancelledNotice}</p>
             <button className="dismiss-notice" onClick={onDismissNotice} title="Dismiss">✕</button>
           </article>
+        ) : null}
+
+        {failedNotice ? (
+          <ErrorNotice
+            notice={failedNotice}
+            onDismiss={onDismissFailedNotice ?? onDismissNotice}
+            onRetry={onSend}
+            disabled={loading || !input.trim()}
+          />
         ) : null}
 
         <div ref={messagesEndRef} />

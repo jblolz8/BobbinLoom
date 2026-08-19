@@ -382,7 +382,8 @@ export async function closeChapterAction(
   provider: TurnProvider,
   suggestedChoicesEnabled: boolean,
   contextWindow: number = 65536,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  summaryDurationMs?: number
 ): Promise<CloseChapterResult> {
   const loaded = load(dataDir, playthroughId);
   if (isFailure(loaded)) return loaded;
@@ -421,7 +422,8 @@ export async function closeChapterAction(
     turnRange: { start: chapterStartTurn, end: loaded.turn },
     messageIds: msgsToArchive.map(m => m.id),
     memoryEventIds: eventsToTag.map(e => e.id),
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    summaryDurationMs
   };
 
   // Tag messages with chapterId and hide them
@@ -553,8 +555,11 @@ export async function resummarizeChapterAction(
   }
 
   let summary: { name: string; shortDescription: string; fullSummary: string };
+  let summaryDurationMs: number | undefined;
   try {
+    const summaryStartTime = performance.now();
     summary = await provider.summarizeChapter(transcript, loaded.promptSettings?.modules.summary, signal);
+    summaryDurationMs = Math.round(performance.now() - summaryStartTime);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Chapter re-summarization failed";
     return { ok: false, status: 502, error: message };
@@ -565,10 +570,13 @@ export async function resummarizeChapterAction(
     return { ok: false, status: 499, error: "Request aborted by the client" };
   }
 
+  const now = new Date().toISOString();
   chapter.name = summary.name;
   chapter.shortDescription = summary.shortDescription;
   chapter.fullSummary = summary.fullSummary;
-  loaded.updatedAt = new Date().toISOString();
+  chapter.updatedAt = now;
+  chapter.summaryDurationMs = summaryDurationMs;
+  loaded.updatedAt = now;
   updatePlaythroughRecord(dataDir, loaded);
 
   return { ok: true, state: loaded };

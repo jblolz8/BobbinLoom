@@ -92,7 +92,7 @@ export class OpenAICompatibleProvider {
         if (!choicesEnabled) {
           delete parsed.data.choices;
         }
-        return { turn: parsed.data, promptUsage, rawInput, rawOutput, finishReason };
+        return { turn: parsed.data, promptUsage, model: this.config.model, rawInput, rawOutput, finishReason };
       }
 
       const extractedObj = extracted as Record<string, unknown>;
@@ -105,12 +105,13 @@ export class OpenAICompatibleProvider {
         : undefined;
 
       if (narrative) {
-        return { turn: { narrative, choices: choicesEnabled ? choices : undefined, statePatch }, promptUsage, rawInput, rawOutput, finishReason };
+        return { turn: { narrative, choices: choicesEnabled ? choices : undefined, statePatch }, promptUsage, model: this.config.model, rawInput, rawOutput, finishReason };
       }
 
       return {
         turn: { narrative: "The provider returned an empty response.", statePatch },
         promptUsage,
+        model: this.config.model,
         rawInput,
         rawOutput,
         finishReason
@@ -120,6 +121,7 @@ export class OpenAICompatibleProvider {
     return {
       turn: { narrative: content || "The provider returned an empty response." },
       promptUsage,
+      model: this.config.model,
       rawInput,
       rawOutput,
       finishReason
