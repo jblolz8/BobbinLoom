@@ -10,7 +10,7 @@ import {
   updateTimingStates
 } from "../engine/engine";
 import type { Playthrough, ScenarioSeed } from "../schemas";
-import type { EntryTimingState, LorebookEntry } from "../schemas";
+import type { EntryTimingState, LorebookEntry, TurnSnapshot } from "../schemas";
 import type { TurnProvider } from "./provider";
 import type { PromptUsageBreakdown } from "./provider";
 import { getLorebook, getPlaythroughRecord, updatePlaythroughRecord } from "./store";
@@ -278,6 +278,38 @@ function estimateTokenUsageFallback(state: Playthrough, input: string, contextWi
 }
 
 /**
+ * Restores a playthrough's world state from a pre-turn snapshot, in place.
+ * Shared by retryAssistantTurn (regenerate after truncation) and truncateChat
+ * (truncate only). Snapshots hold no message content, so restoring never
+ * touches the message list. No-op when the snapshot is absent — the caller's
+ * live state stands (graceful degradation for legacy records).
+ */
+function restoreSnapshotState(target: Playthrough, snapshot: TurnSnapshot | undefined): void {
+  if (!snapshot) return;
+  target.turn = snapshot.turn;
+  target.locationId = snapshot.locationId;
+  target.flags = structuredClone(snapshot.flags);
+  target.playerCharacter = structuredClone(snapshot.playerCharacter);
+  target.characters = structuredClone(snapshot.characters);
+  target.characterTemplates = structuredClone(snapshot.characterTemplates);
+  target.npcs = structuredClone(snapshot.npcs);
+  target.inventory = structuredClone(snapshot.inventory);
+  target.quests = structuredClone(snapshot.quests);
+  target.memoryEvents = structuredClone(snapshot.memoryEvents);
+  target.lorebookIds = snapshot.lorebookIds ?? [];
+  target.lorebookTimingStates = snapshot.lorebookTimingStates
+    ? structuredClone(snapshot.lorebookTimingStates)
+    : undefined;
+  target.locationCatalog = structuredClone(snapshot.locationCatalog ?? []);
+  target.itemCatalog = snapshot.itemCatalog
+    ? structuredClone(snapshot.itemCatalog)
+    : undefined;
+  target.chapters = structuredClone(snapshot.chapters ?? []);
+  target.storyMetaSummaries = structuredClone(snapshot.storyMetaSummaries ?? []);
+  target.currentChapterStartedAtTurn = snapshot.currentChapterStartedAtTurn ?? 1;
+}
+
+/**
  * Retries an assistant response: truncates the chat back to just before the
  * user message of that turn, restores the snapshotted world state (when one
  * exists), permanently discards everything after, then re-runs the turn.
@@ -336,29 +368,7 @@ export async function retryAssistantTurn(
     messages: playthrough.messages.slice(0, userIndex)
   };
 
-  if (snapshot) {
-    base.turn = snapshot.turn;
-    base.locationId = snapshot.locationId;
-    base.flags = structuredClone(snapshot.flags);
-    base.playerCharacter = structuredClone(snapshot.playerCharacter);
-    base.characters = structuredClone(snapshot.characters);
-    base.characterTemplates = structuredClone(snapshot.characterTemplates);
-    base.npcs = structuredClone(snapshot.npcs);
-    base.inventory = structuredClone(snapshot.inventory);
-    base.quests = structuredClone(snapshot.quests);
-    base.memoryEvents = structuredClone(snapshot.memoryEvents);
-    base.lorebookIds = snapshot.lorebookIds ?? [];
-    base.lorebookTimingStates = snapshot.lorebookTimingStates
-      ? structuredClone(snapshot.lorebookTimingStates)
-      : undefined;
-    base.locationCatalog = structuredClone(snapshot.locationCatalog ?? []);
-    base.itemCatalog = snapshot.itemCatalog
-      ? structuredClone(snapshot.itemCatalog)
-      : undefined;
-    base.chapters = structuredClone(snapshot.chapters ?? []);
-    base.storyMetaSummaries = structuredClone(snapshot.storyMetaSummaries ?? []);
-    base.currentChapterStartedAtTurn = snapshot.currentChapterStartedAtTurn ?? 1;
-  }
+  restoreSnapshotState(base, snapshot);
 
   const result = await executeTurn(
     base,
@@ -410,6 +420,51 @@ export function editChatMessage(
 
   updatePlaythroughRecord(dataDir, playthrough);
   return { ok: true, state: playthrough };
+}
+
+/**
+ * Deletes the given message and everything after it (inclusive), restoring the
+ * world state to the snapshot of the first assistant message in the deleted
+ * block — that snapshot is the pre-turn state right after the new last message.
+ * When the deleted block holds no assistant message (nothing happened after the
+ * new last message), the live state already reflects the truncation. Permanently
+ * discards the deleted messages and their snapshots; no regeneration.
+ */
+export function truncateChat(
+  dataDir: string,
+  playthroughId: string,
+  messageId: string
+): EditOutcome {
+  const playthrough = getPlaythroughRecord(dataDir, playthroughId);
+  if (!playthrough) {
+    return { ok: false, status: 404, error: "Playthrough not found" };
+  }
+
+  const index = playthrough.messages.findIndex((message) => message.id === messageId);
+  if (index === -1) {
+    return { ok: false, status: 404, error: "Message not found" };
+  }
+
+  const deletedBlock = playthrough.messages.slice(index);
+  const targetAssistant = deletedBlock.find((message) => message.role === "assistant");
+  const snapshot = targetAssistant ? playthrough.snapshots?.[targetAssistant.id] : undefined;
+
+  // Inclusive delete: keep messages[0..index-1]; drop the message and everything after.
+  const next: Playthrough = {
+    ...playthrough,
+    messages: playthrough.messages.slice(0, index)
+  };
+  restoreSnapshotState(next, snapshot);
+
+  // Permanently drop snapshots belonging to messages that no longer exist.
+  const liveMessageIds = new Set(next.messages.map((message) => message.id));
+  next.snapshots = Object.fromEntries(
+    Object.entries(next.snapshots ?? {}).filter(([messageId]) => liveMessageIds.has(messageId))
+  );
+  next.updatedAt = new Date().toISOString();
+
+  updatePlaythroughRecord(dataDir, next);
+  return { ok: true, state: next };
 }
 
 export function buildOpeningPrompt(scenarioDescription: string | undefined, seed: ScenarioSeed): string {

@@ -127,12 +127,27 @@ uploads (`bodyLimit: 10MB`) because card PNGs exceed the default 1MB.
 Two actions, driven by the two-pane diff UI:
 
 - `generate` — ask the LLM to draft the BL sheet from the CCv2 content, with
-  optional `feedback` + `currentContent` for targeted retries.
+  optional `feedback` + `currentContent` for targeted retries. An optional
+  `format` targets a specific character format (defaults to the active preset's).
 - `apply` — commit a generated `content` (the diff's edited pane), update the
   record, and remove the stale `.bl.json` sidecar.
 
 The UI shows a **true two-pane git-style side-by-side diff** (BL / Original /
-Both tabs) before applying.
+Both tabs) before applying. A **format picker** beside the action lets you choose
+which preset's sheet structure to target, defaulting to the active preset.
+
+### Reformat (`POST /api/characters/:id/reformat`)
+
+For **native BL records** whose sheet no longer matches the selected format, the
+edit view shows **"Update into Newer Format with AI"**. It restructures the stored
+sheet into the target format with the same preview/accept diff flow — never a
+blind overwrite:
+
+- `generate` — restructure the sheet into the target `format`; optional
+  `feedback` + `currentContent` for targeted retries.
+- `apply` — commit the accepted `content` to the record.
+
+CCv2 sheets are rejected here ("convert to BL first").
 
 ---
 
@@ -194,6 +209,7 @@ user applies changes.
 | `POST /api/characters/import` | import CCv2 PNG/JSON card (10MB bodyLimit) |
 | `GET /api/characters/:id/avatar` | serve card avatar PNG |
 | `POST /api/characters/:id/convert` | CCv2→BL `generate` / `apply` |
+| `POST /api/characters/:id/reformat` | BL sheet → target format `generate` / `apply` |
 | `POST /api/characters/suggest-tags` | AI tag suggestion |
 | `POST /api/characters/brainstorm` | AI brainstorming assistant |
 | `PUT /api/playthroughs/:id/characters/:characterId` | edit runtime/template fields (guards read-only CCv2 sheets) |

@@ -1,5 +1,5 @@
-import type { CharacterTemplate, PromptPresetModule } from "../../schemas";
-import { ensureAllSections } from "../../engine/characterSections";
+import type { CharacterFormat, CharacterTemplate, PromptPresetModule } from "../../schemas";
+import { ensureAllSections, resolveCharacterFormat } from "../../engine/characterFormat";
 import type { TurnProvider } from "../provider";
 
 export interface ConvertGenerateInput {
@@ -7,6 +7,9 @@ export interface ConvertGenerateInput {
   feedback?: string;
   currentContent?: string;
   modules?: PromptPresetModule[];
+  /** Target character format for the converted sheet (defaults to the shipped
+   *  Default format when omitted). */
+  format?: CharacterFormat;
 }
 
 export interface ConvertGenerateOutput {
@@ -24,6 +27,7 @@ export async function convertCardGenerate(
   signal?: AbortSignal
 ): Promise<ConvertGenerateOutput> {
   const t = input.template;
+  const fmt = resolveCharacterFormat(input.format);
 
   // Build story context from card metadata
   const contextParts: string[] = [];
@@ -44,7 +48,8 @@ export async function convertCardGenerate(
       input.feedback,
       context,
       input.modules,
-      signal
+      signal,
+      fmt
     );
   } else {
     // Initial generation from source CCv2 card
@@ -52,12 +57,13 @@ export async function convertCardGenerate(
       { name: t.name, description: t.content },
       context,
       input.modules,
-      signal
+      signal,
+      fmt
     );
   }
 
-  // Post-process: fill missing canonical sections
-  content = ensureAllSections(content);
+  // Post-process: fill missing sections per the target format
+  content = ensureAllSections(content, fmt);
   return { content };
 }
 

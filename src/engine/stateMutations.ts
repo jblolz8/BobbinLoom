@@ -10,51 +10,26 @@ import {
 } from "../schemas";
 import {
   addSectionItem,
+  applySectionChanges,
   parseClothingFromContent,
+  removeContentSection,
   removeSectionItem,
-  replaceSectionItem
+  renameContentSection,
+  replaceSectionItem,
+  splitContentSections
 } from "./characterSections";
+import { formatSections, resolveCharacterFormat } from "./characterFormat";
 import { ITEMS, LOCATIONS } from "./demoData";
 import { instantiateTemplate } from "./playthroughFactory";
 
-export const KNOWN_SECTIONS = [
-  "Species",
-  "Gender",
-  "Body",
-  "Appearance",
-  "Clothing",
-  "Personality",
-  "Communication - Public",
-  "Communication - Private",
-  "Likes",
-  "Dislikes",
-  "Sexual Capabilities",
-] as const;
-export type KnownSection = (typeof KNOWN_SECTIONS)[number];
-
-export function patchContentSection(
-  content: string,
-  sectionName: string,
-  newBody: string
-): string {
-  const canonical = KNOWN_SECTIONS.find(
-    (s) => s.toLowerCase() === sectionName.trim().toLowerCase()
-  );
-  if (!canonical) {
-    throw new Error(`Unknown section: "${sectionName}"`);
-  }
-
-  const escapedName = canonical.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const headerRegex = new RegExp(
-    `\\[${escapedName}\\]\\n([\\s\\S]*?)(?=\\n\\[[A-Z][^\\]]*\\]|$)`,
-    "i"
-  );
-
-  if (!headerRegex.test(content)) {
-    throw new Error(`Section [${canonical}] not found in content`);
-  }
-
-  return content.replace(headerRegex, `[${canonical}]\n${newBody}`);
+/** The active preset's section order + inline set, threaded into section
+ *  patches so new sections land where the user's format expects them. */
+function formatPatchOpts(next: Playthrough): { order: string[]; inlineHeaders: string[] } {
+  const sections = formatSections(next.promptSettings?.characterFormat);
+  return {
+    order: sections.map((s) => s.name),
+    inlineHeaders: sections.filter((s) => s.inline).map((s) => s.name),
+  };
 }
 
 function newId(prefix: string): string {
@@ -263,6 +238,7 @@ export function applyStatePatch(state: Playthrough, patchInput: unknown): ApplyP
       rejected.push("no template found for character: " + character.name);
       continue;
     }
+    // Any header is allowed — the format (or the sheet itself) defines the set.
     if (entry.section.trim().toLowerCase() === "clothing") {
       character.clothing = parseClothingFromContent(entry.content);
       applied.push(
@@ -270,23 +246,83 @@ export function applyStatePatch(state: Playthrough, patchInput: unknown): ApplyP
       );
       continue;
     }
-    try {
-      next.characterTemplates[tplIdx] = {
-        ...next.characterTemplates[tplIdx],
-        content: patchContentSection(
-          next.characterTemplates[tplIdx].content,
-          entry.section,
-          entry.content
-        ),
-      };
-      applied.push(
-        "section updated: " + character.name + " → [" + entry.section + "]"
-      );
-    } catch (e) {
-      rejected.push(
-        "section update failed for " + character.name + ": " + (e as Error).message
-      );
+    const fmt = formatPatchOpts(next);
+    const r = applySectionChanges(
+      next.characterTemplates[tplIdx].content,
+      [{ header: entry.section, body: entry.content }],
+      { order: fmt.order, inlineHeaders: fmt.inlineHeaders }
+    );
+    next.characterTemplates[tplIdx] = {
+      ...next.characterTemplates[tplIdx],
+      content: r,
+    };
+    applied.push(
+      "section updated: " + character.name + " → [" + entry.section + "]"
+    );
+  }
+
+  for (const entry of patch.characterSectionRemove ?? []) {
+    const character = findCharacter(entry.characterId);
+    if (!character) {
+      rejected.push("unknown character for sectionRemove: " + entry.characterId);
+      continue;
     }
+    if (isReadOnlySheet(next, character)) {
+      rejected.push("section remove rejected: " + character.name + " has a read-only CCv2 sheet");
+      continue;
+    }
+    const tplIdx = next.characterTemplates.findIndex((t) => t.id === character.templateId);
+    if (tplIdx < 0) { rejected.push("no template found for character: " + character.name); continue; }
+    const before = next.characterTemplates[tplIdx].content;
+    const beforeCount = splitContentSections(before).sections.length;
+    const after = removeContentSection(before, entry.section);
+    const afterCount = splitContentSections(after).sections.length;
+    if (afterCount === beforeCount) {
+      rejected.push("section remove failed: " + character.name + " has no [" + entry.section + "] section");
+      continue;
+    }
+    next.characterTemplates[tplIdx] = { ...next.characterTemplates[tplIdx], content: after };
+    if (entry.section.trim().toLowerCase() === "clothing") {
+      character.clothing = [];
+    }
+    applied.push("section removed: " + character.name + " → [" + entry.section + "]");
+  }
+
+  for (const entry of patch.characterSectionRename ?? []) {
+    const character = findCharacter(entry.characterId);
+    if (!character) {
+      rejected.push("unknown character for sectionRename: " + entry.characterId);
+      continue;
+    }
+    if (isReadOnlySheet(next, character)) {
+      rejected.push("section rename rejected: " + character.name + " has a read-only CCv2 sheet");
+      continue;
+    }
+    const tplIdx = next.characterTemplates.findIndex((t) => t.id === character.templateId);
+    if (tplIdx < 0) { rejected.push("no template found for character: " + character.name); continue; }
+    const fromKey = entry.from.trim().toLowerCase();
+    const toKey = entry.to.trim().toLowerCase();
+    if (!fromKey || !toKey || fromKey === toKey) {
+      rejected.push("section rename failed: " + character.name + " — from and to must differ");
+      continue;
+    }
+    const before = next.characterTemplates[tplIdx].content;
+    const exists = splitContentSections(before).sections.some((s) => s.header.trim().toLowerCase() === fromKey);
+    if (!exists) {
+      rejected.push("section rename failed: " + character.name + " has no [" + entry.from + "] section");
+      continue;
+    }
+    const after = renameContentSection(before, entry.from, entry.to);
+    next.characterTemplates[tplIdx] = { ...next.characterTemplates[tplIdx], content: after };
+    // Keep the structured-clothing invariant: renaming a [Clothing] section
+    // means the outfit is no longer described as clothing (clear it), and
+    // renaming a section TO "Clothing" re-derives the outfit from it.
+    if (fromKey === "clothing") {
+      character.clothing = [];
+    } else if (toKey === "clothing") {
+      character.clothing = parseClothingFromContent(after);
+    }
+    applied.push("section renamed: " + character.name + " → [" + entry.from + "] ⇒ [" + entry.to + "]");
   }
 
   for (const entry of patch.characterSectionItemAdd ?? []) {

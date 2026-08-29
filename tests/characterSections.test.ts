@@ -5,8 +5,6 @@ import {
   toJsonExampleContent,
   splitContentSections,
   joinContentSections,
-  missingSections,
-  ensureAllSections,
   seedMemorySummary,
   parseClothingFromContent,
   summaryFromContent,
@@ -17,7 +15,9 @@ import {
   parseSectionItems,
   addSectionItem,
   removeSectionItem,
-  replaceSectionItem
+  replaceSectionItem,
+  removeContentSection,
+  renameContentSection
 } from "../src/engine/characterSections";
 
 describe("characterSections", () => {
@@ -50,37 +50,31 @@ describe("characterSections", () => {
     expect(joinContentSections(sections)).toBe(CHARACTER_SHEET_EXAMPLE);
   });
 
-  it("missingSections reports gaps in a half-built sheet", () => {
-    const half = "[Species]: Human\n[Gender]: Female\n";
-    expect(missingSections(half)).toEqual(expect.arrayContaining(["Body", "Clothing", "Personality"]));
-    expect(missingSections(half)).not.toContain("Species");
-  });
-
-  it("ensureAllSections appends stubs for missing sections in canonical order", () => {
-    const content = "[Species]: Human\n\n[Personality]\n- Cheerful\n";
-    const filled = ensureAllSections(content, true);
-    for (const h of CHARACTER_SECTION_HEADERS) {
-      expect(filled).toContain(`[${h}]`);
-    }
-    // existing body preserved
-    expect(filled).toContain("[Species]: Human");
-    expect(filled).toContain("- Cheerful");
-  });
-
-  it("ensureAllSections does not stub [Sexual Capabilities] by default", () => {
-    const filled = ensureAllSections("[Personality]\n- Quiet\n");
-    expect(filled).not.toContain("[Sexual Capabilities]");
-    // the rest of the canonical sections ARE stubbed
-    for (const h of CHARACTER_SECTION_HEADERS.filter((x) => x !== "Sexual Capabilities")) {
-      expect(filled).toContain(`[${h}]`);
-    }
-  });
-
   it("seedMemorySummary picks the first Personality bullet, else falls back", () => {
     expect(seedMemorySummary("Mira", "[Species]: Human\n\n[Personality]\n- Cheerful, curious\n..."))
       .toBe("Mira — Cheerful, curious");
     expect(seedMemorySummary("Mira", "[Species]: Human\n[Dislikes]\n- x"))
       .toContain("Mira has not formed");
+  });
+
+  it("removeContentSection drops one whole section and keeps the rest", () => {
+    const content = "[Species]: Human\n\n[Body]\n- Tall\n\n[Personality]\n- Cheerful";
+    const out = removeContentSection(content, "Body");
+    expect(out).not.toContain("[Body]");
+    expect(out).toContain("[Species]: Human");
+    expect(out).toContain("[Personality]");
+    // Removing an absent section is a no-op.
+    expect(removeContentSection(content, "Likes")).toBe(content);
+  });
+
+  it("renameContentSection renames a header and preserves its body", () => {
+    const content = "[Species]: Human\n\n[Body]\n- Tall\n";
+    const out = renameContentSection(content, "body", "Physique");
+    expect(out).toContain("[Physique]\n- Tall");
+    expect(out).not.toContain("[Body]");
+    expect(out).toContain("[Species]: Human");
+    // Missing source header is a no-op.
+    expect(renameContentSection(content, "Likes", "Hobbies")).toBe(content);
   });
 });
 

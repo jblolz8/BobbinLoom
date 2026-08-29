@@ -103,14 +103,47 @@ describe("basic NPC lifecycle", () => {
     expect(tpl.content).toContain("[Appearance]\n- Hair: Jet black");
   });
 
-  it("rejects characterSectionUpdate with unknown section", () => {
+  it("characterSectionUpdate accepts any header and inserts a missing section", () => {
     const pt = createInitialPlaythrough("Test", undefined, "default", "Default", undefined, undefined);
     const charId = pt.characters[0].id;
 
     const result = applyStatePatch(pt, {
       characterSectionUpdate: [{ characterId: charId, section: "FavoriteFood", content: "Pizza" }]
     });
-    expect(result.rejected.length).toBeGreaterThan(0);
+    expect(result.rejected.length).toBe(0);
+    const tpl = result.state.characterTemplates.find(t => t.id === pt.characters[0].templateId)!;
+    expect(tpl.content).toContain("[FavoriteFood]\nPizza");
+  });
+
+  it("characterSectionRemove deletes a whole section (and clears structured clothing)", () => {
+    const pt = createInitialPlaythrough("Test", undefined, "default", "Default", undefined, undefined);
+    const charId = pt.characters[0].id;
+    const tplId = pt.characters[0].templateId;
+
+    const result = applyStatePatch(pt, {
+      characterSectionRemove: [{ characterId: charId, section: "Dislikes" }]
+    });
+    expect(result.rejected.length).toBe(0);
+    expect(result.state.characterTemplates.find(t => t.id === tplId)!.content).not.toContain("[Dislikes]");
+    // Removing an absent section rejects.
+    const again = applyStatePatch(result.state, {
+      characterSectionRemove: [{ characterId: charId, section: "Dislikes" }]
+    });
+    expect(again.rejected.length).toBeGreaterThan(0);
+  });
+
+  it("characterSectionRename renames a header and preserves its body", () => {
+    const pt = createInitialPlaythrough("Test", undefined, "default", "Default", undefined, undefined);
+    const charId = pt.characters[0].id;
+    const tplId = pt.characters[0].templateId;
+
+    const result = applyStatePatch(pt, {
+      characterSectionRename: [{ characterId: charId, from: "Personality", to: "Temperament" }]
+    });
+    expect(result.rejected.length).toBe(0);
+    const tpl = result.state.characterTemplates.find(t => t.id === tplId)!;
+    expect(tpl.content).toContain("[Temperament]");
+    expect(tpl.content).not.toContain("[Personality]");
   });
 
   it("rejects characterSectionUpdate for unknown character", () => {

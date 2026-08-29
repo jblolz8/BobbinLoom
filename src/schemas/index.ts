@@ -273,18 +273,41 @@ export const PromptModuleSetSchema = z.preprocess(
 export type PromptModuleSet = z.infer<typeof PromptModuleSetSchema>;
 export const EMPTY_MODULE_SET: PromptModuleSet = { turn: [], seed: [], sheet: [], summary: [] };
 
+// ── Character format (preset-owned sheet structure) ──
+// The ordered list of sections a character sheet should contain. Each section
+// carries generation guidance (instruction + optional examples) and an optional
+// `inline` flag (render as `[Name]: value` on one line instead of a block).
+// The list is open-ended: extra sections beyond a preset's list are always
+// allowed in sheets — the format drives defaults, order, and guidance, never a
+// rejection whitelist.
+export const CharacterFormatSectionSchema = z.object({
+  name: z.string().min(1),
+  order: z.number(),
+  instruction: z.string().default(""),
+  examples: z.array(z.string()).default([]),
+  inline: z.boolean().default(false),
+});
+export type CharacterFormatSection = z.infer<typeof CharacterFormatSectionSchema>;
+
+export const CharacterFormatSchema = z.object({
+  sections: z.array(CharacterFormatSectionSchema).default([]),
+});
+export type CharacterFormat = z.infer<typeof CharacterFormatSchema>;
+
 export const PromptPresetSchema = z.object({
   id: z.string(),
   name: z.string(),
   readonly: z.boolean(),
-  modules: PromptModuleSetSchema
+  modules: PromptModuleSetSchema,
+  characterFormat: CharacterFormatSchema.optional()
 });
 export type PromptPreset = z.infer<typeof PromptPresetSchema>;
 
 export const PlaythroughPromptSettingsSchema = z.object({
   presetId: z.string(),
   presetName: z.string(),
-  modules: PromptModuleSetSchema
+  modules: PromptModuleSetSchema,
+  characterFormat: CharacterFormatSchema.optional()
 });
 export type PlaythroughPromptSettings = z.infer<typeof PlaythroughPromptSettingsSchema>;
 
@@ -419,6 +442,10 @@ export const PlaythroughSchema = z.object({
   scenarioDescription: z.string().optional(),
   personaId: z.string().optional(),
   initialCastIds: z.array(z.string()).optional(),
+  // Per-playthrough input draft (client syncs a debounced copy; newer-wins vs
+  // localStorage). Optional so pre-draft records parse untouched.
+  draft: z.string().optional(),
+  draftUpdatedAt: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string()
 });
@@ -486,6 +513,15 @@ export const StatePatchSchema = z.object({
   characterSectionItemReplace: z.array(z.object({
     characterId: z.string(),
     section: z.string(),
+    from: z.string(),
+    to: z.string(),
+  })).optional(),
+  characterSectionRemove: z.array(z.object({
+    characterId: z.string(),
+    section: z.string(),
+  })).optional(),
+  characterSectionRename: z.array(z.object({
+    characterId: z.string(),
     from: z.string(),
     to: z.string(),
   })).optional(),

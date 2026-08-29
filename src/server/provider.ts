@@ -1,5 +1,5 @@
 import { buildMockAssistantTurn } from "../engine/engine";
-import type { AssistantTurn, ParsedUserInput, Playthrough, PromptPresetModule, ScenarioPreferences, ScenarioSeed } from "../schemas";
+import type { AssistantTurn, CharacterFormat, ParsedUserInput, Playthrough, PromptPresetModule, ScenarioPreferences, ScenarioSeed } from "../schemas";
 
 /** Per-segment token estimates (chars/4) of the prompt actually sent to the model. */
 export type PromptUsageBreakdown = {
@@ -63,7 +63,8 @@ export interface TurnProvider {
     preferences: ScenarioPreferences,
     lorebookIds?: string[],
     modules?: PromptPresetModule[],
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    format?: CharacterFormat
   ): Promise<ScenarioSeed>;
 
   /** Summarize a chapter transcript into { name, shortDescription, fullSummary }. */
@@ -82,12 +83,14 @@ export interface TurnProvider {
 
   /** Generate a detailed character sheet content blob from a background NPC's
    *  basic data and the current story context. Returns just the content string
-   *  (the text blob for the [Species]…[Dislikes] sections). */
+   *  (the text blob of the preset's sections). `format` is the target character
+   *  format (defaults to the shipped Default format when omitted). */
   generateCharacterSheet(
     npc: { name: string; description: string; disposition?: string },
     storyContext: string,
     modules?: PromptPresetModule[],
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    format?: CharacterFormat
   ): Promise<string>;
 
   /** Refine an existing character sheet draft based on targeted user feedback and
@@ -98,7 +101,19 @@ export interface TurnProvider {
     feedback: string,
     storyContext: string,
     modules?: PromptPresetModule[],
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    format?: CharacterFormat
+  ): Promise<string>;
+
+  /** Restructure an existing sheet into a target character format: ensure every
+   *  format section is present in the format's order, add missing sections with
+   *  content derived from the existing sheet, preserve established details. */
+  reformatCharacterSheet(
+    currentContent: string,
+    format: CharacterFormat,
+    modules?: PromptPresetModule[],
+    signal?: AbortSignal,
+    feedback?: string
   ): Promise<string>;
 
   /** Suggest a list of relevant tags for a character based on its sheet, notes,
@@ -136,6 +151,8 @@ export interface CharacterBrainstormInput {
   userMessage: string;
   includeOriginalCard?: boolean;
   modules?: PromptPresetModule[];
+  /** Target character format whose section guidance the assistant should follow. */
+  format?: CharacterFormat;
 }
 
 export interface CharacterBrainstormOutput {
@@ -159,7 +176,7 @@ export class MockProvider implements TurnProvider {
     return { turn: buildMockAssistantTurn(input, state, choicesEnabled) };
   }
 
-  async generateScenarioSeed(_preferences: ScenarioPreferences, _lorebookIds?: string[], _modules?: PromptPresetModule[], _signal?: AbortSignal): Promise<ScenarioSeed> {
+  async generateScenarioSeed(_preferences: ScenarioPreferences, _lorebookIds?: string[], _modules?: PromptPresetModule[], _signal?: AbortSignal, _format?: CharacterFormat): Promise<ScenarioSeed> {
     throw new Error("Scenario generation is not available with the Mock provider. Switch to a real provider in Settings.");
   }
 
@@ -175,12 +192,16 @@ export class MockProvider implements TurnProvider {
     return []; // mock doesn't support embeddings
   }
 
-  async generateCharacterSheet(_npc: { name: string; description: string; disposition?: string }, _storyContext: string, _modules?: PromptPresetModule[], _signal?: AbortSignal): Promise<string> {
+  async generateCharacterSheet(_npc: { name: string; description: string; disposition?: string }, _storyContext: string, _modules?: PromptPresetModule[], _signal?: AbortSignal, _format?: CharacterFormat): Promise<string> {
     throw new Error("Character sheet generation is not available with the Mock provider. Switch to a real provider in Settings.");
   }
 
-  async refineCharacterSheet(_currentContent: string, _originalCardContent: string, _feedback: string, _storyContext: string, _modules?: PromptPresetModule[], _signal?: AbortSignal): Promise<string> {
+  async refineCharacterSheet(_currentContent: string, _originalCardContent: string, _feedback: string, _storyContext: string, _modules?: PromptPresetModule[], _signal?: AbortSignal, _format?: CharacterFormat): Promise<string> {
     throw new Error("Character sheet refinement is not available with the Mock provider. Switch to a real provider in Settings.");
+  }
+
+  async reformatCharacterSheet(_currentContent: string, _format: CharacterFormat, _modules?: PromptPresetModule[], _signal?: AbortSignal, _feedback?: string): Promise<string> {
+    throw new Error("Character sheet reformatting is not available with the Mock provider. Switch to a real provider in Settings.");
   }
 
   async suggestCharacterTags(_character: { name: string; content: string; creatorNotes?: string; currentTags?: string[]; guidance?: string }, _libraryTags: string[], _signal?: AbortSignal): Promise<string[]> {

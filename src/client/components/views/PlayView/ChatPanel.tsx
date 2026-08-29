@@ -20,6 +20,7 @@ export type ChatPanelProps = {
   showGenerationTime?: boolean;
   showMessageTimestamps?: boolean;
   showModelName?: boolean;
+  canContinue: boolean;
   onChoiceSelect: (text: string) => void;
   editingMessageId: string | null;
   editDraft: string;
@@ -28,6 +29,7 @@ export type ChatPanelProps = {
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   onRetryRequest: (msg: ChatMessage) => void;
+  onRequestTruncate: (msg: ChatMessage) => void;
   lastPatchInfo: { applied: string[]; rejected: string[]; warnings: string[] };
   sendingMessage: string | null;
   cancelledNotice: string | null;
@@ -246,9 +248,10 @@ export function ChatPanel(props: ChatPanelProps) {
     playthrough, input, onInputChange, onSend, loading, actionLoading,
     choices, choicesEnabled, showDebug, showContextUsage,
     showGenerationTime = true, showMessageTimestamps = true, showModelName = true,
+    canContinue,
     onChoiceSelect,
     editingMessageId, editDraft, onEditDraftChange, onStartEdit, onSaveEdit, onCancelEdit,
-    onRetryRequest, lastPatchInfo,
+    onRetryRequest, onRequestTruncate, lastPatchInfo,
     sendingMessage, cancelledNotice, failedNotice, onDismissNotice, onDismissFailedNotice, onCancel, tokenUsage,
     viewingChapterId, onReturnToCurrentChapter,
     onResummarizeChapter, resummarizingChapterId,
@@ -264,7 +267,7 @@ export function ChatPanel(props: ChatPanelProps) {
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (!loading && input.trim()) {
+      if (!loading && (input.trim() || canContinue)) {
         onSend();
       }
     }
@@ -340,6 +343,14 @@ export function ChatPanel(props: ChatPanelProps) {
                 <div className="edit-actions">
                   <button onClick={onSaveEdit} disabled={actionLoading || !editDraft.trim()}>{actionLoading ? "Saving…" : "Save"}</button>
                   <button onClick={onCancelEdit} disabled={actionLoading}>Cancel</button>
+                  <button
+                    className="danger"
+                    onClick={() => onRequestTruncate(msg)}
+                    disabled={actionLoading}
+                    title="Permanently delete this message and everything after it"
+                  >
+                    Delete up to here
+                  </button>
                 </div>
               </div>
             ) : (
@@ -364,6 +375,10 @@ export function ChatPanel(props: ChatPanelProps) {
             </article>
             <GeneratingResponse showGenerationTime={showGenerationTime} />
           </>
+        ) : null}
+
+        {!sendingMessage && loading ? (
+          <GeneratingResponse showGenerationTime={showGenerationTime} />
         ) : null}
 
         {cancelledNotice ? (
@@ -400,7 +415,13 @@ export function ChatPanel(props: ChatPanelProps) {
         {loading ? (
           <button className="cancel-btn" onClick={onCancel}>Cancel</button>
         ) : (
-          <button onClick={onSend} disabled={!input.trim()}>Send</button>
+          <button
+            onClick={onSend}
+            disabled={!input.trim() && !canContinue}
+            title={!input.trim() && canContinue ? "Ask the AI to respond to your last message" : undefined}
+          >
+            {!input.trim() && canContinue ? "Continue" : "Send"}
+          </button>
         )}
       </div>
       ) : null}

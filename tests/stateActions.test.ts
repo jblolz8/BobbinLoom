@@ -107,6 +107,10 @@ class MockProviderShim implements TurnProvider {
     throw new Error("not used in promote tests");
   }
 
+  async reformatCharacterSheet(_content: string, _format: unknown): Promise<string> {
+    throw new Error("not used in promote tests");
+  }
+
   async suggestCharacterTags(): Promise<string[]> {
     return [];
   }
@@ -170,6 +174,7 @@ describe("closeChapterAction — NPC staleness pruning (Phase E)", () => {
       async embedTexts(): Promise<number[][]> { return []; },
       async generateCharacterSheet(): Promise<string> { throw new Error("not used"); },
       async refineCharacterSheet(): Promise<string> { throw new Error("not used"); },
+      async reformatCharacterSheet(): Promise<string> { throw new Error("not used"); },
       async suggestCharacterTags(): Promise<string[]> { return []; },
       async brainstormCharacter() { throw new Error("not used"); }
     };

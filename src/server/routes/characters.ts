@@ -18,9 +18,11 @@ import {
 } from "../store";
 import { parseCard } from "../characterCards/parseCard";
 import { convertCardApply, convertCardGenerate } from "../characterCards/convertCard";
+import { resolveCharacterFormat } from "../../engine/characterFormat";
 import { PNG_SIG } from "../characterCards/pngText";
 import { saveToLibraryAction } from "../stateActions";
 import { abortOnClientDisconnect, dataDir, providerManager } from "./helpers";
+import type { CharacterFormat } from "../../schemas";
 
 const UpdateCharacterBody = z.object({
   name: z.string().min(1).optional(),
@@ -173,6 +175,7 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
     content: z.string().optional(),        // required for "apply"
     currentContent: z.string().optional(), // active draft for targeted retry "generate"
     feedback: z.string().optional(),       // optional retry feedback for "generate"
+    format: z.record(z.any()).optional(),  // target character format (from the active preset)
   });
 
   app.post("/api/characters/:id/convert", async (request, reply) => {
@@ -197,6 +200,7 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
           template,
           feedback: body.feedback,
           currentContent: body.currentContent,
+          format: body.format as CharacterFormat | undefined,
         }, controller.signal);
         return {
           content: result.content,
@@ -219,6 +223,53 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
     // The converted record now lives at <slug>.json; drop the stale CCv2 import
     // record (.bl.json) so the library reads exactly one record for the card.
     removeCharacterImportRecord(params.id);
+    return { record: updated };
+  });
+
+  // ── Reformat an existing BL sheet into a target character format ──
+  const ReformatActionBody = z.object({
+    action: z.enum(["generate", "apply"]),
+    content: z.string().optional(),        // required for "apply"
+    format: z.record(z.any()).optional(),  // target character format
+    currentContent: z.string().optional(), // source sheet for retry-with-feedback
+    feedback: z.string().optional(),       // user guidance for a retry
+  });
+
+  app.post("/api/characters/:id/reformat", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const body = ReformatActionBody.parse(request.body ?? {});
+
+    if (body.action === "apply" && !body.content) {
+      return reply.code(400).send({ error: "content is required for apply action" });
+    }
+
+    const template = getCharacterTemplate(params.id);
+    if (!template) return reply.code(404).send({ error: "Character not found" });
+    if (template.format === "ccv2") {
+      return reply.code(400).send({ error: "Read-only CCv2 sheets cannot be reformatted — convert to BL format first" });
+    }
+
+    if (body.action === "generate") {
+      try {
+        const controller = abortOnClientDisconnect(reply);
+        const provider = providerManager.getProvider();
+        const format = resolveCharacterFormat(body.format as CharacterFormat | undefined);
+        // On retry the client sends the previously-generated sheet plus feedback.
+        const source = body.currentContent ?? template.content;
+        const content = await provider.reformatCharacterSheet(source, format, undefined, controller.signal, body.feedback);
+        return { content, originalContent: template.content, record: template };
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        if (message.includes("abort")) {
+          return reply.code(499).send({ error: "Request aborted" });
+        }
+        return reply.code(502).send({ error: `Reformat failed: ${message}` });
+      }
+    }
+
+    // action === "apply"
+    const updated = updateCharacterTemplateRecord(params.id, { content: body.content! });
+    if (!updated) return reply.code(404).send({ error: "Character not found" });
     return { record: updated };
   });
 
@@ -273,6 +324,7 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
     ).default([]),
     userMessage: z.string().min(1),
     includeOriginalCard: z.boolean().optional(),
+    format: z.record(z.any()).optional(),
   });
 
   app.post("/api/characters/brainstorm", async (request, reply) => {
@@ -286,6 +338,7 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
           chatHistory: body.chatHistory,
           userMessage: body.userMessage,
           includeOriginalCard: body.includeOriginalCard,
+          format: body.format as CharacterFormat | undefined,
         },
         controller.signal
       );

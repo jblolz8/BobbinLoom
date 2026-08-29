@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createBlankPlaythrough, createInitialPlaythrough, parseUserInput } from "../src/engine/engine";
+import { createBlankPlaythrough, createInitialPlaythrough, DEFAULT_CHARACTER_FORMAT, NSFW_CHARACTER_FORMAT, parseUserInput } from "../src/engine/engine";
 import { DEMO_TEMPLATE } from "../src/engine/demoData";
 import { OpenAICompatibleProvider, assembleTurnPrompt, extractJsonPayload, repairRawControlChars } from "../src/server/openAiCompatibleProvider";
 import { normalizeBaseUrl, resolveConnectionConfig } from "../src/server/providerConfig";
@@ -386,7 +386,10 @@ describe("OpenAICompatibleProvider", () => {
     const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
     await provider.generateCharacterSheet(
       { name: "Shopkeep", description: "A friendly shopkeeper.", disposition: "friendly" },
-      "Setting: Town\nContent Rating: mature\nPlayer Character: Hero"
+      "Setting: Town\nContent Rating: mature\nPlayer Character: Hero",
+      undefined,
+      undefined,
+      NSFW_CHARACTER_FORMAT
     );
     const marker = "Return ONLY a JSON object with this exact shape:";
     const start = sentPrompt.indexOf(marker);
@@ -396,6 +399,49 @@ describe("OpenAICompatibleProvider", () => {
     expect(() => JSON.parse(sentPrompt.slice(jsonStart, jsonEnd + 1))).not.toThrow();
     expect(sentPrompt).toContain("[Species]");
     expect(sentPrompt).toContain("[Sexual Capabilities]");
+    expect(sentPrompt).toContain("in this order: [Species]");
+  });
+
+  it("brainstorm prompt follows the target character format instead of a hardcoded list", async () => {
+    let sentPrompt = "";
+    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const b = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
+      sentPrompt = b.messages[0]?.content ?? "";
+      return jsonResponse({ choices: [{ message: { content: JSON.stringify({ reply: "ok" }) } }] });
+    });
+    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+
+    // Default format (10 sections, no [Sexual Capabilities]).
+    await provider.brainstormCharacter(
+      {
+        character: { name: "Mira", content: "[Species]: Human\n\n[Personality]\n- Cheerful" },
+        chatHistory: [],
+        userMessage: "Make her more mysterious",
+        format: DEFAULT_CHARACTER_FORMAT,
+      },
+      undefined
+    );
+    // The format's section order and instructions are injected.
+    expect(sentPrompt).toContain("in this order: [Species]");
+    expect(sentPrompt).toContain("Communication - Public");
+    expect(sentPrompt).toContain("The character's species, ancestry, or type of being.");
+    // The Default format has no [Sexual Capabilities], so the assistant must not demand it.
+    expect(sentPrompt).not.toContain("[Sexual Capabilities]");
+    // Inline sections are explained from the format, not hardcoded Species/Gender only.
+    expect(sentPrompt).toContain("Sections marked inline");
+
+    // NSFW format (11 sections) DOES include Sexual Capabilities guidance.
+    await provider.brainstormCharacter(
+      {
+        character: { name: "Mira", content: "[Species]: Human" },
+        chatHistory: [],
+        userMessage: "Add kinks",
+        format: NSFW_CHARACTER_FORMAT,
+      },
+      undefined
+    );
+    expect(sentPrompt).toContain("[Sexual Capabilities]");
+    expect(sentPrompt).toContain("Femdom (giving)");
   });
 
   it("STORY SO FAR injects the meta-summary plus only the most recent verbatim chapters", () => {

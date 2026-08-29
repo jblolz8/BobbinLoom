@@ -1,6 +1,8 @@
-import { CHARACTER_SHEET_EXAMPLE, toJsonExampleContent } from "../engine/characterSections";
+import { toJsonExampleContent } from "../engine/characterSections";
+import { buildFormatExample, buildFormatRules, resolveCharacterFormat } from "../engine/characterFormat";
 import {
   AssistantTurnSchema,
+  CharacterFormat,
   ParsedUserInput,
   Playthrough,
   PromptPresetModule,
@@ -128,9 +130,10 @@ export class OpenAICompatibleProvider {
     };
   }
 
-  async generateScenarioSeed(preferences: ScenarioPreferences, lorebookIds?: string[], modules?: PromptPresetModule[], signal?: AbortSignal): Promise<ScenarioSeed> {
+  async generateScenarioSeed(preferences: ScenarioPreferences, lorebookIds?: string[], modules?: PromptPresetModule[], signal?: AbortSignal, format?: CharacterFormat): Promise<ScenarioSeed> {
     const lorebookContext = buildLorebookContext(lorebookIds, preferences.setting ?? "", lorebookBudgetChars(this.config.maxTokens));
     const seedModules = renderModules(modules);
+    const sheetExample = toJsonExampleContent(buildFormatExample(format));
 
     const prompt = [
       "You are a scenario generator for a local RPG chat engine called BobbinLoom.",
@@ -143,7 +146,7 @@ export class OpenAICompatibleProvider {
       "  ],",
       '  "character": {',
       '    "name": "Character Name",',
-      `    "content": "${toJsonExampleContent(CHARACTER_SHEET_EXAMPLE)}"`,
+      `    "content": "${sheetExample}"`,
       "  },",
       '  "quest": {',
       '    "id": "quest_shortname",',
@@ -234,25 +237,29 @@ export class OpenAICompatibleProvider {
     npc: { name: string; description: string; disposition?: string },
     storyContext: string,
     modules?: PromptPresetModule[],
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    format?: CharacterFormat
   ): Promise<string> {
+    const fmt = resolveCharacterFormat(format);
     const sheetModules = renderModules(modules);
+    const example = toJsonExampleContent(buildFormatExample(fmt));
+    const rules = buildFormatRules(fmt);
     const prompt = [
       "You are a character sheet generator for a local RPG chat engine called BobbinLoom.",
       "Given a background NPC's basic info and the current story context, produce a detailed character sheet content blob.",
       "",
       "Return ONLY a JSON object with this exact shape:",
       "{",
-      `  "content": "${toJsonExampleContent(CHARACTER_SHEET_EXAMPLE)}"`,
+      `  "content": "${example}"`,
       "}",
       "",
       "Rules:",
       `- The NPC is named "${npc.name}". Their current description is: "${npc.description}"${npc.disposition ? ` and their disposition is "${npc.disposition}".` : "."}`,
-      "- Expand this into a full character sheet. Invent reasonable details that fit the story context — species, body type, appearance, personality, communication style, likes, and dislikes.",
-      "- Use the standard section headers: [Species], [Gender], [Body], [Appearance], [Clothing], [Personality], [Communication - Public], [Communication - Private], [Likes], [Dislikes].",
+      "- Expand this into a full character sheet. Invent reasonable details that fit the story context.",
+      "- The [Clothing] section, if present, should be a bulleted list describing what the character wears (- Top: ..., - Bottom: ..., - Feet: ...).",
       "- Match the tone and detail level of the story context.",
-      "- The [Clothing] section should be a bulleted list describing what the character wears. Use slot-style bullets (- Top: ..., - Bottom: ..., - Feet: ...).",
-      "- The character should feel like they belong in this world. Use the story context to ground their details.",
+      "- The character should feel like they belong in this world.",
+      rules,
       "",
       ...(sheetModules ? [sheetModules] : []),
       "",
@@ -262,6 +269,105 @@ export class OpenAICompatibleProvider {
       "Return ONLY the JSON object. No markdown, no explanation.",
     ].join("\n");
 
+    return this.executeSheetJsonRequest(prompt, signal, "The model did not return a valid character sheet.");
+  }
+
+  async refineCharacterSheet(
+    currentContent: string,
+    originalCardContent: string,
+    feedback: string,
+    storyContext: string,
+    modules?: PromptPresetModule[],
+    signal?: AbortSignal,
+    format?: CharacterFormat
+  ): Promise<string> {
+    const fmt = resolveCharacterFormat(format);
+    const sheetModules = renderModules(modules);
+    const example = toJsonExampleContent(buildFormatExample(fmt));
+    const rules = buildFormatRules(fmt);
+    const prompt = [
+      "You are an expert character sheet editor for a local RPG chat engine called BobbinLoom.",
+      "Your task is to refine and revise an existing BobbinLoom character sheet draft based on user feedback.",
+      "",
+      "Return ONLY a JSON object with this exact shape:",
+      "{",
+      `  "content": "${example}"`,
+      "}",
+      "",
+      "CRITICAL INSTRUCTIONS FOR TARGETED EDITING:",
+      "1. Apply the USER FEEDBACK precisely to the relevant sections or lines of the character sheet.",
+      "2. PRESERVE all parts, sections, and details of the CURRENT DRAFT that were not criticized or targeted by the feedback verbatim. Do NOT unnecessarily rewrite, shuffle, or delete good existing sections.",
+      "3. Keep the sheet conforming to the target format below.",
+      rules,
+      "4. The [Clothing] section, if present, should be a bulleted list describing what the character wears (- Top: ..., - Bottom: ..., - Feet: ...).",
+      "5. Reference the ORIGINAL SOURCE CARD if additional source lore is needed.",
+      "",
+      ...(sheetModules ? [sheetModules] : []),
+      "",
+      "--- CURRENT DRAFT SHEET ---",
+      currentContent,
+      "",
+      "--- ORIGINAL SOURCE CARD (REFERENCE) ---",
+      originalCardContent,
+      "",
+      "--- USER FEEDBACK (APPLY THIS) ---",
+      feedback,
+      "",
+      ...(storyContext && storyContext !== "(no additional context)" ? ["--- ADDITIONAL CONTEXT ---", storyContext, ""] : []),
+      "Return ONLY the JSON object. No markdown, no explanation.",
+    ].join("\n");
+
+    return this.executeSheetJsonRequest(prompt, signal, "The model did not return a valid revised character sheet.");
+  }
+
+  async reformatCharacterSheet(
+    currentContent: string,
+    format: CharacterFormat,
+    modules?: PromptPresetModule[],
+    signal?: AbortSignal,
+    feedback?: string
+  ): Promise<string> {
+    const fmt = resolveCharacterFormat(format);
+    const sheetModules = renderModules(modules);
+    const example = toJsonExampleContent(buildFormatExample(fmt));
+    const rules = buildFormatRules(fmt);
+    const prompt = [
+      "You are an expert character sheet editor for a local RPG chat engine called BobbinLoom.",
+      "Restructure an existing character sheet to match a target format.",
+      "",
+      "Return ONLY a JSON object with this exact shape:",
+      "{",
+      `  "content": "${example}"`,
+      "}",
+      "",
+      "TARGET FORMAT:",
+      rules,
+      "",
+      "RULES:",
+      "- Keep every established detail from the source sheet — do not lose or invent facts.",
+      "- Ensure every section in the target format is present, in the given order. For a missing section, derive fitting content from the existing sheet, or write \"(not established)\" when nothing is known.",
+      "- Preserve additional sections that carry real information; fold clearly redundant ones into the nearest matching section.",
+      "- Sections marked inline are written as `[Name]: value` on one line; the rest use block form ([Name] followed by content lines).",
+      "",
+      ...(sheetModules ? [sheetModules] : []),
+      "",
+      ...(feedback ? ["USER GUIDANCE FOR THIS REVISION:", feedback, ""] : []),
+      "--- CURRENT SHEET ---",
+      currentContent,
+      "",
+      "Return ONLY the JSON object. No markdown, no explanation.",
+    ].join("\n");
+
+    return this.executeSheetJsonRequest(prompt, signal, "The model did not return a valid restructured character sheet.");
+  }
+
+  /** Shared `{ "content": "..." }` JSON request for the sheet generation,
+   *  refinement, and reformatting methods. */
+  private async executeSheetJsonRequest(
+    prompt: string,
+    signal: AbortSignal | undefined,
+    errorPrefix: string
+  ): Promise<string> {
     const messages: ChatMessage[] = [
       { role: "user", content: prompt }
     ];
@@ -290,82 +396,7 @@ export class OpenAICompatibleProvider {
     }
 
     const errSnippet = rawContent ? rawContent.slice(0, 300) : "(empty response)";
-    throw new Error(
-      `The model did not return a valid character sheet. Raw response snippet: "${errSnippet}"`
-    );
-  }
-
-  async refineCharacterSheet(
-    currentContent: string,
-    originalCardContent: string,
-    feedback: string,
-    storyContext: string,
-    modules?: PromptPresetModule[],
-    signal?: AbortSignal
-  ): Promise<string> {
-    const sheetModules = renderModules(modules);
-    const prompt = [
-      "You are an expert character sheet editor for a local RPG chat engine called BobbinLoom.",
-      "Your task is to refine and revise an existing BobbinLoom character sheet draft based on user feedback.",
-      "",
-      "Return ONLY a JSON object with this exact shape:",
-      "{",
-      `  "content": "${toJsonExampleContent(CHARACTER_SHEET_EXAMPLE)}"`,
-      "}",
-      "",
-      "CRITICAL INSTRUCTIONS FOR TARGETED EDITING:",
-      "1. Apply the USER FEEDBACK precisely to the relevant sections or lines of the character sheet.",
-      "2. PRESERVE all parts, sections, and details of the CURRENT DRAFT that were not criticized or targeted by the feedback verbatim. Do NOT unnecessarily rewrite, shuffle, or delete good existing sections.",
-      "3. Use the standard BobbinLoom section headers: [Species], [Gender], [Body], [Appearance], [Clothing], [Personality], [Communication - Public], [Communication - Private], [Likes], [Dislikes].",
-      "4. The [Clothing] section should be a bulleted list describing what the character wears (- Top: ..., - Bottom: ..., - Feet: ...).",
-      "5. Reference the ORIGINAL SOURCE CARD if additional source lore is needed.",
-      "",
-      ...(sheetModules ? [sheetModules] : []),
-      "",
-      "--- CURRENT DRAFT SHEET ---",
-      currentContent,
-      "",
-      "--- ORIGINAL SOURCE CARD (REFERENCE) ---",
-      originalCardContent,
-      "",
-      "--- USER FEEDBACK (APPLY THIS) ---",
-      feedback,
-      "",
-      ...(storyContext && storyContext !== "(no additional context)" ? ["--- ADDITIONAL CONTEXT ---", storyContext, ""] : []),
-      "Return ONLY the JSON object. No markdown, no explanation.",
-    ].join("\n");
-
-    const messages: ChatMessage[] = [
-      { role: "user", content: prompt }
-    ];
-
-    const body: Record<string, unknown> = {
-      model: this.config.model,
-      messages,
-      temperature: 0.5,
-      max_tokens: Math.min(4000, this.config.maxTokens),
-      response_format: { type: "json_object" }
-    };
-
-    const response = await this.executeRequest(body, "/chat/completions", undefined, signal);
-    const payload = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-
-    const rawContent = payload.choices?.[0]?.message?.content?.trim() ?? "";
-    const extracted = extractJsonPayload(rawContent);
-
-    if (extracted && typeof extracted === "object" && extracted !== null && "content" in extracted) {
-      const sheetContent = (extracted as Record<string, unknown>).content;
-      if (typeof sheetContent === "string" && sheetContent.trim()) {
-        return sheetContent.trim();
-      }
-    }
-
-    const errSnippet = rawContent ? rawContent.slice(0, 300) : "(empty response)";
-    throw new Error(
-      `The model did not return a valid revised character sheet. Raw response snippet: "${errSnippet}"`
-    );
+    throw new Error(`${errorPrefix} Raw response snippet: "${errSnippet}"`);
   }
 
   async suggestCharacterTags(
@@ -522,6 +553,13 @@ export class OpenAICompatibleProvider {
   ): Promise<CharacterBrainstormOutput> {
     const sheetModules = renderModules(input.modules);
     const c = input.character;
+    const fmt = resolveCharacterFormat(input.format);
+    const inlineSections = fmt.sections.filter((s) => s.inline).map((s) => s.name);
+    const formatRules = [
+      buildFormatRules(fmt),
+      `- Sections marked inline (${inlineSections.join(", ")}) are written as [Name]: value on one line; the rest use block form ([Name] followed by content lines).`,
+      "- In proposedChanges.sections, return ONLY the section body — never the [Header] itself.",
+    ].join("\n");
 
     const contextParts: string[] = [
       "--- ACTIVE CHARACTER CARD ---",
@@ -544,9 +582,7 @@ export class OpenAICompatibleProvider {
       "Your role is to brainstorm, refine, and co-create character cards with the user in a natural, multi-turn dialogue.",
       "",
       "BOBBINLOOM CHARACTER SHEET FORMAT RULES:",
-      "- Standard canonical section headers: [Species], [Gender], [Body], [Appearance], [Clothing], [Personality], [Communication - Public], [Communication - Private], [Likes], [Dislikes], [Sexual Capabilities].",
-      "- [Species]: ... and [Gender]: ... are inline headers on single lines.",
-      "- Other sections use block headers [SectionName] followed by bulleted traits ('- Top: ...', '- Trait: ...') or descriptive text.",
+      formatRules,
       "",
       "RESPONSE GUIDELINES:",
       "1. Reply conversationally, constructively, and creatively to the user's questions, feedback, or brainstorming ideas in the 'reply' field. Markdown formatting is encouraged.",

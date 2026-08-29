@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CharacterTemplate } from "../src/schemas";
+import { DEFAULT_CHARACTER_FORMAT } from "../src/engine/characterFormat";
 import {
   collectCardSettings,
   displayTitle,
@@ -214,7 +215,8 @@ describe("convertCardGenerate", () => {
       { name: "Whiskers", description: "A playful stray cat in the city alleyways." },
       expect.stringContaining("Setting/Scenario: Rainy cyberpunk alley"),
       undefined,
-      undefined
+      undefined,
+      DEFAULT_CHARACTER_FORMAT
     );
     expect(result.content).toContain("[Species]: Cat");
   });
@@ -249,7 +251,8 @@ describe("convertCardGenerate", () => {
       feedback,
       "(no additional context)",
       undefined,
-      undefined
+      undefined,
+      DEFAULT_CHARACTER_FORMAT
     );
     expect(result.content).toContain("Cute silver ears");
   });

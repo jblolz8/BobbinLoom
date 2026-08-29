@@ -1,13 +1,17 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { getPlaythroughRecord, updatePlaythroughRecord } from "../store";
-import { editChatMessage, executeTurn, retryAssistantTurn, type TurnExecution } from "../turnActions";
+import { editChatMessage, executeTurn, retryAssistantTurn, truncateChat, type TurnExecution } from "../turnActions";
 import { abortOnClientDisconnect, dataDir, providerManager } from "./helpers";
 
 const TurnBody = z.object({
   playthroughId: z.string(),
   input: z.string(),
-  suggestedChoicesEnabled: z.boolean().default(true)
+  suggestedChoicesEnabled: z.boolean().default(true),
+  /** Keep the synthetic user message out of the visible chat (used by the
+   *  client's "Continue" flow, which sends a hidden continuation instruction
+   *  so the model replies to the player's last visible message). */
+  hideUserMessage: z.boolean().default(false)
 });
 
 const RetryBody = z.object({
@@ -17,6 +21,10 @@ const RetryBody = z.object({
 
 const EditMessageBody = z.object({
   content: z.string()
+});
+
+const TruncateBody = z.object({
+  messageId: z.string()
 });
 
 export async function turnRoutes(app: FastifyInstance): Promise<void> {
@@ -36,7 +44,7 @@ export async function turnRoutes(app: FastifyInstance): Promise<void> {
         providerManager.getProvider(),
         body.suggestedChoicesEnabled,
         providerManager.getContextWindow(),
-        { signal: controller.signal }
+        { signal: controller.signal, hideUserMessage: body.hideUserMessage }
       );
     } catch (error) {
       if (controller.signal.aborted) return;
@@ -99,6 +107,16 @@ export async function turnRoutes(app: FastifyInstance): Promise<void> {
     const body = EditMessageBody.parse(request.body);
 
     const result = editChatMessage(dataDir, params.id, params.messageId, body.content);
+
+    if (!result.ok) return reply.code(result.status).send({ error: result.error });
+    return result.state;
+  });
+
+  app.post("/api/playthroughs/:id/truncate", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const body = TruncateBody.parse(request.body);
+
+    const result = truncateChat(dataDir, params.id, body.messageId);
 
     if (!result.ok) return reply.code(result.status).send({ error: result.error });
     return result.state;

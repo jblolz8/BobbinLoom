@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import type { CharacterInstance, ClothingItem, Playthrough } from "../../../schemas";
 import { TagInput } from "../base";
-import { CHARACTER_SECTION_HEADERS, splitContentSections, joinContentSections, parseClothingFromContent } from "../../../engine/characterSections";
+import { parseClothingFromContent } from "../../../engine/characterSections";
 
 export type CharacterEditorProps = {
   character: CharacterInstance;
@@ -61,7 +61,6 @@ function formToPayload(form: EditorForm): CharacterEditPayload {
     name: form.name || undefined,
     content: form.content || undefined,
     summary: form.summary || undefined,
-    clothing: form.clothing,
     mood: form.mood || undefined,
     towardPlayer: form.towardPlayer || undefined,
     memorySummary: form.memorySummary || undefined,
@@ -83,56 +82,6 @@ export function CharacterEditor({
   const isReadOnlySheet = playthrough.characterTemplates.find((t) => t.id === character.templateId)?.format === "ccv2";
   const initialForm = useRef<EditorForm>(instanceToForm(character, playthrough));
   const [form, setForm] = useState<EditorForm>(initialForm.current);
-  const [structuredMode, setStructuredMode] = useState(() => splitContentSections(form.content).sections.length >= 2);
-  const contentSections = useMemo(() => splitContentSections(form.content), [form.content]);
-
-  function updateSection(index: number, body: string) {
-    const updated = contentSections.sections.map((s, i) => (i === index ? { ...s, body } : s));
-    setForm((f) => ({ ...f, content: joinContentSections(updated, contentSections.preamble) }));
-  }
-
-  const [clothingSlot, setClothingSlot] = useState("");
-  const [clothingName, setClothingName] = useState("");
-  const [clothingState, setClothingState] = useState("");
-
-  function addClothingItem() {
-    if (!clothingSlot.trim() || !clothingName.trim()) return;
-    setForm((prev) => ({
-      ...prev,
-      clothing: [
-        ...prev.clothing.filter((c) => c.slot !== clothingSlot.trim()),
-        { slot: clothingSlot.trim(), name: clothingName.trim(), state: clothingState.trim() || undefined }
-      ]
-    }));
-    setClothingSlot("");
-    setClothingName("");
-    setClothingState("");
-  }
-
-  function removeClothingItem(slot: string) {
-    setForm((prev) => ({ ...prev, clothing: prev.clothing.filter((c) => c.slot !== slot) }));
-  }
-
-  const clothingEditor = (
-    <>
-      {form.clothing.length === 0 ? (
-        <p className="empty-value">No clothing items yet.</p>
-      ) : (
-        form.clothing.map((c) => (
-          <div key={c.slot} className="clothing-row">
-            <span>{c.slot}: {c.name}{c.state ? ` (${c.state})` : ""}</span>
-            <button className="icon-btn danger-icon" onClick={() => removeClothingItem(c.slot)} disabled={isReadOnlySheet}>✕</button>
-          </div>
-        ))
-      )}
-      <div className="clothing-add">
-        <input placeholder="Slot" value={clothingSlot} onChange={(e) => setClothingSlot(e.target.value)} disabled={isReadOnlySheet} />
-        <input placeholder="Name" value={clothingName} onChange={(e) => setClothingName(e.target.value)} disabled={isReadOnlySheet} />
-        <input placeholder="State (optional)" value={clothingState} onChange={(e) => setClothingState(e.target.value)} disabled={isReadOnlySheet} />
-        <button onClick={addClothingItem} disabled={isReadOnlySheet}>Add</button>
-      </div>
-    </>
-  );
 
   const [mode, setMode] = useState<"view" | "edit">(initialMode);
   const [saving, setSaving] = useState(false);
@@ -166,7 +115,10 @@ export function CharacterEditor({
         delete payload.content;
         delete payload.clothing;
       } else {
-        payload.clothing = structuredMode ? form.clothing : parseClothingFromContent(form.content);
+        // The content field is authoritative: the [Clothing] section IS the
+        // current outfit. Re-derive structured clothing from it on save so the
+        // prompt's derived Clothing line stays honest.
+        payload.clothing = parseClothingFromContent(form.content);
       }
       await onSave(payload);
 
@@ -262,54 +214,16 @@ export function CharacterEditor({
               ))}
 
               <h4>Character Sheet{isReadOnlySheet ? <span className="ccv2-readonly-badge">Read-only CCv2 sheet — conversion coming later</span> : null}</h4>
-              <div className="section-mode-toggle">
-                <button className={structuredMode ? "active" : ""} onClick={() => setStructuredMode(true)}>Sections</button>
-                <button className={!structuredMode ? "active" : ""} onClick={() => setStructuredMode(false)}>Raw</button>
-              </div>
-              {structuredMode ? (
-                contentSections.sections.length === 0 ? (
-                  <p className="empty-value">No sections detected — switch to Raw to edit the full sheet text.</p>
-                ) : (
-                  <div className="section-editor">
-                    {contentSections.sections.map((s, i) => (
-                      s.header.toLowerCase() === "clothing" ? (
-                        <div className="editor-field" key={`${s.header}-${i}`}>
-                          <span className="editor-field-label">Clothing</span>
-                          {clothingEditor}
-                        </div>
-                      ) : (
-                      <label className="editor-field" key={`${s.header}-${i}`}>
-                        <span className="editor-field-label">{s.header}</span>
-                        <textarea
-                          rows={Math.max(2, Math.min(12, Math.ceil((s.body?.length ?? 0) / 60)))}
-                          value={s.body ?? ""}
-                          onChange={(e) => updateSection(i, e.target.value)}
-                          className="content-textarea"
-                          disabled={isReadOnlySheet}
-                        />
-                      </label>
-                      )
-                    ))}
-                    {!contentSections.sections.some((s) => s.header.toLowerCase() === "clothing") ? (
-                      <div className="editor-field">
-                        <span className="editor-field-label">Clothing (structured)</span>
-                        {clothingEditor}
-                      </div>
-                    ) : null}
-                  </div>
-                )
-              ) : (
-                renderField("Content", "Full character sheet text — injected directly into the model prompt.", (
-                  <textarea
-                    rows={20}
-                    value={form.content}
-                    onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-                    placeholder={"[Species]: ..."}
-                    className="content-textarea"
-                    disabled={isReadOnlySheet}
-                  />
-                ))
-              )}
+              {renderField("Content", "Full character sheet text — [Section] headers, in the order your current preset's Character Sheet format defines. [Clothing] slot bullets here are the character's current outfit.", (
+                <textarea
+                  rows={20}
+                  value={form.content}
+                  onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
+                  placeholder={"[Species]: ..."}
+                  className="content-textarea"
+                  disabled={isReadOnlySheet}
+                />
+              ))}
 
               <h4>Runtime State</h4>
               {renderField("Mood", "Current emotional state", (

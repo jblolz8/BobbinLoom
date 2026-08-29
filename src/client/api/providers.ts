@@ -1,4 +1,5 @@
 import { request } from "./client";
+import type { CharacterFormat } from "../../schemas";
 
 export type ProviderConnection = {
   id: string;
@@ -75,12 +76,14 @@ export type Preset = {
   name: string;
   readonly: boolean;
   modules: PromptModuleSet;
+  characterFormat?: CharacterFormat;
 };
 
 export type PlaythroughPromptSettings = {
   presetId: string;
   presetName: string;
   modules: PromptModuleSet;
+  characterFormat?: CharacterFormat;
 };
 
 export function listProviderConnections(): Promise<ProviderRegistry> {
@@ -136,7 +139,7 @@ export function createPreset(name: string, cloneFromId?: string): Promise<Preset
   });
 }
 
-export function updatePreset(id: string, payload: { name?: string; modules?: PromptModuleSet }): Promise<Preset> {
+export function updatePreset(id: string, payload: { name?: string; modules?: PromptModuleSet; characterFormat?: CharacterFormat }): Promise<Preset> {
   return request<Preset>(`/api/prompt-presets/${id}`, {
     method: "PUT",
     body: JSON.stringify(payload)

@@ -9,12 +9,24 @@ export {
 } from "./playthroughFactory";
 
 export {
-  KNOWN_SECTIONS,
-  patchContentSection,
   applyStatePatch
 } from "./stateMutations";
 
-export type { KnownSection, ApplyPatchResult } from "./stateMutations";
+export type { ApplyPatchResult } from "./stateMutations";
+
+export {
+  DEFAULT_CHARACTER_FORMAT,
+  NSFW_CHARACTER_FORMAT,
+  resolveCharacterFormat,
+  formatSections,
+  normalizedFormatSectionNames,
+  normalizedContentSectionNames,
+  buildFormatExample,
+  buildFormatRules,
+  ensureAllSections,
+  missingFormatSections,
+  isFormatAligned
+} from "./characterFormat";
 
 export {
   cosineSimilarity,

@@ -51,6 +51,27 @@ describe("playthrough store", () => {
     const reloaded = getPlaythroughRecord(dir, created.id);
     expect(reloaded?.flags).toContain("stored_flag");
   });
+
+  it("round-trips the per-playthrough input draft fields (draft + draftUpdatedAt)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bobbinloom-store-"));
+    tempDirs.push(dir);
+
+    const created = createPlaythroughRecord(dir, "Draft Run");
+    expect(created.draft).toBeUndefined();
+
+    created.draft = "an in-progress message…";
+    created.draftUpdatedAt = "2026-08-19T00:00:00.000Z";
+    updatePlaythroughRecord(dir, created);
+
+    const reloaded = getPlaythroughRecord(dir, created.id);
+    expect(reloaded?.draft).toBe("an in-progress message…");
+    expect(reloaded?.draftUpdatedAt).toBe("2026-08-19T00:00:00.000Z");
+
+    // Clearing the draft persists too.
+    reloaded!.draft = "";
+    updatePlaythroughRecord(dir, reloaded!);
+    expect(getPlaythroughRecord(dir, created.id)?.draft).toBe("");
+  });
 });
 
 describe("createPlaythroughFromSeedRecord (scenario generation)", () => {

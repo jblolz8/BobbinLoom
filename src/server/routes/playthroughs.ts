@@ -38,6 +38,8 @@ const CreatePlaythroughBody = z.object({
 
 const RenameBody = z.object({ name: z.string().min(1) });
 
+const DraftBody = z.object({ content: z.string() });
+
 const GenerateBody = z.object({
   name: z.string().min(1).default("New Adventure"),
   setting: z.string().optional(),
@@ -98,6 +100,20 @@ export async function playthroughRoutes(app: FastifyInstance): Promise<void> {
     return updated;
   });
 
+  // Per-playthrough input draft. The client sends this debounced while typing;
+  // the server stamps the timestamp so a newer-wins compare vs the client's
+  // localStorage copy can pick the freshest text on open. Empty content clears.
+  app.put("/api/playthroughs/:id/draft", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const body = DraftBody.parse(request.body ?? {});
+    const playthrough = getPlaythroughRecord(dataDir, params.id);
+    if (!playthrough) return reply.code(404).send({ error: "Playthrough not found" });
+    playthrough.draft = body.content;
+    playthrough.draftUpdatedAt = new Date().toISOString();
+    updatePlaythroughRecord(dataDir, playthrough);
+    return { ok: true, draftUpdatedAt: playthrough.draftUpdatedAt };
+  });
+
   app.post("/api/playthroughs/:id/duplicate", async (request, reply) => {
     const params = z.object({ id: z.string() }).parse(request.params);
     const clone = duplicatePlaythroughRecord(dataDir, params.id);
@@ -121,7 +137,7 @@ export async function playthroughRoutes(app: FastifyInstance): Promise<void> {
     const controller = abortOnClientDisconnect(reply);
 
     try {
-      const seed = await providerManager.getProvider().generateScenarioSeed(preferences, body.lorebookIds, preset?.modules.seed, controller.signal);
+      const seed = await providerManager.getProvider().generateScenarioSeed(preferences, body.lorebookIds, preset?.modules.seed, controller.signal, preset?.characterFormat);
       if (controller.signal.aborted) return;
 
       const openingMode = body.openingMode ?? "fleshedOut";
@@ -211,7 +227,8 @@ export async function playthroughRoutes(app: FastifyInstance): Promise<void> {
         seed: preset.modules.seed.map((m) => ({ ...m })),
         sheet: preset.modules.sheet.map((m) => ({ ...m })),
         summary: preset.modules.summary.map((m) => ({ ...m }))
-      }
+      },
+      characterFormat: preset.characterFormat ? JSON.parse(JSON.stringify(preset.characterFormat)) : undefined,
     };
     updatePlaythroughRecord(dataDir, playthrough);
 

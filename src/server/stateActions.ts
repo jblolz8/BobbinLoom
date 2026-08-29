@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { applyStatePatch } from "../engine/engine";
-import { ensureAllSections, seedMemorySummary, summaryFromContent } from "../engine/characterSections";
+import { seedMemorySummary, summaryFromContent } from "../engine/characterSections";
+import { ensureAllSections, resolveCharacterFormat } from "../engine/characterFormat";
 import type { Chapter, ChapterMetaSummary, CharacterTemplate, Playthrough, SimpleNPC } from "../schemas";
 import { getCharacterTemplate, getPlaythroughRecord, listCharacterTemplates, saveCharacterTemplateRecord, updatePlaythroughRecord } from "./store";
 import { buildLorebookContext, lorebookBudgetChars } from "./lorebookContext";
@@ -112,6 +113,7 @@ export async function promoteNpcAction(
   if (!npc) return { ok: false, status: 404, error: "NPC not found" };
 
   const storyContext = buildPromoteStoryContext(loaded, npc, maxTokens);
+  const format = resolveCharacterFormat(loaded.promptSettings?.characterFormat);
 
   // 1) Generate (only when no approved draft content was supplied)
   let content = acceptedContent;
@@ -121,7 +123,8 @@ export async function promoteNpcAction(
         { name: npc.name, description: npc.description, disposition: npc.disposition },
         storyContext,
         loaded.promptSettings?.modules.sheet,
-        signal
+        signal,
+        format
       );
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -134,8 +137,8 @@ export async function promoteNpcAction(
     return { ok: false, status: 499, error: "Request aborted by the client" };
   }
 
-  // 2) Post-process: fill missing canonical sections, seed memory
-  content = ensureAllSections(content);
+  // 2) Post-process: fill the target format's sections, seed memory
+  content = ensureAllSections(content, format);
   const memorySummary = seedMemorySummary(npc.name, content);
 
   // 3) Apply (single commit — no partial state)
@@ -163,19 +166,21 @@ export async function promoteNpcDraftAction(
   if (!npc) return { ok: false, status: 404, error: "NPC not found" };
 
   const storyContext = buildPromoteStoryContext(loaded, npc, maxTokens);
+  const format = resolveCharacterFormat(loaded.promptSettings?.characterFormat);
   let content: string;
   try {
     content = await provider.generateCharacterSheet(
       { name: npc.name, description: npc.description, disposition: npc.disposition },
       storyContext,
       loaded.promptSettings?.modules.sheet,
-      signal
+      signal,
+      format
     );
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     return { ok: false, status: 502, error: `Failed to generate character sheet: ${message}` };
   }
-  content = ensureAllSections(content);
+  content = ensureAllSections(content, format);
   return { ok: true, npc, content, storyContext };
 }
 

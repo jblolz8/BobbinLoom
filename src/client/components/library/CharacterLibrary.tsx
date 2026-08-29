@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import type { CharacterTemplate } from "../../../schemas";
+import type { CharacterFormat } from "../../../schemas";
 import {
   createCharacter,
   deleteCharacter,
@@ -12,9 +13,10 @@ import {
   deleteCharacterProfileAvatar,
   getCharacterAvatarUrl,
 } from "../../api";
-import { convertCharacterApply, convertCharacterGenerate, suggestCharacterTags, brainstormCharacter } from "../../api";
-import type { CharacterTemplateUpdate, ProposedSectionChange, CharacterBrainstormResult } from "../../api";
+import { convertCharacterApply, convertCharacterGenerate, reformatCharacterApply, reformatCharacterGenerate, suggestCharacterTags, brainstormCharacter, getDefaultPresetId, listPresets, getPreset } from "../../api";
+import type { CharacterTemplateUpdate, ProposedSectionChange, CharacterBrainstormResult, Preset } from "../../api";
 import { CHARACTER_SHEET_EXAMPLE, applySectionChanges } from "../../../engine/characterSections";
+import { isFormatAligned, resolveCharacterFormat } from "../../../engine/characterFormat";
 import { displayTitle, entryKind, filterLibraryEntries, cardBadgeLabel, groupByLineage, getGroupCreatedAt, getGroupUpdatedAt, type CharacterSortOption, type SortDirection } from "../../../engine/characterCards";
 import { Icon, SearchBar, TagChip, CharacterAvatar } from "../base";
 export { CharacterAvatar } from "../base";
@@ -528,7 +530,33 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     newContent: string;
     recordId: string;
     readOnly?: boolean;
+    kind?: "convert" | "reformat";
   } | null>(null);
+
+  // ── Target character format (drives Convert to BL and Update into Newer Format) ──
+  const [presetOptions, setPresetOptions] = useState<Preset[]>([]);
+  const [targetFormatId, setTargetFormatId] = useState<string | null>(null);
+  const targetFormat: CharacterFormat = useMemo(() => {
+    const preset = presetOptions.find((p) => p.id === targetFormatId);
+    return resolveCharacterFormat(preset?.characterFormat);
+  }, [presetOptions, targetFormatId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [summaries, def] = await Promise.all([listPresets(), getDefaultPresetId()]);
+        const full = await Promise.all(summaries.map((s) => getPreset(s.id)));
+        if (cancelled) return;
+        setPresetOptions(full);
+        // Default the picker to the active preset (global default when no playthrough).
+        setTargetFormatId((cur) => cur ?? def.defaultPresetId);
+      } catch {
+        // Ignore preset-load failures — the format falls back to Default.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // ── Edit-form tab (converted cards): BL Format (default) / Original / Both ──
   const [viewTab, setViewTab] = useState<"bl" | "original" | "both">("bl");
@@ -544,6 +572,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     recordId: string;
     recordName: string;
     template: CharacterTemplate;
+    kind?: "convert" | "reformat";
   } | null>(null);
 
   // ── Import success banner state ──
@@ -791,6 +820,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
           })),
           userMessage: userText,
           includeOriginalCard: includeOriginalCcv2,
+          format: targetFormat,
         },
         { signal: controller.signal }
       );
@@ -1045,11 +1075,12 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     const controller = new AbortController();
     abortControllerRef.current = controller;
     try {
-      const result = await convertCharacterGenerate(template.id, { signal: controller.signal });
+      const result = await convertCharacterGenerate(template.id, { format: targetFormat, signal: controller.signal });
       setDiffData({
         oldContent: result.originalContent,
         newContent: result.content,
         recordId: template.id,
+        kind: "convert",
       });
     } catch (e) {
       if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted") || e.message.includes("cancelled"))) {
@@ -1074,12 +1105,14 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
       const result = await convertCharacterGenerate(diffData.recordId, {
         feedback: feedback || undefined,
         currentContent: diffData.newContent,
+        format: targetFormat,
         signal: controller.signal,
       });
       setDiffData({
         oldContent: result.originalContent,
         newContent: result.content,
         recordId: diffData.recordId,
+        kind: "convert",
       });
     } catch (e) {
       if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted") || e.message.includes("cancelled"))) {
@@ -1119,6 +1152,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
         recordId: convertedRecordId,
         recordName: displayTitle(targetTpl),
         template: targetTpl,
+        kind: "convert",
       });
 
       // If the editor was open for this card, refresh the form
@@ -1140,6 +1174,97 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     setDiffData(null);
     setConvertingId(null);
     setConvertError(null);
+  }
+
+  // ── Reformat an existing BL sheet into the target format (preview/accept) ──
+  async function handleReformat() {
+    if (!editingId) return;
+    setConvertLoading(true);
+    setConvertError(null);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    try {
+      const result = await reformatCharacterGenerate(editingId, { format: targetFormat, signal: controller.signal });
+      setDiffData({
+        oldContent: result.originalContent,
+        newContent: result.content,
+        recordId: editingId,
+        kind: "reformat",
+      });
+    } catch (e) {
+      if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted") || e.message.includes("cancelled"))) {
+        setStatus("Reformat cancelled.");
+      } else {
+        setConvertError(e instanceof Error ? e.message : String(e));
+      }
+    } finally {
+      setConvertLoading(false);
+      abortControllerRef.current = null;
+    }
+  }
+
+  async function handleReformatRetry(feedback: string) {
+    if (!diffData) return;
+    setConvertLoading(true);
+    setConvertError(null);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    try {
+      const result = await reformatCharacterGenerate(diffData.recordId, {
+        format: targetFormat,
+        currentContent: diffData.newContent,
+        feedback: feedback || undefined,
+        signal: controller.signal,
+      });
+      setDiffData({
+        oldContent: result.originalContent,
+        newContent: result.content,
+        recordId: diffData.recordId,
+        kind: "reformat",
+      });
+    } catch (e) {
+      if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted") || e.message.includes("cancelled"))) {
+        setStatus("Reformat retry cancelled.");
+      } else {
+        setConvertError(e instanceof Error ? e.message : String(e));
+      }
+    } finally {
+      setConvertLoading(false);
+      abortControllerRef.current = null;
+    }
+  }
+
+  async function handleReformatAccept() {
+    if (!diffData) return;
+    setConvertLoading(true);
+    setConvertError(null);
+    try {
+      const result = await reformatCharacterApply(diffData.recordId, diffData.newContent);
+      const reformattedRecordId = diffData.recordId;
+      setDiffData(null);
+      setConvertingId(null);
+      const refreshed = await listCharacters();
+      setTemplates(refreshed);
+
+      const targetTpl = refreshed.find(t => t.id === reformattedRecordId) ?? result.record;
+      setConvertedSuccess({
+        recordId: reformattedRecordId,
+        recordName: displayTitle(targetTpl),
+        template: targetTpl,
+        kind: "reformat",
+      });
+
+      // If the editor was open for this card, refresh the form
+      if (editingId === reformattedRecordId) {
+        const updated = templateToForm(targetTpl);
+        setForm(updated);
+        setInitialForm(updated);
+      }
+    } catch (e) {
+      setConvertError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setConvertLoading(false);
+    }
   }
 
   // ── Tag calculations & Booru toggles ──
@@ -1292,7 +1417,9 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                 <Icon name="CheckCircle2" size={18} />
               </span>
               <span className="conversion-success-text">
-                Successfully converted and saved <strong>&quot;{convertedSuccess.recordName}&quot;</strong> to BobbinLoom format!
+                {convertedSuccess.kind === "reformat"
+                  ? <>Successfully updated <strong>&quot;{convertedSuccess.recordName}&quot;</strong> into the newer format!</>
+                  : <>Successfully converted and saved <strong>&quot;{convertedSuccess.recordName}&quot;</strong> to BobbinLoom format!</>}
               </span>
               <button
                 type="button"
@@ -1398,6 +1525,15 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
               </div>
 
               <div className="editor-header-actions">
+                <label className="format-picker-label" title="Target character format used by Convert to BL and Update into Newer Format">
+                  <span>Format</span>
+                  <select value={targetFormatId ?? ""} onChange={(e) => setTargetFormatId(e.target.value)}>
+                    {presetOptions.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </label>
+
                 {!editingIsCcv2 ? (
                   <button
                     type="button"
@@ -1410,6 +1546,19 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                     {aiMessages.length > 0 && (
                       <span className="ai-msg-count-badge">{aiMessages.length}</span>
                     )}
+                  </button>
+                ) : null}
+
+                {!editingIsCcv2 && editingId && !isFormatAligned(form.content, targetFormat) ? (
+                  <button
+                    type="button"
+                    className="reformat-btn"
+                    onClick={() => void handleReformat()}
+                    disabled={convertLoading}
+                    title="Restructure this sheet to match the selected format, with a preview before applying"
+                  >
+                    <Icon name="Sparkles" size={14} className={convertLoading ? "sparkle-pulse" : ""} />
+                    {convertLoading ? "Updating…" : "Update into Newer Format with AI"}
                   </button>
                 ) : null}
 
@@ -2437,6 +2586,19 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
             onClose={closeDiffModal}
             loading={false}
             error={null}
+          />
+        ) : diffData.kind === "reformat" ? (
+          <DiffModal
+            title="Update into Newer Format"
+            oldLabel="Current Sheet"
+            newLabel="Updated Sheet"
+            oldContent={diffData.oldContent}
+            newContent={diffData.newContent}
+            onAccept={handleReformatAccept}
+            onRetry={handleReformatRetry}
+            onClose={closeDiffModal}
+            loading={convertLoading}
+            error={convertError}
           />
         ) : (
           <DiffModal

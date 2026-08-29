@@ -36,6 +36,7 @@ function makeProvider(overrides: Partial<TurnProvider> = {}): TurnProvider & { c
     async embedTexts() { return []; },
     async generateCharacterSheet() { throw new Error("not used"); },
     async refineCharacterSheet() { throw new Error("not used"); },
+    async reformatCharacterSheet() { throw new Error("not used"); },
     async suggestCharacterTags() { return []; },
     async brainstormCharacter() { throw new Error("not used"); },
     compactCalls,

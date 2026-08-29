@@ -7,12 +7,27 @@ import {
   questAction,
   resummarizeChapter,
   retryTurn,
+  saveDraft,
   sendTurn,
+  truncatePlaythrough,
   type QuestAction,
   type TokenUsage
 } from "../api";
 
 const CHAT_SETTINGS_KEY = "bobbinloom_chat_settings";
+
+const DRAFT_KEY_PREFIX = "bobbinloom_draft_";
+
+/** Hidden continuation instruction: sent (with hideUserMessage) when the user
+ *  hits Continue after a trailing user message, so the model replies to the
+ *  player's last visible message without an empty bubble in the chat. */
+const CONTINUE_INSTRUCTION =
+  "Continue the story from the player's last message. Write the next scene as the " +
+  "world and its characters; do not take actions on behalf of the player.";
+
+function draftKey(playthroughId: string): string {
+  return `${DRAFT_KEY_PREFIX}${playthroughId}`;
+}
 
 /** In-chat failure notice shown when a send or retry fails (non-abort).
  *  The failed message is restored to the input box, so "retry" is just
@@ -61,6 +76,49 @@ function saveChatSettings(settings: ChatSettings) {
   try {
     localStorage.setItem(CHAT_SETTINGS_KEY, JSON.stringify(settings));
   } catch {}
+}
+
+function readLocalDraft(playthroughId: string): { text: string; at: number } | null {
+  try {
+    const raw = localStorage.getItem(draftKey(playthroughId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { text?: unknown; at?: unknown };
+    if (typeof parsed.text !== "string" || typeof parsed.at !== "number") return null;
+    return { text: parsed.text, at: parsed.at };
+  } catch {
+    return null;
+  }
+}
+
+/** Persists the draft to both copies: localStorage (immediate) and the server
+ *  record (fire-and-forget; failures are fine — the local copy covers). */
+async function persistDraft(playthroughId: string, text: string): Promise<void> {
+  try {
+    if (text) {
+      localStorage.setItem(draftKey(playthroughId), JSON.stringify({ text, at: Date.now() }));
+    } else {
+      localStorage.removeItem(draftKey(playthroughId));
+    }
+  } catch {}
+  try {
+    await saveDraft(playthroughId, text);
+  } catch {
+    /* server copy optional — local copy survives */
+  }
+}
+
+/** Newer-wins resolution between the local and server draft copies. */
+function resolveDraft(playthrough: Playthrough | null): { text: string; localWins: boolean } {
+  if (!playthrough) return { text: "", localWins: false };
+  const local = readLocalDraft(playthrough.id);
+  const serverText = playthrough.draft ?? "";
+  const serverAt = playthrough.draftUpdatedAt ? new Date(playthrough.draftUpdatedAt).getTime() : 0;
+  if (local) {
+    return local.at > serverAt
+      ? { text: local.text, localWins: true }
+      : { text: serverText, localWins: false };
+  }
+  return { text: serverText, localWins: false };
 }
 
 export function usePlaythrough() {
@@ -141,6 +199,7 @@ export function usePlaythrough() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [retryTarget, setRetryTarget] = useState<ChatMessage | null>(null);
+  const [truncateTarget, setTruncateTarget] = useState<ChatMessage | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [resummarizingChapterId, setResummarizingChapterId] = useState<string | null>(null);
   const [viewingChapterId, setViewingChapterId] = useState<string | null>(null);
@@ -153,11 +212,37 @@ export function usePlaythrough() {
       .catch(() => { /* meter keeps last known value on failure */ });
   }, [activePlaythroughId, choicesEnabled]);
 
+  // ── Per-playthrough input draft ──
+  // Debounced persist while typing (skipped while a turn is in flight, so the
+  // transiently-cleared input during a send never wipes the draft; success
+  // clears it explicitly, failure restores it and re-saves).
+  useEffect(() => {
+    if (!activePlaythroughId || loading) return;
+    const timer = window.setTimeout(() => {
+      void persistDraft(activePlaythroughId, input);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [input, activePlaythroughId, loading]);
+
+  /** True when the last visible message is a user message — the input box is
+   *  "awaiting the AI's response", so an empty input may Continue instead of
+   *  being disabled. */
+  const canContinue = (() => {
+    if (!playthrough) return false;
+    for (let i = playthrough.messages.length - 1; i >= 0; i -= 1) {
+      const message = playthrough.messages[i];
+      if (!message.hidden) return message.role === "user";
+    }
+    return false;
+  })();
+
   async function loadPlaythrough(id: string) {
     try {
       const all = await listPlaythroughs();
       const found = all.playthroughs.find((p) => p.id === id);
       if (found) {
+        const oldId = playthrough?.id ?? null;
+        if (oldId && oldId !== found.id) void persistDraft(oldId, input);
         setPlaythrough(found);
         setChoices([]);
         setLastPatchInfo({ applied: [], rejected: [], warnings: [] });
@@ -165,6 +250,9 @@ export function usePlaythrough() {
         setRawOutput(null);
         setCancelledNotice(null);
         setFailedNotice(null);
+        const { text, localWins } = resolveDraft(found);
+        setInput(text);
+        if (localWins && text && text !== found.draft) void persistDraft(found.id, text);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -172,10 +260,14 @@ export function usePlaythrough() {
   }
 
   async function handleSend() {
-    if (!playthrough || !input.trim() || loading) return;
-    const currentInput = input;
+    if (!playthrough || loading) return;
+    const isContinue = canContinue && !input.trim();
+    if (!input.trim() && !isContinue) return;
+    // Continue sends a hidden instruction so the model replies to the player's
+    // last visible message; nothing is shown as a user bubble.
+    const currentInput = input.trim() ? input : CONTINUE_INSTRUCTION;
     setInput("");
-    setSendingMessage(currentInput);
+    setSendingMessage(input.trim() ? currentInput : null);
     setLoading(true);
     setError(null);
     setCancelledNotice(null);
@@ -186,23 +278,32 @@ export function usePlaythrough() {
     const startTime = performance.now();
 
     try {
-      const response = await sendTurn(playthrough.id, currentInput, choicesEnabled, controller.signal);
+      const response = await sendTurn(
+        playthrough.id,
+        currentInput,
+        choicesEnabled,
+        controller.signal,
+        isContinue ? { hideUserMessage: true } : undefined
+      );
       setPlaythrough(response.state);
       setChoices(response.choices ?? []);
       setLastPatchInfo({ applied: response.applied, rejected: response.rejected, warnings: response.warnings });
       setTokenUsage(response.tokenUsage ?? null);
       setRawInput(response.rawInput ?? null);
       setRawOutput(response.rawOutput ?? null);
+      if (!isContinue) void persistDraft(playthrough.id, "");
     } catch (e) {
       const durationMs = Math.round(performance.now() - startTime);
-      setInput(currentInput);
+      if (!isContinue) setInput(currentInput);
       if (e instanceof DOMException && e.name === "AbortError") {
-        setCancelledNotice("Response cancelled — message restored to input.");
+        setCancelledNotice(isContinue ? "Response cancelled." : "Response cancelled — message restored to input.");
         setFailedNotice(null);
       } else {
         const rawErr = e instanceof Error ? e.message : String(e);
         setFailedNotice({
-          message: "Generation failed — your message was restored to the input box.",
+          message: isContinue
+            ? "Continue failed — nothing was sent."
+            : "Generation failed — your message was restored to the input box.",
           rawError: rawErr,
           durationMs
         });
@@ -277,6 +378,33 @@ export function usePlaythrough() {
     }
   }
 
+  async function confirmTruncate() {
+    if (!playthrough || !truncateTarget || actionLoading) return;
+    setActionLoading(true);
+    setError(null);
+    setFailedNotice(null);
+    setCancelledNotice(null);
+    try {
+      const updated = await truncatePlaythrough(playthrough.id, truncateTarget.id);
+      setPlaythrough(updated);
+      setTruncateTarget(null);
+      cancelEdit();
+      setChoices([]);
+      setLastPatchInfo({ applied: [], rejected: [], warnings: [] });
+      setRawInput(null);
+      setRawOutput(null);
+    } catch (e) {
+      const rawErr = e instanceof Error ? e.message : String(e);
+      setTruncateTarget(null);
+      setFailedNotice({
+        message: "Delete up to here failed — nothing was changed.",
+        rawError: rawErr
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   async function handleResummarizeChapter(chapterId: string) {
     if (!playthrough || actionLoading) return;
     setActionLoading(true);
@@ -307,6 +435,9 @@ export function usePlaythrough() {
   }
 
   function resetTurnState(newPlaythrough: Playthrough | null) {
+    // Flush the current playthrough's draft before switching away.
+    const oldId = playthrough?.id ?? null;
+    if (oldId && oldId !== newPlaythrough?.id) void persistDraft(oldId, input);
     setPlaythrough(newPlaythrough);
     setChoices([]);
     setLastPatchInfo({ applied: [], rejected: [], warnings: [] });
@@ -314,6 +445,14 @@ export function usePlaythrough() {
     setRawOutput(null);
     setCancelledNotice(null);
     setFailedNotice(null);
+    if (newPlaythrough) {
+      const { text, localWins } = resolveDraft(newPlaythrough);
+      setInput(text);
+      // Sync a newer local draft up to the server even if the user never types again.
+      if (localWins && text && text !== newPlaythrough.draft) void persistDraft(newPlaythrough.id, text);
+    } else {
+      setInput("");
+    }
   }
 
   return {
@@ -322,6 +461,7 @@ export function usePlaythrough() {
     resetTurnState,
     input,
     setInput,
+    canContinue,
     choicesEnabled,
     setChoicesEnabled,
     showDebug,
@@ -357,6 +497,8 @@ export function usePlaythrough() {
     setEditDraft,
     retryTarget,
     setRetryTarget,
+    truncateTarget,
+    setTruncateTarget,
     actionLoading,
     resummarizingChapterId,
     viewingChapterId,
@@ -368,6 +510,7 @@ export function usePlaythrough() {
     cancelEdit,
     saveEdit,
     confirmRetry,
+    confirmTruncate,
     handleResummarizeChapter,
     handleQuestAction
   };

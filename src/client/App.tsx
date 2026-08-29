@@ -316,6 +316,9 @@ export default function App() {
           setEditDraft={playthroughHook.setEditDraft}
           retryTarget={playthroughHook.retryTarget}
           setRetryTarget={playthroughHook.setRetryTarget}
+          truncateTarget={playthroughHook.truncateTarget}
+          setTruncateTarget={playthroughHook.setTruncateTarget}
+          canContinue={playthroughHook.canContinue}
           actionLoading={playthroughHook.actionLoading}
           resummarizingChapterId={playthroughHook.resummarizingChapterId}
           viewingChapterId={playthroughHook.viewingChapterId}
@@ -327,6 +330,7 @@ export default function App() {
           cancelEdit={playthroughHook.cancelEdit}
           saveEdit={playthroughHook.saveEdit}
           confirmRetry={playthroughHook.confirmRetry}
+          confirmTruncate={playthroughHook.confirmTruncate}
           handleResummarizeChapter={playthroughHook.handleResummarizeChapter}
           handleQuestAction={playthroughHook.handleQuestAction}
           handleDismissNotice={() => playthroughHook.setCancelledNotice(null)}

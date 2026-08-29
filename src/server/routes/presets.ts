@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { AvatarShapeSchema, EMPTY_MODULE_SET, PromptModuleSetSchema, TagTaxonomyConfigSchema, type PromptModuleSet, type PromptPreset } from "../../schemas";
+import { AvatarShapeSchema, CharacterFormatSchema, EMPTY_MODULE_SET, PromptModuleSetSchema, TagTaxonomyConfigSchema, type PromptModuleSet, type PromptPreset } from "../../schemas";
 import { loadPresets, savePresets, loadAppSettings, saveAppSettings, settingsDir } from "./helpers";
 
 const CreatePresetBody = z.object({
@@ -10,7 +10,8 @@ const CreatePresetBody = z.object({
 
 const UpdatePresetBody = z.object({
   name: z.string().min(1).optional(),
-  modules: PromptModuleSetSchema.optional()
+  modules: PromptModuleSetSchema.optional(),
+  characterFormat: CharacterFormatSchema.optional()
 });
 
 const DefaultPresetBody = z.object({
@@ -40,6 +41,7 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
     const presets = loadPresets();
 
     let modules: PromptModuleSet = EMPTY_MODULE_SET;
+    let characterFormat: PromptPreset["characterFormat"];
     if (body.cloneFromId) {
       const source = presets.find((p) => p.id === body.cloneFromId);
       if (!source) return reply.code(404).send({ error: "Source preset not found" });
@@ -49,10 +51,11 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
         sheet: source.modules.sheet.map((m) => ({ ...m })),
         summary: source.modules.summary.map((m) => ({ ...m }))
       };
+      characterFormat = source.characterFormat ? JSON.parse(JSON.stringify(source.characterFormat)) : undefined;
     }
 
     const id = `preset_${Date.now()}`;
-    const preset: PromptPreset = { id, name: body.name, readonly: false, modules };
+    const preset: PromptPreset = { id, name: body.name, readonly: false, modules, ...(characterFormat ? { characterFormat } : {}) };
     presets.push(preset);
     savePresets(presets);
     return reply.code(201).send(preset);
@@ -68,6 +71,7 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
 
     if (body.name !== undefined) presets[index].name = body.name;
     if (body.modules !== undefined) presets[index].modules = body.modules;
+    if (body.characterFormat !== undefined) presets[index].characterFormat = body.characterFormat;
     savePresets(presets);
     return presets[index];
   });

@@ -99,7 +99,8 @@
 
 .settings-tabs {
   display: flex;
-  gap: 0;
+  flex-wrap: wrap;
+  gap: 0.25rem 0;
   border-bottom: 1px solid #2a303d;
   margin-bottom: 1rem;
 }
@@ -122,6 +123,45 @@
 
 .tab:hover:not(.active) {
   color: #b8bfcc;
+}
+
+@media (max-width: 600px) {
+  .settings-tabs {
+    gap: 0.15rem;
+  }
+  .tab {
+    flex: 1 1 auto;
+    text-align: center;
+    padding: 0.5rem 0.6rem;
+  }
+}
+
+/* Full-screen mobile layout for the Settings modal (mirrors the setup-wizard
+   convention below 680px). The modal fills the viewport so the tab row and the
+   settings content get the full width instead of a cramped card. */
+@media (max-width: 680px) {
+  .modal.settings-modal-wide {
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+    padding: 1rem 0.85rem;
+    border: none;
+  }
+  .settings-modal-wide .modal-header {
+    margin-bottom: 0.75rem;
+  }
+  /* Keep the tab row pinned while scrolling a long settings tab. Needs a solid
+     background so content scrolling underneath doesn't show through. */
+  .settings-modal-wide .settings-tabs {
+    position: sticky;
+    top: -1rem;
+    margin-left: -0.85rem;
+    margin-right: -0.85rem;
+    padding: 0 0.85rem;
+    background: #151923;
+    z-index: 2;
+  }
 }
 
 /* Preset bar */
@@ -255,6 +295,115 @@
 .add-module-btn:hover {
   border-color: #5a8fd4;
   color: #eceff4;
+}
+
+/* Character format (sections) editor */
+.format-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.format-section-row {
+  border: 1px solid #2a303d;
+  border-radius: 10px;
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.format-section-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.format-index {
+  font-size: 0.8rem;
+  color: #8a93a5;
+  min-width: 1.4rem;
+  text-align: right;
+}
+
+.format-section-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  border: 1px solid #3a4150;
+  background: #0f131b;
+  color: #eceff4;
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+}
+
+.format-inline-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  color: #8a93a5;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.format-instruction,
+.format-examples {
+  border: 1px solid #2a303d;
+  background: #0f131b;
+  color: #eceff4;
+  border-radius: 8px;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.8rem;
+  resize: vertical;
+}
+
+.format-examples {
+  color: #a8c9a0;
+}
+
+.format-drag-handle {
+  cursor: grab;
+  color: #8a93a5;
+  padding: 0.1rem 0.3rem;
+  user-select: none;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+  touch-action: none; /* let pointer drags (mouse + touch) drive reorder, not page scroll */
+}
+.format-drag-handle:hover {
+  color: #d7dce4;
+  background: rgba(255, 255, 255, 0.05);
+}
+.format-drag-handle:active {
+  cursor: grabbing;
+}
+.format-section-row.dragging {
+  opacity: 0.45;
+}
+.format-section-row.drop-target {
+  outline: 2px dashed #4a80d6;
+  outline-offset: 2px;
+}
+.format-drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  transform: translate(-50%, -140%);
+  background: #1a2030;
+  border: 1px solid #4a80d6;
+  color: #eceff4;
+  padding: 0.4rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  z-index: 1200;
+  white-space: nowrap;
+  max-width: 60vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.format-drag-ghost-name {
+  font-weight: 600;
 }
 
 .module-edit-modal {
@@ -2639,6 +2788,49 @@
   display: flex;
   gap: 8px;
   margin-bottom: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* ── Target format picker (Convert to BL / Update into Newer Format) ── */
+.format-picker-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--text-dim, #8a93a5);
+}
+.format-picker-label select {
+  border: 1px solid var(--border-color, #3a4150);
+  background: var(--bg-input, #0f131b);
+  color: var(--text, #eceff4);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 0.8rem;
+  max-width: 180px;
+}
+
+/* ── Reformat (Update into Newer Format with AI) button ── */
+.reformat-btn {
+  background: linear-gradient(180deg, rgba(124, 58, 237, 0.2), rgba(124, 58, 237, 0.08));
+  color: var(--text, #eceff4);
+  border: 1px solid rgba(124, 58, 237, 0.5);
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.reformat-btn:hover:not(:disabled) {
+  background: rgba(124, 58, 237, 0.3);
+  border-color: rgba(124, 58, 237, 0.8);
+}
+.reformat-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* ── Import notice modal ── */

@@ -73,15 +73,28 @@ export function createPlaythrough(
   });
 }
 
+export type SendTurnOptions = {
+  /** Hide the synthetic user message in the visible chat (the "Continue" flow
+   *  sends a hidden continuation instruction so the model replies to the
+   *  player's last visible message). */
+  hideUserMessage?: boolean;
+};
+
 export function sendTurn(
   playthroughId: string,
   input: string,
   suggestedChoicesEnabled: boolean,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: SendTurnOptions
 ): Promise<TurnResponse> {
   return request<TurnResponse>("/api/turn", {
     method: "POST",
-    body: JSON.stringify({ playthroughId, input, suggestedChoicesEnabled }),
+    body: JSON.stringify({
+      playthroughId,
+      input,
+      suggestedChoicesEnabled,
+      hideUserMessage: options?.hideUserMessage ?? false
+    }),
     signal
   });
 }
@@ -107,6 +120,25 @@ export function editMessage(
   content: string
 ): Promise<Playthrough> {
   return request<Playthrough>(`/api/playthroughs/${playthroughId}/messages/${messageId}`, {
+    method: "PUT",
+    body: JSON.stringify({ content })
+  });
+}
+
+/** Deletes a message and everything after it (inclusive), reverting world state. */
+export function truncatePlaythrough(playthroughId: string, messageId: string): Promise<Playthrough> {
+  return request<Playthrough>(`/api/playthroughs/${playthroughId}/truncate`, {
+    method: "POST",
+    body: JSON.stringify({ messageId })
+  });
+}
+
+/** Persists the per-playthrough input draft (empty content clears it). */
+export function saveDraft(
+  playthroughId: string,
+  content: string
+): Promise<{ ok: boolean; draftUpdatedAt: string }> {
+  return request<{ ok: boolean; draftUpdatedAt: string }>(`/api/playthroughs/${playthroughId}/draft`, {
     method: "PUT",
     body: JSON.stringify({ content })
   });

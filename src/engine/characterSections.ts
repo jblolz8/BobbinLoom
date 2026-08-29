@@ -133,30 +133,12 @@ export function joinContentSections(sections: ContentSection[], preamble = ""): 
   return parts.join("").replace(/^\n+/, "");
 }
 
-/** Canonical sections absent from the content (case-insensitive compare). */
+/** Canonical sections absent from the content (case-insensitive compare).
+ *  @deprecated use missingFormatSections(format) from ./characterFormat — the
+ *  canonical list is no longer the only sheet structure. */
 export function missingSections(content: string): string[] {
   const present = new Set(splitContentSections(content).sections.map((s) => s.header.toLowerCase()));
   return CHARACTER_SECTION_HEADERS.filter((h) => !present.has(h.toLowerCase()));
-}
-
-/** Fill in any missing canonical sections with "(not established)" stubs.
- *  [Sexual Capabilities] is NOT stubbed — the section appears only when the
- *  sheet generator (module-driven) or the story itself writes it. Pass
- *  includeSexualCapabilities=true to opt back in (reserved for the prompt
- *  module feature). */
-export function ensureAllSections(content: string, includeSexualCapabilities = false): string {
-  const headers = [...CHARACTER_SECTION_HEADERS];
-  if (!includeSexualCapabilities) {
-    headers.splice(headers.indexOf("Sexual Capabilities"), 1);
-  }
-  const { sections: existing } = splitContentSections(content);
-  const sections: ContentSection[] = [...existing];
-  for (const h of headers) {
-    if (!sections.some((s) => s.header.toLowerCase() === h.toLowerCase())) {
-      sections.push({ header: h, body: "(not established)" });
-    }
-  }
-  return joinContentSections(sections);
 }
 
 /**
@@ -166,11 +148,21 @@ export function ensureAllSections(content: string, includeSexualCapabilities = f
  * - If the section does not exist, it is inserted into the section list in canonical order
  *   (or appended if non-canonical).
  * Untouched sections and preambles are preserved verbatim.
+ *
+ * `opts.order` overrides the canonical insertion order for new sections (the
+ * engine passes the active preset's format section names); `opts.inlineHeaders`
+ * overrides which headers are created inline when new (defaults to Species and
+ * Gender). Existing sections always keep their own style.
  */
 export function applySectionChanges(
   currentContent: string,
-  changes: Array<{ header: string; body: string }>
+  changes: Array<{ header: string; body: string }>,
+  opts: { order?: readonly string[]; inlineHeaders?: readonly string[] } = {}
 ): string {
+  const order = opts.order ?? CHARACTER_SECTION_HEADERS;
+  const inlineHeaders = new Set(
+    (opts.inlineHeaders ?? ["Species", "Gender"]).map((h) => h.toLowerCase())
+  );
   const { preamble, sections } = splitContentSections(currentContent);
   const updatedSections: ContentSection[] = [...sections];
 
@@ -179,7 +171,7 @@ export function applySectionChanges(
     if (!trimmedHeader) continue;
     const normHeader = trimmedHeader.toLowerCase();
     const existingIdx = updatedSections.findIndex((s) => s.header.toLowerCase() === normHeader);
-    const isInline = normHeader === "species" || normHeader === "gender";
+    const isInline = inlineHeaders.has(normHeader);
 
     const newSec: ContentSection = {
       header: trimmedHeader,
@@ -190,13 +182,13 @@ export function applySectionChanges(
     if (existingIdx >= 0) {
       updatedSections[existingIdx] = newSec;
     } else {
-      const canonicalIdx = CHARACTER_SECTION_HEADERS.findIndex(
+      const canonicalIdx = order.findIndex(
         (h) => h.toLowerCase() === normHeader
       );
       if (canonicalIdx >= 0) {
         let insertPos = updatedSections.length;
         for (let i = 0; i < updatedSections.length; i++) {
-          const currentCanonicalIdx = CHARACTER_SECTION_HEADERS.findIndex(
+          const currentCanonicalIdx = order.findIndex(
             (h) => h.toLowerCase() === updatedSections[i].header.toLowerCase()
           );
           if (currentCanonicalIdx > canonicalIdx) {
@@ -212,6 +204,32 @@ export function applySectionChanges(
   }
 
   return joinContentSections(updatedSections, preamble);
+}
+
+/** Remove one whole section (by header, case-insensitive) from a content blob.
+ *  The original is returned when no matching section exists. */
+export function removeContentSection(content: string, header: string): string {
+  const { preamble, sections } = splitContentSections(content);
+  const key = header.trim().toLowerCase();
+  return joinContentSections(
+    sections.filter((s) => s.header.trim().toLowerCase() !== key),
+    preamble
+  );
+}
+
+/** Rename a whole section's header (case-insensitive match), preserving its
+ *  body. Returns the original content when the source header is missing. */
+export function renameContentSection(content: string, from: string, to: string): string {
+  const { preamble, sections } = splitContentSections(content);
+  const fromKey = from.trim().toLowerCase();
+  const toName = to.trim();
+  if (!toName) return content;
+  return joinContentSections(
+    sections.map((s) =>
+      s.header.trim().toLowerCase() === fromKey ? { ...s, header: toName } : s
+    ),
+    preamble
+  );
 }
 
 /** Seed a character instance memorySummary from the [Personality] section.

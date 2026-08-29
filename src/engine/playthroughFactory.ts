@@ -1,4 +1,5 @@
 import {
+  CharacterFormat,
   CharacterInstance,
   CharacterTemplate,
   EMPTY_MODULE_SET,
@@ -83,7 +84,8 @@ export function createInitialPlaythrough(
   presetId = "default",
   presetName = "Default",
   persona?: PlayerPersona,
-  cast?: CharacterTemplate[]
+  cast?: CharacterTemplate[],
+  characterFormat?: CharacterFormat
 ): Playthrough {
   const createdAt = nowIso();
   const playthroughId = newId("play");
@@ -125,7 +127,7 @@ export function createInitialPlaythrough(
     inventory: clone(STARTER_INVENTORY),
     quests: clone(STARTER_QUESTS),
     memoryLayers: { recent: [], compressed: [] },
-    promptSettings: { presetId, presetName, modules },
+    promptSettings: { presetId, presetName, modules, characterFormat },
     memoryEvents: [],
     messages: [],
     snapshots: {},
@@ -148,7 +150,8 @@ export function createPlaythroughFromSeed(
   presetName = "Default",
   persona?: PlayerPersona,
   cast?: CharacterTemplate[],
-  includeOpening = true
+  includeOpening = true,
+  characterFormat?: CharacterFormat
 ): Playthrough {
   const createdAt = nowIso();
   const playthroughId = newId("play");
@@ -247,7 +250,7 @@ export function createPlaythroughFromSeed(
     ],
     locationCatalog,
     itemCatalog: items,
-    promptSettings: { presetId, presetName, modules },
+    promptSettings: { presetId, presetName, modules, characterFormat },
     memoryEvents: [],
     messages: includeOpening && seed.openingText?.trim()
       ? [{ id: newId("msg"), role: "assistant", content: seed.openingText.trim(), createdAt }]
@@ -268,7 +271,8 @@ export function createBlankPlaythrough(
   presetId = "default",
   presetName = "Default",
   persona?: PlayerPersona,
-  cast: CharacterTemplate[] = []
+  cast: CharacterTemplate[] = [],
+  characterFormat?: CharacterFormat
 ): Playthrough {
   const createdAt = nowIso();
   const playthroughId = newId("play");
@@ -309,7 +313,7 @@ export function createBlankPlaythrough(
     inventory: [],
     quests: [],
     memoryLayers: { recent: [], compressed: [] },
-    promptSettings: { presetId, presetName, modules },
+    promptSettings: { presetId, presetName, modules, characterFormat },
     memoryEvents: [],
     messages: [],
     snapshots: {},

@@ -47,6 +47,9 @@ export type PlayViewProps = {
   setEditDraft: (val: string) => void;
   retryTarget: ChatMessage | null;
   setRetryTarget: (msg: ChatMessage | null) => void;
+  truncateTarget: ChatMessage | null;
+  setTruncateTarget: (msg: ChatMessage | null) => void;
+  canContinue: boolean;
   actionLoading: boolean;
   resummarizingChapterId: string | null;
   viewingChapterId: string | null;
@@ -58,6 +61,7 @@ export type PlayViewProps = {
   cancelEdit: () => void;
   saveEdit: () => Promise<void>;
   confirmRetry: () => Promise<void>;
+  confirmTruncate: () => Promise<void>;
   handleResummarizeChapter: (chapterId: string) => Promise<void>;
   handleQuestAction: (questId: string, action: QuestAction, name?: string, summary?: string) => Promise<void>;
   handleDismissNotice: () => void;
@@ -125,6 +129,9 @@ export function PlayView(props: PlayViewProps) {
     setEditDraft,
     retryTarget,
     setRetryTarget,
+    truncateTarget,
+    setTruncateTarget,
+    canContinue,
     actionLoading,
     resummarizingChapterId,
     viewingChapterId,
@@ -136,6 +143,7 @@ export function PlayView(props: PlayViewProps) {
     cancelEdit,
     saveEdit,
     confirmRetry,
+    confirmTruncate,
     handleResummarizeChapter,
     handleQuestAction,
     handleDismissNotice,
@@ -205,6 +213,7 @@ export function PlayView(props: PlayViewProps) {
           showGenerationTime={showGenerationTime}
           showMessageTimestamps={showMessageTimestamps}
           showModelName={showModelName}
+          canContinue={canContinue}
           onChoiceSelect={setInput}
           editingMessageId={editingMessageId}
           editDraft={editDraft}
@@ -213,6 +222,7 @@ export function PlayView(props: PlayViewProps) {
           onSaveEdit={() => { void saveEdit(); }}
           onCancelEdit={cancelEdit}
           onRetryRequest={setRetryTarget}
+          onRequestTruncate={setTruncateTarget}
           lastPatchInfo={lastPatchInfo}
           sendingMessage={sendingMessage}
           cancelledNotice={cancelledNotice}
@@ -294,6 +304,28 @@ export function PlayView(props: PlayViewProps) {
                 {actionLoading ? "Retrying…" : "Yes, retry"}
               </button>
               <button onClick={() => setRetryTarget(null)} disabled={actionLoading}>Cancel</button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {truncateTarget ? (
+        <div className="modal-backdrop">
+          <section className="modal confirm-modal">
+            <header className="modal-header">
+              <div>
+                <h2>Delete up to here?</h2>
+                <p>This will permanently delete this message and everything after it, reverting the world state to this point. This cannot be undone.</p>
+              </div>
+            </header>
+            <blockquote className="retry-preview">
+              {truncateTarget.content.slice(0, 200)}{truncateTarget.content.length > 200 ? "…" : ""}
+            </blockquote>
+            <div className="settings-actions">
+              <button className="danger" onClick={confirmTruncate} disabled={actionLoading}>
+                {actionLoading ? "Deleting…" : "Yes, delete"}
+              </button>
+              <button onClick={() => setTruncateTarget(null)} disabled={actionLoading}>Cancel</button>
             </div>
           </section>
         </div>

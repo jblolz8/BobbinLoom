@@ -14,7 +14,8 @@ import {
   buildOpeningPrompt,
   editChatMessage,
   executeTurn,
-  retryAssistantTurn
+  retryAssistantTurn,
+  truncateChat
 } from "../src/server/turnActions";
 
 const tempDirs: string[] = [];
@@ -90,6 +91,23 @@ describe("executeTurn", () => {
     await executeTurn(playthrough, "hi", new SignalProbeProvider(), false, 65536, { signal: controller.signal });
 
     expect(receivedSignal).toBe(controller.signal);
+  });
+
+  it("hides the user message when hideUserMessage is set (Continue flow)", async () => {
+    const dir = tempDir();
+    const playthrough = createPlaythroughRecord(dir, "Hide User Message Test");
+    const provider = new MockProvider();
+
+    const result = await executeTurn(playthrough, "*continue*", provider, false, 65536, { hideUserMessage: true });
+
+    expect(result.state.messages).toHaveLength(2);
+    expect(result.state.messages[0].role).toBe("user");
+    expect(result.state.messages[0].content).toBe("*continue*");
+    expect(result.state.messages[0].hidden).toBe(true);
+    expect(result.state.messages[1].role).toBe("assistant");
+    expect(result.state.messages[1].hidden).toBeUndefined();
+    // The hidden user message is still snapshotted/recorded (retry can find it).
+    expect(result.state.snapshots?.[result.state.messages[1].id]).toBeDefined();
   });
 });
 
@@ -342,6 +360,7 @@ describe("executeTurn tokenUsage", () => {
       async embedTexts() { return []; },
       async generateCharacterSheet() { throw new Error("not needed"); },
       async refineCharacterSheet() { throw new Error("not needed"); },
+      async reformatCharacterSheet() { throw new Error("not needed"); },
       async suggestCharacterTags() { return []; },
       async brainstormCharacter() { throw new Error("not needed"); }
     };
@@ -450,5 +469,147 @@ describe("buildOpeningPrompt", () => {
     } as ScenarioSeed;
     const out = buildOpeningPrompt(undefined, seed);
     expect(out).not.toContain("World context");
+  });
+});
+
+describe("truncateChat (Delete up to here)", () => {
+  /** Builds U1 A1 U2 A2 with observable state mutations between turns:
+   *  - turn 1 runs → S1 (turn=1)
+   *  - "flag_before_turn_2" pushed (state present when turn 2 starts)
+   *  - turn 2 runs (snapshot[A2] = S1 + flag_before_turn_2)
+   *  - "flag_after_turn_2" pushed (state produced after turn 2) */
+  async function buildTwoTurns(dir: string) {
+    const provider = new MockProvider();
+    let playthrough = createPlaythroughRecord(dir, "Truncate Test");
+    playthrough = (await executeTurn(playthrough, "first input", provider, false)).state;
+    playthrough.flags.push("flag_before_turn_2");
+    updatePlaythroughRecord(dir, playthrough);
+    playthrough = (await executeTurn(playthrough, "second input", provider, false)).state;
+    playthrough.flags.push("flag_after_turn_2");
+    updatePlaythroughRecord(dir, playthrough);
+    return { playthrough, provider };
+  }
+
+  it("deletes an assistant message and everything after it (inclusive), restoring the pre-turn snapshot", async () => {
+    const dir = tempDir();
+    const { playthrough } = await buildTwoTurns(dir);
+
+    const assistant2Id = playthrough.messages[3].id; // A2
+    const result = truncateChat(dir, playthrough.id, assistant2Id);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // U1 A1 U2 remain; A2 and its effects are gone.
+    expect(result.state.messages.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
+    expect(result.state.messages[2].content).toBe("second input");
+    expect(result.state.turn).toBe(1);
+    expect(result.state.flags).toContain("flag_before_turn_2");
+    expect(result.state.flags).not.toContain("flag_after_turn_2");
+
+    // Snapshot of the deleted assistant message is pruned.
+    expect(result.state.snapshots?.[assistant2Id]).toBeUndefined();
+  });
+
+  it("deleting up to a user message keeps it as the trailing message and reverts to its reply's snapshot", async () => {
+    const dir = tempDir();
+    const { playthrough } = await buildTwoTurns(dir);
+
+    const user2Id = playthrough.messages[2].id; // U2
+    const result = truncateChat(dir, playthrough.id, user2Id);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.state.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(result.state.turn).toBe(1);
+    expect(result.state.flags).toContain("flag_before_turn_2");
+    expect(result.state.flags).not.toContain("flag_after_turn_2");
+  });
+
+  it("deleting the last assistant message reverts that turn's effects (its own snapshot)", async () => {
+    const dir = tempDir();
+    const { playthrough } = await buildTwoTurns(dir);
+
+    const lastId = playthrough.messages[3].id; // A2 is the last message
+    const result = truncateChat(dir, playthrough.id, lastId);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.state.messages).toHaveLength(3); // U1 A1 U2
+    expect(result.state.turn).toBe(1);
+    expect(result.state.flags).not.toContain("flag_after_turn_2");
+  });
+
+  it("deleting a trailing user message with no reply keeps live state (nothing happened after it)", async () => {
+    const dir = tempDir();
+    const provider = new MockProvider();
+    let playthrough = createPlaythroughRecord(dir, "Trailing User Test");
+    playthrough = (await executeTurn(playthrough, "first input", provider, false)).state;
+    // Queue a user message with no reply yet.
+    playthrough.messages.push({ id: "msg_trailing_user", role: "user", content: "queued input", createdAt: new Date().toISOString() });
+    updatePlaythroughRecord(dir, playthrough);
+
+    const result = truncateChat(dir, playthrough.id, "msg_trailing_user");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.state.messages).toHaveLength(2); // U1 A1
+    expect(result.state.turn).toBe(1);
+  });
+
+  it("deleting the very first message wipes back to the pristine initial state", async () => {
+    const dir = tempDir();
+    const { playthrough } = await buildTwoTurns(dir);
+
+    const firstId = playthrough.messages[0].id; // U1
+    const result = truncateChat(dir, playthrough.id, firstId);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.state.messages).toHaveLength(0);
+    expect(result.state.turn).toBe(0);
+    expect(result.state.flags).not.toContain("flag_before_turn_2");
+    expect(result.state.snapshots).toEqual({});
+  });
+
+  it("restores itemCatalog and lorebookTimingStates from the target snapshot", async () => {
+    const dir = tempDir();
+    const provider = new MockProvider();
+    let playthrough = createPlaythroughRecord(dir, "Truncate Items Test");
+
+    playthrough.itemCatalog = [
+      { id: "item_sword", name: "Iron Sword", type: "weapon", description: "A simple blade", stackable: false }
+    ];
+    playthrough.lorebookTimingStates = {
+      "100": { lastActivatedAt: 1, stickyCount: 0, delayRemaining: 0, cooldownRemaining: 2 }
+    };
+    updatePlaythroughRecord(dir, playthrough);
+
+    playthrough = (await executeTurn(playthrough, "first input", provider, false)).state;
+    playthrough.itemCatalog!.push({ id: "item_shield", name: "Wooden Shield", type: "armor", description: "A wooden shield", stackable: false });
+    playthrough.lorebookTimingStates!["200"] = { lastActivatedAt: 2, stickyCount: 1, delayRemaining: 0, cooldownRemaining: 0 };
+    updatePlaythroughRecord(dir, playthrough);
+
+    const lastId = playthrough.messages[1].id; // A1 — deleting it reverts turn 1's snapshot
+    const result = truncateChat(dir, playthrough.id, lastId);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.state.itemCatalog).toHaveLength(1);
+    expect(result.state.itemCatalog?.[0].id).toBe("item_sword");
+    expect(result.state.lorebookTimingStates?.["100"]).toBeDefined();
+    expect(result.state.lorebookTimingStates?.["200"]).toBeUndefined();
+  });
+
+  it("reports 404 for a missing playthrough or message", async () => {
+    const dir = tempDir();
+    const { playthrough } = await buildTwoTurns(dir);
+
+    const noPlaythrough = truncateChat(dir, "play_missing", "msg_x");
+    expect(noPlaythrough.ok).toBe(false);
+    if (!noPlaythrough.ok) expect(noPlaythrough.status).toBe(404);
+
+    const missing = truncateChat(dir, playthrough.id, "msg_missing");
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(missing.status).toBe(404);
   });
 });

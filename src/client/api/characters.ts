@@ -1,4 +1,4 @@
-import type { CharacterTemplate, ClothingItem, Playthrough } from "../../schemas";
+import type { CharacterFormat, CharacterTemplate, ClothingItem, Playthrough } from "../../schemas";
 import { request } from "./client";
 
 export type CharacterTemplateUpdate = Partial<Pick<CharacterTemplate, "name" | "content" | "creatorNotes" | "tags">>;
@@ -128,6 +128,8 @@ export type ConvertApplyResult = {
 export type ConvertGenerateOptions = {
   feedback?: string;
   currentContent?: string;
+  /** Target character format (defaults to the active preset's format). */
+  format?: CharacterFormat;
   signal?: AbortSignal;
 };
 
@@ -141,6 +143,7 @@ export function convertCharacterGenerate(
       action: "generate",
       ...(options?.feedback ? { feedback: options.feedback } : {}),
       ...(options?.currentContent ? { currentContent: options.currentContent } : {}),
+      ...(options?.format ? { format: options.format } : {}),
     }),
     signal: options?.signal,
   });
@@ -151,6 +154,42 @@ export function convertCharacterApply(
   content: string
 ): Promise<ConvertApplyResult> {
   return request<ConvertApplyResult>(`/api/characters/${id}/convert`, {
+    method: "POST",
+    body: JSON.stringify({ action: "apply", content }),
+  });
+}
+
+// ── Reformat an existing BL sheet into a target character format ──
+
+export type ReformatGenerateOptions = {
+  format?: CharacterFormat;
+  /** Source sheet for retry-with-feedback; defaults to the stored template content. */
+  currentContent?: string;
+  feedback?: string;
+  signal?: AbortSignal;
+};
+
+export function reformatCharacterGenerate(
+  id: string,
+  options?: ReformatGenerateOptions
+): Promise<ConvertGenerateResult> {
+  return request<ConvertGenerateResult>(`/api/characters/${id}/reformat`, {
+    method: "POST",
+    body: JSON.stringify({
+      action: "generate",
+      ...(options?.format ? { format: options.format } : {}),
+      ...(options?.currentContent ? { currentContent: options.currentContent } : {}),
+      ...(options?.feedback ? { feedback: options.feedback } : {}),
+    }),
+    signal: options?.signal,
+  });
+}
+
+export function reformatCharacterApply(
+  id: string,
+  content: string
+): Promise<ConvertApplyResult> {
+  return request<ConvertApplyResult>(`/api/characters/${id}/reformat`, {
     method: "POST",
     body: JSON.stringify({ action: "apply", content }),
   });
@@ -199,6 +238,8 @@ export type CharacterBrainstormPayload = {
   }>;
   userMessage: string;
   includeOriginalCard?: boolean;
+  /** Target character format whose section guidance the assistant should follow. */
+  format?: CharacterFormat;
 };
 
 export type CharacterBrainstormResult = {
