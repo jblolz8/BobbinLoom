@@ -256,7 +256,7 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
         const format = resolveCharacterFormat(body.format as CharacterFormat | undefined);
         // On retry the client sends the previously-generated sheet plus feedback.
         const source = body.currentContent ?? template.content;
-        const content = await provider.reformatCharacterSheet(source, format, undefined, controller.signal, body.feedback);
+        const content = await provider.reformatCharacterSheet(source, format, controller.signal, body.feedback);
         return { content, originalContent: template.content, record: template };
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);

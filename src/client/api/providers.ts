@@ -59,9 +59,6 @@ export type PresetModule = {
 
 export type PromptModuleSet = {
   turn: PresetModule[];
-  seed: PresetModule[];
-  sheet: PresetModule[];
-  summary: PresetModule[];
 };
 
 export type PresetSummary = {

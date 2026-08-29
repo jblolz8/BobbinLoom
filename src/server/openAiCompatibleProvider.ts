@@ -1,11 +1,10 @@
 import { toJsonExampleContent } from "../engine/characterSections";
-import { buildFormatExample, buildFormatRules, resolveCharacterFormat } from "../engine/characterFormat";
+import { buildFormatExample, buildFormatRules, formatSectionHeaders, resolveCharacterFormat } from "../engine/characterFormat";
 import {
   AssistantTurnSchema,
   CharacterFormat,
   ParsedUserInput,
   Playthrough,
-  PromptPresetModule,
   ScenarioPreferences,
   ScenarioSeed,
   ScenarioSeedSchema
@@ -130,9 +129,8 @@ export class OpenAICompatibleProvider {
     };
   }
 
-  async generateScenarioSeed(preferences: ScenarioPreferences, lorebookIds?: string[], modules?: PromptPresetModule[], signal?: AbortSignal, format?: CharacterFormat): Promise<ScenarioSeed> {
+  async generateScenarioSeed(preferences: ScenarioPreferences, lorebookIds?: string[], signal?: AbortSignal, format?: CharacterFormat): Promise<ScenarioSeed> {
     const lorebookContext = buildLorebookContext(lorebookIds, preferences.setting ?? "", lorebookBudgetChars(this.config.maxTokens));
-    const seedModules = renderModules(modules);
     const sheetExample = toJsonExampleContent(buildFormatExample(format));
 
     const prompt = [
@@ -168,7 +166,6 @@ export class OpenAICompatibleProvider {
       preferences.setting ? `Setting: ${preferences.setting}` : "",
       "",
       ...(lorebookContext ? [lorebookContext, ""] : []),
-      ...(seedModules ? [seedModules, ""] : []),
       ...(preferences.cast && preferences.cast.length ? [
         "",
         "EXISTING CAST (already chosen — do NOT create new versions of these):",
@@ -178,10 +175,11 @@ export class OpenAICompatibleProvider {
         "",
       ] : []),
       "Guidelines:",
+      "- Write in a neutral tone; let the user's setting description carry the genre and atmosphere.",
       "- Provide 2 to 4 distinct connected locations (the first location is where the player starts).",
       "- Give locations realistic snake_case IDs with loc_ prefix (e.g. loc_tavern, loc_square).",
       "- Ensure connections form a valid graph using the loc_ IDs defined in the list.",
-      "- Provide 1 starting companion character template with a complete character sheet in the content field. Write a compelling, detailed character sheet using standard section headers ([Species], [Gender], [Body], [Appearance], [Clothing], [Personality], [Communication - Public], [Communication - Private], [Likes], [Dislikes]).",
+      "- Provide 1 starting companion character template with a complete character sheet in the content field. Write a compelling, detailed character sheet using the standard section headers: " + formatSectionHeaders(format).join(", ") + ".",
       "- The companion's [Clothing] section should describe what they wear using slot-style bullets (- Top: ..., - Bottom: ..., - Feet: ...).",
       "- Provide 1 clear starting quest with a snake_case id (quest_ prefix).",
       "- Provide 2 to 4 starting items with snake_case IDs (item_ prefix), unique names, type words, descriptions, and quantities (1-5).",
@@ -236,12 +234,10 @@ export class OpenAICompatibleProvider {
   async generateCharacterSheet(
     npc: { name: string; description: string; disposition?: string },
     storyContext: string,
-    modules?: PromptPresetModule[],
     signal?: AbortSignal,
     format?: CharacterFormat
   ): Promise<string> {
     const fmt = resolveCharacterFormat(format);
-    const sheetModules = renderModules(modules);
     const example = toJsonExampleContent(buildFormatExample(fmt));
     const rules = buildFormatRules(fmt);
     const prompt = [
@@ -261,8 +257,6 @@ export class OpenAICompatibleProvider {
       "- The character should feel like they belong in this world.",
       rules,
       "",
-      ...(sheetModules ? [sheetModules] : []),
-      "",
       "STORY CONTEXT:",
       storyContext,
       "",
@@ -277,12 +271,10 @@ export class OpenAICompatibleProvider {
     originalCardContent: string,
     feedback: string,
     storyContext: string,
-    modules?: PromptPresetModule[],
     signal?: AbortSignal,
     format?: CharacterFormat
   ): Promise<string> {
     const fmt = resolveCharacterFormat(format);
-    const sheetModules = renderModules(modules);
     const example = toJsonExampleContent(buildFormatExample(fmt));
     const rules = buildFormatRules(fmt);
     const prompt = [
@@ -301,8 +293,6 @@ export class OpenAICompatibleProvider {
       rules,
       "4. The [Clothing] section, if present, should be a bulleted list describing what the character wears (- Top: ..., - Bottom: ..., - Feet: ...).",
       "5. Reference the ORIGINAL SOURCE CARD if additional source lore is needed.",
-      "",
-      ...(sheetModules ? [sheetModules] : []),
       "",
       "--- CURRENT DRAFT SHEET ---",
       currentContent,
@@ -323,12 +313,10 @@ export class OpenAICompatibleProvider {
   async reformatCharacterSheet(
     currentContent: string,
     format: CharacterFormat,
-    modules?: PromptPresetModule[],
     signal?: AbortSignal,
     feedback?: string
   ): Promise<string> {
     const fmt = resolveCharacterFormat(format);
-    const sheetModules = renderModules(modules);
     const example = toJsonExampleContent(buildFormatExample(fmt));
     const rules = buildFormatRules(fmt);
     const prompt = [
@@ -348,8 +336,6 @@ export class OpenAICompatibleProvider {
       "- Ensure every section in the target format is present, in the given order. For a missing section, derive fitting content from the existing sheet, or write \"(not established)\" when nothing is known.",
       "- Preserve additional sections that carry real information; fold clearly redundant ones into the nearest matching section.",
       "- Sections marked inline are written as `[Name]: value` on one line; the rest use block form ([Name] followed by content lines).",
-      "",
-      ...(sheetModules ? [sheetModules] : []),
       "",
       ...(feedback ? ["USER GUIDANCE FOR THIS REVISION:", feedback, ""] : []),
       "--- CURRENT SHEET ---",
@@ -551,7 +537,6 @@ export class OpenAICompatibleProvider {
     input: CharacterBrainstormInput,
     signal?: AbortSignal
   ): Promise<CharacterBrainstormOutput> {
-    const sheetModules = renderModules(input.modules);
     const c = input.character;
     const fmt = resolveCharacterFormat(input.format);
     const inlineSections = fmt.sections.filter((s) => s.inline).map((s) => s.name);
@@ -605,7 +590,6 @@ export class OpenAICompatibleProvider {
       "  }",
       "}",
       "",
-      ...(sheetModules ? [sheetModules, ""] : []),
       ...contextParts
     ].join("\n");
 
@@ -712,16 +696,14 @@ export class OpenAICompatibleProvider {
     };
   }
 
-  async summarizeChapter(transcript: string, modules?: PromptPresetModule[], signal?: AbortSignal): Promise<{ name: string; shortDescription: string; fullSummary: string }> {
-    const summaryModules = renderModules(modules);
+  async summarizeChapter(transcript: string, signal?: AbortSignal): Promise<{ name: string; shortDescription: string; fullSummary: string }> {
     const summaryPrompt = [
       "You are a story archivist. Below is the transcript of a story chapter.",
       "Produce a JSON object with:",
       "- name: a short title for the chapter (2-6 words)",
       "- shortDescription: one sentence summary",
       "- fullSummary: a narrative summary of the key events (~300 words). Focus on what actually happened — key events, character moments, location changes, quest developments. Do not speculate about unresolved threads.",
-      "",
-      ...(summaryModules ? [summaryModules] : []),
+      "- Write in a clear, neutral tone. Describe events factually — what happened, who was involved, and how it changed the situation.",
       "",
       "TRANSCRIPT:",
       transcript,
@@ -760,14 +742,12 @@ export class OpenAICompatibleProvider {
     return { name: "Untitled Chapter", shortDescription: "", fullSummary: content || "No summary available." };
   }
 
-  async compactStorySoFar(input: ChapterCompactionInput, modules?: PromptPresetModule[], signal?: AbortSignal): Promise<{ summary: string }> {
-    const summaryModules = renderModules(modules);
+  async compactStorySoFar(input: ChapterCompactionInput, signal?: AbortSignal): Promise<{ summary: string }> {
     const parts: string[] = [
       "You are a story archivist maintaining a rolling summary of an ongoing roleplay story.",
       "Below is the prior rolling summary, the endings of chapters that must now be folded in,",
       "and a list of important plot events.",
-      "",
-      ...(summaryModules ? [summaryModules] : []),
+      "- Write in a clear, neutral tone. Describe events factually — what happened, who was involved, and how it changed the situation.",
       "",
       "PRIOR SUMMARY:",
       input.priorSummary || "(none yet)",

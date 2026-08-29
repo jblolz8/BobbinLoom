@@ -137,7 +137,7 @@ export async function playthroughRoutes(app: FastifyInstance): Promise<void> {
     const controller = abortOnClientDisconnect(reply);
 
     try {
-      const seed = await providerManager.getProvider().generateScenarioSeed(preferences, body.lorebookIds, preset?.modules.seed, controller.signal, preset?.characterFormat);
+      const seed = await providerManager.getProvider().generateScenarioSeed(preferences, body.lorebookIds, controller.signal, preset?.characterFormat);
       if (controller.signal.aborted) return;
 
       const openingMode = body.openingMode ?? "fleshedOut";
@@ -223,10 +223,7 @@ export async function playthroughRoutes(app: FastifyInstance): Promise<void> {
       presetId: preset.id,
       presetName: preset.name,
       modules: {
-        turn: preset.modules.turn.map((m) => ({ ...m })),
-        seed: preset.modules.seed.map((m) => ({ ...m })),
-        sheet: preset.modules.sheet.map((m) => ({ ...m })),
-        summary: preset.modules.summary.map((m) => ({ ...m }))
+        turn: preset.modules.turn.map((m) => ({ ...m }))
       },
       characterFormat: preset.characterFormat ? JSON.parse(JSON.stringify(preset.characterFormat)) : undefined,
     };
@@ -285,7 +282,7 @@ export async function playthroughRoutes(app: FastifyInstance): Promise<void> {
     let summaryDurationMs: number | undefined;
     try {
       const summaryStartTime = performance.now();
-      summary = await provider.summarizeChapter(transcript, playthrough.promptSettings?.modules.summary, controller.signal);
+      summary = await provider.summarizeChapter(transcript, controller.signal);
       summaryDurationMs = Math.round(performance.now() - summaryStartTime);
     } catch (error) {
       if (controller.signal.aborted) return;

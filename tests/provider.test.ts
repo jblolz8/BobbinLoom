@@ -296,10 +296,7 @@ describe("OpenAICompatibleProvider", () => {
           content: "You are a meticulous test narrator. ".repeat(12),
           order: 1,
           enabled: true
-        }],
-        seed: [],
-        sheet: [],
-        summary: []
+        }]
       }
     };
     const { turn, promptUsage } = await provider.generateTurn(
@@ -387,7 +384,6 @@ describe("OpenAICompatibleProvider", () => {
     await provider.generateCharacterSheet(
       { name: "Shopkeep", description: "A friendly shopkeeper.", disposition: "friendly" },
       "Setting: Town\nContent Rating: mature\nPlayer Character: Hero",
-      undefined,
       undefined,
       NSFW_CHARACTER_FORMAT
     );
@@ -998,8 +994,8 @@ describe("CCv2 runtime macros (D10)", () => {
   });
 });
 
-describe("per-context prompt modules", () => {
-  it("injects seed-context modules into the scenario-seed prompt but not the turn prompt", async () => {
+describe("turn prompt modules + hardcoded tone", () => {
+  it("injects turn-context modules into the turn prompt; the scenario-seed prompt uses the hardcoded neutral tone (no module system)", async () => {
     let sentPrompt = "";
     const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
@@ -1010,14 +1006,6 @@ describe("per-context prompt modules", () => {
     });
     const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
 
-    const seedModule: PromptPresetModule = {
-      id: "mod_seed",
-      name: "Seed tone",
-      description: "test",
-      content: "SEED MARKER",
-      order: 99,
-      enabled: true
-    };
     const turnModule: PromptPresetModule = {
       id: "mod_turn",
       name: "Turn tone",
@@ -1027,18 +1015,18 @@ describe("per-context prompt modules", () => {
       enabled: true
     };
 
-    await provider.generateScenarioSeed({ name: "Test World", setting: "A quiet starting village." }, undefined, [seedModule]);
-    expect(sentPrompt).toContain("SEED MARKER");
+    await provider.generateScenarioSeed({ name: "Test World", setting: "A quiet starting village." }, undefined);
+    expect(sentPrompt).toContain("Write in a neutral tone");
+    expect(sentPrompt).not.toContain("TURN MARKER");
 
     const state = createInitialPlaythrough("Context Isolation");
     state.promptSettings = {
       presetId: "test",
       presetName: "Test",
-      modules: { turn: [turnModule], seed: [seedModule], sheet: [], summary: [] }
+      modules: { turn: [turnModule] }
     };
     const assembled = assembleTurnPrompt(parseUserInput("go"), state, true);
     expect(assembled.system).toContain("TURN MARKER");
-    expect(assembled.system).not.toContain("SEED MARKER");
   });
 
   it("makes the scenario-seed prompt cast-aware and names the lead companion", async () => {
@@ -1063,7 +1051,7 @@ describe("per-context prompt modules", () => {
     expect(sentPrompt).toContain("lead companion is Mira");
   });
 
-  it("injects sheet-context modules into the character-sheet prompt", async () => {
+  it("character-sheet prompt is format-driven (no sheet-context module injection)", async () => {
     let sentPrompt = "";
     const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
       const b = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
@@ -1071,20 +1059,31 @@ describe("per-context prompt modules", () => {
       return jsonResponse({ choices: [{ message: { content: JSON.stringify({ content: "[Species]: Human" }) } }] });
     });
     const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
-    const sheetModule: PromptPresetModule = {
-      id: "mod_sheet",
-      name: "Sheet boundaries",
-      description: "test",
-      content: "SHEET MARKER: keep the sheet to its standard sections",
-      order: 99,
-      enabled: true
-    };
     await provider.generateCharacterSheet(
       { name: "Shopkeep", description: "A friendly shopkeeper." },
-      "Setting: Town",
-      [sheetModule]
+      "Setting: Town"
     );
-    expect(sentPrompt).toContain("SHEET MARKER: keep the sheet to its standard sections");
+    expect(sentPrompt).toContain("[Species]");
+    expect(sentPrompt).toContain("in this order: [Species]");
+  });
+
+  it("scenario-seed section-header guidance is format-driven (NSFW includes Sexual Capabilities)", async () => {
+    let sentPrompt = "";
+    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const b = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
+      sentPrompt = b.messages[0]?.content ?? "";
+      return jsonResponse({ choices: [{ message: { content: JSON.stringify(VALID_SEED) } }] });
+    });
+    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+
+    // Default format (10 sections, no Sexual Capabilities).
+    await provider.generateScenarioSeed({ name: "World", setting: "A quiet village." }, undefined, undefined, DEFAULT_CHARACTER_FORMAT);
+    expect(sentPrompt).toContain("using the standard section headers: [Species], [Gender], [Body]");
+    expect(sentPrompt).not.toContain("Sexual Capabilities");
+
+    // NSFW format (11 sections).
+    await provider.generateScenarioSeed({ name: "World", setting: "A quiet village." }, undefined, undefined, NSFW_CHARACTER_FORMAT);
+    expect(sentPrompt).toContain("[Sexual Capabilities]");
   });
 
   it("migrates legacy flat-array promptSettings snapshots to turn modules", () => {
@@ -1097,8 +1096,5 @@ describe("per-context prompt modules", () => {
     });
     expect(parsed.modules.turn).toHaveLength(1);
     expect(parsed.modules.turn[0].id).toBe("mod_legacy");
-    expect(parsed.modules.seed).toEqual([]);
-    expect(parsed.modules.sheet).toEqual([]);
-    expect(parsed.modules.summary).toEqual([]);
   });
 });

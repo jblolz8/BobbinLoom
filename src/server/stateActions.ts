@@ -122,7 +122,6 @@ export async function promoteNpcAction(
       content = await provider.generateCharacterSheet(
         { name: npc.name, description: npc.description, disposition: npc.disposition },
         storyContext,
-        loaded.promptSettings?.modules.sheet,
         signal,
         format
       );
@@ -172,7 +171,6 @@ export async function promoteNpcDraftAction(
     content = await provider.generateCharacterSheet(
       { name: npc.name, description: npc.description, disposition: npc.disposition },
       storyContext,
-      loaded.promptSettings?.modules.sheet,
       signal,
       format
     );
@@ -339,7 +337,7 @@ async function foldOldestChaptersIntoMetaSummaries(
       priorSummary: target.summary,
       chapterTranscriptions: remainingToFold.map((ch) => ({ name: ch.name, fullSummary: ch.fullSummary })),
       importantEvents
-    }, loaded.promptSettings?.modules.summary, signal);
+    }, signal);
     target.summary = result.summary;
   } catch (error) {
     // Degrade-and-warn: still fold the ids so the verbatim window shrinks, but
@@ -563,7 +561,7 @@ export async function resummarizeChapterAction(
   let summaryDurationMs: number | undefined;
   try {
     const summaryStartTime = performance.now();
-    summary = await provider.summarizeChapter(transcript, loaded.promptSettings?.modules.summary, signal);
+    summary = await provider.summarizeChapter(transcript, signal);
     summaryDurationMs = Math.round(performance.now() - summaryStartTime);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Chapter re-summarization failed";

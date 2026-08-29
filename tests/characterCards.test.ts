@@ -215,7 +215,6 @@ describe("convertCardGenerate", () => {
       { name: "Whiskers", description: "A playful stray cat in the city alleyways." },
       expect.stringContaining("Setting/Scenario: Rainy cyberpunk alley"),
       undefined,
-      undefined,
       DEFAULT_CHARACTER_FORMAT
     );
     expect(result.content).toContain("[Species]: Cat");
@@ -250,7 +249,6 @@ describe("convertCardGenerate", () => {
       "A playful stray cat in the city alleyways.",
       feedback,
       "(no additional context)",
-      undefined,
       undefined,
       DEFAULT_CHARACTER_FORMAT
     );

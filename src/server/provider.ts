@@ -1,5 +1,5 @@
 import { buildMockAssistantTurn } from "../engine/engine";
-import type { AssistantTurn, CharacterFormat, ParsedUserInput, Playthrough, PromptPresetModule, ScenarioPreferences, ScenarioSeed } from "../schemas";
+import type { AssistantTurn, CharacterFormat, ParsedUserInput, Playthrough, ScenarioPreferences, ScenarioSeed } from "../schemas";
 
 /** Per-segment token estimates (chars/4) of the prompt actually sent to the model. */
 export type PromptUsageBreakdown = {
@@ -62,19 +62,18 @@ export interface TurnProvider {
   generateScenarioSeed(
     preferences: ScenarioPreferences,
     lorebookIds?: string[],
-    modules?: PromptPresetModule[],
     signal?: AbortSignal,
     format?: CharacterFormat
   ): Promise<ScenarioSeed>;
 
   /** Summarize a chapter transcript into { name, shortDescription, fullSummary }. */
-  summarizeChapter(transcript: string, modules?: PromptPresetModule[], signal?: AbortSignal): Promise<{ name: string; shortDescription: string; fullSummary: string }>;
+  summarizeChapter(transcript: string, signal?: AbortSignal): Promise<{ name: string; shortDescription: string; fullSummary: string }>;
 
   /** Consolidate older chapter summaries into / on top of the single rolling
    *  meta-summary. `priorSummary` is the existing meta-summary text (null when
    *  this is the very first fold-after-seed — though the seed itself promotes a
    *  chapter directly with no provider call). Returns the new rolling summary. */
-  compactStorySoFar(input: ChapterCompactionInput, modules?: PromptPresetModule[], signal?: AbortSignal): Promise<{ summary: string }>;
+  compactStorySoFar(input: ChapterCompactionInput, signal?: AbortSignal): Promise<{ summary: string }>;
 
   /** Compute embedding vectors for one or more texts. Returns vectors in input
    *  order. Returns empty array when embeddings are unsupported (mock) or the
@@ -88,7 +87,6 @@ export interface TurnProvider {
   generateCharacterSheet(
     npc: { name: string; description: string; disposition?: string },
     storyContext: string,
-    modules?: PromptPresetModule[],
     signal?: AbortSignal,
     format?: CharacterFormat
   ): Promise<string>;
@@ -100,7 +98,6 @@ export interface TurnProvider {
     originalCardContent: string,
     feedback: string,
     storyContext: string,
-    modules?: PromptPresetModule[],
     signal?: AbortSignal,
     format?: CharacterFormat
   ): Promise<string>;
@@ -111,7 +108,6 @@ export interface TurnProvider {
   reformatCharacterSheet(
     currentContent: string,
     format: CharacterFormat,
-    modules?: PromptPresetModule[],
     signal?: AbortSignal,
     feedback?: string
   ): Promise<string>;
@@ -150,7 +146,6 @@ export interface CharacterBrainstormInput {
   }>;
   userMessage: string;
   includeOriginalCard?: boolean;
-  modules?: PromptPresetModule[];
   /** Target character format whose section guidance the assistant should follow. */
   format?: CharacterFormat;
 }
@@ -176,15 +171,15 @@ export class MockProvider implements TurnProvider {
     return { turn: buildMockAssistantTurn(input, state, choicesEnabled) };
   }
 
-  async generateScenarioSeed(_preferences: ScenarioPreferences, _lorebookIds?: string[], _modules?: PromptPresetModule[], _signal?: AbortSignal, _format?: CharacterFormat): Promise<ScenarioSeed> {
+  async generateScenarioSeed(_preferences: ScenarioPreferences, _lorebookIds?: string[], _signal?: AbortSignal, _format?: CharacterFormat): Promise<ScenarioSeed> {
     throw new Error("Scenario generation is not available with the Mock provider. Switch to a real provider in Settings.");
   }
 
-  async summarizeChapter(_transcript: string, _modules?: PromptPresetModule[], _signal?: AbortSignal): Promise<{ name: string; shortDescription: string; fullSummary: string }> {
+  async summarizeChapter(_transcript: string, _signal?: AbortSignal): Promise<{ name: string; shortDescription: string; fullSummary: string }> {
     throw new Error("Chapter summarization is not available with the Mock provider. Switch to a real provider in Settings.");
   }
 
-  async compactStorySoFar(_input: ChapterCompactionInput, _modules?: PromptPresetModule[], _signal?: AbortSignal): Promise<{ summary: string }> {
+  async compactStorySoFar(_input: ChapterCompactionInput, _signal?: AbortSignal): Promise<{ summary: string }> {
     throw new Error("Chapter compaction is not available with the Mock provider. Switch to a real provider in Settings.");
   }
 
@@ -192,15 +187,15 @@ export class MockProvider implements TurnProvider {
     return []; // mock doesn't support embeddings
   }
 
-  async generateCharacterSheet(_npc: { name: string; description: string; disposition?: string }, _storyContext: string, _modules?: PromptPresetModule[], _signal?: AbortSignal, _format?: CharacterFormat): Promise<string> {
+  async generateCharacterSheet(_npc: { name: string; description: string; disposition?: string }, _storyContext: string, _signal?: AbortSignal, _format?: CharacterFormat): Promise<string> {
     throw new Error("Character sheet generation is not available with the Mock provider. Switch to a real provider in Settings.");
   }
 
-  async refineCharacterSheet(_currentContent: string, _originalCardContent: string, _feedback: string, _storyContext: string, _modules?: PromptPresetModule[], _signal?: AbortSignal, _format?: CharacterFormat): Promise<string> {
+  async refineCharacterSheet(_currentContent: string, _originalCardContent: string, _feedback: string, _storyContext: string, _signal?: AbortSignal, _format?: CharacterFormat): Promise<string> {
     throw new Error("Character sheet refinement is not available with the Mock provider. Switch to a real provider in Settings.");
   }
 
-  async reformatCharacterSheet(_currentContent: string, _format: CharacterFormat, _modules?: PromptPresetModule[], _signal?: AbortSignal, _feedback?: string): Promise<string> {
+  async reformatCharacterSheet(_currentContent: string, _format: CharacterFormat, _signal?: AbortSignal, _feedback?: string): Promise<string> {
     throw new Error("Character sheet reformatting is not available with the Mock provider. Switch to a real provider in Settings.");
   }
 

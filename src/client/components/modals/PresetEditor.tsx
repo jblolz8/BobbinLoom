@@ -10,7 +10,6 @@ import {
   setDefaultPresetId,
   updatePlaythroughPromptSettings,
   updatePreset,
-  type ModuleContext,
   type PlaythroughPromptSettings,
   type PromptModuleSet,
   type PresetModule,
@@ -63,11 +62,11 @@ function newModuleId(): string {
   return `mod_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-const CONTEXT_TABS: Array<{ value: ModuleContext; label: string }> = [
+type EditorTab = "turn" | "sheet";
+
+const CONTEXT_TABS: Array<{ value: EditorTab; label: string }> = [
   { value: "turn", label: "Turn" },
-  { value: "seed", label: "New Scenario" },
-  { value: "sheet", label: "Character Sheet" },
-  { value: "summary", label: "Summary" }
+  { value: "sheet", label: "Character Sheet" }
 ];
 
 type CharacterFormatRowProps = {
@@ -151,13 +150,13 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
   const [activePresetId, setActivePresetId] = useState<string>("default");
   const [activePresetName, setActivePresetName] = useState("Default");
   const [activePresetReadonly, setActivePresetReadonly] = useState(true);
-  const [presetModules, setPresetModules] = useState<PromptModuleSet>({ turn: [], seed: [], sheet: [], summary: [] });
+  const [presetModules, setPresetModules] = useState<PromptModuleSet>({ turn: [] });
   const [presetFormat, setPresetFormat] = useState<CharacterFormat>(cloneFormat(undefined));
   const [presetDirty, setPresetDirty] = useState(false);
   const [presetSaving, setPresetSaving] = useState(false);
   const [editingModule, setEditingModule] = useState<PresetModule | null>(null);
   const [editModuleForm, setEditModuleForm] = useState<{ name: string; description: string; content: string }>({ name: "", description: "", content: "" });
-  const [activeContextTab, setActiveContextTab] = useState<ModuleContext>("turn");
+  const [activeContextTab, setActiveContextTab] = useState<EditorTab>("turn");
   const [status, setStatus] = useState<string | null>(null);
 
   // Pointer-based drag state for reordering Character Sheet sections (works for
@@ -343,19 +342,19 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
   }
 
   function toggleModule(moduleId: string) {
-    setPresetModules((prev) => ({ ...prev, [activeContextTab]: prev[activeContextTab].map((m) => (m.id === moduleId ? { ...m, enabled: !m.enabled } : m)) }));
+    setPresetModules((prev) => ({ ...prev, turn: prev.turn.map((m) => (m.id === moduleId ? { ...m, enabled: !m.enabled } : m)) }));
     markDirty();
   }
 
   function moveModule(moduleId: string, direction: -1 | 1) {
     setPresetModules((prev) => {
-      const sorted = [...prev[activeContextTab]].sort((a, b) => a.order - b.order);
+      const sorted = [...prev.turn].sort((a, b) => a.order - b.order);
       const idx = sorted.findIndex((m) => m.id === moduleId);
       if (idx < 0) return prev;
       const targetIdx = idx + direction;
       if (targetIdx < 0 || targetIdx >= sorted.length) return prev;
       [sorted[idx], sorted[targetIdx]] = [sorted[targetIdx], sorted[idx]];
-      return { ...prev, [activeContextTab]: sorted.map((m, i) => ({ ...m, order: i + 1 })) };
+      return { ...prev, turn: sorted.map((m, i) => ({ ...m, order: i + 1 })) };
     });
     markDirty();
   }
@@ -369,7 +368,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
     if (!editingModule) return;
     setPresetModules((prev) => ({
       ...prev,
-      [activeContextTab]: prev[activeContextTab].map((m) =>
+      turn: prev.turn.map((m) =>
         m.id === editingModule.id ? { ...m, name: editModuleForm.name, description: editModuleForm.description, content: editModuleForm.content } : m
       )
     }));
@@ -379,13 +378,13 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
 
   function deleteModule(moduleId: string) {
     if (!window.confirm("Delete this module?")) return;
-    setPresetModules((prev) => ({ ...prev, [activeContextTab]: prev[activeContextTab].filter((m) => m.id !== moduleId) }));
+    setPresetModules((prev) => ({ ...prev, turn: prev.turn.filter((m) => m.id !== moduleId) }));
     markDirty();
   }
 
   function addNewModule() {
-    const newMod: PresetModule = { id: newModuleId(), name: "New Module", description: "", content: "", order: presetModules[activeContextTab].length + 1, enabled: true };
-    setPresetModules((prev) => ({ ...prev, [activeContextTab]: [...prev[activeContextTab], newMod] }));
+    const newMod: PresetModule = { id: newModuleId(), name: "New Module", description: "", content: "", order: presetModules.turn.length + 1, enabled: true };
+    setPresetModules((prev) => ({ ...prev, turn: [...prev.turn, newMod] }));
     setEditingModule(newMod);
     setEditModuleForm({ name: newMod.name, description: "", content: "" });
     markDirty();
@@ -479,7 +478,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
         ) : (
           <>
             {(() => {
-              const sortedModules = [...presetModules[activeContextTab]].sort((a, b) => a.order - b.order);
+              const sortedModules = [...presetModules.turn].sort((a, b) => a.order - b.order);
               if (sortedModules.length === 0) return null;
               return (
                 <div className="module-group">

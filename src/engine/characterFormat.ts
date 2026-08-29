@@ -78,6 +78,13 @@ export function formatSections(format?: CharacterFormat): CharacterFormatSection
   return resolveCharacterFormat(format).sections;
 }
 
+/** The resolved format's section names, in order, wrapped as headers: e.g.
+ *  ["[Species]", "[Gender]", ...]. Useful for prompt guidance that lists the
+ *  sheet's canonical sections. */
+export function formatSectionHeaders(format?: CharacterFormat): string[] {
+  return formatSections(format).map((s) => `[${s.name}]`);
+}
+
 /** Ordered, lowercased section names of a format. */
 export function normalizedFormatSectionNames(format?: CharacterFormat): string[] {
   return formatSections(format).map((s) => s.name.trim().toLowerCase());

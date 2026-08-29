@@ -6,16 +6,7 @@
 
 Prompt behavior is configured through **presets** — named collections of prompt modules that can be toggled, reordered, and edited. Each playthrough stores a snapshot of its preset at creation time, so changing a preset doesn't retroactively affect existing games.
 
-Modules are **scoped to a prompt context** — a module only feeds the prompts it is tagged for. The four contexts:
-
-| Context | Prompts it feeds |
-|---|---|
-| `turn` | The main turn system prompt (the classic module surface) |
-| `seed` | Scenario generation (the setup "Generate Scenario" call) |
-| `sheet` | Character sheet generation (NPC promotion / sheet drafting) |
-| `summary` | Chapter summarization + story-so-far compaction |
-
-The **PresetEditor shows one tab per context** (Turn / New Scenario / Character Sheet / Summary).
+Modules are **scoped to the turn context** — the only module surface. The seed, sheet, and summary module contexts were **removed (Aug 2026)**: scenario generation, character-sheet generation, and chapter summarization now use hardcoded prompts (with a fixed neutral tone) rather than user-editable modules. The PresetEditor shows two tabs: **Turn** (modules) and **Character Sheet** (the format).
 
 ---
 
@@ -32,9 +23,6 @@ type Preset = {
 
 type PromptModuleSet = {
   turn: PresetModule[];     // the main turn system prompt
-  seed: PresetModule[];     // scenario generation
-  sheet: PresetModule[];    // legacy character sheet modules (rarely used — see below)
-  summary: PresetModule[];  // chapter summarization + compaction
 };
 
 type PresetModule = {
@@ -47,9 +35,9 @@ type PresetModule = {
 };
 ```
 
-**Context is structural, not a per-module field.** The tab a module is edited under *is* its context — a module created on the Summary tab only ever feeds summary prompts, never the turn/seed/sheet configurations. (The earlier per-module `contexts` array and the decorative `tags` field were removed Aug 2026.) Legacy presets/snapshots that stored modules as a flat array load with the whole array treated as `turn` modules.
+**Context is structural, not a per-module field.** Modules belong to the Turn context — the only context. (The earlier per-module `contexts` array, the decorative `tags` field, and the seed/sheet/summary contexts were removed Aug 2026.) Legacy presets/snapshots that stored modules as a flat array load with the whole array treated as `turn` modules.
 
-**The Character Sheet tab is a sections editor, not a module list.** Sheet structure — which sections exist, their order, their inline vs. block layout, and the instruction/examples the model gets — is owned by `characterFormat`, edited row-by-row in the Character Sheet tab. The old `sheet` module list still loads for backward compatibility but is empty in the shipped presets; the format is the sheet's authoritative contract.
+**The Character Sheet tab is a sections editor, not a module list.** Sheet structure — which sections exist, their order, their inline vs. block layout, and the instruction/examples the model gets — is owned by `characterFormat`, edited row-by-row in the Character Sheet tab. The former `sheet` module context was removed (Aug 2026); the format is the sheet's authoritative contract.
 
 ---
 
@@ -70,16 +58,13 @@ type PresetModule = {
 | Relationship Dynamics | On | Relationships evolve through actions |
 | Grounded Style | On | Vivid but controlled prose |
 
-### Scoped modules (added Aug 2026)
+### Hardcoded seed & summary tone (removed Aug 2026)
 
-| Module | Context | Default | Default (NSFW) |
-|---|---|---|---|
-| Seed Tone | `seed` | Setting description carries genre/tone | Same, reflecting mature registers in atmosphere |
-| Summary Tone | `summary` | Neutral, factual summaries | Factual, plain, no euphemism or judgment |
+The former **Seed Tone** and **Summary Tone** modules were removed along with the `seed`/`summary` module contexts. Scenario generation and chapter summarization now use a fixed **neutral tone** inlined into their prompts — no longer user-configurable. This is intended to be revisited when scenario/summary prompting is redesigned.
 
-> **Character sheet guidance moved into the format.** The former `sheet` module "Sheet Content Boundaries" was removed in the format work: the sections themselves — including whether `[Sexual Capabilities]` exists — are now defined by the preset's `characterFormat`, and the per-section instructions/examples carry the guidance. Default's format is the 10-section set (no `[Sexual Capabilities]`); Default (NSFW)'s format adds it as the 11th section.
+> **Character sheet guidance lives in the format.** The former `sheet` module "Sheet Content Boundaries" was removed: the sections themselves — including whether `[Sexual Capabilities]` exists — are now defined by the preset's `characterFormat`, and the per-section instructions/examples carry the guidance. Default's format is the 10-section set (no `[Sexual Capabilities]`); Default (NSFW)'s format adds it as the 11th section.
 
-The Default/NSFW difference is the content lever: **the preset you use IS the content control** (per-playthrough `contentRating` was removed Aug 2026). The playthrough's snapshot decides the sheet/seed/summary guidance it gets — mid-story preset switches (Settings → Prompt Configuration → Apply) re-scope future generations.
+The Default/NSFW difference is the content lever: **the preset you use IS the content control** (per-playthrough `contentRating` was removed Aug 2026). The playthrough's snapshot decides the turn-module guidance and sheet format it gets — mid-story preset switches (Settings → Prompt Configuration → Apply) re-scope future generations.
 
 ---
 
@@ -87,11 +72,11 @@ The Default/NSFW difference is the content lever: **the preset you use IS the co
 
 1. Open **Settings** → **Prompt Configuration** tab
 2. Select a preset from the dropdown, or create a new one via "Save as New…"
-3. Pick a context tab — **Turn / New Scenario / Character Sheet / Summary**
-4. Toggle modules on/off with checkboxes (Turn / New Scenario / Summary tabs)
+3. Pick a tab — **Turn** (modules) or **Character Sheet** (sections)
+4. Toggle Turn modules on/off with checkboxes
 5. Reorder modules with ↑↓ arrows
 6. Edit module name, content, and metadata (✎ button)
-7. Add new modules with "+ Add Module" — they land in the active tab's context
+7. Add new modules with "+ Add Module" — they land in the Turn context
 8. On the **Character Sheet** tab: edit the section list — name, `inline` checkbox (renders `[Name]: value` on one line vs. block form), model instruction, and optional example body. **Reorder sections by dragging the ⋮⋮ grip** — the pointer-based drag works on both mouse and touch. The order shown IS the order generated sheets must follow. The Examples field is freeform while typing and normalizes (trim + collapse blank lines, one example per line) on blur.
 9. Click **Save** to persist changes to the preset
 10. Switching presets auto-applies to the current playthrough

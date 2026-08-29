@@ -47,7 +47,6 @@ export async function convertCardGenerate(
       t.content,
       input.feedback,
       context,
-      input.modules,
       signal,
       fmt
     );
@@ -56,7 +55,6 @@ export async function convertCardGenerate(
     content = await provider.generateCharacterSheet(
       { name: t.name, description: t.content },
       context,
-      input.modules,
       signal,
       fmt
     );

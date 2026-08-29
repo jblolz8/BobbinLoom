@@ -237,7 +237,7 @@ export const QuestSchema = z.object({
 });
 export type Quest = z.infer<typeof QuestSchema>;
 
-export const MODULE_CONTEXTS = ["turn", "seed", "sheet", "summary"] as const;
+export const MODULE_CONTEXTS = ["turn"] as const;
 export type ModuleContext = (typeof MODULE_CONTEXTS)[number];
 
 export const PromptPresetModuleSchema = z.object({
@@ -257,21 +257,18 @@ export type PromptPresetModule = z.infer<typeof PromptPresetModuleSchema>;
  *  missing arrays filled with []. */
 export const PromptModuleSetSchema = z.preprocess(
   (val) => {
-    if (Array.isArray(val)) return { turn: val, seed: [], sheet: [], summary: [] };
+    if (Array.isArray(val)) return { turn: val };
     if (typeof val === "object" && val !== null) {
-      return { turn: [], seed: [], sheet: [], summary: [], ...(val as Record<string, unknown>) };
+      return { turn: [], ...(val as Record<string, unknown>) };
     }
     return val;
   },
   z.object({
-    turn: z.array(PromptPresetModuleSchema),
-    seed: z.array(PromptPresetModuleSchema),
-    sheet: z.array(PromptPresetModuleSchema),
-    summary: z.array(PromptPresetModuleSchema)
+    turn: z.array(PromptPresetModuleSchema)
   })
 );
 export type PromptModuleSet = z.infer<typeof PromptModuleSetSchema>;
-export const EMPTY_MODULE_SET: PromptModuleSet = { turn: [], seed: [], sheet: [], summary: [] };
+export const EMPTY_MODULE_SET: PromptModuleSet = { turn: [] };
 
 // ── Character format (preset-owned sheet structure) ──
 // The ordered list of sections a character sheet should contain. Each section

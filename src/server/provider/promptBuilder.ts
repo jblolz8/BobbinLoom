@@ -1,9 +1,10 @@
 import { joinContentSections, splitContentSections, summaryFromContent } from "../../engine/characterSections";
+import { formatSectionHeaders, formatSections } from "../../engine/characterFormat";
 import { ITEMS } from "../../engine/demoData";
 import { retrieveMemoriesVector, scanLorebooks } from "../../engine/engine";
 import { expandMacros } from "../../engine/macros";
 import type { EntryTimingState, LorebookEntry } from "../../schemas";
-import type { CharacterInstance, CharacterTemplate, ParsedUserInput, Playthrough, PromptPresetModule } from "../../schemas";
+import type { CharacterFormat, CharacterInstance, CharacterTemplate, ParsedUserInput, Playthrough, PromptPresetModule } from "../../schemas";
 import type { PromptUsage, PromptUsageBreakdown } from "../provider";
 import { VERBATIM_CHAPTER_LIMIT } from "../provider";
 import { getLorebook } from "../store";
@@ -194,10 +195,18 @@ export function renderModules(modules: PromptPresetModule[] | undefined): string
     .join("\n\n");
 }
 
-export function buildSystemPrompt(choicesEnabled: boolean, modules: PromptPresetModule[], lorebookBefore: string, lorebookAfter: string): { text: string; segments: SystemPromptSegments } {
+export function buildSystemPrompt(choicesEnabled: boolean, modules: PromptPresetModule[], lorebookBefore: string, lorebookAfter: string, format?: CharacterFormat): { text: string; segments: SystemPromptSegments } {
   const enabledModules = modules
     .filter((m) => m.enabled)
     .sort((a, b) => a.order - b.order);
+
+  const sectionHeaders = formatSectionHeaders(format);
+  const sectionNamesList = sectionHeaders.join(", ");
+  const bulletedSections = formatSections(format)
+    .filter((s) => !s.inline)
+    .map((s) => s.name)
+    .filter((n) => n.toLowerCase() !== "clothing")
+    .join(", ");
 
   const moduleContents = enabledModules.map((m) => m.content).join("\n\n");
   const lorebookSection = [lorebookBefore, lorebookAfter].filter(Boolean).join("\n\n");
@@ -276,9 +285,9 @@ export function buildSystemPrompt(choicesEnabled: boolean, modules: PromptPreset
     "- locationConnect: create a new edge between two existing locations. Both sides are updated automatically. Use IDs or names.",
     "- locationDisconnect: remove an edge between two locations. Both sides are updated automatically.",
     "- characterLocation: move a character to a location. Use characterId (instance ID or name) and locationId (location ID or name). Use this when a character travels, is escorted, or relocated by events.",
-    "- characterSectionUpdate: replace the entire content of one section in a character's sheet. Use canonical section names: Species, Gender, Body, Appearance, Clothing, Personality, Communication - Public, Communication - Private, Likes, Dislikes, Sexual Capabilities. Send the COMPLETE new text for that section, not a delta. Use this to update clothing, appearance changes, or personality shifts. The \"Clothing\" section is managed via characterClothing* patches — a Clothing section update is applied as a full outfit replace. Prefer the characterSectionItem* actions for incremental changes to bulleted sections of PRESENT characters; use this whole-section replace for full rewrites, freeform Communication sections, and ABSENT characters.",
+    `- characterSectionUpdate: replace the entire content of one section in a character's sheet. Use canonical section names: ${sectionNamesList}. Send the COMPLETE new text for that section, not a delta. Use this to update clothing, appearance changes, or personality shifts. The "Clothing" section is managed via characterClothing* patches — a Clothing section update is applied as a full outfit replace. Prefer the characterSectionItem* actions for incremental changes to bulleted sections of PRESENT characters; use this whole-section replace for full rewrites, freeform Communication sections, and ABSENT characters.`,
     "- characterClothingAdd/Remove/SetState/Set: manage a character's worn clothing. Add items by slot (one item per slot), remove by slot, set state (wet, torn, removed) on worn items, or Set to replace the whole outfit.",
-    "- characterSectionItemAdd: add ONE item to a bulleted section (Personality, Likes, Dislikes, Sexual Capabilities, Body, Appearance). Send the new item text without a leading dash. The engine appends it as a bullet; exact duplicates are ignored. Use this for newly-discovered traits (e.g. a Like the character realizes mid-story). Requires the character to be PRESENT (at the player's location).",
+    `- characterSectionItemAdd: add ONE item to a bulleted section (${bulletedSections}). Send the new item text without a leading dash. The engine appends it as a bullet; exact duplicates are ignored. Use this for newly-discovered traits (e.g. a Like the character realizes mid-story). Requires the character to be PRESENT (at the player's location).`,
     "- characterSectionItemRemove: remove ONE item from a bulleted section by its exact current text. Use this when a trait no longer holds (e.g. a Like removed after a traumatic outdoors event). Rejected if no exact match exists. Requires the character to be PRESENT.",
     "- characterSectionItemReplace: replace ONE bullet's text in a section. Send 'from' (exact current text) and 'to' (new text). Use for evolving traits (personality shifts). Rejected if 'from' has no exact match. Requires the character to be PRESENT.",
     choicesEnabled
@@ -373,6 +382,7 @@ export type AssembledTurnPrompt = {
 
 export function assembleTurnPrompt(input: ParsedUserInput, state: Playthrough, choicesEnabled: boolean, queryEmbedding: number[] = []): AssembledTurnPrompt {
   const modules = state.promptSettings?.modules.turn ?? [];
+  const format = state.promptSettings?.characterFormat;
 
   let lorebookBefore = "";
   let lorebookAfter = "";
@@ -425,7 +435,7 @@ export function assembleTurnPrompt(input: ParsedUserInput, state: Playthrough, c
     }
   }
 
-  const systemResult = buildSystemPrompt(choicesEnabled, modules, lorebookBefore, lorebookAfter);
+  const systemResult = buildSystemPrompt(choicesEnabled, modules, lorebookBefore, lorebookAfter, format);
   const userResult = buildUserPrompt(input, state, lorebookDepth, queryEmbedding);
 
   const est = (chars: number) => Math.ceil(chars / 4);

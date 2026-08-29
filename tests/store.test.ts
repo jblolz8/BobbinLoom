@@ -100,20 +100,20 @@ describe("createPlaythroughFromSeedRecord (scenario generation)", () => {
 });
 
 describe("resolvePresetForGeneration (Generate Scenario preset resolution)", () => {
-  it("falls back to the default preset so its seed modules reach the generator", () => {
+  it("falls back to the default preset so its turn modules reach the generator", () => {
     const resolved = resolvePresetForGeneration(undefined);
 
     expect(resolved).not.toBeNull();
-    expect(resolved!.modules.seed.length).toBeGreaterThan(0);
-    // Seed modules must be enabled to render into the Generate Scenario prompt.
-    expect(resolved!.modules.seed.some((m) => m.enabled)).toBe(true);
+    expect(resolved!.modules.turn.length).toBeGreaterThan(0);
+    // Turn modules must be enabled to render into the turn prompt.
+    expect(resolved!.modules.turn.some((m) => m.enabled)).toBe(true);
   });
 
   it("resolves an explicit presetId", () => {
     const resolved = resolvePresetForGeneration("default-nsfw");
 
     expect(resolved?.id).toBe("default-nsfw");
-    expect(resolved!.modules.seed.length).toBeGreaterThan(0);
+    expect(resolved!.modules.turn.length).toBeGreaterThan(0);
   });
 
   it("returns null for an unknown presetId so the route 404s", () => {

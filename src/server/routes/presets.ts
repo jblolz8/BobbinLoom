@@ -25,7 +25,7 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
       id,
       name,
       readonly,
-      moduleCount: modules.turn.length + modules.seed.length + modules.sheet.length + modules.summary.length
+      moduleCount: modules.turn.length
     }));
   });
 
@@ -46,10 +46,7 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
       const source = presets.find((p) => p.id === body.cloneFromId);
       if (!source) return reply.code(404).send({ error: "Source preset not found" });
       modules = {
-        turn: source.modules.turn.map((m) => ({ ...m })),
-        seed: source.modules.seed.map((m) => ({ ...m })),
-        sheet: source.modules.sheet.map((m) => ({ ...m })),
-        summary: source.modules.summary.map((m) => ({ ...m }))
+        turn: source.modules.turn.map((m) => ({ ...m }))
       };
       characterFormat = source.characterFormat ? JSON.parse(JSON.stringify(source.characterFormat)) : undefined;
     }

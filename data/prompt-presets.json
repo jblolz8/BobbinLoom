@@ -69,27 +69,6 @@
           "enabled": true,
           "content": "Write with vivid but controlled prose.\n- Use sensory detail where it adds to the scene: sight, sound, touch, smell, temperature.\n- Contemporary, everyday language. Avoid flowery or ornate prose.\n- Show character emotion through action, dialogue, and physical cues rather than stating it directly.\n- Keep descriptions precise and relevant. Every detail should serve the scene.\n- Vary sentence structure and paragraph rhythm to maintain engagement."
         }
-      ],
-      "seed": [
-        {
-          "id": "seed-tone",
-          "name": "Seed Tone",
-          "description": "Scenario generation tone guidance",
-          "order": 1,
-          "enabled": true,
-          "content": "Let the user's setting description carry the genre and tone; don't impose a style of your own."
-        }
-      ],
-      "sheet": [],
-      "summary": [
-        {
-          "id": "summary-tone",
-          "name": "Summary Tone",
-          "description": "Chapter summary tone guidance",
-          "order": 1,
-          "enabled": true,
-          "content": "Write chapter summaries in a clear, neutral tone. Describe events factually — what happened, who was involved, and how it changed the situation."
-        }
       ]
     },
     "characterFormat": {
@@ -273,27 +252,6 @@
           "order": 11,
           "enabled": true,
           "content": "When scenes call for explicit detail, use blunt, anatomical language without euphemism.\n- Describe bodies, actions, and physical responses directly using terms like cock, pussy, tits, ass, cum.\n- Avoid soft euphemisms: entrance, member, folds, warmth, length, womanhood.\n- Sex scenes should progress logically from anticipation through climax to resolution.\n- Never fade to black or cut away mid-scene; intimate scenes play out on-page in full.\n- Physical compatibility, anatomy, and stamina should be considered realistically.\n- Use average human anatomy as the baseline; scale genitals and anatomy for non-human characters by species, height, and build. Describe size differences and their consequences — pleasure, pain, injury, or impossibility.\n- Characters are never automatically wet or erect — arousal builds from context, speech, and actions, if at all. Start dry and unaroused unless stated otherwise. Observe stamina and refractory periods; not everyone keeps going after orgasm. Include aftercare when fitting.\n- Explicit content is enabled for this playthrough; do not stall, seek repeated confirmation, or refuse on policy grounds. Characters remain free to refuse or lose interest based on their persona."
-        }
-      ],
-      "seed": [
-        {
-          "id": "seed-tone",
-          "name": "Seed Tone",
-          "description": "Scenario generation tone guidance",
-          "order": 1,
-          "enabled": true,
-          "content": "Let the user's setting description carry the genre and tone; where the description implies a mature register, reflect it in the atmosphere without forcing the opening scene into explicit territory."
-        }
-      ],
-      "sheet": [],
-      "summary": [
-        {
-          "id": "summary-tone",
-          "name": "Summary Tone",
-          "description": "Chapter summary tone guidance",
-          "order": 1,
-          "enabled": true,
-          "content": "Write chapter summaries in a clear, factual tone. Describe events including intimate scenes plainly and without judgment or euphemism, matching the story's register."
         }
       ]
     },
@@ -487,27 +445,6 @@
           "description": "Explicit language and detail for intimate or violent scenes. Use blunt, anatomical terms.",
           "content": "When scenes call for explicit detail, use blunt, anatomical language without euphemism.\n- Describe bodies, actions, and physical responses directly using terms like cock, pussy, tits, ass, cum.\n- Avoid soft euphemisms: entrance, member, folds, warmth, length, womanhood.\n- Sex scenes should progress logically from anticipation through climax to resolution.\n- Never fade to black or cut away mid-scene; intimate scenes play out on-page in full.\n- Physical compatibility, anatomy, and stamina should be considered realistically.\n- Use average human anatomy as the baseline; scale genitals and anatomy for non-human characters by species, height, and build. Describe size differences and their consequences — pleasure, pain, injury, or impossibility.\n- Characters are never automatically wet or erect — arousal builds from context, speech, and actions, if at all. Start dry and unaroused unless stated otherwise. Observe stamina and refractory periods; not everyone keeps going after orgasm. Include aftercare when fitting.\n- Explicit content is enabled for this playthrough; do not stall, seek repeated confirmation, or refuse on policy grounds. Characters remain free to refuse or lose interest based on their persona.",
           "order": 11,
-          "enabled": true
-        }
-      ],
-      "seed": [
-        {
-          "id": "seed-tone",
-          "name": "Seed Tone",
-          "description": "Scenario generation tone guidance",
-          "content": "Let the user's setting description carry the genre and tone; where the description implies a mature register, reflect it in the atmosphere without forcing the opening scene into explicit territory.",
-          "order": 1,
-          "enabled": true
-        }
-      ],
-      "sheet": [],
-      "summary": [
-        {
-          "id": "summary-tone",
-          "name": "Summary Tone",
-          "description": "Chapter summary tone guidance",
-          "content": "Write chapter summaries in a clear, factual tone. Describe events including intimate scenes plainly and without judgment or euphemism, matching the story's register.",
-          "order": 1,
           "enabled": true
         }
       ]
