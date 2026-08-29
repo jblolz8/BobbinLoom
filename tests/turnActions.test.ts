@@ -176,14 +176,14 @@ describe("retryAssistantTurn", () => {
     expect(snapshot1?.lorebookTimingStates?.["100"]).toBeDefined();
 
     // Mutate items and timing on turn 2
-    playthrough.itemCatalog.push({
+    playthrough.itemCatalog!.push({
       id: "item_shield",
       name: "Wooden Shield",
       type: "armor",
       description: "A wooden shield",
       stackable: false
     });
-    playthrough.lorebookTimingStates["200"] = {
+    playthrough.lorebookTimingStates!["200"] = {
       lastActivatedAt: 2,
       stickyCount: 1,
       delayRemaining: 0,

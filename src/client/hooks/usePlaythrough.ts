@@ -14,6 +14,15 @@ import {
 
 const CHAT_SETTINGS_KEY = "bobbinloom_chat_settings";
 
+/** In-chat failure notice shown when a send or retry fails (non-abort).
+ *  The failed message is restored to the input box, so "retry" is just
+ *  pressing Send again — the notice carries the reason and raw error. */
+export type FailedResponseNotice = {
+  message: string;
+  rawError?: string;
+  durationMs?: number;
+};
+
 type ChatSettings = {
   choicesEnabled: boolean;
   showDebug: boolean;
@@ -254,8 +263,12 @@ export function usePlaythrough() {
     } catch (e) {
       const durationMs = Math.round(performance.now() - startTime);
       const rawErr = e instanceof Error ? e.message : String(e);
+      // Restore the failed message to the input box and close the confirm
+      // modal, so "retry" is just pressing Send again (same as send failures).
+      setInput(retryTarget.content);
+      setRetryTarget(null);
       setFailedNotice({
-        message: "Retry failed — world state was not changed.",
+        message: "Retry failed — your message was restored to the input box. World state was not changed.",
         rawError: rawErr,
         durationMs
       });
@@ -299,6 +312,8 @@ export function usePlaythrough() {
     setLastPatchInfo({ applied: [], rejected: [], warnings: [] });
     setRawInput(null);
     setRawOutput(null);
+    setCancelledNotice(null);
+    setFailedNotice(null);
   }
 
   return {

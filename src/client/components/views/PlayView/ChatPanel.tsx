@@ -155,14 +155,10 @@ function DebugBox(props: {
 
 function ErrorNotice({
   notice,
-  onDismiss,
-  onRetry,
-  disabled
+  onDismiss
 }: {
   notice: FailedResponseNotice;
   onDismiss: () => void;
-  onRetry?: () => void;
-  disabled?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -209,15 +205,6 @@ function ErrorNotice({
           <pre className="error-code-block">
             <code>{formattedError}</code>
           </pre>
-        </div>
-      ) : null}
-
-      {onRetry ? (
-        <div className="error-notice-actions">
-          <button type="button" className="error-retry-btn" onClick={onRetry} disabled={disabled}>
-            <Icon name="RotateCcw" size={13} />
-            <span>Send Again</span>
-          </button>
         </div>
       ) : null}
     </article>
@@ -390,8 +377,6 @@ export function ChatPanel(props: ChatPanelProps) {
           <ErrorNotice
             notice={failedNotice}
             onDismiss={onDismissFailedNotice ?? onDismissNotice}
-            onRetry={onSend}
-            disabled={loading || !input.trim()}
           />
         ) : null}
 
