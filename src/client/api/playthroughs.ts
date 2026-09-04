@@ -59,6 +59,10 @@ export function listPlaythroughs(): Promise<PlaythroughListResponse> {
   return request<PlaythroughListResponse>("/api/playthroughs");
 }
 
+export function getPlaythrough(id: string): Promise<Playthrough> {
+  return request<Playthrough>(`/api/playthroughs/${id}`);
+}
+
 export function createPlaythrough(
   name: string,
   personaId?: string,
@@ -185,6 +189,28 @@ export function renamePlaythrough(id: string, name: string): Promise<Playthrough
 
 export function duplicatePlaythrough(id: string): Promise<Playthrough> {
   return request<Playthrough>(`/api/playthroughs/${id}/duplicate`, {
+    method: "POST"
+  });
+}
+
+export function branchPlaythrough(
+  id: string,
+  messageId: string,
+  name?: string,
+  asStandalone?: boolean
+): Promise<Playthrough> {
+  return request<Playthrough>(`/api/playthroughs/${id}/branch`, {
+    method: "POST",
+    body: JSON.stringify({ messageId, name, asStandalone })
+  });
+}
+
+export function listPlaythroughTimelines(id: string): Promise<{ timelines: Playthrough[] }> {
+  return request<{ timelines: Playthrough[] }>(`/api/playthroughs/${id}/timelines`);
+}
+
+export function promotePlaythroughBranch(id: string): Promise<Playthrough> {
+  return request<Playthrough>(`/api/playthroughs/${id}/promote`, {
     method: "POST"
   });
 }

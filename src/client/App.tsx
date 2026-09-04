@@ -318,6 +318,8 @@ export default function App() {
           setRetryTarget={playthroughHook.setRetryTarget}
           truncateTarget={playthroughHook.truncateTarget}
           setTruncateTarget={playthroughHook.setTruncateTarget}
+          branchTarget={playthroughHook.branchTarget}
+          setBranchTarget={playthroughHook.setBranchTarget}
           canContinue={playthroughHook.canContinue}
           actionLoading={playthroughHook.actionLoading}
           resummarizingChapterId={playthroughHook.resummarizingChapterId}
@@ -331,6 +333,7 @@ export default function App() {
           saveEdit={playthroughHook.saveEdit}
           confirmRetry={playthroughHook.confirmRetry}
           confirmTruncate={playthroughHook.confirmTruncate}
+          confirmBranch={playthroughHook.confirmBranch}
           handleResummarizeChapter={playthroughHook.handleResummarizeChapter}
           handleQuestAction={playthroughHook.handleQuestAction}
           handleDismissNotice={() => playthroughHook.setCancelledNotice(null)}

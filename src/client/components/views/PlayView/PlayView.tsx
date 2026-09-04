@@ -10,6 +10,7 @@ import { SettingsModal } from "../../modals/SettingsModal";
 import { PersonaManager } from "../../modals/PersonaManager";
 import { CharacterManager } from "../../modals/CharacterManager";
 import { LorebookManager } from "../../modals/LorebookManager";
+import { TimelineModal } from "../../modals/TimelineModal";
 
 export type PlayViewProps = {
   playthrough: Playthrough;
@@ -62,6 +63,9 @@ export type PlayViewProps = {
   saveEdit: () => Promise<void>;
   confirmRetry: () => Promise<void>;
   confirmTruncate: () => Promise<void>;
+  branchTarget: ChatMessage | null;
+  setBranchTarget: (msg: ChatMessage | null) => void;
+  confirmBranch: (branchName?: string, asStandalone?: boolean) => Promise<void>;
   handleResummarizeChapter: (chapterId: string) => Promise<void>;
   handleQuestAction: (questId: string, action: QuestAction, name?: string, summary?: string) => Promise<void>;
   handleDismissNotice: () => void;
@@ -144,6 +148,9 @@ export function PlayView(props: PlayViewProps) {
     saveEdit,
     confirmRetry,
     confirmTruncate,
+    branchTarget,
+    setBranchTarget,
+    confirmBranch,
     handleResummarizeChapter,
     handleQuestAction,
     handleDismissNotice,
@@ -166,6 +173,9 @@ export function PlayView(props: PlayViewProps) {
     setSaveLoadOpen,
   } = props;
 
+  const [timelinesOpen, setTimelinesOpen] = useState(false);
+  const [branchNameInput, setBranchNameInput] = useState("");
+  const [branchAsStandalone, setBranchAsStandalone] = useState(false);
   const [characterManagerEditingId, setCharacterManagerEditingId] = useState<string | undefined>(undefined);
 
   function handleCurrentDeleted(remaining: Playthrough[]) {
@@ -223,6 +233,7 @@ export function PlayView(props: PlayViewProps) {
           onCancelEdit={cancelEdit}
           onRetryRequest={setRetryTarget}
           onRequestTruncate={setTruncateTarget}
+          onBranchRequest={setBranchTarget}
           lastPatchInfo={lastPatchInfo}
           sendingMessage={sendingMessage}
           cancelledNotice={cancelledNotice}
@@ -250,6 +261,7 @@ export function PlayView(props: PlayViewProps) {
             setCharacterManagerEditingId(templateId);
             setCharacterManagerOpen(true);
           }}
+          onOpenTimelines={() => setTimelinesOpen(true)}
           actionLoading={actionLoading}
           className={isMobile && mobileTab !== "info" ? "mobile-hidden" : undefined}
         />
@@ -331,6 +343,85 @@ export function PlayView(props: PlayViewProps) {
         </div>
       ) : null}
 
+      {branchTarget ? (
+        <div className="modal-backdrop">
+          <section className="modal confirm-modal" style={{ maxWidth: 500 }}>
+            <header className="modal-header">
+              <div>
+                <h2>Branch into New Timeline?</h2>
+                <p>Create a new playthrough timeline branching off right after this message. The world state will be rolled back to this point, leaving your current playthrough untouched.</p>
+              </div>
+            </header>
+            <blockquote className="retry-preview">
+              {branchTarget.content.slice(0, 200)}{branchTarget.content.length > 200 ? "…" : ""}
+            </blockquote>
+            <div style={{ margin: "1rem 0" }}>
+              <label style={{ display: "block", fontSize: "0.82rem", marginBottom: "0.4rem", color: "#94a3b8" }}>
+                Branch Name (optional)
+              </label>
+              <input
+                type="text"
+                value={branchNameInput}
+                onChange={(e) => setBranchNameInput(e.target.value)}
+                placeholder={`${playthrough.name} (Branch T${branchTarget.turn ?? playthrough.turn})`}
+                style={{
+                  width: "100%",
+                  padding: "0.55rem 0.75rem",
+                  borderRadius: "6px",
+                  background: "#0f131b",
+                  border: "1px solid #3a4150",
+                  color: "#eceff4",
+                  fontSize: "0.88rem"
+                }}
+              />
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  marginTop: "0.75rem",
+                  fontSize: "0.82rem",
+                  color: "#94a3b8",
+                  cursor: "pointer"
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={branchAsStandalone}
+                  onChange={(e) => setBranchAsStandalone(e.target.checked)}
+                />
+                <span>Also create as separate Playthrough in Save/Load list</span>
+              </label>
+            </div>
+            <div className="settings-actions">
+              <button
+                className="primary"
+                onClick={async () => {
+                  const name = branchNameInput.trim();
+                  const standalone = branchAsStandalone;
+                  setBranchNameInput("");
+                  setBranchAsStandalone(false);
+                  await confirmBranch(name || undefined, standalone);
+                }}
+                disabled={actionLoading}
+              >
+                {actionLoading ? "Branching…" : "Create Branch & Switch"}
+              </button>
+              <button
+                onClick={() => {
+                  setBranchTarget(null);
+                  setBranchNameInput("");
+                  setBranchAsStandalone(false);
+                }}
+                disabled={actionLoading}
+              >
+                Cancel
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -369,6 +460,13 @@ export function PlayView(props: PlayViewProps) {
       <LorebookManager
         open={lorebookManagerOpen}
         onClose={() => setLorebookManagerOpen(false)}
+      />
+
+      <TimelineModal
+        open={timelinesOpen}
+        onClose={() => setTimelinesOpen(false)}
+        activePlaythrough={playthrough}
+        onSwitchPlaythrough={loadPlaythrough}
       />
     </main>
   );

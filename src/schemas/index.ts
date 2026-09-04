@@ -339,6 +339,8 @@ export const ChatMessageSchema = z.object({
   model: z.string().optional(),
   hidden: z.boolean().optional(),
   chapterId: z.string().optional(),
+  /** The story turn during which this message was added. Enables mapping to TurnSnapshots. */
+  turn: z.number().optional(),
   /** Marks the assistant message that opens a new chapter after the previous
    *  chapter was archived. Drives the "Re-summarize previous chapter" action. */
   chapterOpening: z.boolean().optional()
@@ -414,6 +416,8 @@ export const PlaythroughSchema = z.object({
   name: z.string(),
   branchId: z.string(),
   parentBranchId: z.string().optional(),
+  rootPlaythroughId: z.string().optional(),
+  isTimelineBranch: z.boolean().optional(),
   createdFromTurn: z.number().optional(),
   turn: z.number(),
   locationId: z.string(),

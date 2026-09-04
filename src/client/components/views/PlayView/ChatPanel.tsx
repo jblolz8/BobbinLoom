@@ -30,6 +30,7 @@ export type ChatPanelProps = {
   onCancelEdit: () => void;
   onRetryRequest: (msg: ChatMessage) => void;
   onRequestTruncate: (msg: ChatMessage) => void;
+  onBranchRequest?: (msg: ChatMessage) => void;
   lastPatchInfo: { applied: string[]; rejected: string[]; warnings: string[] };
   sendingMessage: string | null;
   cancelledNotice: string | null;
@@ -251,7 +252,7 @@ export function ChatPanel(props: ChatPanelProps) {
     canContinue,
     onChoiceSelect,
     editingMessageId, editDraft, onEditDraftChange, onStartEdit, onSaveEdit, onCancelEdit,
-    onRetryRequest, onRequestTruncate, lastPatchInfo,
+    onRetryRequest, onRequestTruncate, onBranchRequest, lastPatchInfo,
     sendingMessage, cancelledNotice, failedNotice, onDismissNotice, onDismissFailedNotice, onCancel, tokenUsage,
     viewingChapterId, onReturnToCurrentChapter,
     onResummarizeChapter, resummarizingChapterId,
@@ -325,6 +326,15 @@ export function ChatPanel(props: ChatPanelProps) {
               <div className="message-actions">
                 <button className="message-action" onClick={() => onStartEdit(msg)} disabled={actionLoading || editingMessageId === msg.id || loading}>Edit</button>
                 {msg.role === "assistant" ? <button className="message-action retry" onClick={() => onRetryRequest(msg)} disabled={actionLoading || loading}>Retry</button> : null}
+                <button
+                  className="message-action branch"
+                  onClick={() => onBranchRequest?.(msg)}
+                  disabled={actionLoading || loading}
+                  title="Branch into a new playthrough timeline from here"
+                >
+                  <Icon name="GitBranch" size={11} />
+                  <span>Branch</span>
+                </button>
                 {msg.chapterOpening && previousChapter ? (
                   <button
                     className="message-action resummarize"

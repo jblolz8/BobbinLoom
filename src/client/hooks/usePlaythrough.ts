@@ -3,6 +3,7 @@ import type { ChatMessage, Playthrough } from "../../schemas";
 import {
   editMessage,
   getContextUsage,
+  getPlaythrough,
   listPlaythroughs,
   questAction,
   resummarizeChapter,
@@ -10,6 +11,7 @@ import {
   saveDraft,
   sendTurn,
   truncatePlaythrough,
+  branchPlaythrough,
   type QuestAction,
   type TokenUsage
 } from "../api";
@@ -200,6 +202,7 @@ export function usePlaythrough() {
   const [editDraft, setEditDraft] = useState("");
   const [retryTarget, setRetryTarget] = useState<ChatMessage | null>(null);
   const [truncateTarget, setTruncateTarget] = useState<ChatMessage | null>(null);
+  const [branchTarget, setBranchTarget] = useState<ChatMessage | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [resummarizingChapterId, setResummarizingChapterId] = useState<string | null>(null);
   const [viewingChapterId, setViewingChapterId] = useState<string | null>(null);
@@ -238,8 +241,7 @@ export function usePlaythrough() {
 
   async function loadPlaythrough(id: string) {
     try {
-      const all = await listPlaythroughs();
-      const found = all.playthroughs.find((p) => p.id === id);
+      const found = await getPlaythrough(id);
       if (found) {
         const oldId = playthrough?.id ?? null;
         if (oldId && oldId !== found.id) void persistDraft(oldId, input);
@@ -405,6 +407,26 @@ export function usePlaythrough() {
     }
   }
 
+  async function confirmBranch(branchName?: string, asStandalone?: boolean) {
+    if (!playthrough || !branchTarget || actionLoading) return;
+    setActionLoading(true);
+    setError(null);
+    try {
+      const branched = await branchPlaythrough(playthrough.id, branchTarget.id, branchName, asStandalone);
+      setBranchTarget(null);
+      resetTurnState(branched);
+    } catch (e) {
+      const rawErr = e instanceof Error ? e.message : String(e);
+      setBranchTarget(null);
+      setFailedNotice({
+        message: "Branch failed — nothing was changed.",
+        rawError: rawErr
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   async function handleResummarizeChapter(chapterId: string) {
     if (!playthrough || actionLoading) return;
     setActionLoading(true);
@@ -499,6 +521,8 @@ export function usePlaythrough() {
     setRetryTarget,
     truncateTarget,
     setTruncateTarget,
+    branchTarget,
+    setBranchTarget,
     actionLoading,
     resummarizingChapterId,
     viewingChapterId,
@@ -511,6 +535,7 @@ export function usePlaythrough() {
     saveEdit,
     confirmRetry,
     confirmTruncate,
+    confirmBranch,
     handleResummarizeChapter,
     handleQuestAction
   };

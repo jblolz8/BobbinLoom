@@ -14,6 +14,7 @@ export type InfoPanelProps = {
   onCloseChapterComplete: (tokenUsage: TokenUsage) => void;
   onStartNewWithSameScenario: (scenarioDescription: string, personaId: string | undefined, initialCastIds: string[] | undefined, originalName: string) => void;
   onOpenLibrary?: (templateId: string) => void;
+  onOpenTimelines?: () => void;
   actionLoading: boolean;
   className?: string;
 };
@@ -51,6 +52,7 @@ export function InfoPanel(props: InfoPanelProps) {
           onViewChapter={props.onViewChapter}
           onCloseChapterComplete={props.onCloseChapterComplete}
           onStartNewWithSameScenario={props.onStartNewWithSameScenario}
+          onOpenTimelines={props.onOpenTimelines}
         />
       ) : null}
     </aside>

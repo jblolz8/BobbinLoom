@@ -7,6 +7,7 @@ import {
   parseUserInput,
   scanLorebooks,
   takeTurnSnapshot,
+  restoreSnapshotState,
   updateTimingStates
 } from "../engine/engine";
 import type { Playthrough, ScenarioSeed } from "../schemas";
@@ -115,6 +116,7 @@ export async function executeTurn(
   }
 
   next.turn += 1;
+  const currentTurn = next.turn;
   // Guard against blank narratives from any provider path — an empty string
   // (or whitespace) must never become an invisible chat message.
   const narrative = assistantTurn.narrative.trim() ? assistantTurn.narrative : "The provider returned an empty response.";
@@ -124,6 +126,7 @@ export async function executeTurn(
       role: "user",
       content: input,
       createdAt: now,
+      turn: currentTurn,
       ...(options?.hideUserMessage ? { hidden: true } : {})
     },
     {
@@ -132,6 +135,7 @@ export async function executeTurn(
       content: narrative,
       createdAt: now,
       durationMs,
+      turn: currentTurn,
       ...(model ? { model } : {}),
       ...(options?.chapterOpening ? { chapterOpening: true } : {})
     }
@@ -275,38 +279,6 @@ function estimateTokenUsageFallback(state: Playthrough, input: string, contextWi
       absent: state.characters.filter((c) => c.currentLocationId !== state.locationId).length,
     },
   };
-}
-
-/**
- * Restores a playthrough's world state from a pre-turn snapshot, in place.
- * Shared by retryAssistantTurn (regenerate after truncation) and truncateChat
- * (truncate only). Snapshots hold no message content, so restoring never
- * touches the message list. No-op when the snapshot is absent — the caller's
- * live state stands (graceful degradation for legacy records).
- */
-function restoreSnapshotState(target: Playthrough, snapshot: TurnSnapshot | undefined): void {
-  if (!snapshot) return;
-  target.turn = snapshot.turn;
-  target.locationId = snapshot.locationId;
-  target.flags = structuredClone(snapshot.flags);
-  target.playerCharacter = structuredClone(snapshot.playerCharacter);
-  target.characters = structuredClone(snapshot.characters);
-  target.characterTemplates = structuredClone(snapshot.characterTemplates);
-  target.npcs = structuredClone(snapshot.npcs);
-  target.inventory = structuredClone(snapshot.inventory);
-  target.quests = structuredClone(snapshot.quests);
-  target.memoryEvents = structuredClone(snapshot.memoryEvents);
-  target.lorebookIds = snapshot.lorebookIds ?? [];
-  target.lorebookTimingStates = snapshot.lorebookTimingStates
-    ? structuredClone(snapshot.lorebookTimingStates)
-    : undefined;
-  target.locationCatalog = structuredClone(snapshot.locationCatalog ?? []);
-  target.itemCatalog = snapshot.itemCatalog
-    ? structuredClone(snapshot.itemCatalog)
-    : undefined;
-  target.chapters = structuredClone(snapshot.chapters ?? []);
-  target.storyMetaSummaries = structuredClone(snapshot.storyMetaSummaries ?? []);
-  target.currentChapterStartedAtTurn = snapshot.currentChapterStartedAtTurn ?? 1;
 }
 
 /**

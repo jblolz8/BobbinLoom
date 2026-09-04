@@ -7,7 +7,7 @@ import { migratePlaythrough } from "./dataMigrations";
 import { slugify, uniqueSlug } from "./slugs";
 import { normalizeCreator, normalizeTags } from "../engine/characterCards";
 import type { ParsedCard } from "./characterCards/parseCard";
-import { createBlankPlaythrough, createInitialPlaythrough, createPlaythroughFromSeed } from "../engine/engine";
+import { createBlankPlaythrough, createInitialPlaythrough, createPlaythroughFromSeed, ensureMessageTurns, restoreSnapshotState } from "../engine/engine";
 import { DEMO_TEMPLATE } from "../engine/demoData";
 import type { CharacterFormat, CharacterTemplate, LoadFailure, LorebookFile, LorebookSummary, PlayerPersona, Playthrough, PlaythroughListResponse, PromptModuleSet, PromptPreset, ScenarioSeed } from "../schemas";
 import { CharacterTemplateSchema, EMPTY_MODULE_SET, PlayerPersonaSchema, PlaythroughSchema } from "../schemas";
@@ -859,7 +859,118 @@ export function duplicatePlaythroughRecord(dir: string, id: string): Playthrough
   return clone;
 }
 
-export function listPlaythroughRecords(dir: string): PlaythroughListResponse {
+/**
+ * Creates a new playthrough branch originating from a specific message in the chat log.
+ * - Truncates messages and memory events to the target message.
+ * - Restores the world state (characters, location, inventory, flags, quests, etc.)
+ *   from the pre-turn snapshot right after the target message.
+ * - Generates a new playthrough id and branchId, links parentBranchId and createdFromTurn.
+ * - Leaves the original playthrough completely untouched.
+ */
+export function branchPlaythroughRecord(
+  dir: string,
+  id: string,
+  messageId: string,
+  branchName?: string,
+  asStandalone = false
+): Playthrough | null {
+  const original = getPlaythroughRecord(dir, id);
+  if (!original) return null;
+
+  ensureMessageTurns(original.messages);
+
+  const messageIndex = original.messages.findIndex((m) => m.id === messageId);
+  if (messageIndex === -1) return null;
+
+  const targetMessage = original.messages[messageIndex];
+  const clone = structuredClone(original);
+
+  const newPlaythroughId = `play_${randomUUID()}`;
+  const newBranchId = `branch_${randomUUID()}`;
+
+  // Keep messages up to and including targetMessage
+  const keptMessages = clone.messages.slice(0, messageIndex + 1);
+  const droppedMessages = clone.messages.slice(messageIndex + 1);
+
+  // If there are dropped messages, the snapshot of the first assistant message
+  // in the dropped block holds the pre-turn world state right after the kept block.
+  const nextAssistant = droppedMessages.find((m) => m.role === "assistant");
+  let snapshotToRestore = nextAssistant ? clone.snapshots?.[nextAssistant.id] : undefined;
+
+  // Fallback: If not found by messageId, try to find a snapshot by turn
+  if (!snapshotToRestore && typeof targetMessage.turn === "number") {
+    const snapshotsList = Object.values(clone.snapshots ?? {});
+    snapshotToRestore = snapshotsList.find((s) => s.turn === targetMessage.turn);
+  }
+
+  if (snapshotToRestore) {
+    restoreSnapshotState(clone, snapshotToRestore);
+  } else if (droppedMessages.length > 0 && typeof targetMessage.turn === "number") {
+    clone.turn = targetMessage.turn;
+  }
+
+  clone.id = newPlaythroughId;
+  clone.branchId = newBranchId;
+  clone.parentBranchId = original.branchId;
+  clone.rootPlaythroughId = original.rootPlaythroughId ?? original.id;
+  clone.isTimelineBranch = !asStandalone;
+  clone.createdFromTurn = targetMessage.turn ?? clone.turn;
+  clone.name = branchName?.trim() || `${original.name} (Branch T${clone.createdFromTurn})`;
+  clone.messages = keptMessages;
+
+  // Filter memory events to not exceed the restored turn
+  clone.memoryEvents = clone.memoryEvents.filter((e) => e.turn <= clone.turn);
+  if (clone.memoryLayers) {
+    clone.memoryLayers.recent = clone.memoryLayers.recent.filter((e) => e.turn <= clone.turn);
+    clone.memoryLayers.compressed = clone.memoryLayers.compressed.filter((e) => e.turn <= clone.turn);
+  }
+
+  // Update playthroughId and branchId on characters and memory events
+  for (const char of clone.characters) {
+    char.playthroughId = newPlaythroughId;
+    char.branchId = newBranchId;
+  }
+  for (const event of clone.memoryEvents) {
+    event.playthroughId = newPlaythroughId;
+    event.branchId = newBranchId;
+  }
+
+  // Drop snapshots belonging to messages that no longer exist in this branch
+  const liveMessageIds = new Set(clone.messages.map((m) => m.id));
+  clone.snapshots = Object.fromEntries(
+    Object.entries(clone.snapshots ?? {}).filter(([msgId]) => liveMessageIds.has(msgId))
+  );
+
+  const now = new Date().toISOString();
+  clone.createdAt = now;
+  clone.updatedAt = now;
+
+  updatePlaythroughRecord(dir, clone);
+  return clone;
+}
+
+export function listPlaythroughTimelines(dir: string, id: string): Playthrough[] {
+  const current = getPlaythroughRecord(dir, id);
+  if (!current) return [];
+  const rootId = current.rootPlaythroughId ?? current.id;
+
+  const all = listPlaythroughRecords(dir, { includeTimelineBranches: true }).playthroughs;
+  return all.filter((p) => (p.rootPlaythroughId ?? p.id) === rootId || p.id === rootId);
+}
+
+export function promotePlaythroughBranchRecord(dir: string, id: string): Playthrough | null {
+  const playthrough = getPlaythroughRecord(dir, id);
+  if (!playthrough) return null;
+  playthrough.isTimelineBranch = false;
+  playthrough.updatedAt = new Date().toISOString();
+  updatePlaythroughRecord(dir, playthrough);
+  return playthrough;
+}
+
+export function listPlaythroughRecords(
+  dir: string,
+  options?: { includeTimelineBranches?: boolean }
+): PlaythroughListResponse {
   ensureStoreDir(dir);
   const playthroughs: Playthrough[] = [];
   const failures: LoadFailure[] = [];
@@ -889,7 +1000,11 @@ export function listPlaythroughRecords(dir: string): PlaythroughListResponse {
     }
   }
   playthroughs.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  return { playthroughs, failures };
+  const filtered = options?.includeTimelineBranches
+    ? playthroughs
+    : playthroughs.filter((p) => !p.isTimelineBranch);
+
+  return { playthroughs: filtered, failures };
 }
 
 // ── Lorebook store ──

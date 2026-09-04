@@ -5,6 +5,8 @@ export {
   createPlaythroughFromSeed,
   createBlankPlaythrough,
   takeTurnSnapshot,
+  restoreSnapshotState,
+  ensureMessageTurns,
   buildMockAssistantTurn
 } from "./playthroughFactory";
 

@@ -9,8 +9,11 @@ import {
   createPlaythroughRecord,
   deletePlaythroughRecord,
   duplicatePlaythroughRecord,
+  branchPlaythroughRecord,
   getPlaythroughRecord,
   listPlaythroughRecords,
+  listPlaythroughTimelines,
+  promotePlaythroughBranchRecord,
   renamePlaythroughRecord,
   resolveCast,
   resolvePresetForGeneration,
@@ -68,8 +71,10 @@ const CloseChapterBody = z.object({
 });
 
 export async function playthroughRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/api/playthroughs", async () => {
-    return listPlaythroughRecords(dataDir);
+  app.get("/api/playthroughs", async (request) => {
+    const query = z.object({ includeBranches: z.string().optional() }).parse(request.query ?? {});
+    const includeTimelineBranches = query.includeBranches === "true";
+    return listPlaythroughRecords(dataDir, { includeTimelineBranches });
   });
 
   app.post("/api/playthroughs", async (request, reply) => {
@@ -119,6 +124,31 @@ export async function playthroughRoutes(app: FastifyInstance): Promise<void> {
     const clone = duplicatePlaythroughRecord(dataDir, params.id);
     if (!clone) return reply.code(404).send({ error: "Playthrough not found" });
     return reply.code(201).send(clone);
+  });
+
+  app.post("/api/playthroughs/:id/branch", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const body = z.object({
+      messageId: z.string().min(1),
+      name: z.string().optional(),
+      asStandalone: z.boolean().optional(),
+    }).parse(request.body ?? {});
+    const branched = branchPlaythroughRecord(dataDir, params.id, body.messageId, body.name, body.asStandalone);
+    if (!branched) return reply.code(404).send({ error: "Playthrough or message not found" });
+    return reply.code(201).send(branched);
+  });
+
+  app.get("/api/playthroughs/:id/timelines", async (request) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const timelines = listPlaythroughTimelines(dataDir, params.id);
+    return { timelines };
+  });
+
+  app.post("/api/playthroughs/:id/promote", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const promoted = promotePlaythroughBranchRecord(dataDir, params.id);
+    if (!promoted) return reply.code(404).send({ error: "Playthrough not found" });
+    return reply.code(200).send(promoted);
   });
 
   app.post("/api/playthroughs/generate", async (request, reply) => {

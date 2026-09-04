@@ -12,7 +12,8 @@ import {
   ScenarioSeed,
   SimpleNPC,
   TurnSnapshot,
-  AssistantTurn
+  AssistantTurn,
+  ChatMessage
 } from "../schemas";
 import { parseClothingFromContent } from "./characterSections";
 import { DEMO_TEMPLATE, ITEMS, LOCATIONS, STARTER_INVENTORY, STARTER_QUESTS } from "./demoData";
@@ -253,7 +254,7 @@ export function createPlaythroughFromSeed(
     promptSettings: { presetId, presetName, modules, characterFormat },
     memoryEvents: [],
     messages: includeOpening && seed.openingText?.trim()
-      ? [{ id: newId("msg"), role: "assistant", content: seed.openingText.trim(), createdAt }]
+      ? [{ id: newId("msg"), role: "assistant", content: seed.openingText.trim(), createdAt, turn: 0 }]
       : [],
     snapshots: {},
     lorebookIds: [],
@@ -349,6 +350,58 @@ export function takeTurnSnapshot(playthrough: Playthrough): TurnSnapshot {
     storyMetaSummaries: playthrough.storyMetaSummaries ?? [],
     currentChapterStartedAtTurn: playthrough.currentChapterStartedAtTurn ?? 1,
   });
+}
+
+/**
+ * Restores a playthrough's world state from a pre-turn snapshot, in place.
+ * Snapshots hold no message content, so restoring never touches the message list.
+ */
+export function restoreSnapshotState(target: Playthrough, snapshot: TurnSnapshot | undefined): void {
+  if (!snapshot) return;
+  target.turn = snapshot.turn;
+  target.locationId = snapshot.locationId;
+  target.flags = clone(snapshot.flags);
+  target.playerCharacter = clone(snapshot.playerCharacter);
+  target.characters = clone(snapshot.characters);
+  target.characterTemplates = clone(snapshot.characterTemplates);
+  target.npcs = clone(snapshot.npcs);
+  target.inventory = clone(snapshot.inventory);
+  target.quests = clone(snapshot.quests);
+  target.memoryEvents = clone(snapshot.memoryEvents);
+  target.lorebookIds = snapshot.lorebookIds ?? [];
+  target.lorebookTimingStates = snapshot.lorebookTimingStates
+    ? clone(snapshot.lorebookTimingStates)
+    : undefined;
+  target.locationCatalog = clone(snapshot.locationCatalog ?? []);
+  target.itemCatalog = snapshot.itemCatalog
+    ? clone(snapshot.itemCatalog)
+    : undefined;
+  target.chapters = clone(snapshot.chapters ?? []);
+  target.storyMetaSummaries = clone(snapshot.storyMetaSummaries ?? []);
+  target.currentChapterStartedAtTurn = snapshot.currentChapterStartedAtTurn ?? 1;
+}
+
+/**
+ * Ensures all chat messages have a valid `turn` field, backfilling based on sequence
+ * if missing on legacy records.
+ */
+export function ensureMessageTurns(messages: ChatMessage[]): void {
+  let currentTurn = 0;
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+    if (typeof msg.turn === "number") {
+      currentTurn = msg.turn;
+    } else {
+      if (msg.role === "user") {
+        currentTurn += 1;
+        msg.turn = currentTurn;
+      } else if (msg.role === "assistant") {
+        msg.turn = (i === 0 && currentTurn === 0) ? 0 : currentTurn;
+      } else {
+        msg.turn = currentTurn;
+      }
+    }
+  }
 }
 
 export function buildMockAssistantTurn(
