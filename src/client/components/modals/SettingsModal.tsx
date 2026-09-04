@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PlaythroughPromptSettings } from "../../api";
 import { PresetEditor } from "./PresetEditor";
 import { ProviderConnections } from "./ProviderConnections";
@@ -49,6 +49,28 @@ export function SettingsModal(props: SettingsModalProps) {
     setShowModelName,
   } = props;
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("provider");
+  const tabsRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const el = tabsRef.current;
+    if (!el) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (el.scrollWidth > el.clientWidth) {
+        if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+          e.preventDefault();
+          const delta = e.deltaMode === 1 ? e.deltaY * 30 : e.deltaY;
+          el.scrollLeft += delta;
+        }
+      }
+    };
+
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", handleWheel);
+    };
+  }, [open]);
 
   if (!open) return null;
 
@@ -59,43 +81,40 @@ export function SettingsModal(props: SettingsModalProps) {
           <div>
             <h2>Settings</h2>
           </div>
-          <button className="flex items-center gap-1" onClick={onClose}><Icon name="X" size={16} /> Close</button>
+          <button className="flex items-center gap-1 modal-close-btn" onClick={onClose} aria-label="Close Settings"><Icon name="X" size={16} /> Close</button>
         </header>
-        <div className="settings-tabs">
-          <button className={`tab ${settingsTab === "provider" ? "active" : ""}`} onClick={() => setSettingsTab("provider")}>
+        <div className="settings-tabs" role="tablist" ref={tabsRef}>
+          <button role="tab" aria-selected={settingsTab === "provider"} className={`tab ${settingsTab === "provider" ? "active" : ""}`} onClick={() => setSettingsTab("provider")}>
             Provider
           </button>
-          <button className={`tab ${settingsTab === "prompts" ? "active" : ""}`} onClick={() => setSettingsTab("prompts")}>
+          <button role="tab" aria-selected={settingsTab === "prompts"} className={`tab ${settingsTab === "prompts" ? "active" : ""}`} onClick={() => setSettingsTab("prompts")}>
             Prompt Configuration
           </button>
-          <button className={`tab ${settingsTab === "tags" ? "active" : ""}`} onClick={() => setSettingsTab("tags")}>
+          <button role="tab" aria-selected={settingsTab === "tags"} className={`tab ${settingsTab === "tags" ? "active" : ""}`} onClick={() => setSettingsTab("tags")}>
             Tags &amp; Taxonomy
           </button>
-          <button className={`tab ${settingsTab === "chat" ? "active" : ""}`} onClick={() => setSettingsTab("chat")}>
+          <button role="tab" aria-selected={settingsTab === "chat"} className={`tab ${settingsTab === "chat" ? "active" : ""}`} onClick={() => setSettingsTab("chat")}>
             Chat
           </button>
-          <button className={`tab ${settingsTab === "appearance" ? "active" : ""}`} onClick={() => setSettingsTab("appearance")}>
+          <button role="tab" aria-selected={settingsTab === "appearance"} className={`tab ${settingsTab === "appearance" ? "active" : ""}`} onClick={() => setSettingsTab("appearance")}>
             Appearance
           </button>
         </div>
-        {settingsTab === "provider" ? (
-          <ProviderConnections />
-        ) : settingsTab === "prompts" ? (
-          <PresetEditor
-            playthroughId={playthroughId}
-            playthroughPromptSettings={playthroughPromptSettings}
-            onPlaythroughPromptSettings={onPlaythroughPromptSettings}
-          />
-        ) : settingsTab === "tags" ? (
-          <div className="settings-tab-panel" style={{ maxHeight: "70vh", overflowY: "auto", paddingRight: "4px" }}>
+        <div className="settings-tab-content">
+          {settingsTab === "provider" ? (
+            <ProviderConnections />
+          ) : settingsTab === "prompts" ? (
+            <PresetEditor
+              playthroughId={playthroughId}
+              playthroughPromptSettings={playthroughPromptSettings}
+              onPlaythroughPromptSettings={onPlaythroughPromptSettings}
+            />
+          ) : settingsTab === "tags" ? (
             <TagTaxonomyPanel />
-          </div>
-        ) : settingsTab === "appearance" ? (
-          <div className="settings-tab-panel" style={{ maxHeight: "70vh", overflowY: "auto", paddingRight: "4px" }}>
+          ) : settingsTab === "appearance" ? (
             <AppearanceSettingsPanel />
-          </div>
-        ) : (
-          <div className="chat-settings-group">
+          ) : (
+            <div className="chat-settings-group">
             <p className="chat-settings-intro">
               Customize which components and visual indicators appear in the Chat panel.
             </p>
@@ -221,6 +240,7 @@ export function SettingsModal(props: SettingsModalProps) {
             </label>
           </div>
         )}
+        </div>
       </section>
     </div>
   );

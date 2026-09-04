@@ -27,6 +27,44 @@
 
 .modal.settings-modal-wide {
   width: min(740px, 100%);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 1.15rem 1.25rem 1rem;
+}
+
+.settings-modal-wide .modal-header {
+  flex-shrink: 0;
+  margin-bottom: 0.75rem;
+}
+
+.settings-modal-wide .settings-tabs {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.settings-modal-wide .settings-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.settings-modal-wide .tab {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.settings-tab-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 4px;
 }
 
 .modal-header {
@@ -126,41 +164,92 @@
 }
 
 @media (max-width: 600px) {
-  .settings-tabs {
+  .settings-tabs:not(.settings-modal-wide .settings-tabs) {
     gap: 0.15rem;
   }
-  .tab {
+  .settings-tabs:not(.settings-modal-wide .settings-tabs) .tab {
     flex: 1 1 auto;
     text-align: center;
     padding: 0.5rem 0.6rem;
   }
 }
 
-/* Full-screen mobile layout for the Settings modal (mirrors the setup-wizard
-   convention below 680px). The modal fills the viewport so the tab row and the
-   settings content get the full width instead of a cramped card. */
+/* Full-screen mobile layout for the Settings modal below 680px.
+   Uses 100dvh flex column so header & tabs remain pinned while content scrolls smoothly. */
 @media (max-width: 680px) {
   .modal.settings-modal-wide {
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
     max-height: 100vh;
+    max-height: 100dvh;
     border-radius: 0;
-    padding: 1rem 0.85rem;
+    padding: 0.85rem 0.85rem 0.5rem;
     border: none;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
   .settings-modal-wide .modal-header {
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.6rem;
+    flex-shrink: 0;
+    align-items: center;
   }
-  /* Keep the tab row pinned while scrolling a long settings tab. Needs a solid
-     background so content scrolling underneath doesn't show through. */
+  .settings-modal-wide .modal-close-btn {
+    min-height: 38px;
+    padding: 0.45rem 0.8rem;
+    font-size: 0.85rem;
+    border-radius: 6px;
+    background: #1c2230;
+    border: 1px solid #2d3648;
+    color: #e2e8f0;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .settings-modal-wide .modal-close-btn:hover {
+    background: #252d40;
+    border-color: #3b4760;
+  }
+  /* Horizontal scrollable tab bar */
   .settings-modal-wide .settings-tabs {
-    position: sticky;
-    top: -1rem;
+    flex-shrink: 0;
+    position: static;
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
     margin-left: -0.85rem;
     margin-right: -0.85rem;
     padding: 0 0.85rem;
     background: #151923;
-    z-index: 2;
+    border-bottom: 1px solid #2a303d;
+    margin-bottom: 0.75rem;
+    gap: 0.25rem;
+  }
+  .settings-modal-wide .settings-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .settings-modal-wide .tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    text-align: center;
+    padding: 0.65rem 0.85rem;
+    min-height: 44px;
+    font-size: 0.86rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+  }
+  .settings-tab-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-right: 2px;
   }
 }
 
@@ -200,6 +289,34 @@
   display: flex;
   gap: 0.4rem;
   flex-wrap: wrap;
+}
+
+@media (max-width: 600px) {
+  .preset-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+  }
+  .preset-bar label {
+    width: 100%;
+  }
+  .preset-bar select {
+    width: 100%;
+    min-width: 0;
+  }
+  .preset-actions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.4rem;
+    width: 100%;
+  }
+  .preset-actions button {
+    width: 100%;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
 }
 
 .module-hint {
@@ -274,6 +391,15 @@
   cursor: not-allowed;
 }
 
+@media (max-width: 480px) {
+  .module-row-actions .icon-btn {
+    padding: 0.25rem 0.45rem;
+    min-height: 32px;
+    min-width: 32px;
+    font-size: 0.82rem;
+  }
+}
+
 .danger-icon {
   color: #d08080;
 }
@@ -345,6 +471,19 @@
   color: #8a93a5;
   white-space: nowrap;
   cursor: pointer;
+}
+
+@media (max-width: 540px) {
+  .format-section-head {
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  .format-section-name {
+    min-width: 130px;
+  }
+  .format-inline-toggle {
+    margin-left: auto;
+  }
 }
 
 .format-instruction,
@@ -1442,6 +1581,106 @@
 
 /* Provider connections */
 .connections { display: flex; flex-direction: column; gap: 0.85rem; }
+
+.conn-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.4rem 0.65rem;
+  background: #111520;
+  border: 1px solid #1f2738;
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.conn-count-label {
+  font-size: 0.82rem;
+  color: #8b99ae;
+}
+
+.conn-count-label span {
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.conn-sort-group {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.conn-sort-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.conn-sort-select {
+  background: #161c28;
+  border: 1px solid #2d3748;
+  color: #f1f5f9;
+  border-radius: 6px;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.conn-sort-select:hover,
+.conn-sort-select:focus {
+  border-color: #3b82f6;
+}
+
+.conn-sort-dir-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #1a2232;
+  border: 1px solid #2e3b50;
+  color: #cbd5e1;
+  border-radius: 6px;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.conn-sort-dir-btn:hover {
+  background: #253147;
+  color: #f8fafc;
+  border-color: #3b82f6;
+}
+
+.conn-sort-dir-btn .sort-dir-text {
+  font-weight: 500;
+}
+
+@media (max-width: 480px) {
+  .conn-toolbar {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.55rem;
+  }
+  .conn-sort-group {
+    flex: 1;
+    justify-content: flex-end;
+  }
+  .conn-sort-select {
+    padding: 0.35rem 0.45rem;
+    font-size: 0.78rem;
+  }
+  .conn-sort-dir-btn {
+    padding: 0.35rem 0.5rem;
+    min-height: 34px;
+  }
+}
+
 .conn-list { display: flex; flex-direction: column; gap: 0.6rem; }
 .conn-card {
   background: #141822;
@@ -1545,6 +1784,12 @@
   color: #94a3b8;
 }
 
+.conn-tag.date-tag {
+  color: #cbd5e1;
+  background: rgba(148, 163, 184, 0.08);
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
 .conn-tag .tag-icon {
   font-size: 0.75rem;
   opacity: 0.85;
@@ -1616,6 +1861,12 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .conn-tag {
+    max-width: 100%;
   }
 }
 .conn-add { align-self: flex-start; }
@@ -1763,6 +2014,34 @@
   gap: 0.6rem;
 }
 
+@media (max-width: 600px) {
+  .conn-actions-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  .conn-actions-bar .actions-left {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    width: 100%;
+  }
+  .conn-actions-bar .actions-left button {
+    flex: 1 1 calc(50% - 0.4rem);
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .conn-actions-bar button.danger {
+    width: 100%;
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
 .btn-secondary {
   background: #232b3b;
   border: 1px solid #334155;
@@ -1906,6 +2185,24 @@
   font-size: 0.76rem;
   color: #899bb0;
   line-height: 1.3;
+}
+
+@media (max-width: 480px) {
+  .chat-setting-card {
+    padding: 0.55rem 0.7rem;
+    gap: 0.55rem;
+  }
+  .chat-setting-icon {
+    width: 26px;
+    height: 26px;
+  }
+  .chat-setting-title {
+    font-size: 0.83rem;
+  }
+  .chat-setting-desc {
+    font-size: 0.73rem;
+    line-height: 1.35;
+  }
 }
 
 .toggle-switch {
@@ -3946,6 +4243,12 @@
   gap: 8px;
 }
 
+@media (max-width: 480px) {
+  .category-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .category-card {
   padding: 8px 10px;
   background: #181e2b;
@@ -4158,6 +4461,27 @@
   padding: 4px 10px;
 }
 
+@media (max-width: 540px) {
+  .add-cat-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .add-cat-row .form-group.flex-1 {
+    width: 100%;
+    min-width: 0;
+  }
+  .color-picker-wrap {
+    flex-wrap: wrap;
+  }
+  .add-cat-actions {
+    justify-content: stretch;
+  }
+  .add-cat-actions button {
+    flex: 1;
+    min-height: 36px;
+  }
+}
+
 /* Specific Tag Overrides */
 .tag-overrides-list {
   display: flex;
@@ -4226,6 +4550,18 @@
   font-size: 0.78rem;
   padding: 5px 10px;
   white-space: nowrap;
+}
+
+@media (max-width: 500px) {
+  .add-override-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .add-override-row button {
+    width: 100%;
+    min-height: 36px;
+  }
 }
 
 /* Save Bar */

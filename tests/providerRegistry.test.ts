@@ -147,13 +147,20 @@ describe("provider registry", () => {
     expect(() => deleteConnection(dir, "nope")).toThrow(/not found/i);
   });
 
-  it("setActiveConnection persists and rejects unknown ids", () => {
+  it("setActiveConnection persists, updates lastActiveAt, and rejects unknown ids", () => {
     const dir = tempDir();
-    createConnection(dir, connInput({ label: "Pick Me", baseUrl: "http://p:1" }));
+    const created = createConnection(dir, connInput({ label: "Pick Me", baseUrl: "http://p:1" }));
+    expect(created.lastActiveAt).toBeTruthy();
 
-    setActiveConnection(dir, "pick_me");
-    const disk = readRegistryFile(dir) as { activeProviderId: string };
-    expect(disk.activeProviderId).toBe("pick_me");
+    const second = createConnection(dir, connInput({ label: "Second", baseUrl: "http://p:2" }));
+    // 'Second' was added when 'pick_me' was already active, so it starts with no lastActiveAt
+    expect(second.lastActiveAt).toBeUndefined();
+
+    setActiveConnection(dir, "second");
+    const disk = readRegistryFile(dir) as { activeProviderId: string; connections: Array<{ id: string; lastActiveAt?: string }> };
+    expect(disk.activeProviderId).toBe("second");
+    const activeConn = disk.connections.find((c) => c.id === "second");
+    expect(activeConn?.lastActiveAt).toBeTruthy();
 
     expect(() => setActiveConnection(dir, "nope")).toThrow(/not found/i);
   });

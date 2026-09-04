@@ -14,6 +14,8 @@ export type AppHeaderProps = {
   isMobile?: boolean;
 };
 
+const STORAGE_KEY_SHOW_PLAY_NAV_TABS = "bobbinloom_show_play_nav_tabs";
+
 export function AppHeader({
   view,
   activeHomeTab,
@@ -25,7 +27,25 @@ export function AppHeader({
   onOpenSettings,
   isMobile = false,
 }: AppHeaderProps) {
-  const [showPlayNavTabs, setShowPlayNavTabs] = useState(true);
+  const [showPlayNavTabs, setShowPlayNavTabs] = useState<boolean>(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const saved = localStorage.getItem(STORAGE_KEY_SHOW_PLAY_NAV_TABS);
+      if (saved !== null) {
+        return saved === "true";
+      }
+    }
+    return true;
+  });
+
+  const handleTogglePlayNavTabs = () => {
+    setShowPlayNavTabs((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined" && window.localStorage) {
+        localStorage.setItem(STORAGE_KEY_SHOW_PLAY_NAV_TABS, String(next));
+      }
+      return next;
+    });
+  };
 
   // On Desktop/Wide view (!isMobile): Nav tabs are always shown in the center.
   // On Mobile in Play View: Visibility is toggled by the Nav (⋮) button.
@@ -133,7 +153,7 @@ export function AppHeader({
         {view === "play" && isMobile ? (
           <button
             className={`options-toggle-btn ${showPlayNavTabs ? "active" : ""}`}
-            onClick={() => setShowPlayNavTabs((prev) => !prev)}
+            onClick={handleTogglePlayNavTabs}
             title={showPlayNavTabs ? "Hide navigation bar" : "Show navigation bar"}
             aria-label="Toggle navigation bar"
             aria-expanded={showPlayNavTabs}

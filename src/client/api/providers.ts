@@ -14,6 +14,7 @@ export type ProviderConnection = {
   apiKeyMasked: string | null;
   createdAt?: string;
   updatedAt?: string;
+  lastActiveAt?: string;
 };
 
 export type ProviderConnectionPayload = {

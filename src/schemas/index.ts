@@ -180,7 +180,8 @@ export const ProviderConnectionSchema = z.object({
   contextWindow: z.number(),
   readonly: z.boolean().optional(),
   createdAt: z.string().optional(),
-  updatedAt: z.string().optional()
+  updatedAt: z.string().optional(),
+  lastActiveAt: z.string().optional()
 });
 export type ProviderConnection = z.infer<typeof ProviderConnectionSchema>;
 

@@ -169,7 +169,10 @@ export function createConnection(dir: string, input: ProviderConnectionInput): P
   };
   if (typeof input.apiKey === "string" && input.apiKey.trim()) conn.apiKey = input.apiKey.trim();
   reg.connections.push(conn);
-  if (!reg.connections.some((c) => c.id === reg.activeProviderId)) reg.activeProviderId = id;
+  if (!reg.connections.some((c) => c.id === reg.activeProviderId)) {
+    reg.activeProviderId = id;
+    conn.lastActiveAt = now;
+  }
   writeRegistry(dir, reg);
   return toPublicConnection(conn);
 }
@@ -234,8 +237,10 @@ export function deleteConnection(dir: string, id: string): PublicProviderRegistr
 
 export function setActiveConnection(dir: string, id: string): { activeProviderId: string } {
   const reg = getRegistry(dir);
-  if (!reg.connections.some((c) => c.id === id)) throw new Error(`Provider not found: ${id}`);
+  const conn = reg.connections.find((c) => c.id === id);
+  if (!conn) throw new Error(`Provider not found: ${id}`);
   reg.activeProviderId = id;
+  conn.lastActiveAt = new Date().toISOString();
   writeRegistry(dir, reg);
   return { activeProviderId: id };
 }

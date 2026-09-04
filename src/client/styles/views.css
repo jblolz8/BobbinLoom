@@ -6360,5 +6360,16 @@ button.tag-chip.active {
   color: #64748b;
 }
 
+@media (max-width: 480px) {
+  .avatar-shape-selector-grid {
+    grid-template-columns: 1fr;
+  }
+  .preview-mockup-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+}
+
 
 

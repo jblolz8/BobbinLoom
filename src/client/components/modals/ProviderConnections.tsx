@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon, TextInput } from "../base";
 import type {
   ConnectionModelsResult,
@@ -24,6 +24,24 @@ type EditorState =
   | { mode: "create" }
   | { mode: "edit"; connection: ProviderConnection };
 
+export type ProviderSortBy = "lastActiveAt" | "label" | "updatedAt" | "createdAt";
+export type SortDirection = "asc" | "desc";
+
+function formatConnDate(isoOrStr?: string): string {
+  if (!isoOrStr) return "";
+  try {
+    const d = new Date(isoOrStr);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric"
+    });
+  } catch {
+    return "";
+  }
+}
+
 const emptyForm = (): ProviderConnectionPayload => ({
   label: "", baseUrl: "", model: "", apiKey: "",
   temperature: 0.8, maxTokens: 1200, contextWindow: 32768
@@ -41,6 +59,78 @@ export function ProviderConnections() {
   const [models, setModels] = useState<string[]>([]);
   const [modelsStatus, setModelsStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [fetchingModels, setFetchingModels] = useState(false);
+
+  const [sortBy, setSortBy] = useState<ProviderSortBy>(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const saved = localStorage.getItem("bobbinloom_provider_sort_by");
+      if (saved === "label" || saved === "lastActiveAt" || saved === "updatedAt" || saved === "createdAt") {
+        return saved;
+      }
+    }
+    return "lastActiveAt";
+  });
+
+  const [sortDir, setSortDir] = useState<SortDirection>(() => {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const saved = localStorage.getItem("bobbinloom_provider_sort_dir");
+      if (saved === "asc" || saved === "desc") {
+        return saved;
+      }
+    }
+    return "desc";
+  });
+
+  function handleSortByChange(newSortBy: ProviderSortBy) {
+    setSortBy(newSortBy);
+    const nextDir: SortDirection = newSortBy === "label" ? "asc" : "desc";
+    setSortDir(nextDir);
+    if (typeof window !== "undefined" && window.localStorage) {
+      localStorage.setItem("bobbinloom_provider_sort_by", newSortBy);
+      localStorage.setItem("bobbinloom_provider_sort_dir", nextDir);
+    }
+  }
+
+  function handleToggleSortDir() {
+    const nextDir: SortDirection = sortDir === "asc" ? "desc" : "asc";
+    setSortDir(nextDir);
+    if (typeof window !== "undefined" && window.localStorage) {
+      localStorage.setItem("bobbinloom_provider_sort_dir", nextDir);
+    }
+  }
+
+  const sortedConnections = useMemo(() => {
+    const list = [...(registry?.connections ?? [])];
+    return list.sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === "label") {
+        cmp = a.label.localeCompare(b.label, undefined, { sensitivity: "base", numeric: true });
+      } else if (sortBy === "lastActiveAt") {
+        const isAActive = a.id === registry?.activeProviderId;
+        const isBActive = b.id === registry?.activeProviderId;
+        const timeA = a.lastActiveAt ? new Date(a.lastActiveAt).getTime() : (isAActive ? 1 : 0);
+        const timeB = b.lastActiveAt ? new Date(b.lastActiveAt).getTime() : (isBActive ? 1 : 0);
+        cmp = timeA - timeB;
+        if (cmp === 0) {
+          cmp = a.label.localeCompare(b.label, undefined, { sensitivity: "base", numeric: true });
+        }
+      } else if (sortBy === "updatedAt") {
+        const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+        const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+        cmp = timeA - timeB;
+        if (cmp === 0) {
+          cmp = a.label.localeCompare(b.label, undefined, { sensitivity: "base", numeric: true });
+        }
+      } else if (sortBy === "createdAt") {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        cmp = timeA - timeB;
+        if (cmp === 0) {
+          cmp = a.label.localeCompare(b.label, undefined, { sensitivity: "base", numeric: true });
+        }
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [registry?.connections, registry?.activeProviderId, sortBy, sortDir]);
 
   useEffect(() => {
     listProviderConnections().then(setRegistry).catch((e) =>
@@ -231,10 +321,45 @@ export function ProviderConnections() {
       )}
       {!editable && (
         <>
+          {(registry?.connections ?? []).length > 0 && (
+            <div className="conn-toolbar">
+              <div className="conn-count-label">
+                <span>{(registry?.connections ?? []).length}</span> {((registry?.connections ?? []).length === 1 ? "provider" : "providers")}
+              </div>
+              <div className="conn-sort-group">
+                <label htmlFor="conn-sort-select" className="conn-sort-label">
+                  <Icon name="ArrowUpDown" size={13} className="text-slate-400" />
+                  <span>Sort:</span>
+                </label>
+                <select
+                  id="conn-sort-select"
+                  className="conn-sort-select"
+                  value={sortBy}
+                  onChange={(e) => handleSortByChange(e.target.value as ProviderSortBy)}
+                >
+                  <option value="lastActiveAt">Last Active</option>
+                  <option value="label">Provider Name</option>
+                  <option value="updatedAt">Last Updated</option>
+                  <option value="createdAt">Created At</option>
+                </select>
+                <button
+                  type="button"
+                  className="conn-sort-dir-btn"
+                  onClick={handleToggleSortDir}
+                  title={`Sort order: ${sortDir === "asc" ? "Ascending" : "Descending"} (click to toggle)`}
+                  aria-label={`Sort order: ${sortDir === "asc" ? "Ascending" : "Descending"}`}
+                >
+                  <Icon name={sortDir === "asc" ? "ArrowUp" : "ArrowDown"} size={14} />
+                  <span className="sort-dir-text">{sortDir === "asc" ? "Asc" : "Desc"}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="conn-list">
-            {(registry?.connections ?? []).length === 0 ? (
+            {sortedConnections.length === 0 ? (
               <p className="conn-empty">No connections yet. Add one to start generating.</p>
-            ) : (registry?.connections ?? []).map((c) => {
+            ) : sortedConnections.map((c) => {
               const isActive = c.id === registry?.activeProviderId;
               return (
                 <div key={c.id} className={`conn-card ${isActive ? "active" : ""}`}>
@@ -295,6 +420,22 @@ export function ProviderConnections() {
                         </span>{" "}
                         {c.hasApiKey ? c.apiKeyMasked : "No key"}
                       </span>
+                      {sortBy === "lastActiveAt" && (c.lastActiveAt || isActive) ? (
+                        <span className="conn-tag date-tag" title={c.lastActiveAt ? `Last active: ${new Date(c.lastActiveAt).toLocaleString()}` : "Currently active"}>
+                          <span className="tag-icon"><Icon name="Activity" size={13} className="text-blue-400" /></span>{" "}
+                          {isActive ? "Active now" : `Active: ${formatConnDate(c.lastActiveAt)}`}
+                        </span>
+                      ) : sortBy === "updatedAt" && c.updatedAt ? (
+                        <span className="conn-tag date-tag" title={`Updated: ${new Date(c.updatedAt).toLocaleString()}`}>
+                          <span className="tag-icon"><Icon name="Clock" size={13} className="text-indigo-400" /></span>{" "}
+                          Updated {formatConnDate(c.updatedAt)}
+                        </span>
+                      ) : sortBy === "createdAt" && c.createdAt ? (
+                        <span className="conn-tag date-tag" title={`Created: ${new Date(c.createdAt).toLocaleString()}`}>
+                          <span className="tag-icon"><Icon name="Calendar" size={13} className="text-emerald-400" /></span>{" "}
+                          Added {formatConnDate(c.createdAt)}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 </div>
