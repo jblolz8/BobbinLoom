@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { HomeTab } from "../views/HomeView";
-import { Icon } from "../base";
+import { Button, Icon, Tooltip } from "../base";
 
 export type AppHeaderProps = {
   view: "home" | "play" | "setup";
@@ -132,35 +132,42 @@ export function AppHeader({
 
       <div className="top-actions">
         {view === "play" || view === "setup" ? (
-          <button onClick={onGoHome} title="Return to Home">
-            <span className="btn-label flex items-center gap-1.5"><Icon name="Home" size={15} /> Home</span>
-            <span className="btn-icon" aria-hidden="true"><Icon name="Home" size={16} /></span>
-          </button>
+          <Tooltip content="Return to Home" side="bottom">
+            <Button variant="secondary" size="sm" onClick={onGoHome} aria-label="Return to Home">
+              <span className="btn-label flex items-center gap-1.5"><Icon name="Home" size={15} /> Home</span>
+              <span className="btn-icon" aria-hidden="true"><Icon name="Home" size={16} /></span>
+            </Button>
+          </Tooltip>
         ) : null}
 
         {view !== "setup" ? (
-          <button className="primary-btn new-playthrough-btn" onClick={onNewPlaythrough}>
+          <Button variant="primary" size="sm" className="new-playthrough-btn" onClick={onNewPlaythrough}>
             <span className="btn-label flex items-center gap-1.5"><Icon name="Plus" size={15} /> New Playthrough</span>
             <span className="btn-icon" aria-hidden="true"><Icon name="Plus" size={16} /></span>
-          </button>
+          </Button>
         ) : null}
 
-        <button className="settings-btn" onClick={onOpenSettings} title="Settings">
-          <span className="btn-label flex items-center gap-1.5"><Icon name="Settings" size={15} /> Settings</span>
-          <span className="btn-icon" aria-hidden="true"><Icon name="Settings" size={16} /></span>
-        </button>
+        <Tooltip content="Settings" side="bottom">
+          <Button variant="secondary" size="sm" className="settings-btn" onClick={onOpenSettings} aria-label="Settings">
+            <span className="btn-label flex items-center gap-1.5"><Icon name="Settings" size={15} /> Settings</span>
+            <span className="btn-icon" aria-hidden="true"><Icon name="Settings" size={16} /></span>
+          </Button>
+        </Tooltip>
 
         {view === "play" && isMobile ? (
-          <button
-            className={`options-toggle-btn ${showPlayNavTabs ? "active" : ""}`}
-            onClick={handleTogglePlayNavTabs}
-            title={showPlayNavTabs ? "Hide navigation bar" : "Show navigation bar"}
-            aria-label="Toggle navigation bar"
-            aria-expanded={showPlayNavTabs}
-          >
-            <span className="btn-label flex items-center gap-1.5"><Icon name="MoreVertical" size={15} /> Nav</span>
-            <span className="btn-icon" aria-hidden="true"><Icon name="MoreVertical" size={16} /></span>
-          </button>
+          <Tooltip content={showPlayNavTabs ? "Hide navigation bar" : "Show navigation bar"} side="bottom">
+            <Button
+              variant={showPlayNavTabs ? "secondary" : "ghost"}
+              size="sm"
+              className={`options-toggle-btn ${showPlayNavTabs ? "active" : ""}`}
+              onClick={handleTogglePlayNavTabs}
+              aria-label="Toggle navigation bar"
+              aria-expanded={showPlayNavTabs}
+            >
+              <span className="btn-label flex items-center gap-1.5"><Icon name="MoreVertical" size={15} /> Nav</span>
+              <span className="btn-icon" aria-hidden="true"><Icon name="MoreVertical" size={16} /></span>
+            </Button>
+          </Tooltip>
         ) : null}
       </div>
 

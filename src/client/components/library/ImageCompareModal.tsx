@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Icon } from "../base";
+import { Button, Icon } from "../base";
 
 export type ImageCompareModalProps = {
   originalSrc: string;
@@ -118,39 +118,40 @@ export function ImageCompareModal({
               <span>Are you sure? This will remove your custom portrait and revert back to the original CCv2 card art.</span>
             </div>
             <div className="restore-warning-actions">
-              <button
-                type="button"
-                className="secondary-btn btn-sm"
+              <Button
+                variant="secondary"
+                size="xs"
                 onClick={() => setShowConfirmRestore(false)}
                 disabled={loading}
               >
                 Cancel
-              </button>
-              <button
-                type="button"
-                className="danger btn-sm"
+              </Button>
+              <Button
+                variant="danger"
+                size="xs"
                 onClick={handleConfirmRestore}
                 disabled={loading}
               >
                 Confirm Restore
-              </button>
+              </Button>
             </div>
           </div>
         ) : null}
 
         <footer className="modal-actions compare-modal-footer">
-          <button
-            type="button"
+          <Button
+            variant="secondary"
             className="restore-original-btn"
             onClick={handleRestoreClick}
             disabled={loading || showConfirmRestore}
             title="Revert back to the original CCv2 card artwork"
+            leftIcon={<Icon name="RotateCcw" size={14} />}
           >
-            <Icon name="RotateCcw" size={14} /> Restore Original Artwork
-          </button>
-          <button type="button" className="secondary-btn" onClick={onClose} disabled={loading}>
+            Restore Original Artwork
+          </Button>
+          <Button variant="secondary" onClick={onClose} disabled={loading}>
             Close
-          </button>
+          </Button>
         </footer>
       </section>
     </div>

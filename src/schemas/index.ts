@@ -197,6 +197,7 @@ export const CustomCategoryConfigSchema = z.object({
   label: z.string(),
   prefixes: z.array(z.string()).default([]),
   color: z.string(),
+  colorLight: z.string().optional(),
   description: z.string().optional(),
 });
 export type CustomCategoryConfig = z.infer<typeof CustomCategoryConfigSchema>;
@@ -210,11 +211,20 @@ export type TagTaxonomyConfig = z.infer<typeof TagTaxonomyConfigSchema>;
 export const AvatarShapeSchema = z.enum(["square", "rounded", "circle"]);
 export type AvatarShape = z.infer<typeof AvatarShapeSchema>;
 
+export const ThemeModeSchema = z.enum(["dark", "light", "system"]);
+export type ThemeMode = z.infer<typeof ThemeModeSchema>;
+
+export const CustomThemeColorsSchema = z.record(z.string());
+export type CustomThemeColors = z.infer<typeof CustomThemeColorsSchema>;
+
 export const AppSettingsSchema = z.object({
   schemaVersion: z.number().int().min(1).default(1),
   defaultPresetId: z.string().optional(),
   tagTaxonomy: TagTaxonomyConfigSchema.optional(),
   avatarShape: AvatarShapeSchema.optional(),
+  themeMode: ThemeModeSchema.optional(),
+  themePreset: z.string().optional(),
+  customThemeColors: CustomThemeColorsSchema.optional(),
   updatedAt: z.string().optional()
 });
 export type AppSettings = z.infer<typeof AppSettingsSchema>;

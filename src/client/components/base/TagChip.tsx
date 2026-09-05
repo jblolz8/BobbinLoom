@@ -38,14 +38,21 @@ export function TagChip({
 
   const isInteractive = Boolean(onClick) && !disabled;
 
+  const darkColors = style.colorsDark || style.colors;
+  const lightColors = style.colorsLight;
+
   const elementProps = {
     className: `color-tag-chip size-${size} cat-${style.categoryId} ${active ? "active" : ""} ${isInteractive ? "interactive" : ""} ${className}`,
     style: {
-      backgroundColor: active ? (style.colors.glow || style.colors.bg) : style.colors.bg,
-      borderColor: active ? style.colors.text : style.colors.border,
-      color: style.colors.text,
-      boxShadow: active ? `0 0 8px ${style.colors.glow || style.colors.border}` : undefined,
-    },
+      "--tag-text": darkColors.text,
+      "--tag-bg": active ? (darkColors.glow || darkColors.bg) : darkColors.bg,
+      "--tag-border": active ? darkColors.text : darkColors.border,
+      "--tag-glow": active ? `0 0 8px ${darkColors.glow || darkColors.border}` : "none",
+      "--tag-text-light": lightColors.text,
+      "--tag-bg-light": active ? (lightColors.glow || lightColors.bg) : lightColors.bg,
+      "--tag-border-light": active ? lightColors.text : lightColors.border,
+      "--tag-glow-light": active ? `0 0 8px ${lightColors.glow || lightColors.border}` : "none",
+    } as React.CSSProperties,
     title: defaultTitle,
     onClick: isInteractive ? onClick : undefined,
   };
@@ -57,7 +64,7 @@ export function TagChip({
       ) : null}
       <span className="tag-value-text">{style.value || style.displayLabel}</span>
       {count !== undefined ? (
-        <span className="tag-count-indicator" style={{ borderColor: style.colors.border }}>
+        <span className="tag-count-indicator">
           {count}
         </span>
       ) : null}

@@ -2,5 +2,8 @@
   "schemaVersion": 1,
   "defaultPresetId": "default-nsfw",
   "avatarShape": "circle",
-  "updatedAt": "2026-08-17T09:43:24.800Z"
+  "themeMode": "light",
+  "themePreset": "warm-parchment",
+  "customThemeColors": {},
+  "updatedAt": "2026-09-05T20:05:28.284Z"
 }

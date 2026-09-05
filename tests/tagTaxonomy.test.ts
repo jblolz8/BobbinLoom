@@ -6,6 +6,10 @@ import {
   resolveTagStyle,
   sortTags,
   getCategoryOrder,
+  deriveLightColor,
+  deriveTagColors,
+  hexToHsl,
+  hslToHex,
   type TagTaxonomyConfig,
 } from "../src/engine/tagTaxonomy";
 import { loadAppSettings, saveAppSettings } from "../src/server/appSettingsStore";
@@ -133,6 +137,90 @@ describe("tagTaxonomy engine", () => {
       expect(tag1.colors.text).toBe(tag2.colors.text);
       expect(tag1.colors.bg).toBe(tag2.colors.bg);
       expect(tag1.colors.border).toBe(tag2.colors.border);
+    });
+
+    it("provides calibrated dark and light color palettes for built-in categories", () => {
+      const nsfw = resolveTagStyle("rating:nsfw");
+      expect(nsfw.colors.text).toBe("#f87171"); // Dark default
+      expect(nsfw.colorsLight.text).toBe("#dc2626"); // Light mode
+
+      const sfw = resolveTagStyle("rating:sfw");
+      expect(sfw.colors.text).toBe("#4ade80");
+      expect(sfw.colorsLight.text).toBe("#16a34a");
+
+      const species = resolveTagStyle("species:cat-girl");
+      expect(species.colors.text).toBe("#22d3ee");
+      expect(species.colorsLight.text).toBe("#0891b2");
+
+      const copyright = resolveTagStyle("copyright:cyberpunk");
+      expect(copyright.colors.text).toBe("#c084fc");
+      expect(copyright.colorsLight.text).toBe("#7c3aed");
+
+      const general = resolveTagStyle("solo");
+      expect(general.colors.text).toBe("#cbd5e1");
+      expect(general.colorsLight.text).toBe("#334155");
+    });
+
+    it("respects themeMode parameter when requested", () => {
+      const darkStyle = resolveTagStyle("species:dragon", null, "dark");
+      expect(darkStyle.colors.text).toBe("#22d3ee");
+
+      const lightStyle = resolveTagStyle("species:dragon", null, "light");
+      expect(lightStyle.colors.text).toBe("#0891b2");
+      expect(lightStyle.colorsDark?.text).toBe("#22d3ee");
+      expect(lightStyle.colorsLight.text).toBe("#0891b2");
+    });
+
+    it("supports custom categories with explicit colorLight or auto-derived light colors", () => {
+      const customConfig: TagTaxonomyConfig = {
+        customCategories: [
+          {
+            id: "world",
+            label: "World",
+            prefixes: ["world"],
+            color: "#38bdf8",
+            colorLight: "#0284c7",
+          },
+          {
+            id: "faction",
+            label: "Faction",
+            prefixes: ["clan"],
+            color: "#e879f9", // No colorLight -> should auto-derive
+          },
+        ],
+        tagOverrides: {},
+      };
+
+      const worldStyle = resolveTagStyle("world:azeroth", customConfig);
+      expect(worldStyle.colors.text).toBe("#38bdf8");
+      expect(worldStyle.colorsLight.text).toBe("#0284c7");
+
+      const clanStyle = resolveTagStyle("clan:uchiha", customConfig);
+      expect(clanStyle.colors.text).toBe("#e879f9");
+      expect(clanStyle.colorsLight).toBeDefined();
+      expect(clanStyle.colorsLight.text.startsWith("#")).toBe(true);
+      expect(clanStyle.colorsLight.text).not.toBe("#e879f9");
+    });
+
+    it("auto-derives light colors for hex tag overrides", () => {
+      const config: TagTaxonomyConfig = {
+        customCategories: [],
+        tagOverrides: {
+          "species:special": "#ff0077",
+        },
+      };
+
+      const specialStyle = resolveTagStyle("species:special", config);
+      expect(specialStyle.colors.text).toBe("#ff0077");
+      expect(specialStyle.colorsLight.text).toBeDefined();
+      expect(specialStyle.colorsLight.text.startsWith("#")).toBe(true);
+    });
+
+    it("derives high contrast light colors accurately using deriveLightColor", () => {
+      const lightCyan = deriveLightColor("#22d3ee");
+      const hsl = hexToHsl(lightCyan);
+      expect(hsl.l).toBeLessThanOrEqual(35); // High contrast darkness
+      expect(hsl.s).toBeGreaterThanOrEqual(50); // Vivid saturation preserved
     });
   });
 

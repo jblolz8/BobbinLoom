@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { AvatarShape } from "../../../schemas";
-import { Icon } from "../base";
+import { Button, Icon } from "../base";
 import { detectSmartCrop } from "../../utils/smartCrop";
 
 export type ImageCropModalProps = {
@@ -364,23 +364,29 @@ export function ImageCropModal({
                     <Icon name="Plus" size={12} />
                   </button>
                   <span className="zoom-val">{Math.round(zoom * 100)}%</span>
-                  <button
+                  <Button
                     type="button"
+                    size="xs"
+                    variant="secondary"
                     className="crop-auto-detect-btn"
                     onClick={handleAutoDetect}
                     disabled={!imageLoaded || detecting || loading}
                     title="Auto-detect face and center crop"
+                    leftIcon={<Icon name="Sparkles" size={12} className={detecting ? "sparkle-pulse" : ""} />}
                   >
-                    <Icon name="Sparkles" size={12} className={detecting ? "sparkle-pulse" : ""} /> Auto-Detect
-                  </button>
-                  <button
+                    Auto-Detect
+                  </Button>
+                  <Button
                     type="button"
+                    size="xs"
+                    variant="secondary"
                     className="crop-reset-btn"
                     onClick={handleReset}
                     title="Reset to center and 100% zoom"
+                    leftIcon={<Icon name="RotateCcw" size={12} />}
                   >
-                    <Icon name="RotateCcw" size={12} /> Reset
-                  </button>
+                    Reset
+                  </Button>
                 </div>
               </div>
 
@@ -428,18 +434,18 @@ export function ImageCropModal({
         </div>
 
         <footer className="modal-actions crop-modal-footer">
-          <button type="button" className="secondary-btn" onClick={onClose} disabled={loading}>
+          <Button variant="secondary" onClick={onClose} disabled={loading}>
             Cancel
-          </button>
-          <button
-            type="button"
-            className="primary-btn crop-apply-btn"
+          </Button>
+          <Button
+            variant="primary"
+            className="crop-apply-btn"
             onClick={handleApplyCrop}
             disabled={!imageLoaded || loading}
+            leftIcon={<Icon name="Check" size={14} />}
           >
-            <Icon name="Check" size={14} />
             {loading ? "Saving Profile Avatar…" : "Apply Profile Avatar"}
-          </button>
+          </Button>
         </footer>
       </section>
     </div>

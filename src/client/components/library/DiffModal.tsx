@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { computeLineDiff } from "../../engine/diff";
-import { Icon } from "../base";
+import { Button, Icon } from "../base";
 import { TwoPaneDiff } from "./TwoPaneDiff";
 
 export type DiffModalProps = {
@@ -15,6 +15,13 @@ export type DiffModalProps = {
   loading?: boolean;
   error?: string | null;
 };
+
+const QUICK_SUGGESTIONS = [
+  "Make personality more detailed",
+  "Keep original dialogue examples",
+  "Format inventory as bullets",
+  "Preserve key backstory points",
+];
 
 export function DiffModal({
   title,
@@ -35,6 +42,16 @@ export function DiffModal({
 
   const [feedback, setFeedback] = useState("");
   const [paneViewMode, setPaneViewMode] = useState<"split" | "left" | "right">("split");
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && !loading) {
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [loading, onClose]);
 
   const addedCount = diffLines.filter((l) => l.type === "added").length;
   const removedCount = diffLines.filter((l) => l.type === "removed").length;
@@ -94,16 +111,19 @@ export function DiffModal({
               </button>
             </div>
 
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
+              iconOnly
               className="diff-close-btn"
               onClick={onClose}
               disabled={loading}
-              title="Close modal"
               aria-label="Close modal"
+              title="Close modal"
             >
               <Icon name="X" size={16} />
-            </button>
+            </Button>
           </div>
         </header>
 
@@ -161,7 +181,7 @@ export function DiffModal({
               </span>
             </div>
             <div className="diff-footer-right">
-              <button className="primary" onClick={onClose}>Close</button>
+              <Button variant="primary" onClick={onClose}>Close</Button>
             </div>
           </footer>
         ) : (
@@ -191,43 +211,60 @@ export function DiffModal({
                   disabled={loading}
                   className="diff-feedback-textarea"
                 />
+                <div className="diff-presets-row">
+                  <span className="diff-presets-label">Suggestions:</span>
+                  <div className="diff-presets-list">
+                    {QUICK_SUGGESTIONS.map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        className="diff-preset-chip-btn"
+                        disabled={loading}
+                        onClick={() => {
+                          setFeedback((prev) => {
+                            const trimmed = prev.trim();
+                            if (!trimmed) return suggestion;
+                            if (trimmed.includes(suggestion)) return prev;
+                            return `${trimmed}, ${suggestion.toLowerCase()}`;
+                          });
+                        }}
+                      >
+                        + {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 
             <div className="diff-footer-right">
-              <button
+              <Button
                 type="button"
+                variant="secondary"
                 onClick={onClose}
                 disabled={loading}
-                className="diff-cancel-btn"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="diff-retry-btn"
+                variant="secondary"
                 onClick={() => onRetry?.(feedback)}
                 disabled={loading}
+                leftIcon={<Icon name={loading ? "Sparkles" : "RotateCcw"} size={14} className={loading ? "sparkle-pulse" : ""} />}
                 title="Regenerate BL character sheet with optional feedback"
               >
-                {loading ? (
-                  <>
-                    <Icon name="Sparkles" size={14} className="sparkle-pulse" /> Retrying…
-                  </>
-                ) : (
-                  <>
-                    <Icon name="RotateCcw" size={14} /> Retry with Feedback
-                  </>
-                )}
-              </button>
-              <button
+                {loading ? "Retrying…" : "Retry with Feedback"}
+              </Button>
+              <Button
                 type="button"
-                className="diff-accept-btn"
+                variant="primary"
                 onClick={onAccept}
                 disabled={loading}
+                leftIcon={<Icon name="Check" size={15} />}
               >
-                <Icon name="Check" size={15} /> Accept &amp; Apply
-              </button>
+                Accept &amp; Apply
+              </Button>
             </div>
           </footer>
         )}

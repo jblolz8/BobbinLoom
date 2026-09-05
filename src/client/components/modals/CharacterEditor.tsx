@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { CharacterInstance, ClothingItem, Playthrough } from "../../../schemas";
-import { TagInput } from "../base";
+import { TagInput, TextInput } from "../base";
 import { parseClothingFromContent } from "../../../engine/characterSections";
 
 export type CharacterEditorProps = {
@@ -205,13 +205,18 @@ export function CharacterEditor({
             </>
           ) : (
             <>
-              {renderField("Name", undefined, (
-                <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
-              ))}
+              <TextInput
+                label="Name"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              />
 
-              {renderField("Summary", "One-line description used when the character is away from the scene", (
-                <input value={form.summary} onChange={(e) => setForm((f) => ({ ...f, summary: e.target.value }))} />
-              ))}
+              <TextInput
+                label="Summary"
+                helperText="One-line description used when the character is away from the scene"
+                value={form.summary}
+                onChange={(e) => setForm((f) => ({ ...f, summary: e.target.value }))}
+              />
 
               <h4>Character Sheet{isReadOnlySheet ? <span className="ccv2-readonly-badge">Read-only CCv2 sheet — conversion coming later</span> : null}</h4>
               {renderField("Content", "Full character sheet text — [Section] headers, in the order your current preset's Character Sheet format defines. [Clothing] slot bullets here are the character's current outfit.", (
@@ -226,12 +231,20 @@ export function CharacterEditor({
               ))}
 
               <h4>Runtime State</h4>
-              {renderField("Mood", "Current emotional state", (
-                <input value={form.mood} onChange={(e) => setForm((f) => ({ ...f, mood: e.target.value }))} placeholder="e.g. curious, wary, hostile" />
-              ))}
-              {renderField("Toward Player", "How the character feels about the player", (
-                <input value={form.towardPlayer} onChange={(e) => setForm((f) => ({ ...f, towardPlayer: e.target.value }))} placeholder="e.g. friendly but guarded" />
-              ))}
+              <TextInput
+                label="Mood"
+                helperText="Current emotional state"
+                value={form.mood}
+                onChange={(e) => setForm((f) => ({ ...f, mood: e.target.value }))}
+                placeholder="e.g. curious, wary, hostile"
+              />
+              <TextInput
+                label="Toward Player"
+                helperText="How the character feels about the player"
+                value={form.towardPlayer}
+                onChange={(e) => setForm((f) => ({ ...f, towardPlayer: e.target.value }))}
+                placeholder="e.g. friendly but guarded"
+              />
               {renderField("Memory Summary", "What the character remembers about the player and recent events", (
                 <textarea rows={3} value={form.memorySummary} onChange={(e) => setForm((f) => ({ ...f, memorySummary: e.target.value }))} />
               ))}

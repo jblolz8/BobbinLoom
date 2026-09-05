@@ -81,7 +81,7 @@ export function SettingsModal(props: SettingsModalProps) {
           <div>
             <h2>Settings</h2>
           </div>
-          <button className="flex items-center gap-1 modal-close-btn" onClick={onClose} aria-label="Close Settings"><Icon name="X" size={16} /> Close</button>
+          <button className="flex items-center gap-1 modal-close-btn" onClick={onClose} aria-label="Close Settings"><Icon name="X" size={14} /> Close</button>
         </header>
         <div className="settings-tabs" role="tablist" ref={tabsRef}>
           <button role="tab" aria-selected={settingsTab === "provider"} className={`tab ${settingsTab === "provider" ? "active" : ""}`} onClick={() => setSettingsTab("provider")}>
@@ -97,7 +97,7 @@ export function SettingsModal(props: SettingsModalProps) {
             Chat
           </button>
           <button role="tab" aria-selected={settingsTab === "appearance"} className={`tab ${settingsTab === "appearance" ? "active" : ""}`} onClick={() => setSettingsTab("appearance")}>
-            Appearance
+            Theme &amp; Appearance
           </button>
         </div>
         <div className="settings-tab-content">
@@ -122,7 +122,7 @@ export function SettingsModal(props: SettingsModalProps) {
             <label className="chat-setting-card">
               <div className="chat-setting-main">
                 <div className="chat-setting-icon" aria-hidden="true">
-                  <Icon name="MessageSquare" size={16} className="text-blue-400" />
+                  <Icon name="MessageSquare" size={16} />
                 </div>
                 <div className="chat-setting-info">
                   <span className="chat-setting-title">Show Choices</span>
@@ -142,7 +142,7 @@ export function SettingsModal(props: SettingsModalProps) {
             <label className="chat-setting-card">
               <div className="chat-setting-main">
                 <div className="chat-setting-icon" aria-hidden="true">
-                  <Icon name="BarChart2" size={16} className="text-emerald-400" />
+                  <Icon name="BarChart2" size={16} />
                 </div>
                 <div className="chat-setting-info">
                   <span className="chat-setting-title">Show Context Usage</span>
@@ -162,7 +162,7 @@ export function SettingsModal(props: SettingsModalProps) {
             <label className="chat-setting-card">
               <div className="chat-setting-main">
                 <div className="chat-setting-icon" aria-hidden="true">
-                  <Icon name="Wrench" size={16} className="text-amber-400" />
+                  <Icon name="Wrench" size={16} />
                 </div>
                 <div className="chat-setting-info">
                   <span className="chat-setting-title">Show Debug Accordion</span>
@@ -182,7 +182,7 @@ export function SettingsModal(props: SettingsModalProps) {
             <label className="chat-setting-card">
               <div className="chat-setting-main">
                 <div className="chat-setting-icon" aria-hidden="true">
-                  <Icon name="Clock" size={16} className="text-indigo-400" />
+                  <Icon name="Clock" size={16} />
                 </div>
                 <div className="chat-setting-info">
                   <span className="chat-setting-title">Display Response Generation Time</span>

@@ -2,7 +2,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { atomicWriteJson, quarantineFile, readJsonFile } from "./persistence";
 import { AppSettingsSchema } from "../schemas";
-import type { AppSettings, AvatarShape, TagTaxonomyConfig } from "../schemas";
+import type { AppSettings, AvatarShape, CustomThemeColors, TagTaxonomyConfig, ThemeMode } from "../schemas";
 
 function settingsPath(dataDir: string): string {
   return join(dataDir, "settings.json");
@@ -32,7 +32,14 @@ export function loadAppSettings(dataDir: string): AppSettings {
 
 export function saveAppSettings(
   dataDir: string,
-  input: { defaultPresetId?: string; tagTaxonomy?: TagTaxonomyConfig; avatarShape?: AvatarShape }
+  input: {
+    defaultPresetId?: string;
+    tagTaxonomy?: TagTaxonomyConfig;
+    avatarShape?: AvatarShape;
+    themeMode?: ThemeMode;
+    themePreset?: string;
+    customThemeColors?: CustomThemeColors;
+  }
 ): AppSettings {
   mkdirSync(dataDir, { recursive: true });
   const next: AppSettings = {

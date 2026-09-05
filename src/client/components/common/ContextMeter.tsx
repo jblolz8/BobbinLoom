@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { TokenUsage } from "../../api";
 
 const SEGMENTS: Array<{ key: keyof TokenUsage["breakdown"]; label: string; color: string }> = [
@@ -18,30 +19,125 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
-interface TooltipState {
+function formatPct(n: number): string {
+  if (n <= 0) return "0%";
+  if (n < 0.1) return "<0.1%";
+  return `${n.toFixed(1)}%`;
+}
+
+interface ActiveSegment {
   key: string;
   label: string;
   value: number;
-  segPct: number;
-  top: number;
-  left: number;
+  segPct: string;
+  centerX: number;
+  topY: number;
 }
 
 export function ContextMeter({ tokenUsage }: { tokenUsage: TokenUsage | null }) {
   const meterRef = useRef<HTMLDivElement>(null);
-  const [hoveredTooltip, setHoveredTooltip] = useState<TooltipState | null>(null);
-  const [pinnedTooltip, setPinnedTooltip] = useState<TooltipState | null>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [activeSegment, setActiveSegment] = useState<ActiveSegment | null>(null);
+  const [isPinned, setIsPinned] = useState(false);
+  const [clampedPos, setClampedPos] = useState<{ left: number; arrowOffset: number } | null>(null);
 
+  // Synchronously clamp tooltip position to prevent viewport bleeding (especially on far-left)
+  useLayoutEffect(() => {
+    if (!activeSegment) {
+      setClampedPos(null);
+      return;
+    }
+
+    const width = tooltipRef.current?.getBoundingClientRect().width || 170;
+    const halfWidth = width / 2;
+    const padding = 12; // Minimum distance from screen edges
+
+    const minCenterX = padding + halfWidth;
+    const maxCenterX = window.innerWidth - padding - halfWidth;
+    const clampedCenterX = Math.max(minCenterX, Math.min(activeSegment.centerX, maxCenterX));
+
+    // Calculate how much the arrow needs to shift from the tooltip center to align with the segment center
+    const rawArrowOffset = activeSegment.centerX - clampedCenterX;
+    const maxArrowOffset = halfWidth - 10;
+    const arrowOffset = Math.max(-maxArrowOffset, Math.min(rawArrowOffset, maxArrowOffset));
+
+    setClampedPos({
+      left: clampedCenterX,
+      arrowOffset,
+    });
+  }, [activeSegment]);
+
+  // Handle outside pointerdown/tap to dismiss when pinned
   useEffect(() => {
-    if (!pinnedTooltip) return;
-    function handleClickOutside(e: MouseEvent) {
-      if (meterRef.current && !meterRef.current.contains(e.target as Node)) {
-        setPinnedTooltip(null);
+    if (!isPinned) return;
+
+    function handlePointerDownOutside(e: PointerEvent | MouseEvent) {
+      if (
+        meterRef.current &&
+        !meterRef.current.contains(e.target as Node) &&
+        tooltipRef.current &&
+        !tooltipRef.current.contains(e.target as Node)
+      ) {
+        setIsPinned(false);
+        setActiveSegment(null);
       }
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [pinnedTooltip]);
+
+    document.addEventListener("pointerdown", handlePointerDownOutside);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDownOutside);
+    };
+  }, [isPinned]);
+
+  const handleSegmentHover = useCallback(
+    (
+      e: React.MouseEvent<HTMLDivElement>,
+      key: string,
+      label: string,
+      value: number,
+      segPct: string
+    ) => {
+      // Only scrub on hover if not actively pinned
+      if (isPinned) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const topY = rect.top - 7;
+      setActiveSegment({ key, label, value, segPct, centerX, topY });
+    },
+    [isPinned]
+  );
+
+  const handleSegmentClick = useCallback(
+    (
+      e: React.MouseEvent<HTMLDivElement>,
+      key: string,
+      label: string,
+      value: number,
+      segPct: string
+    ) => {
+      e.stopPropagation();
+      const rect = e.currentTarget.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const topY = rect.top - 7;
+
+      // If already pinned on this exact segment, tap/click toggles it closed
+      if (isPinned && activeSegment?.key === key) {
+        setIsPinned(false);
+        setActiveSegment(null);
+      } else {
+        setActiveSegment({ key, label, value, segPct, centerX, topY });
+        setIsPinned(true);
+      }
+    },
+    [isPinned, activeSegment]
+  );
+
+  const handleBarLeave = useCallback(() => {
+    // Desktop: dismiss when hovering away, unless pinned
+    if (!isPinned) {
+      setActiveSegment(null);
+    }
+  }, [isPinned]);
 
   if (!tokenUsage) {
     return (
@@ -52,101 +148,84 @@ export function ContextMeter({ tokenUsage }: { tokenUsage: TokenUsage | null }) 
   }
 
   const { estimated, contextWindow, breakdown } = tokenUsage;
-  const pct = Math.min(100, Math.round((estimated / contextWindow) * 100));
+  const pct = Math.min(100, (estimated / contextWindow) * 100);
   const remaining = Math.max(0, contextWindow - estimated);
   const remainingPct = Math.max(0, 100 - pct);
 
   const statusClass = pct >= 95 ? "status-danger" : pct >= 85 ? "status-warning" : "status-normal";
 
-  const buildTooltip = (
-    e: React.MouseEvent<HTMLDivElement>,
-    key: string,
-    label: string,
-    value: number,
-    segPct: number
-  ): TooltipState => {
-    const segRect = e.currentTarget.getBoundingClientRect();
-    return {
-      key,
-      label,
-      value,
-      segPct,
-      top: segRect.top,
-      left: segRect.left + segRect.width / 2,
-    };
-  };
-
-  const handleMouseEnter = (
-    e: React.MouseEvent<HTMLDivElement>,
-    key: string,
-    label: string,
-    value: number,
-    segPct: number
-  ) => {
-    setHoveredTooltip(buildTooltip(e, key, label, value, segPct));
-  };
-
-  const handleMouseLeave = () => {
-    setHoveredTooltip(null);
-  };
-
-  const handleClick = (
-    e: React.MouseEvent<HTMLDivElement>,
-    key: string,
-    label: string,
-    value: number,
-    segPct: number
-  ) => {
-    const t = buildTooltip(e, key, label, value, segPct);
-    setPinnedTooltip((prev) => (prev?.key === key ? null : t));
-  };
-
-  const activeTooltip = hoveredTooltip ?? pinnedTooltip;
-
   return (
     <div className="context-meter" ref={meterRef}>
-      <div className="context-meter-bar">
+      <div className="context-meter-bar" onPointerLeave={handleBarLeave}>
         {SEGMENTS.map(({ key, label, color }) => {
           const value = breakdown[key] ?? 0;
           if (value <= 0) return null;
           const widthPct = (value / contextWindow) * 100;
-          const segPct = Math.round((value / estimated) * 100);
-          const isPinned = pinnedTooltip?.key === key;
+          const segPct = formatPct(widthPct);
+          const isSelected = activeSegment?.key === key;
+
           return (
             <div
               key={key}
-              className={`context-meter-segment${isPinned ? " is-pinned" : ""}`}
+              className={`context-meter-segment${isSelected ? " is-hovered" : ""}${isPinned && isSelected ? " is-pinned" : ""}`}
               style={{ width: `${widthPct}%`, backgroundColor: color }}
-              onMouseEnter={(e) => handleMouseEnter(e, key, label, value, segPct)}
-              onMouseLeave={handleMouseLeave}
-              onClick={(e) => handleClick(e, key, label, value, segPct)}
+              onPointerEnter={(e) => handleSegmentHover(e, key, label, value, segPct)}
+              onPointerMove={(e) => handleSegmentHover(e, key, label, value, segPct)}
+              onClick={(e) => handleSegmentClick(e, key, label, value, segPct)}
             />
           );
         })}
         {remaining > 0 ? (
           <div
-            className={`context-meter-segment free-space${pinnedTooltip?.key === "freeSpace" ? " is-pinned" : ""}`}
-            style={{ width: `${(remaining / contextWindow) * 100}%`, backgroundColor: "rgba(255, 255, 255, 0.08)" }}
-            onMouseEnter={(e) => handleMouseEnter(e, "freeSpace", "Free Space", remaining, remainingPct)}
-            onMouseLeave={handleMouseLeave}
-            onClick={(e) => handleClick(e, "freeSpace", "Free Space", remaining, remainingPct)}
+            className={`context-meter-segment free-space${activeSegment?.key === "freeSpace" ? " is-hovered" : ""}${isPinned && activeSegment?.key === "freeSpace" ? " is-pinned" : ""}`}
+            style={{ width: `${(remaining / contextWindow) * 100}%` }}
+            onPointerEnter={(e) => handleSegmentHover(e, "freeSpace", "Free Space", remaining, formatPct(remainingPct))}
+            onPointerMove={(e) => handleSegmentHover(e, "freeSpace", "Free Space", remaining, formatPct(remainingPct))}
+            onClick={(e) => handleSegmentClick(e, "freeSpace", "Free Space", remaining, formatPct(remainingPct))}
           />
         ) : null}
       </div>
-      {activeTooltip && (
-        <div
-          className="context-meter-tooltip"
-          style={{ top: `${activeTooltip.top}px`, left: `${activeTooltip.left}px` }}
-        >
-          {activeTooltip.label}: {formatTokens(activeTooltip.value)} tokens ({activeTooltip.segPct}%)
-          <div className="context-meter-tooltip-caret" />
-        </div>
-      )}
+
+      {typeof document !== "undefined" && activeSegment &&
+        createPortal(
+          <div
+            ref={tooltipRef}
+            className="base-tooltip-content context-meter-portal-tooltip"
+            style={{
+              position: "fixed",
+              left: `${clampedPos?.left ?? activeSegment.centerX}px`,
+              top: `${activeSegment.topY}px`,
+              transform: "translate(-50%, -100%)",
+              visibility: clampedPos ? "visible" : "hidden",
+              pointerEvents: "none",
+              zIndex: 99999,
+            }}
+          >
+            {activeSegment.label}: {formatTokens(activeSegment.value)} tokens ({activeSegment.segPct} of context)
+            <svg
+              className="base-tooltip-arrow context-meter-portal-arrow"
+              width={8}
+              height={4}
+              viewBox="0 0 8 4"
+              style={{
+                position: "absolute",
+                top: "100%",
+                left: `calc(50% + ${clampedPos?.arrowOffset ?? 0}px)`,
+                transform: "translateX(-50%)",
+              }}
+            >
+              <polygon points="0,0 4,4 8,0" />
+            </svg>
+          </div>,
+          document.body
+        )}
+
       <span className={`context-meter-label ${statusClass}`}>
-        {formatTokens(estimated)}/{formatTokens(contextWindow)} tokens ({pct}%)
+        {formatTokens(estimated)}/{formatTokens(contextWindow)} tokens ({formatPct(pct)} of context)
         {remaining > 0 ? ` · ${formatTokens(remaining)} remaining` : " · full"}
       </span>
     </div>
   );
 }
 
+export default ContextMeter;

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Icon } from "../base";
+import { Button, Icon } from "../base";
 import { resolveTagStyle, sortTags, type TagTaxonomyConfig } from "../../../engine/tagTaxonomy";
 
 export type TagSuggestionModalProps = {
@@ -432,13 +432,15 @@ export function TagSuggestionModal({
 
             {/* Explicit Cancel Button */}
             <div className="tag-loading-actions">
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="sm"
                 className="tag-cancel-generation-btn"
                 onClick={onClose}
+                leftIcon={<Icon name="XCircle" size={14} />}
               >
-                <Icon name="XCircle" size={14} /> Cancel Generation
-              </button>
+                Cancel Generation
+              </Button>
             </div>
           </div>
         ) : error && !dismissedError ? (
@@ -453,20 +455,23 @@ export function TagSuggestionModal({
               </div>
             </div>
             <div className="tag-error-actions">
-              <button
-                type="button"
-                className="secondary-btn"
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setDismissedError(true)}
+                leftIcon={<Icon name="Edit3" size={14} />}
               >
-                <Icon name="Edit3" size={14} /> Continue Manually
-              </button>
-              <button
-                type="button"
-                className="primary-btn tag-error-retry-btn"
+                Continue Manually
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                className="tag-error-retry-btn"
                 onClick={handleRegenerateClick}
+                leftIcon={<Icon name="RefreshCw" size={14} />}
               >
-                <Icon name="RefreshCw" size={14} /> Retry Generation
-              </button>
+                Retry Generation
+              </Button>
             </div>
           </div>
         ) : (
@@ -642,21 +647,22 @@ export function TagSuggestionModal({
             )}
           </div>
           <div className="tag-footer-actions">
-            <button
-              type="button"
+            <Button
+              variant="secondary"
               className="diff-cancel-btn"
               onClick={onClose}
             >
               Cancel
-            </button>
-            <button
-              type="button"
-              className="diff-accept-btn tag-apply-btn"
+            </Button>
+            <Button
+              variant="primary"
+              className="tag-apply-btn"
               onClick={handleConfirm}
               disabled={loading}
+              leftIcon={<Icon name="Check" size={15} />}
             >
-              <Icon name="Check" size={15} /> Apply ({selectedTags.size}) Tags
-            </button>
+              Apply ({selectedTags.size}) Tags
+            </Button>
           </div>
         </footer>
       </section>

@@ -164,7 +164,7 @@ export function PersonaLibrary({ isModal, onPersonasChanged }: PersonaLibraryPro
             <div key={p.id} className={`persona-row ${p.isDefault ? "default" : ""}`}>
               <AvatarBadge icon="User" name={p.name} size="sm" />
               <div className="persona-row-info">
-                <strong>{p.name}</strong> {p.isDefault ? <span className="default-star" title="Default persona"><Icon name="Star" size={14} className="text-amber-400 fill-amber-400" /></span> : null}
+                <strong>{p.name}</strong> {p.isDefault ? <span className="default-star" title="Default persona"><Icon name="Star" size={14} className="fill-current" /></span> : null}
                 <span className="persona-row-desc">{p.description || <em>No description</em>}</span>
                 <span className="persona-row-meta">
                   {p.bodyType}{p.initialClothing.length > 0 ? ` · ${p.initialClothing.length} clothing item${p.initialClothing.length === 1 ? "" : "s"}` : " · no clothing"}

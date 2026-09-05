@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   applyAvatarShapeTheme,
+  applyTheme,
   createPlaythrough,
   generatePlaythrough,
   getAppearanceSettings,
@@ -56,17 +57,39 @@ export default function App() {
   // Existing-setting selector fed by imported CCv2 card scenarios (D7/F6)
   const [cardSettings, setCardSettings] = useState<Array<{ title: string; scenario: string }>>([]);
 
-  // Initialize appearance avatar shape
+  // Initialize appearance avatar shape & theme
   useEffect(() => {
-    const cached = typeof window !== "undefined" ? localStorage.getItem("bobbinloom_avatar_shape") : null;
-    if (cached === "square" || cached === "rounded" || cached === "circle") {
-      applyAvatarShapeTheme(cached);
+    const cachedShape = typeof window !== "undefined" ? localStorage.getItem("bobbinloom_avatar_shape") : null;
+    if (cachedShape === "square" || cachedShape === "rounded" || cachedShape === "circle") {
+      applyAvatarShapeTheme(cachedShape);
     } else {
       applyAvatarShapeTheme("rounded");
     }
+
+    const cachedMode = typeof window !== "undefined" ? (localStorage.getItem("bobbinloom_theme_mode") as any) : null;
+    const cachedPreset = typeof window !== "undefined" ? (localStorage.getItem("bobbinloom_theme_preset") ?? undefined) : undefined;
+    let cachedCustom = undefined;
+    try {
+      cachedCustom = typeof window !== "undefined" && localStorage.getItem("bobbinloom_theme_custom")
+        ? JSON.parse(localStorage.getItem("bobbinloom_theme_custom")!)
+        : undefined;
+    } catch {
+      /* silent */
+    }
+    applyTheme({
+      themeMode: cachedMode ?? "dark",
+      themePreset: cachedPreset,
+      customThemeColors: cachedCustom,
+    });
+
     getAppearanceSettings()
       .then((res) => {
         if (res.avatarShape) applyAvatarShapeTheme(res.avatarShape);
+        applyTheme({
+          themeMode: res.themeMode,
+          themePreset: res.themePreset,
+          customThemeColors: res.customThemeColors,
+        });
       })
       .catch(() => {
         /* silent */

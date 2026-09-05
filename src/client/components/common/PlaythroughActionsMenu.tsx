@@ -1,9 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import type { Playthrough } from "../../../schemas";
 import { deletePlaythrough, duplicatePlaythrough } from "../../api";
 import { ConfirmModal } from "./ConfirmModal";
-import { Icon } from "../base";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  Button,
+  Icon,
+  Tooltip,
+} from "../base";
 
 export type PlaythroughActionsMenuProps = {
   playthroughId: string;
@@ -16,28 +24,9 @@ export type PlaythroughActionsMenuProps = {
 
 export function PlaythroughActionsMenu(props: PlaythroughActionsMenuProps) {
   const { playthroughId, playthroughName, onRenameRequest, onDuplicated, onDeleted, onError } = props;
-  const [open, setOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [open]);
 
   async function handleDuplicate() {
-    setOpen(false);
     try {
       const clone = await duplicatePlaythrough(playthroughId);
       onDuplicated(clone);
@@ -47,7 +36,6 @@ export function PlaythroughActionsMenu(props: PlaythroughActionsMenuProps) {
   }
 
   function handleDeleteClick() {
-    setOpen(false);
     setDeleteConfirm(true);
   }
 
@@ -62,37 +50,48 @@ export function PlaythroughActionsMenu(props: PlaythroughActionsMenuProps) {
   }
 
   function handleRename() {
-    setOpen(false);
     onRenameRequest(playthroughId, playthroughName);
   }
 
   return (
-    <div className="playthrough-actions-menu" ref={menuRef}>
-      <span
-        role="button"
-        tabIndex={0}
-        className="playthrough-actions-trigger"
-        onClick={(e) => { e.stopPropagation(); setOpen((prev) => !prev); }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            e.stopPropagation();
-            setOpen((prev) => !prev);
-          }
-        }}
-        aria-label="More options"
-        aria-haspopup="true"
-        aria-expanded={open}
-      >
-        <Icon name="MoreVertical" size={16} />
-      </span>
-      {open ? (
-        <div className="playthrough-actions-dropdown" role="menu" onClick={(e) => e.stopPropagation()}>
-          <button role="menuitem" className="flex items-center gap-1.5" onClick={handleRename}><Icon name="Pencil" size={14} /> Rename</button>
-          <button role="menuitem" className="flex items-center gap-1.5" onClick={handleDuplicate}><Icon name="Copy" size={14} /> Duplicate</button>
-          <button role="menuitem" className="danger flex items-center gap-1.5" onClick={handleDeleteClick}><Icon name="Trash2" size={14} /> Delete</button>
-        </div>
-      ) : null}
+    <div className="playthrough-actions-menu" onClick={(e) => e.stopPropagation()}>
+      <DropdownMenu>
+        <Tooltip content="More options">
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              iconOnly
+              aria-label="More options"
+              className="playthrough-actions-trigger"
+            >
+              <Icon name="MoreVertical" size={16} />
+            </Button>
+          </DropdownMenuTrigger>
+        </Tooltip>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            icon={<Icon name="Pencil" size={14} />}
+            onClick={handleRename}
+          >
+            Rename
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            icon={<Icon name="Copy" size={14} />}
+            onClick={() => void handleDuplicate()}
+          >
+            Duplicate
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            danger
+            icon={<Icon name="Trash2" size={14} />}
+            onClick={handleDeleteClick}
+          >
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
       {deleteConfirm
         ? createPortal(
             <ConfirmModal
@@ -109,3 +108,4 @@ export function PlaythroughActionsMenu(props: PlaythroughActionsMenuProps) {
     </div>
   );
 }
+

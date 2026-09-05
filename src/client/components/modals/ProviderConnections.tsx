@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Icon, TextInput } from "../base";
+import { Button, Icon, SimpleSelect, TextInput, Tooltip } from "../base";
 import type {
   ConnectionModelsResult,
   ConnectionTestResult,
@@ -26,6 +26,13 @@ type EditorState =
 
 export type ProviderSortBy = "lastActiveAt" | "label" | "updatedAt" | "createdAt";
 export type SortDirection = "asc" | "desc";
+
+const SORT_OPTIONS: Array<{ value: ProviderSortBy; label: string }> = [
+  { value: "lastActiveAt", label: "Last Active" },
+  { value: "label", label: "Provider Name" },
+  { value: "updatedAt", label: "Last Updated" },
+  { value: "createdAt", label: "Created At" },
+];
 
 function formatConnDate(isoOrStr?: string): string {
   if (!isoOrStr) return "";
@@ -328,30 +335,30 @@ export function ProviderConnections() {
               </div>
               <div className="conn-sort-group">
                 <label htmlFor="conn-sort-select" className="conn-sort-label">
-                  <Icon name="ArrowUpDown" size={13} className="text-slate-400" />
+                  <Icon name="ArrowUpDown" size={13} />
                   <span>Sort:</span>
                 </label>
-                <select
+                <SimpleSelect<ProviderSortBy>
                   id="conn-sort-select"
-                  className="conn-sort-select"
+                  size="xs"
                   value={sortBy}
-                  onChange={(e) => handleSortByChange(e.target.value as ProviderSortBy)}
-                >
-                  <option value="lastActiveAt">Last Active</option>
-                  <option value="label">Provider Name</option>
-                  <option value="updatedAt">Last Updated</option>
-                  <option value="createdAt">Created At</option>
-                </select>
-                <button
-                  type="button"
-                  className="conn-sort-dir-btn"
-                  onClick={handleToggleSortDir}
-                  title={`Sort order: ${sortDir === "asc" ? "Ascending" : "Descending"} (click to toggle)`}
-                  aria-label={`Sort order: ${sortDir === "asc" ? "Ascending" : "Descending"}`}
-                >
-                  <Icon name={sortDir === "asc" ? "ArrowUp" : "ArrowDown"} size={14} />
-                  <span className="sort-dir-text">{sortDir === "asc" ? "Asc" : "Desc"}</span>
-                </button>
+                  onChange={handleSortByChange}
+                  options={SORT_OPTIONS}
+                  aria-label="Sort providers by"
+                />
+                <Tooltip content={`Sort order: ${sortDir === "asc" ? "Ascending" : "Descending"} (click to toggle)`}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="xs"
+                    className="conn-sort-dir-btn"
+                    onClick={handleToggleSortDir}
+                    aria-label={`Sort order: ${sortDir === "asc" ? "Ascending" : "Descending"}`}
+                    leftIcon={<Icon name={sortDir === "asc" ? "ArrowUp" : "ArrowDown"} size={14} />}
+                  >
+                    <span className="sort-dir-text">{sortDir === "asc" ? "Asc" : "Desc"}</span>
+                  </Button>
+                </Tooltip>
               </div>
             </div>
           )}
@@ -370,81 +377,113 @@ export function ProviderConnections() {
                         {isActive && <span className="conn-badge active">Active</span>}
                       </div>
                       <div className="conn-actions">
-                        <button
-                          type="button"
-                          className="primary-btn"
-                          onClick={() => activate(c.id)}
-                          disabled={isActive}
-                          title={isActive ? "Active connection" : "Activate connection"}
-                        >
-                          <span className="btn-label">{isActive ? "Active" : "Activate"}</span>
-                          <span className="btn-icon">{isActive ? <Icon name="Check" size={14} /> : <Icon name="Zap" size={14} />}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openEdit(c)}
-                          title="Edit connection"
-                        >
-                          <span className="btn-label">Edit</span>
-                          <span className="btn-icon"><Icon name="Pencil" size={14} /></span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => duplicate(c.id)}
-                          title="Duplicate connection"
-                        >
-                          <span className="btn-label">Duplicate</span>
-                          <span className="btn-icon"><Icon name="Copy" size={14} /></span>
-                        </button>
-                        <button
-                          type="button"
-                          className="danger"
-                          onClick={() => confirmRemove(c)}
-                          title="Delete connection"
-                        >
-                          <span className="btn-label">Delete</span>
-                          <span className="btn-icon"><Icon name="Trash2" size={14} /></span>
-                        </button>
+                        <Tooltip content={isActive ? "Active connection" : "Activate connection"}>
+                          <Button
+                            variant="primary"
+                            size="xs"
+                            onClick={() => activate(c.id)}
+                            disabled={isActive}
+                            aria-label={isActive ? "Active connection" : "Activate connection"}
+                          >
+                            <span className="btn-label flex items-center gap-1.5">
+                              <span className="btn-icon">{isActive ? <Icon name="Check" size={13} /> : <Icon name="Zap" size={13} />}</span>
+                              <span>{isActive ? "Active" : "Activate"}</span>
+                            </span>
+                            <span className="btn-icon-only" aria-hidden="true">
+                              {isActive ? <Icon name="Check" size={14} /> : <Icon name="Zap" size={14} />}
+                            </span>
+                          </Button>
+                        </Tooltip>
+                        <Tooltip content="Edit connection">
+                          <Button
+                            variant="secondary"
+                            size="xs"
+                            onClick={() => openEdit(c)}
+                            aria-label="Edit connection"
+                          >
+                            <span className="btn-label flex items-center gap-1.5">
+                              <span className="btn-icon"><Icon name="Pencil" size={13} /></span>
+                              <span>Edit</span>
+                            </span>
+                            <span className="btn-icon-only" aria-hidden="true">
+                              <Icon name="Pencil" size={14} />
+                            </span>
+                          </Button>
+                        </Tooltip>
+                        <Tooltip content="Duplicate connection">
+                          <Button
+                            variant="secondary"
+                            size="xs"
+                            onClick={() => duplicate(c.id)}
+                            aria-label="Duplicate connection"
+                          >
+                            <span className="btn-label flex items-center gap-1.5">
+                              <span className="btn-icon"><Icon name="Copy" size={13} /></span>
+                              <span>Duplicate</span>
+                            </span>
+                            <span className="btn-icon-only" aria-hidden="true">
+                              <Icon name="Copy" size={14} />
+                            </span>
+                          </Button>
+                        </Tooltip>
+                        <Tooltip content="Delete connection">
+                          <Button
+                            variant="danger"
+                            size="xs"
+                            onClick={() => confirmRemove(c)}
+                            aria-label="Delete connection"
+                          >
+                            <span className="btn-label flex items-center gap-1.5">
+                              <span className="btn-icon"><Icon name="Trash2" size={13} /></span>
+                              <span>Delete</span>
+                            </span>
+                            <span className="btn-icon-only" aria-hidden="true">
+                              <Icon name="Trash2" size={14} />
+                            </span>
+                          </Button>
+                        </Tooltip>
                       </div>
                     </div>
                     <div className="conn-tags">
                       <span className="conn-tag" title={`Base URL: ${c.baseUrl}`}>
-                        <span className="tag-icon"><Icon name="Globe" size={13} className="text-slate-400" /></span> {c.baseUrl}
+                        <span className="tag-icon"><Icon name="Globe" size={13} className="text-slate-400" /></span>
+                        <span className="tag-text">{c.baseUrl}</span>
                       </span>
                       <span className="conn-tag" title={`Model: ${c.model}`}>
-                        <span className="tag-icon"><Icon name="Zap" size={13} className="text-amber-400" /></span> {c.model}
+                        <span className="tag-icon"><Icon name="Zap" size={13} /></span>
+                        <span className="tag-text">{c.model}</span>
                       </span>
-                      <span className={`conn-tag ${c.hasApiKey ? "has-key" : "no-key"}`}>
+                      <span className={`conn-tag ${c.hasApiKey ? "has-key" : "no-key"}`} title={c.hasApiKey ? "API Key configured" : "No API key configured"}>
                         <span className="tag-icon">
-                          {c.hasApiKey ? <Icon name="KeyRound" size={13} className="text-lime-400" /> : <Icon name="LockKeyholeOpen" size={13} className="text-slate-500" />}
-                        </span>{" "}
-                        {c.hasApiKey ? c.apiKeyMasked : "No key"}
+                          {c.hasApiKey ? <Icon name="KeyRound" size={13} /> : <Icon name="LockKeyholeOpen" size={13} className="text-slate-500" />}
+                        </span>
+                        <span className="tag-text">{c.hasApiKey ? c.apiKeyMasked : "No key"}</span>
                       </span>
                       {sortBy === "lastActiveAt" && (c.lastActiveAt || isActive) ? (
                         <span className="conn-tag date-tag" title={c.lastActiveAt ? `Last active: ${new Date(c.lastActiveAt).toLocaleString()}` : "Currently active"}>
-                          <span className="tag-icon"><Icon name="Activity" size={13} className="text-blue-400" /></span>{" "}
-                          {isActive ? "Active now" : `Active: ${formatConnDate(c.lastActiveAt)}`}
+                          <span className="tag-icon"><Icon name="Activity" size={13} className="text-blue-400" /></span>
+                          <span className="tag-text">{isActive ? "Active now" : `Active: ${formatConnDate(c.lastActiveAt)}`}</span>
                         </span>
                       ) : sortBy === "updatedAt" && c.updatedAt ? (
                         <span className="conn-tag date-tag" title={`Updated: ${new Date(c.updatedAt).toLocaleString()}`}>
-                          <span className="tag-icon"><Icon name="Clock" size={13} className="text-indigo-400" /></span>{" "}
-                          Updated {formatConnDate(c.updatedAt)}
+                          <span className="tag-icon"><Icon name="Clock" size={13} className="text-indigo-400" /></span>
+                          <span className="tag-text">Updated {formatConnDate(c.updatedAt)}</span>
                         </span>
-                      ) : sortBy === "createdAt" && c.createdAt ? (
-                        <span className="conn-tag date-tag" title={`Created: ${new Date(c.createdAt).toLocaleString()}`}>
-                          <span className="tag-icon"><Icon name="Calendar" size={13} className="text-emerald-400" /></span>{" "}
-                          Added {formatConnDate(c.createdAt)}
+                      ) : (
+                        <span className="conn-tag date-tag" title={c.createdAt ? `Created: ${new Date(c.createdAt).toLocaleString()}` : "Provider connection"}>
+                          <span className="tag-icon"><Icon name="Calendar" size={13} className="text-emerald-400" /></span>
+                          <span className="tag-text">{c.createdAt ? `Added ${formatConnDate(c.createdAt)}` : "Added"}</span>
                         </span>
-                      ) : null}
+                      )}
                     </div>
                   </div>
                 </div>
               );
             })}
           </div>
-          <button className="conn-add flex items-center justify-center gap-1.5" onClick={openCreate}>
-            <Icon name="Plus" size={16} /> Add connection
-          </button>
+          <Button variant="secondary" fullWidth className="conn-add" onClick={openCreate} leftIcon={<Icon name="Plus" size={16} />}>
+            Add connection
+          </Button>
         </>
       )}
 
@@ -455,21 +494,27 @@ export function ProviderConnections() {
           </div>
 
           <div className="conn-section">
-            <h5 className="conn-section-title">Connection Basics</h5>
+            <h5 className="form-section-title conn-section-title">
+              <Icon name="Plug" size={14} />
+              <span>Connection Basics</span>
+            </h5>
             <div className="conn-fields-group">
-              <TextInput
-                label="Name"
-                value={form.label}
-                onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
-                placeholder="e.g. Local LM Studio"
-              />
+              <div className="conn-fields-row-2">
+                <TextInput
+                  label="Name"
+                  value={form.label}
+                  onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
+                  placeholder="e.g. Local LM Studio"
+                />
 
-              <TextInput
-                label="Base URL"
-                value={form.baseUrl}
-                onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))}
-                placeholder="http://localhost:1234/v1"
-              />
+                <TextInput
+                  label="Base URL"
+                  value={form.baseUrl}
+                  onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))}
+                  placeholder="http://localhost:1234/v1"
+                  leftIcon={<Icon name="Globe" size={14} />}
+                />
+              </div>
 
               <div>
                 <TextInput
@@ -478,26 +523,51 @@ export function ProviderConnections() {
                   value={form.apiKey ?? ""}
                   onChange={(e) => setForm((f) => ({ ...f, apiKey: e.target.value }))}
                   placeholder={isKeyCleared ? "Key will be cleared on Save" : "Enter API key"}
+                  leftIcon={<Icon name="KeyRound" size={14} />}
                   rightElement={
-                    <button type="button" className="btn-secondary" onClick={toggleShowKey} disabled={keyBusy}>
-                      {keyBusy ? "…" : showKey ? "Hide" : "Show"}
-                    </button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={toggleShowKey}
+                      disabled={keyBusy}
+                      isLoading={keyBusy}
+                      leftIcon={<Icon name={showKey ? "EyeOff" : "Eye"} size={14} />}
+                    >
+                      {showKey ? "Hide" : "Show"}
+                    </Button>
                   }
                 />
                 {isKeyCleared ? (
-                  <p className="conn-status err" style={{ marginTop: "0.25rem", fontSize: "0.8rem" }}>
-                    Stored key will be cleared when saved.{" "}
-                    <button type="button" className="link" onClick={restoreKey}>Undo</button>
-                  </p>
+                  <div className="conn-key-status-row">
+                    <span className="conn-key-warning-status">
+                      <Icon name="AlertTriangle" size={13} />
+                      <span>Key marked for removal on Save</span>
+                    </span>
+                    <Button type="button" variant="ghost" size="xs" onClick={restoreKey} leftIcon={<Icon name="RotateCcw" size={12} />}>
+                      Undo
+                    </Button>
+                  </div>
                 ) : isStoredKeyActive ? (
-                  <button type="button" className="link" onClick={clearKey}>Clear stored key</button>
+                  <div className="conn-key-status-row">
+                    <span className="conn-key-vault-status">
+                      <Icon name="LockKeyhole" size={13} />
+                      <span>Stored in encrypted vault</span>
+                    </span>
+                    <Button type="button" variant="ghost" size="xs" onClick={clearKey} leftIcon={<Icon name="Trash2" size={12} />}>
+                      Clear stored key
+                    </Button>
+                  </div>
                 ) : null}
               </div>
             </div>
           </div>
 
           <div className="conn-section">
-            <h5 className="conn-section-title">Model Configuration</h5>
+            <h5 className="form-section-title conn-section-title">
+              <Icon name="Cpu" size={14} />
+              <span>Model Configuration</span>
+            </h5>
             <div className="conn-fields-group">
               <div>
                 <TextInput
@@ -505,37 +575,42 @@ export function ProviderConnections() {
                   value={form.model}
                   onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
                   placeholder="e.g. llama-3"
+                  leftIcon={<Icon name="Cpu" size={14} />}
                   rightElement={
-                    <button
+                    <Button
                       type="button"
-                      className="btn-secondary"
+                      variant="secondary"
+                      size="sm"
                       onClick={() => void loadModels(probeTarget())}
                       disabled={fetchingModels || busy || (editor.mode !== "edit" && !form.baseUrl.trim())}
+                      isLoading={fetchingModels}
+                      leftIcon={<Icon name="RefreshCw" size={13} className={fetchingModels ? "animate-spin" : ""} />}
                     >
-                      {fetchingModels ? "Loading…" : "Fetch models"}
-                    </button>
+                      Fetch models
+                    </Button>
                   }
                 />
                 {models.length > 0 && (
-                  <label className="form-field" style={{ marginTop: "0.5rem" }}>
+                  <div className="base-form-field form-field" style={{ marginTop: "0.5rem" }}>
                     <span className="field-label-text">Select from Fetched Models ({models.length} available)</span>
-                    <select
-                      className="form-input form-select"
+                    <SimpleSelect
+                      size="sm"
+                      variant="filled"
+                      fullWidth
                       value={models.includes(form.model) ? form.model : ""}
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          setForm((f) => ({ ...f, model: e.target.value }));
+                      onChange={(selectedModel) => {
+                        if (selectedModel) {
+                          setForm((f) => ({ ...f, model: selectedModel }));
                         }
                       }}
-                    >
-                      <option value="" disabled>-- Select a fetched model --</option>
-                      {models.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                      placeholder="-- Select a fetched model --"
+                      options={models.map((m) => ({
+                        value: m,
+                        label: m,
+                        icon: <Icon name="Cpu" size={13} />,
+                      }))}
+                    />
+                  </div>
                 )}
                 {modelsStatus && <p className={`conn-status ${modelsStatus.kind}`}>{modelsStatus.text}</p>}
               </div>
@@ -543,24 +618,33 @@ export function ProviderConnections() {
           </div>
 
           <div className="conn-section">
-            <h5 className="conn-section-title">Generation Parameters</h5>
+            <h5 className="form-section-title conn-section-title">
+              <Icon name="Sliders" size={14} />
+              <span>Generation Parameters</span>
+            </h5>
             <div className="settings-grid-3">
               <TextInput
                 label="Temperature"
                 type="number"
                 step="0.1"
+                placeholder="0.8"
+                helperText="Sampling temperature (0.0 – 2.0)"
                 value={form.temperature}
                 onChange={(e) => setForm((f) => ({ ...f, temperature: Number(e.target.value) }))}
               />
               <TextInput
                 label="Max Tokens"
                 type="number"
+                placeholder="1200"
+                helperText="Max output tokens per turn"
                 value={form.maxTokens}
                 onChange={(e) => setForm((f) => ({ ...f, maxTokens: Number(e.target.value) }))}
               />
               <TextInput
                 label="Context Window"
                 type="number"
+                placeholder="32768"
+                helperText="Token budget (e.g. 32768)"
                 value={form.contextWindow}
                 onChange={(e) => setForm((f) => ({ ...f, contextWindow: Number(e.target.value) }))}
               />
@@ -570,20 +654,20 @@ export function ProviderConnections() {
           {test && <p className={`conn-status ${test.kind}`}>{test.text}</p>}
           <div className="settings-actions conn-actions-bar">
             <div className="actions-left">
-              <button type="submit" className="primary-btn flex items-center gap-1.5" disabled={busy}>
-                <Icon name="Save" size={14} /> {busy ? "Saving…" : "Save"}
-              </button>
-              <button type="button" className="btn-secondary flex items-center gap-1.5" onClick={(e) => void testCurrent(e)} disabled={busy}>
-                <Icon name="Activity" size={14} /> Test connection
-              </button>
-              <button type="button" className="btn-ghost flex items-center gap-1.5" onClick={closeEditor}>
-                <Icon name="X" size={14} /> Cancel
-              </button>
+              <Button type="submit" variant="primary" size="sm" disabled={busy} isLoading={busy} leftIcon={<Icon name="Save" size={14} />}>
+                Save
+              </Button>
+              <Button type="button" variant="secondary" size="sm" onClick={(e) => void testCurrent(e)} disabled={busy} leftIcon={<Icon name="Activity" size={14} />}>
+                Test connection
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={closeEditor} leftIcon={<Icon name="X" size={14} />}>
+                Cancel
+              </Button>
             </div>
             {editor.mode === "edit" && (
-              <button type="button" className="danger flex items-center gap-1.5" onClick={() => { if (editor.mode === "edit") void confirmRemove(editor.connection); }}>
-                <Icon name="Trash2" size={14} /> Delete
-              </button>
+              <Button type="button" variant="danger" size="sm" onClick={() => { if (editor.mode === "edit") void confirmRemove(editor.connection); }} leftIcon={<Icon name="Trash2" size={14} />}>
+                Delete
+              </Button>
             )}
           </div>
         </form>

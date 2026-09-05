@@ -18,7 +18,20 @@ import type { CharacterTemplateUpdate, ProposedSectionChange, CharacterBrainstor
 import { CHARACTER_SHEET_EXAMPLE, applySectionChanges } from "../../../engine/characterSections";
 import { isFormatAligned, resolveCharacterFormat } from "../../../engine/characterFormat";
 import { displayTitle, entryKind, filterLibraryEntries, cardBadgeLabel, groupByLineage, getGroupCreatedAt, getGroupUpdatedAt, type CharacterSortOption, type SortDirection } from "../../../engine/characterCards";
-import { Icon, SearchBar, TagChip, CharacterAvatar } from "../base";
+import {
+  Button,
+  Icon,
+  SearchBar,
+  TagChip,
+  CharacterAvatar,
+  Tooltip,
+  TextInput,
+  SimpleSelect,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "../base";
 export { CharacterAvatar } from "../base";
 import { ConfirmModal } from "../common/ConfirmModal";
 import { DiffModal } from "./DiffModal";
@@ -362,19 +375,15 @@ function getPageNumbers(current: number, total: number): number[] {
 /** Card dropdown "more options" menu */
 function MoreOptionsMenu({
   template,
-  isOpen,
-  onToggle,
   onEdit,
   onConvert,
   onDelete,
   converting,
 }: {
   template: CharacterTemplate;
-  isOpen: boolean;
-  onToggle: (e: React.MouseEvent) => void;
-  onEdit: (e: React.MouseEvent) => void;
-  onConvert?: (e: React.MouseEvent) => void;
-  onDelete: (e: React.MouseEvent) => void;
+  onEdit: () => void;
+  onConvert?: () => void;
+  onDelete: () => void;
   converting?: boolean;
 }) {
   return (
@@ -382,31 +391,47 @@ function MoreOptionsMenu({
       className="card-more-menu-container"
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
     >
-      <button
-        type="button"
-        className={`more-options-btn ${isOpen ? "active" : ""}`}
-        onClick={onToggle}
-        title="Actions"
-        aria-label="Actions"
-      >
-        <Icon name="MoreVertical" size={16} />
-      </button>
-      {isOpen ? (
-        <div className="dropdown-menu">
-          <button type="button" className="dropdown-item" onClick={onEdit}>
-            <Icon name="Pencil" size={13} /> Edit
-          </button>
+      <DropdownMenu>
+        <Tooltip content="Actions">
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              iconOnly
+              aria-label="Actions"
+              className="more-options-btn"
+            >
+              <Icon name="MoreVertical" size={16} />
+            </Button>
+          </DropdownMenuTrigger>
+        </Tooltip>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            icon={<Icon name="Pencil" size={14} />}
+            onClick={onEdit}
+          >
+            Edit
+          </DropdownMenuItem>
           {onConvert ? (
-            <button type="button" className="dropdown-item" onClick={onConvert} disabled={converting}>
-              <Icon name="Sparkles" size={13} /> {converting ? "Converting…" : "Convert to BL"}
-            </button>
+            <DropdownMenuItem
+              icon={<Icon name="Sparkles" size={14} className={converting ? "sparkle-pulse" : ""} />}
+              onClick={onConvert}
+              disabled={converting}
+            >
+              {converting ? "Converting…" : "Convert to BL"}
+            </DropdownMenuItem>
           ) : null}
-          <button type="button" className="dropdown-item danger" onClick={onDelete}>
-            <Icon name="Trash2" size={13} /> Delete
-          </button>
-        </div>
-      ) : null}
+          <DropdownMenuItem
+            danger
+            icon={<Icon name="Trash2" size={14} />}
+            onClick={onDelete}
+          >
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
@@ -502,12 +527,19 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
       const saved = localStorage.getItem("bobbinloom_library_page_size");
       if (saved) {
         const parsed = Number(saved);
-        if (!isNaN(parsed) && [12, 24, 48, 96, 1000].includes(parsed)) {
-          return parsed;
+        if (!isNaN(parsed) && parsed > 0 && parsed <= 1000) {
+          return Math.round(parsed);
         }
       }
     }
     return 12;
+  });
+
+  const [isCustomPageSize, setIsCustomPageSize] = useState<boolean>(() => {
+    return ![12, 24, 48, 96, 1000].includes(pageSize);
+  });
+  const [customPageSizeInput, setCustomPageSizeInput] = useState<string>(() => {
+    return [12, 24, 48, 96, 1000].includes(pageSize) ? "" : String(pageSize);
   });
 
   const setPageSize = (size: number) => {
@@ -517,7 +549,36 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     } catch { /* silent */ }
   };
 
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const handleCommitCustomPageSize = () => {
+    const parsed = parseInt(customPageSizeInput, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      const clamped = Math.min(Math.max(parsed, 1), 1000);
+      setCustomPageSizeInput(String(clamped));
+      setPageSize(clamped);
+      setCurrentPage(1);
+    } else {
+      setCustomPageSizeInput(String(pageSize));
+    }
+  };
+
+  const handlePageSizeSelectChange = (val: string) => {
+    if (val === "custom") {
+      setIsCustomPageSize(true);
+      if (!customPageSizeInput || isNaN(parseInt(customPageSizeInput, 10))) {
+        setCustomPageSizeInput(String(pageSize));
+      }
+    } else {
+      setIsCustomPageSize(false);
+      const num = Number(val);
+      setPageSize(num);
+      setCurrentPage(1);
+    }
+  };
+
+  const [conversionFailed, setConversionFailed] = useState<{
+    template: CharacterTemplate;
+    error: string;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Conversion state ──
@@ -687,19 +748,6 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
       }
     }
   }, [initialEditingId, templates, editorOpen]);
-
-  // Close dropdown menu when clicking outside
-  useEffect(() => {
-    if (!openMenuId) return;
-    function handleDocClick(e: MouseEvent) {
-      const target = e.target as HTMLElement;
-      if (!target.closest(".card-more-menu-container")) {
-        setOpenMenuId(null);
-      }
-    }
-    document.addEventListener("mousedown", handleDocClick);
-    return () => document.removeEventListener("mousedown", handleDocClick);
-  }, [openMenuId]);
 
   function handleCancelTagSuggest() {
     if (tagSuggestAbortControllerRef.current) {
@@ -1072,6 +1120,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     setConvertingId(template.id);
     setConvertLoading(true);
     setConvertError(null);
+    setConversionFailed(null);
     const controller = new AbortController();
     abortControllerRef.current = controller;
     try {
@@ -1085,11 +1134,12 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     } catch (e) {
       if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted") || e.message.includes("cancelled"))) {
         setStatus("Conversion cancelled.");
-        setConvertingId(null);
       } else {
-        setConvertError(e instanceof Error ? e.message : String(e));
+        const errMsg = e instanceof Error ? e.message : String(e);
+        setConversionFailed({ template, error: errMsg });
       }
     } finally {
+      setConvertingId(null);
       setConvertLoading(false);
       abortControllerRef.current = null;
     }
@@ -1367,6 +1417,42 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     return groups.slice(start, start + pageSize);
   }, [groups, currentPage, pageSize]);
 
+  const galleryRef = useRef<HTMLElement>(null);
+  const [galleryHeight, setGalleryHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    const el = galleryRef.current;
+    if (!el) return;
+
+    const updateHeight = () => {
+      const h = el.offsetHeight;
+      if (h > 0) {
+        setGalleryHeight(h);
+      }
+    };
+
+    updateHeight();
+
+    if (typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(() => {
+        updateHeight();
+      });
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+  }, [paginatedGroups.length, viewMode, search, activeFilterTags]);
+
+  const sidebarStyle = useMemo<React.CSSProperties>(() => {
+    if (!galleryHeight) return {};
+    // When gallery is short (e.g. 2 cards = ~300px), limit sidebar max-height so it doesn't exceed gallery.
+    // Maintain a comfortable minimum floor (260px) so the search input and several tags remain visible.
+    const effectiveMax = Math.max(galleryHeight, 260);
+    const ceiling = isModal ? "calc(90vh - 130px)" : "calc(100vh - 24px)";
+    return {
+      maxHeight: `min(${effectiveMax}px, ${ceiling})`,
+    };
+  }, [galleryHeight, isModal]);
+
   return (
     <div className={`character-library-container ${isModal ? "is-modal" : "is-workspace"}`}>
       {isModal ? (
@@ -1516,23 +1602,75 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
           </div>
         ) : null}
 
+        {conversionFailed ? (
+          <div className="conversion-success-banner library-error-banner conversion-failed-banner">
+            <div className="conversion-success-content">
+              <span className="conversion-success-icon error-icon">
+                <Icon name="AlertCircle" size={18} />
+              </span>
+              <span className="conversion-success-text error-text">
+                Failed to convert <strong>&quot;{displayTitle(conversionFailed.template)}&quot;</strong> to BobbinLoom format: {conversionFailed.error}
+              </span>
+              <Button
+                type="button"
+                variant="secondary"
+                size="xs"
+                className="conversion-retry-banner-btn"
+                onClick={() => {
+                  const tpl = conversionFailed.template;
+                  setConversionFailed(null);
+                  void handleConvert(tpl);
+                }}
+                leftIcon={<Icon name="RefreshCw" size={12} />}
+              >
+                Retry
+              </Button>
+            </div>
+            <button
+              type="button"
+              className="conversion-success-dismiss"
+              onClick={() => setConversionFailed(null)}
+              title="Dismiss notification"
+            >
+              <Icon name="X" size={14} />
+            </button>
+          </div>
+        ) : null}
+
         {editorOpen ? (
           <div className={`character-editor-inline ${aiBrainstormOpen ? "split-layout" : ""}`}>
             <div className="editor-top-bar">
               <div className="editor-title-wrap">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="editor-back-btn"
+                  onClick={handleCancelClick}
+                  leftIcon={<Icon name="ArrowLeft" size={15} />}
+                  title="Return to Character Library"
+                >
+                  Back
+                </Button>
                 <h3>{editingId ? `Edit: ${form.name}` : "New Character"}</h3>
-                {status ? <span className="editor-status-toast">{status}</span> : null}
+                {status ? (
+                  <span className={`editor-status-toast ${status.toLowerCase().includes("error") || status.toLowerCase().includes("fail") ? "is-error" : ""}`}>
+                    <Icon name={status.toLowerCase().includes("error") || status.toLowerCase().includes("fail") ? "AlertCircle" : "Check"} size={13} />
+                    {status}
+                  </span>
+                ) : null}
               </div>
 
               <div className="editor-header-actions">
-                <label className="format-picker-label" title="Target character format used by Convert to BL and Update into Newer Format">
+                <div className="format-picker-label" title="Target character format used by Convert to BL and Update into Newer Format">
                   <span>Format</span>
-                  <select value={targetFormatId ?? ""} onChange={(e) => setTargetFormatId(e.target.value)}>
-                    {presetOptions.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                </label>
+                  <SimpleSelect<string>
+                    value={targetFormatId ?? (presetOptions[0]?.id || "")}
+                    onChange={(val) => setTargetFormatId(val)}
+                    options={presetOptions.map((p) => ({ value: p.id, label: p.name }))}
+                    size="xs"
+                  />
+                </div>
 
                 {!editingIsCcv2 ? (
                   <button
@@ -1550,20 +1688,24 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                 ) : null}
 
                 {!editingIsCcv2 && editingId && !isFormatAligned(form.content, targetFormat) ? (
-                  <button
+                  <Button
                     type="button"
+                    size="xs"
                     className="reformat-btn"
                     onClick={() => void handleReformat()}
                     disabled={convertLoading}
                     title="Restructure this sheet to match the selected format, with a preview before applying"
+                    leftIcon={<Icon name="Sparkles" size={14} className={convertLoading ? "sparkle-pulse" : ""} />}
                   >
-                    <Icon name="Sparkles" size={14} className={convertLoading ? "sparkle-pulse" : ""} />
                     {convertLoading ? "Updating…" : "Update into Newer Format with AI"}
-                  </button>
+                  </Button>
                 ) : null}
 
                 {editingIsCcv2 ? (
-                  <button
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="primary"
                     className="convert-btn"
                     onClick={() => {
                       const tpl = templates.find(t => t.id === editingId);
@@ -1572,7 +1714,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                     disabled={convertLoading}
                   >
                     {convertLoading ? "Converting…" : "Convert to BL Format"}
-                  </button>
+                  </Button>
                 ) : null}
               </div>
             </div>
@@ -1605,10 +1747,11 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                   disabled={saving}
                 />
 
-                <label className="editor-field">
-                  <span className="editor-field-label">Name</span>
-                  <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-                </label>
+                <TextInput
+                  label="Name"
+                  value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                />
 
                 {(() => {
                   const tpl = editingId ? templates.find(t => t.id === editingId) : undefined;
@@ -1699,23 +1842,35 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                         </>
                       ) : viewTab === "original" ? (
                         <>
-                          <div className="editor-field read-only">
-                            <span className="editor-field-label">Original Creator's Notes</span>
-                            <pre className="content-view notes-view">{originalCreatorNotes || "(no original creator notes)"}</pre>
-                          </div>
+                          <label className="editor-field read-only">
+                            <span className="editor-field-label">
+                              Original Creator's Notes
+                              <span className="ccv2-readonly-badge">Read-only</span>
+                            </span>
+                            <textarea
+                              rows={3}
+                              value={originalCreatorNotes}
+                              readOnly
+                              placeholder="(no original creator notes)"
+                              className="creator-notes-textarea read-only"
+                            />
+                          </label>
 
                           <div className="editor-field read-only">
                             <div className="editor-field-header-row">
                               <span className="editor-field-label">Original CCv2 Tags</span>
                               {originalTags.length > 0 ? (
-                                <button
+                                <Button
                                   type="button"
+                                  size="xs"
+                                  variant="secondary"
                                   className="restore-tags-btn"
                                   onClick={() => setForm(f => ({ ...f, tags: [...originalTags] }))}
                                   title="Restore original CCv2 tags to current character sheet"
+                                  leftIcon={<Icon name="RotateCcw" size={13} />}
                                 >
-                                  <Icon name="RotateCcw" size={13} /> Restore Original Tags
-                                </button>
+                                  Restore Original Tags
+                                </Button>
                               ) : null}
                             </div>
                             <div className="read-only-tags-wrap">
@@ -1729,10 +1884,18 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                             </div>
                           </div>
 
-                          <div className="editor-field read-only">
-                            <span className="editor-field-label">Original CCv2 Content</span>
-                            <pre className="content-view">{tpl!.ccv2Content!}</pre>
-                          </div>
+                          <label className="editor-field read-only">
+                            <span className="editor-field-label">
+                              Original CCv2 Content
+                              <span className="ccv2-readonly-badge">Read-only</span>
+                            </span>
+                            <textarea
+                              rows={20}
+                              value={tpl!.ccv2Content ?? ""}
+                              readOnly
+                              className="content-textarea read-only"
+                            />
+                          </label>
                         </>
                       ) : (
                         <>
@@ -1772,39 +1935,45 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
 
                 <div className="modal-actions editor-footer-actions">
                   {editingId ? (
-                    <button
-                      type="button"
-                      className="danger editor-delete-btn"
-                      onClick={() => {
-                        const targetTpl = templates.find((t) => t.id === editingId);
-                        const targetName = targetTpl ? displayTitle(targetTpl) : form.name;
-                        requestDelete(editingId, targetName);
-                      }}
-                      disabled={saving}
-                      title="Delete this character card from the library"
-                    >
-                      <Icon name="Trash2" size={14} /> Delete
-                    </button>
+                    <Tooltip content="Delete this character card from the library">
+                      <Button
+                        type="button"
+                        variant="danger"
+                        className="editor-delete-btn"
+                        onClick={() => {
+                          const targetTpl = templates.find((t) => t.id === editingId);
+                          const targetName = targetTpl ? displayTitle(targetTpl) : form.name;
+                          requestDelete(editingId, targetName);
+                        }}
+                        disabled={saving}
+                        leftIcon={<Icon name="Trash2" size={14} />}
+                      >
+                        Delete
+                      </Button>
+                    </Tooltip>
                   ) : <div />}
                   <div className="editor-footer-right-actions">
-                    <button
+                    <Button
                       type="button"
-                      className="secondary-btn"
+                      variant="secondary"
                       onClick={handleCancelClick}
                       disabled={saving}
                     >
                       Cancel
-                    </button>
-                    <button
-                      type="button"
-                      className="primary-btn editor-save-btn"
-                      onClick={handleSave}
-                      disabled={saving || !form.name.trim() || !isFormDirty}
-                      title={!isFormDirty ? "No changes to save" : "Save character card"}
-                    >
-                      <Icon name="Check" size={14} />
-                      {saving ? "Saving…" : "Save"}
-                    </button>
+                    </Button>
+                    <Tooltip content={!isFormDirty ? "No changes to save" : "Save character card"}>
+                      <Button
+                        type="button"
+                        variant="primary"
+                        className="editor-save-btn"
+                        onClick={handleSave}
+                        disabled={saving || !form.name.trim() || !isFormDirty}
+                        isLoading={saving}
+                        leftIcon={<Icon name="Check" size={14} />}
+                      >
+                        Save
+                      </Button>
+                    </Tooltip>
                   </div>
                 </div>
               </div>
@@ -1833,7 +2002,10 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
         ) : (
           <div className="character-booru-layout">
             {/* ── Left-side Booru Tag Sidebar ── */}
-            <aside className={`character-tag-sidebar ${mobileSidebarExpanded ? "mobile-expanded" : "mobile-collapsed"}`}>
+            <aside
+              className={`character-tag-sidebar ${mobileSidebarExpanded ? "mobile-expanded" : "mobile-collapsed"}`}
+              style={sidebarStyle}
+            >
               <div
                 className="sidebar-header"
                 onClick={() => setMobileSidebarExpanded(!mobileSidebarExpanded)}
@@ -2031,16 +2203,23 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
             </aside>
 
             {/* ── Main Gallery Area ── */}
-            <main className="character-main-gallery">
+            <main className="character-main-gallery" ref={galleryRef}>
               {/* Top Toolbar */}
               <div className="library-toolbar">
                 <div className="library-toolbar-actions">
-                  <button className="primary-btn" onClick={openCreate}>
-                    <Icon name="Plus" size={15} /> New Character
-                  </button>
-                  <button className="import-btn" onClick={() => fileInputRef.current?.click()} disabled={importing}>
-                    <Icon name="Upload" size={15} /> {importing ? "Importing…" : "Import Card"}
-                  </button>
+                  <Button variant="primary" onClick={openCreate} leftIcon={<Icon name="Plus" size={15} />}>
+                    New Character
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="import-btn"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={importing}
+                    isLoading={importing}
+                    leftIcon={<Icon name="Upload" size={15} />}
+                  >
+                    Import Card
+                  </Button>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -2064,19 +2243,18 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
 
                 {/* Sort Controls */}
                 <div className="library-sort-control-group" role="group" aria-label="Sort library">
-                  <div className="library-sort-select-wrapper">
-                    <Icon name="ArrowUpDown" size={13} className="library-sort-icon" />
-                    <select
-                      className="library-sort-select"
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value as CharacterSortOption)}
-                      aria-label="Sort characters by"
-                    >
-                      <option value="name">Name</option>
-                      <option value="createdAt">Created Date</option>
-                      <option value="updatedAt">Updated Date</option>
-                    </select>
-                  </div>
+                  <SimpleSelect<CharacterSortOption>
+                    value={sortBy}
+                    onChange={(val) => setSortBy(val)}
+                    options={[
+                      { value: "name", label: "Name", icon: <Icon name="ArrowUpDown" size={12} /> },
+                      { value: "createdAt", label: "Created Date", icon: <Icon name="ArrowUpDown" size={12} /> },
+                      { value: "updatedAt", label: "Updated Date", icon: <Icon name="ArrowUpDown" size={12} /> },
+                    ]}
+                    size="xs"
+                    variant="ghost"
+                    aria-label="Sort characters by"
+                  />
                   <button
                     type="button"
                     className="library-sort-dir-btn"
@@ -2191,7 +2369,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                         return (
                           <div
                             key={group.key}
-                            className={`card-portrait ${openMenuId === latest.id ? "menu-open" : ""} ${isConverting ? "is-converting" : ""}`}
+                            className={`card-portrait ${isConverting ? "is-converting" : ""}`}
                             onClick={() => openEdit(latest)}
                             role="button"
                             tabIndex={0}
@@ -2263,30 +2441,13 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                                 </div>
                                 <MoreOptionsMenu
                                   template={latest}
-                                  isOpen={openMenuId === latest.id}
-                                  onToggle={(e) => {
-                                    e.stopPropagation();
-                                    setOpenMenuId(openMenuId === latest.id ? null : latest.id);
-                                  }}
-                                  onEdit={(e) => {
-                                    e.stopPropagation();
-                                    setOpenMenuId(null);
-                                    openEdit(latest);
-                                  }}
+                                  onEdit={() => openEdit(latest)}
                                   onConvert={
                                     entryKind(latest) === "ccv2"
-                                      ? (e) => {
-                                          e.stopPropagation();
-                                          setOpenMenuId(null);
-                                          handleConvert(latest);
-                                        }
+                                      ? () => handleConvert(latest)
                                       : undefined
                                   }
-                                  onDelete={(e) => {
-                                    e.stopPropagation();
-                                    setOpenMenuId(null);
-                                    requestDelete(latest.id, displayTitle(latest));
-                                  }}
+                                  onDelete={() => requestDelete(latest.id, displayTitle(latest))}
                                   converting={isConverting}
                                 />
                               </div>
@@ -2307,7 +2468,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                         return (
                           <div
                             key={group.key}
-                            className={`card-list-row ${openMenuId === latest.id ? "menu-open" : ""} ${isConverting ? "is-converting" : ""}`}
+                            className={`card-list-row ${isConverting ? "is-converting" : ""}`}
                             onClick={() => openEdit(latest)}
                             role="button"
                             tabIndex={0}
@@ -2343,30 +2504,13 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
 
                                 <MoreOptionsMenu
                                   template={latest}
-                                  isOpen={openMenuId === latest.id}
-                                  onToggle={(e) => {
-                                    e.stopPropagation();
-                                    setOpenMenuId(openMenuId === latest.id ? null : latest.id);
-                                  }}
-                                  onEdit={(e) => {
-                                    e.stopPropagation();
-                                    setOpenMenuId(null);
-                                    openEdit(latest);
-                                  }}
+                                  onEdit={() => openEdit(latest)}
                                   onConvert={
                                     entryKind(latest) === "ccv2"
-                                      ? (e) => {
-                                          e.stopPropagation();
-                                          setOpenMenuId(null);
-                                          handleConvert(latest);
-                                        }
+                                      ? () => handleConvert(latest)
                                       : undefined
                                   }
-                                  onDelete={(e) => {
-                                    e.stopPropagation();
-                                    setOpenMenuId(null);
-                                    requestDelete(latest.id, displayTitle(latest));
-                                  }}
+                                  onDelete={() => requestDelete(latest.id, displayTitle(latest))}
                                   converting={isConverting}
                                 />
                               </div>
@@ -2414,7 +2558,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                         return (
                           <div
                             key={group.key}
-                            className={`card-grid-item ${openMenuId === latest.id ? "menu-open" : ""} ${isConverting ? "is-converting" : ""}`}
+                            className={`card-grid-item ${isConverting ? "is-converting" : ""}`}
                             onClick={() => openEdit(latest)}
                             role="button"
                             tabIndex={0}
@@ -2450,30 +2594,13 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                                 </div>
                                 <MoreOptionsMenu
                                   template={latest}
-                                  isOpen={openMenuId === latest.id}
-                                  onToggle={(e) => {
-                                    e.stopPropagation();
-                                    setOpenMenuId(openMenuId === latest.id ? null : latest.id);
-                                  }}
-                                  onEdit={(e) => {
-                                    e.stopPropagation();
-                                    setOpenMenuId(null);
-                                    openEdit(latest);
-                                  }}
+                                  onEdit={() => openEdit(latest)}
                                   onConvert={
                                     entryKind(latest) === "ccv2"
-                                      ? (e) => {
-                                          e.stopPropagation();
-                                          setOpenMenuId(null);
-                                          handleConvert(latest);
-                                        }
+                                      ? () => handleConvert(latest)
                                       : undefined
                                   }
-                                  onDelete={(e) => {
-                                    e.stopPropagation();
-                                    setOpenMenuId(null);
-                                    requestDelete(latest.id, displayTitle(latest));
-                                  }}
+                                  onDelete={() => requestDelete(latest.id, displayTitle(latest))}
                                   converting={isConverting}
                                 />
                               </div>
@@ -2492,79 +2619,120 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
 
                     {totalPages > 1 ? (
                       <div className="pagination-controls">
-                        <button
-                          type="button"
-                          className="pagination-nav-btn"
-                          disabled={currentPage === 1}
-                          onClick={() => setCurrentPage(1)}
-                          title="First page"
-                        >
-                          <Icon name="ChevronsLeft" size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          className="pagination-nav-btn"
-                          disabled={currentPage === 1}
-                          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                          title="Previous page"
-                        >
-                          <Icon name="ChevronLeft" size={14} />
-                        </button>
+                        <Tooltip content="First page">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="xs"
+                            iconOnly
+                            className="pagination-nav-btn"
+                            disabled={currentPage === 1}
+                            onClick={() => setCurrentPage(1)}
+                            aria-label="First page"
+                          >
+                            <Icon name="ChevronsLeft" size={14} />
+                          </Button>
+                        </Tooltip>
+                        <Tooltip content="Previous page">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="xs"
+                            iconOnly
+                            className="pagination-nav-btn"
+                            disabled={currentPage === 1}
+                            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                            aria-label="Previous page"
+                          >
+                            <Icon name="ChevronLeft" size={14} />
+                          </Button>
+                        </Tooltip>
 
                         {getPageNumbers(currentPage, totalPages).map((p, idx) => {
                           if (p === -1) {
                             return <span key={`ellipsis-${idx}`} className="pagination-ellipsis">…</span>;
                           }
                           return (
-                            <button
+                            <Button
                               key={p}
                               type="button"
+                              variant={currentPage === p ? "primary" : "secondary"}
+                              size="xs"
                               className={`pagination-page-btn ${currentPage === p ? "active" : ""}`}
                               onClick={() => setCurrentPage(p)}
                             >
                               {p}
-                            </button>
+                            </Button>
                           );
                         })}
 
-                        <button
-                          type="button"
-                          className="pagination-nav-btn"
-                          disabled={currentPage === totalPages}
-                          onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                          title="Next page"
-                        >
-                          <Icon name="ChevronRight" size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          className="pagination-nav-btn"
-                          disabled={currentPage === totalPages}
-                          onClick={() => setCurrentPage(totalPages)}
-                          title="Last page"
-                        >
-                          <Icon name="ChevronsRight" size={14} />
-                        </button>
+                        <Tooltip content="Next page">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="xs"
+                            iconOnly
+                            className="pagination-nav-btn"
+                            disabled={currentPage === totalPages}
+                            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                            aria-label="Next page"
+                          >
+                            <Icon name="ChevronRight" size={14} />
+                          </Button>
+                        </Tooltip>
+                        <Tooltip content="Last page">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="xs"
+                            iconOnly
+                            className="pagination-nav-btn"
+                            disabled={currentPage === totalPages}
+                            onClick={() => setCurrentPage(totalPages)}
+                            aria-label="Last page"
+                          >
+                            <Icon name="ChevronsRight" size={14} />
+                          </Button>
+                        </Tooltip>
                       </div>
                     ) : null}
 
                     <div className="pagination-size-selector">
-                      <label>
-                        <span>Per page:</span>
-                        <select
-                          value={pageSize}
-                          onChange={(e) => {
-                            setPageSize(Number(e.target.value));
-                            setCurrentPage(1);
+                      <span className="pagination-size-selector-label">Per page:</span>
+                      <SimpleSelect<string>
+                        value={isCustomPageSize ? "custom" : String(pageSize)}
+                        onChange={handlePageSizeSelectChange}
+                        options={[
+                          { value: "12", label: "12" },
+                          { value: "24", label: "24" },
+                          { value: "48", label: "48" },
+                          { value: "96", label: "96" },
+                          { value: "1000", label: "All" },
+                          { value: "custom", label: "Custom…" },
+                        ]}
+                        size="xs"
+                        aria-label="Items per page"
+                      />
+                      {isCustomPageSize && (
+                        <TextInput
+                          size="sm"
+                          type="number"
+                          min={1}
+                          max={1000}
+                          fullWidth={false}
+                          value={customPageSizeInput}
+                          onChange={(e) => setCustomPageSizeInput(e.target.value)}
+                          onBlur={handleCommitCustomPageSize}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              handleCommitCustomPageSize();
+                            }
                           }}
-                        >
-                          <option value={12}>12</option>
-                          <option value={24}>24</option>
-                          <option value={48}>48</option>
-                          <option value={96}>96</option>
-                          <option value={1000}>All</option>
-                        </select>
-                      </label>
+                          placeholder="Count"
+                          containerClassName="pagination-custom-input"
+                          aria-label="Custom items per page"
+                        />
+                      )}
                     </div>
                   </div>
                 </>
@@ -2622,7 +2790,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
           <section className="modal import-notice-modal">
             <header className="modal-header">
               <h2>Already Imported</h2>
-              <button onClick={() => setImportNotice(null)}>Close</button>
+              <Button variant="ghost" size="sm" onClick={() => setImportNotice(null)}>Close</Button>
             </header>
             <p>{importNotice.message}</p>
             <div className="version-group" style={{ margin: "12px 0", padding: "12px", border: "1px solid var(--border-color, #333)", borderRadius: "6px" }}>
@@ -2634,11 +2802,11 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
               </div>
             </div>
             <div className="modal-actions">
-              <button onClick={() => setImportNotice(null)}>Dismiss</button>
-              <button className="primary" onClick={() => {
+              <Button variant="secondary" onClick={() => setImportNotice(null)}>Dismiss</Button>
+              <Button variant="primary" onClick={() => {
                 setImportNotice(null);
                 openEdit(importNotice.existingRecord);
-              }}>View / Edit</button>
+              }}>View / Edit</Button>
             </div>
           </section>
         </div>
@@ -2716,20 +2884,20 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
               )}
             </div>
             <footer className="discard-warning-footer">
-              <button
-                type="button"
-                className="secondary-btn"
+              <Button
+                variant="secondary"
                 onClick={() => setShowDiscardConfirm(false)}
               >
                 Keep Editing
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="danger"
                 className="discard-confirm-btn"
                 onClick={handleConfirmDiscard}
+                leftIcon={<Icon name="Trash2" size={14} />}
               >
-                <Icon name="Trash2" size={14} /> Discard Changes
-              </button>
+                Discard Changes
+              </Button>
             </footer>
           </section>
         </div>

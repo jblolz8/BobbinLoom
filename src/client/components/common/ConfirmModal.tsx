@@ -1,3 +1,5 @@
+import { Button } from "../base";
+
 type ConfirmModalProps = {
   title: string;
   message: string;
@@ -29,10 +31,12 @@ export function ConfirmModal(props: ConfirmModalProps) {
           </div>
         </header>
         <div className="settings-actions">
-          <button className={danger ? "danger" : ""} onClick={onConfirm}>
+          <Button variant={danger ? "danger" : "primary"} onClick={onConfirm}>
             {confirmLabel}
-          </button>
-          <button onClick={onCancel}>Cancel</button>
+          </Button>
+          <Button variant="secondary" onClick={onCancel}>
+            Cancel
+          </Button>
         </div>
       </section>
     </div>

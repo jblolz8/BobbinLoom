@@ -4,7 +4,7 @@ import type { TokenUsage } from "../../../api";
 import type { FailedResponseNotice } from "../../../hooks/usePlaythrough";
 import { ContextMeter } from "../../common/ContextMeter";
 import { MarkdownView } from "../../common/MarkdownView";
-import { Icon, ModelBadge } from "../../base";
+import { Button, Icon, ModelBadge, TextArea } from "../../base";
 
 export type ChatPanelProps = {
   playthrough: Playthrough;
@@ -142,16 +142,25 @@ function DebugBox(props: {
 
   return (
     <details className="debug-box">
-      <summary>Debug</summary>
-      <div className="debug-tabs">
-        <button className={`debug-tab ${debugTab === "patch" ? "active" : ""}`} onClick={() => setDebugTab("patch")}>Patch</button>
-        <button className={`debug-tab ${debugTab === "output" ? "active" : ""}`} onClick={() => setDebugTab("output")}>Output</button>
-        <button className={`debug-tab ${debugTab === "input" ? "active" : ""}`} onClick={() => setDebugTab("input")}>Input</button>
+      <summary className="debug-summary">Debug</summary>
+      <div className="debug-header-row">
+        <div className="debug-tabs">
+          <button type="button" className={`debug-tab ${debugTab === "patch" ? "active" : ""}`} onClick={() => setDebugTab("patch")}>Patch</button>
+          <button type="button" className={`debug-tab ${debugTab === "output" ? "active" : ""}`} onClick={() => setDebugTab("output")}>Output</button>
+          <button type="button" className={`debug-tab ${debugTab === "input" ? "active" : ""}`} onClick={() => setDebugTab("input")}>Input</button>
+        </div>
+        <Button
+          size="xs"
+          variant="ghost"
+          className="debug-copy-btn"
+          onClick={handleCopy}
+          leftIcon={<Icon name={copied ? "Check" : "Copy"} size={12} />}
+          title="Copy to clipboard"
+        >
+          {copied ? "Copied" : "Copy"}
+        </Button>
       </div>
-      <button className="debug-copy" onClick={handleCopy} title="Copy to clipboard">
-        {copied ? "Copied!" : "📋"}
-      </button>
-      <pre>{tabContent}</pre>
+      <pre className="debug-pre">{tabContent}</pre>
     </details>
   );
 }
@@ -187,23 +196,38 @@ function ErrorNotice({
     <article className="message system error-notice">
       <div className="error-notice-header">
         <div className="error-notice-title">
-          <span className="error-notice-icon">⚠️</span>
+          <Icon name="AlertCircle" size={16} className="error-notice-icon text-danger" />
           <strong>{notice.message}</strong>
           {notice.durationMs !== undefined && notice.durationMs > 0 ? (
             <span className="error-notice-duration">({(notice.durationMs / 1000).toFixed(1)}s)</span>
           ) : null}
         </div>
-        <button className="dismiss-notice" onClick={onDismiss} title="Dismiss" aria-label="Dismiss notice">✕</button>
+        <Button
+          size="xs"
+          variant="ghost"
+          iconOnly
+          className="dismiss-notice-btn"
+          onClick={onDismiss}
+          leftIcon={<Icon name="X" size={13} />}
+          title="Dismiss notice"
+          aria-label="Dismiss notice"
+        />
       </div>
 
       {formattedError ? (
         <div className="error-code-wrapper">
           <div className="error-code-header">
             <span className="error-code-label">Error Details</span>
-            <button type="button" className="error-copy-btn" onClick={handleCopy} title="Copy error details">
-              <Icon name={copied ? "Check" : "Copy"} size={13} />
-              <span>{copied ? "Copied" : "Copy"}</span>
-            </button>
+            <Button
+              size="xs"
+              variant="ghost"
+              className="error-copy-btn"
+              onClick={handleCopy}
+              leftIcon={<Icon name={copied ? "Check" : "Copy"} size={12} />}
+              title="Copy error details"
+            >
+              {copied ? "Copied" : "Copy"}
+            </Button>
           </div>
           <pre className="error-code-block">
             <code>{formattedError}</code>
@@ -289,7 +313,7 @@ export function ChatPanel(props: ChatPanelProps) {
         {isViewingArchive ? (
           <div className="chapter-view-banner">
             <span>Viewing archived chapter: <strong>{chapterName}</strong> — read only.</span>
-            <button onClick={onReturnToCurrentChapter}>Return to current chapter</button>
+            <Button size="xs" variant="secondary" onClick={onReturnToCurrentChapter}>Return to current chapter</Button>
           </div>
         ) : null}
 
@@ -324,43 +348,90 @@ export function ChatPanel(props: ChatPanelProps) {
                 ) : null}
               </div>
               <div className="message-actions">
-                <button className="message-action" onClick={() => onStartEdit(msg)} disabled={actionLoading || editingMessageId === msg.id || loading}>Edit</button>
-                {msg.role === "assistant" ? <button className="message-action retry" onClick={() => onRetryRequest(msg)} disabled={actionLoading || loading}>Retry</button> : null}
-                <button
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  className="message-action"
+                  onClick={() => onStartEdit(msg)}
+                  disabled={actionLoading || editingMessageId === msg.id || loading}
+                  leftIcon={<Icon name="Pencil" size={11} />}
+                >
+                  Edit
+                </Button>
+                {msg.role === "assistant" ? (
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    className="message-action retry"
+                    onClick={() => onRetryRequest(msg)}
+                    disabled={actionLoading || loading}
+                    leftIcon={<Icon name="RefreshCw" size={11} />}
+                  >
+                    Retry
+                  </Button>
+                ) : null}
+                <Button
+                  size="xs"
+                  variant="ghost"
                   className="message-action branch"
                   onClick={() => onBranchRequest?.(msg)}
                   disabled={actionLoading || loading}
+                  leftIcon={<Icon name="GitBranch" size={11} />}
                   title="Branch into a new playthrough timeline from here"
                 >
-                  <Icon name="GitBranch" size={11} />
-                  <span>Branch</span>
-                </button>
+                  Branch
+                </Button>
                 {msg.chapterOpening && previousChapter ? (
-                  <button
+                  <Button
+                    size="xs"
+                    variant="ghost"
                     className="message-action resummarize"
                     onClick={() => onResummarizeChapter(previousChapter.id)}
                     disabled={actionLoading || loading || isResummarizing}
+                    leftIcon={<Icon name="BookOpen" size={11} />}
                     title="Re-summarize the previous chapter (updates the chapter record for future turns)"
                   >
                     {isResummarizing ? "Summarizing…" : "Re-summarize previous chapter"}
-                  </button>
+                  </Button>
                 ) : null}
               </div>
             </div>
             {editingMessageId === msg.id ? (
               <div className="edit-area">
-                <textarea value={editDraft} onChange={(e) => onEditDraftChange(e.target.value)} rows={Math.min(12, Math.max(3, editDraft.split("\n").length))} />
+                <TextArea
+                  value={editDraft}
+                  onChange={(e) => onEditDraftChange(e.target.value)}
+                  rows={Math.min(12, Math.max(3, editDraft.split("\n").length))}
+                  className="edit-draft-textarea"
+                />
                 <div className="edit-actions">
-                  <button onClick={onSaveEdit} disabled={actionLoading || !editDraft.trim()}>{actionLoading ? "Saving…" : "Save"}</button>
-                  <button onClick={onCancelEdit} disabled={actionLoading}>Cancel</button>
-                  <button
-                    className="danger"
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={onSaveEdit}
+                    disabled={actionLoading || !editDraft.trim()}
+                    isLoading={actionLoading}
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={onCancelEdit}
+                    disabled={actionLoading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="danger"
                     onClick={() => onRequestTruncate(msg)}
                     disabled={actionLoading}
+                    leftIcon={<Icon name="Trash2" size={12} />}
                     title="Permanently delete this message and everything after it"
                   >
                     Delete up to here
-                  </button>
+                  </Button>
                 </div>
               </div>
             ) : (
@@ -393,8 +464,20 @@ export function ChatPanel(props: ChatPanelProps) {
 
         {cancelledNotice ? (
           <article className="message system cancelled-notice">
-            <p>{cancelledNotice}</p>
-            <button className="dismiss-notice" onClick={onDismissNotice} title="Dismiss">✕</button>
+            <div className="cancelled-notice-text flex items-center gap-2">
+              <Icon name="Ban" size={13} className="text-muted" />
+              <p>{cancelledNotice}</p>
+            </div>
+            <Button
+              size="xs"
+              variant="ghost"
+              iconOnly
+              className="dismiss-notice-btn"
+              onClick={onDismissNotice}
+              leftIcon={<Icon name="X" size={13} />}
+              title="Dismiss"
+              aria-label="Dismiss notice"
+            />
           </article>
         ) : null}
 
@@ -409,31 +492,69 @@ export function ChatPanel(props: ChatPanelProps) {
       </div>
 
       {choicesEnabled && choices.length > 0 && !loading ? (
-        <div className="choices">{choices.map((c) => <button key={c} onClick={() => onChoiceSelect(c)}>{c}</button>)}</div>
+        <div className="choices">
+          {choices.map((c) => (
+            <Button
+              key={c}
+              size="sm"
+              variant="secondary"
+              className="choice-btn"
+              onClick={() => onChoiceSelect(c)}
+            >
+              {c}
+            </Button>
+          ))}
+        </div>
       ) : null}
 
       {!isViewingArchive ? (
-      <div className="input-row">
-        <textarea
-          value={input}
-          onChange={(e) => onInputChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder='Plain text is action. "Quoted text" is dialogue. Enter to send, Shift+Enter for new line.'
-          rows={3}
-          disabled={loading}
-        />
-        {loading ? (
-          <button className="cancel-btn" onClick={onCancel}>Cancel</button>
-        ) : (
-          <button
-            onClick={onSend}
-            disabled={!input.trim() && !canContinue}
-            title={!input.trim() && canContinue ? "Ask the AI to respond to your last message" : undefined}
-          >
-            {!input.trim() && canContinue ? "Continue" : "Send"}
-          </button>
-        )}
-      </div>
+        <div className="prompt-card-container">
+          <TextArea
+            value={input}
+            onChange={(e) => onInputChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder='Plain text is action. "Quoted text" is dialogue.'
+            rows={3}
+            disabled={loading}
+            className="prompt-card-textarea"
+          />
+          <div className="prompt-card-footer">
+            <div className="prompt-card-hints">
+              <span className="prompt-hint-item">
+                <kbd className="prompt-kbd">Enter ↵</kbd> send
+              </span>
+              <span className="prompt-hint-dot">·</span>
+              <span className="prompt-hint-item">
+                <kbd className="prompt-kbd">Shift + Enter</kbd> new line
+              </span>
+            </div>
+            <div className="prompt-card-actions">
+              {loading ? (
+                <Button
+                  size="sm"
+                  variant="danger"
+                  className="cancel-btn"
+                  onClick={onCancel}
+                  leftIcon={<Icon name="Square" size={12} />}
+                >
+                  Cancel
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  className="send-btn"
+                  onClick={onSend}
+                  disabled={!input.trim() && !canContinue}
+                  leftIcon={<Icon name={!input.trim() && canContinue ? "FastForward" : "Send"} size={13} />}
+                  title={!input.trim() && canContinue ? "Ask the AI to respond to your last message" : undefined}
+                >
+                  {!input.trim() && canContinue ? "Continue" : "Send"}
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {showContextUsage ? <ContextMeter tokenUsage={tokenUsage} /> : null}

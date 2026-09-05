@@ -1,8 +1,276 @@
 :root {
   color-scheme: dark;
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #101216;
-  color: #eceff4;
+
+  /* ── 1. App Canvas & Panels ── */
+  --bg-app: #101216;
+  --bg-panel: #151923;
+  --bg-surface-elevated: #1c2230;
+  --bg-surface-hover: #242d3f;
+  --modal-backdrop: rgba(0, 0, 0, 0.65);
+
+  /* ── 2. Borders & Dividers ── */
+  --border-subtle: #232d3d;
+  --border-main: #2a303d;
+  --border-light: #3a4150;
+  --border-focus: #3b69a8;
+
+  /* ── 3. General Typography ── */
+  --text-primary: #eceff4;
+  --text-secondary: #8a93a5;
+  --text-muted: #8092a5;
+  --text-disabled: #414a58;
+
+  /* ── 4. Story & Roleplay Markdown ── */
+  --story-text: #eceff4;
+  --story-quote: #e2b86b;             /* Spoken dialogue ("...") */
+  --story-thought: #d8dee9;           /* Italics / internal thought (*...*) */
+  --story-emphasis: #60a5fa;          /* Bold / action (**...**) */
+  --story-blockquote-border: #e2b86b;
+  --story-blockquote-bg: rgba(226, 184, 107, 0.06);
+  --story-blockquote-text: #cbd5e1;
+
+  /* ── 5. Code & Technical Blocks ── */
+  --code-inline-bg: rgba(15, 23, 42, 0.65);
+  --code-inline-border: rgba(255, 255, 255, 0.08);
+  --code-inline-text: #8be9fd;
+  --code-block-bg: #0d1117;
+  --code-block-border: #2d3748;
+  --code-block-header: #161b22;
+  --code-lang-label: #899bb0;
+
+  /* ── 6. Chat Bubbles & Roles ── */
+  --chat-bg: var(--bg-app);
+  --chat-user-bg: #243145;
+  --chat-user-border: #384a66;
+  --chat-user-text: #eceff4;
+
+  --chat-ai-bg: #1c2230;
+  --chat-ai-border: #2a303d;
+  --chat-ai-text: #eceff4;
+
+  --chat-system-bg: #1a1e2b;
+  --chat-system-border: #3a4150;
+  --chat-system-text: #8a93a5;
+
+  /* ── 7. Primary Brand & Interactive Accents ── */
+  --accent-base: #2b4b7b;
+  --accent-hover: #345a8a;
+  --accent-active: #223c63;
+  --accent-text: #ffffff;
+  --accent-translucent: rgba(43, 75, 123, 0.2);
+  --accent-highlight: #5a8fd4;
+
+  /* ── 7b. AI Assistant & Brainstorm Accents ── */
+  --ai-accent: #a855f7;
+  --ai-accent-hover: #c084fc;
+  --ai-accent-active: #9333ea;
+  --ai-accent-translucent: rgba(168, 85, 247, 0.16);
+  --ai-bubble-bg: #1e1b4b;
+  --ai-bubble-border: rgba(168, 85, 247, 0.3);
+  --ai-bubble-text: #f8fafc;
+
+  /* ── 8. Form Controls & Inputs ── */
+  --input-bg: #131722;
+  --input-filled-bg: #181d2a;
+  --input-border: #2c3546;
+  --input-text: #eceff4;
+  --input-placeholder: #626e82;
+  --input-focus-border: #3b69a8;
+  --input-focus-ring: rgba(43, 75, 123, 0.35);
+
+  /* ── 9. Status & Semantic Colors ── */
+  --status-success: #4ade80;
+  --status-success-bg: rgba(74, 222, 128, 0.14);
+  --status-success-border: rgba(74, 222, 128, 0.35);
+
+  --status-warning: #fbbf24;
+  --status-warning-bg: rgba(251, 191, 36, 0.14);
+  --status-warning-border: rgba(251, 191, 36, 0.35);
+
+  --status-danger: #f87171;
+  --status-danger-bg: rgba(248, 113, 113, 0.14);
+  --status-danger-border: rgba(248, 113, 113, 0.35);
+
+  --status-info: #38bdf8;
+  --status-info-bg: rgba(56, 189, 248, 0.14);
+  --status-info-border: rgba(56, 189, 248, 0.35);
+
+  --btn-danger-bg: #3a1a1a;
+  --btn-danger-border: #8a3a3a;
+  --btn-danger-text: #f0b0a8;
+  --btn-danger-hover: #4a2020;
+
+  --btn-warning-bg: #332410;
+  --btn-warning-border: #785215;
+  --btn-warning-text: #fde68a;
+  --btn-warning-hover: #443015;
+
+  /* ── 10. Error Callouts ── */
+  --error-box-bg: #23181c;
+  --error-box-border: #702e38;
+  --error-box-title: #ff8594;
+  --error-box-code-bg: #121013;
+  --error-box-code-border: #4a2228;
+  --error-box-code-text: #ffccd3;
+
+  /* ── 11. Two-Pane Diff Colors ── */
+  --diff-added-bg: rgba(74, 222, 128, 0.12);
+  --diff-added-gutter: #4caf50;
+  --diff-removed-bg: rgba(248, 113, 113, 0.12);
+  --diff-removed-gutter: #f44336;
+
+  /* ── 12. Timeline Graph & Branching ── */
+  --timeline-node-bg: #141926;
+  --timeline-node-border: #273349;
+  --timeline-node-active-bg: #111a2d;
+  --timeline-node-active-border: #38bdf8;
+  --timeline-node-active-glow: rgba(56, 189, 248, 0.3);
+
+  /* ── 13. UI Scrollbars & Shadows ── */
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: var(--border-light, #2a3344);
+  --scrollbar-thumb-hover: var(--accent-base, #2b4b7b);
+  --scrollbar-thumb-active: var(--accent-hover, #345a8a);
+  --shadow-card: 0 4px 14px rgba(0, 0, 0, 0.45);
+
+  /* ── Legacy Aliases (Backwards Compatibility) ── */
+  --primary-color: var(--accent-base);
+  --border-color: var(--border-main);
+  --panel-bg: var(--bg-panel);
+  --bg-secondary: var(--bg-surface-elevated);
+  --bg-surface: var(--bg-surface-elevated);
+  --bg-card: var(--bg-surface-elevated);
+  --bg-code: var(--code-block-bg);
+  --text-dim: var(--text-secondary);
+  --text-color: var(--text-primary);
+  --accent-color: var(--accent-base);
+  --bg-input: var(--input-bg);
+  --text: var(--text-primary);
+}
+
+/* ── Light Mode Palette ── */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-app: #f4f6f9;
+  --bg-panel: #ffffff;
+  --bg-surface-elevated: #edf2f7;
+  --bg-surface-hover: #e2e8f0;
+  --modal-backdrop: rgba(15, 23, 42, 0.45);
+
+  --border-subtle: #e2e8f0;
+  --border-main: #cbd5e1;
+  --border-light: #94a3b8;
+  --border-focus: #3b82f6;
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-disabled: #94a3b8;
+
+  --story-text: #0f172a;
+  --story-quote: #b45309;             /* Inverted warm amber/gold for high contrast */
+  --story-thought: #475569;           /* Slate for readable thoughts */
+  --story-emphasis: #1d4ed8;
+  --story-blockquote-border: #d97706;
+  --story-blockquote-bg: rgba(245, 158, 11, 0.08);
+  --story-blockquote-text: #334155;
+
+  --code-inline-bg: #e2e8f0;
+  --code-inline-border: #cbd5e1;
+  --code-inline-text: #0284c7;
+  --code-block-bg: #1e293b;
+  --code-block-border: #334155;
+  --code-block-header: #0f172a;
+  --code-lang-label: #94a3b8;
+
+  --chat-bg: var(--bg-app);
+  --chat-user-bg: #e0e7ff;
+  --chat-user-border: #c7d2fe;
+  --chat-user-text: #1e1b4b;
+
+  --chat-ai-bg: #ffffff;
+  --chat-ai-border: #e2e8f0;
+  --chat-ai-text: #0f172a;
+
+  --chat-system-bg: #f1f5f9;
+  --chat-system-border: #cbd5e1;
+  --chat-system-text: #475569;
+
+  --accent-base: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-active: #1e40af;
+  --accent-text: #ffffff;
+  --accent-translucent: rgba(37, 99, 235, 0.12);
+  --accent-highlight: var(--accent-base);
+
+  /* ── 7b. AI Assistant & Brainstorm Accents ── */
+  --ai-accent: #7e22ce;
+  --ai-accent-hover: #6b21a8;
+  --ai-accent-active: #581c87;
+  --ai-accent-translucent: rgba(126, 34, 206, 0.12);
+  --ai-bubble-bg: #f5f3ff;
+  --ai-bubble-border: #ddd6fe;
+  --ai-bubble-text: #3b0764;
+
+  --input-bg: #ffffff;
+  --input-filled-bg: #f1f5f9;
+  --input-border: #cbd5e1;
+  --input-text: #0f172a;
+  --input-placeholder: #94a3b8;
+  --input-focus-border: #2563eb;
+  --input-focus-ring: rgba(37, 99, 235, 0.2);
+
+  --status-success: #15803d;
+  --status-success-bg: rgba(22, 163, 74, 0.12);
+  --status-success-border: rgba(22, 163, 74, 0.3);
+
+  --status-warning: #b45309;
+  --status-warning-bg: rgba(217, 119, 6, 0.12);
+  --status-warning-border: rgba(217, 119, 6, 0.3);
+
+  --status-danger: #b91c1c;
+  --status-danger-bg: rgba(220, 38, 38, 0.1);
+  --status-danger-border: rgba(220, 38, 38, 0.28);
+
+  --status-info: #0284c7;
+  --status-info-bg: rgba(2, 132, 199, 0.1);
+  --status-info-border: rgba(2, 132, 199, 0.28);
+
+  --btn-danger-bg: #fee2e2;
+  --btn-danger-border: #fca5a5;
+  --btn-danger-text: #991b1b;
+  --btn-danger-hover: #fecaca;
+
+  --btn-warning-bg: #fef3c7;
+  --btn-warning-border: #fcd34d;
+  --btn-warning-text: #92400e;
+  --btn-warning-hover: #fde68a;
+
+  --error-box-bg: #fef2f2;
+  --error-box-border: #fecaca;
+  --error-box-title: #991b1b;
+  --error-box-code-bg: #450a0a;
+  --error-box-code-border: #7f1d1d;
+  --error-box-code-text: #fecaca;
+
+  --diff-added-bg: rgba(34, 197, 94, 0.15);
+  --diff-added-gutter: #16a34a;
+  --diff-removed-bg: rgba(239, 68, 68, 0.15);
+  --diff-removed-gutter: #dc2626;
+
+  --timeline-node-bg: #ffffff;
+  --timeline-node-border: #cbd5e1;
+  --timeline-node-active-bg: #f0f9ff;
+  --timeline-node-active-border: #0284c7;
+  --timeline-node-active-glow: rgba(2, 132, 199, 0.25);
+
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: var(--border-light, #cbd5e1);
+  --scrollbar-thumb-hover: var(--accent-base, #2563eb);
+  --scrollbar-thumb-active: var(--accent-hover, #1d4ed8);
+  --shadow-card: 0 4px 14px rgba(0, 0, 0, 0.08);
 }
 
 * {
@@ -11,6 +279,9 @@
 
 body {
   margin: 0;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 svg {
@@ -26,12 +297,18 @@ select {
 }
 
 button {
-  border: 1px solid #3a4150;
-  background: #202634;
-  color: #eceff4;
+  border: 1px solid var(--border-light);
+  background: var(--bg-surface-elevated);
+  color: var(--text-primary);
   border-radius: 8px;
   padding: 0.55rem 0.8rem;
   cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+button:hover:not(:disabled):not(.primary-btn):not(.danger):not(.ai-brainstorm-toggle-btn):not(.suggest-tags-ai-btn):not(.auto-detect-action):not(.crop-auto-detect-btn):not(.tag-regenerate-btn):not(.danger-action):not(.warning-action):not(.import-btn):not(.active) {
+  background: var(--bg-surface-hover);
+  border-color: var(--border-focus);
 }
 
 button:disabled {
@@ -40,41 +317,62 @@ button:disabled {
 }
 
 button.danger {
-  border-color: #8a3a3a;
-  background: #3a1a1a;
-  color: #f0b0a8;
+  border-color: var(--btn-danger-border);
+  background: var(--btn-danger-bg);
+  color: var(--btn-danger-text);
 }
 
 button.danger:hover:not(:disabled) {
-  background: #4a2020;
+  background: var(--btn-danger-hover);
 }
 
 button.primary-btn {
-  background: #2a4a7a;
-  border-color: #3a5a8a;
+  background: var(--accent-base);
+  border-color: var(--accent-hover);
+  color: var(--accent-text);
   font-weight: 600;
 }
 
 button.primary-btn:hover:not(:disabled) {
-  background: #345a8a;
+  background: var(--accent-hover);
+}
+
+input,
+select,
+textarea {
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--input-text);
+  border-radius: 8px;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--input-placeholder);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--input-focus-border);
+  box-shadow: 0 0 0 2px var(--input-focus-ring);
 }
 
 textarea {
   width: 100%;
   resize: vertical;
-  border: 1px solid #3a4150;
-  background: #0f131b;
-  color: #eceff4;
-  border-radius: 10px;
   padding: 0.75rem;
+  border-radius: 10px;
 }
 
 .status-ok {
-  color: #4ade80;
+  color: var(--status-success);
 }
 
 .status-error {
-  color: #f87171;
+  color: var(--status-danger);
   white-space: pre-wrap;
   word-break: break-word;
 }
+
