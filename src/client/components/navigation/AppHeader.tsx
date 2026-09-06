@@ -52,7 +52,7 @@ export function AppHeader({
   const displayNavTabs = !isMobile || view !== "play" || showPlayNavTabs;
 
   return (
-    <header className={`top-bar app-unified-header ${isMobile ? "is-mobile" : ""}`}>
+    <header className={`top-bar app-unified-header view-${view} ${isMobile && view === "play" ? "is-mobile" : ""}`}>
       <div className="header-brand-group">
         <h1 className="header-logo flex items-center gap-2" onClick={onGoHome} style={{ cursor: "pointer" }}>
           <span className="logo-emoji flex items-center"><ThreadIcon size={22} /></span>

@@ -2707,25 +2707,28 @@
   }
 }
 
-@media (max-width: 768px) {
+/* ── Progressive AppHeader Collapsing Hierarchy ── */
+
+/* Stage 1: Move Four Nav Buttons to Row 2 when horizontal room is tight (<= 860px) */
+/* Row 1 keeps BobbinLoom Icon + Title and both action buttons with FULL text labels */
+@media (max-width: 860px) {
   .app-unified-header {
     flex-wrap: wrap;
     gap: 0.4rem 0.5rem;
-    padding: 0.3rem 0.5rem;
+    padding: 0.35rem 0.75rem;
   }
 
   .header-brand-group {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
-    max-width: calc(100% - 150px);
-    gap: 0.4rem;
+    gap: 0.55rem;
   }
 
   .active-playthrough-badge {
     display: inline-flex;
     flex: 0 1 auto;
     min-width: 0;
-    max-width: 100%;
+    max-width: 220px;
     padding: 0.18rem 0.45rem;
     font-size: 0.76rem;
   }
@@ -2764,16 +2767,65 @@
 
   .top-actions {
     flex-shrink: 0;
-    gap: 0.25rem;
+    gap: 0.4rem;
     margin-left: auto;
   }
+}
 
+/* Stage 2: Settings Button collapses to icon first (<= 540px) */
+@media (max-width: 540px) {
+  .app-unified-header .top-actions .settings-btn .btn-label {
+    display: none;
+  }
+
+  .app-unified-header .top-actions .settings-btn .btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .app-unified-header .top-actions .settings-btn {
+    padding: 0.35rem 0.45rem;
+    min-width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* Stage 3: BobbinLoom Title Text hides second (<= 440px) */
+@media (max-width: 440px) {
+  .app-unified-header .header-brand-group .logo-text {
+    display: none;
+  }
+}
+
+/* Stage 4: New Playthrough Button collapses to icon last (<= 360px) */
+@media (max-width: 360px) {
+  .header-brand-group {
+    gap: 0.25rem;
+  }
+
+  .active-playthrough-badge {
+    padding: 0.15rem 0.35rem;
+    font-size: 0.72rem;
+  }
+
+  .top-actions {
+    gap: 0.25rem;
+  }
+
+  .top-actions .new-playthrough-btn .btn-label,
   .top-actions .btn-label {
     display: none;
   }
 
+  .top-actions .new-playthrough-btn .btn-icon,
   .top-actions .btn-icon {
-    display: inline;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .top-actions button,
@@ -2788,23 +2840,6 @@
 
   .top-actions .toggle {
     white-space: nowrap;
-  }
-}
-
-@media (max-width: 480px) {
-  .app-unified-header .header-brand-group .logo-text {
-    display: none;
-  }
-}
-
-@media (max-width: 360px) {
-  .header-brand-group {
-    gap: 0.25rem;
-  }
-
-  .active-playthrough-badge {
-    padding: 0.15rem 0.35rem;
-    font-size: 0.72rem;
   }
 }
 

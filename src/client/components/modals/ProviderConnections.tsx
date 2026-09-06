@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Icon, SimpleSelect, TextInput, Tooltip } from "../base";
+import { Badge, Button, Icon, SimpleSelect, TextInput, Tooltip } from "../base";
 import type {
   ConnectionModelsResult,
   ConnectionTestResult,
@@ -374,7 +374,7 @@ export function ProviderConnections() {
                     <div className="conn-card-header">
                       <div className="conn-title-group">
                         <span className="conn-name">{c.label}</span>
-                        {isActive && <span className="conn-badge active">Active</span>}
+                        {isActive && <Badge variant="accent" size="xs">Active</Badge>}
                       </div>
                       <div className="conn-actions">
                         <Tooltip content={isActive ? "Active connection" : "Activate connection"}>
@@ -445,35 +445,27 @@ export function ProviderConnections() {
                       </div>
                     </div>
                     <div className="conn-tags">
-                      <span className="conn-tag" title={`Base URL: ${c.baseUrl}`}>
-                        <span className="tag-icon"><Icon name="Globe" size={13} className="text-slate-400" /></span>
-                        <span className="tag-text">{c.baseUrl}</span>
-                      </span>
-                      <span className="conn-tag" title={`Model: ${c.model}`}>
-                        <span className="tag-icon"><Icon name="Zap" size={13} /></span>
-                        <span className="tag-text">{c.model}</span>
-                      </span>
-                      <span className={`conn-tag ${c.hasApiKey ? "has-key" : "no-key"}`} title={c.hasApiKey ? "API Key configured" : "No API key configured"}>
-                        <span className="tag-icon">
-                          {c.hasApiKey ? <Icon name="KeyRound" size={13} /> : <Icon name="LockKeyholeOpen" size={13} className="text-slate-500" />}
-                        </span>
-                        <span className="tag-text">{c.hasApiKey ? c.apiKeyMasked : "No key"}</span>
-                      </span>
+                      <Badge className="conn-tag" leftIcon={<Icon name="Globe" size={13} className="text-slate-400" />} title={`Base URL: ${c.baseUrl}`}>
+                        {c.baseUrl}
+                      </Badge>
+                      <Badge className="conn-tag" leftIcon={<Icon name="Zap" size={13} className="text-amber-400" style={{ color: "var(--status-warning, #fbbf24)" }} />} title={`Model: ${c.model}`}>
+                        {c.model}
+                      </Badge>
+                      <Badge className={`conn-tag ${c.hasApiKey ? "has-key" : "no-key"}`} variant={c.hasApiKey ? "success" : "neutral"} leftIcon={c.hasApiKey ? <Icon name="KeyRound" size={13} /> : <Icon name="LockKeyholeOpen" size={13} className="text-slate-500" />} title={c.hasApiKey ? "API Key configured" : "No API key configured"}>
+                        {c.hasApiKey ? c.apiKeyMasked : "No key"}
+                      </Badge>
                       {sortBy === "lastActiveAt" && (c.lastActiveAt || isActive) ? (
-                        <span className="conn-tag date-tag" title={c.lastActiveAt ? `Last active: ${new Date(c.lastActiveAt).toLocaleString()}` : "Currently active"}>
-                          <span className="tag-icon"><Icon name="Activity" size={13} className="text-blue-400" /></span>
-                          <span className="tag-text">{isActive ? "Active now" : `Active: ${formatConnDate(c.lastActiveAt)}`}</span>
-                        </span>
+                        <Badge className="conn-tag date-tag" leftIcon={<Icon name="Activity" size={13} className="text-blue-400" />} title={c.lastActiveAt ? `Last active: ${new Date(c.lastActiveAt).toLocaleString()}` : "Currently active"}>
+                          {isActive ? "Active now" : `Active: ${formatConnDate(c.lastActiveAt)}`}
+                        </Badge>
                       ) : sortBy === "updatedAt" && c.updatedAt ? (
-                        <span className="conn-tag date-tag" title={`Updated: ${new Date(c.updatedAt).toLocaleString()}`}>
-                          <span className="tag-icon"><Icon name="Clock" size={13} className="text-indigo-400" /></span>
-                          <span className="tag-text">Updated {formatConnDate(c.updatedAt)}</span>
-                        </span>
+                        <Badge className="conn-tag date-tag" leftIcon={<Icon name="Clock" size={13} className="text-indigo-400" />} title={`Updated: ${new Date(c.updatedAt).toLocaleString()}`}>
+                          Updated {formatConnDate(c.updatedAt)}
+                        </Badge>
                       ) : (
-                        <span className="conn-tag date-tag" title={c.createdAt ? `Created: ${new Date(c.createdAt).toLocaleString()}` : "Provider connection"}>
-                          <span className="tag-icon"><Icon name="Calendar" size={13} className="text-emerald-400" /></span>
-                          <span className="tag-text">{c.createdAt ? `Added ${formatConnDate(c.createdAt)}` : "Added"}</span>
-                        </span>
+                        <Badge className="conn-tag date-tag" leftIcon={<Icon name="Calendar" size={13} className="text-emerald-400" />} title={c.createdAt ? `Created: ${new Date(c.createdAt).toLocaleString()}` : "Provider connection"}>
+                          {c.createdAt ? `Added ${formatConnDate(c.createdAt)}` : "Added"}
+                        </Badge>
                       )}
                     </div>
                   </div>

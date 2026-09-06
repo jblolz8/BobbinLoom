@@ -4,6 +4,7 @@ import { editCharacter, getCharacterAvatarUrl, listCharacters, promoteNpc, promo
 import type { CharacterEditPayload, PromoteDraftResult } from "../../../../api";
 import { CharacterEditor } from "../../../modals/CharacterEditor";
 import { CharacterSheetSections } from "./CharacterSheetSections";
+import { PromotePreview } from "../../../common/PromotePreview";
 import { AvatarBadge, Badge, Button, Icon, SearchBar } from "../../../base";
 
 type SaveFeedback = { ok: boolean; text: string };

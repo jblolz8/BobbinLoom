@@ -1871,7 +1871,7 @@
 
 .conn-tags {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
   gap: 0.45rem;
   width: 100%;
 }
@@ -1881,11 +1881,13 @@
   align-items: center;
   gap: 0.35rem;
   font-size: 0.78rem;
+  line-height: 1.35;
+  min-height: 1.7rem;
   color: var(--text-secondary);
   background: var(--bg-panel);
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  padding: 0.22rem 0.5rem;
+  padding: 0.28rem 0.55rem;
   width: 100%;
   min-width: 0;
   max-width: none;
@@ -1908,19 +1910,25 @@
   border-color: var(--border-subtle);
 }
 
-.conn-tag .tag-icon {
+.conn-tag .base-badge__icon {
   font-size: 0.75rem;
   opacity: 0.85;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
 }
 
-.conn-tag .tag-text {
+.conn-tag .base-badge__content {
+  display: block;
+  line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
   min-width: 0;
+  padding-bottom: 2px;
+  margin-bottom: -2px;
 }
 
 .conn-actions {

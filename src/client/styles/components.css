@@ -918,7 +918,7 @@ textarea.base-form-input--lg,
   gap: 0.3rem;
   font-family: inherit;
   font-weight: 600;
-  line-height: 1;
+  line-height: 1.25;
   white-space: nowrap;
   vertical-align: middle;
   border-radius: var(--radius-sm, 6px);
