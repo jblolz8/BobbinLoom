@@ -626,13 +626,45 @@ export function applyTheme(settings: {
     root.style.setProperty(key, value);
   }
 
-  // 8. Cache to localStorage for instant, flicker-free subsequent page loads
+  // 8. Update dynamic browser tab favicon to match active accent color
+  const activeAccent = combinedColors["--accent-base"] || (effectiveMode === "light" ? "#2563eb" : "#2b4b7b");
+  updateFavicon(activeAccent, effectiveMode === "light");
+
+  // 9. Cache to localStorage for instant, flicker-free subsequent page loads
   try {
     localStorage.setItem("bobbinloom_theme_mode", mode);
     if (settings.themePreset) localStorage.setItem("bobbinloom_theme_preset", settings.themePreset);
     if (settings.customThemeColors) {
       localStorage.setItem("bobbinloom_theme_custom", JSON.stringify(settings.customThemeColors));
     }
+  } catch {
+    /* silent */
+  }
+}
+
+/** Generates dynamic thread spool SVG data URI for browser tab favicon */
+export function generateThreadFaviconDataUri(accentColor: string, isLightMode: boolean = false): string {
+  const spoolColor = isLightMode ? "%23475569" : "%2394a3b8";
+  const holeColor = "%230f172a";
+  const encodedAccent = encodeURIComponent(accentColor);
+
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M5 3.5C5 2.67 5.67 2 6.5 2H17.5C18.33 2 19 2.67 19 3.5C19 4.33 18.33 5 17.5 5H6.5C5.67 5 5 4.33 5 3.5Z' fill='${spoolColor}'/><ellipse cx='12' cy='3.5' rx='2' ry='0.75' fill='${holeColor}'/><rect x='8.5' y='5' width='7' height='14' fill='${spoolColor}' opacity='0.4'/><rect x='6' y='5' width='12' height='14' rx='1.5' fill='${encodedAccent}'/><path d='M6 7.5H18 M6 10.5H18 M6 13.5H18 M6 16.5H18' stroke='%23ffffff' stroke-width='0.75' stroke-opacity='0.3' stroke-linecap='round'/><path d='M6 8.5H18 M6 11.5H18 M6 14.5H18 M6 17.5H18' stroke='%23000000' stroke-width='0.75' stroke-opacity='0.25' stroke-linecap='round'/><path d='M5 19.5C5 18.67 5.67 18 6.5 18H17.5C18.33 18 19 18.67 19 19.5C19 20.33 18.33 21 17.5 21H6.5C5.67 21 5 20.33 5 19.5Z' fill='${spoolColor}'/><path d='M17.5 17.5C19.8 18.2 21.2 19.8 20.2 22C19.6 23.2 17.8 22.8 17.2 21.8' stroke='${encodedAccent}' stroke-width='1.5' stroke-linecap='round' fill='none'/></svg>`;
+
+  return `data:image/svg+xml,${svg}`;
+}
+
+/** Updates the document favicon link tag dynamically */
+export function updateFavicon(accentColor: string, isLightMode: boolean = false): void {
+  if (typeof document === "undefined") return;
+  try {
+    let link = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "icon";
+      document.head.appendChild(link);
+    }
+    link.type = "image/svg+xml";
+    link.href = generateThreadFaviconDataUri(accentColor, isLightMode);
   } catch {
     /* silent */
   }

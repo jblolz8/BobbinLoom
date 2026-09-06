@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { HomeTab } from "../views/HomeView";
-import { Button, Icon, Tooltip } from "../base";
+import { Button, Icon, Tooltip, ThreadIcon } from "../base";
 
 export type AppHeaderProps = {
   view: "home" | "play" | "setup";
@@ -55,9 +55,8 @@ export function AppHeader({
     <header className={`top-bar app-unified-header ${isMobile ? "is-mobile" : ""}`}>
       <div className="header-brand-group">
         <h1 className="header-logo flex items-center gap-2" onClick={onGoHome} style={{ cursor: "pointer" }}>
-          <span className="logo-emoji">🧵</span>
+          <span className="logo-emoji flex items-center"><ThreadIcon size={22} /></span>
           <span className="logo-text">BobbinLoom</span>
-
         </h1>
         {view === "play" && activePlaythroughName ? (
           <div className="active-playthrough-badge flex items-center gap-1.5" title={`Active playthrough: ${activePlaythroughName}`}>

@@ -878,6 +878,11 @@
   cursor: pointer;
 }
 
+.close-chapter-modal .checkbox-label input[type="checkbox"] {
+  accent-color: var(--accent-base);
+  cursor: pointer;
+}
+
 .close-chapter-modal textarea {
   width: 100%;
   min-height: 60px;

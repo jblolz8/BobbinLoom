@@ -1833,6 +1833,11 @@
   color: var(--text-primary);
 }
 
+.close-chapter-checkbox-label input[type="checkbox"] {
+  accent-color: var(--accent-base);
+  cursor: pointer;
+}
+
 .close-chapter-textarea {
   width: 100%;
   min-height: 5rem;
