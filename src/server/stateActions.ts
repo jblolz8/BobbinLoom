@@ -460,12 +460,9 @@ export async function closeChapterAction(
   // player visited. Background cast only — main cast (characters[]) is never a
   // candidate.
   const visitedLocations = new Set<string>();
-  for (let t = chapterStartTurn; t <= loaded.turn; t++) {
-    const snap = loaded.snapshots?.[String(t)];
-    if (snap) visitedLocations.add(snap.locationId);
-  }
   // Runtime snapshots are keyed by assistant message id (each records the turn
-  // it was taken on) — also honor those whose turn falls inside the chapter.
+  // it was taken on). Legacy records may carry turn-string keys. Honor every
+  // snapshot whose captured turn falls inside the chapter regardless of key.
   for (const snap of Object.values(loaded.snapshots ?? {})) {
     if (snap.turn >= chapterStartTurn && snap.turn <= loaded.turn) {
       visitedLocations.add(snap.locationId);

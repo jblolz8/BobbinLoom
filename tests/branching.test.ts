@@ -197,4 +197,117 @@ describe("branching playthroughs", () => {
     expect(branchPlaythroughRecord(dir, "non_existent_id", "msg_1")).toBeNull();
     expect(branchPlaythroughRecord(dir, created.id, "non_existent_msg")).toBeNull();
   });
+
+  it("falls back to the nearest earlier snapshot when the exact branch checkpoint is missing", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bobbinloom-branch-"));
+    tempDirs.push(dir);
+
+    const original = createPlaythroughRecord(dir, "Walkback");
+    original.locationId = "loc_tavern";
+    original.flags = ["f0"];
+    original.snapshots = {};
+
+    // Turn 1
+    const s0 = takeTurnSnapshot(original); // turn 0
+    original.turn = 1;
+    original.flags.push("f1");
+    original.locationId = "loc_cellar";
+    original.messages.push(
+      { id: "u1", role: "user", content: "one", createdAt: "2026-01-01T00:00:00Z", turn: 1 },
+      { id: "a1", role: "assistant", content: "A1", createdAt: "2026-01-01T00:00:01Z", turn: 1 }
+    );
+    original.snapshots.a1 = s0;
+
+    // Turn 2
+    const s1 = takeTurnSnapshot(original); // turn 1
+    original.turn = 2;
+    original.flags.push("f2");
+    original.locationId = "loc_dungeon";
+    original.messages.push(
+      { id: "u2", role: "user", content: "two", createdAt: "2026-01-01T00:00:02Z", turn: 2 },
+      { id: "a2", role: "assistant", content: "A2", createdAt: "2026-01-01T00:00:03Z", turn: 2 }
+    );
+    original.snapshots.a2 = s1;
+
+    // Turn 3
+    const s2 = takeTurnSnapshot(original); // turn 2
+    original.turn = 3;
+    original.flags.push("f3");
+    original.messages.push(
+      { id: "u3", role: "user", content: "three", createdAt: "2026-01-01T00:00:04Z", turn: 3 },
+      { id: "a3", role: "assistant", content: "A3", createdAt: "2026-01-01T00:00:05Z", turn: 3 }
+    );
+    original.snapshots.a3 = s2;
+
+    updatePlaythroughRecord(dir, original);
+
+    // Simulate a lost checkpoint: the turn-2 assistant's snapshot is the exact
+    // one branchPlaythroughRecord would restore when branching at the turn-1
+    // assistant. Delete it (as a prior truncate/retry would).
+    const saved = getPlaythroughRecord(dir, original.id)!;
+    saved.snapshots = saved.snapshots ?? {};
+    delete saved.snapshots.a2;
+    updatePlaythroughRecord(dir, saved);
+
+    const branch = branchPlaythroughRecord(dir, original.id, "a1", "walkback");
+    expect(branch).not.toBeNull();
+    if (!branch) return;
+
+    // Must NOT keep the latest world state (flags f0..f3). It reverts to the
+    // nearest snapshot at-or-before the branch point: a1's own snapshot (turn 0).
+    expect(branch.turn).toBe(0);
+    expect(branch.flags).toEqual(["f0"]);
+    expect(branch.flags).not.toContain("f1");
+    expect(branch.locationId).toBe("loc_tavern");
+  });
+
+  it("restores memoryLayers from the branch-point snapshot and re-keys them to the new branch", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bobbinloom-branch-"));
+    tempDirs.push(dir);
+
+    const original = createPlaythroughRecord(dir, "Layers");
+    const branchId = original.branchId;
+    original.snapshots = {};
+
+    // Turn 1: snapshot captures empty layers, then a recent event is added.
+    const s0 = takeTurnSnapshot(original);
+    original.turn = 1;
+    original.messages.push(
+      { id: "u1", role: "user", content: "one", createdAt: "2026-01-01T00:00:00Z", turn: 1 },
+      { id: "a1", role: "assistant", content: "A1", createdAt: "2026-01-01T00:00:01Z", turn: 1 }
+    );
+    original.snapshots.a1 = s0;
+    original.memoryLayers = {
+      recent: [{ id: "r1", playthroughId: original.id, branchId, turn: 1, type: "event", summary: "recent", importance: 1, tags: [], createdAt: "2026-01-01T00:00:01Z" }],
+      compressed: [],
+    };
+
+    // Turn 2: snapshot captures recent:[r1]; after the turn the recent layer is
+    // compacted into compressed, simulating auto-compression.
+    const s1 = takeTurnSnapshot(original);
+    original.turn = 2;
+    original.messages.push(
+      { id: "u2", role: "user", content: "two", createdAt: "2026-01-01T00:00:02Z", turn: 2 },
+      { id: "a2", role: "assistant", content: "A2", createdAt: "2026-01-01T00:00:03Z", turn: 2 }
+    );
+    original.snapshots.a2 = s1;
+    original.memoryLayers = {
+      recent: [],
+      compressed: [{ id: "c2", playthroughId: original.id, branchId, turn: 2, type: "event", summary: "compacted", importance: 1, tags: [], createdAt: "2026-01-01T00:00:03Z" }],
+    };
+    updatePlaythroughRecord(dir, original);
+
+    const branch = branchPlaythroughRecord(dir, original.id, "a1", "layers");
+    expect(branch).not.toBeNull();
+    if (!branch) return;
+
+    // Branch restores from a2's snapshot (captured at turn 1), which held recent:[r1].
+    expect(branch.memoryLayers?.recent.some((e) => e.id === "r1")).toBe(true);
+    // The turn-2 compressed event must NOT leak into the branch.
+    expect(branch.memoryLayers?.compressed.some((e) => e.id === "c2")).toBe(false);
+    // Restored layer events are re-keyed to the new branch/playthrough.
+    const restored = branch.memoryLayers?.recent.find((e) => e.id === "r1");
+    expect(restored?.branchId).toBe(branch.branchId);
+    expect(restored?.playthroughId).toBe(branch.id);
+  });
 });

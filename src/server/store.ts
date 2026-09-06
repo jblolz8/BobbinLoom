@@ -9,7 +9,7 @@ import { normalizeCreator, normalizeTags } from "../engine/characterCards";
 import type { ParsedCard } from "./characterCards/parseCard";
 import { createBlankPlaythrough, createInitialPlaythrough, createPlaythroughFromSeed, ensureMessageTurns, restoreSnapshotState } from "../engine/engine";
 import { DEMO_TEMPLATE } from "../engine/demoData";
-import type { CharacterFormat, CharacterTemplate, LoadFailure, LorebookFile, LorebookSummary, PlayerPersona, Playthrough, PlaythroughListResponse, PromptModuleSet, PromptPreset, ScenarioSeed } from "../schemas";
+import type { CharacterFormat, CharacterTemplate, LoadFailure, LorebookFile, LorebookSummary, PlayerPersona, Playthrough, PlaythroughListResponse, PromptModuleSet, PromptPreset, ScenarioSeed, TurnSnapshot } from "../schemas";
 import { CharacterTemplateSchema, EMPTY_MODULE_SET, PlayerPersonaSchema, PlaythroughSchema } from "../schemas";
 
 function ensureStoreDir(dir: string): void {
@@ -897,17 +897,36 @@ export function branchPlaythroughRecord(
   const nextAssistant = droppedMessages.find((m) => m.role === "assistant");
   let snapshotToRestore = nextAssistant ? clone.snapshots?.[nextAssistant.id] : undefined;
 
-  // Fallback: If not found by messageId, try to find a snapshot by turn
+  // Fallback: if that exact checkpoint is missing (dropped by an earlier
+  // truncate/retry, or a legacy record), walk back through every snapshot to the
+  // nearest one whose captured turn is at or before the branch point. This
+  // guarantees the branch reverts to a real historical checkpoint instead of
+  // silently keeping the latest world state (which left Player/Chars/Journal
+  // ahead of the truncated chat). Snapshot keys may be assistant message ids or
+  // legacy turn strings, so we match on the snapshot's captured turn value, not
+  // its key.
   if (!snapshotToRestore && typeof targetMessage.turn === "number") {
-    const snapshotsList = Object.values(clone.snapshots ?? {});
-    snapshotToRestore = snapshotsList.find((s) => s.turn === targetMessage.turn);
+    let bestTurn = -1;
+    for (const snap of Object.values(clone.snapshots ?? {})) {
+      if (snap.turn <= targetMessage.turn && snap.turn > bestTurn) {
+        bestTurn = snap.turn;
+        snapshotToRestore = snap;
+      }
+    }
   }
 
   if (snapshotToRestore) {
     restoreSnapshotState(clone, snapshotToRestore);
-  } else if (droppedMessages.length > 0 && typeof targetMessage.turn === "number") {
+  } else if (droppedMessages.length === 0 && typeof targetMessage.turn === "number") {
+    // Nothing was dropped — the live world state already matches the branch
+    // point; only the turn counter needs to reflect it.
     clone.turn = targetMessage.turn;
   }
+  // (else: dropped messages but no snapshot at or before the branch point —
+  // the historical state cannot be reconstructed, so the branch keeps its latest
+  // consistent world value rather than lying about the turn counter. This is a
+  // genuine data gap (e.g. a brand-new/truncated record with no checkpoints),
+  // not a silent corruption.)
 
   clone.id = newPlaythroughId;
   clone.branchId = newBranchId;
@@ -918,12 +937,8 @@ export function branchPlaythroughRecord(
   clone.name = branchName?.trim() || `${original.name} (Branch T${clone.createdFromTurn})`;
   clone.messages = keptMessages;
 
-  // Filter memory events to not exceed the restored turn
-  clone.memoryEvents = clone.memoryEvents.filter((e) => e.turn <= clone.turn);
-  if (clone.memoryLayers) {
-    clone.memoryLayers.recent = clone.memoryLayers.recent.filter((e) => e.turn <= clone.turn);
-    clone.memoryLayers.compressed = clone.memoryLayers.compressed.filter((e) => e.turn <= clone.turn);
-  }
+  // Memory events/layers are restored by restoreSnapshotState (which now copies
+  // memoryLayers from the snapshot), so no turn-based filtering is needed here.
 
   // Update playthroughId and branchId on characters and memory events
   for (const char of clone.characters) {
@@ -933,6 +948,14 @@ export function branchPlaythroughRecord(
   for (const event of clone.memoryEvents) {
     event.playthroughId = newPlaythroughId;
     event.branchId = newBranchId;
+  }
+  for (const layer of clone.memoryLayers?.recent ?? []) {
+    layer.playthroughId = newPlaythroughId;
+    layer.branchId = newBranchId;
+  }
+  for (const layer of clone.memoryLayers?.compressed ?? []) {
+    layer.playthroughId = newPlaythroughId;
+    layer.branchId = newBranchId;
   }
 
   // Drop snapshots belonging to messages that no longer exist in this branch

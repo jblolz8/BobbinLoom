@@ -368,6 +368,10 @@ export function restoreSnapshotState(target: Playthrough, snapshot: TurnSnapshot
   target.inventory = clone(snapshot.inventory);
   target.quests = clone(snapshot.quests);
   target.memoryEvents = clone(snapshot.memoryEvents);
+  // memoryLayers were being captured by takeTurnSnapshot but never restored,
+  // so a reverted branch kept the latest layers in its Journal. Restore them
+  // so the branch's memory view matches its branch point.
+  target.memoryLayers = snapshot.memoryLayers ? clone(snapshot.memoryLayers) : target.memoryLayers;
   target.lorebookIds = snapshot.lorebookIds ?? [];
   target.lorebookTimingStates = snapshot.lorebookTimingStates
     ? clone(snapshot.lorebookTimingStates)
