@@ -4,7 +4,7 @@ import type { TokenUsage } from "../../../api";
 import type { FailedResponseNotice } from "../../../hooks/usePlaythrough";
 import { ContextMeter } from "../../common/ContextMeter";
 import { MarkdownView } from "../../common/MarkdownView";
-import { Button, Icon, ModelBadge, TextArea } from "../../base";
+import { Badge, Button, Icon, ModelBadge, TextArea } from "../../base";
 
 export type ChatPanelProps = {
   playthrough: Playthrough;
@@ -341,10 +341,14 @@ export function ChatPanel(props: ChatPanelProps) {
                   </span>
                 ) : null}
                 {showGenerationTime && msg.role === "assistant" && msg.durationMs !== undefined ? (
-                  <span className="message-duration" title={`Response generation time: ${(msg.durationMs / 1000).toFixed(2)}s`}>
-                    <Icon name="Clock" size={10} />
-                    <span>{formatDuration(msg.durationMs)}</span>
-                  </span>
+                  <Badge
+                    variant="neutral"
+                    size="xs"
+                    leftIcon={<Icon name="Clock" size={10} />}
+                    title={`Response generation time: ${(msg.durationMs / 1000).toFixed(2)}s`}
+                  >
+                    {formatDuration(msg.durationMs)}
+                  </Badge>
                 ) : null}
               </div>
               <div className="message-actions">

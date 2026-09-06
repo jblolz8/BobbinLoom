@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { LorebookSummary, MemoryEvent, Playthrough } from "../../../../../schemas";
 import { closeChapter, listLorebooks, type CloseChapterBody, type TokenUsage } from "../../../../api";
-import { AvatarBadge, Icon } from "../../../base";
+import { AvatarBadge, Badge, Button, Checkbox, Icon, TextArea, TextInput } from "../../../base";
 
 export function JournalTab({
   playthrough,
@@ -28,6 +28,7 @@ export function JournalTab({
   // Filter state for timeline events
   const [eventSearch, setEventSearch] = useState("");
   const [minImportance, setMinImportance] = useState<number>(0);
+  const [hoverImportance, setHoverImportance] = useState<number | null>(null);
 
   useEffect(() => {
     listLorebooks().then(setLorebookSummaries).catch(() => setLorebookSummaries([]));
@@ -191,14 +192,15 @@ export function JournalTab({
           <span>Journal</span>
         </h2>
         {onOpenTimelines ? (
-          <button
-            className="journal-timelines-btn"
+          <Button
+            variant="outline"
+            size="sm"
+            leftIcon={<Icon name="GitFork" size={14} />}
             onClick={onOpenTimelines}
             title="View alternative timeline branches for this playthrough"
           >
-            <Icon name="GitFork" size={14} />
-            <span>View Timelines</span>
-          </button>
+            View Timelines
+          </Button>
         ) : null}
       </div>
 
@@ -213,8 +215,10 @@ export function JournalTab({
           </div>
           <p className="about-synopsis-text">{playthrough.scenarioDescription}</p>
           <div className="about-actions">
-            <button
-              className="start-same-scenario-btn"
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Icon name="Copy" size={13} />}
               onClick={() => onStartNewWithSameScenario(
                 playthrough.scenarioDescription!,
                 playthrough.personaId,
@@ -223,9 +227,8 @@ export function JournalTab({
               )}
               title="Start a new game using this scenario, cast, and persona"
             >
-              <Icon name="Copy" size={13} />
-              <span>Start New with Same Scenario</span>
-            </button>
+              Start New with Same Scenario
+            </Button>
           </div>
         </article>
       ) : null}
@@ -238,7 +241,7 @@ export function JournalTab({
             <span>Lorebooks</span>
           </h3>
           {attachedLorebooks.length > 0 ? (
-            <span className="lorebook-count-badge">{attachedLorebooks.length} attached</span>
+            <Badge variant="neutral" size="xs" pill>{attachedLorebooks.length} attached</Badge>
           ) : null}
         </div>
         {attachedLorebooks.length === 0 ? (
@@ -252,7 +255,7 @@ export function JournalTab({
               <div key={lb.id} className="lorebook-pill" title={`${lb.entryCount} active lore entries`}>
                 <Icon name="BookOpen" size={13} />
                 <span>{lb.name}</span>
-                <span className="lorebook-count-badge">{lb.entryCount} entries</span>
+                <Badge variant="neutral" size="xs" pill>{lb.entryCount} entries</Badge>
               </div>
             ))}
           </div>
@@ -266,9 +269,9 @@ export function JournalTab({
             <Icon name="Scroll" size={15} />
             <span>Chapters</span>
           </h3>
-          <span className="lorebook-count-badge">
+          <Badge variant="neutral" size="xs" pill>
             {(playthrough.chapters?.length ?? 0) + 1} volumes
-          </span>
+          </Badge>
         </div>
 
         <div className="chapters-section-body">
@@ -276,13 +279,12 @@ export function JournalTab({
           <div className="chapter-current-banner">
             <div className="current-chapter-header">
               <h4 className="current-chapter-title">
-                <Icon name="BookOpen" size={15} color="#38bdf8" />
+                <Icon name="BookOpen" size={15} className="current-chapter-icon" />
                 <span>Current Chapter</span>
               </h4>
-              <span className="current-chapter-status">
-                <span className="current-chapter-status-dot" />
-                <span>Ongoing</span>
-              </span>
+              <Badge variant="accent" size="xs" pill leftIcon={<span className="current-chapter-status-dot" />}>
+                Ongoing
+              </Badge>
             </div>
 
             <div className="current-chapter-controls">
@@ -290,15 +292,17 @@ export function JournalTab({
                 {visibleMessages.length} message{visibleMessages.length === 1 ? "" : "s"} in session
                 {!canClose ? ` (need ${6 - visibleMessages.length} more to close)` : " · Ready to summarize"}
               </span>
-              <button
-                className="close-chapter-btn"
+              <Button
+                variant="primary"
+                size="sm"
+                leftIcon={<Icon name="BookmarkCheck" size={13} />}
                 disabled={!canClose || closing}
+                isLoading={closing}
                 onClick={() => setCloseModalOpen(true)}
                 title={!canClose ? "Play a bit longer before closing this chapter" : "Close and summarize this chapter into an archived volume"}
               >
-                <Icon name="BookmarkCheck" size={13} />
-                <span>{closing ? "Closing…" : "Close Chapter"}</span>
-              </button>
+                {closing ? "Closing…" : "Close Chapter"}
+              </Button>
             </div>
           </div>
 
@@ -311,19 +315,19 @@ export function JournalTab({
                   <li key={ch.id} className="archived-volume-card">
                     <div className="volume-header" onClick={() => toggleExpand(ch.id)}>
                       <div className="volume-title-group">
-                        <Icon name={isExpanded ? "ChevronDown" : "ChevronRight"} size={14} color="#94a3b8" />
+                        <Icon name={isExpanded ? "ChevronDown" : "ChevronRight"} size={14} className="volume-expand-icon" />
                         <h4>{ch.name}</h4>
                       </div>
                       <div className="volume-meta-pills">
-                        <span className="volume-pill">
+                        <Badge variant="neutral" size="xs">
                           T{ch.turnRange.start} – T{ch.turnRange.end}
-                        </span>
+                        </Badge>
                       </div>
                     </div>
 
                     {ch.shortDescription && !isExpanded ? (
-                      <div style={{ padding: "0.4rem 0.85rem 0.6rem 2.1rem" }}>
-                        <p className="volume-short-desc" style={{ margin: 0 }}>{ch.shortDescription}</p>
+                      <div className="volume-short-desc-wrapper">
+                        <p className="volume-short-desc">{ch.shortDescription}</p>
                       </div>
                     ) : null}
 
@@ -340,16 +344,17 @@ export function JournalTab({
                           >
                             {ch.createdAt ? new Date(ch.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : ""}
                           </span>
-                          <button
-                            className="view-transcript-btn"
+                          <Button
+                            variant="outline"
+                            size="xs"
+                            leftIcon={<Icon name="FileText" size={12} />}
                             onClick={(e) => {
                               e.stopPropagation();
                               onViewChapter(ch.id);
                             }}
                           >
-                            <Icon name="FileText" size={12} />
-                            <span>View Transcript</span>
-                          </button>
+                            View Transcript
+                          </Button>
                         </div>
                       </div>
                     ) : null}
@@ -370,49 +375,45 @@ export function JournalTab({
       {closeModalOpen ? (
         <div className="modal-overlay" onClick={() => setCloseModalOpen(false)}>
           <div className="modal close-chapter-modal" onClick={e => e.stopPropagation()}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
-              <Icon name="BookmarkCheck" size={20} color="#38bdf8" />
-              <h3 style={{ margin: 0 }}>Close Chapter</h3>
+            <div className="close-chapter-modal-header">
+              <Icon name="BookmarkCheck" size={20} className="close-chapter-modal-icon" />
+              <h3>Close Chapter</h3>
             </div>
-            <p style={{ color: "#94a3b8", fontSize: "0.86rem", lineHeight: 1.5, margin: "0 0 1rem 0" }}>
+            <p className="close-chapter-modal-desc">
               The current ongoing chapter will be closed and summarized into an archived volume. The turn history and memories will remain preserved.
             </p>
-            <label className="checkbox-label" style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", cursor: "pointer", marginBottom: "0.75rem" }}>
-              <input
-                type="checkbox"
-                checked={addClosingMessage}
-                onChange={e => setAddClosingMessage(e.target.checked)}
-              />
-              <span>Add custom closing note or author remark</span>
-            </label>
+            <Checkbox
+              checked={addClosingMessage}
+              onChange={e => setAddClosingMessage(e.target.checked)}
+              label="Add custom closing note or author remark"
+              containerClassName="close-chapter-checkbox-label"
+            />
             {addClosingMessage ? (
-              <textarea
+              <TextArea
                 value={closingMessage}
                 onChange={e => setClosingMessage(e.target.value)}
                 placeholder="Write a closing remark or scene resolution…"
-                style={{
-                  width: "100%",
-                  minHeight: "5rem",
-                  background: "#10151f",
-                  border: "1px solid #303849",
-                  borderRadius: "8px",
-                  padding: "0.6rem",
-                  color: "#eceff4",
-                  fontSize: "0.85rem",
-                  marginBottom: "1rem",
-                  resize: "vertical"
-                }}
+                className="close-chapter-textarea"
+                rows={3}
               />
             ) : null}
-            <div className="modal-actions" style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "1rem" }}>
-              <button
-                className="primary-btn"
+            <div className="modal-actions close-chapter-modal-actions">
+              <Button
+                variant="primary"
+                size="md"
                 disabled={closing}
+                isLoading={closing}
                 onClick={handleCloseChapter}
               >
                 {closing ? "Closing & Summarizing…" : "Confirm & Close"}
-              </button>
-              <button onClick={() => setCloseModalOpen(false)}>Cancel</button>
+              </Button>
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => setCloseModalOpen(false)}
+              >
+                Cancel
+              </Button>
             </div>
           </div>
         </div>
@@ -425,9 +426,9 @@ export function JournalTab({
             <Icon name="Users" size={15} />
             <span>Dramatis Personae</span>
           </h3>
-          <span className="lorebook-count-badge">
+          <Badge variant="neutral" size="xs" pill>
             {playthrough.characters.length + playthrough.npcs.length} persons
-          </span>
+          </Badge>
         </div>
 
         {playthrough.characters.length === 0 && playthrough.npcs.length === 0 ? (
@@ -447,7 +448,7 @@ export function JournalTab({
                       <AvatarBadge name={c.name} icon="User" size="sm" />
                       <div className="dramatis-info">
                         <div className="dramatis-title-row">
-                          <strong className="dramatis-name">{c.name}</strong>
+                          <strong className="dramatis-name" title={c.name}>{c.name}</strong>
                         </div>
                         {c.memorySummary ? (
                           <p className="dramatis-desc">{c.memorySummary}</p>
@@ -469,11 +470,24 @@ export function JournalTab({
                       <AvatarBadge name={npc.name} icon="Users" size="sm" />
                       <div className="dramatis-info">
                         <div className="dramatis-title-row">
-                          <strong className="dramatis-name">{npc.name}</strong>
+                          <strong className="dramatis-name" title={npc.name}>{npc.name}</strong>
                           {npc.disposition ? (
-                            <span className={`dramatis-disposition ${npc.disposition.toLowerCase()}`}>
+                            <Badge
+                              variant={
+                                npc.disposition.toLowerCase().includes("friend") ||
+                                npc.disposition.toLowerCase().includes("ally")
+                                  ? "success"
+                                  : npc.disposition.toLowerCase().includes("hostil") ||
+                                    npc.disposition.toLowerCase().includes("aggress") ||
+                                    npc.disposition.toLowerCase().includes("threat")
+                                  ? "danger"
+                                  : "neutral"
+                              }
+                              size="xs"
+                              title={`Disposition: ${npc.disposition}`}
+                            >
                               {npc.disposition}
-                            </span>
+                            </Badge>
                           ) : null}
                         </div>
                         {npc.description ? (
@@ -496,39 +510,65 @@ export function JournalTab({
             <Icon name="Clock" size={15} />
             <span>Event Timeline</span>
           </h3>
-          <span className="lorebook-count-badge">
+          <Badge variant="neutral" size="xs" pill>
             {events.length} event{events.length === 1 ? "" : "s"}
-          </span>
+          </Badge>
         </div>
 
         {/* Filter Toolbar */}
         <div className="timeline-filter-toolbar">
-          <input
-            type="text"
-            className="timeline-search-input"
+          <TextInput
             placeholder="Search events (turn, type, text)…"
             value={eventSearch}
             onChange={(e) => setEventSearch(e.target.value)}
+            containerClassName="timeline-search-input-container"
+            size="sm"
           />
-          <div className="timeline-importance-filter" title="Filter by minimum importance">
-            <button
-              className={`importance-filter-btn ${minImportance === 0 ? "active" : ""}`}
+          <div className="timeline-importance-filter" role="group" aria-label="Filter events by importance">
+            <Button
+              variant={minImportance === 0 ? "secondary" : "ghost"}
+              size="xs"
+              className={`importance-filter-all-btn ${minImportance === 0 ? "active" : ""}`}
               onClick={() => setMinImportance(0)}
+              title="Show all events"
+              aria-pressed={minImportance === 0}
             >
               All
-            </button>
-            <button
-              className={`importance-filter-btn ${minImportance === 3 ? "active" : ""}`}
-              onClick={() => setMinImportance(3)}
+            </Button>
+            <div
+              className="timeline-stars-picker"
+              onMouseLeave={() => setHoverImportance(null)}
+              role="radiogroup"
+              aria-label="Minimum importance rating"
             >
-              3★+
-            </button>
-            <button
-              className={`importance-filter-btn ${minImportance === 4 ? "active" : ""}`}
-              onClick={() => setMinImportance(4)}
-            >
-              4★+
-            </button>
+              {[1, 2, 3, 4, 5].map((star) => {
+                const effectiveRating = hoverImportance ?? minImportance;
+                const isLit = star <= effectiveRating;
+                const isSelected = minImportance === star;
+
+                return (
+                  <button
+                    key={star}
+                    type="button"
+                    className={`timeline-star-picker-btn ${isLit ? "lit" : ""} ${isSelected ? "selected" : ""}`}
+                    onClick={() => {
+                      // Clicking on the currently selected star toggles back to All (0)
+                      setMinImportance(prev => (prev === star ? 0 : star));
+                    }}
+                    onMouseEnter={() => setHoverImportance(star)}
+                    title={`Filter by ${star}★ or higher (click again to reset)`}
+                    aria-label={`${star} star${star === 1 ? "" : "s"} or higher`}
+                  >
+                    <Icon
+                      name="Star"
+                      size={13}
+                      className="timeline-star-picker-icon"
+                      style={{ fill: isLit ? "currentColor" : "none" }}
+                    />
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -555,24 +595,26 @@ export function JournalTab({
                   >
                     <h4>
                       {group.chapterId ? (
-                        <Icon name={isExpanded ? "ChevronDown" : "ChevronRight"} size={14} color="#94a3b8" />
+                        <Icon name={isExpanded ? "ChevronDown" : "ChevronRight"} size={14} className="timeline-expand-icon" />
                       ) : (
-                        <Icon name="Bookmark" size={14} color="#38bdf8" />
+                        <Icon name="Bookmark" size={14} className="timeline-bookmark-icon" />
                       )}
                       <span>{group.chapterName}</span>
-                      <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 400 }}>
+                      <span className="timeline-events-count">
                         ({group.events.length} event{group.events.length !== 1 ? "s" : ""})
                       </span>
                     </h4>
                     {group.turnRange ? (
-                      <span className="volume-pill">T{group.turnRange.start} – T{group.turnRange.end}</span>
+                      <Badge variant="neutral" size="xs">
+                        T{group.turnRange.start} – T{group.turnRange.end}
+                      </Badge>
                     ) : null}
                   </div>
 
                   {isExpanded ? (
                     <div>
                       {group.metaSummary ? (
-                        <p className="timeline-meta-summary" style={{ padding: "0.5rem 0.8rem", margin: 0, borderBottom: "1px solid #232d3d" }}>
+                        <p className="timeline-meta-summary">
                           {group.metaSummary}
                         </p>
                       ) : null}
@@ -589,8 +631,8 @@ export function JournalTab({
                               <div className="timeline-item-card">
                                 <div className="timeline-item-header">
                                   <div className="timeline-item-meta">
-                                    <span className="timeline-turn-badge">T{e.turn}</span>
-                                    <span className="timeline-type-badge">{e.type}</span>
+                                    <Badge variant="accent" size="xs">T{e.turn}</Badge>
+                                    <Badge variant="outline" size="xs">{e.type}</Badge>
                                   </div>
                                   {renderStars(e.importance)}
                                 </div>

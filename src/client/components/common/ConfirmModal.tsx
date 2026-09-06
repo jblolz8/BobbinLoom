@@ -1,41 +1,81 @@
+import { useEffect, type ReactNode } from "react";
 import { Button } from "../base";
 
-type ConfirmModalProps = {
+export type ConfirmModalProps = {
   title: string;
-  message: string;
+  message?: ReactNode;
   confirmLabel?: string;
+  cancelLabel?: string;
   danger?: boolean;
-  onConfirm: () => void;
+  isLoading?: boolean;
+  confirmDisabled?: boolean;
+  maxWidth?: number | string;
+  className?: string;
+  children?: ReactNode;
+  onConfirm: () => void | Promise<void>;
   onCancel: () => void;
 };
 
 export function ConfirmModal(props: ConfirmModalProps) {
-  const { title, message, confirmLabel = "Confirm", danger = false, onConfirm, onCancel } = props;
+  const {
+    title,
+    message,
+    confirmLabel = "Confirm",
+    cancelLabel = "Cancel",
+    danger = false,
+    isLoading = false,
+    confirmDisabled = false,
+    maxWidth,
+    className = "",
+    children,
+    onConfirm,
+    onCancel,
+  } = props;
 
-  function handleBackdropClick(e: React.MouseEvent) {
-    e.stopPropagation();
-    if (e.target === e.currentTarget) onCancel();
-  }
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && !isLoading) {
+        onCancel();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onCancel, isLoading]);
 
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Escape") onCancel();
+  function handleBackdropMouseDown(e: React.MouseEvent) {
+    if (e.target === e.currentTarget && !isLoading) {
+      onCancel();
+    }
   }
 
   return (
-    <div className="modal-backdrop" onClick={handleBackdropClick} onKeyDown={handleKeyDown}>
-      <section className="modal confirm-modal">
+    <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown}>
+      <section
+        className={`modal confirm-modal${className ? ` ${className}` : ""}`.trim()}
+        style={maxWidth !== undefined ? { maxWidth } : undefined}
+      >
         <header className="modal-header">
           <div>
             <h2>{title}</h2>
-            <p>{message}</p>
+            {message ? (typeof message === "string" ? <p>{message}</p> : message) : null}
           </div>
         </header>
+        {children}
         <div className="settings-actions">
-          <Button variant={danger ? "danger" : "primary"} onClick={onConfirm}>
+          <Button
+            variant={danger ? "danger" : "primary"}
+            onClick={onConfirm}
+            isLoading={isLoading}
+            disabled={confirmDisabled || isLoading}
+          >
             {confirmLabel}
           </Button>
-          <Button variant="secondary" onClick={onCancel}>
-            Cancel
+          <Button
+            variant="secondary"
+            onClick={onCancel}
+            disabled={isLoading}
+          >
+            {cancelLabel}
           </Button>
         </div>
       </section>

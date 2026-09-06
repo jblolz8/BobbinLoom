@@ -11,3 +11,6 @@ export * from "./Tooltip";
 export * from "./DropdownMenu";
 export * from "./Select";
 export * from "./TextArea";
+export * from "./Badge";
+export * from "./Tabs";
+export * from "./Checkbox";

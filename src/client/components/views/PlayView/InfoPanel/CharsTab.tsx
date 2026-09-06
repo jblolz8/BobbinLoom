@@ -3,9 +3,8 @@ import type { CharacterInstance, CharacterTemplate, Playthrough } from "../../..
 import { editCharacter, getCharacterAvatarUrl, listCharacters, promoteNpc, promoteNpcDraft, saveCharacterToLibrary } from "../../../../api";
 import type { CharacterEditPayload, PromoteDraftResult } from "../../../../api";
 import { CharacterEditor } from "../../../modals/CharacterEditor";
-import { PromotePreview } from "../../../common/PromotePreview";
 import { CharacterSheetSections } from "./CharacterSheetSections";
-import { AvatarBadge, Icon, SearchBar } from "../../../base";
+import { AvatarBadge, Badge, Button, Icon, SearchBar } from "../../../base";
 
 type SaveFeedback = { ok: boolean; text: string };
 
@@ -159,7 +158,7 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
           <div className="section-title-wrap">
             <Icon name="Users" size={14} />
             <span className="section-title-text">Main Cast</span>
-            <span className="badge-count">{playthrough.characters.length}</span>
+            <Badge variant="neutral" size="xs" pill>{playthrough.characters.length}</Badge>
           </div>
 
           {playthrough.characters.length > 0 && (
@@ -226,7 +225,7 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
           <div className="section-title-wrap">
             <Icon name="UserCheck" size={14} />
             <span className="section-title-text">Background</span>
-            <span className="badge-count">{playthrough.npcs.length}</span>
+            <Badge variant="neutral" size="xs" pill>{playthrough.npcs.length}</Badge>
           </div>
 
           {playthrough.npcs.length > 3 && (
@@ -253,7 +252,7 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
                   <div className="npc-title-wrap">
                     <strong className="npc-name">{npc.name}</strong>
                     {npc.disposition ? (
-                      <span className="npc-disposition-tag">{npc.disposition}</span>
+                      <Badge variant="neutral" size="xs">{npc.disposition}</Badge>
                     ) : null}
                   </div>
                 </div>
@@ -263,25 +262,26 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
                 <div className="npc-actions">
                   {draftingId === npc.id ? (
                     <span className="promote-actions">
-                      <button type="button" className="btn-drafting" disabled>
-                        <Icon name="Sparkles" size={13} className="sparkle-pulse" /> Drafting…
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-cancel"
+                      <Button size="xs" variant="secondary" disabled leftIcon={<Icon name="Sparkles" size={13} className="sparkle-pulse" />}>
+                        Drafting…
+                      </Button>
+                      <Button
+                        size="xs"
+                        variant="ghost"
                         onClick={() => { draftAbortRef.current?.abort(); setDraftingId(null); }}
                       >
                         Cancel
-                      </button>
+                      </Button>
                     </span>
                   ) : (
-                    <button
-                      type="button"
-                      className="promote-npc-btn"
+                    <Button
+                      size="xs"
+                      variant="primary"
                       onClick={() => handleStartPromote(npc.id)}
+                      leftIcon={<Icon name="Sparkles" size={13} />}
                     >
-                      <Icon name="Sparkles" size={13} /> Promote to Detailed
-                    </button>
+                      Promote to Detailed
+                    </Button>
                   )}
                 </div>
               </div>
@@ -397,43 +397,58 @@ export function CharacterCard(props: {
 
             <div className="char-compact-name-row">
               <h4 className="char-name">{character.name}</h4>
-              <span className={`presence-pill ${present ? "is-present" : "is-away"}`}>
+              <Badge
+                variant={present ? "success" : "neutral"}
+                size="xs"
+                pill
+              >
                 {present ? "● Present" : "○ Away"} · at {locationName}
-              </span>
+              </Badge>
             </div>
           </div>
 
           {/* Bottom Line: Badges */}
           <div className="char-badges-row compact-badges">
             {readOnlySheet ? (
-              <span className="ccv2-readonly-badge">CCv2</span>
+              <Badge variant="info" size="xs">CCv2</Badge>
             ) : null}
 
             {inLibrary ? (
               libraryStale ? (
-                <span className="lib-badge stale" title="Playthrough changes differ from global library template">
-                  <Icon name="AlertTriangle" size={11} /> Diverged
-                </span>
+                <Badge
+                  variant="warning"
+                  size="xs"
+                  title="Playthrough changes differ from global library template"
+                  leftIcon={<Icon name="AlertTriangle" size={11} />}
+                >
+                  Diverged
+                </Badge>
               ) : (
-                <span className="lib-badge synced" title="Synced with Character Library">
-                  <Icon name="Check" size={11} /> Library Linked
-                </span>
+                <Badge
+                  variant="success"
+                  size="xs"
+                  title="Synced with Character Library"
+                  leftIcon={<Icon name="Check" size={11} />}
+                >
+                  Library Linked
+                </Badge>
               )
             ) : (
-              <span className="lib-badge local" title="Local to this playthrough">
+              <Badge variant="neutral" size="xs" title="Local to this playthrough">
                 Local Cast
-              </span>
+              </Badge>
             )}
 
             {inLibrary && onOpenLibrary && (
-              <button
-                type="button"
-                className="open-library-btn"
+              <Button
+                size="xs"
+                variant="ghost"
                 onClick={() => onOpenLibrary(character.templateId)}
                 title="Open and edit global template in Character Library"
+                leftIcon={<Icon name="ExternalLink" size={11} />}
               >
-                <Icon name="ExternalLink" size={11} /> Library
-              </button>
+                Library
+              </Button>
             )}
           </div>
         </div>
@@ -442,41 +457,56 @@ export function CharacterCard(props: {
           {/* Portrait Mode Header */}
           <div className="char-title-row">
             <h4 className="char-name">{character.name}</h4>
-            <span className={`presence-pill ${present ? "is-present" : "is-away"}`}>
+            <Badge
+              variant={present ? "success" : "neutral"}
+              size="xs"
+              pill
+            >
               {present ? "● Present" : "○ Away"} · at {locationName}
-            </span>
+            </Badge>
           </div>
 
           <div className="char-badges-row">
             {readOnlySheet ? (
-              <span className="ccv2-readonly-badge">CCv2 Sheet</span>
+              <Badge variant="info" size="xs">CCv2 Sheet</Badge>
             ) : null}
 
             {inLibrary ? (
               libraryStale ? (
-                <span className="lib-badge stale" title="Playthrough changes differ from global library template">
-                  <Icon name="AlertTriangle" size={11} /> Diverged from Library
-                </span>
+                <Badge
+                  variant="warning"
+                  size="xs"
+                  title="Playthrough changes differ from global library template"
+                  leftIcon={<Icon name="AlertTriangle" size={11} />}
+                >
+                  Diverged from Library
+                </Badge>
               ) : (
-                <span className="lib-badge synced" title="Synced with Character Library">
-                  <Icon name="Check" size={11} /> Library Linked
-                </span>
+                <Badge
+                  variant="success"
+                  size="xs"
+                  title="Synced with Character Library"
+                  leftIcon={<Icon name="Check" size={11} />}
+                >
+                  Library Linked
+                </Badge>
               )
             ) : (
-              <span className="lib-badge local" title="Local to this playthrough">
+              <Badge variant="neutral" size="xs" title="Local to this playthrough">
                 Local Cast
-              </span>
+              </Badge>
             )}
 
             {inLibrary && onOpenLibrary && (
-              <button
-                type="button"
-                className="open-library-btn"
+              <Button
+                size="xs"
+                variant="ghost"
                 onClick={() => onOpenLibrary(character.templateId)}
                 title="Open and edit global template in Character Library"
+                leftIcon={<Icon name="ExternalLink" size={11} />}
               >
-                <Icon name="ExternalLink" size={11} /> Open in Library
-              </button>
+                Open in Library
+              </Button>
             )}
           </div>
         </div>
@@ -574,42 +604,45 @@ export function CharacterCard(props: {
 
       {/* Footer Action Row */}
       <div className="char-actions-footer">
-        <button type="button" className="btn-sheet" onClick={onEdit}>
-          <Icon name="FileText" size={13} /> Full Sheet
-        </button>
+        <Button size="sm" variant="secondary" onClick={onEdit} leftIcon={<Icon name="FileText" size={13} />}>
+          Full Sheet
+        </Button>
 
         <div className="library-sync-actions">
           {inLibrary ? (
             <>
-              <button
-                type="button"
-                className="btn-sync update"
+              <Button
+                size="sm"
+                variant="primary"
+                isLoading={saving}
                 disabled={saving}
                 onClick={() => onSave("update")}
                 title="Update the existing Character Library template"
               >
-                {saving ? "Saving…" : "Update Library"}
-              </button>
-              <button
-                type="button"
-                className="btn-sync version"
+                Update Library
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                isLoading={saving}
                 disabled={saving}
                 onClick={() => onSave("newVersion")}
                 title="Save as a new version in the Character Library"
               >
-                {saving ? "Saving…" : "New Version"}
-              </button>
+                New Version
+              </Button>
             </>
           ) : (
-            <button
-              type="button"
-              className="btn-sync create"
+            <Button
+              size="sm"
+              variant="primary"
+              isLoading={saving}
               disabled={saving}
               onClick={() => onSave("update")}
               title="Save this character to the Character Library"
             >
-              {saving ? "Saving…" : "Save to Library"}
-            </button>
+              Save to Library
+            </Button>
           )}
         </div>
 

@@ -55,8 +55,9 @@ export function AppHeader({
     <header className={`top-bar app-unified-header ${isMobile ? "is-mobile" : ""}`}>
       <div className="header-brand-group">
         <h1 className="header-logo flex items-center gap-2" onClick={onGoHome} style={{ cursor: "pointer" }}>
-          <span>🧵</span>
-          <span>BobbinLoom</span>
+          <span className="logo-emoji">🧵</span>
+          <span className="logo-text">BobbinLoom</span>
+
         </h1>
         {view === "play" && activePlaythroughName ? (
           <div className="active-playthrough-badge flex items-center gap-1.5" title={`Active playthrough: ${activePlaythroughName}`}>
@@ -79,7 +80,7 @@ export function AppHeader({
               }
             }}
           >
-            <span className="tab-icon"><Icon name="Gamepad2" size={18} /></span>
+            <span className="tab-icon"><Icon name="Gamepad2" size={15} /></span>
             <span className="tab-label">Playthroughs</span>
           </button>
 
@@ -94,7 +95,7 @@ export function AppHeader({
               }
             }}
           >
-            <span className="tab-icon"><Icon name="Users" size={18} /></span>
+            <span className="tab-icon"><Icon name="Users" size={15} /></span>
             <span className="tab-label">Characters</span>
           </button>
 
@@ -109,7 +110,7 @@ export function AppHeader({
               }
             }}
           >
-            <span className="tab-icon"><Icon name="BookMarked" size={18} /></span>
+            <span className="tab-icon"><Icon name="BookMarked" size={15} /></span>
             <span className="tab-label">Lorebooks</span>
           </button>
 
@@ -124,7 +125,7 @@ export function AppHeader({
               }
             }}
           >
-            <span className="tab-icon"><Icon name="User" size={18} /></span>
+            <span className="tab-icon"><Icon name="User" size={15} /></span>
             <span className="tab-label">Personas</span>
           </button>
         </nav>
@@ -170,13 +171,6 @@ export function AppHeader({
           </Tooltip>
         ) : null}
       </div>
-
-      {view === "play" && activePlaythroughName ? (
-        <div className="playthrough-title-banner flex items-center gap-1.5" title={`Active playthrough: ${activePlaythroughName}`}>
-          <span className="banner-icon"><Icon name="BookOpen" size={15} /></span>
-          <span className="banner-text">{activePlaythroughName}</span>
-        </div>
-      ) : null}
     </header>
   );
 }

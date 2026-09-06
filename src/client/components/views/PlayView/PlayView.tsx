@@ -11,6 +11,8 @@ import { PersonaManager } from "../../modals/PersonaManager";
 import { CharacterManager } from "../../modals/CharacterManager";
 import { LorebookManager } from "../../modals/LorebookManager";
 import { TimelineModal } from "../../modals/TimelineModal";
+import { ConfirmModal } from "../../common/ConfirmModal";
+import { Icon, TextInput, Checkbox } from "../../base";
 
 export type PlayViewProps = {
   playthrough: Playthrough;
@@ -268,159 +270,123 @@ export function PlayView(props: PlayViewProps) {
       </section>
 
       {isMobile ? (
-        <nav className="mobile-tab-bar" aria-label="Mobile View Panels Navigation">
+        <nav className="mobile-tab-bar" aria-label="Mobile View Panels Navigation" role="tablist">
           <button
+            role="tab"
+            type="button"
             className={`mobile-tab ${mobileTab === "scene" ? "active" : ""}`}
             onClick={() => setMobileTab("scene")}
             aria-label="Scene view"
-            aria-current={mobileTab === "scene" ? "page" : undefined}
+            aria-selected={mobileTab === "scene"}
           >
-            <span className="mobile-tab-icon" aria-hidden="true">🗺</span>
+            <span className="mobile-tab-icon" aria-hidden="true">
+              <Icon name="Compass" size={20} />
+            </span>
             <span className="mobile-tab-label">Scene</span>
           </button>
           <button
+            role="tab"
+            type="button"
             className={`mobile-tab ${mobileTab === "chat" ? "active" : ""}`}
             onClick={() => setMobileTab("chat")}
             aria-label="Chat view"
-            aria-current={mobileTab === "chat" ? "page" : undefined}
+            aria-selected={mobileTab === "chat"}
           >
-            <span className="mobile-tab-icon" aria-hidden="true">💬</span>
+            <span className="mobile-tab-icon" aria-hidden="true">
+              <Icon name="MessageSquare" size={20} />
+            </span>
             <span className="mobile-tab-label">Chat</span>
           </button>
           <button
+            role="tab"
+            type="button"
             className={`mobile-tab ${mobileTab === "info" ? "active" : ""}`}
             onClick={() => setMobileTab("info")}
             aria-label="Info view"
-            aria-current={mobileTab === "info" ? "page" : undefined}
+            aria-selected={mobileTab === "info"}
           >
-            <span className="mobile-tab-icon" aria-hidden="true">ℹ</span>
+            <span className="mobile-tab-icon" aria-hidden="true">
+              <Icon name="BookOpen" size={20} />
+            </span>
             <span className="mobile-tab-label">Info</span>
           </button>
         </nav>
       ) : null}
 
       {retryTarget ? (
-        <div className="modal-backdrop">
-          <section className="modal confirm-modal">
-            <header className="modal-header">
-              <div>
-                <h2>Retry this response?</h2>
-                <p>This will permanently delete this response and everything after it, then generate a new one. World state from the deleted turns will be reverted.</p>
-              </div>
-            </header>
-            <blockquote className="retry-preview">
-              {retryTarget.content.slice(0, 200)}{retryTarget.content.length > 200 ? "…" : ""}
-            </blockquote>
-            <div className="settings-actions">
-              <button className="danger" onClick={confirmRetry} disabled={actionLoading}>
-                {actionLoading ? "Retrying…" : "Yes, retry"}
-              </button>
-              <button onClick={() => setRetryTarget(null)} disabled={actionLoading}>Cancel</button>
-            </div>
-          </section>
-        </div>
+        <ConfirmModal
+          title="Retry this response?"
+          message="This will permanently delete this response and everything after it, then generate a new one. World state from the deleted turns will be reverted."
+          confirmLabel={actionLoading ? "Retrying…" : "Yes, retry"}
+          danger
+          isLoading={actionLoading}
+          onConfirm={() => { void confirmRetry(); }}
+          onCancel={() => setRetryTarget(null)}
+        >
+          <blockquote className="retry-preview">
+            {retryTarget.content.slice(0, 200)}{retryTarget.content.length > 200 ? "…" : ""}
+          </blockquote>
+        </ConfirmModal>
       ) : null}
 
       {truncateTarget ? (
-        <div className="modal-backdrop">
-          <section className="modal confirm-modal">
-            <header className="modal-header">
-              <div>
-                <h2>Delete up to here?</h2>
-                <p>This will permanently delete this message and everything after it, reverting the world state to this point. This cannot be undone.</p>
-              </div>
-            </header>
-            <blockquote className="retry-preview">
-              {truncateTarget.content.slice(0, 200)}{truncateTarget.content.length > 200 ? "…" : ""}
-            </blockquote>
-            <div className="settings-actions">
-              <button className="danger" onClick={confirmTruncate} disabled={actionLoading}>
-                {actionLoading ? "Deleting…" : "Yes, delete"}
-              </button>
-              <button onClick={() => setTruncateTarget(null)} disabled={actionLoading}>Cancel</button>
-            </div>
-          </section>
-        </div>
+        <ConfirmModal
+          title="Delete up to here?"
+          message="This will permanently delete this message and everything after it, reverting the world state to this point. This cannot be undone."
+          confirmLabel={actionLoading ? "Deleting…" : "Yes, delete"}
+          danger
+          isLoading={actionLoading}
+          onConfirm={() => { void confirmTruncate(); }}
+          onCancel={() => setTruncateTarget(null)}
+        >
+          <blockquote className="retry-preview">
+            {truncateTarget.content.slice(0, 200)}{truncateTarget.content.length > 200 ? "…" : ""}
+          </blockquote>
+        </ConfirmModal>
       ) : null}
 
       {branchTarget ? (
-        <div className="modal-backdrop">
-          <section className="modal confirm-modal" style={{ maxWidth: 500 }}>
-            <header className="modal-header">
-              <div>
-                <h2>Branch into New Timeline?</h2>
-                <p>Create a new playthrough timeline branching off right after this message. The world state will be rolled back to this point, leaving your current playthrough untouched.</p>
-              </div>
-            </header>
-            <blockquote className="retry-preview">
-              {branchTarget.content.slice(0, 200)}{branchTarget.content.length > 200 ? "…" : ""}
-            </blockquote>
-            <div style={{ margin: "1rem 0" }}>
-              <label style={{ display: "block", fontSize: "0.82rem", marginBottom: "0.4rem", color: "#94a3b8" }}>
-                Branch Name (optional)
-              </label>
-              <input
-                type="text"
-                value={branchNameInput}
-                onChange={(e) => setBranchNameInput(e.target.value)}
-                placeholder={`${playthrough.name} (Branch T${branchTarget.turn ?? playthrough.turn})`}
-                style={{
-                  width: "100%",
-                  padding: "0.55rem 0.75rem",
-                  borderRadius: "6px",
-                  background: "#0f131b",
-                  border: "1px solid #3a4150",
-                  color: "#eceff4",
-                  fontSize: "0.88rem"
-                }}
-              />
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  marginTop: "0.75rem",
-                  fontSize: "0.82rem",
-                  color: "#94a3b8",
-                  cursor: "pointer"
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={branchAsStandalone}
-                  onChange={(e) => setBranchAsStandalone(e.target.checked)}
-                />
-                <span>Also create as separate Playthrough in Save/Load list</span>
-              </label>
-            </div>
-            <div className="settings-actions">
-              <button
-                className="primary"
-                onClick={async () => {
-                  const name = branchNameInput.trim();
-                  const standalone = branchAsStandalone;
-                  setBranchNameInput("");
-                  setBranchAsStandalone(false);
-                  await confirmBranch(name || undefined, standalone);
-                }}
-                disabled={actionLoading}
-              >
-                {actionLoading ? "Branching…" : "Create Branch & Switch"}
-              </button>
-              <button
-                onClick={() => {
-                  setBranchTarget(null);
-                  setBranchNameInput("");
-                  setBranchAsStandalone(false);
-                }}
-                disabled={actionLoading}
-              >
-                Cancel
-              </button>
-            </div>
-          </section>
-        </div>
+        <ConfirmModal
+          title="Branch into New Timeline?"
+          message="Create a new playthrough timeline branching off right after this message. The world state will be rolled back to this point, leaving your current playthrough untouched."
+          confirmLabel={actionLoading ? "Branching…" : "Create Branch & Switch"}
+          maxWidth={500}
+          isLoading={actionLoading}
+          onConfirm={async () => {
+            const name = branchNameInput.trim();
+            const standalone = branchAsStandalone;
+            setBranchNameInput("");
+            setBranchAsStandalone(false);
+            await confirmBranch(name || undefined, standalone);
+          }}
+          onCancel={() => {
+            setBranchTarget(null);
+            setBranchNameInput("");
+            setBranchAsStandalone(false);
+          }}
+        >
+          <blockquote className="retry-preview">
+            {branchTarget.content.slice(0, 200)}{branchTarget.content.length > 200 ? "…" : ""}
+          </blockquote>
+          <div className="modal-form-fields">
+            <TextInput
+              label="Branch Name (optional)"
+              value={branchNameInput}
+              onChange={(e) => setBranchNameInput(e.target.value)}
+              placeholder={`${playthrough.name} (Branch T${branchTarget.turn ?? playthrough.turn})`}
+              disabled={actionLoading}
+            />
+            <Checkbox
+              checked={branchAsStandalone}
+              onChange={(e) => setBranchAsStandalone(e.target.checked)}
+              disabled={actionLoading}
+              label="Also create as separate Playthrough in Save/Load list"
+              containerClassName="modal-checkbox-label"
+            />
+          </div>
+        </ConfirmModal>
       ) : null}
+
 
       <SettingsModal
         open={settingsOpen}

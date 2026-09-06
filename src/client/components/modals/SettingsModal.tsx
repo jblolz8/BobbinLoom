@@ -1,12 +1,20 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { PlaythroughPromptSettings } from "../../api";
 import { PresetEditor } from "./PresetEditor";
 import { ProviderConnections } from "./ProviderConnections";
 import { TagTaxonomyPanel } from "../library/TagTaxonomyModal";
 import { AppearanceSettingsPanel } from "./AppearanceSettingsPanel";
-import { Icon } from "../base";
+import { Icon, Tabs, type TabItem } from "../base";
 
 type SettingsTab = "provider" | "prompts" | "tags" | "chat" | "appearance";
+
+const SETTINGS_TABS: TabItem<SettingsTab>[] = [
+  { id: "provider", label: "Provider", icon: "Cpu" },
+  { id: "prompts", label: "Prompt Configuration", icon: "Sliders" },
+  { id: "tags", label: "Tags & Taxonomy", icon: "Tag" },
+  { id: "chat", label: "Chat", icon: "MessageSquare" },
+  { id: "appearance", label: "Theme & Appearance", icon: "Palette" },
+];
 
 export type SettingsModalProps = {
   open: boolean;
@@ -49,28 +57,6 @@ export function SettingsModal(props: SettingsModalProps) {
     setShowModelName,
   } = props;
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("provider");
-  const tabsRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const el = tabsRef.current;
-    if (!el) return;
-
-    const handleWheel = (e: WheelEvent) => {
-      if (el.scrollWidth > el.clientWidth) {
-        if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-          e.preventDefault();
-          const delta = e.deltaMode === 1 ? e.deltaY * 30 : e.deltaY;
-          el.scrollLeft += delta;
-        }
-      }
-    };
-
-    el.addEventListener("wheel", handleWheel, { passive: false });
-    return () => {
-      el.removeEventListener("wheel", handleWheel);
-    };
-  }, [open]);
 
   if (!open) return null;
 
@@ -83,22 +69,15 @@ export function SettingsModal(props: SettingsModalProps) {
           </div>
           <button className="flex items-center gap-1 modal-close-btn" onClick={onClose} aria-label="Close Settings"><Icon name="X" size={14} /> Close</button>
         </header>
-        <div className="settings-tabs" role="tablist" ref={tabsRef}>
-          <button role="tab" aria-selected={settingsTab === "provider"} className={`tab ${settingsTab === "provider" ? "active" : ""}`} onClick={() => setSettingsTab("provider")}>
-            Provider
-          </button>
-          <button role="tab" aria-selected={settingsTab === "prompts"} className={`tab ${settingsTab === "prompts" ? "active" : ""}`} onClick={() => setSettingsTab("prompts")}>
-            Prompt Configuration
-          </button>
-          <button role="tab" aria-selected={settingsTab === "tags"} className={`tab ${settingsTab === "tags" ? "active" : ""}`} onClick={() => setSettingsTab("tags")}>
-            Tags &amp; Taxonomy
-          </button>
-          <button role="tab" aria-selected={settingsTab === "chat"} className={`tab ${settingsTab === "chat" ? "active" : ""}`} onClick={() => setSettingsTab("chat")}>
-            Chat
-          </button>
-          <button role="tab" aria-selected={settingsTab === "appearance"} className={`tab ${settingsTab === "appearance" ? "active" : ""}`} onClick={() => setSettingsTab("appearance")}>
-            Theme &amp; Appearance
-          </button>
+        <div className="settings-tabs-wrapper">
+          <Tabs<SettingsTab>
+            tabs={SETTINGS_TABS}
+            activeTab={settingsTab}
+            onChange={setSettingsTab}
+            variant="underline"
+            size="sm"
+            className="settings-modal-tabs"
+          />
         </div>
         <div className="settings-tab-content">
           {settingsTab === "provider" ? (

@@ -1,6 +1,6 @@
 import type { InventoryRef, Item, Playthrough } from "../../../../../schemas";
 import { ITEMS } from "../../../../../engine/demoData";
-import { AvatarBadge, Icon } from "../../../base";
+import { AvatarBadge, Badge, Icon } from "../../../base";
 
 function getItemDef(ref: InventoryRef, catalog: Item[] | undefined): { name: string; type: string; description?: string } {
   const def = catalog?.find((i) => i.id === ref.itemId) ?? ITEMS.find((i) => i.id === ref.itemId);
@@ -85,7 +85,7 @@ export function PlayerTab({ playthrough }: { playthrough: Playthrough }) {
           <span className="flex items-center gap-1.5">
             <Icon name="Zap" size={15} /> Conditions
           </span>
-          <span className="badge-count">{pc.conditions.length}</span>
+          <Badge variant="neutral" size="xs" pill>{pc.conditions.length}</Badge>
         </h3>
         {pc.conditions.length > 0 ? (
           <div className="conditions-grid">
@@ -109,7 +109,7 @@ export function PlayerTab({ playthrough }: { playthrough: Playthrough }) {
           <span className="flex items-center gap-1.5">
             <Icon name="Package" size={15} /> Inventory
           </span>
-          <span className="badge-count">{inventoryCount}</span>
+          <Badge variant="neutral" size="xs" pill>{inventoryCount}</Badge>
         </h3>
         {playthrough.inventory.length > 0 ? (
           <div className="inventory-grid">
@@ -125,10 +125,10 @@ export function PlayerTab({ playthrough }: { playthrough: Playthrough }) {
                       </span>
                       <strong className="item-name">{def.name}</strong>
                     </div>
-                    <span className="item-qty-badge">x{item.quantity}</span>
+                    <Badge variant="accent" size="xs">x{item.quantity}</Badge>
                   </div>
                   <div className="inventory-card-meta">
-                    <span className="item-type-tag">{def.type}</span>
+                    <Badge variant="outline" size="xs">{def.type}</Badge>
                   </div>
                   {def.description ? (
                     <p className="item-desc">{def.description}</p>

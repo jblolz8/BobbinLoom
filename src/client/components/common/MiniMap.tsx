@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { LocationEntry } from "../../../schemas";
+import { Button, Icon } from "../base";
 
 export type MiniMapProps = {
   locations: LocationEntry[];
@@ -150,12 +151,22 @@ function MapCanvas({
         <div className="minimap-header">
           <h3>Map</h3>
           <div className="minimap-toolbar">
-            <button type="button" onClick={zoomIn} title="Zoom In">+</button>
-            <button type="button" onClick={zoomOut} title="Zoom Out">−</button>
-            <button type="button" onClick={recenter} title="Recenter on Player">🎯</button>
-            <button type="button" onClick={fitAll} title="Fit All Locations">⌖</button>
+            <button type="button" onClick={zoomIn} title="Zoom In" aria-label="Zoom In">
+              <Icon name="ZoomIn" size={12} />
+            </button>
+            <button type="button" onClick={zoomOut} title="Zoom Out" aria-label="Zoom Out">
+              <Icon name="ZoomOut" size={12} />
+            </button>
+            <button type="button" onClick={recenter} title="Recenter on Player" aria-label="Recenter on Player">
+              <Icon name="Crosshair" size={12} />
+            </button>
+            <button type="button" onClick={fitAll} title="Fit All Locations" aria-label="Fit All Locations">
+              <Icon name="Maximize" size={12} />
+            </button>
             {onExpand && (
-              <button type="button" onClick={onExpand} title="Expand World Map">⛶</button>
+              <button type="button" onClick={onExpand} title="Expand World Map" aria-label="Expand World Map">
+                <Icon name="Maximize2" size={12} />
+              </button>
             )}
           </div>
         </div>
@@ -164,14 +175,30 @@ function MapCanvas({
           <div className="minimap-modal-title-group">
             <h2>World Map</h2>
             <div className="minimap-toolbar">
-              <button type="button" onClick={zoomIn} title="Zoom In">+</button>
-              <button type="button" onClick={zoomOut} title="Zoom Out">−</button>
-              <button type="button" onClick={recenter} title="Recenter on Player">🎯</button>
-              <button type="button" onClick={fitAll} title="Fit All Locations">⌖</button>
+              <button type="button" onClick={zoomIn} title="Zoom In" aria-label="Zoom In">
+                <Icon name="ZoomIn" size={12} />
+              </button>
+              <button type="button" onClick={zoomOut} title="Zoom Out" aria-label="Zoom Out">
+                <Icon name="ZoomOut" size={12} />
+              </button>
+              <button type="button" onClick={recenter} title="Recenter on Player" aria-label="Recenter on Player">
+                <Icon name="Crosshair" size={12} />
+              </button>
+              <button type="button" onClick={fitAll} title="Fit All Locations" aria-label="Fit All Locations">
+                <Icon name="Maximize" size={12} />
+              </button>
             </div>
           </div>
           {onCloseModal && (
-            <button type="button" className="quest-icon-btn" onClick={onCloseModal} title="Close map">✕</button>
+            <Button
+              size="xs"
+              variant="ghost"
+              iconOnly
+              onClick={onCloseModal}
+              title="Close map"
+              aria-label="Close map"
+              leftIcon={<Icon name="X" size={14} />}
+            />
           )}
         </header>
       )}
@@ -292,7 +319,7 @@ function MapCanvas({
             {selectedLoc.id === currentLocationId ? (
               <p className="map-current-here">● You are here</p>
             ) : null}
-            <button type="button" onClick={() => setSelected(null)}>Close</button>
+            <Button size="xs" variant="secondary" onClick={() => setSelected(null)}>Close</Button>
           </div>
         ) : null}
       </div>
@@ -302,6 +329,15 @@ function MapCanvas({
 
 export function MiniMap({ locations, currentLocationId }: MiniMapProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!isExpanded) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setIsExpanded(false);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isExpanded]);
 
   if (locations.length === 0) return null;
 
@@ -314,8 +350,13 @@ export function MiniMap({ locations, currentLocationId }: MiniMapProps) {
       />
 
       {isExpanded ? (
-        <div className="modal-backdrop" onClick={() => setIsExpanded(false)}>
-          <section className="modal minimap-modal" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="modal-backdrop"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setIsExpanded(false);
+          }}
+        >
+          <section className="modal minimap-modal">
             <div className="minimap-modal-body">
               <MapCanvas
                 locations={locations}

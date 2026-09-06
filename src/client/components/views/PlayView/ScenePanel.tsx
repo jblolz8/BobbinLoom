@@ -2,7 +2,8 @@ import { useState } from "react";
 import type { Playthrough, Quest } from "../../../../schemas";
 import type { QuestAction } from "../../../api";
 import { MiniMap } from "../../common/MiniMap";
-import { Icon } from "../../base";
+import { ConfirmModal } from "../../common/ConfirmModal";
+import { Badge, Button, Checkbox, Icon, TextArea, TextInput } from "../../base";
 
 export type ScenePanelProps = {
   playthrough: Playthrough;
@@ -51,11 +52,6 @@ export function ScenePanel({ playthrough, actionLoading, onQuestAction, classNam
 
   return (
     <aside className={`panel left-panel${className ? ` ${className}` : ""}`}>
-      <MiniMap
-        locations={playthrough.locationCatalog ?? []}
-        currentLocationId={playthrough.locationId}
-      />
-
       <div className="scene-panel-content">
         <article className="card scene-overview-card">
           <div className="scene-card-header">
@@ -79,23 +75,31 @@ export function ScenePanel({ playthrough, actionLoading, onQuestAction, classNam
 
             <div className="scene-meta-item">
               <span className="meta-label"><Icon name="Clock" size={13} /> Turn</span>
-              <span className="meta-val turn-badge">#{playthrough.turn}</span>
+              <Badge variant="accent" size="sm">#{playthrough.turn}</Badge>
             </div>
+
+            {currentLocation?.description ? (
+              <p className="scene-location-description">{currentLocation.description}</p>
+            ) : null}
           </div>
         </article>
+
+        <MiniMap
+          locations={playthrough.locationCatalog ?? []}
+          currentLocationId={playthrough.locationId}
+        />
 
         <section className="scene-section">
           <h3 className="section-subtitle flex items-center justify-between">
             <span className="flex items-center gap-1.5">
               <Icon name="Flag" size={15} /> World Flags
             </span>
-            <span className="badge-count">{playthrough.flags.length}</span>
+            <Badge variant="neutral" size="xs" pill>{playthrough.flags.length}</Badge>
           </h3>
           {playthrough.flags.length > 0 ? (
             <div className="flags-grid">
               {playthrough.flags.map((f) => (
-                <div key={f} className="flag-chip">
-                  <Icon name="Flag" size={13} className="flag-chip-icon" />
+                <div key={f} className="flag-chip" title={f}>
                   <span className="flag-chip-text">{f}</span>
                 </div>
               ))}
@@ -113,44 +117,47 @@ export function ScenePanel({ playthrough, actionLoading, onQuestAction, classNam
             <span className="flex items-center gap-1.5">
               <Icon name="Scroll" size={15} /> Quests
             </span>
-            <span className="badge-count">{quests.length}</span>
+            <Badge variant="neutral" size="xs" pill>{quests.length}</Badge>
           </h3>
           {quests.length > 0 ? (
             <div className="quests-container">
               {quests.map((quest) => (
                 <div key={quest.id} className={`quest-card ${quest.tracking ? "tracking" : ""}`}>
                   <div className="quest-card-header">
-                    <label className="quest-checkbox-label" title={quest.tracking ? "Untrack quest" : "Track quest"}>
-                      <input
-                        type="checkbox"
-                        checked={quest.tracking}
-                        onChange={() => handleToggle(quest.id)}
-                        disabled={actionLoading}
-                      />
-                      <strong className="quest-title">{quest.name}</strong>
-                    </label>
-                    <span className={`quest-status-badge ${quest.status}`}>{quest.status}</span>
+                    <Checkbox
+                      checked={quest.tracking}
+                      onChange={() => handleToggle(quest.id)}
+                      disabled={actionLoading}
+                      label={<strong className="quest-title">{quest.name}</strong>}
+                      containerClassName="quest-checkbox-label"
+                      title={quest.tracking ? "Untrack quest" : "Track quest"}
+                    />
                   </div>
 
                   {quest.summary ? <p className="quest-summary">{quest.summary}</p> : null}
 
                   <div className="quest-card-actions">
-                    <button
-                      className="quest-action-btn flex items-center gap-1"
+                    <Button
+                      size="xs"
+                      variant="ghost"
                       disabled={actionLoading}
                       onClick={() => setEditing({ questId: quest.id, name: quest.name, summary: quest.summary })}
+                      leftIcon={<Icon name="Pencil" size={12} />}
                       title="Edit quest"
                     >
-                      <Icon name="Pencil" size={13} /> Edit
-                    </button>
-                    <button
-                      className="quest-action-btn danger flex items-center gap-1"
+                      Edit
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      className="text-danger hover:bg-danger-subtle"
                       disabled={actionLoading}
                       onClick={() => setDeleting({ questId: quest.id, name: quest.name })}
+                      leftIcon={<Icon name="Trash2" size={12} />}
                       title="Abandon quest"
                     >
-                      <Icon name="Trash2" size={13} /> Abandon
-                    </button>
+                      Abandon
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -165,61 +172,44 @@ export function ScenePanel({ playthrough, actionLoading, onQuestAction, classNam
       </div>
 
       {editing ? (
-        <div className="modal-backdrop" onClick={() => setEditing(null)}>
-          <section className="modal quest-edit-modal" onClick={(e) => e.stopPropagation()}>
-            <header className="modal-header">
-              <h2>Edit Quest</h2>
-              <button className="flex items-center gap-1" onClick={() => setEditing(null)}>
-                <Icon name="X" size={16} /> Close
-              </button>
-            </header>
-            <div className="settings-form">
-              <label>
-                Name
-                <input
-                  value={editing.name}
-                  onChange={(e) => setEditing({ ...editing, name: e.target.value })}
-                />
-              </label>
-              <label>
-                Summary
-                <textarea
-                  value={editing.summary}
-                  onChange={(e) => setEditing({ ...editing, summary: e.target.value })}
-                  rows={3}
-                />
-              </label>
-            </div>
-            <div className="settings-actions flex items-center gap-2 mt-4">
-              <button className="primary-btn flex items-center gap-1.5" onClick={handleEditSave} disabled={actionLoading || !editing.name.trim()}>
-                <Icon name="Save" size={15} /> Save Changes
-              </button>
-              <button onClick={() => setEditing(null)} disabled={actionLoading}>Cancel</button>
-            </div>
-          </section>
-        </div>
+        <ConfirmModal
+          title="Edit Quest"
+          confirmLabel="Save Changes"
+          confirmDisabled={!editing.name.trim()}
+          isLoading={actionLoading}
+          onConfirm={handleEditSave}
+          onCancel={() => setEditing(null)}
+          maxWidth={460}
+        >
+          <div className="modal-form-fields">
+            <TextInput
+              label="Quest Name"
+              value={editing.name}
+              onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+              disabled={actionLoading}
+              autoFocus
+            />
+            <TextArea
+              label="Summary"
+              value={editing.summary}
+              onChange={(e) => setEditing({ ...editing, summary: e.target.value })}
+              rows={3}
+              disabled={actionLoading}
+            />
+          </div>
+        </ConfirmModal>
       ) : null}
 
       {deleting ? (
-        <div className="modal-backdrop" onClick={() => setDeleting(null)}>
-          <section className="modal confirm-modal" onClick={(e) => e.stopPropagation()}>
-            <header className="modal-header">
-              <div>
-                <h2>Abandon Quest?</h2>
-                <p>This will permanently remove <strong>{deleting.name}</strong> from your quest list and log it in the chat.</p>
-              </div>
-              <button className="flex items-center gap-1" onClick={() => setDeleting(null)}>
-                <Icon name="X" size={16} />
-              </button>
-            </header>
-            <div className="settings-actions flex items-center gap-2 mt-4">
-              <button className="danger flex items-center gap-1.5" onClick={handleDelete} disabled={actionLoading}>
-                <Icon name="Trash2" size={15} /> Yes, abandon
-              </button>
-              <button onClick={() => setDeleting(null)} disabled={actionLoading}>Cancel</button>
-            </div>
-          </section>
-        </div>
+        <ConfirmModal
+          title="Abandon Quest?"
+          message={<>This will permanently remove <strong>{deleting.name}</strong> from your quest list and log it in the chat.</>}
+          confirmLabel="Yes, abandon"
+          danger
+          isLoading={actionLoading}
+          onConfirm={handleDelete}
+          onCancel={() => setDeleting(null)}
+        />
       ) : null}
     </aside>
   );
