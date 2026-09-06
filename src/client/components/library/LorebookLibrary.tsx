@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { LorebookEntry, LorebookFile, LorebookSummary } from "../../../schemas";
+import { Icon, Button, SearchBar, TextArea, TextInput, SimpleSelect, Checkbox, Badge } from "../base";
+import { ConfirmModal } from "../common/ConfirmModal";
 import {
   createLorebook,
   deleteLorebook,
@@ -11,14 +13,8 @@ import {
 
 export type LorebookLibraryProps = {
   isModal?: boolean;
+  onClose?: () => void;
   onLorebooksChanged?: () => void;
-};
-
-const SELECTIVE_LOGIC_LABELS: Record<number, string> = {
-  0: "AND ANY",
-  1: "NOT ALL",
-  2: "NOT ANY",
-  3: "AND ALL",
 };
 
 function blankEntry(uid: number): LorebookEntry {
@@ -65,7 +61,38 @@ function sortEntries(entries: Record<string, LorebookEntry>): LorebookEntry[] {
   return Object.values(entries).sort((a, b) => a.order - b.order || a.uid - b.uid);
 }
 
-export function LorebookLibrary({ isModal, onLorebooksChanged }: LorebookLibraryProps) {
+/** Collapsible heading + body used to group the entry-editor sidebar fields. */
+function SidebarSection({ title, children, defaultOpen = true }: { title: string; children: ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="lorebook-sidebar-section">
+      <button
+        type="button"
+        className={`lorebook-sidebar-section-head ${open ? "is-open" : ""}`}
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+      >
+        <span>{title}</span>
+        <Icon name={open ? "ChevronDown" : "ChevronRight"} size={13} />
+      </button>
+      {open ? <div className="lorebook-sidebar-section-body">{children}</div> : null}
+    </div>
+  );
+}
+
+/** Minimal badge shown on an entry list row. */
+function entryStateBadges(entry: LorebookEntry): ReactNode {
+  const badges: ReactNode[] = [];
+  if (entry.constant) {
+    badges.push(<Badge key="constant" variant="info" size="xs" pill leftIcon={<Icon name="Zap" size={10} />}>Constant</Badge>);
+  }
+  if (entry.disable) {
+    badges.push(<Badge key="disable" variant="outline" size="xs" pill>Disabled</Badge>);
+  }
+  return badges.length ? <span className="entry-state-badges">{badges}</span> : null;
+}
+
+export function LorebookLibrary({ isModal, onClose, onLorebooksChanged }: LorebookLibraryProps) {
   const [summaries, setSummaries] = useState<LorebookSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [lorebook, setLorebook] = useState<LorebookFile | null>(null);
@@ -74,6 +101,10 @@ export function LorebookLibrary({ isModal, onLorebooksChanged }: LorebookLibrary
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<{ text: string; isError: boolean } | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState<{ kind: "lorebook"; id: string; name: string } | { kind: "entry"; uid: number } | null>(null);
+  const [discardConfirm, setDiscardConfirm] = useState<{ onConfirm: () => void; onCancel: () => void; title: string; message: string } | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [createName, setCreateName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -89,6 +120,27 @@ export function LorebookLibrary({ isModal, onLorebooksChanged }: LorebookLibrary
   }
 
   async function selectLorebook(id: string) {
+    if (editingUid !== null && hasUnsavedEntryEdit()) {
+      setDiscardConfirm({
+        title: "Discard unsaved entry edits?",
+        message: "You have unsaved changes to an entry. Switching lorebooks will discard them.",
+        onConfirm: async () => {
+          setDiscardConfirm(null);
+          setEditingUid(null);
+          setEntryForm(null);
+          try {
+            const lb = await getLorebook(id);
+            setLorebook(lb);
+            setSelectedId(id);
+            setStatus(null);
+          } catch (e) {
+            setStatus({ text: e instanceof Error ? e.message : String(e), isError: true });
+          }
+        },
+        onCancel: () => setDiscardConfirm(null),
+      });
+      return;
+    }
     setStatus(null);
     setEditingUid(null);
     setEntryForm(null);
@@ -109,14 +161,14 @@ export function LorebookLibrary({ isModal, onLorebooksChanged }: LorebookLibrary
     refresh();
   }
 
-  async function handleCreate() {
-    const name = window.prompt("Lorebook name:");
-    if (!name?.trim()) return;
+  async function handleCreate(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
     setSaving(true);
     try {
-      await createLorebook(name.trim());
+      await createLorebook(trimmed);
       await refresh();
-      setStatus({ text: `"${name.trim()}" created.`, isError: false });
+      setStatus({ text: `"${trimmed}" created.`, isError: false });
     } catch (e) {
       setStatus({ text: e instanceof Error ? e.message : String(e), isError: true });
     } finally {
@@ -124,8 +176,44 @@ export function LorebookLibrary({ isModal, onLorebooksChanged }: LorebookLibrary
     }
   }
 
+  function renderCreateConfirm() {
+    if (!creating) return null;
+    const canSubmit = createName.trim().length > 0 && !saving;
+    return (
+      <ConfirmModal
+        title="New Lorebook"
+        message="Create an empty lorebook to start adding World Info entries, or import a SillyTavern .json later."
+        confirmLabel={saving ? "Creating…" : "Create"}
+        confirmDisabled={!canSubmit}
+        isLoading={saving}
+        maxWidth={480}
+        onCancel={() => {
+          setCreating(false);
+          setCreateName("");
+        }}
+        onConfirm={async () => {
+          const name = createName.trim();
+          if (!name) return;
+          setCreating(false);
+          setCreateName("");
+          await handleCreate(name);
+        }}
+      >
+        <div className="modal-form-fields">
+          <TextInput
+            label="Lorebook name"
+            value={createName}
+            onChange={(e) => setCreateName(e.target.value)}
+            placeholder="e.g. Kanto Region Lore"
+            disabled={saving}
+            autoFocus
+          />
+        </div>
+      </ConfirmModal>
+    );
+  }
+
   async function handleDelete(id: string, name: string) {
-    if (!window.confirm(`Delete lorebook "${name}"? This cannot be undone.`)) return;
     setSaving(true);
     try {
       await deleteLorebook(id);
@@ -206,20 +294,128 @@ export function LorebookLibrary({ isModal, onLorebooksChanged }: LorebookLibrary
     setEditingUid(null);
   }
 
-  function handleSaveEntry() {
-    if (!lorebook || !entryForm) return;
-    const updated = { ...lorebook.entries, [String(entryForm.uid)]: entryForm };
-    setLorebook({ ...lorebook, entries: updated });
+  function hasUnsavedEntryEdit(): boolean {
+    if (entryForm === null || editingUid === null || !lorebook) return false;
+    const stored = lorebook.entries[String(editingUid)];
+    if (!stored) return true;
+    return (
+      entryForm.key.join("\n") !== stored.key.join("\n") ||
+      entryForm.keysecondary.join("\n") !== stored.keysecondary.join("\n") ||
+      entryForm.content !== stored.content ||
+      entryForm.comment !== stored.comment ||
+      entryForm.constant !== stored.constant ||
+      entryForm.disable !== stored.disable ||
+      entryForm.selective !== stored.selective ||
+      entryForm.selectiveLogic !== stored.selectiveLogic ||
+      entryForm.caseSensitive !== stored.caseSensitive ||
+      entryForm.matchWholeWords !== stored.matchWholeWords ||
+      entryForm.useRegex !== stored.useRegex ||
+      entryForm.order !== stored.order ||
+      entryForm.position !== stored.position ||
+      entryForm.depth !== stored.depth ||
+      entryForm.scanDepth !== stored.scanDepth ||
+      entryForm.sticky !== stored.sticky ||
+      entryForm.cooldown !== stored.cooldown ||
+      entryForm.delay !== stored.delay ||
+      entryForm.probability !== stored.probability ||
+      entryForm.useProbability !== stored.useProbability ||
+      entryForm.group !== stored.group ||
+      entryForm.groupWeight !== stored.groupWeight ||
+      entryForm.preventRecursion !== stored.preventRecursion ||
+      entryForm.excludeRecursion !== stored.excludeRecursion ||
+      entryForm.delayUntilRecursion !== stored.delayUntilRecursion
+    );
+  }
+
+  function handleCloseEntryEditor() {
+    if (hasUnsavedEntryEdit()) {
+      setDiscardConfirm({
+        title: "Discard unsaved entry edits?",
+        message: "Any changes you made to this entry will be lost.",
+        onConfirm: () => {
+          setDiscardConfirm(null);
+          closeEntryEditor();
+        },
+        onCancel: () => setDiscardConfirm(null),
+      });
+      return;
+    }
     closeEntryEditor();
+  }
+
+  async function handleSaveEntry() {
+    if (!lorebook || !entryForm || !selectedId) return;
+    setSaving(true);
+    try {
+      const updated: LorebookFile = {
+        ...lorebook,
+        entries: { ...lorebook.entries, [String(entryForm.uid)]: entryForm },
+      };
+      // NOTE: onLorebooksChanged triggers a full re-fetch of the lorebook summary
+      // in App.tsx. The active editor's local `lorebook` state is set to `updated`
+      // below BEFORE the callback fires, so the re-fetch reads back the same data.
+      // If a second editor for the same lorebook were ever open simultaneously,
+      // the re-fetch would clobber it — guard against that before allowing
+      // concurrent editors.
+      await saveLorebook(selectedId, updated);
+      setLorebook(updated);
+      setStatus({ text: "Entry saved.", isError: false });
+      onLorebooksChanged?.();
+      closeEntryEditor();
+    } catch (e) {
+      setStatus({ text: e instanceof Error ? e.message : String(e), isError: true });
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleDeleteEntry(uid: number) {
     if (!lorebook) return;
-    if (!window.confirm("Delete this entry?")) return;
     const updated = { ...lorebook.entries };
     delete updated[String(uid)];
     setLorebook({ ...lorebook, entries: updated });
     if (editingUid === uid) closeEntryEditor();
+  }
+
+  function renderDeleteConfirm() {
+    if (!deleteConfirm) return null;
+    const isLorebook = deleteConfirm.kind === "lorebook";
+    return (
+      <ConfirmModal
+        title={isLorebook ? `Delete "${deleteConfirm.name}"?` : "Delete this entry?"}
+        message={
+          isLorebook
+            ? "This will permanently remove the lorebook and all of its entries. This cannot be undone."
+            : "The entry will be removed from this lorebook. This cannot be undone."
+        }
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        danger
+        onCancel={() => setDeleteConfirm(null)}
+        onConfirm={async () => {
+          if (isLorebook) {
+            await handleDelete(deleteConfirm.id, deleteConfirm.name);
+          } else {
+            handleDeleteEntry(deleteConfirm.uid);
+          }
+          setDeleteConfirm(null);
+        }}
+      />
+    );
+  }
+
+  function renderDiscardConfirm() {
+    if (!discardConfirm) return null;
+    return (
+      <ConfirmModal
+        title={discardConfirm.title}
+        message={discardConfirm.message}
+        confirmLabel="Discard"
+        cancelLabel="Cancel"
+        onCancel={discardConfirm.onCancel}
+        onConfirm={discardConfirm.onConfirm}
+      />
+    );
   }
 
   function entryFormField<T extends keyof LorebookEntry>(field: T, value: LorebookEntry[T]) {
@@ -240,190 +436,381 @@ export function LorebookLibrary({ isModal, onLorebooksChanged }: LorebookLibrary
       })
     : [];
 
+  const entryListPanel = (
+    <div className="lorebook-entry-list">
+      <div className="lorebook-entry-list-header">
+        <SearchBar
+          value={searchTerm}
+          onChange={setSearchTerm}
+          placeholder="Search entries…"
+          size="sm"
+        />
+        <Button variant="primary" size="sm" leftIcon={<Icon name="Plus" size={14} />} onClick={openNewEntry} disabled={saving}>
+          Add Entry
+        </Button>
+      </div>
+      {filteredEntries.length === 0 ? (
+        <p className="lorebook-empty">No entries. Click "+ Add Entry" to create one, or import from a SillyTavern World Info file.</p>
+      ) : (
+        <ul className="lorebook-entry-rows">
+          {filteredEntries.map((entry) => (
+            <li
+              key={entry.uid}
+              className={`lorebook-entry-row ${entry.uid === editingUid ? "selected" : ""} ${entry.disable ? "disabled" : ""}`}
+              onClick={() => openEditEntry(entry)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  openEditEntry(entry);
+                }
+              }}
+            >
+              <div className="entry-row-top">
+                <span className="entry-uid">#{entry.uid}</span>
+                <span className="entry-label">
+                  {entry.key.slice(0, 3).join(", ") || "(no keys)"}
+                </span>
+                {entryStateBadges(entry)}
+              </div>
+              <span className="entry-preview">{entry.content.slice(0, 60)}{entry.content.length > 60 ? "…" : ""}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+
   if (selectedId && lorebook && !editingUid) {
     return (
-      <div className={`lorebook-library-container ${isModal ? "is-modal" : "is-workspace"}`}>
-        {isModal ? (
-          <div className="global-scope-badge" title="Edits modify global lorebook templates">
-            🌐 Global Lorebooks
-          </div>
-        ) : null}
+      <>
+        <div className={`lorebook-library-container ${isModal ? "is-modal" : "is-workspace"}`}>
+          {isModal ? (
+            <div className="global-scope-badge" title="Edits modify global lorebook templates">
+              🌐 Global Lorebooks
+            </div>
+          ) : null}
 
         <div className="lorebook-editor-subhead">
           <h3>Lorebook: {lorebook.name} ({Object.keys(lorebook.entries).length} entries)</h3>
           <div className="modal-header-actions">
-            <button onClick={handleSaveLorebook} disabled={saving}>{saving ? "Saving…" : "Save Lorebook"}</button>
-            <button onClick={handleExport}>Export</button>
-            <button onClick={backToList}>Back to List</button>
+            <Button variant="primary" size="sm" onClick={handleSaveLorebook} disabled={saving} isLoading={saving}>
+              {saving ? "Saving…" : "Save Lorebook"}
+            </Button>
+            <Button variant="secondary" size="sm" onClick={handleExport}>Export</Button>
+            <Button variant="ghost" size="sm" onClick={handleCloseEntryEditor}>Back to List</Button>
           </div>
         </div>
 
-        {status ? <p className={status.isError ? "status-error" : "status-ok"}>{status.text}</p> : null}
-
-        <div className="lorebook-settings-bar">
-          <label>Name <input
-            value={lorebook.name}
-            onChange={(e) => setLorebook({ ...lorebook, name: e.target.value })}
-          /></label>
-          <label>Scan Depth <input
-            type="number" min={0} max={1000}
-            value={lorebook.scanDepth ?? 2}
-            onChange={(e) => setLorebook({ ...lorebook, scanDepth: Number(e.target.value) || 2 })}
-          /></label>
-          <label className="toggle"><input
-            type="checkbox"
-            checked={lorebook.caseSensitive ?? false}
-            onChange={(e) => setLorebook({ ...lorebook, caseSensitive: e.target.checked })}
-          /> Case Sensitive</label>
-          <label className="toggle"><input
-            type="checkbox"
-            checked={lorebook.matchWholeWords ?? false}
-            onChange={(e) => setLorebook({ ...lorebook, matchWholeWords: e.target.checked })}
-          /> Whole Words</label>
-        </div>
-
-        <div className="lorebook-editor-layout">
-          <div className="lorebook-entry-list">
-            <div className="lorebook-entry-list-header">
-              <input
-                type="text"
-                placeholder="Search entries…"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              <button onClick={openNewEntry} disabled={saving}>+ Add Entry</button>
-            </div>
-            {filteredEntries.length === 0 ? (
-              <p className="lorebook-empty">No entries. Click "+ Add Entry" to create one, or import from a SillyTavern World Info file.</p>
+        {status ? (
+          <div style={{ marginBottom: "8px" }}>
+            {status.isError ? (
+              <Badge variant="danger" leftIcon={<Icon name="AlertCircle" size={13} />}>{status.text}</Badge>
             ) : (
-              <ul className="lorebook-entry-rows">
-                {filteredEntries.map((entry) => (
-                  <li
-                    key={entry.uid}
-                    className={`lorebook-entry-row ${entry.disable ? "disabled" : ""}`}
-                    onClick={() => openEditEntry(entry)}
-                  >
-                    <span className="entry-uid">#{entry.uid}</span>
-                    <span className="entry-label">
-                      {entry.constant ? "⚡" : ""}
-                      {entry.key.slice(0, 3).join(", ") || "(no keys)"}
-                    </span>
-                    <span className="entry-preview">{entry.content.slice(0, 60)}{entry.content.length > 60 ? "…" : ""}</span>
-                  </li>
-                ))}
-              </ul>
+              <Badge variant="success" leftIcon={<Icon name="Check" size={13} />}>{status.text}</Badge>
             )}
           </div>
+        ) : null}
+
+        <div className="lorebook-settings-bar">
+          <div className="lorebook-settings-name">
+            <TextInput
+              label="Name"
+              value={lorebook.name}
+              onChange={(e) => setLorebook({ ...lorebook, name: e.target.value })}
+              size="sm"
+              placeholder="Lorebook name"
+            />
+          </div>
+          <div className="lorebook-settings-scan">
+            <TextInput
+              label="Scan Depth"
+              type="number"
+              min={0}
+              max={1000}
+              value={lorebook.scanDepth ?? 2}
+              onChange={(e) => setLorebook({ ...lorebook, scanDepth: Number(e.target.value) || 2 })}
+              size="sm"
+              title="How many messages back the engine scans for keyword matches."
+            />
+          </div>
+          <div className="lorebook-settings-toggles">
+            <Checkbox
+              label="Case Sensitive"
+              checked={lorebook.caseSensitive ?? false}
+              onChange={(e) => setLorebook({ ...lorebook, caseSensitive: e.target.checked })}
+              description="Keyword matching respects letter case for this lorebook."
+            />
+            <Checkbox
+              label="Whole Words"
+              checked={lorebook.matchWholeWords ?? false}
+              onChange={(e) => setLorebook({ ...lorebook, matchWholeWords: e.target.checked })}
+              description="Keywords must match whole words, not substrings."
+            />
+          </div>
+        </div>
+
+        <div className="lorebook-master-detail">
+          {entryListPanel}
 
           <div className="lorebook-entry-editor-placeholder">
             <p>Select an entry from the list to edit it, or click "+ Add Entry".</p>
           </div>
         </div>
       </div>
+        {renderDeleteConfirm()}
+        {renderDiscardConfirm()}
+      </>
     );
   }
 
   if (selectedId && lorebook && editingUid && entryForm) {
     return (
-      <div className={`lorebook-library-container ${isModal ? "is-modal" : "is-workspace"}`}>
-        <div className="lorebook-editor-subhead">
-          <h3>{lorebook.name} — Entry #{entryForm.uid}</h3>
-          <div className="modal-header-actions">
-            <button onClick={handleSaveEntry} disabled={saving}>Save Entry</button>
-            <button onClick={closeEntryEditor}>Cancel</button>
+      <>
+        <div className={`lorebook-library-container ${isModal ? "is-modal" : "is-workspace"}`}>
+          <div className="lorebook-editor-subhead">
+            <h3>{lorebook.name} — Editing Entry #{entryForm.uid}</h3>
+            <div className="modal-header-actions">
+              <Button variant="primary" size="sm" onClick={handleSaveEntry} disabled={saving} isLoading={saving}>
+                Save Entry
+              </Button>
+              <Button variant="secondary" size="sm" onClick={handleExport}>Export</Button>
+              <Button variant="ghost" size="sm" onClick={handleCloseEntryEditor}>Back to List</Button>
+            </div>
           </div>
-        </div>
+
+          {status ? (
+            <div style={{ marginBottom: "8px" }}>
+              {status.isError ? (
+                <Badge variant="danger" leftIcon={<Icon name="AlertCircle" size={13} />}>{status.text}</Badge>
+              ) : (
+                <Badge variant="success" leftIcon={<Icon name="Check" size={13} />}>{status.text}</Badge>
+              )}
+            </div>
+          ) : null}
+
+          <div className="lorebook-master-detail">
+            {entryListPanel}
 
         <div className="lorebook-entry-editor">
           <div className="lorebook-entry-editor-main">
-            <label>Keys (one per line)
-              <textarea
-                rows={3}
-                value={entryForm.key.join("\n")}
-                onChange={(e) => entryFormField("key", e.target.value.split("\n").filter(Boolean))}
-                placeholder="Keywords that trigger this entry"
-              />
-            </label>
-            <label>Secondary Keys (one per line)
-              <textarea
-                rows={2}
-                value={entryForm.keysecondary.join("\n")}
-                onChange={(e) => entryFormField("keysecondary", e.target.value.split("\n").filter(Boolean))}
-                placeholder="Secondary keywords for selective matching"
-              />
-            </label>
-            <label>Content
-              <textarea
-                rows={6}
-                value={entryForm.content}
-                onChange={(e) => entryFormField("content", e.target.value)}
-                placeholder="The text injected into the prompt when this entry activates"
-              />
-            </label>
-            <label>Comment
-              <textarea
-                rows={2}
-                value={entryForm.comment}
-                onChange={(e) => entryFormField("comment", e.target.value)}
-                placeholder="Optional note (not sent to the model)"
-              />
-            </label>
+            <TextArea
+              label="Keys (one per line)"
+              value={entryForm.key.join("\n")}
+              onChange={(e) => entryFormField("key", e.target.value.split("\n").filter(Boolean))}
+              placeholder="Keywords that trigger this entry"
+              rows={3}
+              size="sm"
+              helperText="One keyword per line. The entry activates when any key matches."
+            />
+            <TextArea
+              label="Secondary Keys (one per line)"
+              value={entryForm.keysecondary.join("\n")}
+              onChange={(e) => entryFormField("keysecondary", e.target.value.split("\n").filter(Boolean))}
+              placeholder="Secondary keywords for selective matching"
+              rows={2}
+              size="sm"
+              helperText="Used only when Selective is enabled — alternatives for AND/NOT logic."
+            />
+            <TextArea
+              label="Content"
+              value={entryForm.content}
+              onChange={(e) => entryFormField("content", e.target.value)}
+              placeholder="The text injected into the prompt when this entry activates"
+              rows={6}
+              size="md"
+              characterCount={entryForm.content.length}
+              maxCharacterCount={8000}
+              helperText={`${entryForm.content.length} / 8000 characters`}
+            />
+            <TextArea
+              label="Comment"
+              value={entryForm.comment}
+              onChange={(e) => entryFormField("comment", e.target.value)}
+              placeholder="Optional note (not sent to the model)"
+              rows={2}
+              size="sm"
+              helperText="Private note for yourself — never injected into the prompt."
+            />
           </div>
 
           <div className="lorebook-entry-editor-sidebar">
-            <h4>Activation</h4>
-            <label className="toggle"><input type="checkbox" checked={entryForm.constant} onChange={(e) => entryFormField("constant", e.target.checked)} /> Constant</label>
-            <label className="toggle"><input type="checkbox" checked={entryForm.disable} onChange={(e) => entryFormField("disable", e.target.checked)} /> Disabled</label>
-            <label className="toggle"><input type="checkbox" checked={entryForm.selective} onChange={(e) => entryFormField("selective", e.target.checked)} /> Selective</label>
+            <SidebarSection title="Activation" defaultOpen>
+              <Checkbox
+                label="Constant"
+                checked={entryForm.constant}
+                onChange={(e) => entryFormField("constant", e.target.checked)}
+                description="Always active, regardless of keyword matches."
+              />
+              <Checkbox
+                label="Disabled"
+                checked={entryForm.disable}
+                onChange={(e) => entryFormField("disable", e.target.checked)}
+                description="Excluded from prompt injection until re-enabled."
+              />
+              <Checkbox
+                label="Selective"
+                checked={entryForm.selective}
+                onChange={(e) => entryFormField("selective", e.target.checked)}
+                description="Entry only fires when secondary keys satisfy the logic rule."
+              />
 
-            {entryForm.selective ? (
-              <label>Selective Logic
-                <select value={entryForm.selectiveLogic} onChange={(e) => entryFormField("selectiveLogic", Number(e.target.value))}>
-                  {Object.entries(SELECTIVE_LOGIC_LABELS).map(([val, label]) => (
-                    <option key={val} value={Number(val)}>{label}</option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
+              {entryForm.selective ? (
+                <div className="lorebook-sidebar-field">
+                  <span className="field-label-text">Selective Logic</span>
+                  <SimpleSelect
+                    value={String(entryForm.selectiveLogic)}
+                    onChange={(v) => entryFormField("selectiveLogic", Number(v))}
+                    size="sm"
+                    fullWidth
+                    aria-label="Selective Logic"
+                    options={[
+                      { value: "0", label: "AND ANY — any key matches" },
+                      { value: "1", label: "NOT ALL — not every key matches" },
+                      { value: "2", label: "NOT ANY — no key matches" },
+                      { value: "3", label: "AND ALL — every key matches" },
+                    ]}
+                  />
+                  <span className="field-helper-text">Controls how secondary keys combine with primary keys.</span>
+                </div>
+              ) : null}
+            </SidebarSection>
 
-            <h4>Matching</h4>
-            <label className="toggle"><input type="checkbox" checked={entryForm.caseSensitive} onChange={(e) => entryFormField("caseSensitive", e.target.checked)} /> Case Sensitive</label>
-            <label className="toggle"><input type="checkbox" checked={entryForm.matchWholeWords} onChange={(e) => entryFormField("matchWholeWords", e.target.checked)} /> Whole Words</label>
-            <label className="toggle"><input type="checkbox" checked={entryForm.useRegex} onChange={(e) => entryFormField("useRegex", e.target.checked)} /> Regex</label>
+            <SidebarSection title="Matching" defaultOpen>
+              <Checkbox
+                label="Case Sensitive"
+                checked={entryForm.caseSensitive}
+                onChange={(e) => entryFormField("caseSensitive", e.target.checked)}
+                description="Keyword matching respects letter case."
+              />
+              <Checkbox
+                label="Whole Words"
+                checked={entryForm.matchWholeWords}
+                onChange={(e) => entryFormField("matchWholeWords", e.target.checked)}
+                description="Keywords must match whole words, not substrings."
+              />
+              <Checkbox
+                label="Regex"
+                checked={entryForm.useRegex}
+                onChange={(e) => entryFormField("useRegex", e.target.checked)}
+                description="Keywords are treated as regular expressions."
+              />
+            </SidebarSection>
 
-            <h4>Injection</h4>
-            <label>Order <input type="number" min={0} value={entryForm.order} onChange={(e) => entryFormField("order", Number(e.target.value) || 100)} /></label>
-            <label>Position
-              <select value={entryForm.position} onChange={(e) => entryFormField("position", Number(e.target.value))}>
-                <option value={0}>0 - Before (system prompt preamble)</option>
-                <option value={1}>1 - After (after character defs)</option>
-                <option value={2}>2 - Depth (at message index)</option>
-              </select>
-            </label>
-            <label>Depth <input type="number" min={0} value={entryForm.depth} onChange={(e) => entryFormField("depth", Number(e.target.value) || 4)} /></label>
-            <label>Scan Depth <input type="number" min={0} value={entryForm.scanDepth ?? ""} onChange={(e) => entryFormField("scanDepth", e.target.value ? Number(e.target.value) : null)} placeholder="Inherits from lorebook" /></label>
+            <SidebarSection title="Injection" defaultOpen={false}>
+              <TextInput
+                label="Order"
+                type="number"
+                min={0}
+                value={entryForm.order}
+                onChange={(e) => entryFormField("order", Number(e.target.value) || 100)}
+                size="sm"
+                helperText="Lower = injected earlier. Default 100."
+              />
+              <div className="lorebook-sidebar-field">
+                <span className="field-label-text">Position</span>
+                <SimpleSelect
+                  value={String(entryForm.position)}
+                  onChange={(v) => entryFormField("position", Number(v))}
+                  size="sm"
+                  fullWidth
+                  aria-label="Position"
+                  options={[
+                    { value: "0", label: "Before — system prompt preamble" },
+                    { value: "1", label: "After — after character definitions" },
+                    { value: "2", label: "Depth — at the current message index" },
+                  ]}
+                />
+                <span className="field-helper-text">Where in the assembled prompt this entry's content is inserted.</span>
+              </div>
+              <TextInput
+                label="Depth"
+                type="number"
+                min={0}
+                value={entryForm.depth}
+                onChange={(e) => entryFormField("depth", Number(e.target.value) || 4)}
+                size="sm"
+                helperText="Recursion depth for nested matches."
+              />
+              <TextInput
+                label="Scan Depth"
+                type="number"
+                min={0}
+                value={entryForm.scanDepth ?? ""}
+                onChange={(e) => entryFormField("scanDepth", e.target.value ? Number(e.target.value) : null)}
+                size="sm"
+                placeholder="Inherits from lorebook"
+                helperText="Leave blank to inherit the lorebook default."
+              />
+            </SidebarSection>
 
-            <h4>Timing</h4>
-            <label>Sticky <input type="number" min={0} value={entryForm.sticky} onChange={(e) => entryFormField("sticky", Number(e.target.value) || 0)} /></label>
-            <label>Cooldown <input type="number" min={0} value={entryForm.cooldown} onChange={(e) => entryFormField("cooldown", Number(e.target.value) || 0)} /></label>
-            <label>Delay <input type="number" min={0} value={entryForm.delay} onChange={(e) => entryFormField("delay", Number(e.target.value) || 0)} /></label>
+            <SidebarSection title="Timing" defaultOpen={false}>
+              <TextInput
+                label="Sticky"
+                type="number"
+                min={0}
+                value={entryForm.sticky}
+                onChange={(e) => entryFormField("sticky", Number(e.target.value) || 0)}
+                size="sm"
+                helperText="Turns sticky after this many activations."
+              />
+              <TextInput
+                label="Cooldown"
+                type="number"
+                min={0}
+                value={entryForm.cooldown}
+                onChange={(e) => entryFormField("cooldown", Number(e.target.value) || 0)}
+                size="sm"
+                helperText="Seconds before this entry can fire again."
+              />
+              <TextInput
+                label="Delay"
+                type="number"
+                min={0}
+                value={entryForm.delay}
+                onChange={(e) => entryFormField("delay", Number(e.target.value) || 0)}
+                size="sm"
+                helperText="Milliseconds to wait before injecting."
+              />
+            </SidebarSection>
 
-            <h4>Probability</h4>
-            <label className="toggle"><input type="checkbox" checked={entryForm.useProbability} onChange={(e) => entryFormField("useProbability", e.target.checked)} /> Use Probability</label>
-            {entryForm.useProbability ? (
-              <label>Probability % <input type="number" min={0} max={100} value={entryForm.probability} onChange={(e) => entryFormField("probability", Number(e.target.value) || 100)} /></label>
-            ) : null}
+            <SidebarSection title="Probability" defaultOpen={false}>
+              <Checkbox
+                label="Use Probability"
+                checked={entryForm.useProbability}
+                onChange={(e) => entryFormField("useProbability", e.target.checked)}
+                description="Randomize whether this entry fires on each eligible turn."
+              />
+              {entryForm.useProbability ? (
+                <TextInput
+                  label="Probability %"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={entryForm.probability}
+                  onChange={(e) => entryFormField("probability", Number(e.target.value) || 100)}
+                  size="sm"
+                  helperText="Chance (0–100) this entry fires when selected."
+                />
+              ) : null}
+            </SidebarSection>
 
             <div className="entry-editor-actions">
-              <button className="danger" onClick={() => handleDeleteEntry(entryForm.uid)}>Delete Entry</button>
+              <Button variant="danger" size="sm" onClick={() => setDeleteConfirm({ kind: "entry", uid: entryForm.uid })}>Delete Entry</Button>
             </div>
           </div>
         </div>
       </div>
+      </div>
+        {renderDeleteConfirm()}
+        {renderDiscardConfirm()}
+      </>
     );
   }
 
   return (
+    <>
     <div className={`lorebook-library-container ${isModal ? "is-modal" : "is-workspace"}`}>
       {isModal ? (
         <div className="global-scope-badge" title="Edits modify global lorebook templates">
@@ -431,11 +818,23 @@ export function LorebookLibrary({ isModal, onLorebooksChanged }: LorebookLibrary
         </div>
       ) : null}
 
-      {status ? <p className={status.isError ? "status-error" : "status-ok"}>{status.text}</p> : null}
+      {status ? (
+        <div style={{ marginBottom: "8px" }}>
+          {status.isError ? (
+            <Badge variant="danger" leftIcon={<Icon name="AlertCircle" size={13} />}>{status.text}</Badge>
+          ) : (
+            <Badge variant="success" leftIcon={<Icon name="Check" size={13} />}>{status.text}</Badge>
+          )}
+        </div>
+      ) : null}
 
       <div className="lorebook-toolbar">
-        <button className="primary-btn" onClick={handleCreate}>New Lorebook</button>
-        <button onClick={() => fileInputRef.current?.click()}>Import from File</button>
+        <Button variant="primary" size="sm" onClick={() => { setCreateName(""); setCreating(true); }} disabled={saving} leftIcon={<Icon name="FilePlus" size={14} />}>
+          New Lorebook
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => fileInputRef.current?.click()} leftIcon={<Icon name="Upload" size={14} />}>
+          Import from File
+        </Button>
         <input
           ref={fileInputRef}
           type="file"
@@ -457,13 +856,15 @@ export function LorebookLibrary({ isModal, onLorebooksChanged }: LorebookLibrary
                 <span>Scan depth: {s.scanDepth}</span>
               </div>
               <div className="lorebook-list-actions">
-                <button onClick={() => void selectLorebook(s.id)}>Edit</button>
-                <button className="danger" onClick={() => void handleDelete(s.id, s.name)}>Delete</button>
+                <Button variant="secondary" size="sm" onClick={() => void selectLorebook(s.id)}>Edit</Button>
+                <Button variant="danger" size="sm" onClick={() => setDeleteConfirm({ kind: "lorebook", id: s.id, name: s.name })}>Delete</Button>
               </div>
             </li>
           ))}
         </ul>
       )}
     </div>
+    {renderCreateConfirm()}
+    </>
   );
 }

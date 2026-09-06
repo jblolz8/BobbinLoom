@@ -1,3 +1,4 @@
+import { Button, Icon } from "../base";
 import { LorebookLibrary } from "../library/LorebookLibrary";
 
 export type LorebookManagerProps = {
@@ -17,10 +18,12 @@ export function LorebookManager({ open, onClose, onLorebooksChanged }: LorebookM
             <h2>Lorebook Manager</h2>
             <p>Manage World Info lorebooks. Import .json files exported from SillyTavern, or create new ones here.</p>
           </div>
-          <button onClick={onClose}>Close</button>
+          <Button variant="secondary" size="sm" onClick={onClose} leftIcon={<Icon name="X" size={14} />}>
+            Close
+          </Button>
         </header>
 
-        <LorebookLibrary isModal={true} onLorebooksChanged={onLorebooksChanged} />
+        <LorebookLibrary isModal={true} onClose={onClose} onLorebooksChanged={onLorebooksChanged} />
       </section>
     </div>
   );

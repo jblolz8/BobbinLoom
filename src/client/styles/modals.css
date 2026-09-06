@@ -1048,24 +1048,33 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  border: 1px solid #2a3040;
+  border: 1px solid var(--border-main);
   border-radius: 6px;
   margin-bottom: 6px;
-  background: #1a1e2b;
+  background: var(--bg-surface-elevated);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.lorebook-list-row:hover {
+  border-color: var(--accent-base);
+  background: var(--bg-surface-hover);
 }
 
 .lorebook-list-info {
   cursor: pointer;
   flex: 1;
+  min-width: 0;
 }
 
 .lorebook-list-info strong {
   display: block;
-  color: #eceff4;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .lorebook-list-info span {
-  color: #7b8299;
+  color: var(--text-muted);
   font-size: 0.82rem;
   margin-right: 12px;
 }
@@ -1076,52 +1085,90 @@
 }
 
 .lorebook-empty {
-  color: #7b8299;
+  color: var(--text-muted);
   text-align: center;
   padding: 24px;
 }
 
-.lorebook-editor {
-  max-width: 960px;
+.lorebook-editor-subhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.lorebook-editor-subhead h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .lorebook-settings-bar {
   display: flex;
-  gap: 12px;
+  gap: 16px;
   align-items: flex-end;
-  padding: 10px 0;
-  border-bottom: 1px solid #2a3040;
+  justify-content: space-between;
+  padding: 6px 0 10px;
+  border-bottom: 1px solid var(--border-subtle);
   margin-bottom: 12px;
   flex-wrap: wrap;
 }
 
-.lorebook-settings-bar label {
+.lorebook-settings-bar .base-form-field {
+  margin: 0;
+}
+
+.lorebook-settings-name {
+  flex: 1 1 220px;
+  min-width: 160px;
+  max-width: 420px;
+}
+
+.lorebook-settings-scan {
+  flex: 0 0 auto;
+  width: 110px;
+}
+
+.lorebook-settings-toggles {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 0.82rem;
-  color: #7b8299;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: auto;
 }
 
-.lorebook-settings-bar input[type="number"] {
-  width: 70px;
+.lorebook-settings-toggles .checkbox-label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
 }
 
-.lorebook-settings-bar label.toggle {
-  flex-direction: row;
-  align-items: center;
-  gap: 4px;
+.lorebook-settings-toggles .checkbox-description {
+  margin-left: 22px;
 }
 
-.lorebook-editor-layout {
+.lorebook-settings-name .base-form-field,
+.lorebook-settings-scan .base-form-field {
+  width: 100%;
+}
+
+.lorebook-master-detail {
   display: flex;
   gap: 16px;
   flex: 1;
   overflow: hidden;
+  min-height: 0;
 }
 
 .lorebook-entry-list {
-  width: 320px;
+  width: 300px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -1134,8 +1181,9 @@
   margin-bottom: 8px;
 }
 
-.lorebook-entry-list-header input {
+.lorebook-entry-list-header .base-search-bar {
   flex: 1;
+  min-width: 0;
 }
 
 .lorebook-entry-rows {
@@ -1148,38 +1196,70 @@
 
 .lorebook-entry-row {
   padding: 8px 10px;
-  border: 1px solid #2a3040;
-  border-radius: 4px;
+  border: 1px solid var(--border-main);
+  border-radius: 6px;
   margin-bottom: 4px;
   cursor: pointer;
-  background: #1a1e2b;
-  transition: background 0.15s;
+  background: var(--bg-surface-elevated);
+  transition: background 0.15s, border-color 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
 .lorebook-entry-row:hover {
-  background: #252a38;
+  background: var(--bg-surface-hover);
+  border-color: var(--border-light);
+}
+
+.lorebook-entry-row.selected {
+  border-color: var(--accent-base);
+  background: var(--accent-translucent);
+}
+
+.lorebook-entry-row:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-base);
 }
 
 .lorebook-entry-row.disabled {
   opacity: 0.5;
 }
 
+.lorebook-entry-row .entry-row-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .lorebook-entry-row .entry-uid {
-  color: #4a5568;
+  color: var(--text-muted);
   font-size: 0.75rem;
-  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+.lorebook-entry-row .entry-state-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .lorebook-entry-row .entry-label {
   display: block;
-  color: #eceff4;
+  color: var(--text-primary);
   font-size: 0.85rem;
   font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .lorebook-entry-row .entry-preview {
   display: block;
-  color: #7b8299;
+  color: var(--text-muted);
   font-size: 0.78rem;
   margin-top: 2px;
 }
@@ -1189,7 +1269,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #7b8299;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 24px;
 }
 
 .lorebook-entry-editor {
@@ -1197,6 +1280,7 @@
   gap: 16px;
   flex: 1;
   overflow: hidden;
+  min-width: 0;
 }
 
 .lorebook-entry-editor-main {
@@ -1205,24 +1289,6 @@
   flex-direction: column;
   gap: 10px;
   overflow-y: auto;
-}
-
-.lorebook-entry-editor-main label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  color: #eceff4;
-  font-size: 0.85rem;
-}
-
-.lorebook-entry-editor-main textarea {
-  background: #1a1e2b;
-  border: 1px solid #2a3040;
-  color: #eceff4;
-  border-radius: 4px;
-  padding: 6px 8px;
-  font-family: inherit;
-  font-size: 0.85rem;
 }
 
 .lorebook-entry-editor-sidebar {
@@ -1234,59 +1300,110 @@
   gap: 6px;
 }
 
-.lorebook-entry-editor-sidebar h4 {
-  margin: 6px 0 2px;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  color: #5a6277;
-  border-top: 1px solid #2a3040;
-  padding-top: 8px;
+.lorebook-entry-editor-sidebar .lorebook-sidebar-section {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--bg-surface-elevated);
 }
 
-.lorebook-entry-editor-sidebar h4:first-child {
-  border-top: none;
-  padding-top: 0;
+.lorebook-entry-editor-sidebar .lorebook-sidebar-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 2px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: inherit;
+}
+
+.lorebook-entry-editor-sidebar .lorebook-sidebar-section-head svg {
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.lorebook-entry-editor-sidebar .lorebook-sidebar-section-head:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface-hover);
+}
+
+.lorebook-entry-editor-sidebar .lorebook-sidebar-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.lorebook-entry-editor-sidebar .base-form-input[type="number"],
+.lorebook-entry-editor-sidebar .base-form-textarea {
+  max-width: 100%;
+}
+
+.lorebook-entry-editor-sidebar .base-form-field {
   margin-top: 0;
 }
 
-.lorebook-entry-editor-sidebar label {
+.lorebook-entry-editor-sidebar .base-form-field + .base-form-field {
+  margin-top: 0.4rem;
+}
+
+.lorebook-entry-editor-sidebar .lorebook-sidebar-field {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  font-size: 0.8rem;
-  color: #7b8299;
+  gap: 0.25rem;
 }
 
-.lorebook-entry-editor-sidebar label.toggle {
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
+.lorebook-entry-editor-sidebar .lorebook-sidebar-field .base-select-trigger--full {
+  width: 100%;
 }
 
-.lorebook-entry-editor-sidebar input[type="number"] {
-  width: 80px;
-}
+@media (max-width: 860px) {
+  .lorebook-master-detail {
+    flex-direction: column;
+  }
 
-.lorebook-entry-editor-sidebar select {
-  background: #1a1e2b;
-  border: 1px solid #2a3040;
-  color: #eceff4;
-  border-radius: 4px;
-  padding: 4px 6px;
+  .lorebook-entry-list {
+    width: 100%;
+    max-height: 220px;
+  }
+
+  .lorebook-entry-editor {
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .lorebook-entry-editor-sidebar {
+    width: 100%;
+    max-height: none;
+    border-top: 1px solid var(--border-subtle);
+    padding-top: 8px;
+  }
+
+  .lorebook-entry-editor-main {
+    max-height: none;
+  }
 }
 
 .entry-editor-actions {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid #2a3040;
+  border-top: 1px solid var(--border-main);
   display: flex;
   gap: 8px;
-}
-
-.lorebook-picker-section {
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid #2a3040;
 }
 
 /* Character Editor */
