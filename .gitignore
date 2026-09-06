@@ -9,6 +9,8 @@ dist/
 data/*.json
 !data/prompt-presets.json
 !data/settings.json
+# Runtime overrides are gitignored (defaults live in committed data/settings.json).
+data/user-settings.json
 data/*.bak
 data/playthroughs/
 data/lorebooks/

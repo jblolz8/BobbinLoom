@@ -8,6 +8,7 @@ import { slugify, uniqueSlug } from "./slugs";
 import { normalizeCreator, normalizeTags } from "../engine/characterCards";
 import type { ParsedCard } from "./characterCards/parseCard";
 import { createBlankPlaythrough, createInitialPlaythrough, createPlaythroughFromSeed, ensureMessageTurns, restoreSnapshotState } from "../engine/engine";
+import { loadAppSettings } from "./appSettingsStore";
 import { DEMO_TEMPLATE } from "../engine/demoData";
 import type { CharacterFormat, CharacterTemplate, LoadFailure, LorebookFile, LorebookSummary, PlayerPersona, Playthrough, PlaythroughListResponse, PromptModuleSet, PromptPreset, ScenarioSeed, TurnSnapshot } from "../schemas";
 import { CharacterTemplateSchema, EMPTY_MODULE_SET, PlayerPersonaSchema, PlaythroughSchema } from "../schemas";
@@ -71,19 +72,9 @@ export function loadDefaultPreset(): { id: string; name: string; modules: Prompt
     const raw = readFileSync(presetsPath, "utf8");
     const presets = JSON.parse(raw) as PromptPreset[];
 
-    // Honour the global default preset from settings.json, falling back to "default".
-    const settingsPath = join(process.cwd(), "data", "settings.json");
-    let targetId = "default";
-    try {
-      if (existsSync(settingsPath)) {
-        const settings = JSON.parse(readFileSync(settingsPath, "utf8"));
-        if (settings.defaultPresetId && presets.some((p) => p.id === settings.defaultPresetId)) {
-          targetId = settings.defaultPresetId;
-        }
-      }
-    } catch {
-      // settings.json missing or malformed — stick with "default"
-    }
+    // Honour the global default preset from the merged app settings (shipped
+    // default "default" overridden by user-settings.json), falling back to "default".
+    const targetId = loadAppSettings(join(process.cwd(), "data")).defaultPresetId ?? "default";
 
     const chosen = presets.find((p) => p.id === targetId) ?? presets.find((p) => p.id === "default");
     if (chosen) {

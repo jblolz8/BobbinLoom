@@ -12,6 +12,7 @@ import {
   type PromptPreset
 } from "../../schemas";
 import { loadPresets, savePresets, loadAppSettings, saveAppSettings, settingsDir } from "./helpers";
+import { DEFAULT_APP_SETTINGS } from "../appSettingsStore";
 
 const CreatePresetBody = z.object({
   name: z.string().min(1),
@@ -96,7 +97,7 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/api/settings/default-preset", async () => {
-    return { defaultPresetId: loadAppSettings(settingsDir).defaultPresetId ?? "default" };
+    return { defaultPresetId: loadAppSettings(settingsDir).defaultPresetId ?? DEFAULT_APP_SETTINGS.defaultPresetId };
   });
 
   app.put("/api/settings/default-preset", async (request) => {
@@ -121,9 +122,9 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/settings/appearance", async () => {
     const settings = loadAppSettings(settingsDir);
     return {
-      avatarShape: settings.avatarShape ?? "rounded",
-      themeMode: settings.themeMode ?? "dark",
-      themePreset: settings.themePreset ?? "default-dark",
+      avatarShape: settings.avatarShape ?? DEFAULT_APP_SETTINGS.avatarShape,
+      themeMode: settings.themeMode ?? DEFAULT_APP_SETTINGS.themeMode,
+      themePreset: settings.themePreset ?? DEFAULT_APP_SETTINGS.themePreset,
       customThemeColors: settings.customThemeColors ?? {},
     };
   });
@@ -137,9 +138,9 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
     }).parse(request.body ?? {});
     const updated = saveAppSettings(settingsDir, body);
     return {
-      avatarShape: updated.avatarShape ?? "rounded",
-      themeMode: updated.themeMode ?? "dark",
-      themePreset: updated.themePreset ?? "default-dark",
+      avatarShape: updated.avatarShape ?? DEFAULT_APP_SETTINGS.avatarShape,
+      themeMode: updated.themeMode ?? DEFAULT_APP_SETTINGS.themeMode,
+      themePreset: updated.themePreset ?? DEFAULT_APP_SETTINGS.themePreset,
       customThemeColors: updated.customThemeColors ?? {},
     };
   });

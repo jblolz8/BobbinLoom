@@ -23,12 +23,19 @@ afterEach(() => {
 });
 
 describe("app settings store", () => {
-  it("returns defaults when settings.json is missing", () => {
+  it("returns shipped defaults when user-settings.json is missing", () => {
     const dir = tempDir();
-    expect(loadAppSettings(dir)).toEqual({ schemaVersion: 1 });
+    const settings = loadAppSettings(dir);
+    expect(settings.defaultPresetId).toBe("default");
+    expect(settings.themePreset).toBe("default-dark");
+    expect(settings.themeMode).toBe("dark");
+    expect(settings.avatarShape).toBe("rounded");
   });
 
-  it("loads a legacy v0 settings.json tolerantly: provider fields ignored, no archive written", () => {
+  it("reads legacy v0 settings.json only as a defaults template, not runtime state", () => {
+    // The committed settings.json is a pure defaults template and is no longer
+    // read as runtime state. A v0 file with provider fields is ignored in favor
+    // of the shipped defaults (start fresh — no adoption of prior runtime prefs).
     const dir = tempDir();
     writeFileSync(
       join(dir, "settings.json"),
@@ -40,42 +47,51 @@ describe("app settings store", () => {
         temperature: 0.9,
         maxTokens: 1800,
         contextWindow: 131072,
-        defaultPresetId: "default-nsfw"
+        defaultPresetId: "default-nsfw",
+        themePreset: "emerald-archive"
       }),
       "utf8"
     );
 
     const settings = loadAppSettings(dir);
 
-    expect(settings.defaultPresetId).toBe("default-nsfw");
-    expect(settings.schemaVersion).toBe(1);
-    expect("providerId" in settings).toBe(false);
-    expect("apiKey" in settings).toBe(false);
-    // No migration side-effects: no .bak is written, the on-disk file is untouched.
+    // Runtime now lives in user-settings.json; a bare settings.json template is ignored.
+    expect(settings.defaultPresetId).toBe("default");
+    expect(settings.themePreset).toBe("default-dark");
+    expect(settings.themeMode).toBe("dark");
+    expect(settings.avatarShape).toBe("rounded");
+    // No migration side-effects: no .bak is written, the template file is untouched.
     expect(existsSync(join(dir, "settings.json.bak"))).toBe(false);
-    const onDisk = JSON.parse(readFileSync(join(dir, "settings.json"), "utf8"));
-    expect(onDisk).toEqual(expect.objectContaining({ defaultPresetId: "default-nsfw" }));
+    expect(existsSync(join(dir, "user-settings.json"))).toBe(false);
   });
 
-  it("quarantines a corrupt settings.json and returns defaults", () => {
+  it("quarantines a corrupt user-settings.json and returns defaults", () => {
     const dir = tempDir();
-    writeFileSync(join(dir, "settings.json"), "{ nope", "utf8");
+    writeFileSync(join(dir, "user-settings.json"), "{ nope", "utf8");
 
     const settings = loadAppSettings(dir);
 
-    expect(settings).toEqual({ schemaVersion: 1 });
-    expect(existsSync(join(dir, "settings.json.bak"))).toBe(true);
+    expect(settings.defaultPresetId).toBe("default");
+    expect(settings.themePreset).toBe("default-dark");
+    expect(existsSync(join(dir, "user-settings.json.bak"))).toBe(true);
   });
 
-  it("saveAppSettings persists defaultPresetId and updatedAt", () => {
+  it("saveAppSettings persists runtime overrides to user-settings.json and merges with defaults", () => {
     const dir = tempDir();
     const saved = saveAppSettings(dir, { defaultPresetId: "default-nsfw" });
 
     expect(saved.defaultPresetId).toBe("default-nsfw");
     expect(saved.schemaVersion).toBe(1);
     expect(typeof saved.updatedAt).toBe("string");
+    // Untouched defaults survive the merge.
+    expect(saved.themePreset).toBe("default-dark");
+    expect(saved.avatarShape).toBe("rounded");
 
+    // Persisted to the runtime file, not the template.
     expect(loadAppSettings(dir).defaultPresetId).toBe("default-nsfw");
+    expect(existsSync(join(dir, "user-settings.json"))).toBe(true);
+    const onDisk = JSON.parse(readFileSync(join(dir, "user-settings.json"), "utf8"));
+    expect(onDisk.defaultPresetId).toBe("default-nsfw");
 
     const updated = saveAppSettings(dir, { defaultPresetId: "default" });
     expect(updated.defaultPresetId).toBe("default");

@@ -1,9 +1,8 @@
 {
   "schemaVersion": 1,
-  "defaultPresetId": "default-nsfw",
-  "avatarShape": "square",
+  "defaultPresetId": "default",
+  "avatarShape": "rounded",
   "themeMode": "dark",
-  "themePreset": "emerald-archive",
-  "customThemeColors": {},
-  "updatedAt": "2026-09-06T07:57:31.871Z"
+  "themePreset": "default-dark",
+  "customThemeColors": {}
 }
