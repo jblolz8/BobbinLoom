@@ -4316,7 +4316,7 @@
   position: relative;
   width: 100%;
   aspect-ratio: 2 / 3 !important;
-  background: #0a0d14;
+  background: var(--bg-app);
   overflow: hidden;
   border-radius: 11px 11px 0 0;
   display: flex;
@@ -4511,7 +4511,7 @@
   position: relative;
   width: 100%;
   aspect-ratio: 1 / 1;
-  background: #0a0d14;
+  background: var(--bg-app);
   overflow: hidden;
   border-radius: 9px 9px 0 0;
   display: flex;
@@ -4955,9 +4955,9 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   border-radius: 4px;
-  color: #fbbf24;
-  background: rgba(251, 191, 36, 0.1);
-  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: var(--status-warning);
+  background: var(--status-warning-bg);
+  border: 1px solid var(--status-warning-border);
   vertical-align: middle;
 }
 
@@ -4974,7 +4974,7 @@
 .cast-warn {
   display: block;
   font-size: 0.75rem;
-  color: #f87171;
+  color: var(--status-danger);
   margin-top: 0.25rem;
 }
 

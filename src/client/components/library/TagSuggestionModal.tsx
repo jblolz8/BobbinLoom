@@ -201,6 +201,22 @@ export function TagSuggestionModal({
   function renderTagToggle(tag: string, source: "ai_new" | "ai_confirmed" | "saved" | "custom") {
     const isChecked = selectedTags.has(tag);
     const tagStyle = resolveTagStyle(tag, taxonomyConfig);
+    const dark = tagStyle.colorsDark || tagStyle.colors;
+    const light = tagStyle.colorsLight || tagStyle.colors;
+
+    // Expose both dark and light palettes as CSS vars so the toggle follows the
+    // active theme mode ([data-theme="light"] / .theme-light), matching how the
+    // base TagChip and the Tags & Taxonomy preview color tag chips.
+    const toggleVars = {
+      "--tag-text": dark.text,
+      "--tag-bg": isChecked ? (dark.glow || dark.bg) : dark.bg,
+      "--tag-border": isChecked ? dark.text : dark.border,
+      "--tag-glow": isChecked ? `0 0 8px ${dark.glow || dark.border}` : "none",
+      "--tag-text-light": light.text,
+      "--tag-bg-light": isChecked ? (light.glow || light.bg) : light.bg,
+      "--tag-border-light": isChecked ? light.text : light.border,
+      "--tag-glow-light": isChecked ? `0 0 8px ${light.glow || light.border}` : "none",
+    } as React.CSSProperties;
 
     return (
       <div
@@ -215,18 +231,14 @@ export function TagSuggestionModal({
             toggleTag(tag);
           }
         }}
-        style={{
-          borderColor: isChecked ? tagStyle.colors.text : tagStyle.colors.border,
-          backgroundColor: isChecked ? (tagStyle.colors.glow || tagStyle.colors.bg) : tagStyle.colors.bg,
-        }}
+        style={toggleVars}
       >
         <span
           className={`tag-checkbox-indicator ${isChecked ? "active" : ""}`}
-          style={{ borderColor: tagStyle.colors.border, color: tagStyle.colors.text }}
         >
           {isChecked ? <Icon name="Check" size={12} strokeWidth={3} /> : null}
         </span>
-        <span className="tag-label-text" style={{ color: tagStyle.colors.text }}>
+        <span className="tag-label-text">
           {tagStyle.namespace ? (
             <span className="tag-toggle-namespace" style={{ opacity: 0.72 }}>
               {tagStyle.namespace}:
@@ -540,7 +552,7 @@ export function TagSuggestionModal({
             {aiSuggestedTagsList.length > 0 ? (
               <div className="tag-modal-group ai-group">
                 <div className="tag-modal-group-title">
-                  <Icon name="Sparkles" size={13} className="text-purple-400" />
+                  <Icon name="Sparkles" size={13} />
                   <span>AI Recommended Tags ({aiSuggestedTagsList.length})</span>
                 </div>
                 <div className="tag-suggestion-chips-grid">
@@ -556,7 +568,7 @@ export function TagSuggestionModal({
             {otherCardTags.length > 0 ? (
               <div className="tag-modal-group saved-group">
                 <div className="tag-modal-group-title">
-                  <Icon name="Tag" size={13} className="text-blue-400" />
+                  <Icon name="Tag" size={13} />
                   <span>Other Saved Card Tags ({otherCardTags.length})</span>
                 </div>
                 <div className="tag-suggestion-chips-grid">
@@ -569,7 +581,7 @@ export function TagSuggestionModal({
             {customTagsList.length > 0 ? (
               <div className="tag-modal-group custom-group">
                 <div className="tag-modal-group-title">
-                  <Icon name="Plus" size={13} className="text-cyan-400" />
+                  <Icon name="Plus" size={13} />
                   <span>Custom Added Tags ({customTagsList.length})</span>
                 </div>
                 <div className="tag-suggestion-chips-grid">

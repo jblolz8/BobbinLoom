@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import type { CharacterTemplate, LorebookSummary } from "../../../schemas";
 import type { Persona } from "../../api";
 import { getTagTaxonomy } from "../../api";
-import { AvatarBadge, Icon, SearchBar, TagChip, CharacterAvatar } from "../base";
+import { AvatarBadge, Button, CharacterAvatar, Icon, SearchBar, SimpleSelect, SwitchRow, TagChip, TextArea, TextInput } from "../base";
 import type { ViewMode } from "../library/CharacterLibrary";
 import { cardBadgeLabel, displayTitle, entryKind, filterLibraryEntries, groupByLineage, getGroupCreatedAt, getGroupUpdatedAt, type CharacterSortOption, type SortDirection } from "../../../engine/characterCards";
 import { groupTagsByCategory, sortTags, type TagTaxonomyConfig } from "../../../engine/tagTaxonomy";
@@ -22,6 +22,8 @@ export const defaultSetupForm: SetupFormState = {
 };
 
 export type SetupStepTab = "persona" | "cast" | "setting";
+
+const SETUP_STEP_ORDER: SetupStepTab[] = ["persona", "cast", "setting"];
 
 export type SetupViewProps = {
   open: boolean;
@@ -346,6 +348,19 @@ export function SetupView(props: SetupViewProps) {
     }
   }
 
+  function handleStepperKeyDown(e: KeyboardEvent<HTMLButtonElement>, tab: SetupStepTab) {
+    const idx = SETUP_STEP_ORDER.indexOf(tab);
+    let next: SetupStepTab | null = null;
+    if (e.key === "ArrowRight") next = SETUP_STEP_ORDER[(idx + 1) % SETUP_STEP_ORDER.length];
+    else if (e.key === "ArrowLeft") next = SETUP_STEP_ORDER[(idx + SETUP_STEP_ORDER.length - 1) % SETUP_STEP_ORDER.length];
+    else if (e.key === "Home") next = SETUP_STEP_ORDER[0];
+    else if (e.key === "End") next = SETUP_STEP_ORDER[SETUP_STEP_ORDER.length - 1];
+    if (next && next !== tab) {
+      e.preventDefault();
+      setActiveTab(next);
+    }
+  }
+
   if (!open) return null;
 
   return (
@@ -416,23 +431,29 @@ export function SetupView(props: SetupViewProps) {
             </div>
 
             <div className="setup-generating-actions">
-              <button
-                type="button"
-                className="danger flex items-center gap-1.5 cancel-gen-btn"
+              <Button
+                variant="danger"
+                className="cancel-gen-btn"
                 onClick={onCancelGenerate}
+                leftIcon={<Icon name="X" size={15} />}
               >
-                <Icon name="X" size={15} /> Cancel Generation
-              </button>
+                Cancel Generation
+              </Button>
             </div>
           </div>
         ) : (
           <>
             {/* ── Wizard Step Tabs ── */}
-            <nav className="setup-wizard-tabs" aria-label="Setup Steps">
+            <nav className="setup-wizard-tabs" aria-label="Setup Steps" role="tablist">
               <button
                 type="button"
+                role="tab"
+                id="setup-tab-persona"
+                aria-selected={activeTab === "persona"}
+                aria-controls="setup-panel-persona"
                 className={`setup-tab-btn ${activeTab === "persona" ? "active" : ""}`}
                 onClick={() => setActiveTab("persona")}
+                onKeyDown={(e) => handleStepperKeyDown(e, "persona")}
               >
                 <span className="setup-tab-num">1</span>
                 <span className="setup-tab-label">Persona</span>
@@ -443,8 +464,13 @@ export function SetupView(props: SetupViewProps) {
 
               <button
                 type="button"
+                role="tab"
+                id="setup-tab-cast"
+                aria-selected={activeTab === "cast"}
+                aria-controls="setup-panel-cast"
                 className={`setup-tab-btn ${activeTab === "cast" ? "active" : ""}`}
                 onClick={() => setActiveTab("cast")}
+                onKeyDown={(e) => handleStepperKeyDown(e, "cast")}
               >
                 <span className="setup-tab-num">2</span>
                 <span className="setup-tab-label">Cast</span>
@@ -455,8 +481,13 @@ export function SetupView(props: SetupViewProps) {
 
               <button
                 type="button"
+                role="tab"
+                id="setup-tab-setting"
+                aria-selected={activeTab === "setting"}
+                aria-controls="setup-panel-setting"
                 className={`setup-tab-btn ${activeTab === "setting" ? "active" : ""}`}
                 onClick={() => setActiveTab("setting")}
+                onKeyDown={(e) => handleStepperKeyDown(e, "setting")}
               >
                 <span className="setup-tab-num">3</span>
                 <span className="setup-tab-label">Setting &amp; Story</span>
@@ -470,7 +501,7 @@ export function SetupView(props: SetupViewProps) {
             <div className="setup-step-body">
               {/* ════════ TAB 1: PERSONA ════════ */}
               {activeTab === "persona" && (
-                <div className="setup-persona-tab">
+                <div className="setup-persona-tab" role="tabpanel" id="setup-panel-persona" aria-labelledby="setup-tab-persona">
                   <div className="setup-section-intro">
                     <h3>Choose Your Persona</h3>
                     <p className="setup-section-hint">
@@ -510,7 +541,7 @@ export function SetupView(props: SetupViewProps) {
                                   {p.isDefault ? <span className="persona-star-badge" title="Default Persona">★</span> : null}
                                 </strong>
                                 <span className="persona-selection-indicator">
-                                  {isSelected ? <Icon name="CheckCircle2" size={18} className="text-blue-400" /> : <div className="selection-circle-empty" />}
+                                  {isSelected ? <Icon name="CheckCircle2" size={18} className="ds-icon-accent" /> : <div className="selection-circle-empty" />}
                                 </span>
                               </div>
                             </div>
@@ -527,12 +558,12 @@ export function SetupView(props: SetupViewProps) {
 
               {/* ════════ TAB 2: CAST ════════ */}
               {activeTab === "cast" && (
-                <div className="setup-cast-tab">
+                <div className="setup-cast-tab" role="tabpanel" id="setup-panel-cast" aria-labelledby="setup-tab-cast">
                   {/* Selected Cast Shelf Tray */}
                   <div className="setup-selected-cast-tray">
                     <div className="selected-cast-tray-header">
                       <div className="flex items-center gap-2">
-                        <Icon name="UserCheck" size={15} className="text-blue-400" />
+                        <Icon name="UserCheck" size={15} className="ds-icon-accent" />
                         <h4>Selected Cast ({selectedCastCount})</h4>
                       </div>
                       {selectedCastCount > 0 ? (
@@ -614,19 +645,18 @@ export function SetupView(props: SetupViewProps) {
 
                       {/* Sort Controls */}
                       <div className="library-sort-control-group setup-cast-sort-group" role="group" aria-label="Sort cast">
-                        <div className="library-sort-select-wrapper">
-                          <Icon name="ArrowUpDown" size={12} className="library-sort-icon" />
-                          <select
-                            className="library-sort-select"
-                            value={sortBy}
-                            onChange={(e) => setSortBy(e.target.value as CharacterSortOption)}
-                            aria-label="Sort cast by"
-                          >
-                            <option value="name">Name</option>
-                            <option value="createdAt">Created Date</option>
-                            <option value="updatedAt">Updated Date</option>
-                          </select>
-                        </div>
+                        <SimpleSelect<CharacterSortOption>
+                          value={sortBy}
+                          onChange={(val) => setSortBy(val)}
+                          options={[
+                            { value: "name", label: "Name", icon: <Icon name="ArrowUpDown" size={12} /> },
+                            { value: "createdAt", label: "Created Date", icon: <Icon name="ArrowUpDown" size={12} /> },
+                            { value: "updatedAt", label: "Updated Date", icon: <Icon name="ArrowUpDown" size={12} /> },
+                          ]}
+                          size="xs"
+                          variant="ghost"
+                          aria-label="Sort cast by"
+                        />
                         <button
                           type="button"
                           className="library-sort-dir-btn"
@@ -752,16 +782,13 @@ export function SetupView(props: SetupViewProps) {
                     <div className="setup-empty-card">
                       <Icon name="SearchX" size={28} className="setup-empty-icon" />
                       <p className="empty-title">No characters match &ldquo;{castSearch}&rdquo;</p>
-                      <button
-                        type="button"
-                        className="secondary-btn"
-                        onClick={() => {
+                      <Button variant="secondary" size="sm" onClick={() => {
                           setCastSearch("");
                           setCastPage(1);
                         }}
                       >
                         Clear Search
-                      </button>
+                      </Button>
                     </div>
                   ) : (
                     <>
@@ -1089,7 +1116,7 @@ export function SetupView(props: SetupViewProps) {
 
               {/* ════════ TAB 3: SETTING & STORY ════════ */}
               {activeTab === "setting" && (
-                <div className="setup-setting-tab">
+                <div className="setup-setting-tab" role="tabpanel" id="setup-panel-setting" aria-labelledby="setup-tab-setting">
                   <div className="setup-section-intro">
                     <h3>Setting, Lore &amp; Generation</h3>
                     <p className="setup-section-hint">
@@ -1133,12 +1160,12 @@ export function SetupView(props: SetupViewProps) {
                             >
                               <div className="lorebook-card-header">
                                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                                  <Icon name="BookOpen" size={14} className={isSelected ? "text-blue-400" : "text-slate-400"} />
+                                  <Icon name="BookOpen" size={14} className={isSelected ? "ds-icon-accent" : "ds-icon-muted"} />
                                   <strong className="lorebook-name" title={lb.name}>{lb.name}</strong>
                                 </div>
                                 <span className="lorebook-selection-indicator">
                                   {isSelected ? (
-                                    <Icon name="CheckCircle2" size={17} className="text-blue-400" />
+                                    <Icon name="CheckCircle2" size={17} className="ds-icon-accent" />
                                   ) : (
                                     <div className="selection-circle-empty" />
                                   )}
@@ -1155,53 +1182,42 @@ export function SetupView(props: SetupViewProps) {
                   </div>
 
                   {/* Playthrough Details Form */}
-                  <div className="settings-form setup-form">
-                    <label>
-                      <span className="field-label">Playthrough Name</span>
-                      <input
-                        value={setupForm.name}
-                        onChange={(e) => onSetupFormChange((f) => ({ ...f, name: e.target.value }))}
-                        placeholder="e.g. Dragon's Rest"
-                        className="setup-text-input"
-                      />
-                    </label>
+                  <div className="setup-form setup-fields">
+                    <TextInput
+                      label="Playthrough Name"
+                      value={setupForm.name}
+                      onChange={(e) => onSetupFormChange((f) => ({ ...f, name: e.target.value }))}
+                      placeholder="e.g. Dragon's Rest"
+                    />
 
-                    <label>
-                      <span className="field-label">World Setting &amp; Starting Scenario</span>
-                      <span className="field-hint">
-                        Describe the world, tone, genre, factions, and initial situation. The AI uses this to craft your scenario.
-                      </span>
-                      <textarea
-                        value={setupForm.setting}
-                        onChange={(e) => {
-                          onSetupFormChange((f) => ({ ...f, setting: e.target.value }));
-                          e.target.style.height = "auto";
-                          e.target.style.height = `${e.target.scrollHeight}px`;
-                        }}
-                        rows={4}
-                        placeholder="Describe the world, tone, genre, factions, and initial situation. Include starting location or goals..."
-                        className="auto-grow-textarea setup-setting-textarea"
-                      />
-                    </label>
+                    <TextArea
+                      label="World Setting &amp; Starting Scenario"
+                      helperText="Describe the world, tone, genre, factions, and initial situation. The AI uses this to craft your scenario."
+                      value={setupForm.setting}
+                      onChange={(e) => onSetupFormChange((f) => ({ ...f, setting: e.target.value }))}
+                      rows={4}
+                      autoGrow
+                      autoGrowMax={240}
+                      placeholder="Describe the world, tone, genre, factions, and initial situation. Include starting location or goals..."
+                    />
 
                     {cardSettings.length > 0 ? (
-                      <label>
+                      <div className="scenario-select-field">
                         <span className="field-hint">…or use an existing setting from an imported card</span>
-                        <select
+                        <SimpleSelect
                           value=""
-                          onChange={(e) => {
-                            if (!e.target.value) return;
-                            const picked = cardSettings.find((s) => s.scenario === e.target.value);
+                          placeholder="Choose a card scenario…"
+                          fullWidth
+                          size="md"
+                          options={cardSettings.map((s) => ({ value: s.scenario, label: s.title }))}
+                          onChange={(scenario) => {
+                            if (!scenario) return;
+                            const picked = cardSettings.find((s) => s.scenario === scenario);
                             if (picked) onSetupFormChange((f) => ({ ...f, setting: picked.scenario }));
                           }}
-                          className="setup-scenario-select"
-                        >
-                          <option value="">Choose a card scenario…</option>
-                          {cardSettings.map((s) => (
-                            <option key={s.scenario} value={s.scenario}>{s.title}</option>
-                          ))}
-                        </select>
-                      </label>
+                          aria-label="Choose a card scenario"
+                        />
+                      </div>
                     ) : null}
 
                     {/* Opening Mode Option Cards */}
@@ -1235,33 +1251,14 @@ export function SetupView(props: SetupViewProps) {
                       </div>
                     </div>
 
-                    {/* Generate Initial Choices Custom Toggle Card */}
-                    <div
-                      className={`setup-choices-toggle-card ${setupForm.generateOpeningChoices ? "active" : ""}`}
-                      onClick={() => onSetupFormChange((f) => ({ ...f, generateOpeningChoices: !f.generateOpeningChoices }))}
-                      role="checkbox"
-                      aria-checked={setupForm.generateOpeningChoices}
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          onSetupFormChange((f) => ({ ...f, generateOpeningChoices: !f.generateOpeningChoices }));
-                        }
-                      }}
-                    >
-                      <div className="setup-choices-toggle-info">
-                        <strong className="setup-choices-toggle-title">
-                          <Icon name="ListOrdered" size={16} className="text-blue-400 inline mr-1.5" />
-                          Generate Initial Choices
-                        </strong>
-                        <span className="setup-choices-toggle-sub">
-                          Provide 3 suggested action choices at the end of the opening scene to kickstart gameplay.
-                        </span>
-                      </div>
-                      <div className={`setup-custom-switch ${setupForm.generateOpeningChoices ? "checked" : ""}`}>
-                        <div className="setup-switch-handle" />
-                      </div>
-                    </div>
+                    {/* Generate Initial Choices */}
+                    <SwitchRow
+                      icon="ListOrdered"
+                      title="Generate Initial Choices"
+                      description="Provide 3 suggested action choices at the end of the opening scene to kickstart gameplay."
+                      checked={setupForm.generateOpeningChoices}
+                      onChange={() => onSetupFormChange((f) => ({ ...f, generateOpeningChoices: !f.generateOpeningChoices }))}
+                    />
                   </div>
 
                   {/* Error Box if previous attempt failed */}
@@ -1269,20 +1266,12 @@ export function SetupView(props: SetupViewProps) {
                     <div className="error-box setup-error">
                       <p>{genError}</p>
                       <div className="flex items-center gap-2 mt-2">
-                        <button
-                          type="button"
-                          className="flex items-center gap-1 retry-btn"
-                          onClick={onGenerate}
-                        >
-                          <Icon name="RotateCcw" size={14} /> Retry
-                        </button>
-                        <button
-                          type="button"
-                          className="flex items-center gap-1 start-blank-alt-btn"
-                          onClick={onStartBlank}
-                        >
-                          <Icon name="FilePlus" size={14} /> Use Start Blank Instead
-                        </button>
+                        <Button variant="secondary" size="sm" onClick={onGenerate} leftIcon={<Icon name="RotateCcw" size={14} />}>
+                          Retry
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={onStartBlank} leftIcon={<Icon name="FilePlus" size={14} />}>
+                          Use Start Blank Instead
+                        </Button>
                       </div>
                     </div>
                   ) : null}
@@ -1295,63 +1284,53 @@ export function SetupView(props: SetupViewProps) {
               {activeTab === "persona" && (
                 <div className="setup-footer-row flex items-center justify-between w-full">
                   <div />
-                  <button
-                    type="button"
-                    className="primary-btn flex items-center gap-1.5"
+                  <Button
+                    variant="primary"
                     onClick={() => setActiveTab("cast")}
+                    rightIcon={<Icon name="ArrowRight" size={15} />}
                   >
-                    Next: Choose Cast <Icon name="ArrowRight" size={15} />
-                  </button>
+                    Next: Choose Cast
+                  </Button>
                 </div>
               )}
 
               {activeTab === "cast" && (
                 <div className="setup-footer-row flex items-center justify-between w-full">
-                  <button
-                    type="button"
-                    className="secondary-btn flex items-center gap-1"
-                    onClick={() => setActiveTab("persona")}
-                  >
-                    <Icon name="ArrowLeft" size={14} /> Back: Persona
-                  </button>
-                  <button
-                    type="button"
-                    className="primary-btn flex items-center gap-1.5"
-                    onClick={() => setActiveTab("setting")}
-                  >
-                    Next: Setting &amp; Story <Icon name="ArrowRight" size={15} />
-                  </button>
+                  <Button variant="secondary" onClick={() => setActiveTab("persona")} leftIcon={<Icon name="ArrowLeft" size={14} />}>
+                    Back: Persona
+                  </Button>
+                  <Button variant="primary" onClick={() => setActiveTab("setting")} rightIcon={<Icon name="ArrowRight" size={15} />}>
+                    Next: Setting &amp; Story
+                  </Button>
                 </div>
               )}
 
               {activeTab === "setting" && (
                 <div className="setup-footer-row flex items-center justify-between w-full">
-                  <button
-                    type="button"
-                    className="secondary-btn flex items-center gap-1"
-                    onClick={() => setActiveTab("cast")}
-                  >
-                    <Icon name="ArrowLeft" size={14} /> Back: Cast
-                  </button>
+                  <Button variant="secondary" onClick={() => setActiveTab("cast")} leftIcon={<Icon name="ArrowLeft" size={14} />}>
+                    Back: Cast
+                  </Button>
 
                   <div className="setup-launch-actions">
-                    <button
-                      type="button"
-                      className="btn-secondary flex items-center gap-1.5"
+                    <Button
+                      variant="secondary"
+                      className="start-blank-footer-btn"
                       onClick={onStartBlank}
                       disabled={generating}
                       title="Start immediately with selected cast without generating scenario text"
+                      leftIcon={<Icon name="FilePlus" size={15} />}
                     >
-                      <Icon name="FilePlus" size={15} /> Start Blank
-                    </button>
-                    <button
-                      type="button"
-                      className="primary-btn flex items-center gap-1.5 generate-scenario-btn"
+                      Start Blank
+                    </Button>
+                    <Button
+                      variant="primary"
+                      className="generate-scenario-btn"
                       onClick={onGenerate}
-                      disabled={generating}
+                      isLoading={generating}
+                      leftIcon={<Icon name="Wand2" size={16} />}
                     >
-                      <Icon name="Wand2" size={16} /> Generate Scenario
-                    </button>
+                      Generate Scenario
+                    </Button>
                   </div>
                 </div>
               )}

@@ -973,6 +973,12 @@ textarea.base-form-input--lg,
   border: 1px solid var(--border-subtle);
 }
 
+/* Semantic color utilities (theme-token driven) for inline icons & accents.
+   These exist because Tailwind's fixed palette (text-blue-400, etc.) is not
+   remapped by the custom-theme token system and would pin default colors. */
+.ds-icon-accent { color: var(--accent-highlight, var(--accent-base)); }
+.ds-icon-muted  { color: var(--text-secondary); }
+
 .base-badge--success {
   background: var(--status-success-bg, rgba(74, 222, 128, 0.14));
   color: var(--status-success, #4ade80);
@@ -1201,6 +1207,167 @@ textarea.base-form-input--lg,
   font-size: 0.78rem;
   color: var(--text-muted);
 }
+
+/* ── Switch (base primitive) ── */
+.base-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: auto;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.base-switch__input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+}
+
+.base-switch__slider {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 20px;
+  background-color: var(--border-light);
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;
+}
+
+.base-switch__slider::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  height: 14px;
+  width: 14px;
+  border-radius: 50%;
+  background-color: var(--text-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.base-switch__input:checked + .base-switch__slider {
+  background-color: var(--accent-base);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent-base) 35%, transparent);
+}
+
+.base-switch__input:checked + .base-switch__slider::before {
+  transform: translateX(16px);
+}
+
+.base-switch__input:focus-visible + .base-switch__slider {
+  outline: 2px solid var(--accent-highlight, var(--accent-base));
+  outline-offset: 2px;
+}
+
+.base-switch__input:disabled + .base-switch__slider {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.base-switch--disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.base-switch__label {
+  font-size: 0.86rem;
+  color: var(--text-primary);
+}
+
+/* ── SwitchRow (settings-style toggle row) ── */
+.base-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.85rem;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-main);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  user-select: none;
+}
+
+.base-toggle-row:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--border-focus);
+}
+
+.base-toggle-row--disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.base-toggle-row__main {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.base-toggle-row__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.base-toggle-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.base-toggle-row__title {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.25;
+}
+
+.base-toggle-row__desc {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.base-toggle-row__switch {
+  flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  .base-toggle-row {
+    padding: 0.55rem 0.7rem;
+    gap: 0.55rem;
+  }
+  .base-toggle-row__icon {
+    width: 26px;
+    height: 26px;
+  }
+  .base-toggle-row__title {
+    font-size: 0.83rem;
+  }
+  .base-toggle-row__desc {
+    font-size: 0.73rem;
+    line-height: 1.35;
+  }
+}
+
 
 
 

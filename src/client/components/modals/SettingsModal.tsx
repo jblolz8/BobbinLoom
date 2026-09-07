@@ -4,7 +4,7 @@ import { PresetEditor } from "./PresetEditor";
 import { ProviderConnections } from "./ProviderConnections";
 import { TagTaxonomyPanel } from "../library/TagTaxonomyModal";
 import { AppearanceSettingsPanel } from "./AppearanceSettingsPanel";
-import { Icon, Tabs, type TabItem } from "../base";
+import { Icon, SwitchRow, Tabs, type TabItem } from "../base";
 
 type SettingsTab = "provider" | "prompts" | "tags" | "chat" | "appearance";
 
@@ -98,125 +98,53 @@ export function SettingsModal(props: SettingsModalProps) {
               Customize which components and visual indicators appear in the Chat panel.
             </p>
 
-            <label className="chat-setting-card">
-              <div className="chat-setting-main">
-                <div className="chat-setting-icon" aria-hidden="true">
-                  <Icon name="MessageSquare" size={16} />
-                </div>
-                <div className="chat-setting-info">
-                  <span className="chat-setting-title">Show Choices</span>
-                  <span className="chat-setting-desc">Display suggested action choice buttons below turn responses</span>
-                </div>
-              </div>
-              <div className="toggle-switch">
-                <input
-                  type="checkbox"
-                  checked={choicesEnabled}
-                  onChange={(e) => setChoicesEnabled(e.target.checked)}
-                />
-                <span className="toggle-slider" />
-              </div>
-            </label>
+            <SwitchRow
+              icon="MessageSquare"
+              title="Show Choices"
+              description="Display suggested action choice buttons below turn responses"
+              checked={choicesEnabled}
+              onChange={(e) => setChoicesEnabled(e.target.checked)}
+            />
 
-            <label className="chat-setting-card">
-              <div className="chat-setting-main">
-                <div className="chat-setting-icon" aria-hidden="true">
-                  <Icon name="BarChart2" size={16} />
-                </div>
-                <div className="chat-setting-info">
-                  <span className="chat-setting-title">Show Context Usage</span>
-                  <span className="chat-setting-desc">Display the Context Meter token and memory usage indicator</span>
-                </div>
-              </div>
-              <div className="toggle-switch">
-                <input
-                  type="checkbox"
-                  checked={showContextUsage}
-                  onChange={(e) => setShowContextUsage(e.target.checked)}
-                />
-                <span className="toggle-slider" />
-              </div>
-            </label>
+            <SwitchRow
+              icon="BarChart2"
+              title="Show Context Usage"
+              description="Display the Context Meter token and memory usage indicator"
+              checked={showContextUsage}
+              onChange={(e) => setShowContextUsage(e.target.checked)}
+            />
 
-            <label className="chat-setting-card">
-              <div className="chat-setting-main">
-                <div className="chat-setting-icon" aria-hidden="true">
-                  <Icon name="Wrench" size={16} />
-                </div>
-                <div className="chat-setting-info">
-                  <span className="chat-setting-title">Show Debug Accordion</span>
-                  <span className="chat-setting-desc">Display the expandable raw prompt, response, and patch inspector</span>
-                </div>
-              </div>
-              <div className="toggle-switch">
-                <input
-                  type="checkbox"
-                  checked={showDebug}
-                  onChange={(e) => setShowDebug(e.target.checked)}
-                />
-                <span className="toggle-slider" />
-              </div>
-            </label>
+            <SwitchRow
+              icon="Wrench"
+              title="Show Debug Accordion"
+              description="Display the expandable raw prompt, response, and patch inspector"
+              checked={showDebug}
+              onChange={(e) => setShowDebug(e.target.checked)}
+            />
 
-            <label className="chat-setting-card">
-              <div className="chat-setting-main">
-                <div className="chat-setting-icon" aria-hidden="true">
-                  <Icon name="Clock" size={16} />
-                </div>
-                <div className="chat-setting-info">
-                  <span className="chat-setting-title">Display Response Generation Time</span>
-                  <span className="chat-setting-desc">Show generation duration badge on AI responses</span>
-                </div>
-              </div>
-              <div className="toggle-switch">
-                <input
-                  type="checkbox"
-                  checked={showGenerationTime}
-                  onChange={(e) => setShowGenerationTime?.(e.target.checked)}
-                />
-                <span className="toggle-slider" />
-              </div>
-            </label>
+            <SwitchRow
+              icon="Clock"
+              title="Display Response Generation Time"
+              description="Show generation duration badge on AI responses"
+              checked={showGenerationTime}
+              onChange={(e) => setShowGenerationTime?.(e.target.checked)}
+            />
 
-            <label className="chat-setting-card">
-              <div className="chat-setting-main">
-                <div className="chat-setting-icon" aria-hidden="true">
-                  <Icon name="Calendar" size={16} className="text-cyan-400" />
-                </div>
-                <div className="chat-setting-info">
-                  <span className="chat-setting-title">Display Chat Message Timestamps</span>
-                  <span className="chat-setting-desc">Show timestamps on chat messages</span>
-                </div>
-              </div>
-              <div className="toggle-switch">
-                <input
-                  type="checkbox"
-                  checked={showMessageTimestamps}
-                  onChange={(e) => setShowMessageTimestamps?.(e.target.checked)}
-                />
-                <span className="toggle-slider" />
-              </div>
-            </label>
+            <SwitchRow
+              iconNode={<Icon name="Calendar" size={15} className="ds-icon-accent" />}
+              title="Display Chat Message Timestamps"
+              description="Show timestamps on chat messages"
+              checked={showMessageTimestamps}
+              onChange={(e) => setShowMessageTimestamps?.(e.target.checked)}
+            />
 
-            <label className="chat-setting-card">
-              <div className="chat-setting-main">
-                <div className="chat-setting-icon" aria-hidden="true">
-                  <Icon name="Bot" size={16} className="text-purple-400" />
-                </div>
-                <div className="chat-setting-info">
-                  <span className="chat-setting-title">Display AI Model Name</span>
-                  <span className="chat-setting-desc">Show model name and provider icon badge on AI responses</span>
-                </div>
-              </div>
-              <div className="toggle-switch">
-                <input
-                  type="checkbox"
-                  checked={showModelName}
-                  onChange={(e) => setShowModelName?.(e.target.checked)}
-                />
-                <span className="toggle-slider" />
-              </div>
-            </label>
+            <SwitchRow
+              iconNode={<Icon name="Bot" size={15} className="ds-icon-accent" />}
+              title="Display AI Model Name"
+              description="Show model name and provider icon badge on AI responses"
+              checked={showModelName}
+              onChange={(e) => setShowModelName?.(e.target.checked)}
+            />
           </div>
         )}
         </div>
