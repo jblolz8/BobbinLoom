@@ -701,7 +701,7 @@
 
 /* Persona Manager */
 .persona-manager {
-  max-width: 640px;
+  width: min(1080px, 96vw);
   max-height: 85vh;
   overflow-y: auto;
 }
@@ -1025,7 +1025,7 @@
 
 /* Lorebook Manager */
 .lorebook-manager-modal {
-  max-width: 900px;
+  width: min(1200px, 96vw);
   max-height: 85vh;
   display: flex;
   flex-direction: column;
@@ -1371,29 +1371,126 @@
   width: 100%;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   Lorebook "Model B": content-driven editor height with an absolutely-anchored
+   entry list. The entry list NEVER dictates page height — it is pinned to the
+   right-hand editor region and spans exactly as tall as the opened entry
+   (capped to the viewport). .lorebook-library-container previously had NO CSS,
+   so no height-bounded ancestor existed and the flex/overflow panes grew the
+   page to full content height.
+   ───────────────────────────────────────────────────────────────────────────── */
+.lorebook-library-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+}
+.lorebook-library-container.is-modal {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.lorebook-subhead-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.lorebook-subhead-title .lorebook-back-btn {
+  flex-shrink: 0;
+}
+.lorebook-subhead-title h3 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The master–detail split: the in-flow editor/placeholder drives height; the
+   entry list is absolutely positioned to always match that height. */
+.lorebook-master-detail {
+  position: relative;
+  padding-left: 316px; /* reserve room for the absolutely-anchored list */
+  overflow: hidden;
+}
+.lorebook-entry-list {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-right: 16px; /* breathing gap before the editor */
+  border-right: 1px solid var(--border-subtle);
+}
+.lorebook-entry-rows {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* The in-flow panes are the height drivers: grow with the opened entry's
+   content, but never past a viewport-derived cap so the page stays put. */
+.lorebook-entry-editor {
+  max-height: clamp(380px, calc(100vh - 340px), 860px);
+  min-height: 0;
+}
+.lorebook-entry-editor-placeholder {
+  flex: 1;
+  min-width: 0;
+  min-height: 420px; /* a comfortable list height while no entry is open */
+  max-height: clamp(380px, calc(100vh - 340px), 860px);
+}
+
 @media (max-width: 860px) {
+  /* Mobile: everything stacks and the page itself scrolls — no nested scroll
+     containers, no absolute anchoring, no fixed-height panes. Only the entry
+     list keeps a bounded internal scroll (so a 40+ entry lorebook doesn't push
+     Content/Parameters far down the page). The editor + parameters flow
+     naturally so Delete Entry at the bottom is always reachable. */
   .lorebook-master-detail {
+    position: static;
+    padding-left: 0;
     flex-direction: column;
-  }
-
-  .lorebook-entry-list {
-    width: 100%;
-    max-height: 220px;
-  }
-
-  .lorebook-entry-editor {
-    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
     overflow: visible;
   }
-
+  .lorebook-entry-list {
+    position: static;
+    width: 100%;
+    padding-right: 0;
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: 12px;
+  }
+  .lorebook-entry-rows {
+    flex: 0 1 auto;
+    max-height: 40vh; /* bounded scroll region when stacked */
+  }
+  .lorebook-entry-editor {
+    flex-direction: column;
+    gap: 16px;
+    overflow: visible;
+    max-height: none;
+    min-height: 0;
+  }
+  .lorebook-entry-editor-main {
+    overflow: visible;
+    max-height: none;
+    flex: none;
+  }
   .lorebook-entry-editor-sidebar {
     width: 100%;
     max-height: none;
-    border-top: 1px solid var(--border-subtle);
-    padding-top: 8px;
+    overflow: visible;
+    flex-shrink: 0;
   }
-
-  .lorebook-entry-editor-main {
+  .lorebook-entry-editor-placeholder {
+    flex: none;
+    min-height: 160px;
     max-height: none;
   }
 }

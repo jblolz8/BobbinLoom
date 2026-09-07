@@ -410,38 +410,46 @@ export default function App() {
         onOpenPersonaManager={modalHook.openPersona}
         onOpenLorebookManager={modalHook.openLorebook}
       />
-      <SettingsModal
-        open={modalHook.settingsOpen}
-        onClose={modalHook.closeModal}
-        playthroughId={null}
-        playthroughPromptSettings={null}
-        onPlaythroughPromptSettings={handlePlaythroughPromptSettings}
-        choicesEnabled={playthroughHook.choicesEnabled}
-        setChoicesEnabled={playthroughHook.setChoicesEnabled}
-        showDebug={playthroughHook.showDebug}
-        setShowDebug={playthroughHook.setShowDebug}
-        showContextUsage={playthroughHook.showContextUsage}
-        setShowContextUsage={playthroughHook.setShowContextUsage}
-        showGenerationTime={playthroughHook.showGenerationTime}
-        setShowGenerationTime={playthroughHook.setShowGenerationTime}
-        showMessageTimestamps={playthroughHook.showMessageTimestamps}
-        setShowMessageTimestamps={playthroughHook.setShowMessageTimestamps}
-        showModelName={playthroughHook.showModelName}
-        setShowModelName={playthroughHook.setShowModelName}
-      />
-      <PersonaManager
-        open={modalHook.personaManagerOpen}
-        onClose={modalHook.closeModal}
-        onPersonasChanged={handlePersonasChanged}
-      />
-      <CharacterManager
-        open={modalHook.characterManagerOpen}
-        onClose={modalHook.closeModal}
-      />
-      <LorebookManager
-        open={modalHook.lorebookManagerOpen}
-        onClose={modalHook.closeModal}
-      />
+      {/* Generic (home / no-active-playthrough) manager modals. PlayView renders
+          its OWN copies of these four with playthrough-scoped props when a
+          playthrough is open — so mount these only on Home to avoid two stacked
+          copies sharing one useModalState() open flag. */}
+      {currentView === "home" ? (
+        <>
+          <SettingsModal
+            open={modalHook.settingsOpen}
+            onClose={modalHook.closeModal}
+            playthroughId={null}
+            playthroughPromptSettings={null}
+            onPlaythroughPromptSettings={handlePlaythroughPromptSettings}
+            choicesEnabled={playthroughHook.choicesEnabled}
+            setChoicesEnabled={playthroughHook.setChoicesEnabled}
+            showDebug={playthroughHook.showDebug}
+            setShowDebug={playthroughHook.setShowDebug}
+            showContextUsage={playthroughHook.showContextUsage}
+            setShowContextUsage={playthroughHook.setShowContextUsage}
+            showGenerationTime={playthroughHook.showGenerationTime}
+            setShowGenerationTime={playthroughHook.setShowGenerationTime}
+            showMessageTimestamps={playthroughHook.showMessageTimestamps}
+            setShowMessageTimestamps={playthroughHook.setShowMessageTimestamps}
+            showModelName={playthroughHook.showModelName}
+            setShowModelName={playthroughHook.setShowModelName}
+          />
+          <PersonaManager
+            open={modalHook.personaManagerOpen}
+            onClose={modalHook.closeModal}
+            onPersonasChanged={handlePersonasChanged}
+          />
+          <CharacterManager
+            open={modalHook.characterManagerOpen}
+            onClose={modalHook.closeModal}
+          />
+          <LorebookManager
+            open={modalHook.lorebookManagerOpen}
+            onClose={modalHook.closeModal}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

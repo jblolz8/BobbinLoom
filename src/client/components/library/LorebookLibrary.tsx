@@ -61,6 +61,16 @@ function sortEntries(entries: Record<string, LorebookEntry>): LorebookEntry[] {
   return Object.values(entries).sort((a, b) => a.order - b.order || a.uid - b.uid);
 }
 
+/** Keys are entered as plain text, separated by commas and/or line breaks
+ *  (SillyTavern-style). Split on both and drop empties/whitespace. */
+const KEY_SEPARATOR = /[\n,]/;
+function splitKeys(raw: string): string[] {
+  return raw
+    .split(KEY_SEPARATOR)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 /** Collapsible heading + body used to group the entry-editor sidebar fields. */
 function SidebarSection({ title, children, defaultOpen = true }: { title: string; children: ReactNode; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -105,7 +115,16 @@ export function LorebookLibrary({ isModal, onClose, onLorebooksChanged }: Lorebo
   const [discardConfirm, setDiscardConfirm] = useState<{ onConfirm: () => void; onCancel: () => void; title: string; message: string } | null>(null);
   const [creating, setCreating] = useState(false);
   const [createName, setCreateName] = useState("");
+  // Raw editor text for the Keys/Secondary-Keys fields. We keep the textarea's
+  // own string (not the parsed array) as its controlled value so the caret never
+  // snaps — blank lines / trailing separators survive while typing, and Enter
+  // inserts a newline normally. The parsed key[] is derived for storage.
+  const [keysRaw, setKeysRaw] = useState("");
+  const [secondaryRaw, setSecondaryRaw] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // JSON snapshot of the last-persisted lorebook, used to guard unsaved
+  // lorebook-HEADER edits (name, scan depth, toggles) on navigation.
+  const persistedJsonRef = useRef<string | null>(null);
 
   useEffect(() => {
     refresh();
@@ -131,6 +150,7 @@ export function LorebookLibrary({ isModal, onClose, onLorebooksChanged }: Lorebo
           try {
             const lb = await getLorebook(id);
             setLorebook(lb);
+            persistedJsonRef.current = JSON.stringify(lb);
             setSelectedId(id);
             setStatus(null);
           } catch (e) {
@@ -147,18 +167,48 @@ export function LorebookLibrary({ isModal, onClose, onLorebooksChanged }: Lorebo
     try {
       const lb = await getLorebook(id);
       setLorebook(lb);
+      persistedJsonRef.current = JSON.stringify(lb);
       setSelectedId(id);
     } catch (e) {
       setStatus({ text: e instanceof Error ? e.message : String(e), isError: true });
     }
   }
 
-  function backToList() {
+  function clearToLibrary() {
+    persistedJsonRef.current = null;
     setSelectedId(null);
     setLorebook(null);
     setEditingUid(null);
     setEntryForm(null);
     refresh();
+  }
+
+  function backToList() {
+    clearToLibrary();
+  }
+
+  /** True if the lorebook name / scan depth / toggles differ from last persist. */
+  function headerDirty(): boolean {
+    if (!lorebook || persistedJsonRef.current === null) return false;
+    return JSON.stringify(lorebook) !== persistedJsonRef.current;
+  }
+
+  /** "Back to Lorebook Library" — guard unsaved header edits before leaving. */
+  function handleBackToLibrary() {
+    if (headerDirty()) {
+      setDiscardConfirm({
+        title: "Discard unsaved changes?",
+        message:
+          "You changed the lorebook name or matching settings. These changes have not been saved and will be lost.",
+        onConfirm: () => {
+          setDiscardConfirm(null);
+          clearToLibrary();
+        },
+        onCancel: () => setDiscardConfirm(null),
+      });
+      return;
+    }
+    clearToLibrary();
   }
 
   async function handleCreate(name: string) {
@@ -265,9 +315,11 @@ export function LorebookLibrary({ isModal, onClose, onLorebooksChanged }: Lorebo
 
   async function handleSaveLorebook() {
     if (!lorebook || !selectedId) return;
+    const snapshot = JSON.stringify(lorebook);
     setSaving(true);
     try {
       await saveLorebook(selectedId, lorebook);
+      persistedJsonRef.current = snapshot;
       setStatus({ text: "Saved.", isError: false });
       onLorebooksChanged?.();
     } catch (e) {
@@ -280,11 +332,16 @@ export function LorebookLibrary({ isModal, onClose, onLorebooksChanged }: Lorebo
   function openNewEntry() {
     const uid = nextUid(lorebook?.entries ?? {});
     const entry = blankEntry(uid);
+    setKeysRaw("");
+    setSecondaryRaw("");
     setEntryForm(entry);
     setEditingUid(uid);
   }
 
   function openEditEntry(entry: LorebookEntry) {
+    // Show keys comma-separated (SillyTavern-style) but allow newlines too.
+    setKeysRaw(entry.key.join(", "));
+    setSecondaryRaw(entry.keysecondary.join(", "));
     setEntryForm({ ...entry });
     setEditingUid(entry.uid);
   }
@@ -359,6 +416,7 @@ export function LorebookLibrary({ isModal, onClose, onLorebooksChanged }: Lorebo
       // concurrent editors.
       await saveLorebook(selectedId, updated);
       setLorebook(updated);
+      persistedJsonRef.current = JSON.stringify(updated);
       setStatus({ text: "Entry saved.", isError: false });
       onLorebooksChanged?.();
       closeEntryEditor();
@@ -370,11 +428,24 @@ export function LorebookLibrary({ isModal, onClose, onLorebooksChanged }: Lorebo
   }
 
   function handleDeleteEntry(uid: number) {
-    if (!lorebook) return;
-    const updated = { ...lorebook.entries };
-    delete updated[String(uid)];
-    setLorebook({ ...lorebook, entries: updated });
+    if (!lorebook || !selectedId) return;
+    const updatedEntries = { ...lorebook.entries };
+    delete updatedEntries[String(uid)];
+    const updated: LorebookFile = { ...lorebook, entries: updatedEntries };
+    setLorebook(updated);
     if (editingUid === uid) closeEntryEditor();
+    // Persist immediately so the delete survives navigation, and resync the
+    // persisted-snapshot guard (JSON.stringify BEFORE the optimistic mutation).
+    const snapshot = JSON.stringify(updated);
+    void saveLorebook(selectedId, updated)
+      .then(() => {
+        persistedJsonRef.current = snapshot;
+        setStatus({ text: "Entry deleted.", isError: false });
+        onLorebooksChanged?.();
+      })
+      .catch((e) => {
+        setStatus({ text: e instanceof Error ? e.message : String(e), isError: true });
+      });
   }
 
   function renderDeleteConfirm() {
@@ -470,7 +541,7 @@ export function LorebookLibrary({ isModal, onClose, onLorebooksChanged }: Lorebo
               <div className="entry-row-top">
                 <span className="entry-uid">#{entry.uid}</span>
                 <span className="entry-label">
-                  {entry.key.slice(0, 3).join(", ") || "(no keys)"}
+                  {(entry.comment ?? "").trim() || entry.key.slice(0, 3).join(", ") || "(no keys)"}
                 </span>
                 {entryStateBadges(entry)}
               </div>
@@ -493,13 +564,24 @@ export function LorebookLibrary({ isModal, onClose, onLorebooksChanged }: Lorebo
           ) : null}
 
         <div className="lorebook-editor-subhead">
-          <h3>Lorebook: {lorebook.name} ({Object.keys(lorebook.entries).length} entries)</h3>
+          <div className="lorebook-subhead-title">
+            <Button
+              variant="secondary"
+              size="sm"
+              className="lorebook-back-btn"
+              onClick={handleBackToLibrary}
+              leftIcon={<Icon name="ArrowLeft" size={15} />}
+              title="Return to Lorebook Library"
+            >
+              Back to Lorebook Library
+            </Button>
+            <h3>Lorebook: {lorebook.name} ({Object.keys(lorebook.entries).length} entries)</h3>
+          </div>
           <div className="modal-header-actions">
             <Button variant="primary" size="sm" onClick={handleSaveLorebook} disabled={saving} isLoading={saving}>
               {saving ? "Saving…" : "Save Lorebook"}
             </Button>
             <Button variant="secondary" size="sm" onClick={handleExport}>Export</Button>
-            <Button variant="ghost" size="sm" onClick={handleCloseEntryEditor}>Back to List</Button>
           </div>
         </div>
 
@@ -570,13 +652,24 @@ export function LorebookLibrary({ isModal, onClose, onLorebooksChanged }: Lorebo
       <>
         <div className={`lorebook-library-container ${isModal ? "is-modal" : "is-workspace"}`}>
           <div className="lorebook-editor-subhead">
-            <h3>{lorebook.name} — Editing Entry #{entryForm.uid}</h3>
+            <div className="lorebook-subhead-title">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="lorebook-back-btn"
+                onClick={handleCloseEntryEditor}
+                leftIcon={<Icon name="ArrowLeft" size={15} />}
+                title="Return to the Lorebook entry list"
+              >
+                Back to Lorebook Entry List
+              </Button>
+              <h3>{lorebook.name} — Editing Entry #{entryForm.uid}</h3>
+            </div>
             <div className="modal-header-actions">
               <Button variant="primary" size="sm" onClick={handleSaveEntry} disabled={saving} isLoading={saving}>
                 Save Entry
               </Button>
               <Button variant="secondary" size="sm" onClick={handleExport}>Export</Button>
-              <Button variant="ghost" size="sm" onClick={handleCloseEntryEditor}>Back to List</Button>
             </div>
           </div>
 
@@ -596,21 +689,29 @@ export function LorebookLibrary({ isModal, onClose, onLorebooksChanged }: Lorebo
         <div className="lorebook-entry-editor">
           <div className="lorebook-entry-editor-main">
             <TextArea
-              label="Keys (one per line)"
-              value={entryForm.key.join("\n")}
-              onChange={(e) => entryFormField("key", e.target.value.split("\n").filter(Boolean))}
+              label="Keys (comma or line separated)"
+              value={keysRaw}
+              onChange={(e) => {
+                setKeysRaw(e.target.value);
+                entryFormField("key", splitKeys(e.target.value));
+              }}
               placeholder="Keywords that trigger this entry"
               rows={3}
               size="sm"
-              helperText="One keyword per line. The entry activates when any key matches."
+              autoGrow
+              helperText="Separate keys with commas or line breaks. The entry activates when any key matches."
             />
             <TextArea
-              label="Secondary Keys (one per line)"
-              value={entryForm.keysecondary.join("\n")}
-              onChange={(e) => entryFormField("keysecondary", e.target.value.split("\n").filter(Boolean))}
+              label="Secondary Keys (comma or line separated)"
+              value={secondaryRaw}
+              onChange={(e) => {
+                setSecondaryRaw(e.target.value);
+                entryFormField("keysecondary", splitKeys(e.target.value));
+              }}
               placeholder="Secondary keywords for selective matching"
               rows={2}
               size="sm"
+              autoGrow
               helperText="Used only when Selective is enabled — alternatives for AND/NOT logic."
             />
             <TextArea
@@ -620,6 +721,7 @@ export function LorebookLibrary({ isModal, onClose, onLorebooksChanged }: Lorebo
               placeholder="The text injected into the prompt when this entry activates"
               rows={6}
               size="md"
+              autoGrow
               characterCount={entryForm.content.length}
               maxCharacterCount={8000}
               helperText={`${entryForm.content.length} / 8000 characters`}
@@ -631,6 +733,7 @@ export function LorebookLibrary({ isModal, onClose, onLorebooksChanged }: Lorebo
               placeholder="Optional note (not sent to the model)"
               rows={2}
               size="sm"
+              autoGrow
               helperText="Private note for yourself — never injected into the prompt."
             />
           </div>
