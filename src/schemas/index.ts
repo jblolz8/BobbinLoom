@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_IMAGE_PROMPT_INSTRUCTION } from "../engine/imageDefaults";
 
 export const ClothingItemSchema = z.object({
   slot: z.string(),
@@ -331,12 +332,28 @@ export const CharacterFormatSchema = z.object({
 });
 export type CharacterFormat = z.infer<typeof CharacterFormatSchema>;
 
+// ── Image generation (preset-owned prompt config) ──
+// The inner fields carry `.default()` so a PARTIAL block always parses to a
+// complete one; the field on the preset/snapshot is `.optional()` with no
+// default, so every existing preset and playthrough keeps parsing and read
+// sites fall back to DEFAULT_IMAGE_GENERATION_SETTINGS explicitly.
+export const ImageGenerationSettingsSchema = z.object({
+  instruction: z.string().default(DEFAULT_IMAGE_PROMPT_INSTRUCTION),
+  positivePrefix: z.string().default(""),
+  negativePrefix: z.string().default(""),
+  promptCharacterLimit: z.number().int().min(0).default(900),
+  includeState: z.boolean().default(true),
+  includeCast: z.boolean().default(true)
+});
+export type ImageGenerationSettings = z.infer<typeof ImageGenerationSettingsSchema>;
+
 export const PromptPresetSchema = z.object({
   id: z.string(),
   name: z.string(),
   readonly: z.boolean(),
   modules: PromptModuleSetSchema,
-  characterFormat: CharacterFormatSchema.optional()
+  characterFormat: CharacterFormatSchema.optional(),
+  imageGeneration: ImageGenerationSettingsSchema.optional()
 });
 export type PromptPreset = z.infer<typeof PromptPresetSchema>;
 
@@ -344,7 +361,8 @@ export const PlaythroughPromptSettingsSchema = z.object({
   presetId: z.string(),
   presetName: z.string(),
   modules: PromptModuleSetSchema,
-  characterFormat: CharacterFormatSchema.optional()
+  characterFormat: CharacterFormatSchema.optional(),
+  imageGeneration: ImageGenerationSettingsSchema.optional()
 });
 export type PlaythroughPromptSettings = z.infer<typeof PlaythroughPromptSettingsSchema>;
 
@@ -368,6 +386,22 @@ export const MemoryEventSchema = z.object({
 });
 export type MemoryEvent = z.infer<typeof MemoryEventSchema>;
 
+/** One generated image attached to an assistant message. `file` is a
+ *  content-addressed name under data/images/ ("<sha256>.<ext>"); the bytes are
+ *  shared, never owned, because branching structuredClones messages by value. */
+export const MessageImageSchema = z.object({
+  /** "<sha256>.<ext>" — content-addressed file under data/images/. */
+  file: z.string(),
+  prompt: z.string().default(""),
+  negativePrompt: z.string().optional(),
+  providerId: z.string().default(""),
+  model: z.string().default(""),
+  seed: z.number().optional(),
+  durationMs: z.number().int().nonnegative().optional(),
+  createdAt: z.string()
+});
+export type MessageImage = z.infer<typeof MessageImageSchema>;
+
 export const ChatMessageSchema = z.object({
   id: z.string(),
   role: z.enum(["user", "assistant", "system"]),
@@ -382,7 +416,10 @@ export const ChatMessageSchema = z.object({
   turn: z.number().optional(),
   /** Marks the assistant message that opens a new chapter after the previous
    *  chapter was archived. Drives the "Re-summarize previous chapter" action. */
-  chapterOpening: z.boolean().optional()
+  chapterOpening: z.boolean().optional(),
+  /** Generated images attached to this message (assistant messages only).
+   *  OPTIONAL so every record written before this feature parses untouched. */
+  images: z.array(MessageImageSchema).optional()
 });
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 

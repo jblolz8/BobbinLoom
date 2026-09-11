@@ -2,7 +2,14 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ProviderConnectionSchema } from "../src/schemas";
+import {
+  ChatMessageSchema,
+  ImageGenerationSettingsSchema,
+  PlaythroughPromptSettingsSchema,
+  PromptPresetSchema,
+  ProviderConnectionSchema
+} from "../src/schemas";
+import { DEFAULT_IMAGE_GENERATION_SETTINGS, DEFAULT_IMAGE_PROMPT_INSTRUCTION } from "../src/engine/imageDefaults";
 import { ProviderManager } from "../src/server/providerManager";
 import { MockProvider } from "../src/server/provider";
 import {
@@ -716,5 +723,85 @@ describe("provider manager kind resolution", () => {
     expect(manager.imageConnection()).not.toBeNull();
     expect(manager.resolveImagePromptConfig(manager.imageConnection())).toBeNull();
     expect(manager.resolveImagePromptConfig(null)).toBeNull();
+  });
+});
+
+describe("shared schema additions (message images + image generation settings)", () => {
+  it("parses a preset and a playthrough snapshot with NO imageGeneration block", () => {
+    const preset = PromptPresetSchema.parse({ id: "p", name: "P", readonly: false, modules: { turn: [] } });
+    expect(preset.imageGeneration).toBeUndefined();
+
+    const snapshot = PlaythroughPromptSettingsSchema.parse({ presetId: "p", presetName: "P", modules: { turn: [] } });
+    expect(snapshot.imageGeneration).toBeUndefined();
+  });
+
+  it("defaults the missing inner fields of a partial imageGeneration block", () => {
+    const preset = PromptPresetSchema.parse({
+      id: "p",
+      name: "P",
+      readonly: false,
+      modules: { turn: [] },
+      imageGeneration: { positivePrefix: "anime style" }
+    });
+    expect(preset.imageGeneration?.positivePrefix).toBe("anime style");
+    expect(preset.imageGeneration?.negativePrefix).toBe("");
+    expect(preset.imageGeneration?.promptCharacterLimit).toBe(900);
+    expect(preset.imageGeneration?.includeState).toBe(true);
+    expect(preset.imageGeneration?.includeCast).toBe(true);
+    expect((preset.imageGeneration?.instruction ?? "").length).toBeGreaterThan(100);
+  });
+
+  it("parses a message with no images, and round-trips one image reference", () => {
+    const bare = ChatMessageSchema.parse({ id: "m", role: "assistant", content: "hi", createdAt: "now" });
+    expect(bare.images).toBeUndefined();
+
+    const hash = "a".repeat(64);
+    const withImage = ChatMessageSchema.parse({
+      id: "m",
+      role: "assistant",
+      content: "hi",
+      createdAt: "now",
+      images: [
+        {
+          file: `${hash}.png`,
+          prompt: "a scene",
+          negativePrompt: "blurry",
+          providerId: "venice",
+          model: "lustify-v8",
+          seed: 42,
+          durationMs: 1000,
+          createdAt: "now"
+        }
+      ]
+    });
+    expect(withImage.images).toHaveLength(1);
+    expect(withImage.images?.[0].file).toBe(`${hash}.png`);
+    expect(withImage.images?.[0].seed).toBe(42);
+    expect(withImage.images?.[0].durationMs).toBe(1000);
+
+    // prompt/providerId/model default to ""; negativePrompt/seed/durationMs stay absent.
+    const minimal = ChatMessageSchema.parse({
+      id: "m",
+      role: "assistant",
+      content: "hi",
+      createdAt: "now",
+      images: [{ file: "x.png", createdAt: "now" }]
+    });
+    expect(minimal.images?.[0].prompt).toBe("");
+    expect(minimal.images?.[0].providerId).toBe("");
+    expect(minimal.images?.[0].model).toBe("");
+    expect(minimal.images?.[0].negativePrompt).toBeUndefined();
+  });
+
+  it("wires the shipped instruction into the schema default without a runtime cycle", () => {
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION.length).toBeGreaterThan(100);
+    // The constant survives the schemas → imageDefaults → (type-only) schemas trip.
+    expect(ImageGenerationSettingsSchema.parse({}).instruction).toBe(DEFAULT_IMAGE_PROMPT_INSTRUCTION);
+    // A preset with no block still gets NO imageGeneration (the fallback is read-site).
+    expect(
+      PromptPresetSchema.parse({ id: "p", name: "P", readonly: false, modules: { turn: [] } }).imageGeneration
+    ).toBeUndefined();
+    // The shipped fallback is itself a complete, parseable settings object.
+    expect(ImageGenerationSettingsSchema.parse(DEFAULT_IMAGE_GENERATION_SETTINGS)).toEqual(DEFAULT_IMAGE_GENERATION_SETTINGS);
   });
 });
