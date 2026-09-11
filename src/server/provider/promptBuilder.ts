@@ -318,6 +318,56 @@ export function buildOutputContract(choicesEnabled: boolean, format?: CharacterF
   return outputInstructions;
 }
 
+export type PromptRole = "system" | "user" | "assistant";
+
+/** One outgoing chat message. Distinct from the persisted `ChatMessage` schema
+ *  type in src/schemas — this one exists only for the duration of one request. */
+export type PromptMessage = { role: PromptRole; content: string };
+
+export type PromptBudget = {
+  contextWindow: number;
+  /** Output tokens reserved for the completion — must mirror the request's `max_tokens`. */
+  reserveOutputTokens: number;
+};
+
+/** Estimation is chars/4 everywhere until real usage is available (Phase 3). */
+export const CONTEXT_SAFETY_RESERVE = 512;
+export const MIN_HISTORY_MESSAGES = 2;
+export const PROMPT_MESSAGE_OVERHEAD_TOKENS = 4;
+
+export function estimateTokens(chars: number): number {
+  return Math.ceil(chars / 4);
+}
+
+/**
+ * Walks visible history from the newest message backwards, keeping whole
+ * messages while they fit `budgetTokens`. The newest exchange is always kept
+ * (MIN_HISTORY_MESSAGES) even if it alone exceeds the budget — dropping it
+ * would leave the model with no immediate context at all.
+ */
+export function selectHistory(
+  state: Playthrough,
+  budgetTokens: number
+): { history: PromptMessage[]; droppedChars: number } {
+  const visible = state.messages.filter((m) => !m.hidden);
+  const kept: PromptMessage[] = [];
+  let used = 0;
+  let droppedChars = 0;
+
+  for (let i = visible.length - 1; i >= 0; i -= 1) {
+    const message = visible[i];
+    const cost = estimateTokens(message.content.length) + PROMPT_MESSAGE_OVERHEAD_TOKENS;
+    if (kept.length >= MIN_HISTORY_MESSAGES && used + cost > budgetTokens) {
+      droppedChars = visible.slice(0, i + 1).reduce((n, m) => n + m.content.length, 0);
+      break;
+    }
+    kept.push({ role: message.role, content: message.content });
+    used += cost;
+  }
+
+  return { history: kept.reverse(), droppedChars };
+}
+
 type UserPromptSegments = { memoryEvents: number; storySoFar: number; stateSummary: number; lorebookDepth: number; recentMessages: number; userInput: number };
 
 export function buildUserPrompt(input: ParsedUserInput, state: Playthrough, lorebookDepthContent: string, queryEmbedding: number[] = []): { text: string; segments: UserPromptSegments } {
