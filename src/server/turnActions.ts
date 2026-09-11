@@ -12,6 +12,7 @@ import type { Playthrough, ScenarioSeed } from "../schemas";
 import type { EntryTimingState, LorebookEntry, TurnSnapshot } from "../schemas";
 import type { TurnProvider } from "./provider";
 import type { PromptUsageBreakdown } from "./provider";
+import type { MeasuredUsage } from "./provider";
 import { getLorebook, getPlaythroughRecord, updatePlaythroughRecord } from "./store";
 
 export type TokenBreakdown = PromptUsageBreakdown;
@@ -20,6 +21,10 @@ export type TokenUsage = {
   estimated: number;
   contextWindow: number;
   breakdown: TokenBreakdown;
+  /** Provider-reported token counts for the prompt just sent, when the
+   *  provider returns a usage block. Absent before the first turn and on
+   *  providers that report none (the estimate is then the only number). */
+  measured?: MeasuredUsage;
   /** How many cast members are present vs absent at the current location
    *  when this usage was measured — makes presence gating observable. */
   castPresence?: { present: number; absent: number };
@@ -83,7 +88,7 @@ export async function executeTurn(
   const snapshot = takeTurnSnapshot(playthrough);
   const parsedInput = parseUserInput(input);
   const startTime = performance.now();
-  const { turn: assistantTurn, promptUsage, model, rawInput, rawOutput, finishReason } = await provider.generateTurn(parsedInput, playthrough, suggestedChoicesEnabled, options?.signal);
+  const { turn: assistantTurn, promptUsage, measuredUsage, model, rawInput, rawOutput, finishReason } = await provider.generateTurn(parsedInput, playthrough, suggestedChoicesEnabled, options?.signal);
   const durationMs = Math.round(performance.now() - startTime);
 
   const patchResult = assistantTurn.statePatch
@@ -194,7 +199,13 @@ export async function executeTurn(
     absent: next.characters.filter((c) => c.currentLocationId !== next.locationId).length,
   };
   const tokenUsage: TokenUsage = promptUsage
-    ? { estimated: promptUsage.estimated, contextWindow, breakdown: promptUsage.breakdown, castPresence }
+    ? {
+        estimated: promptUsage.estimated,
+        contextWindow,
+        breakdown: promptUsage.breakdown,
+        castPresence,
+        ...(measuredUsage ? { measured: measuredUsage } : {})
+      }
     : estimateTokenUsageFallback(next, input, contextWindow);
 
   return {

@@ -17,6 +17,8 @@ export type TokenUsage = {
   estimated: number;
   contextWindow: number;
   breakdown: TokenBreakdown;
+  /** Real prompt/completion tokens from the provider's last response, when reported. */
+  measured?: { promptTokens: number; completionTokens?: number };
   castPresence?: { present: number; absent: number };
 };
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { TokenUsage } from "../../api";
+import { deriveMeterTotals } from "../../utils/meterTotals";
 
 const SEGMENTS: Array<{ key: keyof TokenUsage["breakdown"]; label: string; color: string }> = [
   { key: "modules", label: "Modules", color: "#4a90d9" },
@@ -147,9 +148,9 @@ export function ContextMeter({ tokenUsage }: { tokenUsage: TokenUsage | null }) 
     );
   }
 
-  const { estimated, contextWindow, breakdown } = tokenUsage;
-  const pct = Math.min(100, (estimated / contextWindow) * 100);
-  const remaining = Math.max(0, contextWindow - estimated);
+  const { contextWindow, breakdown } = tokenUsage;
+  const { total, scale, remaining, measured } = deriveMeterTotals(tokenUsage);
+  const pct = Math.min(100, (total / contextWindow) * 100);
   const remainingPct = Math.max(0, 100 - pct);
 
   const statusClass = pct >= 95 ? "status-danger" : pct >= 85 ? "status-warning" : "status-normal";
@@ -160,7 +161,10 @@ export function ContextMeter({ tokenUsage }: { tokenUsage: TokenUsage | null }) 
         {SEGMENTS.map(({ key, label, color }) => {
           const value = breakdown[key] ?? 0;
           if (value <= 0) return null;
-          const widthPct = (value / contextWindow) * 100;
+          // Scale so the bar's per-segment attribution still tiles to `total`
+          // even when `total` is the provider's real (measured) count.
+          const scaledValue = value * scale;
+          const widthPct = (scaledValue / contextWindow) * 100;
           const segPct = formatPct(widthPct);
           const isSelected = activeSegment?.key === key;
 
@@ -169,9 +173,9 @@ export function ContextMeter({ tokenUsage }: { tokenUsage: TokenUsage | null }) 
               key={key}
               className={`context-meter-segment${isSelected ? " is-hovered" : ""}${isPinned && isSelected ? " is-pinned" : ""}`}
               style={{ width: `${widthPct}%`, backgroundColor: color }}
-              onPointerEnter={(e) => handleSegmentHover(e, key, label, value, segPct)}
-              onPointerMove={(e) => handleSegmentHover(e, key, label, value, segPct)}
-              onClick={(e) => handleSegmentClick(e, key, label, value, segPct)}
+              onPointerEnter={(e) => handleSegmentHover(e, key, label, scaledValue, segPct)}
+              onPointerMove={(e) => handleSegmentHover(e, key, label, scaledValue, segPct)}
+              onClick={(e) => handleSegmentClick(e, key, label, scaledValue, segPct)}
             />
           );
         })}
@@ -221,8 +225,9 @@ export function ContextMeter({ tokenUsage }: { tokenUsage: TokenUsage | null }) 
         )}
 
       <span className={`context-meter-label ${statusClass}`}>
-        {formatTokens(estimated)}/{formatTokens(contextWindow)} tokens ({formatPct(pct)} of context)
+        {formatTokens(total)}/{formatTokens(contextWindow)} tokens ({formatPct(pct)} of context)
         {remaining > 0 ? ` · ${formatTokens(remaining)} remaining` : " · full"}
+        {measured ? " · measured" : ""}
       </span>
     </div>
   );
