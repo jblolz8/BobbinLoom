@@ -2,7 +2,8 @@ import type { TurnProvider } from "./provider";
 import { MockProvider } from "./provider";
 import { OpenAICompatibleProvider } from "./openAiCompatibleProvider";
 import { resolveConnectionConfig } from "./providerConfig";
-import type { ProviderConnectionInput, PublicProviderConnection } from "./providerConfig";
+import type { PublicProviderConnection, ResolvedProviderConfig } from "./providerConfig";
+import type { ProviderConnection } from "../schemas";
 import {
   activeConnectionOfKind,
   createConnection,
@@ -15,7 +16,7 @@ import {
   testProviderConnection,
   updateConnection
 } from "./providerRegistry";
-import type { ModelsProbeResult, PublicProviderRegistry } from "./providerRegistry";
+import type { ModelsProbeResult, ProviderConnectionDraft, PublicProviderRegistry } from "./providerRegistry";
 
 export class ProviderManager {
   constructor(
@@ -28,32 +29,62 @@ export class ProviderManager {
    *  Reads the persisted registry (never re-seeds over it — that would wipe
    *  user-created connections on every call). The kind filter is mandatory: the
    *  old `?? connections[0]` fallback could hand a text turn an image endpoint. */
-  private activeConnection() {
+  private activeTextConnection() {
     return activeConnectionOfKind(getRegistry(this.dataDir), "text");
   }
 
+  /** The active IMAGE connection, or null. Never returns a text connection. */
+  private activeImageConnection() {
+    return activeConnectionOfKind(getRegistry(this.dataDir), "image");
+  }
+
   getProvider(): TurnProvider {
-    const conn = this.activeConnection();
-    if (!conn) return new MockProvider(); // no connections configured yet
+    const conn = this.activeTextConnection();
+    if (!conn) return new MockProvider(); // no text connection configured yet
     return new OpenAICompatibleProvider(resolveConnectionConfig(conn, this.env));
   }
 
   getContextWindow(): number {
-    return this.activeConnection()?.contextWindow ?? 32768;
+    return this.activeTextConnection()?.contextWindow ?? 32768;
   }
 
   getMaxTokens(): number {
-    return this.activeConnection()?.maxTokens ?? 1200;
+    return this.activeTextConnection()?.maxTokens ?? 1200;
+  }
+
+  /** The image connection a request should use: an explicit id when given (and
+   *  it really is an image connection), else the active image connection. */
+  imageConnection(id?: string): ProviderConnection | null {
+    if (id) {
+      const reg = getRegistry(this.dataDir);
+      const explicit = reg.connections.find((c) => c.id === id && c.kind === "image");
+      if (explicit) return explicit;
+    }
+    return this.activeImageConnection();
+  }
+
+  /** The config used to WRITE image prompts: the image connection's
+   *  promptProviderId when it still resolves to a text connection, else the
+   *  active text connection. null ⇒ no text provider available (the route turns
+   *  that into a 400). */
+  resolveImagePromptConfig(imageConn: ProviderConnection | null): ResolvedProviderConfig | null {
+    const reg = getRegistry(this.dataDir);
+    if (imageConn?.promptProviderId) {
+      const writer = reg.connections.find((c) => c.id === imageConn.promptProviderId && c.kind === "text");
+      if (writer) return resolveConnectionConfig(writer, this.env);
+    }
+    const active = activeConnectionOfKind(reg, "text");
+    return active ? resolveConnectionConfig(active, this.env) : null;
   }
 
   // ── Connection CRUD ──
   listConnections(): PublicProviderRegistry {
     return listConnections(this.dataDir);
   }
-  createConnection(input: ProviderConnectionInput): PublicProviderConnection {
+  createConnection(input: ProviderConnectionDraft): PublicProviderConnection {
     return createConnection(this.dataDir, input);
   }
-  updateConnection(id: string, input: ProviderConnectionInput): PublicProviderConnection {
+  updateConnection(id: string, input: ProviderConnectionDraft): PublicProviderConnection {
     return updateConnection(this.dataDir, id, input);
   }
   duplicateConnection(id: string): PublicProviderConnection {

@@ -608,4 +608,113 @@ describe("provider manager kind resolution", () => {
     expect(manager.getContextWindow()).toBe(32768);
     expect(manager.getMaxTokens()).toBe(1200);
   });
+
+  it("creates and updates image connections through the manager", () => {
+    const dir = tempDir();
+    const manager = new ProviderManager(dir, {});
+    const created = manager.createConnection({
+      label: "Venice",
+      baseUrl: "https://api.venice.ai/api/v1",
+      model: "m",
+      kind: "image",
+      apiStyle: "venice",
+      safeMode: false,
+      size: "1024x1024",
+      aspectRatio: "16:9",
+      promptProviderId: null,
+      stylePreset: "cinematic",
+      hideWatermark: true,
+      variants: 2
+    });
+
+    expect(created.kind).toBe("image");
+    expect(created.apiStyle).toBe("venice");
+    expect(manager.listConnections().activeImageProviderId).toBe(created.id);
+    expect(manager.listConnections().activeTextProviderId).toBe("");
+
+    const updated = manager.updateConnection(created.id, {
+      label: "Venice 2",
+      baseUrl: "https://api.venice.ai/api/v1",
+      model: "m2",
+      safeMode: true,
+      variants: 3
+    });
+    expect(updated.label).toBe("Venice 2");
+    expect(updated.safeMode).toBe(true);
+    expect(updated.variants).toBe(3);
+    expect(updated.kind).toBe("image");
+  });
+
+  it("resolves the image connection: active by default, explicit image id when asked", () => {
+    const dir = tempDir();
+    const text = createConnection(dir, connInput({ label: "Text", baseUrl: "http://t:1" }));
+    const first = createConnection(dir, connInput({ label: "Venice One", kind: "image" }));
+    const second = createConnection(dir, connInput({ label: "Venice Two", kind: "image" }));
+    const manager = new ProviderManager(dir, {});
+
+    expect(manager.imageConnection()?.id).toBe(first.id);
+    expect(manager.imageConnection(second.id)?.id).toBe(second.id);
+    // A text connection id (or an unknown one) must never be returned for
+    // image work — it falls back to the active image connection.
+    expect(manager.imageConnection(text.id)?.id).toBe(first.id);
+    expect(manager.imageConnection("ghost")?.id).toBe(first.id);
+  });
+
+  it("has no image connection when only text connections exist", () => {
+    const dir = tempDir();
+    createConnection(dir, connInput({ label: "Text" }));
+    const manager = new ProviderManager(dir, {});
+    expect(manager.imageConnection()).toBeNull();
+  });
+
+  it("resolves the image-prompt writer: promptProviderId, else the active text connection", () => {
+    const dir = tempDir();
+    const writer = createConnection(
+      dir,
+      connInput({ label: "Writer", baseUrl: "http://w:1", model: "writer-model" })
+    );
+    const other = createConnection(dir, connInput({ label: "Other", baseUrl: "http://o:1", model: "other-model" }));
+    const image = createConnection(
+      dir,
+      connInput({ label: "Venice", kind: "image", promptProviderId: writer.id })
+    );
+    const manager = new ProviderManager(dir, {});
+
+    const explicit = manager.resolveImagePromptConfig(manager.imageConnection());
+    expect(explicit?.providerId).toBe(writer.id);
+    expect(explicit?.model).toBe("writer-model");
+
+    // An explicit prompt writer keeps winning after the active text changes.
+    setActiveConnection(dir, other.id);
+    expect(manager.resolveImagePromptConfig(manager.imageConnection())?.providerId).toBe(writer.id);
+
+    // A dangling (or non-text) promptProviderId falls back to the active text one.
+    updateConnection(dir, image.id, {
+      label: "Venice",
+      baseUrl: "https://api.venice.ai/api/v1",
+      model: "m",
+      promptProviderId: "ghost"
+    });
+    expect(manager.resolveImagePromptConfig(manager.imageConnection())?.providerId).toBe(other.id);
+
+    updateConnection(dir, image.id, {
+      label: "Venice",
+      baseUrl: "https://api.venice.ai/api/v1",
+      model: "m",
+      promptProviderId: writer.id
+    });
+    setActiveConnection(dir, writer.id);
+    // A null image connection still resolves the active TEXT connection: the
+    // writer is a text connection, independent of which image row asked.
+    expect(manager.resolveImagePromptConfig(null)?.providerId).toBe(writer.id);
+  });
+
+  it("has no image-prompt writer when no text connection exists", () => {
+    const dir = tempDir();
+    createConnection(dir, connInput({ label: "Images", kind: "image" }));
+    const manager = new ProviderManager(dir, {});
+    expect(manager.imageConnection()).not.toBeNull();
+    expect(manager.resolveImagePromptConfig(manager.imageConnection())).toBeNull();
+    expect(manager.resolveImagePromptConfig(null)).toBeNull();
+  });
 });
