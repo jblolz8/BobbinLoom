@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChatMessage, Playthrough } from "../../schemas";
 import {
+  deleteMessageImage,
   editMessage,
+  generateMessageImage,
   getContextUsage,
   getPlaythrough,
   listPlaythroughs,
+  previewImagePrompt,
   questAction,
   resummarizeChapter,
   retryTurn,
@@ -47,6 +50,25 @@ type ChatSettings = {
   showGenerationTime: boolean;
   showMessageTimestamps: boolean;
   showModelName: boolean;
+  imagePromptPreview: boolean;
+};
+
+/** Overrides the preview modal posts back. When BOTH prompt fields are present
+ *  the server skips the text call, so the reviewed text is what the image
+ *  provider receives and the text model is not paid for twice. */
+export type ImageGenerationOverrides = {
+  promptOverride?: string;
+  negativeOverride?: string;
+  imageProviderId?: string;
+};
+
+/** The generated prompt awaiting review in the modal. The message is carried
+ *  along so the modal's Generate button can re-enter `handleGenerateImage`
+ *  without the component having to look the message up again. */
+export type ImagePromptRequest = {
+  message: ChatMessage;
+  prompt: string;
+  negativePrompt: string;
 };
 
 function loadChatSettings(): ChatSettings {
@@ -61,6 +83,7 @@ function loadChatSettings(): ChatSettings {
         showGenerationTime: typeof parsed.showGenerationTime === "boolean" ? parsed.showGenerationTime : true,
         showMessageTimestamps: typeof parsed.showMessageTimestamps === "boolean" ? parsed.showMessageTimestamps : true,
         showModelName: typeof parsed.showModelName === "boolean" ? parsed.showModelName : true,
+        imagePromptPreview: typeof parsed.imagePromptPreview === "boolean" ? parsed.imagePromptPreview : true,
       };
     }
   } catch {}
@@ -71,6 +94,7 @@ function loadChatSettings(): ChatSettings {
     showGenerationTime: true,
     showMessageTimestamps: true,
     showModelName: true,
+    imagePromptPreview: true,
   };
 }
 
@@ -134,6 +158,7 @@ export function usePlaythrough() {
   const showGenerationTime = chatSettings.showGenerationTime;
   const showMessageTimestamps = chatSettings.showMessageTimestamps;
   const showModelName = chatSettings.showModelName;
+  const imagePromptPreview = chatSettings.imagePromptPreview;
 
   const setChoicesEnabled = (val: boolean) => {
     setChatSettingsState((prev) => {
@@ -182,6 +207,14 @@ export function usePlaythrough() {
       return next;
     });
   };
+
+  const setImagePromptPreview = (val: boolean) => {
+    setChatSettingsState((prev) => {
+      const next = { ...prev, imagePromptPreview: val };
+      saveChatSettings(next);
+      return next;
+    });
+  };
   const [choices, setChoices] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -194,6 +227,16 @@ export function usePlaythrough() {
   const [cancelledNotice, setCancelledNotice] = useState<string | null>(null);
   const [failedNotice, setFailedNotice] = useState<FailedResponseNotice | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // ── Generated images (per message) ──
+  // One message at a time: the id of the message whose image (or whose prompt)
+  // is in flight drives the ChatPanel footer, and one abort ref covers both
+  // requests, so "Cancel" always kills whichever call is running.
+  const [imageGeneratingId, setImageGeneratingId] = useState<string | null>(null);
+  const [imagePreviewMessageId, setImagePreviewMessageId] = useState<string | null>(null);
+  const [imageDeletingId, setImageDeletingId] = useState<string | null>(null);
+  const [imagePromptRequest, setImagePromptRequest] = useState<ImagePromptRequest | null>(null);
+  const imageAbortRef = useRef<AbortController | null>(null);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
   const [rawInput, setRawInput] = useState<string | null>(null);
   const [rawOutput, setRawOutput] = useState<string | null>(null);
@@ -252,6 +295,8 @@ export function usePlaythrough() {
         setRawOutput(null);
         setCancelledNotice(null);
         setFailedNotice(null);
+        // A prompt modal belongs to the playthrough it was opened from.
+        setImagePromptRequest(null);
         const { text, localWins } = resolveDraft(found);
         setInput(text);
         if (localWins && text && text !== found.draft) void persistDraft(found.id, text);
@@ -319,6 +364,140 @@ export function usePlaythrough() {
 
   function handleCancel() {
     abortControllerRef.current?.abort();
+  }
+
+  /** Every image-path failure goes through the same in-page failed notice the
+   *  send path uses (raw error included) and changes nothing on the record. */
+  function reportImageFailure(e: unknown, startTime: number, message: string) {
+    setFailedNotice({
+      message,
+      rawError: e instanceof Error ? e.message : String(e),
+      durationMs: Math.round(performance.now() - startTime)
+    });
+  }
+
+  /** True when both reviewed fields are present, i.e. the server will skip the
+   *  text call and use the user's text verbatim (modulo prefix + clamping). */
+  function hasPromptOverrides(overrides?: ImageGenerationOverrides): boolean {
+    return overrides?.promptOverride !== undefined && overrides?.negativeOverride !== undefined;
+  }
+
+  /**
+   * Generate one image for an assistant message — one entry point, three paths:
+   *  - preview ON (the default) with no overrides: run the text call only and
+   *    hand the composed prompt to the modal. Nothing is generated yet.
+   *  - preview ON with BOTH overrides (the modal's Generate button): the server
+   *    skips the text call, so no second token spend and the user's edits are
+   *    what reaches the image provider.
+   *  - preview OFF: a single request, no modal, no overrides.
+   */
+  async function handleGenerateImage(message: ChatMessage, overrides?: ImageGenerationOverrides) {
+    if (!playthrough || imageGeneratingId || imagePreviewMessageId) return;
+    const reviewing = imagePromptPreview && !hasPromptOverrides(overrides);
+    setCancelledNotice(null);
+    setFailedNotice(null);
+
+    const controller = new AbortController();
+    imageAbortRef.current = controller;
+    const startTime = performance.now();
+
+    if (reviewing) {
+      setImagePreviewMessageId(message.id);
+      try {
+        const preview = await previewImagePrompt(playthrough.id, message.id, overrides?.imageProviderId, controller.signal);
+        // A preview the user cancelled must not pop the modal open again.
+        if (controller.signal.aborted) return;
+        setImagePromptRequest({ message, prompt: preview.prompt, negativePrompt: preview.negativePrompt });
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") {
+          setCancelledNotice("Image prompt cancelled.");
+        } else {
+          reportImageFailure(e, startTime, "Image generation failed — nothing was changed.");
+        }
+      } finally {
+        setImagePreviewMessageId(null);
+        imageAbortRef.current = null;
+      }
+      return;
+    }
+
+    setImageGeneratingId(message.id);
+    try {
+      const res = await generateMessageImage(playthrough.id, message.id, { ...overrides, signal: controller.signal });
+      // The response carries the authoritative record — set it exactly like
+      // `handleSend` does with `response.state`.
+      setPlaythrough(res.playthrough);
+      setImagePromptRequest(null);
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        setCancelledNotice("Image generation cancelled.");
+      } else {
+        reportImageFailure(e, startTime, "Image generation failed — nothing was changed.");
+      }
+    } finally {
+      setImageGeneratingId(null);
+      imageAbortRef.current = null;
+    }
+  }
+
+  function handleCancelImage() {
+    imageAbortRef.current?.abort();
+  }
+
+  /** Cancel/close the prompt modal. Closing mid-flight aborts the text call, so
+   *  the per-message spinner can never be left stuck — the hook owns the
+   *  in-flight state, the modal only owns the prompt text. */
+  function closeImagePrompt() {
+    setImagePromptRequest(null);
+    if (imagePreviewMessageId) imageAbortRef.current?.abort();
+  }
+
+  /** Fresh draft from the text model without leaving the modal. */
+  async function rerunImagePrompt() {
+    const request = imagePromptRequest;
+    if (!playthrough || !request || imageGeneratingId || imagePreviewMessageId) return;
+    const controller = new AbortController();
+    imageAbortRef.current = controller;
+    setImagePreviewMessageId(request.message.id);
+    setCancelledNotice(null);
+    setFailedNotice(null);
+    const startTime = performance.now();
+    try {
+      const preview = await previewImagePrompt(playthrough.id, request.message.id, undefined, controller.signal);
+      if (controller.signal.aborted) return;
+      setImagePromptRequest({ ...request, prompt: preview.prompt, negativePrompt: preview.negativePrompt });
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        setCancelledNotice("Image prompt cancelled.");
+      } else {
+        reportImageFailure(e, startTime, "Image generation failed — nothing was changed.");
+      }
+    } finally {
+      setImagePreviewMessageId(null);
+      imageAbortRef.current = null;
+    }
+  }
+
+  /**
+   * Drop one generated image from a message. The server sweeps the file when
+   * nothing else references those bytes, so the confirmation is worded to cover
+   * both cases rather than trying to count references on the client.
+   */
+  async function handleDeleteImage(message: ChatMessage, file: string) {
+    if (!playthrough || imageGeneratingId || imagePreviewMessageId || imageDeletingId) return;
+    if (!window.confirm("Remove this image? The file is deleted if nothing else uses it.")) return;
+    setCancelledNotice(null);
+    setFailedNotice(null);
+    setImageDeletingId(message.id);
+    const startTime = performance.now();
+    try {
+      const res = await deleteMessageImage(playthrough.id, message.id, file);
+      setPlaythrough(res.playthrough);
+    } catch (e) {
+      reportImageFailure(e, startTime, "Removing the image failed — nothing was changed.");
+    } finally {
+      setImageDeletingId(null);
+    }
   }
 
   function startEdit(message: ChatMessage) {
@@ -467,6 +646,7 @@ export function usePlaythrough() {
     setRawOutput(null);
     setCancelledNotice(null);
     setFailedNotice(null);
+    setImagePromptRequest(null);
     if (newPlaythrough) {
       const { text, localWins } = resolveDraft(newPlaythrough);
       setInput(text);
@@ -496,6 +676,8 @@ export function usePlaythrough() {
     setShowMessageTimestamps,
     showModelName,
     setShowModelName,
+    imagePromptPreview,
+    setImagePromptPreview,
     choices,
     setChoices,
     loading,
@@ -530,6 +712,15 @@ export function usePlaythrough() {
     loadPlaythrough,
     handleSend,
     handleCancel,
+    imageGeneratingId,
+    imagePreviewMessageId,
+    imageDeletingId,
+    imagePromptRequest,
+    handleGenerateImage,
+    handleCancelImage,
+    closeImagePrompt,
+    rerunImagePrompt,
+    handleDeleteImage,
     startEdit,
     cancelEdit,
     saveEdit,
