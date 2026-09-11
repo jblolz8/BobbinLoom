@@ -195,11 +195,33 @@ export function renderModules(modules: PromptPresetModule[] | undefined): string
     .join("\n\n");
 }
 
+/** Stable, cache-friendly prefix: preset modules then lorebook "before" entries. */
+export function buildStableSystemBlock(modules: PromptPresetModule[], lorebookBefore: string): string {
+  return [renderModules(modules), lorebookBefore].filter(Boolean).join("\n\n");
+}
+
 export function buildSystemPrompt(choicesEnabled: boolean, modules: PromptPresetModule[], lorebookBefore: string, lorebookAfter: string, format?: CharacterFormat): { text: string; segments: SystemPromptSegments } {
   const enabledModules = modules
     .filter((m) => m.enabled)
     .sort((a, b) => a.order - b.order);
 
+  const moduleContents = enabledModules.map((m) => m.content).join("\n\n");
+  const lorebookSection = [lorebookBefore, lorebookAfter].filter(Boolean).join("\n\n");
+  const outputInstructions = buildOutputContract(choicesEnabled, format);
+
+  const parts = [lorebookSection, moduleContents, outputInstructions].filter(Boolean);
+  return {
+    text: parts.join("\n\n"),
+    segments: {
+      modules: moduleContents.length,
+      outputFormat: outputInstructions.length,
+      lorebook: lorebookSection.length
+    }
+  };
+}
+
+/** Volatile output contract: JSON shape, per-field guidance, choice rules. */
+export function buildOutputContract(choicesEnabled: boolean, format?: CharacterFormat): string {
   const sectionHeaders = formatSectionHeaders(format);
   const sectionNamesList = sectionHeaders.join(", ");
   const bulletedSections = formatSections(format)
@@ -207,9 +229,6 @@ export function buildSystemPrompt(choicesEnabled: boolean, modules: PromptPreset
     .map((s) => s.name)
     .filter((n) => n.toLowerCase() !== "clothing")
     .join(", ");
-
-  const moduleContents = enabledModules.map((m) => m.content).join("\n\n");
-  const lorebookSection = [lorebookBefore, lorebookAfter].filter(Boolean).join("\n\n");
 
   const outputInstructions = [
     "",
@@ -296,15 +315,7 @@ export function buildSystemPrompt(choicesEnabled: boolean, modules: PromptPreset
     "Keep narrative under 350 words."
   ].join("\n");
 
-  const parts = [lorebookSection, moduleContents, outputInstructions].filter(Boolean);
-  return {
-    text: parts.join("\n\n"),
-    segments: {
-      modules: moduleContents.length,
-      outputFormat: outputInstructions.length,
-      lorebook: lorebookSection.length
-    }
-  };
+  return outputInstructions;
 }
 
 type UserPromptSegments = { memoryEvents: number; storySoFar: number; stateSummary: number; lorebookDepth: number; recentMessages: number; userInput: number };
