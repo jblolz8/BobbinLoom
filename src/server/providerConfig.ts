@@ -38,10 +38,25 @@ export function normalizeBaseUrl(baseUrl: string): string {
   return trimmed.endsWith("/v1") ? trimmed : `${trimmed}/v1`;
 }
 
-function numberFromEnv(value: string | undefined, fallback: number): number {
+export function numberFromEnv(value: string | undefined, fallback: number): number {
   if (!value) return fallback;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+/** Image requests get their own timeout: local diffusion queues and Venice's
+ *  image lane both blow past the 120s text default, and cutting a generation
+ *  off at 120s wastes the whole call. Retries stay at 1 — a 60-second
+ *  generation is not something to repeat twice on a 5xx. */
+export function resolveImageConfig(
+  conn: ProviderConnection,
+  env: NodeJS.ProcessEnv = process.env
+): ResolvedProviderConfig {
+  return {
+    ...resolveConnectionConfig(conn, env),
+    timeoutMs: numberFromEnv(env.BOBBINLOOM_IMAGE_TIMEOUT_MS, 180_000),
+    maxRetries: numberFromEnv(env.BOBBINLOOM_IMAGE_MAX_RETRIES, 1)
+  };
 }
 
 /** Resolve a persisted connection into the runtime provider config. Only

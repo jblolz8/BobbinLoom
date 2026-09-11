@@ -17,6 +17,8 @@ import {
   updateConnection
 } from "./providerRegistry";
 import type { ModelsProbeResult, ProviderConnectionDraft, PublicProviderRegistry } from "./providerRegistry";
+import { createImageProvider, UnconfiguredImageProvider } from "./imageProvider";
+import type { ImageProvider } from "./imageProvider";
 
 export class ProviderManager {
   constructor(
@@ -61,6 +63,15 @@ export class ProviderManager {
       if (explicit) return explicit;
     }
     return this.activeImageConnection();
+  }
+
+  /** The image provider for a request: the explicit connection when it resolves
+   *  to a real image connection, else the active one, else the throwing
+   *  placeholder that the route turns into a 400. */
+  getImageProvider(id?: string): ImageProvider {
+    const conn = this.imageConnection(id);
+    if (!conn) return new UnconfiguredImageProvider();
+    return createImageProvider(conn, this.env, this.fetchImpl);
   }
 
   /** The config used to WRITE image prompts: the image connection's
