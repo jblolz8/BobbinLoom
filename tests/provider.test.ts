@@ -32,6 +32,23 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+/** The CURRENT STATE region of the volatile tail block — the state summary and
+ *  character sheets only. Excludes the OUTPUT FORMAT contract, which legitimately
+ *  names "[Clothing]"/"[Personality]" as canonical section names and would
+ *  otherwise satisfy sheet-level assertions by accident. */
+function currentStateText(assembled: ReturnType<typeof assembleTurnPrompt>): string {
+  const joined = promptText(assembled);
+  const start = joined.indexOf("CURRENT STATE\n");
+  if (start === -1) return "";
+  const end = joined.indexOf("\n\nPARSED INPUT", start);
+  return joined.slice(start, end === -1 ? undefined : end);
+}
+
+/** Joins every outgoing message so ordering-agnostic content assertions keep working. */
+function promptText(assembled: ReturnType<typeof assembleTurnPrompt>): string {
+  return assembled.messages.map((m) => m.content).join("\n\n");
+}
+
 const VALID_SEED = {
   locations: [
     {
@@ -459,7 +476,7 @@ describe("OpenAICompatibleProvider", () => {
     }];
 
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
-    const user = assembled.user;
+    const user = promptText(assembled);
 
     expect(user).toContain("STORY SO FAR:");
     expect(user).toContain("EARLIER STORY:\nMETA rolling summary");
@@ -477,19 +494,19 @@ describe("OpenAICompatibleProvider", () => {
   it("STORY SO FAR is omitted entirely when there are no chapters or meta summaries", () => {
     const pt = createInitialPlaythrough("No Chapters Test");
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
-    expect(assembled.user).not.toContain("STORY SO FAR:");
+    expect(promptText(assembled)).not.toContain("STORY SO FAR:");
     expect(assembled.promptUsage.breakdown.storySoFar).toBe(0);
   });
 
   it("npcPromote guidance is honest about the starter sheet (no overpromising)", () => {
     const pt = createInitialPlaythrough("Guidance Test");
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
-    expect(assembled.system).toContain("npcPromote");
+    expect(promptText(assembled)).toContain("npcPromote");
     // The model-initiated path creates a starter sheet from the NPC's info —
     // the guidance must not claim the character gains full tracked state.
-    expect(assembled.system).not.toContain("They gain full tracked state");
-    expect(assembled.system).toContain("basic sheet built from their description");
-    expect(assembled.system).toContain("npcAdd is the right tool");
+    expect(promptText(assembled)).not.toContain("They gain full tracked state");
+    expect(promptText(assembled)).toContain("basic sheet built from their description");
+    expect(promptText(assembled)).toContain("npcAdd is the right tool");
   });
 
   it("sizes the scenario-seed max_tokens off the connection config (with a 4000 floor)", async () => {
@@ -856,9 +873,9 @@ describe("presence-gated character injection", () => {
   it("renders same-location characters with their full sheet and no ABSENT block", () => {
     const pt = createInitialPlaythrough("Presence Present Test");
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
-    expect(assembled.user).toContain("CHARACTER: Mira");
-    expect(assembled.user).toContain("- Values competence, honesty, and self-control.");
-    expect(assembled.user).not.toContain("ABSENT CHARACTERS");
+    expect(promptText(assembled)).toContain("CHARACTER: Mira");
+    expect(promptText(assembled)).toContain("- Values competence, honesty, and self-control.");
+    expect(promptText(assembled)).not.toContain("ABSENT CHARACTERS");
   });
 
   it("demotes different-location characters to a one-liner and withholds the full sheet", () => {
@@ -866,12 +883,12 @@ describe("presence-gated character injection", () => {
     const miraId = pt.characters[0].id;
     pt.characters[0].currentLocationId = "loc_other";
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
-    expect(assembled.user).toContain("ABSENT CHARACTERS");
-    expect(assembled.user).toContain(`- Mira (${miraId}) — `);
-    expect(assembled.user).toContain("at loc_other (loc_other)");
+    expect(promptText(assembled)).toContain("ABSENT CHARACTERS");
+    expect(promptText(assembled)).toContain(`- Mira (${miraId}) — `);
+    expect(promptText(assembled)).toContain("at loc_other (loc_other)");
     // Full sheet withheld for the absent character.
-    expect(assembled.user).not.toContain("- Values competence, honesty, and self-control.");
-    expect(assembled.user).not.toContain("[RUNTIME STATE]");
+    expect(promptText(assembled)).not.toContain("- Values competence, honesty, and self-control.");
+    expect(promptText(assembled)).not.toContain("[RUNTIME STATE]");
   });
 
   it("includes towardPlayer brackets in the absent line only when non-neutral", () => {
@@ -880,11 +897,11 @@ describe("presence-gated character injection", () => {
     pt.characters[0].currentLocationId = "loc_other";
     pt.characters[0].towardPlayer = "wary";
     const wary = assembleTurnPrompt(parseUserInput("go"), pt, true);
-    expect(wary.user).toContain(`- Mira (${miraId}) [wary] — `);
+    expect(promptText(wary)).toContain(`- Mira (${miraId}) [wary] — `);
     pt.characters[0].towardPlayer = "neutral";
     const neutral = assembleTurnPrompt(parseUserInput("go"), pt, true);
-    expect(neutral.user).toContain(`- Mira (${miraId}) — `);
-    expect(neutral.user).not.toContain("[neutral]");
+    expect(promptText(neutral)).toContain(`- Mira (${miraId}) — `);
+    expect(promptText(neutral)).not.toContain("[neutral]");
   });
 
   it("appends conditions to the absent line only when non-empty", () => {
@@ -892,55 +909,59 @@ describe("presence-gated character injection", () => {
     pt.characters[0].currentLocationId = "loc_other";
     pt.characters[0].conditions = ["🤕 wounded"];
     const wounded = assembleTurnPrompt(parseUserInput("go"), pt, true);
-    expect(wounded.user).toContain("🤕 wounded");
+    // The OUTPUT FORMAT contract's own guidance quotes "(e.g. \"🤕 wounded\")",
+    // so the character's condition line must be checked in CURRENT STATE only.
+    expect(currentStateText(wounded)).toContain("🤕 wounded");
     pt.characters[0].conditions = [];
     const clean = assembleTurnPrompt(parseUserInput("go"), pt, true);
-    expect(clean.user).not.toContain("🤕 wounded");
+    expect(currentStateText(clean)).not.toContain("🤕 wounded");
   });
 
   it("treats a blank playthrough (all at 'unknown') as fully present", () => {
     const pt = createBlankPlaythrough("Presence Blank Test", EMPTY_MODULE_SET, "default", "Default", undefined, [DEMO_TEMPLATE]);
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
-    expect(assembled.user).toContain("CHARACTER: Mira");
-    expect(assembled.user).not.toContain("ABSENT CHARACTERS");
+    expect(promptText(assembled)).toContain("CHARACTER: Mira");
+    expect(promptText(assembled)).not.toContain("ABSENT CHARACTERS");
   });
 
   it("keeps all instance ids in the Allowed IDs line regardless of presence", () => {
     const pt = createInitialPlaythrough("Presence AllowedIds Test", EMPTY_MODULE_SET, "default", "Default", undefined, [DEMO_TEMPLATE, CLOTHED_TEMPLATE]);
     pt.characters[1].currentLocationId = "loc_other";
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
-    expect(assembled.user).toContain(`Characters: ${pt.characters[0].id}, ${pt.characters[1].id}`);
-    expect(assembled.user).toContain("ABSENT CHARACTERS");
+    expect(promptText(assembled)).toContain(`Characters: ${pt.characters[0].id}, ${pt.characters[1].id}`);
+    expect(promptText(assembled)).toContain("ABSENT CHARACTERS");
   });
 
   it("omits the raw [Clothing] section and renders a derived line when structured clothing exists", () => {
     const pt = createInitialPlaythrough("Presence Clothing Test", EMPTY_MODULE_SET, "default", "Default", undefined, [CLOTHED_TEMPLATE]);
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
-    expect(assembled.user).toContain("CHARACTER: Aya");
-    expect(assembled.user).not.toContain("[Clothing]");
-    expect(assembled.user).toContain("Clothing: Top: Torn silk blouse; Legs: Leather pants");
+    expect(promptText(assembled)).toContain("CHARACTER: Aya");
+    // Sheet-level assertions target the CURRENT STATE region: the OUTPUT FORMAT
+    // contract also lists "[Clothing]"/"[Personality]" as canonical section names.
+    expect(currentStateText(assembled)).not.toContain("[Clothing]");
+    expect(promptText(assembled)).toContain("Clothing: Top: Torn silk blouse; Legs: Leather pants");
     // The rest of the sheet is still injected verbatim.
-    expect(assembled.user).toContain("[Personality]");
-    expect(assembled.user).toContain("Quiet observer.");
+    expect(currentStateText(assembled)).toContain("[Personality]");
+    expect(promptText(assembled)).toContain("Quiet observer.");
   });
 
   it("injects the blob unchanged when the character wears no structured clothing", () => {
     const pt = createInitialPlaythrough("Presence NoClothing Test");
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
-    expect(assembled.user).toContain("CHARACTER: Mira");
-    expect(assembled.user).toContain("[Species]: Human");
-    expect(assembled.user).toContain("[Personality]");
-    expect(assembled.user).toContain("- Values competence, honesty, and self-control.");
+    expect(promptText(assembled)).toContain("CHARACTER: Mira");
+    expect(promptText(assembled)).toContain("[Species]: Human");
+    expect(currentStateText(assembled)).toContain("[Personality]");
+    expect(promptText(assembled)).toContain("- Values competence, honesty, and self-control.");
   });
 
   it("documents the absent-character rules and characterClothing* patches in the system prompt", () => {
     const pt = createInitialPlaythrough("Presence System Test");
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
-    expect(assembled.system).toContain("characterClothingAdd/Remove/SetState/Set: manage a character's worn clothing.");
-    expect(assembled.system).toContain('The "Clothing" section is managed via characterClothing* patches');
-    expect(assembled.system).toContain("A character is present at the scene only when their location matches the current location.");
-    expect(assembled.system).toContain("Absent characters can still be affected by statePatch: characterLocation");
-    expect(assembled.system).toContain("While a character is absent they may evolve off-screen");
+    expect(promptText(assembled)).toContain("characterClothingAdd/Remove/SetState/Set: manage a character's worn clothing.");
+    expect(promptText(assembled)).toContain('The "Clothing" section is managed via characterClothing* patches');
+    expect(promptText(assembled)).toContain("A character is present at the scene only when their location matches the current location.");
+    expect(promptText(assembled)).toContain("Absent characters can still be affected by statePatch: characterLocation");
+    expect(promptText(assembled)).toContain("While a character is absent they may evolve off-screen");
   });
 });
 
@@ -969,19 +990,19 @@ describe("CCv2 runtime macros (D10)", () => {
     pt.playerCharacter.name = "Anon";
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
     // Sheet is rendered verbatim + macros expanded (D6/D10).
-    expect(assembled.user).toContain("CHARACTER: Mira");
-    expect(assembled.user).toContain("Mira loves Anon");
+    expect(promptText(assembled)).toContain("CHARACTER: Mira");
+    expect(promptText(assembled)).toContain("Mira loves Anon");
     // Raw macros never leak into the prompt.
-    expect(assembled.user).not.toContain("{{char}}");
-    expect(assembled.user).not.toContain("{{user}}");
+    expect(promptText(assembled)).not.toContain("{{char}}");
+    expect(promptText(assembled)).not.toContain("{{user}}");
   });
 
   it("expands macros in BL sheets too (shared path, case-insensitive)", () => {
     const pt = createInitialPlaythrough("BL Macro Test", EMPTY_MODULE_SET, "default", "Default", undefined, [BL_MACRO_TEMPLATE]);
     pt.playerCharacter.name = "Anon";
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
-    expect(assembled.user).toContain("Mira greets Anon warmly.");
-    expect(assembled.user).not.toContain("{{Char}}");
+    expect(promptText(assembled)).toContain("Mira greets Anon warmly.");
+    expect(promptText(assembled)).not.toContain("{{Char}}");
   });
 
   it("expands macros in the absent-character one-liner summary", () => {
@@ -989,8 +1010,8 @@ describe("CCv2 runtime macros (D10)", () => {
     pt.playerCharacter.name = "Anon";
     pt.characters[0].currentLocationId = "loc_other";
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
-    expect(assembled.user).toContain("ABSENT CHARACTERS");
-    expect(assembled.user).not.toContain("{{char}}");
+    expect(promptText(assembled)).toContain("ABSENT CHARACTERS");
+    expect(promptText(assembled)).not.toContain("{{char}}");
   });
 });
 
@@ -1026,7 +1047,7 @@ describe("turn prompt modules + hardcoded tone", () => {
       modules: { turn: [turnModule] }
     };
     const assembled = assembleTurnPrompt(parseUserInput("go"), state, true);
-    expect(assembled.system).toContain("TURN MARKER");
+    expect(promptText(assembled)).toContain("TURN MARKER");
   });
 
   it("makes the scenario-seed prompt cast-aware and names the lead companion", async () => {

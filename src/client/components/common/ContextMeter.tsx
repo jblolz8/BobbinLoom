@@ -8,7 +8,7 @@ const SEGMENTS: Array<{ key: keyof TokenUsage["breakdown"]; label: string; color
   { key: "lorebook", label: "Lorebook", color: "#8b5cf6" },
   { key: "storySoFar", label: "Story So Far", color: "#2dd4bf" },
   { key: "stateSummary", label: "State Summary", color: "#10b981" },
-  { key: "recentMessages", label: "Chat History", color: "#f59e0b" },
+  { key: "chatHistory", label: "Chat History", color: "#f59e0b" },
   { key: "memoryEvents", label: "Memory Events", color: "#ef4444" },
   { key: "lorebookDepth", label: "Lorebook Depth", color: "#a78bfa" },
   { key: "userInput", label: "User Input", color: "#06b6d4" },

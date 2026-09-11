@@ -347,7 +347,7 @@ describe("executeTurn tokenUsage", () => {
       estimated: 1234,
       breakdown: {
         modules: 500, outputFormat: 400, lorebook: 0, storySoFar: 0, stateSummary: 200,
-        recentMessages: 100, memoryEvents: 20, lorebookDepth: 0, userInput: 14
+        chatHistory: 100, memoryEvents: 20, lorebookDepth: 0, userInput: 14
       }
     };
     const provider: TurnProvider = {

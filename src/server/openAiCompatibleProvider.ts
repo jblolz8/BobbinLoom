@@ -23,7 +23,7 @@ import { assembleTurnPrompt, renderModules } from "./provider/promptBuilder";
 import { requestWithRetry } from "./provider/openaiClient";
 
 export { extractJsonPayload, repairRawControlChars } from "./provider/patchParser";
-export { assembleTurnPrompt, summarizePlaythrough, renderModules, buildSystemPrompt, buildUserPrompt } from "./provider/promptBuilder";
+export { assembleTurnPrompt, summarizePlaythrough, renderModules, buildSystemPrompt } from "./provider/promptBuilder";
 
 type ChatMessage = {
   role: "system" | "user" | "assistant";
@@ -58,12 +58,7 @@ export class OpenAICompatibleProvider {
       : [[]];
     const queryEmbedding = queryEmbeddings[0] ?? [];
 
-    const { system, user, promptUsage } = assembleTurnPrompt(input, state, choicesEnabled, queryEmbedding);
-
-    const messages: ChatMessage[] = [
-      { role: "system", content: system },
-      { role: "user", content: user }
-    ];
+    const { messages, promptUsage } = assembleTurnPrompt(input, state, choicesEnabled, queryEmbedding);
 
     const body: Record<string, unknown> = {
       model: this.config.model,

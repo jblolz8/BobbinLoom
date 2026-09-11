@@ -368,18 +368,8 @@ export function selectHistory(
   return { history: kept.reverse(), droppedChars };
 }
 
-type UserPromptSegments = { memoryEvents: number; storySoFar: number; stateSummary: number; lorebookDepth: number; recentMessages: number; userInput: number };
-
-export function buildUserPrompt(input: ParsedUserInput, state: Playthrough, lorebookDepthContent: string, queryEmbedding: number[] = []): { text: string; segments: UserPromptSegments } {
-  const visibleMessages = state.messages.filter((m) => !m.hidden);
-  const recentMessages = visibleMessages
-    .slice(-12)
-    .map((message) => `${message.role.toUpperCase()}: ${message.content}`)
-    .join("\n");
-
-  const memories = retrieveMemoriesVector(state, queryEmbedding);
-  const stateSummary = summarizePlaythrough(state);
-
+/** STORY SO FAR block: the latest meta-summary plus the newest verbatim chapters. */
+function buildStorySoFarSection(state: Playthrough): string {
   let storySoFarSection = "";
   const chapters = state.chapters ?? [];
   const metas = state.storyMetaSummaries ?? [];
@@ -400,45 +390,15 @@ export function buildUserPrompt(input: ParsedUserInput, state: Playthrough, lore
     }
     storySoFarSection = "STORY SO FAR:\n" + parts.join("\n\n");
   }
-
-  const depthSection = lorebookDepthContent ? `[Current context]\n${lorebookDepthContent}` : "";
-
-  const actionLine = `Action: ${input.actionText || "none"}`;
-  const spokenLine = `Spoken: ${input.spokenText.length ? input.spokenText.join(" | ") : "none"}`;
-
-  return {
-    text: [
-      memories,
-      storySoFarSection,
-      "CURRENT STATE",
-      stateSummary,
-      "",
-      depthSection,
-      "RECENT MESSAGES",
-      recentMessages || "none",
-      "",
-      "USER INPUT",
-      input.raw,
-      "",
-      "PARSED INPUT",
-      actionLine,
-      spokenLine
-    ].filter(Boolean).join("\n"),
-    segments: {
-      memoryEvents: memories.length,
-      storySoFar: storySoFarSection.length,
-      stateSummary: stateSummary.length,
-      lorebookDepth: depthSection.length,
-      recentMessages: (recentMessages || "none").length,
-      userInput: input.raw.length + actionLine.length + spokenLine.length
-    }
-  };
+  return storySoFarSection;
 }
 
 export type AssembledTurnPrompt = {
-  system: string;
-  user: string;
+  messages: PromptMessage[];
   promptUsage: PromptUsage;
+  /** Chars of visible history excluded by the budget. Not surfaced yet — the
+   *  hook for a future "not sent / close a chapter" meter segment. */
+  droppedHistoryChars: number;
 };
 
 type LorebookSegments = { before: string; after: string; depth: string };
@@ -504,32 +464,85 @@ function collectLorebookSegments(state: Playthrough): LorebookSegments {
   return { before: lorebookBefore, after: lorebookAfter, depth: lorebookDepth };
 }
 
-export function assembleTurnPrompt(input: ParsedUserInput, state: Playthrough, choicesEnabled: boolean, queryEmbedding: number[] = []): AssembledTurnPrompt {
+export function assembleTurnPrompt(
+  input: ParsedUserInput,
+  state: Playthrough,
+  choicesEnabled: boolean,
+  queryEmbedding: number[] = [],
+  budget: PromptBudget = { contextWindow: 65536, reserveOutputTokens: 1200 }
+): AssembledTurnPrompt {
   const modules = state.promptSettings?.modules.turn ?? [];
   const format = state.promptSettings?.characterFormat;
 
   const { before: lorebookBefore, after: lorebookAfter, depth: lorebookDepth } = collectLorebookSegments(state);
 
-  const systemResult = buildSystemPrompt(choicesEnabled, modules, lorebookBefore, lorebookAfter, format);
-  const userResult = buildUserPrompt(input, state, lorebookDepth, queryEmbedding);
+  const stableBlock = buildStableSystemBlock(modules, lorebookBefore);
+  const outputContract = buildOutputContract(choicesEnabled, format);
 
-  const est = (chars: number) => Math.ceil(chars / 4);
+  const memories = retrieveMemoriesVector(state, queryEmbedding);
+  const storySoFarSection = buildStorySoFarSection(state);
+  const stateSummary = summarizePlaythrough(state);
+
+  const actionLine = `Action: ${input.actionText || "none"}`;
+  const spokenLine = `Spoken: ${input.spokenText.length ? input.spokenText.join(" | ") : "none"}`;
+  const depthSection = lorebookDepth ? `[Current context]\n${lorebookDepth}` : "";
+
+  // Volatile tail: everything that changes every turn, ordered most-stable-first.
+  const tailBlock = [
+    memories,
+    storySoFarSection,
+    "CURRENT STATE",
+    stateSummary,
+    depthSection,
+    lorebookAfter,
+    "PARSED INPUT",
+    actionLine,
+    spokenLine,
+    outputContract
+  ].filter(Boolean).join("\n\n");
+
+  const usable = Math.max(
+    0,
+    budget.contextWindow - budget.reserveOutputTokens - CONTEXT_SAFETY_RESERVE
+  );
+  const fixedCost =
+    estimateTokens(stableBlock.length) + estimateTokens(tailBlock.length) + estimateTokens(input.raw.length);
+  const { history, droppedChars } = selectHistory(state, Math.max(0, usable - fixedCost));
+
+  const messages: PromptMessage[] = history.length > 0
+    ? [
+        { role: "system", content: stableBlock },
+        ...history,
+        { role: "system", content: tailBlock },
+        { role: "user", content: input.raw }
+      ]
+    : [
+        // No transcript to send (fresh playthrough, or right after a chapter
+        // close): merge the tail into the leading system message so the array
+        // never opens with two consecutive system messages.
+        { role: "system", content: [stableBlock, tailBlock].filter(Boolean).join("\n\n") },
+        { role: "user", content: input.raw }
+      ];
+
+  const est = estimateTokens;
   const breakdown: PromptUsageBreakdown = {
-    modules: est(systemResult.segments.modules),
-    outputFormat: est(systemResult.segments.outputFormat),
-    lorebook: est(systemResult.segments.lorebook),
-    storySoFar: est(userResult.segments.storySoFar),
-    stateSummary: est(userResult.segments.stateSummary),
-    recentMessages: est(userResult.segments.recentMessages),
-    memoryEvents: est(userResult.segments.memoryEvents),
-    lorebookDepth: est(userResult.segments.lorebookDepth),
-    userInput: est(userResult.segments.userInput)
+    modules: est(renderModules(modules).length),
+    outputFormat: est(outputContract.length),
+    lorebook: est([lorebookBefore, lorebookAfter].filter(Boolean).join("\n\n").length),
+    storySoFar: est(storySoFarSection.length),
+    stateSummary: est(stateSummary.length),
+    chatHistory: est(history.reduce((n, m) => n + m.content.length, 0)),
+    memoryEvents: est(memories.length),
+    lorebookDepth: est(depthSection.length),
+    userInput: est(input.raw.length + actionLine.length + spokenLine.length)
   };
-  const estimated = (Object.values(breakdown) as number[]).reduce((sum: number, n: number) => sum + n, 0);
+  // Meter tiling: sum-of-segments remains `estimated` so the bar's segments add
+  // up exactly, as they do today. Budget math above used its own char total.
+  const estimated = (Object.values(breakdown) as number[]).reduce((sum, n) => sum + n, 0);
 
   return {
-    system: systemResult.text,
-    user: userResult.text,
-    promptUsage: { estimated, breakdown }
+    messages,
+    promptUsage: { estimated, breakdown },
+    droppedHistoryChars: droppedChars
   };
 }

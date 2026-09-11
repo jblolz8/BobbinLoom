@@ -241,7 +241,7 @@ function estimateTokenUsageFallback(state: Playthrough, input: string, contextWi
     + state.npcs.reduce((sum, n) => sum + n.name.length + n.description.length + 30, 0)
     + 200; // player + location + flags overhead
 
-  const recentMessages = state.messages
+  const chatHistory = state.messages
     .filter(m => !m.hidden)
     .slice(-12)
     .map(m => m.content).join("\n");
@@ -260,7 +260,7 @@ function estimateTokenUsageFallback(state: Playthrough, input: string, contextWi
     lorebook: 0, // unknown outside the provider
     storySoFar: est(storySoFarText),
     stateSummary: Math.ceil(stateChars / 4),
-    recentMessages: est(recentMessages),
+    chatHistory: est(chatHistory),
     memoryEvents: est(memoryText + memoryLayersText),
     lorebookDepth: 0, // unknown outside the provider
     userInput: est(input),

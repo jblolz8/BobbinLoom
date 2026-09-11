@@ -7,7 +7,7 @@ export type TokenBreakdown = {
   lorebook: number;
   storySoFar: number;
   stateSummary: number;
-  recentMessages: number;
+  chatHistory: number;
   memoryEvents: number;
   lorebookDepth: number;
   userInput: number;
