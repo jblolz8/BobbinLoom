@@ -2419,6 +2419,46 @@
   color: var(--text-muted);
 }
 
+/* The image editor's toggle rows (Safe Mode, Hide Watermark) sit INSIDE
+   .conn-editor-card, which is already var(--bg-surface-elevated) with a
+   var(--border-main) border — the shared .base-toggle-row background/border
+   disappeared into it (elevated on elevated), so the rows read as washed-out
+   flat boxes. On the Chat tab the same rows sit on the modal background and
+   stand out. Drop the row one surface step BELOW the card instead (--input-bg
+   is darker than the card in the dark theme and lighter than it in the light
+   one) and lift its border to --border-light, which reads against the card in
+   both themes. Scoped to the card, so the Chat tab and the Setup wizard keep
+   the shared .base-toggle-row rules untouched. */
+.conn-editor-card .conn-toggle-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.conn-editor-card .base-toggle-row {
+  /* `.conn-editor label` sets flex-direction: column on every label in the
+     editor, which stacked the switch under the text here; the row is a row, and
+     its 0.75rem gap is the shared row's. */
+  flex-direction: row;
+  gap: 0.75rem;
+  background: var(--input-bg);
+  border-color: var(--border-light);
+}
+
+/* Kept explicit rather than relying on components.css winning the tie by import
+   order, so the shared hover feedback survives the override above. */
+.conn-editor-card .base-toggle-row:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--border-focus);
+}
+
+/* The leading icon tile's shared --bg-panel sits within a hair of the row's new
+   background, so give it the card's own surface to read as a tile. */
+.conn-editor-card .base-toggle-row__icon {
+  background: var(--bg-surface-elevated);
+  border-color: var(--border-main);
+}
+
 .conn-key-status-row {
   display: flex;
   align-items: center;

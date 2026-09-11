@@ -427,21 +427,25 @@ export function ImageConnectionEditor({
             </div>
           </div>
 
-          <SwitchRow
-            icon="ShieldOff"
-            title="Safe Mode"
-            description="Ask the provider to blur adult content. Leave off."
-            checked={form.safeMode ?? false}
-            onChange={(e) => setForm((f) => ({ ...f, safeMode: e.target.checked }))}
-          />
+          {/* Grouped the way the Chat tab groups its own toggle rows, so the two
+              read as a set rather than two loose boxes in the card. */}
+          <div className="conn-toggle-group">
+            <SwitchRow
+              icon="Shield"
+              title="Safe Mode"
+              description="Ask the provider to blur adult content. Leave off."
+              checked={form.safeMode ?? false}
+              onChange={(e) => setForm((f) => ({ ...f, safeMode: e.target.checked }))}
+            />
 
-          <SwitchRow
-            icon="EyeOff"
-            title="Hide Watermark"
-            description="Venice only. Request results without the Venice watermark."
-            checked={form.hideWatermark ?? false}
-            onChange={(e) => setForm((f) => ({ ...f, hideWatermark: e.target.checked }))}
-          />
+            <SwitchRow
+              icon="EyeOff"
+              title="Hide Watermark"
+              description="Venice only. Request results without the Venice watermark."
+              checked={form.hideWatermark ?? false}
+              onChange={(e) => setForm((f) => ({ ...f, hideWatermark: e.target.checked }))}
+            />
+          </div>
         </div>
       </div>
 
