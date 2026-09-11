@@ -158,6 +158,32 @@ Both meter routes must build the same query embedding `generateTurn` does, or th
 
 ---
 
+## Side calls: the image prompt is not part of a turn
+
+Image generation needs a text model, but its call to that model is a **side call**, not a
+turn (`src/server/provider/imagePrompt.ts`):
+
+- It builds its own two-message request — `system` = the preset's image instruction, one
+  `user` message of scene text + world state + present cast — and sends it straight to the
+  connection that writes image prompts (the image connection's `promptProviderId`, else
+  the active text connection). Nothing is appended to the message array above and nothing
+  from it enters the transcript.
+- It therefore does **not** touch the turn counter, snapshots, world state, the token
+  meter, or `tokenCalibration`, and it writes no playthrough record.
+- It does consume the text connection's tokens, for its own small request:
+  `temperature: 0.7` and `max_tokens: min(connection.maxTokens, 600)`.
+- It is not a `TurnProvider` method. Adding one there would force a stub into every turn
+  mock for a call that has nothing to do with turns.
+
+**The image-prompt configuration is preset-owned, not a prompt module.** The module set
+(`modules.turn`) stays turn-only: the image instruction, the positive/negative prefixes,
+the character limit and the `includeState` / `includeCast` flags live in a separate
+`imageGeneration` block on the preset, snapshotted onto the playthrough alongside the
+modules and the character format when the preset is applied. Fields, resolution order and
+the shipped values: [`image-generation.md`](image-generation.md).
+
+---
+
 ## Debugging a prompt
 
 The **Debug** panel in the chat view:

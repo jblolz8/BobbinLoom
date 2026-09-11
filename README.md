@@ -14,6 +14,7 @@ A local-first AI-Roleplay Story Engine. Story-first characters with thin runtime
 - [`docs/character-library.md`](docs/character-library.md) — Booru-style library, tags/taxonomy, CCv2 import, AI tag suggestion & brainstorming
 - [`docs/prompt-modules.md`](docs/prompt-modules.md) — the prompt-module preset system
 - [`docs/provider-setup.md`](docs/provider-setup.md) — provider connections, API keys, and the provider interface surface
+- [`docs/image-generation.md`](docs/image-generation.md) — image providers and dialects, the generation pipeline, content-addressed storage, and the preset image-prompt config
 
 ### Termux (Android) setup
 

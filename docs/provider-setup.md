@@ -9,7 +9,12 @@ label, base URL, API key, model, and generation parameters (temperature, max tok
 context window). You can keep many connections configured (e.g. DeepSeek, Kimi, a local
 LM Studio/Ollama server) and switch which one is **active** at any time.
 
-- The **active** connection is the one the engine uses for all generation.
+- Every connection carries a **`kind`** — `text` or `image` — and each kind has its own
+  active slot. The active **text** connection is the one the engine uses for all text
+  generation; the active **image** connection is the one that renders pictures.
+  Activating a connection fills the slot matching its kind, so a text connection can
+  never take the image slot or vice versa. Image connections have their own fields and
+  endpoints — see [`image-generation.md`](image-generation.md).
 - Fresh installs start with **no connections** — there are no built-in seeds.
   Everything is user-created in Settings → Provider.
 - The frontend never sees full API keys. Keys are stored server-side and shown only
@@ -20,9 +25,14 @@ LM Studio/Ollama server) and switch which one is **active** at any time.
 ## Where things live
 
 - **Connections + active selection:** `data/providers.json` (created empty on first
-  run; gitignored — never commit it). Versioned (`schemaVersion`); corrupt or
-  invalid files are archived to `.bak` and either salvaged (valid connections
-  kept) or reseeded, with a warning banner in Settings.
+  run; gitignored — never commit it). The file is at **`schemaVersion: 2`**: two
+  independent active slots (`activeTextProviderId`, `activeImageProviderId`) and a
+  `kind` (`text` / `image`) on every connection. A v0/v1 file is migrated on read — the
+  original is archived to `.bak`, the old single `activeProviderId` becomes
+  `activeTextProviderId`, `activeImageProviderId` starts empty, and every connection is
+  stamped `kind: "text"`. An unreadable file is quarantined to `.bak`; a schema-invalid
+  one is salvaged (valid connections kept, invalid dropped) with a warning banner in
+  Settings.
 - **App settings:** `DEFAULT_APP_SETTINGS` (`src/server/appSettingsStore.ts`) is the
   fresh-install source of truth; the committed `data/settings.json` is only a matching
   template, and user changes (`defaultPresetId`, theme, avatar shape, `tagTaxonomy`)
@@ -86,15 +96,53 @@ need to re-enter them (the connections themselves are unaffected).
 
 ---
 
+## Image providers
+
+Image generation (see [`image-generation.md`](image-generation.md)) uses its own
+**image connections**, configured under **Settings → Provider → Image Providers**. They
+are ordinary registry entries with `kind: "image"` — a name, base URL, API key and model
+id, plus the image-only fields below. The same **+ Add connection** / **Edit** /
+**Duplicate** / **Delete** / **Activate** actions apply as for text connections, and an
+image connection is never used for a text turn (the kind filter is mandatory on every
+accessor).
+
+| Field | What it does |
+|---|---|
+| **API Style** | The endpoint dialect. **OpenAI-compatible** (the default) posts to `<baseUrl>/images/generations`; **Venice** posts to `<baseUrl>/image/generate`. Venice sends negative prompts, seeds, variants and style presets; OpenAI-compatible sends none of them. |
+| **Image Size** | `auto`, `1024x1024`, `1536x1024`, `1024x1536`, `1024x1792`, `1792x1024`, or a value you type. `auto` lets the provider choose. |
+| **Aspect Ratio** | Used **instead of** Image Size for models that reject `width`/`height` (the Venice qwen-image family). Leave empty to send the size. |
+| **Style Preset** | Venice only. Sent as `style_preset`. |
+| **Variants** | 1–4. Every rendered variant is kept on the message. |
+| **Hide Watermark** | Venice only. Requests results without the Venice watermark. |
+| **Safe Mode** | Ask the provider to blur adult content. Off by default; leave it off for this project. |
+| **Prompt writer** | Which **text** connection writes the image prompt. Defaults to the current active text provider (stored as `null`); a dangling id also falls back to the active text provider. A prompt writer is required — with no text connection at all, image generation answers 400. |
+
+**Model listing.** **Fetch models** works on an image connection too, and asks for the
+*image* model family (`GET <baseUrl>/models?type=image`) — that is how image checkpoints
+are listed on providers exposing more than one family. **Test connection** still issues a
+plain `GET <baseUrl>/models` reachability + auth check.
+
+Image connections store every shared field (name, base URL, model, temperature, max
+tokens, context window) plus the ones above; the image-only fields are simply absent on
+text rows.
+
+---
+
 ## Environment variables (optional)
 
 ```env
 BOBBINLOOM_MAX_RETRIES=1
 BOBBINLOOM_TIMEOUT_MS=120000
+BOBBINLOOM_IMAGE_MAX_RETRIES=1
+BOBBINLOOM_IMAGE_TIMEOUT_MS=180000
 ```
 
 `BOBBINLOOM_MAX_RETRIES` and `BOBBINLOOM_TIMEOUT_MS` tune request behaviour for every
-connection. All other provider configuration (base URL, model, API key, params)
+**text** connection — including the image-prompt side call, which is a text call.
+`BOBBINLOOM_IMAGE_MAX_RETRIES` (default 1) and `BOBBINLOOM_IMAGE_TIMEOUT_MS` (default
+180000) tune the **image** render calls only, which get their own budget because a local
+diffusion queue or an image lane routinely blows past the 120 s text default. All other
+provider configuration (base URL, model, API key, params)
 lives in the connection itself — the legacy env-var path (`BOBBINLOOM_PROVIDER`,
 `DEEPSEEK_API_KEY`, `KIMI_API_KEY`, `CUSTOM_OPENAI_API_KEY`, `BOBBINLOOM_MODEL`,
 `BOBBINLOOM_BASE_URL`, etc.) was removed Aug 2026.
@@ -145,6 +193,11 @@ for the AI-only ones):
 The two library features (tag suggestion and brainstorming) are documented in
 `character-library.md`.
 
+Image generation is deliberately **not** part of this interface: it is a separate
+`ImageProvider` (`src/server/imageProvider/types.ts`) chosen per image connection, so
+adding it never forces a stub into every turn mock. See
+[`image-generation.md`](image-generation.md).
+
 ### Scenario opening modes
 
 "Generate New Scenario" offers two opening modes (Setup form):
@@ -166,5 +219,7 @@ library card is reused as the lead rather than cloned.
 - non-streaming only
 - chat completions only
 - no provider-specific tool calling
-- no image inputs
-- one global active provider (per-playthrough selection is a future feature)
+- no image inputs (vision input; image *generation* is an output feature — see
+  [`image-generation.md`](image-generation.md))
+- one active connection per kind — one text, one image (per-playthrough selection is a
+  future feature)
