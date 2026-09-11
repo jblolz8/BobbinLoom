@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { saveImageBytes } from "../src/server/imageStore";
 import { playthroughRoutes } from "../src/server/routes/playthroughs";
 import { getPlaythroughRecord } from "../src/server/store";
+import { truncateChat } from "../src/server/turnActions";
 import { cleanupTempDirs, pngBytes, tempDir, writePlaythroughWithImages } from "./helpers/imageFixtures";
 
 afterEach(cleanupTempDirs);
@@ -110,6 +111,83 @@ describe("DELETE /api/playthroughs/:id sweeps the image store", () => {
       expect(res.json()).toEqual({ ok: true });
       // The record really was deleted; only the cleanup was skipped.
       expect(getPlaythroughRecord(h.dataDir, pt.id)).toBeNull();
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe("truncateChat sweeps the image store", () => {
+  /** Records and images as siblings under one temp root, like every other test
+   *  here — nothing points at the real `data/`. */
+  function truncHarness() {
+    const root = tempDir("bobbinloom-truncate-");
+    return { root, dataDir: join(root, "playthroughs"), imagesDir: join(root, "images") };
+  }
+
+  it("removes an image only the truncated messages referenced and keeps a surviving message's image", () => {
+    const h = truncHarness();
+    const kept = saveImageBytes(pngBytes("kept"), "image/png", h.imagesDir).file;
+    const truncated = saveImageBytes(pngBytes("truncated"), "image/png", h.imagesDir).file;
+    const orphan = saveImageBytes(pngBytes("orphan-d"), "image/png", h.imagesDir).file;
+
+    // msg0 (assistant, kept) · msg1 (user) · msg2 (assistant, truncated away).
+    const pt = writePlaythroughWithImages(h.dataDir, "Trunc", [[kept], [], [truncated]]);
+    const survivorId = pt.messages[0].id;
+    const cutoffId = pt.messages[2].id;
+
+    const result = truncateChat(h.dataDir, pt.id, cutoffId, h.imagesDir);
+
+    expect(result.ok).toBe(true);
+    // The surviving message keeps its file; the truncated block's file and the
+    // unrelated orphan are both gone — proof the sweep scanned the store.
+    expect(storedFiles(h.imagesDir)).toEqual([kept]);
+    const stored = getPlaythroughRecord(h.dataDir, pt.id);
+    expect(stored?.messages.map((m) => m.id)).toEqual([survivorId, pt.messages[1].id]);
+    expect(stored?.messages[0].images?.[0].file).toBe(kept);
+  });
+
+  it("never collects a file another playthrough still references", () => {
+    const h = truncHarness();
+    // Same bytes → the SAME file on disk, referenced by both records.
+    const shared = saveImageBytes(pngBytes("shared-trunc"), "image/png", h.imagesDir).file;
+    const keeper = writePlaythroughWithImages(h.dataDir, "Keeper", [[shared]]);
+    const pt = writePlaythroughWithImages(h.dataDir, "Trunc2", [[], [], [shared]]);
+
+    const result = truncateChat(h.dataDir, pt.id, pt.messages[2].id, h.imagesDir);
+
+    expect(result.ok).toBe(true);
+    expect(storedFiles(h.imagesDir)).toEqual([shared]);
+    expect(getPlaythroughRecord(h.dataDir, keeper.id)?.messages[0].images?.[0].file).toBe(shared);
+  });
+
+  it("defaults the sweep to the store beside the data dir, never the real one", () => {
+    const h = truncHarness();
+    const inStore = saveImageBytes(pngBytes("sibling"), "image/png", h.imagesDir).file;
+    const pt = writePlaythroughWithImages(h.dataDir, "Sibling", [[], [], [inStore]]);
+
+    // No imagesDir argument: the sweep must find `<root>/images` on its own.
+    const result = truncateChat(h.dataDir, pt.id, pt.messages[2].id);
+
+    expect(result.ok).toBe(true);
+    expect(storedFiles(h.imagesDir)).toEqual([]);
+  });
+
+  it("does not fail the truncate when the sweep fails", () => {
+    const h = truncHarness();
+    const broken = brokenImagesDir(h.root);
+    const pt = writePlaythroughWithImages(h.dataDir, "TruncFail", [[], [], []]);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      const result = truncateChat(h.dataDir, pt.id, pt.messages[2].id, broken);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.state.messages).toHaveLength(2);
+      const stored = getPlaythroughRecord(h.dataDir, pt.id);
+      expect(stored?.messages).toHaveLength(2);
       expect(warn).toHaveBeenCalled();
     } finally {
       warn.mockRestore();

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { dirname, join } from "node:path";
 import {
   applyStatePatch,
   parseUserInput,
@@ -14,6 +15,7 @@ import type { TurnProvider } from "./provider";
 import type { PromptUsageBreakdown } from "./provider";
 import type { MeasuredUsage } from "./provider";
 import { getLorebook, getPlaythroughRecord, updatePlaythroughRecord } from "./store";
+import { sweepOrphansInDataDir } from "./imageStore";
 import { clampCalibration } from "./provider/promptBuilder";
 
 export type TokenBreakdown = PromptUsageBreakdown;
@@ -409,6 +411,15 @@ export function editChatMessage(
   return { ok: true, state: playthrough };
 }
 
+/** The images store that belongs to `dataDir`. Production keeps the two as
+ *  siblings (`data/playthroughs` ↔ `data/images`, the store's own `IMAGES_DIR`),
+ *  so a caller handed a custom data dir sweeps its OWN store — which is what
+ *  keeps a temp data dir in a test from sweeping the real `data/images` when a
+ *  suite calls truncateChat directly. */
+function defaultImagesDir(dataDir: string): string {
+  return join(dirname(dataDir), "images");
+}
+
 /**
  * Deletes the given message and everything after it (inclusive), restoring the
  * world state to the snapshot of the first assistant message in the deleted
@@ -420,7 +431,8 @@ export function editChatMessage(
 export function truncateChat(
   dataDir: string,
   playthroughId: string,
-  messageId: string
+  messageId: string,
+  imagesDir: string = defaultImagesDir(dataDir)
 ): EditOutcome {
   const playthrough = getPlaythroughRecord(dataDir, playthroughId);
   if (!playthrough) {
@@ -451,6 +463,18 @@ export function truncateChat(
   next.updatedAt = new Date().toISOString();
 
   updatePlaythroughRecord(dataDir, next);
+
+  // Persist FIRST, then collect. The truncated messages took their image refs
+  // with them, so any file they alone referenced is now unreferenced and goes;
+  // a file a surviving message still references stays. Sweeping before the
+  // write would delete files the on-disk record still points at. Best-effort:
+  // a failed sweep must never fail the truncate that already happened.
+  try {
+    sweepOrphansInDataDir(dataDir, imagesDir);
+  } catch (error) {
+    console.warn(`[images] orphan sweep after truncating playthrough ${playthroughId} failed:`, error);
+  }
+
   return { ok: true, state: next };
 }
 
