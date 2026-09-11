@@ -268,6 +268,11 @@ export async function playthroughRoutes(app: FastifyInstance): Promise<void> {
         turn: preset.modules.turn.map((m) => ({ ...m }))
       },
       characterFormat: preset.characterFormat ? JSON.parse(JSON.stringify(preset.characterFormat)) : undefined,
+      // Snapshot the image prompt config too: a playthrough keeps using the
+      // settings it was applied with, exactly like modules and characterFormat.
+      // Presets without a block stay undefined here; read sites fall back to
+      // DEFAULT_IMAGE_GENERATION_SETTINGS explicitly.
+      imageGeneration: preset.imageGeneration ? JSON.parse(JSON.stringify(preset.imageGeneration)) : undefined,
     };
     updatePlaythroughRecord(dataDir, playthrough);
 

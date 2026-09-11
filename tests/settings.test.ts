@@ -1,11 +1,15 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { fileURLToPath } from "node:url";
+import Fastify from "fastify";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ProviderManager } from "../src/server/providerManager";
 import { MockProvider } from "../src/server/provider";
 import { loadAppSettings, saveAppSettings } from "../src/server/appSettingsStore";
 import { seedRegistry } from "../src/server/providerRegistry";
+import { DEFAULT_IMAGE_GENERATION_SETTINGS, DEFAULT_IMAGE_PROMPT_INSTRUCTION } from "../src/engine/imageDefaults";
+import { PromptPresetSchema } from "../src/schemas";
 
 const tempDirs: string[] = [];
 
@@ -195,5 +199,242 @@ describe("provider manager registry integration", () => {
     });
     expect(manager.getApiKey(created.id)).toEqual({ apiKey: "sk-test-1234" });
     expect(() => manager.getApiKey("nope")).toThrow(/not found/i);
+  });
+});
+
+// ── Wave 4: preset-owned image prompt configuration ──
+
+/** The shipped file, resolved from this test file rather than the cwd, so the
+ *  drift guard still reads the real repo file while a route test has swapped
+ *  the cwd for a hermetic data dir. */
+const PRESETS_FILE = fileURLToPath(new URL("../data/prompt-presets.json", import.meta.url));
+
+describe("image generation: shipped preset configs", () => {
+  const raw = readFileSync(PRESETS_FILE, "utf8");
+  const presets = JSON.parse(raw) as Array<{
+    id: string;
+    name: string;
+    readonly: boolean;
+    imageGeneration?: Record<string, unknown>;
+  }>;
+  const preset = (id: string) => presets.find((p) => p.id === id)!;
+
+  it("keeps CRLF line endings and no LF-only lines", () => {
+    expect(raw).toContain("\r\n");
+    expect(raw.replace(/\r\n/g, "")).not.toContain("\n");
+  });
+
+  it("ships the default preset's instruction byte-identical to the code constant", () => {
+    expect(preset("default").imageGeneration?.instruction).toBe(DEFAULT_IMAGE_PROMPT_INSTRUCTION);
+  });
+
+  it("ships the reviewed prefixes, character limit and flags on both read-only presets", () => {
+    for (const id of ["default", "default-nsfw"]) {
+      const image = preset(id).imageGeneration!;
+      expect(image.positivePrefix).toBe("anime style");
+      expect(image.promptCharacterLimit).toBe(900);
+      expect(image.includeState).toBe(true);
+      expect(image.includeCast).toBe(true);
+    }
+    expect(preset("default").imageGeneration?.negativePrefix).toBe(DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix);
+    expect(preset("default-nsfw").imageGeneration?.negativePrefix).toBe(
+      `${DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix}, censored, mosaic censoring, bar censor, child, loli, shota`
+    );
+  });
+
+  it("ships the NSFW instruction as the same document plus the Explicit scenes section", () => {
+    const explicitScenes =
+      "Explicit scenes:\n" +
+      "- When the scene text is sexually explicit, depict it at the same explicitness. Name the act, the\n" +
+      "  position, what is exposed, and the visible physical state — plainly, without euphemism, matching\n" +
+      "  the playthrough's Explicit Content module.\n" +
+      "- Keep anatomy, clothing state, and arousal consistent with what the scene text establishes. Do not\n" +
+      "  add acts, participants, or undress the scene did not describe.\n" +
+      "- Never sanitize, blur, censor, fade, or omit what the scene describes, and never add safety,\n" +
+      "  consent, or policy boilerplate. If the scene is not explicit, do not invent explicit content.";
+    expect(preset("default-nsfw").imageGeneration?.instruction).toBe(
+      DEFAULT_IMAGE_PROMPT_INSTRUCTION.replace("Return JSON only:", `${explicitScenes}\n\nReturn JSON only:`)
+    );
+  });
+
+  it("leaves the user-owned preset without a block, so it exercises the read-time fallback", () => {
+    const userOwned = presets.find((p) => p.name === "pplong NSFW")!;
+    expect(userOwned.readonly).toBe(false);
+    expect(userOwned.imageGeneration).toBeUndefined();
+  });
+});
+
+const IMAGE_BLOCK = {
+  instruction: "A test instruction.",
+  positivePrefix: "test prefix",
+  negativePrefix: "test negative",
+  promptCharacterLimit: 111,
+  includeState: false,
+  includeCast: true
+};
+
+/** The preset routes resolve `data/` from the process cwd, so this block swaps
+ *  the cwd for a hermetic temp dir before importing them (once: the module
+ *  graph captures the temp data dirs at import time). */
+describe("image generation: preset routes and the playthrough snapshot", () => {
+  let app: ReturnType<typeof Fastify>;
+  let dir: string;
+  let playthroughsDir: string;
+  let startedIn: string;
+
+  const presetsFile = () => join(dir, "data", "prompt-presets.json");
+  const readPresets = () => JSON.parse(readFileSync(presetsFile(), "utf8")) as Array<{ id: string; imageGeneration?: unknown }>;
+
+  beforeAll(async () => {
+    dir = mkdtempSync(join(tmpdir(), "bobbinloom-preset-routes-"));
+    playthroughsDir = join(dir, "data", "playthroughs");
+    mkdirSync(playthroughsDir, { recursive: true });
+    writeFileSync(
+      presetsFile(),
+      JSON.stringify(
+        [
+          { id: "shipped", name: "Shipped", readonly: true, modules: { turn: [] }, imageGeneration: { ...IMAGE_BLOCK } },
+          { id: "user-no-image", name: "User (no image)", readonly: false, modules: { turn: [] } },
+          { id: "user-plain", name: "User (plain)", readonly: false, modules: { turn: [] } },
+          { id: "user-with-image", name: "User (image)", readonly: false, modules: { turn: [] }, imageGeneration: { ...IMAGE_BLOCK } }
+        ],
+        null,
+        1
+      ),
+      "utf8"
+    );
+
+    startedIn = process.cwd();
+    process.chdir(dir);
+    const [{ presetRoutes }, { playthroughRoutes }] = await Promise.all([
+      import("../src/server/routes/presets"),
+      import("../src/server/routes/playthroughs")
+    ]);
+    app = Fastify();
+    await app.register(presetRoutes);
+    await app.register(playthroughRoutes);
+    await app.ready();
+  });
+
+  afterAll(async () => {
+    await app?.close();
+    process.chdir(startedIn);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("round-trips imageGeneration through the preset PUT route", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/prompt-presets/user-no-image",
+      payload: { imageGeneration: { positivePrefix: "photorealistic, 35mm film" } }
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    // Inner fields carry defaults, so a partial block arrives complete.
+    expect(body.imageGeneration.positivePrefix).toBe("photorealistic, 35mm film");
+    expect(body.imageGeneration.instruction).toBe(DEFAULT_IMAGE_PROMPT_INSTRUCTION);
+    expect(body.imageGeneration.promptCharacterLimit).toBe(900);
+    expect(body.imageGeneration.includeState).toBe(true);
+    expect(body.imageGeneration.includeCast).toBe(true);
+    // Persisted, not merely echoed.
+    expect(readPresets().find((p) => p.id === "user-no-image")!.imageGeneration).toEqual(body.imageGeneration);
+  });
+
+  it("returns the stored block from the preset GET route", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/prompt-presets/user-with-image" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().imageGeneration).toEqual(IMAGE_BLOCK);
+  });
+
+  it("rejects a write to a read-only preset and leaves the file untouched", async () => {
+    const before = readFileSync(presetsFile(), "utf8");
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/prompt-presets/shipped",
+      payload: { imageGeneration: { positivePrefix: "nope" } }
+    });
+    expect(res.statusCode).toBe(403);
+    expect(readFileSync(presetsFile(), "utf8")).toBe(before);
+  });
+
+  it("deep-copies the block when creating a preset from a source", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/prompt-presets",
+      payload: { name: "Clone", cloneFromId: "user-with-image" }
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().imageGeneration).toEqual(IMAGE_BLOCK);
+
+    // Editing the source afterwards must not reach the clone.
+    const edited = await app.inject({
+      method: "PUT",
+      url: "/api/prompt-presets/user-with-image",
+      payload: { imageGeneration: { ...IMAGE_BLOCK, positivePrefix: "changed after the clone" } }
+    });
+    expect(edited.statusCode).toBe(200);
+    const reread = await app.inject({ method: "GET", url: `/api/prompt-presets/${created.json().id}` });
+    expect(reread.json().imageGeneration).toEqual(IMAGE_BLOCK);
+
+    // Restore the source for the tests below.
+    await app.inject({
+      method: "PUT",
+      url: "/api/prompt-presets/user-with-image",
+      payload: { imageGeneration: IMAGE_BLOCK }
+    });
+  });
+
+  it("snapshots imageGeneration into a playthrough's prompt settings", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/playthroughs",
+      payload: { name: "Snapshot", blank: true, presetId: "user-with-image" }
+    });
+    expect(created.statusCode).toBe(201);
+    const id = created.json().id as string;
+
+    const snap = await app.inject({
+      method: "PUT",
+      url: `/api/playthroughs/${id}/prompt-settings`,
+      payload: { presetId: "user-with-image" }
+    });
+    expect(snap.statusCode).toBe(200);
+    expect(snap.json().imageGeneration).toEqual(IMAGE_BLOCK);
+
+    const onDisk = JSON.parse(readFileSync(join(playthroughsDir, `${id}.json`), "utf8"));
+    expect(onDisk.promptSettings.imageGeneration).toEqual(IMAGE_BLOCK);
+
+    // A snapshot is a deep copy: editing the preset afterwards cannot reach it.
+    await app.inject({
+      method: "PUT",
+      url: "/api/prompt-presets/user-with-image",
+      payload: { imageGeneration: { ...IMAGE_BLOCK, positivePrefix: "edited after the snapshot" } }
+    });
+    const after = JSON.parse(readFileSync(join(playthroughsDir, `${id}.json`), "utf8"));
+    expect(after.promptSettings.imageGeneration.positivePrefix).toBe("test prefix");
+  });
+
+  it("omits the snapshot block when the preset has none (read-time fallback)", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/playthroughs",
+      payload: { name: "No image block", blank: true, presetId: "user-plain" }
+    });
+    expect(created.statusCode).toBe(201);
+    const snap = await app.inject({
+      method: "PUT",
+      url: `/api/playthroughs/${created.json().id}/prompt-settings`,
+      payload: { presetId: "user-plain" }
+    });
+    expect(snap.statusCode).toBe(200);
+    expect(snap.json().imageGeneration).toBeUndefined();
+  });
+
+  it("parses a preset with no imageGeneration block and falls back to the shipped defaults", () => {
+    const parsed = PromptPresetSchema.parse({ id: "legacy", name: "Legacy", readonly: false, modules: { turn: [] } });
+    expect(parsed.imageGeneration).toBeUndefined();
+    const resolved = parsed.imageGeneration ?? DEFAULT_IMAGE_GENERATION_SETTINGS;
+    expect(resolved.instruction).toBe(DEFAULT_IMAGE_PROMPT_INSTRUCTION);
+    expect(resolved.promptCharacterLimit).toBe(900);
   });
 });

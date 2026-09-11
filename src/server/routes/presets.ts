@@ -5,6 +5,7 @@ import {
   CharacterFormatSchema,
   CustomThemeColorsSchema,
   EMPTY_MODULE_SET,
+  ImageGenerationSettingsSchema,
   PromptModuleSetSchema,
   TagTaxonomyConfigSchema,
   ThemeModeSchema,
@@ -22,7 +23,8 @@ const CreatePresetBody = z.object({
 const UpdatePresetBody = z.object({
   name: z.string().min(1).optional(),
   modules: PromptModuleSetSchema.optional(),
-  characterFormat: CharacterFormatSchema.optional()
+  characterFormat: CharacterFormatSchema.optional(),
+  imageGeneration: ImageGenerationSettingsSchema.optional()
 });
 
 const DefaultPresetBody = z.object({
@@ -53,6 +55,7 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
 
     let modules: PromptModuleSet = EMPTY_MODULE_SET;
     let characterFormat: PromptPreset["characterFormat"];
+    let imageGeneration: PromptPreset["imageGeneration"];
     if (body.cloneFromId) {
       const source = presets.find((p) => p.id === body.cloneFromId);
       if (!source) return reply.code(404).send({ error: "Source preset not found" });
@@ -60,10 +63,18 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
         turn: source.modules.turn.map((m) => ({ ...m }))
       };
       characterFormat = source.characterFormat ? JSON.parse(JSON.stringify(source.characterFormat)) : undefined;
+      imageGeneration = source.imageGeneration ? JSON.parse(JSON.stringify(source.imageGeneration)) : undefined;
     }
 
     const id = `preset_${Date.now()}`;
-    const preset: PromptPreset = { id, name: body.name, readonly: false, modules, ...(characterFormat ? { characterFormat } : {}) };
+    const preset: PromptPreset = {
+      id,
+      name: body.name,
+      readonly: false,
+      modules,
+      ...(characterFormat ? { characterFormat } : {}),
+      ...(imageGeneration ? { imageGeneration } : {})
+    };
     presets.push(preset);
     savePresets(presets);
     return reply.code(201).send(preset);
@@ -80,6 +91,7 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
     if (body.name !== undefined) presets[index].name = body.name;
     if (body.modules !== undefined) presets[index].modules = body.modules;
     if (body.characterFormat !== undefined) presets[index].characterFormat = body.characterFormat;
+    if (body.imageGeneration !== undefined) presets[index].imageGeneration = body.imageGeneration;
     savePresets(presets);
     return presets[index];
   });
