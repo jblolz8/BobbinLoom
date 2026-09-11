@@ -43,7 +43,7 @@ type PresetModule = {
 
 ## Default presets
 
-`data/prompt-presets.json` ships with **two** readonly presets — **Default** and **Default (NSFW)** — mirror images of each other. Default has the content modules off; Default (NSFW) has them on. Both are `readonly: true` and cannot be overwritten via the UI; use "Save as New…" to customize.
+`data/prompt-presets.json` ships with **two** readonly presets — **Default** and **Default (NSFW)** — whose turn modules mirror each other. Default has the content modules off; Default (NSFW) has them on. Both are `readonly: true` and cannot be overwritten via the UI; use "Save as New…" to customize. Their image-generation blocks DO differ: Default (NSFW) adds an explicit-content section to the prompt instruction and extra tokens to its negative prefix — see [`image-generation.md`](image-generation.md).
 
 ### Turn modules (Default)
 
