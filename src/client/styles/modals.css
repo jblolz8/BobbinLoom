@@ -64,6 +64,21 @@
   font-size: 0.84rem;
 }
 
+/* Nested kind tabs inside the Provider tab (Text Providers / Image Providers).
+   They sit under the main tab strip as a pill switch, not a second underline. */
+.settings-subtabs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.settings-modal-wide .settings-provider-tabs {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  max-width: 100%;
+  margin-top: 0.15rem;
+}
+
 .settings-tab-content {
   flex: 1 1 auto;
   min-height: 0;
@@ -2123,6 +2138,31 @@
   border-color: var(--border-subtle);
 }
 
+/* Image rows only: endpoint dialect, and whether the provider was asked to blur
+   adult content. The warn tag marks an image connection whose prompt writer no
+   longer resolves (the active text provider is used instead). */
+.conn-tag.style-tag {
+  color: var(--accent-highlight);
+  border-color: var(--border-light);
+}
+
+.conn-tag.safe-on {
+  color: var(--status-warning);
+  background: var(--status-warning-bg);
+  border-color: var(--status-warning-border);
+}
+
+.conn-tag.safe-off {
+  color: var(--text-muted);
+}
+
+.conn-tag.warn-tag {
+  font-weight: 600;
+  color: var(--status-warning);
+  background: var(--status-warning-bg);
+  border-color: var(--status-warning-border);
+}
+
 .conn-tag .base-badge__icon {
   font-size: 0.75rem;
   opacity: 0.85;
@@ -2361,6 +2401,22 @@
   .conn-fields-row-2 {
     grid-template-columns: 1fr;
   }
+}
+
+/* A labelled select/toggle group: SimpleSelect has no built-in label or helper
+   text, so the image editor's fields wrap them in this. */
+.conn-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.conn-field-helper {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--text-muted);
 }
 
 .conn-key-status-row {

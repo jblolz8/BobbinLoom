@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { PlaythroughPromptSettings } from "../../api";
+import type { ProviderKind } from "../../../schemas";
 import { PresetEditor } from "./PresetEditor";
 import { ProviderConnections } from "./ProviderConnections";
 import { TagTaxonomyPanel } from "../library/TagTaxonomyModal";
@@ -14,6 +15,13 @@ const SETTINGS_TABS: TabItem<SettingsTab>[] = [
   { id: "tags", label: "Tags & Taxonomy", icon: "Tag" },
   { id: "chat", label: "Chat", icon: "MessageSquare" },
   { id: "appearance", label: "Theme & Appearance", icon: "Palette" },
+];
+
+/** The Provider tab's own tabs: text and image connections are configured
+ *  independently and never share a list. */
+const PROVIDER_KIND_TABS: TabItem<ProviderKind>[] = [
+  { id: "text", label: "Text Providers", icon: "MessageSquare" },
+  { id: "image", label: "Image Providers", icon: "Image" },
 ];
 
 export type SettingsModalProps = {
@@ -57,6 +65,13 @@ export function SettingsModal(props: SettingsModalProps) {
     setShowModelName,
   } = props;
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("provider");
+  const [providerKind, setProviderKind] = useState<ProviderKind>("text");
+
+  // The modal keeps its state while closed (`if (!open) return null` below), so
+  // the Provider tab is reset to the usual Text list on every open.
+  useEffect(() => {
+    if (open) setProviderKind("text");
+  }, [open]);
 
   if (!open) return null;
 
@@ -81,7 +96,20 @@ export function SettingsModal(props: SettingsModalProps) {
         </div>
         <div className="settings-tab-content">
           {settingsTab === "provider" ? (
-            <ProviderConnections />
+            <div className="settings-subtabs">
+              <Tabs<ProviderKind>
+                tabs={PROVIDER_KIND_TABS}
+                activeTab={providerKind}
+                onChange={setProviderKind}
+                variant="pill"
+                size="sm"
+                className="settings-provider-tabs"
+                ariaLabel="Provider kind"
+              />
+              {/* key: switching kind remounts the list so the per-kind sort
+                  preference and the editor state start clean. */}
+              <ProviderConnections key={providerKind} kind={providerKind} />
+            </div>
           ) : settingsTab === "prompts" ? (
             <PresetEditor
               playthroughId={playthroughId}

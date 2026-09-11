@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Badge, Button, Icon, SimpleSelect, TextInput, Tooltip } from "../base";
+import { Badge, Icon } from "../base";
 import type {
   ConnectionModelsResult,
   ConnectionTestResult,
@@ -18,83 +18,152 @@ import {
   testProviderConnection,
   updateProviderConnection
 } from "../../api";
+import type { ProviderKind } from "../../../schemas";
+import { ApiKeyField, type ApiKeyFieldProps } from "./providers/ApiKeyField";
+import { ImageConnectionEditor } from "./providers/ImageConnectionEditor";
+import {
+  ProviderConnectionList,
+  type ProviderSortBy,
+  type SortDirection
+} from "./providers/ProviderConnectionList";
+import { TextConnectionEditor } from "./providers/TextConnectionEditor";
 
 type EditorState =
   | { mode: "closed" }
   | { mode: "create" }
   | { mode: "edit"; connection: ProviderConnection };
 
-export type ProviderSortBy = "lastActiveAt" | "label" | "updatedAt" | "createdAt";
-export type SortDirection = "asc" | "desc";
+type EditorStatus = { kind: "ok" | "err"; text: string } | null;
 
-const SORT_OPTIONS: Array<{ value: ProviderSortBy; label: string }> = [
-  { value: "lastActiveAt", label: "Last Active" },
-  { value: "label", label: "Provider Name" },
-  { value: "updatedAt", label: "Last Updated" },
-  { value: "createdAt", label: "Created At" },
-];
+const SORT_BY_VALUES: ProviderSortBy[] = ["lastActiveAt", "label", "updatedAt", "createdAt"];
 
-function formatConnDate(isoOrStr?: string): string {
-  if (!isoOrStr) return "";
-  try {
-    const d = new Date(isoOrStr);
-    if (isNaN(d.getTime())) return "";
-    return d.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric"
-    });
-  } catch {
-    return "";
-  }
+/**
+ * Sort preferences are per kind: the two lists are user-visible side by side and
+ * one shared key meant sorting the image list also re-sorted the text list.
+ */
+function sortStorageKey(kind: ProviderKind, which: "by" | "dir"): string {
+  return `bobbinloom_provider_sort_${which}_${kind}`;
 }
 
-const emptyForm = (): ProviderConnectionPayload => ({
-  kind: "text",
-  label: "", baseUrl: "", model: "", apiKey: "",
-  temperature: 0.8, maxTokens: 1200, contextWindow: 32768
-});
+function readSortBy(kind: ProviderKind): ProviderSortBy {
+  if (typeof window !== "undefined" && window.localStorage) {
+    const saved = localStorage.getItem(sortStorageKey(kind, "by"));
+    if (saved && (SORT_BY_VALUES as string[]).includes(saved)) {
+      return saved as ProviderSortBy;
+    }
+  }
+  return "lastActiveAt";
+}
 
-export function ProviderConnections() {
+function readSortDir(kind: ProviderKind): SortDirection {
+  if (typeof window !== "undefined" && window.localStorage) {
+    const saved = localStorage.getItem(sortStorageKey(kind, "dir"));
+    if (saved === "asc" || saved === "desc") {
+      return saved;
+    }
+  }
+  return "desc";
+}
+
+const emptyForm = (kind: ProviderKind): ProviderConnectionPayload =>
+  kind === "image"
+    ? {
+        kind: "image",
+        label: "", baseUrl: "", model: "", apiKey: "",
+        apiStyle: "openai",
+        safeMode: false,
+        size: "auto",
+        aspectRatio: "",
+        promptProviderId: null,
+        stylePreset: "",
+        hideWatermark: false,
+        variants: 1,
+        temperature: 0.8, maxTokens: 1200, contextWindow: 32768
+      }
+    : {
+        kind: "text",
+        label: "", baseUrl: "", model: "", apiKey: "",
+        temperature: 0.8, maxTokens: 1200, contextWindow: 32768
+      };
+
+/** Edit form seeded from a stored row. Image-only fields are carried so saving
+ *  an image connection cannot silently drop them. */
+const formFromConnection = (c: ProviderConnection): ProviderConnectionPayload =>
+  c.kind === "image"
+    ? {
+        kind: "image",
+        label: c.label, baseUrl: c.baseUrl, model: c.model, apiKey: "",
+        apiStyle: c.apiStyle ?? "openai",
+        safeMode: c.safeMode ?? false,
+        size: c.size ?? "auto",
+        aspectRatio: c.aspectRatio ?? "",
+        promptProviderId: c.promptProviderId ?? null,
+        stylePreset: c.stylePreset ?? "",
+        hideWatermark: c.hideWatermark ?? false,
+        variants: c.variants ?? 1,
+        temperature: c.temperature, maxTokens: c.maxTokens, contextWindow: c.contextWindow
+      }
+    : {
+        kind: "text",
+        label: c.label, baseUrl: c.baseUrl, model: c.model, apiKey: "",
+        temperature: c.temperature, maxTokens: c.maxTokens, contextWindow: c.contextWindow
+      };
+
+/**
+ * Settings → Provider, both kinds. One container holds every request and every
+ * piece of state (registry, editor mode, sort, probe statuses); the list and the
+ * editors are presentational. `kind` selects which half of the registry is
+ * listed, which slot the Active badge reads, and which editor opens.
+ *
+ * The parent mounts this with `key={kind}` so a tab switch remounts it: the
+ * lazily-read sort preference is then the new kind's, and a half-filled editor
+ * from the other kind cannot linger.
+ */
+export type ProviderConnectionsProps = { kind: ProviderKind };
+
+export function ProviderConnections({ kind }: ProviderConnectionsProps) {
   const [registry, setRegistry] = useState<ProviderRegistry | null>(null);
   const [editor, setEditor] = useState<EditorState>({ mode: "closed" });
-  const [form, setForm] = useState<ProviderConnectionPayload>(emptyForm());
+  const [form, setForm] = useState<ProviderConnectionPayload>(() => emptyForm(kind));
   const [showKey, setShowKey] = useState(false);
   const [keyBusy, setKeyBusy] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
-  const [test, setTest] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [status, setStatus] = useState<EditorStatus>(null);
+  const [test, setTest] = useState<EditorStatus>(null);
   const [models, setModels] = useState<string[]>([]);
-  const [modelsStatus, setModelsStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [modelsStatus, setModelsStatus] = useState<EditorStatus>(null);
   const [fetchingModels, setFetchingModels] = useState(false);
 
-  const [sortBy, setSortBy] = useState<ProviderSortBy>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const saved = localStorage.getItem("bobbinloom_provider_sort_by");
-      if (saved === "label" || saved === "lastActiveAt" || saved === "updatedAt" || saved === "createdAt") {
-        return saved;
-      }
-    }
-    return "lastActiveAt";
-  });
+  const [sortBy, setSortBy] = useState<ProviderSortBy>(() => readSortBy(kind));
 
-  const [sortDir, setSortDir] = useState<SortDirection>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const saved = localStorage.getItem("bobbinloom_provider_sort_dir");
-      if (saved === "asc" || saved === "desc") {
-        return saved;
-      }
-    }
-    return "desc";
-  });
+  const [sortDir, setSortDir] = useState<SortDirection>(() => readSortDir(kind));
+
+  // Covers a caller that swaps `kind` without remounting.
+  useEffect(() => {
+    setSortBy(readSortBy(kind));
+    setSortDir(readSortDir(kind));
+  }, [kind]);
+
+  /** Connections of this kind only — never the other kind's rows. */
+  const connections = useMemo(
+    () => (registry?.connections ?? []).filter((c) => c.kind === kind),
+    [registry, kind]
+  );
+
+  const textConnections = useMemo(
+    () => (registry?.connections ?? []).filter((c) => c.kind === "text"),
+    [registry]
+  );
+
+  const activeId = (kind === "text" ? registry?.activeTextProviderId : registry?.activeImageProviderId) ?? "";
 
   function handleSortByChange(newSortBy: ProviderSortBy) {
     setSortBy(newSortBy);
     const nextDir: SortDirection = newSortBy === "label" ? "asc" : "desc";
     setSortDir(nextDir);
     if (typeof window !== "undefined" && window.localStorage) {
-      localStorage.setItem("bobbinloom_provider_sort_by", newSortBy);
-      localStorage.setItem("bobbinloom_provider_sort_dir", nextDir);
+      localStorage.setItem(sortStorageKey(kind, "by"), newSortBy);
+      localStorage.setItem(sortStorageKey(kind, "dir"), nextDir);
     }
   }
 
@@ -102,19 +171,19 @@ export function ProviderConnections() {
     const nextDir: SortDirection = sortDir === "asc" ? "desc" : "asc";
     setSortDir(nextDir);
     if (typeof window !== "undefined" && window.localStorage) {
-      localStorage.setItem("bobbinloom_provider_sort_dir", nextDir);
+      localStorage.setItem(sortStorageKey(kind, "dir"), nextDir);
     }
   }
 
   const sortedConnections = useMemo(() => {
-    const list = [...(registry?.connections ?? [])];
+    const list = [...connections];
     return list.sort((a, b) => {
       let cmp = 0;
       if (sortBy === "label") {
         cmp = a.label.localeCompare(b.label, undefined, { sensitivity: "base", numeric: true });
       } else if (sortBy === "lastActiveAt") {
-        const isAActive = a.id === registry?.activeTextProviderId;
-        const isBActive = b.id === registry?.activeTextProviderId;
+        const isAActive = a.id === activeId;
+        const isBActive = b.id === activeId;
         const timeA = a.lastActiveAt ? new Date(a.lastActiveAt).getTime() : (isAActive ? 1 : 0);
         const timeB = b.lastActiveAt ? new Date(b.lastActiveAt).getTime() : (isBActive ? 1 : 0);
         cmp = timeA - timeB;
@@ -138,7 +207,7 @@ export function ProviderConnections() {
       }
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [registry?.connections, registry?.activeTextProviderId, sortBy, sortDir]);
+  }, [connections, activeId, sortBy, sortDir]);
 
   useEffect(() => {
     listProviderConnections().then(setRegistry).catch((e) =>
@@ -152,7 +221,7 @@ export function ProviderConnections() {
   }
 
   function openCreate() {
-    setForm(emptyForm());
+    setForm(emptyForm(kind));
     setModels([]); setModelsStatus(null);
     setShowKey(false);
     setStatus(null); setTest(null);
@@ -160,11 +229,7 @@ export function ProviderConnections() {
   }
 
   function openEdit(c: ProviderConnection) {
-    setForm({
-      kind: c.kind,
-      label: c.label, baseUrl: c.baseUrl, model: c.model, apiKey: "",
-      temperature: c.temperature, maxTokens: c.maxTokens, contextWindow: c.contextWindow
-    });
+    setForm(formFromConnection(c));
     setModels([]); setModelsStatus(null);
     setShowKey(false); setStatus(null); setTest(null);
     setEditor({ mode: "edit", connection: c });
@@ -207,11 +272,20 @@ export function ProviderConnections() {
     setFetchingModels(true);
     setModelsStatus(null);
     try {
-      const r: ConnectionModelsResult = await fetchProviderModels(target);
+      // Image endpoints expose their own model family; asking for it keeps the
+      // listing (and the ids you can paste into Model) image-only.
+      const r: ConnectionModelsResult = await fetchProviderModels(
+        kind === "image" ? { ...target, type: "image" } : target
+      );
       setModels(r.models);
+      // Image endpoints frequently expose no /models listing at all. Keep the
+      // server's message (a 401 must stay visible) and add why it is not fatal.
+      const imageHint = kind === "image"
+        ? " Image endpoints often do not list models — type the model id instead."
+        : "";
       setModelsStatus(r.ok
-        ? { kind: "ok", text: r.models.length ? `${r.models.length} model${r.models.length === 1 ? "" : "s"} loaded.` : "Connected, but the server returned no models." }
-        : { kind: "err", text: r.message ? `Failed (${r.status ?? ""}): ${r.message}` : "Failed to load models." });
+        ? { kind: "ok", text: r.models.length ? `${r.models.length} model${r.models.length === 1 ? "" : "s"} loaded.` : `Connected, but the server returned no models.${imageHint}` }
+        : { kind: "err", text: r.message ? `Failed (${r.status ?? ""}): ${r.message}${imageHint}` : `Failed to load models.${imageHint}` });
     } catch (err) {
       setModels([]);
       setModelsStatus({ kind: "err", text: err instanceof Error ? err.message : String(err) });
@@ -220,10 +294,20 @@ export function ProviderConnections() {
     }
   }
 
+  /** Empty image-only strings are dropped rather than stored as "". */
+  function toPayload(current: ProviderConnectionPayload): ProviderConnectionPayload {
+    if (current.kind !== "image") return { ...current };
+    return {
+      ...current,
+      aspectRatio: current.aspectRatio?.trim() ? current.aspectRatio.trim() : undefined,
+      stylePreset: current.stylePreset?.trim() ? current.stylePreset.trim() : undefined
+    };
+  }
+
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setStatus(null); setTest(null);
-    const payload: ProviderConnectionPayload = { ...form };
+    const payload: ProviderConnectionPayload = toPayload(form);
     try {
       if (editor.mode === "edit") {
         const p = editor.connection;
@@ -266,7 +350,11 @@ export function ProviderConnections() {
 
   async function activate(id: string) {
     setStatus(null);
-    try { await setActiveProviderConnection(id); await reload(); }
+    try {
+      // Activation answers with the whole registry, so no follow-up reload.
+      const r = await setActiveProviderConnection(id);
+      setRegistry(r);
+    }
     catch (err) { setStatus({ kind: "err", text: err instanceof Error ? err.message : String(err) }); }
   }
 
@@ -317,8 +405,60 @@ export function ProviderConnections() {
   }
 
   const editable = editor.mode !== "closed";
+  const editing = editor.mode === "edit" ? editor.connection : null;
   const isKeyCleared = form.apiKey === null;
   const isStoredKeyActive = editor.mode === "edit" && editor.connection.hasApiKey && !isKeyCleared;
+
+  const apiKeyProps: ApiKeyFieldProps = {
+    value: form.apiKey,
+    onChange: (value) => setForm((f) => ({ ...f, apiKey: value })),
+    showKey,
+    onToggleShowKey: toggleShowKey,
+    keyBusy,
+    isKeyCleared,
+    isStoredKeyActive,
+    onClearKey: clearKey,
+    onRestoreKey: restoreKey
+  };
+
+  /** Image rows carry their endpoint dialect, its safety setting, and a warning
+   *  when the connection's prompt writer no longer exists. */
+  function renderKindTags(c: ProviderConnection) {
+    if (kind !== "image") return null;
+    const style = c.apiStyle ?? "openai";
+    const promptWriterMissing = !!c.promptProviderId && !textConnections.some((t) => t.id === c.promptProviderId);
+    return (
+      <>
+        <Badge
+          className="conn-tag style-tag"
+          leftIcon={<Icon name="Palette" size={13} />}
+          title={style === "venice" ? "Venice endpoint (/image/generate)" : "OpenAI-compatible endpoint (/images/generations)"}
+        >
+          {style === "venice" ? "Venice" : "OpenAI"}
+        </Badge>
+        <Badge
+          className={`conn-tag ${c.safeMode ? "safe-on" : "safe-off"}`}
+          leftIcon={c.safeMode ? <Icon name="ShieldAlert" size={13} /> : <Icon name="ShieldOff" size={13} />}
+          title={c.safeMode ? "Safe mode on — the provider blurs adult content" : "Safe mode off — adult content is not blurred"}
+        >
+          {c.safeMode ? "Safe mode on" : "Safe mode off"}
+        </Badge>
+        {promptWriterMissing && (
+          <Badge
+            className="conn-tag warn-tag"
+            leftIcon={<Icon name="AlertTriangle" size={13} />}
+            title={`Prompt writer "${c.promptProviderId}" no longer exists — the active text provider writes the prompt instead`}
+          >
+            prompt writer missing — using active
+          </Badge>
+        )}
+      </>
+    );
+  }
+
+  const emptyLabel = kind === "image"
+    ? "No image providers yet. Add one to generate images for an assistant message."
+    : "No connections yet. Add one to start generating.";
 
   return (
     <div className="connections">
@@ -328,344 +468,63 @@ export function ProviderConnections() {
           {registry.warnings.map((w, i) => <p key={i}>{w}</p>)}
         </div>
       )}
+
       {!editable && (
-        <>
-          {(registry?.connections ?? []).length > 0 && (
-            <div className="conn-toolbar">
-              <div className="conn-count-label">
-                <span>{(registry?.connections ?? []).length}</span> {((registry?.connections ?? []).length === 1 ? "provider" : "providers")}
-              </div>
-              <div className="conn-sort-group">
-                <label htmlFor="conn-sort-select" className="conn-sort-label">
-                  <Icon name="ArrowUpDown" size={13} />
-                  <span>Sort:</span>
-                </label>
-                <SimpleSelect<ProviderSortBy>
-                  id="conn-sort-select"
-                  size="xs"
-                  value={sortBy}
-                  onChange={handleSortByChange}
-                  options={SORT_OPTIONS}
-                  aria-label="Sort providers by"
-                />
-                <Tooltip content={`Sort order: ${sortDir === "asc" ? "Ascending" : "Descending"} (click to toggle)`}>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="xs"
-                    className="conn-sort-dir-btn"
-                    onClick={handleToggleSortDir}
-                    aria-label={`Sort order: ${sortDir === "asc" ? "Ascending" : "Descending"}`}
-                    leftIcon={<Icon name={sortDir === "asc" ? "ArrowUp" : "ArrowDown"} size={14} />}
-                  >
-                    <span className="sort-dir-text">{sortDir === "asc" ? "Asc" : "Desc"}</span>
-                  </Button>
-                </Tooltip>
-              </div>
-            </div>
-          )}
-
-          <div className="conn-list">
-            {sortedConnections.length === 0 ? (
-              <p className="conn-empty">No connections yet. Add one to start generating.</p>
-            ) : sortedConnections.map((c) => {
-              const isActive = c.id === registry?.activeTextProviderId;
-              return (
-                <div key={c.id} className={`conn-card ${isActive ? "active" : ""}`}>
-                  <div className="conn-card-body">
-                    <div className="conn-card-header">
-                      <div className="conn-title-group">
-                        <span className="conn-name">{c.label}</span>
-                        {isActive && <Badge variant="accent" size="xs">Active</Badge>}
-                      </div>
-                      <div className="conn-actions">
-                        <Tooltip content={isActive ? "Active connection" : "Activate connection"}>
-                          <Button
-                            variant="primary"
-                            size="xs"
-                            onClick={() => activate(c.id)}
-                            disabled={isActive}
-                            aria-label={isActive ? "Active connection" : "Activate connection"}
-                          >
-                            <span className="btn-label flex items-center gap-1.5">
-                              <span className="btn-icon">{isActive ? <Icon name="Check" size={13} /> : <Icon name="Zap" size={13} />}</span>
-                              <span>{isActive ? "Active" : "Activate"}</span>
-                            </span>
-                            <span className="btn-icon-only" aria-hidden="true">
-                              {isActive ? <Icon name="Check" size={14} /> : <Icon name="Zap" size={14} />}
-                            </span>
-                          </Button>
-                        </Tooltip>
-                        <Tooltip content="Edit connection">
-                          <Button
-                            variant="secondary"
-                            size="xs"
-                            onClick={() => openEdit(c)}
-                            aria-label="Edit connection"
-                          >
-                            <span className="btn-label flex items-center gap-1.5">
-                              <span className="btn-icon"><Icon name="Pencil" size={13} /></span>
-                              <span>Edit</span>
-                            </span>
-                            <span className="btn-icon-only" aria-hidden="true">
-                              <Icon name="Pencil" size={14} />
-                            </span>
-                          </Button>
-                        </Tooltip>
-                        <Tooltip content="Duplicate connection">
-                          <Button
-                            variant="secondary"
-                            size="xs"
-                            onClick={() => duplicate(c.id)}
-                            aria-label="Duplicate connection"
-                          >
-                            <span className="btn-label flex items-center gap-1.5">
-                              <span className="btn-icon"><Icon name="Copy" size={13} /></span>
-                              <span>Duplicate</span>
-                            </span>
-                            <span className="btn-icon-only" aria-hidden="true">
-                              <Icon name="Copy" size={14} />
-                            </span>
-                          </Button>
-                        </Tooltip>
-                        <Tooltip content="Delete connection">
-                          <Button
-                            variant="danger"
-                            size="xs"
-                            onClick={() => confirmRemove(c)}
-                            aria-label="Delete connection"
-                          >
-                            <span className="btn-label flex items-center gap-1.5">
-                              <span className="btn-icon"><Icon name="Trash2" size={13} /></span>
-                              <span>Delete</span>
-                            </span>
-                            <span className="btn-icon-only" aria-hidden="true">
-                              <Icon name="Trash2" size={14} />
-                            </span>
-                          </Button>
-                        </Tooltip>
-                      </div>
-                    </div>
-                    <div className="conn-tags">
-                      <Badge className="conn-tag" leftIcon={<Icon name="Globe" size={13} className="text-slate-400" />} title={`Base URL: ${c.baseUrl}`}>
-                        {c.baseUrl}
-                      </Badge>
-                      <Badge className="conn-tag" leftIcon={<Icon name="Zap" size={13} className="text-amber-400" style={{ color: "var(--status-warning, #fbbf24)" }} />} title={`Model: ${c.model}`}>
-                        {c.model}
-                      </Badge>
-                      <Badge className={`conn-tag ${c.hasApiKey ? "has-key" : "no-key"}`} variant={c.hasApiKey ? "success" : "neutral"} leftIcon={c.hasApiKey ? <Icon name="KeyRound" size={13} /> : <Icon name="LockKeyholeOpen" size={13} className="text-slate-500" />} title={c.hasApiKey ? "API Key configured" : "No API key configured"}>
-                        {c.hasApiKey ? c.apiKeyMasked : "No key"}
-                      </Badge>
-                      {sortBy === "lastActiveAt" && (c.lastActiveAt || isActive) ? (
-                        <Badge className="conn-tag date-tag" leftIcon={<Icon name="Activity" size={13} className="text-blue-400" />} title={c.lastActiveAt ? `Last active: ${new Date(c.lastActiveAt).toLocaleString()}` : "Currently active"}>
-                          {isActive ? "Active now" : `Active: ${formatConnDate(c.lastActiveAt)}`}
-                        </Badge>
-                      ) : sortBy === "updatedAt" && c.updatedAt ? (
-                        <Badge className="conn-tag date-tag" leftIcon={<Icon name="Clock" size={13} className="text-indigo-400" />} title={`Updated: ${new Date(c.updatedAt).toLocaleString()}`}>
-                          Updated {formatConnDate(c.updatedAt)}
-                        </Badge>
-                      ) : (
-                        <Badge className="conn-tag date-tag" leftIcon={<Icon name="Calendar" size={13} className="text-emerald-400" />} title={c.createdAt ? `Created: ${new Date(c.createdAt).toLocaleString()}` : "Provider connection"}>
-                          {c.createdAt ? `Added ${formatConnDate(c.createdAt)}` : "Added"}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <Button variant="secondary" fullWidth className="conn-add" onClick={openCreate} leftIcon={<Icon name="Plus" size={16} />}>
-            Add connection
-          </Button>
-        </>
+        <ProviderConnectionList
+          connections={sortedConnections}
+          activeId={activeId}
+          sortBy={sortBy}
+          sortDir={sortDir}
+          onSortByChange={handleSortByChange}
+          onToggleSortDir={handleToggleSortDir}
+          onActivate={(id) => void activate(id)}
+          onEdit={openEdit}
+          onDuplicate={(id) => void duplicate(id)}
+          onRemove={(c) => void confirmRemove(c)}
+          onAdd={openCreate}
+          emptyLabel={emptyLabel}
+          renderTags={renderKindTags}
+        />
       )}
 
-      {editable && (
-        <form className="conn-editor conn-editor-card" onSubmit={save}>
-          <div className="conn-editor-header">
-            <h4>{editor.mode === "create" ? "New Provider Connection" : `Edit: ${editor.connection.label}`}</h4>
-          </div>
-
-          <div className="conn-section">
-            <h5 className="form-section-title conn-section-title">
-              <Icon name="Plug" size={14} />
-              <span>Connection Basics</span>
-            </h5>
-            <div className="conn-fields-group">
-              <div className="conn-fields-row-2">
-                <TextInput
-                  label="Name"
-                  value={form.label}
-                  onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
-                  placeholder="e.g. Local LM Studio"
-                />
-
-                <TextInput
-                  label="Base URL"
-                  value={form.baseUrl}
-                  onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))}
-                  placeholder="http://localhost:1234/v1"
-                  leftIcon={<Icon name="Globe" size={14} />}
-                />
-              </div>
-
-              <div>
-                <TextInput
-                  label="API Key"
-                  type={showKey ? "text" : "password"}
-                  value={form.apiKey ?? ""}
-                  onChange={(e) => setForm((f) => ({ ...f, apiKey: e.target.value }))}
-                  placeholder={isKeyCleared ? "Key will be cleared on Save" : "Enter API key"}
-                  leftIcon={<Icon name="KeyRound" size={14} />}
-                  rightElement={
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={toggleShowKey}
-                      disabled={keyBusy}
-                      isLoading={keyBusy}
-                      leftIcon={<Icon name={showKey ? "EyeOff" : "Eye"} size={14} />}
-                    >
-                      {showKey ? "Hide" : "Show"}
-                    </Button>
-                  }
-                />
-                {isKeyCleared ? (
-                  <div className="conn-key-status-row">
-                    <span className="conn-key-warning-status">
-                      <Icon name="AlertTriangle" size={13} />
-                      <span>Key marked for removal on Save</span>
-                    </span>
-                    <Button type="button" variant="ghost" size="xs" onClick={restoreKey} leftIcon={<Icon name="RotateCcw" size={12} />}>
-                      Undo
-                    </Button>
-                  </div>
-                ) : isStoredKeyActive ? (
-                  <div className="conn-key-status-row">
-                    <span className="conn-key-vault-status">
-                      <Icon name="LockKeyhole" size={13} />
-                      <span>Stored in encrypted vault</span>
-                    </span>
-                    <Button type="button" variant="ghost" size="xs" onClick={clearKey} leftIcon={<Icon name="Trash2" size={12} />}>
-                      Clear stored key
-                    </Button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </div>
-
-          <div className="conn-section">
-            <h5 className="form-section-title conn-section-title">
-              <Icon name="Cpu" size={14} />
-              <span>Model Configuration</span>
-            </h5>
-            <div className="conn-fields-group">
-              <div>
-                <TextInput
-                  label="Model ID"
-                  value={form.model}
-                  onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
-                  placeholder="e.g. llama-3"
-                  leftIcon={<Icon name="Cpu" size={14} />}
-                  rightElement={
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => void loadModels(probeTarget())}
-                      disabled={fetchingModels || busy || (editor.mode !== "edit" && !form.baseUrl.trim())}
-                      isLoading={fetchingModels}
-                      leftIcon={<Icon name="RefreshCw" size={13} className={fetchingModels ? "animate-spin" : ""} />}
-                    >
-                      Fetch models
-                    </Button>
-                  }
-                />
-                {models.length > 0 && (
-                  <div className="base-form-field form-field" style={{ marginTop: "0.5rem" }}>
-                    <span className="field-label-text">Select from Fetched Models ({models.length} available)</span>
-                    <SimpleSelect
-                      size="sm"
-                      variant="filled"
-                      fullWidth
-                      value={models.includes(form.model) ? form.model : ""}
-                      onChange={(selectedModel) => {
-                        if (selectedModel) {
-                          setForm((f) => ({ ...f, model: selectedModel }));
-                        }
-                      }}
-                      placeholder="-- Select a fetched model --"
-                      options={models.map((m) => ({
-                        value: m,
-                        label: m,
-                        icon: <Icon name="Cpu" size={13} />,
-                      }))}
-                    />
-                  </div>
-                )}
-                {modelsStatus && <p className={`conn-status ${modelsStatus.kind}`}>{modelsStatus.text}</p>}
-              </div>
-            </div>
-          </div>
-
-          <div className="conn-section">
-            <h5 className="form-section-title conn-section-title">
-              <Icon name="Sliders" size={14} />
-              <span>Generation Parameters</span>
-            </h5>
-            <div className="settings-grid-3">
-              <TextInput
-                label="Temperature"
-                type="number"
-                step="0.1"
-                placeholder="0.8"
-                helperText="Sampling temperature (0.0 – 2.0)"
-                value={form.temperature}
-                onChange={(e) => setForm((f) => ({ ...f, temperature: Number(e.target.value) }))}
-              />
-              <TextInput
-                label="Max Tokens"
-                type="number"
-                placeholder="1200"
-                helperText="Max output tokens per turn"
-                value={form.maxTokens}
-                onChange={(e) => setForm((f) => ({ ...f, maxTokens: Number(e.target.value) }))}
-              />
-              <TextInput
-                label="Context Window"
-                type="number"
-                placeholder="32768"
-                helperText="Token budget (e.g. 32768)"
-                value={form.contextWindow}
-                onChange={(e) => setForm((f) => ({ ...f, contextWindow: Number(e.target.value) }))}
-              />
-            </div>
-          </div>
-
-          {test && <p className={`conn-status ${test.kind}`}>{test.text}</p>}
-          <div className="settings-actions conn-actions-bar">
-            <div className="actions-left">
-              <Button type="submit" variant="primary" size="sm" disabled={busy} isLoading={busy} leftIcon={<Icon name="Save" size={14} />}>
-                Save
-              </Button>
-              <Button type="button" variant="secondary" size="sm" onClick={(e) => void testCurrent(e)} disabled={busy} leftIcon={<Icon name="Activity" size={14} />}>
-                Test connection
-              </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={closeEditor} leftIcon={<Icon name="X" size={14} />}>
-                Cancel
-              </Button>
-            </div>
-            {editor.mode === "edit" && (
-              <Button type="button" variant="danger" size="sm" onClick={() => { if (editor.mode === "edit") void confirmRemove(editor.connection); }} leftIcon={<Icon name="Trash2" size={14} />}>
-                Delete
-              </Button>
-            )}
-          </div>
-        </form>
-      )}
+      {editable && (kind === "image" ? (
+        <ImageConnectionEditor
+          mode={editor.mode === "create" ? "create" : "edit"}
+          editing={editing}
+          form={form}
+          setForm={setForm}
+          apiKey={apiKeyProps}
+          models={models}
+          modelsStatus={modelsStatus}
+          fetchingModels={fetchingModels}
+          onFetchModels={() => void loadModels(probeTarget())}
+          testStatus={test}
+          busy={busy}
+          onSubmit={save}
+          onTest={(e) => void testCurrent(e)}
+          onCancel={closeEditor}
+          onDelete={() => { if (editor.mode === "edit") void confirmRemove(editor.connection); }}
+          textConnections={textConnections}
+        />
+      ) : (
+        <TextConnectionEditor
+          mode={editor.mode === "create" ? "create" : "edit"}
+          editing={editing}
+          form={form}
+          setForm={setForm}
+          apiKey={apiKeyProps}
+          models={models}
+          modelsStatus={modelsStatus}
+          fetchingModels={fetchingModels}
+          onFetchModels={() => void loadModels(probeTarget())}
+          testStatus={test}
+          busy={busy}
+          onSubmit={save}
+          onTest={(e) => void testCurrent(e)}
+          onCancel={closeEditor}
+          onDelete={() => { if (editor.mode === "edit") void confirmRemove(editor.connection); }}
+        />
+      ))}
     </div>
   );
 }
