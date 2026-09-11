@@ -75,6 +75,9 @@
 
 .app-root {
   height: 100vh;
+  height: 100dvh; /* match the VISIBLE viewport on mobile — 100vh (large viewport) makes the
+                     document taller than the screen, which is what allows the page scroll that
+                     mobile URL bars react to */
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -4637,115 +4640,6 @@
   color: var(--btn-danger-text);
 }
 
-/* ── Pagination Bar ── */
-.library-pagination {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  padding: 10px 14px;
-  background: var(--bg-surface-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  margin-top: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.pagination-info {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-}
-.pagination-info strong {
-  color: var(--text-primary);
-  font-weight: 600;
-}
-
-.pagination-controls {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.pagination-nav-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.12s;
-  padding: 0;
-}
-.pagination-nav-btn:hover:not(:disabled) {
-  background: var(--bg-surface-hover);
-  color: var(--text-primary);
-  border-color: var(--border-main);
-}
-.pagination-nav-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.pagination-page-btn {
-  min-width: 28px;
-  height: 28px;
-  padding: 0 6px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  color: var(--text-secondary);
-  font-size: 0.8rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.12s;
-}
-.pagination-page-btn:hover:not(.active) {
-  background: var(--bg-surface-hover);
-  color: var(--text-primary);
-}
-.pagination-page-btn.active {
-  background: var(--accent-base);
-  color: var(--accent-text);
-  border-color: var(--accent-base);
-  font-weight: 600;
-}
-
-.pagination-ellipsis {
-  color: var(--text-muted);
-  padding: 0 4px;
-  font-size: 0.85rem;
-}
-
-.pagination-size-selector {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-}
-.pagination-size-selector select {
-  background: var(--input-bg);
-  border: 1px solid var(--input-border);
-  border-radius: 6px;
-  color: var(--input-text);
-  padding: 3px 6px;
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-.pagination-size-selector-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.pagination-custom-input {
-  width: 68px !important;
-  text-align: center;
-}
-
 /* ── Responsive Layout Overrides ── */
 @media (max-width: 860px) {
   .character-booru-layout {
@@ -4853,7 +4747,7 @@
   .view-mode-switcher {
     justify-content: center;
   }
-  .library-pagination {
+  .base-pagination {
     flex-direction: column;
     gap: 8px;
     justify-content: center;

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import type { CharacterTemplate, LorebookSummary } from "../../../schemas";
 import type { Persona } from "../../api";
 import { getTagTaxonomy } from "../../api";
-import { AvatarBadge, Button, CharacterAvatar, Icon, SearchBar, SimpleSelect, SwitchRow, TagChip, TextArea, TextInput } from "../base";
+import { AvatarBadge, Button, CharacterAvatar, Icon, Pagination, SearchBar, SimpleSelect, SwitchRow, TagChip, TextArea, TextInput } from "../base";
+import { usePagination } from "../../hooks/usePagination";
 import type { ViewMode } from "../library/CharacterLibrary";
 import { cardBadgeLabel, displayTitle, entryKind, filterLibraryEntries, groupByLineage, getGroupCreatedAt, getGroupUpdatedAt, type CharacterSortOption, type SortDirection } from "../../../engine/characterCards";
 import { groupTagsByCategory, sortTags, type TagTaxonomyConfig } from "../../../engine/tagTaxonomy";
@@ -65,19 +66,6 @@ function formatCastDate(isoOrStr?: string): string {
   } catch {
     return "";
   }
-}
-
-function getPageNumbers(current: number, total: number): number[] {
-  if (total <= 7) {
-    return Array.from({ length: total }, (_, i) => i + 1);
-  }
-  if (current <= 4) {
-    return [1, 2, 3, 4, 5, -1, total];
-  }
-  if (current >= total - 3) {
-    return [1, -1, total - 4, total - 3, total - 2, total - 1, total];
-  }
-  return [1, -1, current - 1, current, current + 1, -1, total];
 }
 
 export function SetupView(props: SetupViewProps) {
@@ -152,7 +140,6 @@ export function SetupView(props: SetupViewProps) {
       localStorage.setItem("bobbinloom_setup_cast_sort_by", option);
       localStorage.setItem("bobbinloom_setup_cast_sort_dir", nextDir);
     } catch { /* silent */ }
-    setCastPage(1);
   };
 
   const toggleSortDirection = () => {
@@ -160,28 +147,6 @@ export function SetupView(props: SetupViewProps) {
     setSortDirectionState(nextDir);
     try {
       localStorage.setItem("bobbinloom_setup_cast_sort_dir", nextDir);
-    } catch { /* silent */ }
-    setCastPage(1);
-  };
-
-  const [castPage, setCastPage] = useState(1);
-  const [pageSize, setPageSizeState] = useState<number>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const saved = localStorage.getItem("bobbinloom_setup_cast_page_size");
-      if (saved) {
-        const parsed = Number(saved);
-        if (!isNaN(parsed) && [12, 24, 48, 96, 1000].includes(parsed)) {
-          return parsed;
-        }
-      }
-    }
-    return 12;
-  });
-
-  const setPageSize = (size: number) => {
-    setPageSizeState(size);
-    try {
-      localStorage.setItem("bobbinloom_setup_cast_page_size", String(size));
     } catch { /* silent */ }
   };
 
@@ -229,7 +194,6 @@ export function SetupView(props: SetupViewProps) {
   useEffect(() => {
     if (open) {
       setActiveTab("persona");
-      setCastPage(1);
     }
   }, [open]);
 
@@ -283,7 +247,6 @@ export function SetupView(props: SetupViewProps) {
       next = [...tokens, tagToken];
     }
     setCastSearch(next.join(" "));
-    setCastPage(1);
   }
 
   function removeFilterTag(tag: string) {
@@ -295,7 +258,6 @@ export function SetupView(props: SetupViewProps) {
       return low !== tagToken && low !== `tag:${tag.toLowerCase()}`;
     });
     setCastSearch(next.join(" "));
-    setCastPage(1);
   }
 
   // Filtered cast templates
@@ -307,11 +269,14 @@ export function SetupView(props: SetupViewProps) {
     return groupByLineage(filteredCast, sortBy, sortDirection);
   }, [filteredCast, sortBy, sortDirection]);
 
-  const totalPages = Math.max(1, Math.ceil(castGroups.length / pageSize));
-  const paginatedCastGroups = useMemo(() => {
-    const start = (castPage - 1) * pageSize;
-    return castGroups.slice(start, start + pageSize);
-  }, [castGroups, castPage, pageSize]);
+  // Pagination — shared maths + state (engine/pagination.ts + hooks/usePagination.ts). `open` is in
+  // resetDeps so the picker starts on page 1 each time the wizard is opened.
+  const castPager = usePagination({
+    items: castGroups,
+    storageKey: "bobbinloom_setup_cast_page_size",
+    resetDeps: [open, castSearch, sortBy, sortDirection]
+  });
+  const paginatedCastGroups = castPager.pageItems;
 
   // Selected persona object
   const selectedPersona = useMemo(() => {
@@ -364,7 +329,7 @@ export function SetupView(props: SetupViewProps) {
   if (!open) return null;
 
   return (
-    <div className="modal-backdrop">
+    <div className="modal-backdrop setup-backdrop">
       <section className="modal setup-modal setup-wizard-modal">
         {/* Modal Header */}
         <header className="modal-header setup-wizard-header">
@@ -381,7 +346,7 @@ export function SetupView(props: SetupViewProps) {
             disabled={generating}
             title="Close setup"
           >
-            <Icon name="X" size={16} /> Close
+            <Icon name="X" size={16} /> <span className="close-btn-label">Close</span>
           </button>
         </header>
 
@@ -614,9 +579,7 @@ export function SetupView(props: SetupViewProps) {
                         value={castSearch}
                         onChange={(val) => {
                           setCastSearch(val);
-                          setCastPage(1);
                         }}
-                        onClear={() => setCastPage(1)}
                         placeholder="Search cast by name, tag (e.g. species:elf), creator…"
                         size="sm"
                       />
@@ -729,7 +692,6 @@ export function SetupView(props: SetupViewProps) {
                         className="clear-all-filters-btn"
                         onClick={() => {
                           setCastSearch("");
-                          setCastPage(1);
                         }}
                       >
                         Clear all
@@ -784,7 +746,6 @@ export function SetupView(props: SetupViewProps) {
                       <p className="empty-title">No characters match &ldquo;{castSearch}&rdquo;</p>
                       <Button variant="secondary" size="sm" onClick={() => {
                           setCastSearch("");
-                          setCastPage(1);
                         }}
                       >
                         Clear Search
@@ -1030,85 +991,16 @@ export function SetupView(props: SetupViewProps) {
                         </div>
                       )}
 
-                      {/* Pagination Controls */}
-                      <div className="library-pagination setup-cast-pagination">
-                        <div className="pagination-info">
-                          Showing <strong>{castGroups.length === 0 ? 0 : (castPage - 1) * pageSize + 1}–{Math.min(castPage * pageSize, castGroups.length)}</strong> of <strong>{castGroups.length}</strong>
-                        </div>
-                        {totalPages > 1 ? (
-                          <div className="pagination-controls">
-                            <button
-                              type="button"
-                              className="pagination-nav-btn"
-                              disabled={castPage === 1}
-                              onClick={() => setCastPage(1)}
-                              title="First page"
-                            >
-                              <Icon name="ChevronsLeft" size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              className="pagination-nav-btn"
-                              disabled={castPage === 1}
-                              onClick={() => setCastPage((p) => Math.max(1, p - 1))}
-                              title="Previous page"
-                            >
-                              <Icon name="ChevronLeft" size={14} />
-                            </button>
-                            {getPageNumbers(castPage, totalPages).map((p, idx) =>
-                              p === -1 ? (
-                                <span key={`ellipsis-${idx}`} className="pagination-ellipsis">…</span>
-                              ) : (
-                                <button
-                                  key={p}
-                                  type="button"
-                                  className={`pagination-page-btn ${castPage === p ? "active" : ""}`}
-                                  onClick={() => setCastPage(p)}
-                                >
-                                  {p}
-                                </button>
-                              )
-                            )}
-                            <button
-                              type="button"
-                              className="pagination-nav-btn"
-                              disabled={castPage === totalPages}
-                              onClick={() => setCastPage((p) => Math.min(totalPages, p + 1))}
-                              title="Next page"
-                            >
-                              <Icon name="ChevronRight" size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              className="pagination-nav-btn"
-                              disabled={castPage === totalPages}
-                              onClick={() => setCastPage(totalPages)}
-                              title="Last page"
-                            >
-                              <Icon name="ChevronsRight" size={14} />
-                            </button>
-                          </div>
-                        ) : null}
-
-                        <div className="pagination-size-selector">
-                          <label>
-                            <span>Per page:</span>
-                            <select
-                              value={pageSize}
-                              onChange={(e) => {
-                                setPageSize(Number(e.target.value));
-                                setCastPage(1);
-                              }}
-                            >
-                              <option value={12}>12</option>
-                              <option value={24}>24</option>
-                              <option value={48}>48</option>
-                              <option value={96}>96</option>
-                              <option value={1000}>All</option>
-                            </select>
-                          </label>
-                        </div>
-                      </div>
+                      <Pagination
+                        className="setup-cast-pagination"
+                        page={castPager.page}
+                        pageSize={castPager.pageSize}
+                        total={castPager.totalItems}
+                        onPageChange={castPager.setPage}
+                        onPageSizeChange={castPager.setPageSize}
+                        onCommitCustomPageSize={castPager.commitCustomPageSize}
+                        itemLabel="characters"
+                      />
                     </>
                   )}
                 </div>

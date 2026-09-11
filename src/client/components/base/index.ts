@@ -17,3 +17,4 @@ export * from "./Checkbox";
 export * from "./Switch";
 export * from "./SwitchRow";
 export * from "./ThreadIcon";
+export * from "./Pagination";

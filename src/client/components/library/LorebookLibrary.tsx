@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { LorebookEntry, LorebookFile, LorebookSummary } from "../../../schemas";
-import { Icon, Button, SearchBar, TextArea, TextInput, SimpleSelect, Checkbox, Badge } from "../base";
+import { Icon, Button, Pagination, SearchBar, TextArea, TextInput, SimpleSelect, Checkbox, Badge } from "../base";
+import { usePagination } from "../../hooks/usePagination";
 import { ConfirmModal } from "../common/ConfirmModal";
 import {
   createLorebook,
@@ -104,6 +105,14 @@ function entryStateBadges(entry: LorebookEntry): ReactNode {
 
 export function LorebookLibrary({ isModal, onClose, onLorebooksChanged }: LorebookLibraryProps) {
   const [summaries, setSummaries] = useState<LorebookSummary[]>([]);
+
+  // Pagination for the lorebook list (shared: engine/pagination.ts + hooks/usePagination.ts).
+  // The entry list inside a lorebook is intentionally NOT paginated — entries are order-sorted and
+  // drag-reorderable, so paging them would fight reordering.
+  const lorebookPager = usePagination({
+    items: summaries,
+    storageKey: "bobbinloom_lorebook_page_size"
+  });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [lorebook, setLorebook] = useState<LorebookFile | null>(null);
   const [editingUid, setEditingUid] = useState<number | null>(null);
@@ -951,7 +960,7 @@ export function LorebookLibrary({ isModal, onClose, onLorebooksChanged }: Lorebo
         <p className="lorebook-empty">No lorebooks yet. Create one or import a SillyTavern World Info .json file.</p>
       ) : (
         <ul className="lorebook-list">
-          {summaries.map((s) => (
+          {lorebookPager.pageItems.map((s) => (
             <li key={s.id} className="lorebook-list-row">
               <div className="lorebook-list-info" onClick={() => void selectLorebook(s.id)}>
                 <strong>{s.name}</strong>
@@ -966,6 +975,17 @@ export function LorebookLibrary({ isModal, onClose, onLorebooksChanged }: Lorebo
           ))}
         </ul>
       )}
+
+      <Pagination
+        className="lorebook-list-pagination"
+        page={lorebookPager.page}
+        pageSize={lorebookPager.pageSize}
+        total={lorebookPager.totalItems}
+        onPageChange={lorebookPager.setPage}
+        onPageSizeChange={lorebookPager.setPageSize}
+        onCommitCustomPageSize={lorebookPager.commitCustomPageSize}
+        itemLabel="lorebooks"
+      />
     </div>
     {renderCreateConfirm()}
     </>

@@ -8,7 +8,9 @@ import {
   updatePersona,
   type Persona
 } from "../../api";
-import { AvatarBadge, Icon } from "../base";
+import { AvatarBadge, Button, Checkbox, Icon, Pagination, TextArea, TextInput } from "../base";
+import { usePagination } from "../../hooks/usePagination";
+import { ConfirmModal } from "../common/ConfirmModal";
 
 export type PersonaLibraryProps = {
   isModal?: boolean;
@@ -33,6 +35,13 @@ export function PersonaLibrary({ isModal, onPersonasChanged }: PersonaLibraryPro
   const [personaClothingState, setPersonaClothingState] = useState("");
   const [personaSaving, setPersonaSaving] = useState(false);
   const [personaStatus, setPersonaStatus] = useState<{ text: string; isError: boolean } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
+
+  // Pagination for the persona list (shared: engine/pagination.ts + hooks/usePagination.ts).
+  const personaPager = usePagination({
+    items: personas,
+    storageKey: "bobbinloom_persona_page_size"
+  });
 
   useEffect(() => {
     setPersonaStatus(null);
@@ -124,9 +133,7 @@ export function PersonaLibrary({ isModal, onPersonasChanged }: PersonaLibraryPro
     }
   }
 
-  async function handleDeletePersona(id: string) {
-    const target = personas.find((p) => p.id === id);
-    if (!window.confirm(`Delete persona "${target?.name ?? id}"? This cannot be undone.`)) return;
+  async function performDeletePersona(id: string) {
     try {
       await deletePersona(id);
       const refreshed = await listPersonas();
@@ -135,6 +142,8 @@ export function PersonaLibrary({ isModal, onPersonasChanged }: PersonaLibraryPro
       setPersonaStatus({ text: "Persona deleted.", isError: false });
     } catch (e) {
       setPersonaStatus({ text: e instanceof Error ? e.message : String(e), isError: true });
+    } finally {
+      setConfirmDelete(null);
     }
   }
 
@@ -160,7 +169,7 @@ export function PersonaLibrary({ isModal, onPersonasChanged }: PersonaLibraryPro
 
       {!personaEditorOpen ? (
         <div className="persona-list">
-          {personas.map((p) => (
+          {personaPager.pageItems.map((p) => (
             <div key={p.id} className={`persona-row ${p.isDefault ? "default" : ""}`}>
               <AvatarBadge icon="User" name={p.name} size="sm" />
               <div className="persona-row-info">
@@ -171,59 +180,131 @@ export function PersonaLibrary({ isModal, onPersonasChanged }: PersonaLibraryPro
                 </span>
               </div>
               <div className="persona-row-actions">
-                <button onClick={() => void startEditPersona(p.id)} disabled={personaSaving}>Edit</button>
-                {!p.isDefault ? <button onClick={() => void handleSetDefault(p.id)} disabled={personaSaving}>Set Default</button> : null}
-                <button className="danger" onClick={() => void handleDeletePersona(p.id)} disabled={personaSaving || personas.length <= 1}>Delete</button>
+                <Button variant="secondary" size="sm" onClick={() => void startEditPersona(p.id)} disabled={personaSaving}>Edit</Button>
+                {!p.isDefault ? (
+                  <Button variant="secondary" size="sm" onClick={() => void handleSetDefault(p.id)} disabled={personaSaving}>Set Default</Button>
+                ) : null}
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setConfirmDelete({ id: p.id, name: p.name })}
+                  disabled={personaSaving || personas.length <= 1}
+                >
+                  Delete
+                </Button>
               </div>
             </div>
           ))}
-          <button className="primary-btn add-module-btn flex items-center gap-1.5 justify-center" onClick={startCreatePersona} disabled={personaSaving}>
-            <Icon name="Plus" size={16} /> Create New Persona
-          </button>
+
+          <Pagination
+            className="persona-list-pagination"
+            page={personaPager.page}
+            pageSize={personaPager.pageSize}
+            total={personaPager.totalItems}
+            onPageChange={personaPager.setPage}
+            onPageSizeChange={personaPager.setPageSize}
+            onCommitCustomPageSize={personaPager.commitCustomPageSize}
+            itemLabel="personas"
+          />
+
+          <Button
+            variant="primary"
+            className="add-module-btn"
+            onClick={startCreatePersona}
+            disabled={personaSaving}
+            leftIcon={<Icon name="Plus" size={16} />}
+          >
+            Create New Persona
+          </Button>
         </div>
       ) : (
         <div className="persona-editor">
           <div className="persona-editor-header">
-            <button className="inline-action flex items-center gap-1" onClick={closePersonaEditor} disabled={personaSaving}>
-              <Icon name="ArrowLeft" size={16} /> Back to list
-            </button>
+            <Button variant="ghost" size="sm" onClick={closePersonaEditor} disabled={personaSaving} leftIcon={<Icon name="ArrowLeft" size={16} />}>
+              Back to list
+            </Button>
             <h3>{editingPersonaId ? `Edit: ${personaForm.name || "Persona"}` : "New Persona"}</h3>
           </div>
           <div className="settings-form">
-            <label>Name <input value={personaForm.name} onChange={(e) => setPersonaForm((f) => ({ ...f, name: e.target.value }))} placeholder="Character name" /></label>
-            <label>Description <textarea rows={3} value={personaForm.description} onChange={(e) => setPersonaForm((f) => ({ ...f, description: e.target.value }))} placeholder="Who is this character? Personality, background, quirks…" /></label>
-            <label>Body Type <input value={personaForm.bodyType} onChange={(e) => setPersonaForm((f) => ({ ...f, bodyType: e.target.value }))} placeholder="e.g. athletic, slender, stocky" /></label>
-            <label>Appearance <textarea rows={3} value={personaForm.appearance} onChange={(e) => setPersonaForm((f) => ({ ...f, appearance: e.target.value }))} placeholder="Hair, eyes, distinguishing features, typical dress…" /></label>
+            <TextInput
+              label="Name"
+              value={personaForm.name}
+              onChange={(e) => setPersonaForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="Character name"
+            />
+            <TextArea
+              label="Description"
+              rows={3}
+              value={personaForm.description}
+              onChange={(e) => setPersonaForm((f) => ({ ...f, description: e.target.value }))}
+              placeholder="Who is this character? Personality, background, quirks…"
+            />
+            <TextInput
+              label="Body Type"
+              value={personaForm.bodyType}
+              onChange={(e) => setPersonaForm((f) => ({ ...f, bodyType: e.target.value }))}
+              placeholder="e.g. athletic, slender, stocky"
+            />
+            <TextArea
+              label="Appearance"
+              rows={3}
+              value={personaForm.appearance}
+              onChange={(e) => setPersonaForm((f) => ({ ...f, appearance: e.target.value }))}
+              placeholder="Hair, eyes, distinguishing features, typical dress…"
+            />
 
             <h4>Initial Clothing</h4>
             <p className="module-hint">Starting clothing may be overridden by scenario generation.</p>
             {personaForm.initialClothing.map((c) => (
               <div key={c.slot} className="clothing-row">
                 <span>{c.slot}: {c.name}{c.state ? ` (${c.state})` : ""}</span>
-                <button className="icon-btn danger-icon" onClick={() => removeClothingItem(c.slot)}><Icon name="X" size={14} /></button>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  iconOnly
+                  className="danger-icon"
+                  onClick={() => removeClothingItem(c.slot)}
+                  aria-label={`Remove ${c.slot}`}
+                >
+                  <Icon name="X" size={14} />
+                </Button>
               </div>
             ))}
             <div className="clothing-add">
-              <input placeholder="Slot" value={personaClothingSlot} onChange={(e) => setPersonaClothingSlot(e.target.value)} />
-              <input placeholder="Name" value={personaClothingName} onChange={(e) => setPersonaClothingName(e.target.value)} />
-              <input placeholder="State (optional)" value={personaClothingState} onChange={(e) => setPersonaClothingState(e.target.value)} />
-              <button onClick={addClothingItem}>Add</button>
+              <TextInput placeholder="Slot" value={personaClothingSlot} onChange={(e) => setPersonaClothingSlot(e.target.value)} />
+              <TextInput placeholder="Name" value={personaClothingName} onChange={(e) => setPersonaClothingName(e.target.value)} />
+              <TextInput placeholder="State (optional)" value={personaClothingState} onChange={(e) => setPersonaClothingState(e.target.value)} />
+              <Button variant="secondary" onClick={addClothingItem}>Add</Button>
             </div>
 
-            <label className="toggle">
-              <input type="checkbox" checked={personaForm.isDefault} onChange={(e) => setPersonaForm((f) => ({ ...f, isDefault: e.target.checked }))} />
-              Set as default persona
-            </label>
+            <Checkbox
+              label="Set as default persona"
+              checked={personaForm.isDefault}
+              onChange={(e) => setPersonaForm((f) => ({ ...f, isDefault: e.target.checked }))}
+            />
 
             <div className="settings-actions">
-              <button className="primary" onClick={() => void savePersona()} disabled={personaSaving || !personaForm.name.trim()}>{personaSaving ? "Saving…" : "Save Persona"}</button>
-              <button onClick={closePersonaEditor} disabled={personaSaving}>Cancel</button>
+              <Button variant="primary" onClick={() => void savePersona()} disabled={personaSaving || !personaForm.name.trim()}>
+                {personaSaving ? "Saving…" : "Save Persona"}
+              </Button>
+              <Button variant="secondary" onClick={closePersonaEditor} disabled={personaSaving}>Cancel</Button>
             </div>
           </div>
         </div>
       )}
 
       {personaStatus ? <pre className={`settings-status ${personaStatus.isError ? "status-error" : "status-ok"}`}>{personaStatus.text}</pre> : null}
+
+      {confirmDelete ? (
+        <ConfirmModal
+          title={`Delete persona "${confirmDelete.name}"?`}
+          message="This removes the persona from the library. Playthroughs created from it keep their own copy."
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => performDeletePersona(confirmDelete.id)}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      ) : null}
     </div>
   );
 }

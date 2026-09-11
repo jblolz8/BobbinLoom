@@ -27,12 +27,14 @@ import {
   Tooltip,
   TextInput,
   SimpleSelect,
+  Pagination,
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
 } from "../base";
 export { CharacterAvatar } from "../base";
+import { usePagination } from "../../hooks/usePagination";
 import { ConfirmModal } from "../common/ConfirmModal";
 import { DiffModal } from "./DiffModal";
 import { TwoPaneDiff } from "./TwoPaneDiff";
@@ -357,20 +359,6 @@ function formatLibraryDate(isoOrStr?: string): string {
   }
 }
 
-function getPageNumbers(current: number, total: number): number[] {
-  if (total <= 7) {
-    return Array.from({ length: total }, (_, i) => i + 1);
-  }
-  if (current <= 4) {
-    return [1, 2, 3, 4, 5, -1, total];
-  }
-  if (current >= total - 3) {
-    return [1, -1, total - 4, total - 3, total - 2, total - 1, total];
-  }
-  return [1, -1, current - 1, current, current + 1, -1, total];
-}
-
-
 
 /** Card dropdown "more options" menu */
 function MoreOptionsMenu({
@@ -510,7 +498,6 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
       localStorage.setItem("bobbinloom_library_sort_by", option);
       localStorage.setItem("bobbinloom_library_sort_dir", nextDir);
     } catch { /* silent */ }
-    setCurrentPage(1);
   };
 
   const toggleSortDirection = () => {
@@ -519,62 +506,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     try {
       localStorage.setItem("bobbinloom_library_sort_dir", nextDir);
     } catch { /* silent */ }
-    setCurrentPage(1);
   };
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSizeState] = useState<number>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const saved = localStorage.getItem("bobbinloom_library_page_size");
-      if (saved) {
-        const parsed = Number(saved);
-        if (!isNaN(parsed) && parsed > 0 && parsed <= 1000) {
-          return Math.round(parsed);
-        }
-      }
-    }
-    return 12;
-  });
-
-  const [isCustomPageSize, setIsCustomPageSize] = useState<boolean>(() => {
-    return ![12, 24, 48, 96, 1000].includes(pageSize);
-  });
-  const [customPageSizeInput, setCustomPageSizeInput] = useState<string>(() => {
-    return [12, 24, 48, 96, 1000].includes(pageSize) ? "" : String(pageSize);
-  });
-
-  const setPageSize = (size: number) => {
-    setPageSizeState(size);
-    try {
-      localStorage.setItem("bobbinloom_library_page_size", String(size));
-    } catch { /* silent */ }
-  };
-
-  const handleCommitCustomPageSize = () => {
-    const parsed = parseInt(customPageSizeInput, 10);
-    if (!isNaN(parsed) && parsed > 0) {
-      const clamped = Math.min(Math.max(parsed, 1), 1000);
-      setCustomPageSizeInput(String(clamped));
-      setPageSize(clamped);
-      setCurrentPage(1);
-    } else {
-      setCustomPageSizeInput(String(pageSize));
-    }
-  };
-
-  const handlePageSizeSelectChange = (val: string) => {
-    if (val === "custom") {
-      setIsCustomPageSize(true);
-      if (!customPageSizeInput || isNaN(parseInt(customPageSizeInput, 10))) {
-        setCustomPageSizeInput(String(pageSize));
-      }
-    } else {
-      setIsCustomPageSize(false);
-      const num = Number(val);
-      setPageSize(num);
-      setCurrentPage(1);
-    }
-  };
-
   const [conversionFailed, setConversionFailed] = useState<{
     template: CharacterTemplate;
     error: string;
@@ -1385,7 +1317,6 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
       next = [...tokens, tagToken];
     }
     setSearch(next.join(" "));
-    setCurrentPage(1);
   }
 
   function removeFilterTag(tag: string) {
@@ -1397,25 +1328,21 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
       return low !== tagToken && low !== `tag:${tag.toLowerCase()}`;
     });
     setSearch(next.join(" "));
-    setCurrentPage(1);
   }
 
   // ── Filtering and Pagination ──
   const filteredTemplates = useMemo(() => filterLibraryEntries(templates, search), [templates, search]);
   const groups = useMemo(() => groupByLineage(filteredTemplates, sortBy, sortDirection), [filteredTemplates, sortBy, sortDirection]);
 
-  const totalPages = Math.max(1, Math.ceil(groups.length / pageSize));
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(1);
-    }
-  }, [totalPages, currentPage]);
-
-  const paginatedGroups = useMemo(() => {
-    if (pageSize >= 1000) return groups;
-    const start = (currentPage - 1) * pageSize;
-    return groups.slice(start, start + pageSize);
-  }, [groups, currentPage, pageSize]);
+  // Pagination — shared maths + state (engine/pagination.ts + hooks/usePagination.ts). The page
+  // returns to 1 when the search text, sort field, or sort direction changes (this replaces the old
+  // per-handler page resets) and it clamps when filtering shrinks the list.
+  const pager = usePagination({
+    items: groups,
+    storageKey: "bobbinloom_library_page_size",
+    resetDeps: [search, sortBy, sortDirection]
+  });
+  const paginatedGroups = pager.pageItems;
 
   const galleryRef = useRef<HTMLElement>(null);
   const [galleryHeight, setGalleryHeight] = useState<number | null>(null);
@@ -2050,7 +1977,6 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                       className="sidebar-clear-btn"
                       onClick={() => {
                         setSearch("");
-                        setCurrentPage(1);
                       }}
                       title="Clear search and tag filters"
                     >
@@ -2233,9 +2159,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                   value={search}
                   onChange={(val) => {
                     setSearch(val);
-                    setCurrentPage(1);
                   }}
-                  onClear={() => setCurrentPage(1)}
                   placeholder="Search name, tags, creator:…"
                   size="md"
                   containerClassName="library-search-wrapper"
@@ -2329,7 +2253,6 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                     className="clear-all-filters-btn"
                     onClick={() => {
                       setSearch("");
-                      setCurrentPage(1);
                     }}
                   >
                     Clear all
@@ -2350,7 +2273,6 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                       style={{ marginTop: "8px" }}
                       onClick={() => {
                         setSearch("");
-                        setCurrentPage(1);
                       }}
                     >
                       Reset filters
@@ -2611,130 +2533,15 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                     </div>
                   )}
 
-                  {/* ── Bottom Pagination Controls ── */}
-                  <div className="library-pagination">
-                    <div className="pagination-info">
-                      Showing <strong>{groups.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, groups.length)}</strong> of <strong>{groups.length}</strong> characters
-                    </div>
-
-                    {totalPages > 1 ? (
-                      <div className="pagination-controls">
-                        <Tooltip content="First page">
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="xs"
-                            iconOnly
-                            className="pagination-nav-btn"
-                            disabled={currentPage === 1}
-                            onClick={() => setCurrentPage(1)}
-                            aria-label="First page"
-                          >
-                            <Icon name="ChevronsLeft" size={14} />
-                          </Button>
-                        </Tooltip>
-                        <Tooltip content="Previous page">
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="xs"
-                            iconOnly
-                            className="pagination-nav-btn"
-                            disabled={currentPage === 1}
-                            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                            aria-label="Previous page"
-                          >
-                            <Icon name="ChevronLeft" size={14} />
-                          </Button>
-                        </Tooltip>
-
-                        {getPageNumbers(currentPage, totalPages).map((p, idx) => {
-                          if (p === -1) {
-                            return <span key={`ellipsis-${idx}`} className="pagination-ellipsis">…</span>;
-                          }
-                          return (
-                            <Button
-                              key={p}
-                              type="button"
-                              variant={currentPage === p ? "primary" : "secondary"}
-                              size="xs"
-                              className={`pagination-page-btn ${currentPage === p ? "active" : ""}`}
-                              onClick={() => setCurrentPage(p)}
-                            >
-                              {p}
-                            </Button>
-                          );
-                        })}
-
-                        <Tooltip content="Next page">
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="xs"
-                            iconOnly
-                            className="pagination-nav-btn"
-                            disabled={currentPage === totalPages}
-                            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                            aria-label="Next page"
-                          >
-                            <Icon name="ChevronRight" size={14} />
-                          </Button>
-                        </Tooltip>
-                        <Tooltip content="Last page">
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="xs"
-                            iconOnly
-                            className="pagination-nav-btn"
-                            disabled={currentPage === totalPages}
-                            onClick={() => setCurrentPage(totalPages)}
-                            aria-label="Last page"
-                          >
-                            <Icon name="ChevronsRight" size={14} />
-                          </Button>
-                        </Tooltip>
-                      </div>
-                    ) : null}
-
-                    <div className="pagination-size-selector">
-                      <span className="pagination-size-selector-label">Per page:</span>
-                      <SimpleSelect<string>
-                        value={isCustomPageSize ? "custom" : String(pageSize)}
-                        onChange={handlePageSizeSelectChange}
-                        options={[
-                          { value: "12", label: "12" },
-                          { value: "24", label: "24" },
-                          { value: "48", label: "48" },
-                          { value: "96", label: "96" },
-                          { value: "1000", label: "All" },
-                          { value: "custom", label: "Custom…" },
-                        ]}
-                        size="xs"
-                        aria-label="Items per page"
-                      />
-                      {isCustomPageSize && (
-                        <TextInput
-                          size="sm"
-                          type="number"
-                          min={1}
-                          max={1000}
-                          fullWidth={false}
-                          value={customPageSizeInput}
-                          onChange={(e) => setCustomPageSizeInput(e.target.value)}
-                          onBlur={handleCommitCustomPageSize}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              handleCommitCustomPageSize();
-                            }
-                          }}
-                          placeholder="Count"
-                          containerClassName="pagination-custom-input"
-                          aria-label="Custom items per page"
-                        />
-                      )}
-                    </div>
-                  </div>
+                  <Pagination
+                    page={pager.page}
+                    pageSize={pager.pageSize}
+                    total={pager.totalItems}
+                    onPageChange={pager.setPage}
+                    onPageSizeChange={pager.setPageSize}
+                    onCommitCustomPageSize={pager.commitCustomPageSize}
+                    itemLabel="characters"
+                  />
                 </>
               )}
             </main>

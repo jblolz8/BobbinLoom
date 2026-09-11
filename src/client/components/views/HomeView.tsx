@@ -5,7 +5,8 @@ import { PlaythroughActionsMenu } from "../common/PlaythroughActionsMenu";
 import { CharacterLibrary } from "../library/CharacterLibrary";
 import { LorebookLibrary } from "../library/LorebookLibrary";
 import { PersonaLibrary } from "../library/PersonaLibrary";
-import { Icon } from "../base";
+import { Icon, Pagination } from "../base";
+import { usePagination } from "../../hooks/usePagination";
 
 export type HomeTab = "playthroughs" | "characters" | "lorebooks" | "personas";
 
@@ -47,6 +48,12 @@ export function HomeView({
   const [renameDraft, setRenameDraft] = useState("");
   const [loadFailures, setLoadFailures] = useState<LoadFailure[]>([]);
   const [failuresDismissed, setFailuresDismissed] = useState(false);
+
+  // Pagination for the playthrough list (shared: engine/pagination.ts + hooks/usePagination.ts).
+  const homePager = usePagination({
+    items: playthroughs,
+    storageKey: "bobbinloom_home_page_size"
+  });
 
   async function refresh() {
     try {
@@ -161,8 +168,9 @@ export function HomeView({
               </button>
             </div>
           ) : (
+            <>
             <div className="playthrough-grid">
-              {playthroughs.map((p) => {
+              {homePager.pageItems.map((p) => {
                 const locationName =
                   p.locationCatalog?.find((l) => l.id === p.locationId)?.name ??
                   p.locationId;
@@ -262,6 +270,18 @@ export function HomeView({
                 );
               })}
             </div>
+
+            <Pagination
+              className="home-page-pagination"
+              page={homePager.page}
+              pageSize={homePager.pageSize}
+              total={homePager.totalItems}
+              onPageChange={homePager.setPage}
+              onPageSizeChange={homePager.setPageSize}
+              onCommitCustomPageSize={homePager.commitCustomPageSize}
+              itemLabel="playthroughs"
+            />
+            </>
           )}
         </section>
       )}

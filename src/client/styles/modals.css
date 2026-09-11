@@ -5334,6 +5334,8 @@
   flex: 1 1 auto;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding-right: 6px;
   display: flex;
   flex-direction: column;
@@ -6049,23 +6051,63 @@
    RESPONSIVENESS & MOBILE STYLES
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* Full-screen mobile wizard, sized to the VISIBLE viewport. 100dvh is declared after a plain
+   100vh line (older browsers keep the vh fallback). With only 100vh the sheet matched the LARGE
+   viewport, so while the mobile URL bar was showing the sticky footer sat below the fold and the
+   user had to scroll the page — the scroll that hides the URL bar — just to reach Generate.
+   Mirrors the Settings modal's mobile block above. */
 @media (max-width: 680px) {
   .modal.setup-wizard-modal {
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
     max-height: 100vh;
+    max-height: 100dvh;
+    /* the base rule ships min-height: 580px — left in place it beats the dvh height on short
+       phones and pushes the sticky footer back below the fold */
+    min-height: 0;
     border-radius: 0;
-    padding: 1rem 0.85rem;
+    padding: 0.7rem 0.85rem 0.55rem;
     border: none;
+  }
+
+  /* The shared backdrop keeps 1rem of padding; a 100dvh sheet inside it would overflow and
+     clip the footer, so the wizard's backdrop goes flush on mobile. */
+  .setup-backdrop {
+    padding: 0;
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
+  .setup-wizard-header {
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+    align-items: center;
+  }
+
+  /* The tab bar already names the step — drop the redundant header/intro copy on mobile. */
+  .setup-wizard-header .setup-subtitle,
+  .setup-wizard-header .close-btn-label,
+  .setup-section-intro {
+    display: none;
+  }
+
+  .setup-wizard-header .modal-close-btn {
+    padding: 0.3rem 0.5rem;
+  }
+
+  .setup-sticky-footer {
+    padding-top: 0.6rem;
   }
 
   .setup-wizard-tabs {
     gap: 4px;
     padding: 3px;
+    margin-bottom: 0.6rem;
   }
 
   .setup-tab-btn {
-    padding: 6px 8px;
+    padding: 7px 8px;
     font-size: 0.8rem;
     gap: 5px;
   }
@@ -6133,6 +6175,42 @@
 
   .setup-cast-actions .view-mode-btn {
     padding: 3px 6px;
+  }
+}
+
+/* Short viewports (landscape phones, small windows): the wizard's header + tabs + footer
+   alone can exceed the available height, so compact the chrome further. */
+@media (max-height: 600px) {
+  .modal.setup-wizard-modal {
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    min-height: 0;
+    padding: 0.55rem 0.75rem 0.5rem;
+  }
+
+  .setup-wizard-header {
+    margin-bottom: 0.4rem;
+    padding-bottom: 0.4rem;
+  }
+
+  .setup-wizard-header .setup-subtitle,
+  .setup-wizard-header .close-btn-label,
+  .setup-section-intro {
+    display: none;
+  }
+
+  .setup-wizard-tabs {
+    margin-bottom: 0.45rem;
+  }
+
+  .setup-tab-btn {
+    padding: 6px 8px;
+  }
+
+  .setup-sticky-footer {
+    padding-top: 0.5rem;
   }
 }
 
