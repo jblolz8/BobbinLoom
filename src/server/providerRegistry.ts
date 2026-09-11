@@ -387,17 +387,21 @@ function parseModelIds(bodyText: string): string[] {
 }
 
 /** Shared /models probe: reachability + auth check, and the model list when the
- *  response is parseable. Used by both the test and fetch-models paths. */
+ *  response is parseable. Used by both the test and fetch-models paths.
+ *  `type` is forwarded as the `type` query parameter — image endpoints (Venice)
+ *  list image checkpoints behind `GET /models?type=image` and return a text
+ *  list without it. */
 async function probeProviderModels(
-  input: { baseUrl: string; apiKey?: string },
+  input: { baseUrl: string; apiKey?: string; type?: string },
   fetchImpl: typeof fetch = fetch
 ): Promise<ModelsProbeResult> {
   const base = normalizeBaseUrl(input.baseUrl);
+  const query = input.type ? `?type=${encodeURIComponent(input.type)}` : "";
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   const start = Date.now();
   try {
-    const res = await fetchImpl(`${base}/models`, {
+    const res = await fetchImpl(`${base}/models${query}`, {
       method: "GET",
       headers: {
         ...(input.apiKey ? { Authorization: `Bearer ${input.apiKey}` } : {})
@@ -425,9 +429,11 @@ export async function testProviderConnection(
   return result;
 }
 
-/** Fetch the model list from an OpenAI-compatible server: GET <base>/models. */
+/** Fetch the model list from an OpenAI-compatible server: GET <base>/models
+ *  (with `?type=<type>` when the caller asks for a typed list, e.g. image
+ *  checkpoints). */
 export async function fetchProviderModels(
-  input: { baseUrl: string; apiKey?: string },
+  input: { baseUrl: string; apiKey?: string; type?: string },
   fetchImpl: typeof fetch = fetch
 ): Promise<ModelsProbeResult> {
   return probeProviderModels(input, fetchImpl);

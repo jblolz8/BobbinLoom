@@ -10,6 +10,9 @@ export { loadAppSettings, saveAppSettings };
 
 export const dataDir = join(process.cwd(), "data", "playthroughs");
 export const settingsDir = join(process.cwd(), "data");
+/** Generated image bytes live in their own content-addressed directory (see
+ *  imageStore.ts) — re-exported here as the route-level default. */
+export { IMAGES_DIR as imagesDir } from "../imageStore";
 export const providerManager = createProviderManager(settingsDir);
 
 export function presetsPath(): string {

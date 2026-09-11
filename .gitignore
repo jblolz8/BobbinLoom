@@ -26,3 +26,6 @@ data/personas/*
 
 # Agent workspace
 .hermes/
+
+# Generated images — content-addressed, adult content, never commit.
+data/images/

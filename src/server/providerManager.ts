@@ -125,8 +125,8 @@ export class ProviderManager {
     return testProviderConnection(this.resolveProbeTarget(input), this.fetchImpl);
   }
 
-  async fetchModels(input: { id?: string; baseUrl?: string; apiKey?: string }): Promise<ModelsProbeResult> {
-    return fetchProviderModels(this.resolveProbeTarget(input), this.fetchImpl);
+  async fetchModels(input: { id?: string; baseUrl?: string; apiKey?: string; type?: string }): Promise<ModelsProbeResult> {
+    return fetchProviderModels({ ...this.resolveProbeTarget(input), type: input.type }, this.fetchImpl);
   }
 
   /** Full stored key for a connection — used only for on-demand reveal in the UI. */

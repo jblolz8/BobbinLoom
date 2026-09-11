@@ -1,0 +1,273 @@
+import { createReadStream } from "node:fs";
+import type { FastifyPluginAsync, FastifyPluginOptions } from "fastify";
+import { z } from "zod";
+import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../../engine/imageDefaults";
+import type { ChatMessage, ImageGenerationSettings, MessageImage, Playthrough, PromptPreset, ProviderConnection } from "../../schemas";
+import { ImageGenerationSettingsSchema } from "../../schemas";
+import { OPENAI_IMAGE_PROMPT_CAP, VENICE_IMAGE_PROMPT_CAP } from "../imageProvider";
+import { clampChars } from "../imageProvider/shared";
+import { imageFilePath, mimeForFile, saveImageBytes, sweepOrphansInDataDir, IMAGES_DIR } from "../imageStore";
+import type { ProviderManager } from "../providerManager";
+import { generateImagePrompt } from "../provider/imagePrompt";
+import { summarizePlaythrough } from "../provider/promptBuilder";
+import { getPlaythroughRecord, updatePlaythroughRecord } from "../store";
+import { abortOnClientDisconnect, dataDir as defaultDataDir, loadPresets as defaultLoadPresets, providerManager } from "./helpers";
+
+/** Injectable seams (all defaulted) so the routes can be exercised against a
+ *  temp data directory with a stub fetch — no test may touch the real store. */
+export type ImageRoutesOptions = FastifyPluginOptions & {
+  dataDir?: string;
+  imagesDir?: string;
+  manager?: ProviderManager;
+  fetchImpl?: typeof fetch;
+  loadPresets?: () => PromptPreset[];
+};
+
+const GenerateImageBody = z.object({
+  imageProviderId: z.string().optional(),
+  promptOverride: z.string().optional(),
+  negativeOverride: z.string().optional(),
+  seed: z.number().int().optional()
+});
+
+const MessageParams = z.object({ id: z.string(), messageId: z.string() });
+
+/** The endpoint's hard prompt cap. Applied to the COMPOSED text so a long
+ *  prefix or a long user edit can never 400 the image call. */
+function dialectPromptCap(conn: ProviderConnection): number {
+  return (conn.apiStyle ?? "openai") === "venice" ? VENICE_IMAGE_PROMPT_CAP : OPENAI_IMAGE_PROMPT_CAP;
+}
+
+/** Clamp to BOTH the preset's soft limit and the dialect's hard cap, ignoring a
+ *  0 limit (the schema allows it and it reads as "unlimited"). */
+function clampComposed(text: string, settings: ImageGenerationSettings, conn: ProviderConnection): string {
+  const limit = settings.promptCharacterLimit > 0
+    ? Math.min(settings.promptCharacterLimit, dialectPromptCap(conn))
+    : dialectPromptCap(conn);
+  return clampChars(text, limit);
+}
+
+/** Preset-owned prompt settings, resolved exactly like the rest of the
+ *  playthrough snapshot: playthrough copy → preset → shipped defaults. Parsed
+ *  (not just copied) so a partial block always comes back complete. */
+function resolveImageSettings(playthrough: Playthrough, presets: PromptPreset[]): ImageGenerationSettings {
+  const snapshot = playthrough.promptSettings?.imageGeneration;
+  if (snapshot) return ImageGenerationSettingsSchema.parse(snapshot);
+  const presetId = playthrough.promptSettings?.presetId;
+  const preset = presetId ? presets.find((p) => p.id === presetId) : undefined;
+  if (preset?.imageGeneration) return ImageGenerationSettingsSchema.parse(preset.imageGeneration);
+  return { ...DEFAULT_IMAGE_GENERATION_SETTINGS };
+}
+
+/** Compact cast block: only characters actually at the current location, plus
+ *  the player (who is always in frame). Deliberately short — the scene text is
+ *  the primary source and `summarizePlaythrough` already covers world state. */
+function buildCastBlock(playthrough: Playthrough): string {
+  const lines: string[] = [];
+  const player = playthrough.playerCharacter;
+  if (player?.appearance) lines.push(`${player.name} (player) — ${player.appearance}`);
+  for (const character of playthrough.characters) {
+    if (character.currentLocationId !== playthrough.locationId) continue;
+    const clothing = character.clothing.length
+      ? `wearing ${character.clothing.map((item) => item.name).join(", ")}`
+      : "clothing unspecified";
+    const conditions = character.conditions.length ? `, ${character.conditions.join(", ")}` : "";
+    lines.push(`${character.name} — ${clothing}, ${character.mood}${conditions}`);
+  }
+  return lines.join("\n");
+}
+
+/** The nearest visible user message before `message` — the action the image is
+ *  answering. Hidden (state-only) user messages are skipped. */
+function previousUserContent(playthrough: { messages: ChatMessage[] }, message: ChatMessage): string | undefined {
+  const index = playthrough.messages.findIndex((m) => m.id === message.id);
+  for (let i = index - 1; i >= 0; i -= 1) {
+    const candidate = playthrough.messages[i];
+    if (candidate.role === "user" && !candidate.hidden) return candidate.content;
+  }
+  return undefined;
+}
+
+export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, options = {}) => {
+  const dataDir = options.dataDir ?? defaultDataDir;
+  const imagesDir = options.imagesDir ?? IMAGES_DIR;
+  const manager = options.manager ?? providerManager;
+  const loadPresets = options.loadPresets ?? defaultLoadPresets;
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  // Content-addressed read: the file name IS the hash, so an immutable cache
+  // header is safe. The name is validated before any filesystem call.
+  app.get("/api/images/:file", async (request, reply) => {
+    const { file } = z.object({ file: z.string() }).parse(request.params);
+    const path = imageFilePath(file, imagesDir);
+    if (!path) return reply.code(404).send({ error: "Image not found" });
+    reply.header("Cache-Control", "public, max-age=31536000, immutable");
+    return reply.type(mimeForFile(file)).send(createReadStream(path));
+  });
+
+  // Dry run: compose the prompt without generating — powers the preview modal.
+  // Runs the text side call exactly once and persists nothing.
+  app.post("/api/playthroughs/:id/messages/:messageId/image/prompt", async (request, reply) => {
+    const params = MessageParams.parse(request.params);
+    const body = GenerateImageBody.parse(request.body ?? {});
+    const playthrough = getPlaythroughRecord(dataDir, params.id);
+    if (!playthrough) return reply.code(404).send({ error: "Playthrough not found" });
+
+    const message = playthrough.messages.find((m) => m.id === params.messageId);
+    if (!message) return reply.code(404).send({ error: "Message not found" });
+    if (message.role !== "assistant") return reply.code(400).send({ error: "Images attach to assistant messages only" });
+
+    const imageConn = manager.imageConnection(body.imageProviderId);
+    if (!imageConn) return reply.code(400).send({ error: "No image provider configured — add one in Settings → Provider → Images." });
+
+    const promptConfig = manager.resolveImagePromptConfig(imageConn);
+    if (!promptConfig) return reply.code(400).send({ error: "No text provider available to write the image prompt." });
+
+    const settings = resolveImageSettings(playthrough, loadPresets());
+    const controller = abortOnClientDisconnect(reply);
+
+    let prompt: string;
+    let negativePrompt: string;
+    try {
+      const result = await generateImagePrompt(promptConfig, settings, {
+        messageContent: message.content,
+        previousUserContent: previousUserContent(playthrough, message),
+        stateSummary: summarizePlaythrough(playthrough),
+        castSummary: buildCastBlock(playthrough)
+      }, fetchImpl, controller.signal);
+      prompt = result.prompt;
+      negativePrompt = result.negativePrompt;
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      const reason = error instanceof Error ? error.message : "Image prompt generation failed";
+      return reply.code(502).send({ error: reason });
+    }
+    if (controller.signal.aborted) return;
+
+    // Clamp to the dialect cap here too, so what the modal shows is byte-for-byte
+    // what the generate call will send.
+    return {
+      prompt: clampComposed(prompt, settings, imageConn),
+      negativePrompt: clampComposed(negativePrompt, settings, imageConn)
+    };
+  });
+
+  // Drop one image ref from a message, then sweep the now-unreferenced file.
+  // Idempotent: removing a ref that is already gone still returns the record.
+  app.delete("/api/playthroughs/:id/messages/:messageId/images/:file", async (request, reply) => {
+    const params = z.object({ id: z.string(), messageId: z.string(), file: z.string() }).parse(request.params);
+    const playthrough = getPlaythroughRecord(dataDir, params.id);
+    if (!playthrough) return reply.code(404).send({ error: "Playthrough not found" });
+
+    const message = playthrough.messages.find((m) => m.id === params.messageId);
+    if (!message) return reply.code(404).send({ error: "Message not found" });
+
+    // `file` is only ever compared against stored refs (never joined onto a
+    // path), and the sweep refuses non-hash names — no traversal surface here.
+    const remaining = (message.images ?? []).filter((image) => image.file !== params.file);
+    if (remaining.length !== (message.images ?? []).length) {
+      if (remaining.length) message.images = remaining;
+      else delete message.images;
+      updatePlaythroughRecord(dataDir, playthrough);
+      sweepOrphansInDataDir(dataDir, imagesDir);
+    }
+    return reply.send({ playthrough });
+  });
+
+  app.post("/api/playthroughs/:id/messages/:messageId/image", async (request, reply) => {
+    const params = MessageParams.parse(request.params);
+    const body = GenerateImageBody.parse(request.body ?? {});
+    const playthrough = getPlaythroughRecord(dataDir, params.id);
+    if (!playthrough) return reply.code(404).send({ error: "Playthrough not found" });
+
+    const message = playthrough.messages.find((m) => m.id === params.messageId);
+    if (!message) return reply.code(404).send({ error: "Message not found" });
+    if (message.role !== "assistant") return reply.code(400).send({ error: "Images attach to assistant messages only" });
+
+    const imageConn = manager.imageConnection(body.imageProviderId);
+    if (!imageConn) return reply.code(400).send({ error: "No image provider configured — add one in Settings → Provider → Images." });
+
+    const promptConfig = manager.resolveImagePromptConfig(imageConn);
+    if (!promptConfig) return reply.code(400).send({ error: "No text provider available to write the image prompt." });
+
+    const settings = resolveImageSettings(playthrough, loadPresets());
+    const controller = abortOnClientDisconnect(reply);
+    const imageProvider = manager.getImageProvider(body.imageProviderId);
+
+    // 1) The prompt. SKIPPED only when BOTH overrides are present — that is the
+    //    preview-modal path: the user already reviewed (and possibly edited) the
+    //    text, so re-running the text model would cost tokens and discard their
+    //    edits. One override alone still runs the text call and then replaces
+    //    just that side. An override is the FINAL composed text (the modal shows
+    //    the composed prompt), so the preset prefix is never applied twice.
+    const hasPrompt = typeof body.promptOverride === "string";
+    const hasNegative = typeof body.negativeOverride === "string";
+    let promptUsed: string;
+    let negativeUsed: string;
+    if (hasPrompt && hasNegative) {
+      promptUsed = clampComposed(body.promptOverride!, settings, imageConn);
+      negativeUsed = clampComposed(body.negativeOverride!, settings, imageConn);
+    } else {
+      try {
+        const written = await generateImagePrompt(promptConfig, settings, {
+          messageContent: message.content,
+          previousUserContent: previousUserContent(playthrough, message),
+          stateSummary: summarizePlaythrough(playthrough),
+          castSummary: buildCastBlock(playthrough)
+        }, fetchImpl, controller.signal);
+        promptUsed = clampComposed(hasPrompt ? body.promptOverride! : written.prompt, settings, imageConn);
+        negativeUsed = clampComposed(hasNegative ? body.negativeOverride! : written.negativePrompt, settings, imageConn);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        const reason = error instanceof Error ? error.message : "Image prompt generation failed";
+        return reply.code(502).send({ error: reason });
+      }
+      if (controller.signal.aborted) return;
+    }
+
+    // 2) Generate. `promptUsed`/`negativeUsed` are exactly what is sent here, so
+    //    the stored ref and the response agree with what the provider received.
+    let result;
+    try {
+      result = await imageProvider.generateImage({
+        prompt: promptUsed,
+        negativePrompt: negativeUsed || undefined,
+        size: imageConn.size,
+        aspectRatio: imageConn.aspectRatio,
+        seed: body.seed,
+        variants: imageConn.variants,
+        safeMode: imageConn.safeMode,
+        stylePreset: imageConn.stylePreset,
+        hideWatermark: imageConn.hideWatermark,
+        signal: controller.signal
+      });
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      const reason = error instanceof Error ? error.message : "Image generation failed";
+      return reply.code(502).send({ error: reason });
+    }
+    if (controller.signal.aborted) return;
+
+    // 3) Persist the bytes content-addressed, then append the ref(s) to the
+    //    message. Every returned variant is kept; `image` is the first one.
+    if (!result.images.length) return reply.code(502).send({ error: "Image provider returned no image data" });
+    const createdAt = new Date().toISOString();
+    const refs: MessageImage[] = result.images.map((image) => {
+      const { file } = saveImageBytes(image.bytes, image.mime, imagesDir);
+      return {
+        file,
+        prompt: promptUsed,
+        negativePrompt: negativeUsed || undefined,
+        providerId: result.providerId,
+        model: result.model,
+        seed: body.seed ?? result.seed,
+        durationMs: result.durationMs,
+        createdAt
+      };
+    });
+    message.images = [...(message.images ?? []), ...refs];
+    updatePlaythroughRecord(dataDir, playthrough);
+
+    return reply.send({ playthrough, image: refs[0], promptUsed, negativeUsed });
+  });
+};

@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { characterRoutes } from "./routes/characters";
+import { imageRoutes } from "./routes/images";
 import { lorebookRoutes } from "./routes/lorebooks";
 import { personaRoutes } from "./routes/personas";
 import { playthroughRoutes } from "./routes/playthroughs";
@@ -29,6 +30,7 @@ async function main(): Promise<void> {
   await app.register(lorebookRoutes);
   await app.register(playthroughRoutes);
   await app.register(turnRoutes);
+  await app.register(imageRoutes);
 
   // Serve the production build (dist/) from the same origin as the API.
   const __dirname = dirname(fileURLToPath(import.meta.url));
