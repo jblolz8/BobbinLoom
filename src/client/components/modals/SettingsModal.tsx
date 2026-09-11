@@ -42,6 +42,11 @@ export type SettingsModalProps = {
   setShowMessageTimestamps?: (show: boolean) => void;
   showModelName?: boolean;
   setShowModelName?: (show: boolean) => void;
+  /** Review the text model's image prompt before it is sent to the image
+   *  provider. Optional (default on) so the modal can be rendered without a
+   *  chat-settings source. */
+  imagePromptPreview?: boolean;
+  setImagePromptPreview?: (show: boolean) => void;
 };
 
 export function SettingsModal(props: SettingsModalProps) {
@@ -63,6 +68,8 @@ export function SettingsModal(props: SettingsModalProps) {
     setShowMessageTimestamps,
     showModelName = true,
     setShowModelName,
+    imagePromptPreview = true,
+    setImagePromptPreview,
   } = props;
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("provider");
   const [providerKind, setProviderKind] = useState<ProviderKind>("text");
@@ -132,6 +139,14 @@ export function SettingsModal(props: SettingsModalProps) {
               description="Display suggested action choice buttons below turn responses"
               checked={choicesEnabled}
               onChange={(e) => setChoicesEnabled(e.target.checked)}
+            />
+
+            <SwitchRow
+              icon="Image"
+              title="Review Image Prompt Before Generating"
+              description="Show the prompt the text model wrote before it is sent to the image provider. Off sends it straight through."
+              checked={imagePromptPreview}
+              onChange={(e) => setImagePromptPreview?.(e.target.checked)}
             />
 
             <SwitchRow
