@@ -380,10 +380,16 @@ export type AssembledTurnPrompt = {
   promptUsage: PromptUsage;
 };
 
-export function assembleTurnPrompt(input: ParsedUserInput, state: Playthrough, choicesEnabled: boolean, queryEmbedding: number[] = []): AssembledTurnPrompt {
-  const modules = state.promptSettings?.modules.turn ?? [];
-  const format = state.promptSettings?.characterFormat;
+type LorebookSegments = { before: string; after: string; depth: string };
 
+/**
+ * Scans this playthrough's lorebooks and splits activated entries by their
+ * configured position: 0 = before the transcript, 1 = immediately before the
+ * user turn ("after"), >= 2 = at depth from the bottom. Position semantics are
+ * SillyTavern-compatible; where each segment is *placed* in the outgoing
+ * message array is assembleTurnPrompt's decision, not this helper's.
+ */
+function collectLorebookSegments(state: Playthrough): LorebookSegments {
   let lorebookBefore = "";
   let lorebookAfter = "";
   let lorebookDepth = "";
@@ -434,6 +440,14 @@ export function assembleTurnPrompt(input: ParsedUserInput, state: Playthrough, c
         .map(a => a.entry.content).join("\n\n");
     }
   }
+  return { before: lorebookBefore, after: lorebookAfter, depth: lorebookDepth };
+}
+
+export function assembleTurnPrompt(input: ParsedUserInput, state: Playthrough, choicesEnabled: boolean, queryEmbedding: number[] = []): AssembledTurnPrompt {
+  const modules = state.promptSettings?.modules.turn ?? [];
+  const format = state.promptSettings?.characterFormat;
+
+  const { before: lorebookBefore, after: lorebookAfter, depth: lorebookDepth } = collectLorebookSegments(state);
 
   const systemResult = buildSystemPrompt(choicesEnabled, modules, lorebookBefore, lorebookAfter, format);
   const userResult = buildUserPrompt(input, state, lorebookDepth, queryEmbedding);
