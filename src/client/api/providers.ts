@@ -1,24 +1,37 @@
 import { request } from "./client";
-import type { CharacterFormat } from "../../schemas";
+import type {
+  CharacterFormat,
+  ImageApiStyle,
+  ProviderConnection as ProviderConnectionRow,
+  ProviderKind
+} from "../../schemas";
 
-export type ProviderConnection = {
-  id: string;
-  label: string;
-  baseUrl: string;
-  model: string;
-  temperature: number;
-  maxTokens: number;
-  contextWindow: number;
-  readonly?: boolean;
+/**
+ * A connection as the API returns it: the persisted row with the secret
+ * replaced by `hasApiKey` + `apiKeyMasked`.
+ *
+ * Derived from the schema (`src/schemas`) rather than hand-copied, on purpose.
+ * This used to be a second, independent declaration of the same shape and it
+ * silently drifted behind the registry — it still declared `activeProviderId`
+ * and had no `kind` — which the compiler could not catch, because the server is
+ * typed from the schema and the client from this copy. Deriving it means the
+ * two can never disagree again. The import is type-only, so it is erased at
+ * build time and the client bundle never reaches `src/schemas` at runtime.
+ */
+export type ProviderConnection = Omit<ProviderConnectionRow, "apiKey"> & {
   hasApiKey: boolean;
   apiKeyMasked: string | null;
-  createdAt?: string;
-  updatedAt?: string;
-  lastActiveAt?: string;
 };
 
+/**
+ * Write shape for create/update. `kind` is required here (the server defaults
+ * it, but) the discriminator decides which endpoint the connection may be used
+ * for, so it has to be stated at every call site instead of defaulting to text
+ * by omission.
+ */
 export type ProviderConnectionPayload = {
   id?: string;
+  kind: ProviderKind;
   label: string;
   baseUrl: string;
   apiKey?: string | null;
@@ -26,10 +39,21 @@ export type ProviderConnectionPayload = {
   temperature?: number;
   maxTokens?: number;
   contextWindow?: number;
+  // ── image-only; absent on text rows ──
+  apiStyle?: ImageApiStyle;
+  safeMode?: boolean;
+  size?: string;
+  aspectRatio?: string;
+  promptProviderId?: string | null;
+  stylePreset?: string;
+  hideWatermark?: boolean;
+  variants?: number;
 };
 
+/** Registry v2: one active slot per kind, plus the read warnings. */
 export type ProviderRegistry = {
-  activeProviderId: string;
+  activeTextProviderId: string;
+  activeImageProviderId: string;
   connections: ProviderConnection[];
   warnings: string[];
 };
@@ -99,13 +123,25 @@ export function deleteProviderConnection(id: string): Promise<ProviderRegistry> 
 export function duplicateProviderConnection(id: string): Promise<ProviderConnection> {
   return request<ProviderConnection>(`/api/settings/providers/${id}/duplicate`, { method: "POST", body: JSON.stringify({}) });
 }
-export function setActiveProviderConnection(id: string): Promise<{ activeProviderId: string }> {
-  return request<{ activeProviderId: string }>(`/api/settings/providers/${id}/active`, { method: "PUT", body: JSON.stringify({}) });
+/** Activating returns the whole registry (registry v2), so the caller can
+ *  replace its state in one call instead of activate-then-reload. */
+export function setActiveProviderConnection(id: string): Promise<ProviderRegistry> {
+  return request<ProviderRegistry>(`/api/settings/providers/${id}/active`, { method: "PUT", body: JSON.stringify({}) });
 }
 export function testProviderConnection(p: { id?: string; baseUrl?: string; apiKey?: string }): Promise<ConnectionTestResult> {
   return request<ConnectionTestResult>("/api/settings/providers/test", { method: "POST", body: JSON.stringify(p) });
 }
-export function fetchProviderModels(p: { id?: string; baseUrl?: string; apiKey?: string }): Promise<ConnectionModelsResult> {
+/**
+ * Probe `<baseUrl>/models`. `type` narrows the listing on servers that expose
+ * more than one model family (`"image"` for image endpoints); it is optional
+ * because most OpenAI-compatible text servers ignore it.
+ */
+export function fetchProviderModels(p: {
+  id?: string;
+  baseUrl?: string;
+  apiKey?: string;
+  type?: "text" | "image";
+}): Promise<ConnectionModelsResult> {
   return request<ConnectionModelsResult>("/api/settings/providers/models", { method: "POST", body: JSON.stringify(p) });
 }
 export function getProviderApiKey(id: string): Promise<{ apiKey: string }> {

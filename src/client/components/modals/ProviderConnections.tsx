@@ -50,6 +50,7 @@ function formatConnDate(isoOrStr?: string): string {
 }
 
 const emptyForm = (): ProviderConnectionPayload => ({
+  kind: "text",
   label: "", baseUrl: "", model: "", apiKey: "",
   temperature: 0.8, maxTokens: 1200, contextWindow: 32768
 });
@@ -112,8 +113,8 @@ export function ProviderConnections() {
       if (sortBy === "label") {
         cmp = a.label.localeCompare(b.label, undefined, { sensitivity: "base", numeric: true });
       } else if (sortBy === "lastActiveAt") {
-        const isAActive = a.id === registry?.activeProviderId;
-        const isBActive = b.id === registry?.activeProviderId;
+        const isAActive = a.id === registry?.activeTextProviderId;
+        const isBActive = b.id === registry?.activeTextProviderId;
         const timeA = a.lastActiveAt ? new Date(a.lastActiveAt).getTime() : (isAActive ? 1 : 0);
         const timeB = b.lastActiveAt ? new Date(b.lastActiveAt).getTime() : (isBActive ? 1 : 0);
         cmp = timeA - timeB;
@@ -137,7 +138,7 @@ export function ProviderConnections() {
       }
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [registry?.connections, registry?.activeProviderId, sortBy, sortDir]);
+  }, [registry?.connections, registry?.activeTextProviderId, sortBy, sortDir]);
 
   useEffect(() => {
     listProviderConnections().then(setRegistry).catch((e) =>
@@ -160,6 +161,7 @@ export function ProviderConnections() {
 
   function openEdit(c: ProviderConnection) {
     setForm({
+      kind: c.kind,
       label: c.label, baseUrl: c.baseUrl, model: c.model, apiKey: "",
       temperature: c.temperature, maxTokens: c.maxTokens, contextWindow: c.contextWindow
     });
@@ -367,7 +369,7 @@ export function ProviderConnections() {
             {sortedConnections.length === 0 ? (
               <p className="conn-empty">No connections yet. Add one to start generating.</p>
             ) : sortedConnections.map((c) => {
-              const isActive = c.id === registry?.activeProviderId;
+              const isActive = c.id === registry?.activeTextProviderId;
               return (
                 <div key={c.id} className={`conn-card ${isActive ? "active" : ""}`}>
                   <div className="conn-card-body">
