@@ -917,6 +917,151 @@
   color: var(--text-secondary);
 }
 
+/* ── Generated images, stacked inside the assistant message ── */
+
+.message-images {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.7rem;
+}
+
+.message-image {
+  position: relative;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-width: 420px;
+}
+
+.message-image img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--border-main);
+  border-radius: 10px;
+  background: var(--bg-panel);
+}
+
+.message-image figcaption {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+
+/* Remove control: revealed on hover/focus like the message actions, and always
+   visible while its own delete is in flight. */
+.message-image-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-main);
+  border-radius: 999px;
+  background: var(--modal-backdrop);
+  color: var(--text-primary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.message-image:hover .message-image-remove,
+.message-image-remove:focus-visible,
+.message-image-remove:disabled {
+  opacity: 1;
+}
+
+.message-image-remove:hover:not(:disabled) {
+  background: var(--status-danger-bg);
+  border-color: var(--status-danger-border);
+  color: var(--status-danger);
+}
+
+.message-image-remove:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.message-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+  min-height: 1.35rem;
+}
+
+.message-image-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.message-image-generate {
+  color: var(--accent-highlight, var(--accent-base));
+}
+
+.message-image-generate:hover:not(:disabled) {
+  background: var(--accent-translucent);
+  color: var(--accent-highlight, var(--accent-base));
+}
+
+/* ── Image prompt review modal ── */
+
+.image-prompt-modal {
+  width: min(720px, 100%);
+}
+
+.image-prompt-subtitle {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  max-width: 52ch;
+}
+
+.image-prompt-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.image-prompt-form .field-counter-text {
+  font-variant-numeric: tabular-nums;
+}
+
+.image-prompt-over-limit .field-counter-text {
+  color: var(--status-danger);
+}
+
+.image-prompt-caption {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.image-prompt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.image-prompt-rerun {
+  margin-left: auto;
+  color: var(--text-secondary);
+}
+
 .edited-tag {
   font-size: 0.72rem;
   font-weight: 400;

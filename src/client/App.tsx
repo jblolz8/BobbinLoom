@@ -351,6 +351,17 @@ export default function App() {
           loadPlaythrough={playthroughHook.loadPlaythrough}
           handleSend={playthroughHook.handleSend}
           handleCancel={playthroughHook.handleCancel}
+          imagePromptPreview={playthroughHook.imagePromptPreview}
+          setImagePromptPreview={playthroughHook.setImagePromptPreview}
+          imageGeneratingId={playthroughHook.imageGeneratingId}
+          imagePreviewMessageId={playthroughHook.imagePreviewMessageId}
+          imageDeletingId={playthroughHook.imageDeletingId}
+          imagePromptRequest={playthroughHook.imagePromptRequest}
+          handleGenerateImage={playthroughHook.handleGenerateImage}
+          handleCancelImage={playthroughHook.handleCancelImage}
+          closeImagePrompt={playthroughHook.closeImagePrompt}
+          rerunImagePrompt={playthroughHook.rerunImagePrompt}
+          handleDeleteImage={playthroughHook.handleDeleteImage}
           startEdit={playthroughHook.startEdit}
           cancelEdit={playthroughHook.cancelEdit}
           saveEdit={playthroughHook.saveEdit}
@@ -434,6 +445,8 @@ export default function App() {
             setShowMessageTimestamps={playthroughHook.setShowMessageTimestamps}
             showModelName={playthroughHook.showModelName}
             setShowModelName={playthroughHook.setShowModelName}
+            imagePromptPreview={playthroughHook.imagePromptPreview}
+            setImagePromptPreview={playthroughHook.setImagePromptPreview}
           />
           <PersonaManager
             open={modalHook.personaManagerOpen}

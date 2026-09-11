@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChatMessage, Playthrough } from "../../../../schemas";
-import type { TokenUsage } from "../../../api";
-import type { FailedResponseNotice } from "../../../hooks/usePlaythrough";
+import { buildImageUrl, type TokenUsage } from "../../../api";
+import type { FailedResponseNotice, ImagePromptRequest } from "../../../hooks/usePlaythrough";
 import { ContextMeter } from "../../common/ContextMeter";
 import { MarkdownView } from "../../common/MarkdownView";
 import { Badge, Button, Icon, ModelBadge, TextArea } from "../../base";
+import { ImagePromptModal } from "./ImagePromptModal";
 
 export type ChatPanelProps = {
   playthrough: Playthrough;
@@ -46,6 +47,26 @@ export type ChatPanelProps = {
   rawInput: string | null;
   rawOutput: string | null;
   className?: string;
+  // ── Generated images ──
+  /** Whether ANY image connection is configured. Derived in PlayView from the
+   *  provider registry so this panel stays presentational. */
+  hasImageProvider?: boolean;
+  imageGeneratingId?: string | null;
+  /** The text call that writes a prompt is in flight for this message. */
+  imagePreviewMessageId?: string | null;
+  /** An image is being removed from this message. */
+  imageDeletingId?: string | null;
+  /** The composed prompt awaiting review; non-null renders the modal. */
+  imagePromptRequest?: ImagePromptRequest | null;
+  imageCharacterLimit?: number;
+  imageProviderLabel?: string;
+  imageProviderModel?: string;
+  onGenerateImage?: (msg: ChatMessage) => void;
+  onCancelImage?: () => void;
+  onDeleteImage?: (msg: ChatMessage, file: string) => void;
+  onImagePromptGenerate?: (prompt: string, negativePrompt: string) => void;
+  onImagePromptRerun?: () => void;
+  onImagePromptClose?: () => void;
 };
 
 
@@ -280,7 +301,21 @@ export function ChatPanel(props: ChatPanelProps) {
     sendingMessage, cancelledNotice, failedNotice, onDismissNotice, onDismissFailedNotice, onCancel, tokenUsage,
     viewingChapterId, onReturnToCurrentChapter,
     onResummarizeChapter, resummarizingChapterId,
-    rawInput, rawOutput, className
+    rawInput, rawOutput, className,
+    hasImageProvider = false,
+    imageGeneratingId = null,
+    imagePreviewMessageId = null,
+    imageDeletingId = null,
+    imagePromptRequest = null,
+    imageCharacterLimit,
+    imageProviderLabel,
+    imageProviderModel,
+    onGenerateImage,
+    onCancelImage,
+    onDeleteImage,
+    onImagePromptGenerate,
+    onImagePromptRerun,
+    onImagePromptClose
   } = props;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -441,6 +476,90 @@ export function ChatPanel(props: ChatPanelProps) {
             ) : (
               <MarkdownView content={msg.content} />
             )}
+            {msg.role === "assistant" ? (
+              <>
+                {msg.images && msg.images.length > 0 ? (
+                  <div className="message-images">
+                    {msg.images.map((img) => (
+                      <figure key={img.file} className="message-image">
+                        <img
+                          src={buildImageUrl(img.file)}
+                          alt={img.prompt.slice(0, 120)}
+                          title={img.prompt}
+                          loading="lazy"
+                        />
+                        <button
+                          type="button"
+                          className="message-image-remove"
+                          title="Remove this image? The file is deleted if nothing else uses it."
+                          aria-label="Remove this image"
+                          onClick={() => onDeleteImage?.(msg, img.file)}
+                          disabled={imageDeletingId === msg.id || imageGeneratingId === msg.id}
+                        >
+                          <Icon name={imageDeletingId === msg.id ? "Loader" : "X"} size={11} className={imageDeletingId === msg.id ? "animate-spin" : ""} />
+                        </button>
+                        <figcaption title={img.prompt}>
+                          {img.model}
+                          {img.durationMs ? ` · ${(img.durationMs / 1000).toFixed(1)}s` : ""}
+                          {img.seed ? ` · seed ${img.seed}` : ""}
+                        </figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="message-footer">
+                  {imageGeneratingId === msg.id ? (
+                    <>
+                      <span className="message-image-status">
+                        <Icon name="Loader" size={12} className="animate-spin" /> Generating image…
+                      </span>
+                      <Button
+                        size="xs"
+                        variant="danger"
+                        className="message-action cancel-image"
+                        onClick={onCancelImage}
+                        leftIcon={<Icon name="Square" size={11} />}
+                      >
+                        Cancel
+                      </Button>
+                    </>
+                  ) : imagePreviewMessageId === msg.id ? (
+                    <>
+                      <span className="message-image-status">
+                        <Icon name="Loader" size={12} className="animate-spin" /> Writing image prompt…
+                      </span>
+                      <Button
+                        size="xs"
+                        variant="danger"
+                        className="message-action cancel-image"
+                        onClick={onCancelImage}
+                        leftIcon={<Icon name="Square" size={11} />}
+                      >
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      className="message-action message-image-generate"
+                      onClick={() => onGenerateImage?.(msg)}
+                      disabled={!hasImageProvider || actionLoading || loading || imageDeletingId === msg.id}
+                      title={
+                        !hasImageProvider
+                          ? "No image provider configured — add one in Settings → Provider → Images"
+                          : actionLoading || loading
+                            ? "Another action is in progress"
+                            : "Generate an image for this message"
+                      }
+                      leftIcon={<Icon name="Image" size={11} />}
+                    >
+                      {msg.images && msg.images.length > 0 ? "Generate another" : "Generate Image"}
+                    </Button>
+                  )}
+                </div>
+              </>
+            ) : null}
           </article>
           );
         })}
@@ -494,6 +613,21 @@ export function ChatPanel(props: ChatPanelProps) {
 
         <div ref={messagesEndRef} />
       </div>
+
+      {imagePromptRequest ? (
+        <ImagePromptModal
+          prompt={imagePromptRequest.prompt}
+          negativePrompt={imagePromptRequest.negativePrompt}
+          providerLabel={imageProviderLabel}
+          model={imageProviderModel}
+          characterLimit={imageCharacterLimit}
+          generating={imageGeneratingId === imagePromptRequest.message.id}
+          rerunning={imagePreviewMessageId === imagePromptRequest.message.id}
+          onGenerate={(prompt, negativePrompt) => onImagePromptGenerate?.(prompt, negativePrompt)}
+          onRerun={() => onImagePromptRerun?.()}
+          onClose={() => onImagePromptClose?.()}
+        />
+      ) : null}
 
       {choicesEnabled && choices.length > 0 && !loading ? (
         <div className="choices">

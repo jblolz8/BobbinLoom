@@ -1,7 +1,13 @@
-import { useState } from "react";
-import type { PlaythroughPromptSettings, TokenUsage, Persona, QuestAction } from "../../../api";
+import { useCallback, useEffect, useState } from "react";
+import {
+  listProviderConnections,
+  type PlaythroughPromptSettings,
+  type TokenUsage,
+  type Persona,
+  type QuestAction
+} from "../../../api";
 import type { ChatMessage, Playthrough } from "../../../../schemas";
-import type { FailedResponseNotice } from "../../../hooks/usePlaythrough";
+import type { FailedResponseNotice, ImageGenerationOverrides, ImagePromptRequest } from "../../../hooks/usePlaythrough";
 import { ScenePanel } from "./ScenePanel";
 import { ChatPanel } from "./ChatPanel";
 import { InfoPanel } from "./InfoPanel/InfoPanel";
@@ -97,6 +103,18 @@ export type PlayViewProps = {
   setSettingsOpen: (open: boolean) => void;
   saveLoadOpen: boolean;
   setSaveLoadOpen: (open: boolean) => void;
+  // ── Generated images (owned by usePlaythrough in App, passed straight down) ──
+  imagePromptPreview?: boolean;
+  setImagePromptPreview?: (show: boolean) => void;
+  imageGeneratingId?: string | null;
+  imagePreviewMessageId?: string | null;
+  imageDeletingId?: string | null;
+  imagePromptRequest?: ImagePromptRequest | null;
+  handleGenerateImage?: (msg: ChatMessage, overrides?: ImageGenerationOverrides) => Promise<void>;
+  handleCancelImage?: () => void;
+  closeImagePrompt?: () => void;
+  rerunImagePrompt?: () => Promise<void>;
+  handleDeleteImage?: (msg: ChatMessage, file: string) => Promise<void>;
 };
 
 export function PlayView(props: PlayViewProps) {
@@ -173,12 +191,54 @@ export function PlayView(props: PlayViewProps) {
     setSettingsOpen,
     saveLoadOpen,
     setSaveLoadOpen,
+    imagePromptPreview = true,
+    setImagePromptPreview,
+    imageGeneratingId = null,
+    imagePreviewMessageId = null,
+    imageDeletingId = null,
+    imagePromptRequest = null,
+    handleGenerateImage,
+    handleCancelImage,
+    closeImagePrompt,
+    rerunImagePrompt,
+    handleDeleteImage
   } = props;
 
   const [timelinesOpen, setTimelinesOpen] = useState(false);
   const [branchNameInput, setBranchNameInput] = useState("");
   const [branchAsStandalone, setBranchAsStandalone] = useState(false);
   const [characterManagerEditingId, setCharacterManagerEditingId] = useState<string | undefined>(undefined);
+
+  // ── Image provider availability ──
+  // The active image connection is GLOBAL (no per-playthrough override), so the
+  // registry is read once on mount and again whenever the Settings modal closes
+  // (that is where a connection is added or activated). ChatPanel only receives
+  // the derived boolean — it never fetches.
+  const [hasImageProvider, setHasImageProvider] = useState(false);
+  const [imageConnection, setImageConnection] = useState<{ label: string; model: string } | null>(null);
+
+  const refreshImageProvider = useCallback(async () => {
+    try {
+      const registry = await listProviderConnections();
+      // Mirrors the server's `activeConnectionOfKind`: the active slot when it
+      // points at an image connection, else the first image connection.
+      const imageConnections = registry.connections.filter((c) => c.kind === "image");
+      const active =
+        imageConnections.find((c) => c.id === registry.activeImageProviderId) ?? imageConnections[0] ?? null;
+      setHasImageProvider(imageConnections.length > 0);
+      setImageConnection(active ? { label: active.label, model: active.model } : null);
+    } catch {
+      /* keep the last known state — the button must not flap on a failed read */
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshImageProvider();
+  }, [refreshImageProvider]);
+
+  // The preset's soft prompt limit, when this playthrough's snapshot carries one
+  // (the prompt modal then shows a real `n / limit` counter).
+  const imageCharacterLimit = playthrough.promptSettings?.imageGeneration?.promptCharacterLimit;
 
   function handleCurrentDeleted(remaining: Playthrough[]) {
     if (remaining.length > 0) {
@@ -250,6 +310,26 @@ export function PlayView(props: PlayViewProps) {
           onReturnToCurrentChapter={() => setViewingChapterId(null)}
           onResummarizeChapter={handleResummarizeChapter}
           resummarizingChapterId={resummarizingChapterId}
+          hasImageProvider={hasImageProvider}
+          imageGeneratingId={imageGeneratingId}
+          imagePreviewMessageId={imagePreviewMessageId}
+          imageDeletingId={imageDeletingId}
+          imagePromptRequest={imagePromptRequest}
+          imageCharacterLimit={imageCharacterLimit}
+          imageProviderLabel={imageConnection?.label}
+          imageProviderModel={imageConnection?.model}
+          onGenerateImage={(msg) => { void handleGenerateImage?.(msg); }}
+          onCancelImage={handleCancelImage}
+          onDeleteImage={(msg, file) => { void handleDeleteImage?.(msg, file); }}
+          onImagePromptGenerate={(prompt, negativePrompt) => {
+            const request = imagePromptRequest;
+            if (!request) return;
+            // Both overrides present ⇒ the server skips the text call: no second
+            // token spend and the edits are what the image provider receives.
+            void handleGenerateImage?.(request.message, { promptOverride: prompt, negativeOverride: negativePrompt });
+          }}
+          onImagePromptRerun={() => { void rerunImagePrompt?.(); }}
+          onImagePromptClose={closeImagePrompt}
           className={isMobile && mobileTab !== "chat" ? "mobile-hidden" : undefined}
         />
 
@@ -390,7 +470,12 @@ export function PlayView(props: PlayViewProps) {
 
       <SettingsModal
         open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
+        onClose={() => {
+          setSettingsOpen(false);
+          // The image provider is configured in this modal, so re-derive
+          // availability (and the caption) on the way out.
+          void refreshImageProvider();
+        }}
         playthroughId={playthrough?.id ?? null}
         playthroughPromptSettings={playthrough?.promptSettings ?? null}
         onPlaythroughPromptSettings={handlePlaythroughPromptSettings}
@@ -406,6 +491,8 @@ export function PlayView(props: PlayViewProps) {
         setShowMessageTimestamps={setShowMessageTimestamps}
         showModelName={showModelName}
         setShowModelName={setShowModelName}
+        imagePromptPreview={imagePromptPreview}
+        setImagePromptPreview={setImagePromptPreview}
       />
 
       <PersonaManager
