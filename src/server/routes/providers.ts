@@ -42,6 +42,16 @@ const TestConnectionBody = z.object({
   apiKey: z.string().optional()
 });
 
+/** Body of POST /api/settings/providers/image-styles. Every field is optional,
+ *  because the styles endpoint is public and has a documented default host —
+ *  the same target resolution as the models probe otherwise (a saved `id` uses
+ *  the STORED key). */
+const ImageStylesBody = z.object({
+  id: z.string().optional(),
+  baseUrl: z.string().min(1).optional(),
+  apiKey: z.string().optional()
+});
+
 const ModelsBody = z.object({
   id: z.string().optional(),
   baseUrl: z.string().min(1).optional(),
@@ -87,6 +97,14 @@ export const providerRoutes: FastifyPluginAsync<ProviderRoutesOptions> = async (
   app.post("/api/settings/providers/models", async (request) => {
     const body = ModelsBody.parse(request.body ?? {});
     return manager.fetchModels(body);
+  });
+
+  // Venice's style list is PUBLIC (no key needed), so every field here is
+  // optional — the probe falls back to the documented Venice host when the
+  // caller sends no base URL. Same body shape as the models probe otherwise.
+  app.post("/api/settings/providers/image-styles", async (request) => {
+    const body = ImageStylesBody.parse(request.body ?? {});
+    return manager.fetchImageStyles(body);
   });
 
   app.post("/api/settings/providers/:id/duplicate", async (request) => {

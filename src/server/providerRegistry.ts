@@ -438,3 +438,77 @@ export async function fetchProviderModels(
 ): Promise<ModelsProbeResult> {
   return probeProviderModels(input, fetchImpl);
 }
+
+/** Venice's documented API host, used as the base-URL fallback for the styles
+ *  probe below. That endpoint is keyless and Venice is the only known
+ *  implementation of it, so a probe with no base URL still has somewhere to go
+ *  instead of failing on a missing field. A self-hosted implementation must
+ *  supply its own base URL. */
+const VENICE_DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
+
+export type StylesProbeResult = {
+  ok: boolean;
+  status?: number;
+  message?: string;
+  latencyMs?: number;
+  styles: string[];
+};
+
+/** Parse the image style list: `{ data: string[] }` (Venice's shape), with a
+ *  `styles` array or a bare array tolerated as fallbacks. Deduped, and the
+ *  provider's ORDER is preserved — unlike the model list (sorted, because an
+ *  alphabetical id list is easier to scan), this is a curated presentation
+ *  order that the UI must not silently rearrange. */
+function parseStylePresets(bodyText: string): string[] {
+  try {
+    const parsed = JSON.parse(bodyText) as unknown;
+    let raw: unknown[] = [];
+    if (Array.isArray(parsed)) {
+      raw = parsed;
+    } else if (parsed && typeof parsed === "object") {
+      const obj = parsed as Record<string, unknown>;
+      if (Array.isArray(obj.data)) raw = obj.data;
+      else if (Array.isArray(obj.styles)) raw = obj.styles;
+    }
+    const styles = raw
+      .map((entry) => (typeof entry === "string" ? entry.trim() : null))
+      .filter((s): s is string => Boolean(s));
+    return [...new Set(styles)];
+  } catch {
+    return [];
+  }
+}
+
+/** Probe the provider's image style list: GET <base>/image/styles.
+ *
+ *  The endpoint is PUBLIC — an unauthenticated call returns the same body as an
+ *  authenticated one — so the Authorization header is optional here: it is sent
+ *  only when a key is available (harmless upstream, and it keeps the call
+ *  correct behind a proxy that requires one). */
+export async function fetchProviderImageStyles(
+  input: { baseUrl?: string; apiKey?: string },
+  fetchImpl: typeof fetch = fetch
+): Promise<StylesProbeResult> {
+  const base = normalizeBaseUrl(input.baseUrl?.trim() || VENICE_DEFAULT_BASE_URL);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  const start = Date.now();
+  try {
+    const res = await fetchImpl(`${base}/image/styles`, {
+      method: "GET",
+      headers: {
+        ...(input.apiKey ? { Authorization: `Bearer ${input.apiKey}` } : {})
+      },
+      signal: controller.signal
+    });
+    const latencyMs = Date.now() - start;
+    if (res.ok) {
+      return { ok: true, status: res.status, latencyMs, styles: parseStylePresets(await res.text()) };
+    }
+    return { ok: false, status: res.status, message: (await res.text()).slice(0, 300), latencyMs, styles: [] };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : String(e), latencyMs: Date.now() - start, styles: [] };
+  } finally {
+    clearTimeout(timeout);
+  }
+}

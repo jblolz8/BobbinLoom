@@ -9,6 +9,7 @@ import {
   createConnection,
   deleteConnection as deleteRegistryConnection,
   duplicateConnection as duplicateRegistryConnection,
+  fetchProviderImageStyles,
   fetchProviderModels,
   getRegistry,
   listConnections,
@@ -16,7 +17,7 @@ import {
   testProviderConnection,
   updateConnection
 } from "./providerRegistry";
-import type { ModelsProbeResult, ProviderConnectionDraft, PublicProviderRegistry } from "./providerRegistry";
+import type { ModelsProbeResult, ProviderConnectionDraft, PublicProviderRegistry, StylesProbeResult } from "./providerRegistry";
 import { createImageProvider, UnconfiguredImageProvider } from "./imageProvider";
 import type { ImageProvider } from "./imageProvider";
 
@@ -127,6 +128,19 @@ export class ProviderManager {
 
   async fetchModels(input: { id?: string; baseUrl?: string; apiKey?: string; type?: string }): Promise<ModelsProbeResult> {
     return fetchProviderModels({ ...this.resolveProbeTarget(input), type: input.type }, this.fetchImpl);
+  }
+
+  /** Probe the provider's image style list (`GET <baseUrl>/image/styles`).
+   *  Same target resolution as the models probe — a saved id uses the STORED
+   *  key, which is never sent back to the client — except that a base URL is
+   *  OPTIONAL: the endpoint is keyless and has a documented default host, so
+   *  the probe's own fallback applies when the caller has none. An unknown id
+   *  still throws (the route turns that into a 500, like the models probe). */
+  async fetchImageStyles(input: { id?: string; baseUrl?: string; apiKey?: string }): Promise<StylesProbeResult> {
+    if (input.id) {
+      return fetchProviderImageStyles(this.resolveProbeTarget({ id: input.id }), this.fetchImpl);
+    }
+    return fetchProviderImageStyles({ baseUrl: input.baseUrl, apiKey: input.apiKey }, this.fetchImpl);
   }
 
   /** Full stored key for a connection — used only for on-demand reveal in the UI. */
