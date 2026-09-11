@@ -19,11 +19,30 @@ export function atomicWriteJson(path: string, data: unknown): void {
   atomicWriteText(path, JSON.stringify(data, null, 2));
 }
 
-/** Write plain text to `path` atomically (tmp + rename). */
+const CRLF = Buffer.from("\r\n");
+
+/** EOL used by the file already at `path`: CRLF when it contains one, LF
+ *  otherwise (including when the file is missing or unreadable). Repo-tracked
+ *  data files are CRLF by contract — `data/prompt-presets.json` has a test
+ *  asserting it — and a plain LF rewrite of one both broke that invariant and
+ *  made git see the whole file as touched on the next checkout. */
+function existingEol(path: string): string {
+  try {
+    return readFileSync(path).includes(CRLF) ? "\r\n" : "\n";
+  } catch {
+    return "\n";
+  }
+}
+
+/** Write plain text to `path` atomically (tmp + rename), keeping the file's
+ *  existing line endings so an app write can never silently re-style a tracked
+ *  file. New files get LF. */
 export function atomicWriteText(path: string, text: string): void {
   mkdirSync(dirname(path), { recursive: true });
+  const eol = existingEol(path);
+  const body = eol === "\n" ? text : text.replace(/\r?\n/g, eol);
   const tmp = path + ".tmp";
-  writeFileSync(tmp, text, "utf8");
+  writeFileSync(tmp, body, "utf8");
   renameSync(tmp, path);
 }
 

@@ -28,6 +28,31 @@ afterEach(() => {
 
 describe("persistence", () => {
   describe("atomicWriteJson", () => {
+    it("keeps a CRLF file's line endings on rewrite", () => {
+      const dir = tempDir();
+      const path = join(dir, "presets.json");
+      writeFileSync(path, "[\r\n  1\r\n]", "utf8");
+
+      atomicWriteJson(path, { a: 1, b: 2 });
+
+      // The reported failure: an in-app save flipped the shipped CRLF presets
+      // file to LF, which the repo asserts against.
+      const raw = readFileSync(path, "utf8");
+      expect(raw).toContain("\r\n");
+      expect(raw.replace(/\r\n/g, "")).not.toContain("\n");
+    });
+
+    it("uses LF for a file that does not exist yet", () => {
+      const dir = tempDir();
+      const path = join(dir, "fresh.json");
+
+      atomicWriteJson(path, { a: 1 });
+
+      const raw = readFileSync(path, "utf8");
+      expect(raw).toContain("\n");
+      expect(raw).not.toContain("\r");
+    });
+
     it("writes valid JSON at the final path with no .tmp left behind", () => {
       const dir = tempDir();
       const path = join(dir, "nested", "file.json");
