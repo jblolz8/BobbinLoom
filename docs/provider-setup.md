@@ -23,9 +23,12 @@ LM Studio/Ollama server) and switch which one is **active** at any time.
   run; gitignored — never commit it). Versioned (`schemaVersion`); corrupt or
   invalid files are archived to `.bak` and either salvaged (valid connections
   kept) or reseeded, with a warning banner in Settings.
-- **App settings** (`data/settings.json`): slim `{schemaVersion, defaultPresetId}`
-  store — holds only the global default prompt preset. The old provider fields
-  were removed from it; legacy files migrate in place on first read.
+- **App settings:** `DEFAULT_APP_SETTINGS` (`src/server/appSettingsStore.ts`) is the
+  fresh-install source of truth; the committed `data/settings.json` is only a matching
+  template, and user changes (`defaultPresetId`, theme, avatar shape, `tagTaxonomy`)
+  are written to the gitignored `data/user-settings.json` and merged over the defaults
+  on read. Legacy provider fields were removed; a bare legacy settings file is ignored
+  rather than migrated.
 
 ---
 

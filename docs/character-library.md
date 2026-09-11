@@ -81,8 +81,9 @@ first `:`, its `value` the part after.
 
 ### Customization (Settings → Taxonomy)
 
-The taxonomy is **user-configurable** and persisted in `data/settings.json`
-under `tagTaxonomy`:
+The taxonomy is **user-configurable** and persisted under `tagTaxonomy` in the
+gitignored runtime file `data/user-settings.json` (the committed
+`data/settings.json` is only the shipped-default template):
 
 ```ts
 type TagTaxonomyConfig = {
@@ -220,4 +221,4 @@ user applies changes.
 ## Data files
 
 - `data/characters/<slug>/` — library records, avatars, versioned templates.
-- `data/settings.json` — `tagTaxonomy` (custom categories + tag overrides) lives here, alongside `defaultPresetId`.
+- `data/user-settings.json` — runtime overrides: `tagTaxonomy` (custom categories + tag overrides), `defaultPresetId`, theme/avatar shape. Gitignored; `data/settings.json` is the shipped-default template only.
