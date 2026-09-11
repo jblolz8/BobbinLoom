@@ -259,3 +259,40 @@ describe("POST /api/settings/images/sweep", () => {
     expect(res.json().error.length).toBeGreaterThan(0);
   });
 });
+
+describe("DELETE /api/playthroughs/:id/messages/:messageId/images/:file", () => {
+  /** The ref is already gone from the persisted record by the time the sweep
+   *  runs, so a sweep failure must not be reported as a failed removal. */
+  it("keeps the shortened record and warns when the sweep fails", async () => {
+    const root = tempDir("bobbinloom-per-image-");
+    const settingsDir = join(root, "settings");
+    const dataDir = join(root, "playthroughs");
+    const stored = saveImageBytes(pngBytes("per-image"), "image/png", join(root, "images")).file;
+    const pt = writePlaythroughWithImages(dataDir, "PerImage", [[stored]]);
+
+    const app = Fastify();
+    app.register(imageRoutes, {
+      dataDir,
+      imagesDir: brokenImagesDir(root),
+      manager: new ProviderManager(settingsDir),
+      loadPresets: () => []
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      const res = await app.inject({
+        method: "DELETE",
+        url: `/api/playthroughs/${pt.id}/messages/${pt.messages[0].id}/images/${stored}`
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { playthrough: { messages: { images?: unknown[] }[] } };
+      expect(body.playthrough.messages[0].images ?? []).toHaveLength(0);
+      // Persisted, not merely echoed back in the response.
+      expect(getPlaythroughRecord(dataDir, pt.id)?.messages[0].images ?? []).toHaveLength(0);
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});

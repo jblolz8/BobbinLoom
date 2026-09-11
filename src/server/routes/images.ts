@@ -181,7 +181,16 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
       if (remaining.length) message.images = remaining;
       else delete message.images;
       updatePlaythroughRecord(dataDir, playthrough);
-      sweepOrphansInDataDir(dataDir, imagesDir);
+      // Best-effort, like the playthrough-delete and truncate sites: the
+      // reference is ALREADY gone from the persisted record, so a failed sweep
+      // must not report the removal as failed (and must not leave the client
+      // showing "nothing was changed" over a change that landed). The file is
+      // collected by the next sweep or the manual endpoint.
+      try {
+        sweepOrphansInDataDir(dataDir, imagesDir);
+      } catch (error) {
+        console.warn(`[images] orphan sweep after removing an image from ${params.messageId} failed:`, error);
+      }
     }
     return reply.send({ playthrough });
   });
