@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_CHARACTER_FORMAT } from "../../../engine/characterFormat";
-import type { CharacterFormat, CharacterFormatSection } from "../../../schemas";
+import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../../../engine/imageDefaults";
+import type { CharacterFormat, CharacterFormatSection, ImageGenerationSettings } from "../../../schemas";
 import {
   createPreset,
   deletePreset,
@@ -11,14 +12,33 @@ import {
   updatePlaythroughPromptSettings,
   updatePreset,
   type PlaythroughPromptSettings,
+  type Preset,
   type PromptModuleSet,
   type PresetModule,
   type PresetSummary
 } from "../../api";
 
+/** The preset/snapshot payloads the client API types carry, extended with the
+ *  image block. The block is preset-owned state (not a prompt module), so it
+ *  travels on the same save call as `modules` and `characterFormat`. */
+type PresetWithImage = Preset & { imageGeneration?: ImageGenerationSettings };
+type PlaythroughSnapshot = PlaythroughPromptSettings & { imageGeneration?: ImageGenerationSettings };
+type PresetSavePayload = {
+  name?: string;
+  modules?: PromptModuleSet;
+  characterFormat?: CharacterFormat;
+  imageGeneration?: ImageGenerationSettings;
+};
+
 function cloneFormat(format?: CharacterFormat): CharacterFormat {
   if (!format || format.sections.length === 0) return JSON.parse(JSON.stringify(DEFAULT_CHARACTER_FORMAT)) as CharacterFormat;
   return JSON.parse(JSON.stringify(format)) as CharacterFormat;
+}
+
+/** Seed the Image Generation tab. A preset with no block falls back to the
+ *  shipped defaults at read time — the same fallback the server uses. */
+function cloneImage(settings?: ImageGenerationSettings): ImageGenerationSettings {
+  return JSON.parse(JSON.stringify(settings ?? DEFAULT_IMAGE_GENERATION_SETTINGS)) as ImageGenerationSettings;
 }
 
 function reindex(sections: CharacterFormatSection[]): CharacterFormatSection[] {
@@ -62,11 +82,12 @@ function newModuleId(): string {
   return `mod_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-type EditorTab = "turn" | "sheet";
+type EditorTab = "turn" | "sheet" | "image";
 
 const CONTEXT_TABS: Array<{ value: EditorTab; label: string }> = [
   { value: "turn", label: "Turn" },
-  { value: "sheet", label: "Character Sheet" }
+  { value: "sheet", label: "Character Sheet" },
+  { value: "image", label: "Image Generation" }
 ];
 
 type CharacterFormatRowProps = {
@@ -152,6 +173,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
   const [activePresetReadonly, setActivePresetReadonly] = useState(true);
   const [presetModules, setPresetModules] = useState<PromptModuleSet>({ turn: [] });
   const [presetFormat, setPresetFormat] = useState<CharacterFormat>(cloneFormat(undefined));
+  const [presetImage, setPresetImage] = useState<ImageGenerationSettings>(() => cloneImage(undefined));
   const [presetDirty, setPresetDirty] = useState(false);
   const [presetSaving, setPresetSaving] = useState(false);
   const [editingModule, setEditingModule] = useState<PresetModule | null>(null);
@@ -249,17 +271,20 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
 
     setActivePresetId(currentId);
     try {
-      const fullPreset = await getPreset(currentId);
+      const fullPreset = (await getPreset(currentId)) as PresetWithImage;
       setActivePresetName(fullPreset.name);
       setActivePresetReadonly(fullPreset.readonly);
       setPresetModules(fullPreset.modules);
       setPresetFormat(cloneFormat(fullPreset.characterFormat));
+      setPresetImage(cloneImage(fullPreset.imageGeneration));
     } catch {
       if (playthroughPromptSettings) {
-        setActivePresetName(playthroughPromptSettings.presetName);
+        const snapshot = playthroughPromptSettings as PlaythroughSnapshot;
+        setActivePresetName(snapshot.presetName);
         setActivePresetReadonly(false);
-        setPresetModules(playthroughPromptSettings.modules);
-        setPresetFormat(cloneFormat(playthroughPromptSettings.characterFormat));
+        setPresetModules(snapshot.modules);
+        setPresetFormat(cloneFormat(snapshot.characterFormat));
+        setPresetImage(cloneImage(snapshot.imageGeneration));
       }
     }
     resetPresetState();
@@ -268,10 +293,11 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
   async function switchPreset(presetId: string) {
     setPresetSaving(true); setStatus(null);
     try {
-      const fullPreset = await getPreset(presetId);
+      const fullPreset = (await getPreset(presetId)) as PresetWithImage;
       setActivePresetId(fullPreset.id); setActivePresetName(fullPreset.name);
       setActivePresetReadonly(fullPreset.readonly); setPresetModules(fullPreset.modules);
       setPresetFormat(cloneFormat(fullPreset.characterFormat));
+      setPresetImage(cloneImage(fullPreset.imageGeneration));
       resetPresetState();
       if (playthroughId) {
         const updated = await updatePlaythroughPromptSettings(playthroughId, presetId);
@@ -289,8 +315,10 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
     if (activePresetReadonly || presetSaving) return;
     setPresetSaving(true); setStatus(null);
     try {
-      const updated = await updatePreset(activePresetId, { modules: presetModules, characterFormat: presetFormat });
-      setPresetModules(updated.modules); setPresetFormat(cloneFormat(updated.characterFormat)); resetPresetState();
+      const payload: PresetSavePayload = { modules: presetModules, characterFormat: presetFormat, imageGeneration: presetImage };
+      const updated = (await updatePreset(activePresetId, payload)) as PresetWithImage;
+      setPresetModules(updated.modules); setPresetFormat(cloneFormat(updated.characterFormat));
+      setPresetImage(cloneImage(updated.imageGeneration)); resetPresetState();
       setStatus(`"${activePresetName}" saved.`);
     } catch (e) { setStatus(e instanceof Error ? e.message : String(e)); }
     finally { setPresetSaving(false); }
@@ -302,10 +330,12 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
     if (!name) { setPresetSaving(false); return; }
     try {
       const created = await createPreset(name);
-      const updated = await updatePreset(created.id, { modules: presetModules, characterFormat: presetFormat });
+      const payload: PresetSavePayload = { modules: presetModules, characterFormat: presetFormat, imageGeneration: presetImage };
+      const updated = (await updatePreset(created.id, payload)) as PresetWithImage;
       setActivePresetId(updated.id); setActivePresetName(updated.name);
       setActivePresetReadonly(updated.readonly); setPresetModules(updated.modules);
       setPresetFormat(cloneFormat(updated.characterFormat));
+      setPresetImage(cloneImage(updated.imageGeneration));
       setPresets(await listPresets()); resetPresetState();
       setStatus(`Saved as "${updated.name}".`);
     } catch (e) { setStatus(e instanceof Error ? e.message : String(e)); }
@@ -331,10 +361,11 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
     setPresetSaving(true); setStatus(null);
     try {
       await deletePreset(activePresetId);
-      const defaultPreset = await getPreset("default");
+      const defaultPreset = (await getPreset("default")) as PresetWithImage;
       setActivePresetId(defaultPreset.id); setActivePresetName(defaultPreset.name);
       setActivePresetReadonly(defaultPreset.readonly); setPresetModules(defaultPreset.modules);
       setPresetFormat(cloneFormat(defaultPreset.characterFormat));
+      setPresetImage(cloneImage(defaultPreset.imageGeneration));
       setPresets(await listPresets()); resetPresetState();
       setStatus("Preset deleted. Switched to Default.");
     } catch (e) { setStatus(e instanceof Error ? e.message : String(e)); }
@@ -414,6 +445,13 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
     markDirty();
   }
 
+  // ── Image generation (preset-owned prompt config) ──
+
+  function updateImage(patch: Partial<ImageGenerationSettings>) {
+    setPresetImage((prev) => ({ ...prev, ...patch }));
+    markDirty();
+  }
+
   function handleReorder(fromIndex: number, toIndex: number) {
     if (fromIndex === toIndex) return;
     setPresetFormat((prev) => {
@@ -441,11 +479,15 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
 
         <div className="preset-context-tabs">
           {CONTEXT_TABS.map((tab) => {
-            const count = tab.value === "sheet" ? presetFormat.sections.length : presetModules[tab.value].length;
+            // The image tab holds one settings block, not a list, so it has no count.
+            const count =
+              tab.value === "sheet" ? presetFormat.sections.length
+              : tab.value === "turn" ? presetModules.turn.length
+              : null;
             return (
               <button key={tab.value} className={`editor-tab${activeContextTab === tab.value ? " active" : ""}`} onClick={() => setActiveContextTab(tab.value)}>
                 {tab.label}
-                <span className="tab-badge">{count}</span>
+                {count === null ? null : <span className="tab-badge">{count}</span>}
               </button>
             );
           })}
@@ -474,6 +516,75 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                 <span className="format-drag-ghost-name">{dragGhost.name}</span>
               </div>
             ) : null}
+          </div>
+        ) : activeContextTab === "image" ? (
+          <div className="format-editor">
+            <p className="module-hint">
+              {`The image prompt the text model writes for a message, before it is handed to the image provider. The model must answer with JSON only — {"prompt": "…", "negative_prompt": "…"} — and the positive and negative prefixes below are prepended to those two fields. The composed prompt is then clamped to the character limit. Keep style and quality keywords out of the instruction: the positive prefix is where art direction lives, so a preset can be restyled by editing one line.`}
+            </p>
+            <div className="settings-form">
+              <label>
+                Instruction
+                <textarea
+                  className="format-instruction"
+                  rows={12}
+                  value={presetImage.instruction}
+                  onChange={(e) => updateImage({ instruction: e.target.value })}
+                  placeholder="How the model should describe the current moment as one still image…"
+                  disabled={activePresetReadonly}
+                />
+              </label>
+              <label>
+                Positive Prefix
+                <input
+                  value={presetImage.positivePrefix}
+                  onChange={(e) => updateImage({ positivePrefix: e.target.value })}
+                  placeholder="anime style"
+                  disabled={activePresetReadonly}
+                />
+              </label>
+              <label>
+                Negative Prefix
+                <input
+                  value={presetImage.negativePrefix}
+                  onChange={(e) => updateImage({ negativePrefix: e.target.value })}
+                  placeholder="lowres, bad anatomy, watermark, text…"
+                  disabled={activePresetReadonly}
+                />
+              </label>
+              <label>
+                Character Limit
+                <input
+                  type="number"
+                  min={0}
+                  step={50}
+                  value={presetImage.promptCharacterLimit}
+                  onChange={(e) => updateImage({ promptCharacterLimit: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+                  disabled={activePresetReadonly}
+                />
+              </label>
+            </div>
+            <label className="format-inline-toggle" title="Send the current scene state to the prompt writer">
+              <input
+                type="checkbox"
+                checked={presetImage.includeState}
+                onChange={(e) => updateImage({ includeState: e.target.checked })}
+                disabled={activePresetReadonly}
+              />
+              include current state
+            </label>
+            <label className="format-inline-toggle" title="Send the characters present in the scene to the prompt writer">
+              <input
+                type="checkbox"
+                checked={presetImage.includeCast}
+                onChange={(e) => updateImage({ includeCast: e.target.checked })}
+                disabled={activePresetReadonly}
+              />
+              include present characters
+            </label>
+            <p className="module-hint">
+              A playthrough snapshots this block when its preset is applied, so editing it here does not change a playthrough already using this preset — re-select the preset for that playthrough to pick up the new text.
+            </p>
           </div>
         ) : (
           <>
