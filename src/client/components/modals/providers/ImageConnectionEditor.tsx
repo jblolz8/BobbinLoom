@@ -1,6 +1,7 @@
-import type { Dispatch, FormEvent, MouseEvent, SetStateAction } from "react";
+import { useEffect, useState, type Dispatch, type FormEvent, type MouseEvent, type SetStateAction } from "react";
 import { Button, Icon, SimpleSelect, SwitchRow, TextInput } from "../../base";
 import type { ImageApiStyle } from "../../../../schemas";
+import { fetchProviderImageStyles } from "../../../api";
 import type { ProviderConnection, ProviderConnectionPayload } from "../../../api";
 import { ApiKeyField, type ApiKeyFieldProps } from "./ApiKeyField";
 
@@ -10,6 +11,16 @@ const API_STYLE_OPTIONS: Array<{ value: ImageApiStyle; label: string }> = [
   { value: "openai", label: "OpenAI-compatible" },
   { value: "venice", label: "Venice" }
 ];
+
+/** The Style Preset select's escape hatch. Not a valid style value (a provider
+ *  can never return it), so it can never collide with a real one: a self-hosted
+ *  or future endpoint that does not implement the styles listing stays usable
+ *  through it. */
+const CUSTOM_STYLE_OPTION = "__custom__";
+
+/** The None option's value. An empty stylePreset is OMITTED from the request
+ *  body by the Venice adapter, so None really does send nothing. */
+const NONE_STYLE_OPTION = "";
 
 /** OpenAI's image size enum; "auto" lets the provider pick. */
 const IMAGE_SIZE_OPTIONS = ["auto", "1024x1024", "1536x1024", "1024x1536", "1024x1792", "1792x1024"];
@@ -77,6 +88,100 @@ export function ImageConnectionEditor({
   const promptWriterId = form.promptProviderId ?? "";
   if (promptWriterId && !textConnections.some((c) => c.id === promptWriterId)) {
     promptWriterOptions.push({ value: promptWriterId, label: `${promptWriterId} (not found)` });
+  }
+
+  // ── Style Preset ──
+  // The valid values belong to the PROVIDER, not to the user. This control used
+  // to be free text whose placeholder read `e.g. anime`, and Venice rejects
+  // that: its values are title-cased (`Anime`) and the field is case-sensitive.
+  // The 400 lands after the text model has already written (and been paid for)
+  // the prompt, which is why the list is now fetched and the field is a select.
+  const venice = (form.apiStyle ?? "openai") === "venice";
+  const styleValue = form.stylePreset ?? "";
+  const [styles, setStyles] = useState<string[]>([]);
+  const [stylesStatus, setStylesStatus] = useState<EditorStatus>(null);
+  const [fetchingStyles, setFetchingStyles] = useState(false);
+  // Set by the Custom… option. A value that is NOT in the fetched list also
+  // reads as custom, so a connection saved with `anime` stays visible and
+  // editable instead of rendering as an empty select.
+  const [customStyle, setCustomStyle] = useState(false);
+
+  const styleInList = styles.includes(styleValue);
+  // Exactly the reported failure: a stored value the provider would reject.
+  // Only asserted once the list has actually arrived — an empty list means
+  // "not fetched", not "nothing valid".
+  const styleNotListed = venice && styleValue !== "" && styles.length > 0 && !styleInList;
+  const styleSuggestion = styleNotListed
+    ? styles.find((s) => s.toLowerCase() === styleValue.trim().toLowerCase())
+    : undefined;
+  const showCustomStyle = venice && (customStyle || (styleValue !== "" && !styleInList));
+
+  const styleOptions = [
+    { value: NONE_STYLE_OPTION, label: "None", description: "Send no style_preset" },
+    ...styles.map((s) => ({ value: s, label: s })),
+    { value: CUSTOM_STYLE_OPTION, label: "Custom…", description: "Type an exact value" }
+  ];
+
+  /** Target for the styles probe: a saved connection uses its STORED key unless
+   *  the form's base URL or key were edited, in which case the draft is probed
+   *  instead (same rule as the model list). */
+  function styleProbeTarget(): { id?: string; baseUrl?: string; apiKey?: string } | null {
+    if (mode === "edit" && editing) {
+      const baseUrlChanged = form.baseUrl.trim() !== editing.baseUrl;
+      const apiKeyChanged = typeof form.apiKey === "string" && form.apiKey !== "";
+      if (!baseUrlChanged && !apiKeyChanged) return { id: editing.id };
+    }
+    const baseUrl = form.baseUrl.trim();
+    const apiKey = typeof form.apiKey === "string" && form.apiKey ? form.apiKey : undefined;
+    if (baseUrl) return { baseUrl, apiKey };
+    return apiKey ? { apiKey } : null;
+  }
+
+  async function loadStyles() {
+    const target = styleProbeTarget();
+    if (!target) {
+      setStylesStatus({ kind: "err", text: "Set a Base URL first (or save the connection)." });
+      return;
+    }
+    setFetchingStyles(true);
+    setStylesStatus(null);
+    try {
+      const r = await fetchProviderImageStyles(target);
+      setStyles(r.styles);
+      setStylesStatus(
+        r.ok
+          ? r.styles.length
+            ? { kind: "ok", text: `${r.styles.length} style${r.styles.length === 1 ? "" : "s"} loaded.` }
+            : { kind: "err", text: "Connected, but the provider listed no styles — use Custom… to type one." }
+          : { kind: "err", text: r.message ? `Failed (${r.status ?? ""}): ${r.message}` : "Failed to load styles." }
+      );
+    } catch (err) {
+      setStyles([]);
+      setStylesStatus({ kind: "err", text: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setFetchingStyles(false);
+    }
+  }
+
+  // Auto-load for an existing Venice connection, the way the model list does on
+  // edit. Keyed to the connection + dialect so switching a saved connection to
+  // Venice loads the list too; edits to the base URL/key are the refresh
+  // control's job (re-fetching on every keystroke would hammer the endpoint).
+  useEffect(() => {
+    if (mode !== "edit" || !editing) return;
+    if ((form.apiStyle ?? "openai") !== "venice") return;
+    void loadStyles();
+  }, [mode, editing?.id, form.apiStyle]);
+
+  function handleStyleChange(next: string) {
+    if (next === CUSTOM_STYLE_OPTION) {
+      setCustomStyle(true);
+      // The current value is kept, so a rejected `anime` can be corrected in
+      // place rather than being wiped by opening the escape hatch.
+      return;
+    }
+    setCustomStyle(false);
+    setForm((f) => ({ ...f, stylePreset: next }));
   }
 
   return (
@@ -214,13 +319,62 @@ export function ImageConnectionEditor({
           />
 
           <div className="conn-fields-row-2">
-            <TextInput
-              label="Style Preset"
-              value={form.stylePreset ?? ""}
-              onChange={(e) => setForm((f) => ({ ...f, stylePreset: e.target.value }))}
-              placeholder="e.g. anime"
-              helperText="Venice only. Ignored by OpenAI-compatible endpoints."
-            />
+            <div className="conn-field-group">
+              <span className="field-label-text">Style Preset</span>
+              {venice ? (
+                <>
+                  <SimpleSelect
+                    size="sm"
+                    variant="filled"
+                    fullWidth
+                    value={showCustomStyle ? CUSTOM_STYLE_OPTION : styleValue}
+                    onChange={handleStyleChange}
+                    options={styleOptions}
+                    placeholder="None (send no style)"
+                    aria-label="Style preset"
+                  />
+                  {showCustomStyle && (
+                    <TextInput
+                      label="Custom style"
+                      value={styleValue}
+                      onChange={(e) => setForm((f) => ({ ...f, stylePreset: e.target.value }))}
+                      placeholder="The exact value the provider expects"
+                    />
+                  )}
+                  <div className="base-form-field form-field" style={{ marginTop: "0.5rem" }}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => void loadStyles()}
+                      disabled={fetchingStyles || (mode !== "edit" && !form.baseUrl.trim())}
+                      isLoading={fetchingStyles}
+                      leftIcon={<Icon name="RefreshCw" size={13} className={fetchingStyles ? "animate-spin" : ""} />}
+                    >
+                      Fetch styles
+                    </Button>
+                  </div>
+                  {stylesStatus && <p className={`conn-status ${stylesStatus.kind}`}>{stylesStatus.text}</p>}
+                  {styleNotListed && (
+                    <p className="conn-status warn">
+                      Warning: “{styleValue}” is not one of the styles this provider lists, so generating with it fails
+                      with a 400 (Invalid style requested)
+                      {styleSuggestion ? ` — did you mean “${styleSuggestion}”?` : ""}. Pick a listed value, or None —
+                      a blank value is not sent at all.
+                    </p>
+                  )}
+                  <p className="conn-field-helper">
+                    Venice only. The list is the provider's own (fetched from the keyless <code>/image/styles</code>);
+                    values are case-sensitive and title-cased. None sends no <code>style_preset</code>.
+                  </p>
+                </>
+              ) : (
+                <p className="conn-field-helper">
+                  Venice only — the OpenAI-compatible dialect has no style parameter, so this is not sent. Switch API
+                  Style to Venice to set it.
+                </p>
+              )}
+            </div>
 
             <div className="conn-field-group">
               <span className="field-label-text">Variants</span>
