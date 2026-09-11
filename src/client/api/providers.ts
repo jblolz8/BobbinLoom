@@ -153,6 +153,38 @@ export function fetchProviderModels(p: {
 }): Promise<ConnectionModelsResult> {
   return request<ConnectionModelsResult>("/api/settings/providers/models", { method: "POST", body: JSON.stringify(p) });
 }
+
+export type ConnectionStylesResult = {
+  ok: boolean;
+  styles: string[];
+  status?: number;
+  message?: string;
+  latencyMs?: number;
+};
+
+/**
+ * Probe `<baseUrl>/image/styles` — the image style list a Venice connection's
+ * Style Preset must be chosen from.
+ *
+ * The endpoint is PUBLIC, so the call needs no key: `baseUrl` may be omitted
+ * entirely and the server falls back to the documented host. `id` (a saved
+ * connection) wins over `baseUrl` and uses the stored key, which is never sent
+ * to the client.
+ *
+ * The values are CASE-SENSITIVE and title-cased upstream (`Anime`, not
+ * `anime`) — a lowercase value is exactly the 400 this control exists to
+ * prevent.
+ */
+export function fetchProviderImageStyles(p: {
+  id?: string;
+  baseUrl?: string;
+  apiKey?: string;
+}): Promise<ConnectionStylesResult> {
+  return request<ConnectionStylesResult>("/api/settings/providers/image-styles", {
+    method: "POST",
+    body: JSON.stringify(p)
+  });
+}
 export function getProviderApiKey(id: string): Promise<{ apiKey: string }> {
   return request<{ apiKey: string }>(`/api/settings/providers/${id}/key`);
 }
