@@ -227,7 +227,18 @@ export async function playthroughRoutes(app: FastifyInstance): Promise<void> {
 
     if (!playthrough) return reply.code(404).send({ error: "Playthrough not found" });
 
-    const { promptUsage } = assembleTurnPrompt(parseUserInput(""), playthrough, query.choices !== "false");
+    // Same query text generateTurn uses, so the meter measures the prompt that
+    // would actually be sent rather than a keyword-only approximation. embedTexts
+    // swallows its own errors and returns [] on failure, which degrades to
+    // keyword-only scoring — a failed embedding must never fail this read-only route.
+    const queryMessages = playthrough.messages.filter((m) => !m.hidden).slice(-4);
+    const queryText = queryMessages.map((m) => m.content).join("\n");
+    const [queryEmbedding = []] = queryText ? await providerManager.getProvider().embedTexts([queryText]) : [[]];
+
+    const { promptUsage } = assembleTurnPrompt(parseUserInput(""), playthrough, query.choices !== "false", queryEmbedding, {
+      contextWindow: providerManager.getContextWindow(),
+      reserveOutputTokens: providerManager.getMaxTokens()
+    });
     return {
       estimated: promptUsage.estimated,
       contextWindow: providerManager.getContextWindow(),
@@ -328,7 +339,16 @@ export async function playthroughRoutes(app: FastifyInstance): Promise<void> {
 
     if (!result.ok) return reply.code(result.status).send({ error: result.error });
 
-    const { promptUsage } = assembleTurnPrompt(parseUserInput(""), result.state, true);
+    // Measure the state AFTER the chapter closes; mirrors generateTurn's query
+    // embedding so the reported memory selection matches the real turn.
+    const queryMessages = result.state.messages.filter((m) => !m.hidden).slice(-4);
+    const queryText = queryMessages.map((m) => m.content).join("\n");
+    const [queryEmbedding = []] = queryText ? await providerManager.getProvider().embedTexts([queryText]) : [[]];
+
+    const { promptUsage } = assembleTurnPrompt(parseUserInput(""), result.state, true, queryEmbedding, {
+      contextWindow: providerManager.getContextWindow(),
+      reserveOutputTokens: providerManager.getMaxTokens()
+    });
     return {
       state: result.state,
       tokenUsage: {
