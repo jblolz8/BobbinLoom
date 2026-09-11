@@ -62,7 +62,9 @@ export class OpenAICompatibleProvider {
     const { messages, promptUsage } = assembleTurnPrompt(input, state, choicesEnabled, queryEmbedding, {
       contextWindow: this.config.contextWindow ?? 65536,
       // Mirrors the `max_tokens` sent below, so the budget cannot be spent entirely on prompt.
-      reserveOutputTokens: this.config.maxTokens
+      reserveOutputTokens: this.config.maxTokens,
+      // Feed back the last measured/estimated ratio so the estimate self-corrects.
+      calibration: state.tokenCalibration
     });
 
     const body: Record<string, unknown> = {

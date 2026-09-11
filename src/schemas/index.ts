@@ -458,6 +458,10 @@ export const PlaythroughSchema = z.object({
   // localStorage). Optional so pre-draft records parse untouched.
   draft: z.string().optional(),
   draftUpdatedAt: z.string().optional(),
+  // Measured/estimated prompt-token ratio from the last turn, fed back into the
+  // next turn's budget. Deliberately NOT snapshotted (see TurnSnapshotSchema):
+  // it measures the tokenizer, not world state, so a retry must not rewind it.
+  tokenCalibration: z.number().optional(),
   createdAt: z.string(),
   updatedAt: z.string()
 });

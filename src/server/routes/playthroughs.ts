@@ -237,7 +237,8 @@ export async function playthroughRoutes(app: FastifyInstance): Promise<void> {
 
     const { promptUsage } = assembleTurnPrompt(parseUserInput(""), playthrough, query.choices !== "false", queryEmbedding, {
       contextWindow: providerManager.getContextWindow(),
-      reserveOutputTokens: providerManager.getMaxTokens()
+      reserveOutputTokens: providerManager.getMaxTokens(),
+      calibration: playthrough.tokenCalibration
     });
     return {
       estimated: promptUsage.estimated,
@@ -347,7 +348,8 @@ export async function playthroughRoutes(app: FastifyInstance): Promise<void> {
 
     const { promptUsage } = assembleTurnPrompt(parseUserInput(""), result.state, true, queryEmbedding, {
       contextWindow: providerManager.getContextWindow(),
-      reserveOutputTokens: providerManager.getMaxTokens()
+      reserveOutputTokens: providerManager.getMaxTokens(),
+      calibration: result.state.tokenCalibration
     });
     return {
       state: result.state,

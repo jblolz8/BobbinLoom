@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createInitialPlaythrough, parseUserInput } from "../src/engine/engine";
-import { assembleTurnPrompt, selectHistory, PROMPT_MESSAGE_OVERHEAD_TOKENS, MIN_HISTORY_MESSAGES } from "../src/server/provider/promptBuilder";
+import { assembleTurnPrompt, selectHistory, clampCalibration, estimateTokens, PROMPT_MESSAGE_OVERHEAD_TOKENS, MIN_HISTORY_MESSAGES } from "../src/server/provider/promptBuilder";
 
 /** Builds a playthrough with N user/assistant pairs of `chars` characters each. */
 function withHistory(pairs: number, chars = 100) {
@@ -155,5 +155,64 @@ describe("assembleTurnPrompt message array", () => {
     const lastSystem = messages.map((m) => m.role).lastIndexOf("system");
     expect(firstAssistant).toBeGreaterThan(0);
     expect(firstAssistant).toBeLessThan(lastSystem);
+  });
+});
+
+describe("token calibration", () => {
+  it("(a) a high calibration makes selectHistory send fewer messages than no calibration", () => {
+    const pt = withHistory(10, 100); // each message ~29 estimated tokens
+    const uncalibrated = selectHistory(pt, 300, 1);
+    const calibrated = selectHistory(pt, 300, 3);
+
+    expect(calibrated.history.length).toBeLessThan(uncalibrated.history.length);
+    expect(calibrated.history.length).toBeGreaterThanOrEqual(MIN_HISTORY_MESSAGES);
+    // The same cap a scaled estimate implies: at 3x, ~79 tokens per 100-char message.
+    expect(calibrated.history.every((m) => m.content.length === 100)).toBe(true);
+  });
+
+  it("(b) floors at 1 when the provider measured fewer tokens than estimated", () => {
+    expect(clampCalibration(0.5)).toBe(1);
+    expect(clampCalibration(0.99)).toBe(1);
+  });
+
+  it("(c) caps at 4 so an outlier measurement cannot blow the budget", () => {
+    expect(clampCalibration(4)).toBe(4);
+    expect(clampCalibration(9.5)).toBe(4);
+    expect(clampCalibration(Number.POSITIVE_INFINITY)).toBe(1);
+  });
+
+  it("(d) returns 1 for absent, non-finite, zero and negative values", () => {
+    expect(clampCalibration(undefined)).toBe(1);
+    expect(clampCalibration(Number.NaN)).toBe(1);
+    expect(clampCalibration(0)).toBe(1);
+    expect(clampCalibration(-2)).toBe(1);
+  });
+
+  it("(g) keeps the reported estimate on the unscaled basis (feedback-loop guard)", () => {
+    // History that comfortably fits at both calibrations: the kept set is equal,
+    // so any difference in `promptUsage` would come purely from scaling.
+    const pt = withHistory(3, 100);
+    const budget = { contextWindow: 65536, reserveOutputTokens: 1200 };
+    const plain = assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget);
+    const scaled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], { ...budget, calibration: 4 });
+
+    expect(scaled.promptUsage).toEqual(plain.promptUsage);
+    expect(scaled.promptUsage.estimated).toBe(plain.promptUsage.estimated);
+
+    // Even when the calibration changes what is sent, history-independent
+    // segments stay on the unscaled chars/4 basis.
+    const tight = { contextWindow: 3000, reserveOutputTokens: 1200 };
+    const plainTight = assembleTurnPrompt(parseUserInput("go"), pt, true, [], tight);
+    const scaledTight = assembleTurnPrompt(parseUserInput("go"), pt, true, [], { ...tight, calibration: 4 });
+    expect(scaledTight.promptUsage.breakdown.outputFormat).toBe(
+      plainTight.promptUsage.breakdown.outputFormat
+    );
+    expect(scaledTight.promptUsage.breakdown.userInput).toBe(plainTight.promptUsage.breakdown.userInput);
+  });
+
+  it("scales estimateTokens only when an explicit scale is passed", () => {
+    expect(estimateTokens(400)).toBe(100);
+    expect(estimateTokens(400, 2.5)).toBe(250);
+    expect(estimateTokens(400, 1)).toBe(100);
   });
 });

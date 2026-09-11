@@ -14,6 +14,7 @@ import type { TurnProvider } from "./provider";
 import type { PromptUsageBreakdown } from "./provider";
 import type { MeasuredUsage } from "./provider";
 import { getLorebook, getPlaythroughRecord, updatePlaythroughRecord } from "./store";
+import { clampCalibration } from "./provider/promptBuilder";
 
 export type TokenBreakdown = PromptUsageBreakdown;
 
@@ -207,6 +208,13 @@ export async function executeTurn(
         ...(measuredUsage ? { measured: measuredUsage } : {})
       }
     : estimateTokenUsageFallback(next, input, contextWindow);
+
+  // Self-calibrate: remember this turn's measured/estimated ratio so the NEXT
+  // turn's budget maths self-corrects. Only a real measurement updates it —
+  // a MockProvider turn leaves any existing ratio untouched.
+  if (measuredUsage && promptUsage && promptUsage.estimated > 0) {
+    next.tokenCalibration = clampCalibration(measuredUsage.promptTokens / promptUsage.estimated);
+  }
 
   return {
     state: next,

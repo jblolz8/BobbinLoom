@@ -109,6 +109,48 @@ describe("executeTurn", () => {
     // The hidden user message is still snapshotted/recorded (retry can find it).
     expect(result.state.snapshots?.[result.state.messages[1].id]).toBeDefined();
   });
+
+  it("(e) stores the measured/estimated ratio for the next turn after a measured turn", async () => {
+    const dir = tempDir();
+    const playthrough = createPlaythroughRecord(dir, "Calibration Store Test");
+    const breakdown = {
+      modules: 10,
+      outputFormat: 40,
+      lorebook: 0,
+      storySoFar: 0,
+      stateSummary: 10,
+      chatHistory: 20,
+      memoryEvents: 0,
+      lorebookDepth: 0,
+      userInput: 20
+    };
+    class MeasuredProvider extends MockProvider {
+      override async generateTurn(): Promise<ProviderTurn> {
+        return {
+          turn: { narrative: "measured" },
+          promptUsage: { estimated: 1000, breakdown },
+          measuredUsage: { promptTokens: 2500 }
+        };
+      }
+    }
+
+    const result = await executeTurn(playthrough, "hi", new MeasuredProvider(), false);
+
+    expect(result.state.tokenCalibration).toBe(2.5);
+    // Calibration is world-external: it must not be rewound by a retry snapshot.
+    const snapshot = result.state.snapshots?.[result.state.messages[1].id];
+    expect(snapshot).toBeDefined();
+    expect(snapshot && "tokenCalibration" in snapshot).toBe(false);
+  });
+
+  it("(f) leaves the calibration absent when the provider reports no measurement", async () => {
+    const dir = tempDir();
+    const playthrough = createPlaythroughRecord(dir, "Unmeasured Calibration Test");
+
+    const result = await executeTurn(playthrough, "hi", new MockProvider(), false);
+
+    expect(result.state.tokenCalibration).toBeUndefined();
+  });
 });
 
 describe("retryAssistantTurn", () => {

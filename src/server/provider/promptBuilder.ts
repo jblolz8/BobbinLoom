@@ -328,15 +328,37 @@ export type PromptBudget = {
   contextWindow: number;
   /** Output tokens reserved for the completion — must mirror the request's `max_tokens`. */
   reserveOutputTokens: number;
+  /** Last turn's measured/estimated prompt-token ratio. Scales ONLY the budget
+   *  maths (fixedCost + per-message history cost) — never the reported estimate. */
+  calibration?: number;
 };
 
 /** Estimation is chars/4 everywhere until real usage is available (Phase 3). */
 export const CONTEXT_SAFETY_RESERVE = 512;
 export const MIN_HISTORY_MESSAGES = 2;
 export const PROMPT_MESSAGE_OVERHEAD_TOKENS = 4;
+/** Bounds for the self-calibration ratio fed back into the budget. */
+export const MIN_TOKEN_CALIBRATION = 1;
+export const MAX_TOKEN_CALIBRATION = 4;
 
-export function estimateTokens(chars: number): number {
-  return Math.ceil(chars / 4);
+/**
+ * Clamps a measured/estimated token ratio into [MIN_TOKEN_CALIBRATION,
+ * MAX_TOKEN_CALIBRATION], returning 1 for a missing or non-finite value.
+ *
+ * The floor of 1 is deliberate: chars/4 is treated as a lower bound on the true
+ * size. A tokenizer that looks more efficient than chars/4 must never be used to
+ * pack MORE history in — over-admitting risks a provider error or silent
+ * truncation, while under-admitting only costs a little context.
+ */
+export function clampCalibration(value?: number): number {
+  if (value === undefined || !Number.isFinite(value)) return MIN_TOKEN_CALIBRATION;
+  return Math.min(MAX_TOKEN_CALIBRATION, Math.max(MIN_TOKEN_CALIBRATION, value));
+}
+
+/** `scale` is the self-calibration ratio: it adjusts budget maths only, never
+ *  the reported `breakdown`/`estimated`, which stay on the unscaled basis. */
+export function estimateTokens(chars: number, scale = 1): number {
+  return Math.ceil((chars / 4) * scale);
 }
 
 /**
@@ -347,7 +369,8 @@ export function estimateTokens(chars: number): number {
  */
 export function selectHistory(
   state: Playthrough,
-  budgetTokens: number
+  budgetTokens: number,
+  scale = 1
 ): { history: PromptMessage[]; droppedChars: number } {
   const visible = state.messages.filter((m) => !m.hidden);
   const kept: PromptMessage[] = [];
@@ -356,7 +379,7 @@ export function selectHistory(
 
   for (let i = visible.length - 1; i >= 0; i -= 1) {
     const message = visible[i];
-    const cost = estimateTokens(message.content.length) + PROMPT_MESSAGE_OVERHEAD_TOKENS;
+    const cost = estimateTokens(message.content.length, scale) + PROMPT_MESSAGE_OVERHEAD_TOKENS;
     if (kept.length >= MIN_HISTORY_MESSAGES && used + cost > budgetTokens) {
       droppedChars = visible.slice(0, i + 1).reduce((n, m) => n + m.content.length, 0);
       break;
@@ -505,9 +528,16 @@ export function assembleTurnPrompt(
     0,
     budget.contextWindow - budget.reserveOutputTokens - CONTEXT_SAFETY_RESERVE
   );
+  // Self-calibration: only the budget maths below is scaled. The reported
+  // `breakdown`/`estimated` stay on the unscaled basis (the ratio stored back is
+  // measured/estimated), otherwise estimated would converge on measured and the
+  // correction would silently disable itself.
+  const tokenScale = clampCalibration(budget.calibration);
   const fixedCost =
-    estimateTokens(stableBlock.length) + estimateTokens(tailBlock.length) + estimateTokens(input.raw.length);
-  const { history, droppedChars } = selectHistory(state, Math.max(0, usable - fixedCost));
+    estimateTokens(stableBlock.length, tokenScale) +
+    estimateTokens(tailBlock.length, tokenScale) +
+    estimateTokens(input.raw.length, tokenScale);
+  const { history, droppedChars } = selectHistory(state, Math.max(0, usable - fixedCost), tokenScale);
 
   const messages: PromptMessage[] = history.length > 0
     ? [
