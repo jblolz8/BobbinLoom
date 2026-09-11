@@ -3,6 +3,7 @@ import { Button, Icon, SimpleSelect, SwitchRow, TextInput } from "../../base";
 import type { ImageApiStyle } from "../../../../schemas";
 import { fetchProviderImageStyles } from "../../../api";
 import type { ProviderConnection, ProviderConnectionPayload } from "../../../api";
+import { CUSTOM_STYLE_OPTION, imageStyleDisplay } from "../../../utils/imageStyleOptions";
 import { ApiKeyField, type ApiKeyFieldProps } from "./ApiKeyField";
 
 type EditorStatus = { kind: "ok" | "err"; text: string } | null;
@@ -12,15 +13,35 @@ const API_STYLE_OPTIONS: Array<{ value: ImageApiStyle; label: string }> = [
   { value: "venice", label: "Venice" }
 ];
 
-/** The Style Preset select's escape hatch. Not a valid style value (a provider
- *  can never return it), so it can never collide with a real one: a self-hosted
- *  or future endpoint that does not implement the styles listing stays usable
- *  through it. */
-const CUSTOM_STYLE_OPTION = "__custom__";
+/** The Style Preset select's fetched list plus its status line. One state so the
+ *  two can never disagree about whether the list is known. */
+type StyleListState = { styles: string[]; status: EditorStatus };
 
-/** The None option's value. An empty stylePreset is OMITTED from the request
- *  body by the Venice adapter, so None really does send nothing. */
-const NONE_STYLE_OPTION = "";
+/**
+ * Session cache of the provider's image style list, keyed by normalized base
+ * URL. The list belongs to the PROVIDER, not to a connection, and the editor
+ * remounts on every open — so without this a re-opened connection re-fetched
+ * (and re-flashed the Style Preset field) every single time. Seeded into state
+ * on mount so the first paint is already correct; the explicit refresh control
+ * still forces a fetch.
+ */
+const imageStyleCache = new Map<string, string[]>();
+
+function normalizeStyleBaseUrl(baseUrl: string): string {
+  return baseUrl.trim().replace(/\/+$/, "").toLowerCase();
+}
+
+function readCachedStyles(cacheKey: string | null): string[] | null {
+  if (!cacheKey) return null;
+  const cached = imageStyleCache.get(cacheKey);
+  // An EMPTY cached list is not cached state: empty means "not fetched", and
+  // caching that would permanently suppress the fetch.
+  return cached && cached.length ? cached : null;
+}
+
+function stylesLoadedStatus(styles: string[]): EditorStatus {
+  return { kind: "ok", text: `${styles.length} style${styles.length === 1 ? "" : "s"} loaded.` };
+}
 
 /** OpenAI's image size enum; "auto" lets the provider pick. */
 const IMAGE_SIZE_OPTIONS = ["auto", "1024x1024", "1536x1024", "1024x1536", "1024x1792", "1792x1024"];
@@ -98,29 +119,33 @@ export function ImageConnectionEditor({
   // the prompt, which is why the list is now fetched and the field is a select.
   const venice = (form.apiStyle ?? "openai") === "venice";
   const styleValue = form.stylePreset ?? "";
-  const [styles, setStyles] = useState<string[]>([]);
-  const [stylesStatus, setStylesStatus] = useState<EditorStatus>(null);
+  // Seeded from the session cache so a re-opened connection paints its stored
+  // value as a real option on the FIRST frame — no re-fetch, nothing to flash.
+  const [styleList, setStyleList] = useState<StyleListState>(() => {
+    const cached = readCachedStyles(styleCacheKey());
+    return cached ? { styles: cached, status: stylesLoadedStatus(cached) } : { styles: [], status: null };
+  });
+  const { styles, status: stylesStatus } = styleList;
   const [fetchingStyles, setFetchingStyles] = useState(false);
-  // Set by the Custom… option. A value that is NOT in the fetched list also
+  // Set by the Custom… option. A value that a LOADED list proves absent also
   // reads as custom, so a connection saved with `anime` stays visible and
   // editable instead of rendering as an empty select.
   const [customStyle, setCustomStyle] = useState(false);
 
-  const styleInList = styles.includes(styleValue);
-  // Exactly the reported failure: a stored value the provider would reject.
-  // Only asserted once the list has actually arrived — an empty list means
-  // "not fetched", not "nothing valid".
-  const styleNotListed = venice && styleValue !== "" && styles.length > 0 && !styleInList;
-  const styleSuggestion = styleNotListed
-    ? styles.find((s) => s.toLowerCase() === styleValue.trim().toLowerCase())
-    : undefined;
-  const showCustomStyle = venice && (customStyle || (styleValue !== "" && !styleInList));
+  // The whole display decision (select value, options, escape hatch, warning,
+  // suggestion) is this pure function's job — see utils/imageStyleOptions.ts.
+  // Its invariant: the select's value is always one of its own options, and a
+  // non-empty stored value never renders as Custom… until a loaded list proves
+  // it absent.
+  const styleDisplay = imageStyleDisplay({ value: styleValue, styles, customRequested: customStyle });
 
-  const styleOptions = [
-    { value: NONE_STYLE_OPTION, label: "None", description: "Send no style_preset" },
-    ...styles.map((s) => ({ value: s, label: s })),
-    { value: CUSTOM_STYLE_OPTION, label: "Custom…", description: "Type an exact value" }
-  ];
+  /** Cache key for the styles list: the provider's base URL, falling back to
+   *  the saved connection's when the probe targets it by id. */
+  function styleCacheKey(): string | null {
+    const target = styleProbeTarget();
+    const baseUrl = target?.baseUrl ?? editing?.baseUrl ?? "";
+    return baseUrl.trim() ? normalizeStyleBaseUrl(baseUrl) : null;
+  }
 
   /** Target for the styles probe: a saved connection uses its STORED key unless
    *  the form's base URL or key were edited, in which case the draft is probed
@@ -140,24 +165,27 @@ export function ImageConnectionEditor({
   async function loadStyles() {
     const target = styleProbeTarget();
     if (!target) {
-      setStylesStatus({ kind: "err", text: "Set a Base URL first (or save the connection)." });
+      setStyleList({ styles: [], status: { kind: "err", text: "Set a Base URL first (or save the connection)." } });
       return;
     }
+    const cacheKey = styleCacheKey();
     setFetchingStyles(true);
-    setStylesStatus(null);
+    setStyleList((s) => ({ ...s, status: null }));
     try {
       const r = await fetchProviderImageStyles(target);
-      setStyles(r.styles);
-      setStylesStatus(
-        r.ok
+      // Only a SUCCESSFUL, non-empty list is worth caching: an empty one means
+      // "not fetched", and caching it would suppress the fetch for the session.
+      if (r.ok && r.styles.length > 0 && cacheKey) imageStyleCache.set(cacheKey, r.styles);
+      setStyleList({
+        styles: r.styles,
+        status: r.ok
           ? r.styles.length
-            ? { kind: "ok", text: `${r.styles.length} style${r.styles.length === 1 ? "" : "s"} loaded.` }
+            ? stylesLoadedStatus(r.styles)
             : { kind: "err", text: "Connected, but the provider listed no styles — use Custom… to type one." }
           : { kind: "err", text: r.message ? `Failed (${r.status ?? ""}): ${r.message}` : "Failed to load styles." }
-      );
+      });
     } catch (err) {
-      setStyles([]);
-      setStylesStatus({ kind: "err", text: err instanceof Error ? err.message : String(err) });
+      setStyleList({ styles: [], status: { kind: "err", text: err instanceof Error ? err.message : String(err) } });
     } finally {
       setFetchingStyles(false);
     }
@@ -167,9 +195,11 @@ export function ImageConnectionEditor({
   // edit. Keyed to the connection + dialect so switching a saved connection to
   // Venice loads the list too; edits to the base URL/key are the refresh
   // control's job (re-fetching on every keystroke would hammer the endpoint).
+  // A cached list is already in state, so it is never re-fetched.
   useEffect(() => {
     if (mode !== "edit" || !editing) return;
     if ((form.apiStyle ?? "openai") !== "venice") return;
+    if (readCachedStyles(styleCacheKey())) return;
     void loadStyles();
   }, [mode, editing?.id, form.apiStyle]);
 
@@ -327,13 +357,13 @@ export function ImageConnectionEditor({
                     size="sm"
                     variant="filled"
                     fullWidth
-                    value={showCustomStyle ? CUSTOM_STYLE_OPTION : styleValue}
+                    value={styleDisplay.selectValue}
                     onChange={handleStyleChange}
-                    options={styleOptions}
+                    options={styleDisplay.options}
                     placeholder="None (send no style)"
                     aria-label="Style preset"
                   />
-                  {showCustomStyle && (
+                  {styleDisplay.showCustomInput && (
                     <TextInput
                       label="Custom style"
                       value={styleValue}
@@ -354,12 +384,18 @@ export function ImageConnectionEditor({
                       Fetch styles
                     </Button>
                   </div>
-                  {stylesStatus && <p className={`conn-status ${stylesStatus.kind}`}>{stylesStatus.text}</p>}
-                  {styleNotListed && (
+                  {/* The fetch is in flight: say so, rather than leaving the
+                      field bare while the list is unknown. */}
+                  {fetchingStyles ? (
+                    <p className="conn-status">Loading styles…</p>
+                  ) : (
+                    stylesStatus && <p className={`conn-status ${stylesStatus.kind}`}>{stylesStatus.text}</p>
+                  )}
+                  {styleDisplay.showWarning && (
                     <p className="conn-status warn">
                       Warning: “{styleValue}” is not one of the styles this provider lists, so generating with it fails
                       with a 400 (Invalid style requested)
-                      {styleSuggestion ? ` — did you mean “${styleSuggestion}”?` : ""}. Pick a listed value, or None —
+                      {styleDisplay.suggestion ? ` — did you mean “${styleDisplay.suggestion}”?` : ""}. Pick a listed value, or None —
                       a blank value is not sent at all.
                     </p>
                   )}
