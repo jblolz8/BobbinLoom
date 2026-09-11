@@ -128,7 +128,7 @@ function DebugBox(props: {
         recent: playthrough.memoryLayers?.recent?.length ?? 0,
         compressed: playthrough.memoryLayers?.compressed?.length ?? 0,
         legacy: playthrough.memoryEvents?.length ?? 0,
-        ghostedMessages: playthrough.messages.filter(m => m.hidden).length,
+        hiddenMessages: playthrough.messages.filter(m => m.hidden).length, // archived chapters + synthetic instructions
         visibleMessages: playthrough.messages.filter(m => !m.hidden).length
       }
     }, null, 2);
