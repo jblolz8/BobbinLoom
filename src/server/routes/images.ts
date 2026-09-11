@@ -152,6 +152,18 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     };
   });
 
+  // Manual sweep: no record change drives this one — the user asked for it, so a
+  // failure is REPORTED (500) instead of swallowed like the two best-effort call
+  // sites. The count is the whole answer: how many unreferenced files went away.
+  app.post("/api/settings/images/sweep", async (request, reply) => {
+    try {
+      return { removed: sweepOrphansInDataDir(dataDir, imagesDir) };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Image sweep failed";
+      return reply.code(500).send({ error: reason });
+    }
+  });
+
   // Drop one image ref from a message, then sweep the now-unreferenced file.
   // Idempotent: removing a ref that is already gone still returns the record.
   app.delete("/api/playthroughs/:id/messages/:messageId/images/:file", async (request, reply) => {

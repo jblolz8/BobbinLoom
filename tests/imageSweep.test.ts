@@ -10,6 +10,8 @@ import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { saveImageBytes } from "../src/server/imageStore";
+import { ProviderManager } from "../src/server/providerManager";
+import { imageRoutes } from "../src/server/routes/images";
 import { playthroughRoutes } from "../src/server/routes/playthroughs";
 import { getPlaythroughRecord } from "../src/server/store";
 import { truncateChat } from "../src/server/turnActions";
@@ -19,7 +21,8 @@ afterEach(cleanupTempDirs);
 
 /** Production layout: records in their own directory, images next to it,
  *  providers in a separate settings directory. Co-locating them would let the
- *  sweep's playthrough scan quarantine the registry file. */
+ *  sweep's playthrough scan quarantine the registry file. Every store path is a
+ *  temp dir — the real `data/` is never read or written. */
 function harness() {
   const root = tempDir("bobbinloom-sweep-");
   const settingsDir = join(root, "settings");
@@ -27,6 +30,12 @@ function harness() {
   const imagesDir = join(root, "images");
   const app = Fastify();
   app.register(playthroughRoutes, { dataDir, imagesDir });
+  app.register(imageRoutes, {
+    dataDir,
+    imagesDir,
+    manager: new ProviderManager(settingsDir),
+    loadPresets: () => []
+  });
   return { app, root, settingsDir, dataDir, imagesDir };
 }
 
@@ -192,5 +201,61 @@ describe("truncateChat sweeps the image store", () => {
     } finally {
       warn.mockRestore();
     }
+  });
+});
+
+describe("POST /api/settings/images/sweep", () => {
+  function sweep(app: FastifyInstance) {
+    return app.inject({ method: "POST", url: "/api/settings/images/sweep" });
+  }
+
+  it("returns the number of unreferenced files it removed, then no-ops", async () => {
+    const h = harness();
+    const referenced = saveImageBytes(pngBytes("referenced"), "image/png", h.imagesDir).file;
+    const orphanA = saveImageBytes(pngBytes("orphan-e1"), "image/png", h.imagesDir).file;
+    const orphanB = saveImageBytes(pngBytes("orphan-e2"), "image/png", h.imagesDir).file;
+    writePlaythroughWithImages(h.dataDir, "Keeper", [[referenced]]);
+
+    const first = await sweep(h.app);
+
+    expect(first.statusCode).toBe(200);
+    expect(first.json()).toEqual({ removed: 2 });
+    expect(storedFiles(h.imagesDir)).toEqual([referenced]);
+    expect(storedFiles(h.imagesDir)).not.toContain(orphanA);
+    expect(storedFiles(h.imagesDir)).not.toContain(orphanB);
+
+    // Nothing left to collect: a second ask is a counted no-op, not an error.
+    const second = await sweep(h.app);
+
+    expect(second.statusCode).toBe(200);
+    expect(second.json()).toEqual({ removed: 0 });
+    expect(storedFiles(h.imagesDir)).toEqual([referenced]);
+  });
+
+  it("is a no-op on an empty store", async () => {
+    const h = harness();
+
+    const res = await sweep(h.app);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ removed: 0 });
+    expect(storedFiles(h.imagesDir)).toEqual([]);
+  });
+
+  it("surfaces a sweep failure as an error response instead of swallowing it", async () => {
+    const h = harness();
+    const app = Fastify();
+    app.register(imageRoutes, {
+      dataDir: h.dataDir,
+      imagesDir: brokenImagesDir(h.root),
+      manager: new ProviderManager(h.settingsDir),
+      loadPresets: () => []
+    });
+
+    const res = await sweep(app);
+
+    expect(res.statusCode).toBe(500);
+    expect(typeof res.json().error).toBe("string");
+    expect(res.json().error.length).toBeGreaterThan(0);
   });
 });
