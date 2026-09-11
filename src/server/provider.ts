@@ -37,10 +37,20 @@ export const COMPACT_TRIGGER_COUNT = 4;
  *  prompt — a deterministic floor so high-importance beats are never lost. */
 export const IMPORTANCE_FLOOR = 3;
 
+/** Real token counts reported by the provider for one request. Preferred over
+ *  the chars/4 estimate whenever present; absent on providers that don't
+ *  return a usage block (many local runtimes). */
+export type MeasuredUsage = {
+  promptTokens: number;
+  completionTokens?: number;
+};
+
 export type ProviderTurn = {
   turn: AssistantTurn;
   /** Real measured prompt usage. Absent from providers that don't assemble a prompt (mock). */
   promptUsage?: PromptUsage;
+  /** Provider-reported token counts for this request, when the response carries a `usage` block. */
+  measuredUsage?: MeasuredUsage;
   /** Model name or ID that generated this turn. */
   model?: string;
   /** Raw request body sent to the provider — for the Debug → Input tab. */

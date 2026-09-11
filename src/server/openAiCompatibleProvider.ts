@@ -13,6 +13,7 @@ import type {
   ChapterCompactionInput,
   CharacterBrainstormInput,
   CharacterBrainstormOutput,
+  MeasuredUsage,
   ProposedSectionChange,
   ProviderTurn
 } from "./provider";
@@ -58,7 +59,11 @@ export class OpenAICompatibleProvider {
       : [[]];
     const queryEmbedding = queryEmbeddings[0] ?? [];
 
-    const { messages, promptUsage } = assembleTurnPrompt(input, state, choicesEnabled, queryEmbedding);
+    const { messages, promptUsage } = assembleTurnPrompt(input, state, choicesEnabled, queryEmbedding, {
+      contextWindow: this.config.contextWindow ?? 65536,
+      // Mirrors the `max_tokens` sent below, so the budget cannot be spent entirely on prompt.
+      reserveOutputTokens: this.config.maxTokens
+    });
 
     const body: Record<string, unknown> = {
       model: this.config.model,
@@ -71,7 +76,10 @@ export class OpenAICompatibleProvider {
     const rawInput = JSON.stringify(body);
     const response = await this.executeRequest(body, "/chat/completions", completionValidator, signal);
     const rawOutput = await response.text();
-    let payload: { choices?: Array<{ message?: { content?: string | null }; finish_reason?: string | null }> } = { choices: [] };
+    let payload: {
+      choices?: Array<{ message?: { content?: string | null }; finish_reason?: string | null }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
+    } = { choices: [] };
     try {
       payload = JSON.parse(rawOutput) as typeof payload;
     } catch {
@@ -82,13 +90,32 @@ export class OpenAICompatibleProvider {
     const finishReason = payload.choices?.[0]?.finish_reason ?? null;
     const extracted = extractJsonPayload(content);
 
+    // Real counts when the provider reports them. Never a fabricated 0 or NaN:
+    // an absent/!numeric usage block leaves this undefined so callers keep the
+    // chars/4 estimate instead of treating a fake zero as a measurement.
+    const usage = payload.usage;
+    const measuredUsage: MeasuredUsage | undefined =
+      typeof usage?.prompt_tokens === "number" && Number.isFinite(usage.prompt_tokens)
+        ? {
+            promptTokens: usage.prompt_tokens,
+            ...(typeof usage.completion_tokens === "number" && Number.isFinite(usage.completion_tokens)
+              ? { completionTokens: usage.completion_tokens }
+              : {})
+          }
+        : undefined;
+
+    // Every return branch below reports what the request actually cost — the
+    // parser path a turn takes must not change whether usage survives.
+    const withUsage = (turn: ProviderTurn): ProviderTurn =>
+      measuredUsage ? { ...turn, measuredUsage } : turn;
+
     if (extracted) {
       const parsed = AssistantTurnSchema.safeParse(extracted);
       if (parsed.success && parsed.data.narrative.trim()) {
         if (!choicesEnabled) {
           delete parsed.data.choices;
         }
-        return { turn: parsed.data, promptUsage, model: this.config.model, rawInput, rawOutput, finishReason };
+        return withUsage({ turn: parsed.data, promptUsage, model: this.config.model, rawInput, rawOutput, finishReason });
       }
 
       const extractedObj = extracted as Record<string, unknown>;
@@ -101,27 +128,27 @@ export class OpenAICompatibleProvider {
         : undefined;
 
       if (narrative) {
-        return { turn: { narrative, choices: choicesEnabled ? choices : undefined, statePatch }, promptUsage, model: this.config.model, rawInput, rawOutput, finishReason };
+        return withUsage({ turn: { narrative, choices: choicesEnabled ? choices : undefined, statePatch }, promptUsage, model: this.config.model, rawInput, rawOutput, finishReason });
       }
 
-      return {
+      return withUsage({
         turn: { narrative: "The provider returned an empty response.", statePatch },
         promptUsage,
         model: this.config.model,
         rawInput,
         rawOutput,
         finishReason
-      };
+      });
     }
 
-    return {
+    return withUsage({
       turn: { narrative: content || "The provider returned an empty response." },
       promptUsage,
       model: this.config.model,
       rawInput,
       rawOutput,
       finishReason
-    };
+    });
   }
 
   async generateScenarioSeed(preferences: ScenarioPreferences, lorebookIds?: string[], signal?: AbortSignal, format?: CharacterFormat): Promise<ScenarioSeed> {

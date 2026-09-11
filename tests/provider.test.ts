@@ -641,6 +641,110 @@ describe("OpenAICompatibleProvider", () => {
     expect(result.finishReason).toBe("stop");
   });
 
+  it("reports measured usage when the provider returns a usage block", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        choices: [{ message: { content: JSON.stringify({ narrative: "ok" }) }, finish_reason: "stop" }],
+        usage: { prompt_tokens: 1234, completion_tokens: 210, total_tokens: 1444 }
+      })
+    );
+
+    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+    const result = await provider.generateTurn(
+      parseUserInput("go"),
+      createInitialPlaythrough("Usage Test"),
+      true
+    );
+
+    expect(result.measuredUsage).toEqual({ promptTokens: 1234, completionTokens: 210 });
+  });
+
+  it("omits measured usage when the provider reports none", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        choices: [{ message: { content: JSON.stringify({ narrative: "ok" }) }, finish_reason: "stop" }]
+      })
+    );
+
+    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+    const result = await provider.generateTurn(
+      parseUserInput("go"),
+      createInitialPlaythrough("No Usage Test"),
+      true
+    );
+
+    expect(result.measuredUsage).toBeUndefined();
+  });
+
+  it("reports measured usage on the fallback-narrative branch as well", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        // `choices` is a string, so AssistantTurnSchema rejects the shape and the
+        // turn comes back through the fallback-narrative branch.
+        choices: [{ message: { content: JSON.stringify({ narrative: "Fallback narrative", choices: "not-an-array" }) } }],
+        usage: { prompt_tokens: 777, completion_tokens: 42 }
+      })
+    );
+
+    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+    const result = await provider.generateTurn(
+      parseUserInput("go"),
+      createInitialPlaythrough("Fallback Usage Test"),
+      true
+    );
+
+    // The malformed choices are dropped, which only happens on the fallback branch.
+    expect(result.turn.narrative).toBe("Fallback narrative");
+    expect(result.turn.choices).toBeUndefined();
+    expect(result.measuredUsage).toEqual({ promptTokens: 777, completionTokens: 42 });
+  });
+
+  it("budgets the transcript against the connection's configured context window", async () => {
+    /** 15 user/assistant pairs = 30 visible messages. */
+    const seedTranscript = () => {
+      const state = createInitialPlaythrough("Budget Wiring Test");
+      for (let i = 0; i < 15; i += 1) {
+        state.messages.push({ id: `u${i}`, role: "user", content: `Player turn ${i}.`, createdAt: "2026-01-01T00:00:00.000Z", turn: i });
+        state.messages.push({ id: `a${i}`, role: "assistant", content: `Narrator reply ${i}.`, createdAt: "2026-01-01T00:00:00.000Z", turn: i });
+      }
+      return state;
+    };
+
+    const sentMessagesFor = async (config: ResolvedProviderConfig) => {
+      let sent: Array<{ role: string; content: string }> = [];
+      const fetchImpl = vi.fn(async (url: unknown, init?: RequestInit) => {
+        if (String(url).endsWith("/embeddings")) {
+          return jsonResponse({ data: [{ embedding: [0.1] }] });
+        }
+        sent = (JSON.parse(String(init?.body)) as { messages: Array<{ role: string; content: string }> }).messages;
+        return jsonResponse({
+          choices: [{ message: { content: JSON.stringify({ narrative: "ok" }) }, finish_reason: "stop" }]
+        });
+      });
+      const provider = new OpenAICompatibleProvider(config, fetchImpl as unknown as typeof fetch);
+      await provider.generateTurn(parseUserInput("I look around."), seedTranscript(), true);
+      return sent;
+    };
+
+    // 2048-token window with 1000 reserved for the completion: the fixed prompt
+    // cost (output contract + state summary) alone exceeds what remains, so only
+    // the minimum history window survives. A dropped budget argument would send
+    // all 30 messages here instead — that is the regression this pins.
+    const tight = await sentMessagesFor(testConfig({ contextWindow: 2048, maxTokens: 1000 }));
+    // Same transcript against a real 64k window: every seeded message is sent.
+    const roomy = await sentMessagesFor(testConfig({ contextWindow: 65536, maxTokens: 1000 }));
+
+    expect(tight.length).toBe(5); // system + newest user/assistant + tail system + final user
+    expect(roomy.length).toBe(33); // system + all 30 seeded + tail system + final user
+    expect(tight.filter((m) => m.role === "assistant")).toHaveLength(1);
+    expect(roomy.filter((m) => m.role === "assistant")).toHaveLength(15);
+    for (let i = 0; i < 15; i += 1) {
+      expect(roomy.some((m) => m.content === `Player turn ${i}.`)).toBe(true);
+      expect(roomy.some((m) => m.content === `Narrator reply ${i}.`)).toBe(true);
+    }
+    expect(tight.some((m) => m.content === "Player turn 0.")).toBe(false);
+  });
+
   it("reports truncation explicitly when the scenario seed is cut off at the token limit", async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({
