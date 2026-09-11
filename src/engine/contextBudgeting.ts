@@ -9,8 +9,12 @@ function clone<T>(value: T): T {
 }
 
 const MEMORY_RETRIEVAL_BUDGET = 800;
-const GHOST_BATCH_SIZE = 10;
-const GHOST_THRESHOLD = 25;
+/** Live memory events retained before older ones rotate into the compressed
+ *  layer. Counted in events, never in chat messages — message count is not a
+ *  proxy for memory pressure. */
+export const MEMORY_ROTATION_THRESHOLD = 60;
+/** Compressed-layer retention ceiling; older events are dropped. */
+const COMPRESSED_EVENT_CAP = 50;
 
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length === 0 || b.length === 0 || a.length !== b.length) return 0;
@@ -111,37 +115,27 @@ export function retrieveMemories(
   return retrieveMemoriesVector(state, []);
 }
 
-export function needsCompression(playthrough: Playthrough, threshold: number = GHOST_THRESHOLD): boolean {
-  return playthrough.messages.filter((m) => !m.hidden).length > threshold;
-}
-
-export function ghostOldMessages(playthrough: Playthrough, batchSize: number = GHOST_BATCH_SIZE): Playthrough {
-  const next = clone(playthrough);
-  const visible = next.messages.filter((m) => !m.hidden);
-  if (visible.length <= GHOST_THRESHOLD) return next;
-
-  const toGhost = visible.slice(0, Math.min(batchSize, visible.length - GHOST_THRESHOLD));
-  for (const msg of toGhost) {
-    msg.hidden = true;
-  }
-
-  return next;
-}
-
-export function moveEventsToCompressed(playthrough: Playthrough): Playthrough {
+/**
+ * Memory retention: once the live event set grows past `threshold`, older
+ * events rotate into the compressed layer (capped at COMPRESSED_EVENT_CAP).
+ * This is purely a memory-layer concern — messages are never hidden to make
+ * room; the prompt's token budget decides what is sent.
+ *
+ * Returns `playthrough` unchanged (same reference) when below the threshold.
+ */
+export function rotateMemoryEvents(
+  playthrough: Playthrough,
+  threshold: number = MEMORY_ROTATION_THRESHOLD
+): Playthrough {
+  if (playthrough.memoryEvents.length < threshold) return playthrough;
   const next = clone(playthrough);
   if (!next.memoryLayers) {
-    next.memoryLayers = { recent: next.memoryEvents, compressed: [] };
+    next.memoryLayers = { recent: [], compressed: [] };
   }
-
-  const recentEvents = next.memoryLayers.recent;
-  if (recentEvents.length === 0) return next;
-
-  const allCompressed = [...next.memoryLayers.compressed, ...recentEvents];
-  next.memoryLayers.compressed = allCompressed.slice(-50);
+  next.memoryLayers.compressed = [...next.memoryLayers.compressed, ...next.memoryLayers.recent, ...next.memoryEvents]
+    .slice(-COMPRESSED_EVENT_CAP);
   next.memoryLayers.recent = [];
   next.memoryEvents = [];
-
   next.updatedAt = nowIso();
   return next;
 }

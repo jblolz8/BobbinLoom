@@ -34,9 +34,7 @@ export {
   cosineSimilarity,
   retrieveMemoriesVector,
   retrieveMemories,
-  needsCompression,
-  ghostOldMessages,
-  moveEventsToCompressed,
+  rotateMemoryEvents,
   scanLorebooks,
   updateTimingStates
 } from "./contextBudgeting";

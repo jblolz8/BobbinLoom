@@ -1,10 +1,8 @@
 import { randomUUID } from "node:crypto";
 import {
   applyStatePatch,
-  ghostOldMessages,
-  moveEventsToCompressed,
-  needsCompression,
   parseUserInput,
+  rotateMemoryEvents,
   scanLorebooks,
   takeTurnSnapshot,
   restoreSnapshotState,
@@ -180,17 +178,15 @@ export async function executeTurn(
     }
   }
 
-  // Auto-compression: when context nears threshold, ghost old messages and compress their events
-  if (needsCompression(next)) {
-    const ghosted = ghostOldMessages(next);
-    const compressed = moveEventsToCompressed(ghosted);
+  // Memory retention: rotate live events into the compressed layer once the live
+    // set grows past the threshold. Purely a memory-layer concern — messages are
+    // never hidden to make room; the prompt budget (Phase 1) decides what is sent.
+    const rotated = rotateMemoryEvents(next);
     Object.assign(next, {
-      messages: compressed.messages,
-      memoryLayers: compressed.memoryLayers,
-      memoryEvents: compressed.memoryEvents,
-      updatedAt: compressed.updatedAt
+      memoryEvents: rotated.memoryEvents,
+      memoryLayers: rotated.memoryLayers,
+      updatedAt: rotated.updatedAt
     });
-  }
 
   // ── Token usage: real measurement from the provider, or fixed fallback estimate ──
   const castPresence = {
