@@ -480,8 +480,8 @@ export function ChatPanel(props: ChatPanelProps) {
               <>
                 {msg.images && msg.images.length > 0 ? (
                   <div className="message-images">
-                    {msg.images.map((img) => (
-                      <figure key={img.file} className="message-image">
+                    {msg.images.map((img, index) => (
+                      <figure key={`${img.file}-${index}`} className="message-image">
                         <img
                           src={buildImageUrl(img.file)}
                           alt={img.prompt.slice(0, 120)}
