@@ -109,6 +109,26 @@ The meter prefers `measured` and shows a `· measured` suffix; `deriveMeterTotal
 
 This matters because the budget is computed from the estimate: an 8192-token connection with 1200 reserved output believes a 4218-token prompt fits in 6480 usable tokens while the real request is 7421 and overflows the window.
 
+### Self-calibration
+
+The budget corrects itself from measured usage. After every turn that reports `usage`, `executeTurn` stores the ratio on the playthrough:
+
+```
+state.tokenCalibration = clampCalibration(measured.promptTokens / promptUsage.estimated)
+```
+
+`generateTurn` and both meter routes pass it back in as `PromptBudget.calibration`, where it scales the budget maths only.
+
+`clampCalibration` clamps to `[MIN_TOKEN_CALIBRATION, MAX_TOKEN_CALIBRATION]` = `[1, 4]` and returns 1 for a missing or non-finite value.
+
+**The floor of 1 is deliberate.** `chars/4` is treated as a *lower bound* on true size. A model that appears to tokenize more efficiently than `chars/4` must never be used as an excuse to pack more history in: over-admitting risks a provider error or silent truncation, while under-admitting only costs a little context.
+
+**The reported `breakdown` / `estimated` must stay on the unscaled basis.** The ratio's denominator is `promptUsage.estimated`; scaling the breakdown too would make `estimated` converge on `measured`, so the next turn's ratio would decay toward 1 and the correction would silently switch itself off. Scale only the budget maths — `fixedCost` and `selectHistory`'s per-message cost.
+
+`tokenCalibration` is **deliberately not part of `TurnSnapshot`**. It measures the connection's tokenizer, not world state, and a retry must not rewind it to a staler ratio.
+
+Verified on an 8192-token connection with 1200 reserved: uncalibrated the prompt admitted 30 history messages whose real cost (7779) exceeded the 6480 usable budget; calibrated it admitted 18 and fit.
+
 ---
 
 ## Memory retrieval is relevance-selected
