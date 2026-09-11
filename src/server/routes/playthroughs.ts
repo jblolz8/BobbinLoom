@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyPluginAsync, FastifyPluginOptions } from "fastify";
 import { z } from "zod";
 import type { PromptPreset, ScenarioPreferences } from "../../schemas";
 import { parseUserInput } from "../../engine/engine";
@@ -27,7 +27,8 @@ import {
   resummarizeChapterAction
 } from "../stateActions";
 import { buildOpeningPrompt, executeTurn } from "../turnActions";
-import { abortOnClientDisconnect, dataDir, loadPresets, providerManager } from "./helpers";
+import { sweepOrphansInDataDir } from "../imageStore";
+import { abortOnClientDisconnect, dataDir as defaultDataDir, imagesDir as defaultImagesDir, loadPresets, providerManager } from "./helpers";
 
 const CreatePlaythroughBody = z.object({
   name: z.string().min(1).default("New Playthrough"),
@@ -70,7 +71,17 @@ const CloseChapterBody = z.object({
   closingMessage: z.string().optional()
 });
 
-export async function playthroughRoutes(app: FastifyInstance): Promise<void> {
+/** Injectable seams (all defaulted) so the delete sweep can be exercised against
+ *  a temp data directory — no test may touch the real store. */
+export type PlaythroughRoutesOptions = FastifyPluginOptions & {
+  dataDir?: string;
+  imagesDir?: string;
+};
+
+export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = async (app, options = {}) => {
+  const dataDir = options.dataDir ?? defaultDataDir;
+  const imagesDir = options.imagesDir ?? defaultImagesDir;
+
   app.get("/api/playthroughs", async (request) => {
     const query = z.object({ includeBranches: z.string().optional() }).parse(request.query ?? {});
     const includeTimelineBranches = query.includeBranches === "true";
@@ -94,6 +105,16 @@ export async function playthroughRoutes(app: FastifyInstance): Promise<void> {
     const params = z.object({ id: z.string() }).parse(request.params);
     const deleted = deletePlaythroughRecord(dataDir, params.id);
     if (!deleted) return reply.code(404).send({ error: "Playthrough not found" });
+    // The record is gone, so any image only it referenced is now unreferenced.
+    // The sweep scans EVERY playthrough with its timeline branches included, so
+    // a content-addressed file still referenced by another playthrough or a
+    // surviving branch stays on disk. Best-effort: a failed sweep leaves files
+    // for the manual endpoint to clean and must never fail a successful delete.
+    try {
+      sweepOrphansInDataDir(dataDir, imagesDir);
+    } catch (error) {
+      console.warn(`[images] orphan sweep after deleting playthrough ${params.id} failed:`, error);
+    }
     return { ok: true };
   });
 
