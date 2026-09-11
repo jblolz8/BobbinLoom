@@ -136,7 +136,7 @@ describe("provider manager registry integration", () => {
       contextWindow: 32768
     });
     expect(created.id).toBe("lmo");
-    expect(manager.setActiveConnection(created.id).activeProviderId).toBe(created.id);
+    expect(manager.setActiveConnection(created.id).activeTextProviderId).toBe(created.id);
     const updated = manager.updateConnection(created.id, {
       label: "LMO2",
       baseUrl: "http://l:1234",
@@ -150,7 +150,7 @@ describe("provider manager registry integration", () => {
     expect(typeof tested.ok).toBe("boolean");
     // Deleting the (now active) connection is allowed; active id clears.
     const afterDelete = manager.deleteConnection(created.id);
-    expect(afterDelete.activeProviderId).toBe("");
+    expect(afterDelete.activeTextProviderId).toBe("");
   });
 
   it("testConnection/fetchModels with an id use the STORED connection key and base URL", async () => {

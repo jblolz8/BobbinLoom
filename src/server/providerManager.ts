@@ -4,6 +4,7 @@ import { OpenAICompatibleProvider } from "./openAiCompatibleProvider";
 import { resolveConnectionConfig } from "./providerConfig";
 import type { ProviderConnectionInput, PublicProviderConnection } from "./providerConfig";
 import {
+  activeConnectionOfKind,
   createConnection,
   deleteConnection as deleteRegistryConnection,
   duplicateConnection as duplicateRegistryConnection,
@@ -23,12 +24,12 @@ export class ProviderManager {
     private readonly fetchImpl: typeof fetch = fetch
   ) {}
 
-  /** The active connection, or null when the registry has no connections.
+  /** The active TEXT connection, or null when no text connection is configured.
    *  Reads the persisted registry (never re-seeds over it — that would wipe
-   *  user-created connections on every call). */
+   *  user-created connections on every call). The kind filter is mandatory: the
+   *  old `?? connections[0]` fallback could hand a text turn an image endpoint. */
   private activeConnection() {
-    const reg = getRegistry(this.dataDir);
-    return reg.connections.find((c) => c.id === reg.activeProviderId) ?? reg.connections[0] ?? null;
+    return activeConnectionOfKind(getRegistry(this.dataDir), "text");
   }
 
   getProvider(): TurnProvider {
@@ -61,7 +62,7 @@ export class ProviderManager {
   deleteConnection(id: string): PublicProviderRegistry {
     return deleteRegistryConnection(this.dataDir, id);
   }
-  setActiveConnection(id: string): { activeProviderId: string } {
+  setActiveConnection(id: string): PublicProviderRegistry {
     return setActiveRegistryConnection(this.dataDir, id);
   }
 

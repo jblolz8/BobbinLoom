@@ -3,20 +3,45 @@ import { join } from "node:path";
 import { atomicWriteJson, backupFile, quarantineFile } from "./persistence";
 import { maskApiKey, normalizeBaseUrl } from "./providerConfig";
 import { ProviderConnectionSchema, ProviderRegistryFileSchema } from "../schemas";
-import type { ProviderConnection, ProviderRegistryFile } from "../schemas";
+import type { ImageApiStyle, ProviderConnection, ProviderKind, ProviderRegistryFile } from "../schemas";
 import type { ProviderConnectionInput, PublicProviderConnection } from "./providerConfig";
 import { decryptApiKey, encryptApiKey, loadOrCreateVaultKey } from "./keyVault";
 
 export type ProviderRegistry = {
-  activeProviderId: string;
+  activeTextProviderId: string;
+  activeImageProviderId: string;
   connections: ProviderConnection[];
 };
 
-export type PublicProviderRegistry = {
-  activeProviderId: string;
+export type PublicProviderRegistry = Omit<ProviderRegistry, "connections"> & {
   connections: PublicProviderConnection[];
   warnings: string[];
 };
+
+/** createConnection/updateConnection input: the shared connection fields plus
+ *  the registry-v2 `kind` discriminator and the image-only fields. Declared
+ *  here (and not in providerConfig.ts, which owns ProviderConnectionInput) so
+ *  the image surface stays inside the registry. */
+export type ProviderConnectionDraft = ProviderConnectionInput & {
+  kind?: ProviderKind;
+  apiStyle?: ImageApiStyle;
+  safeMode?: boolean;
+  size?: string;
+  aspectRatio?: string;
+  promptProviderId?: string | null;
+  stylePreset?: string;
+  hideWatermark?: boolean;
+  variants?: number;
+};
+
+/** Connections of one kind, and the active one among them. The kind filter is
+ *  mandatory — the old `?? connections[0]` fallback would hand a text turn an
+ *  image endpoint (and vice versa). */
+export function activeConnectionOfKind(reg: ProviderRegistry, kind: ProviderKind): ProviderConnection | null {
+  const of = reg.connections.filter((c) => c.kind === kind);
+  const wanted = kind === "text" ? reg.activeTextProviderId : reg.activeImageProviderId;
+  return of.find((c) => c.id === wanted) ?? of[0] ?? null;
+}
 
 function registryPath(dir: string): string {
   return join(dir, "providers.json");
@@ -33,12 +58,32 @@ function decryptConnections(connections: ProviderConnection[], vaultKey: Buffer)
 
 type ReadResult = { registry: ProviderRegistry | null; warnings: string[] };
 
+/** v1 (and bare v0) → v2: `activeProviderId` splits into activeTextProviderId
+ *  plus an empty activeImageProviderId, and every connection is stamped
+ *  `kind: "text"` (an explicit kind wins). Archived to .bak, like the v0 path. */
+function migrateToV2(raw: Record<string, unknown>): Record<string, unknown> {
+  const connections = Array.isArray(raw.connections) ? raw.connections : [];
+  return {
+    schemaVersion: 2,
+    activeTextProviderId:
+      typeof raw.activeTextProviderId === "string" ? raw.activeTextProviderId
+      : typeof raw.activeProviderId === "string" ? raw.activeProviderId : "",
+    activeImageProviderId: typeof raw.activeImageProviderId === "string" ? raw.activeImageProviderId : "",
+    connections: connections.map((c) =>
+      c && typeof c === "object" && !Array.isArray(c)
+        ? { kind: "text", ...(c as Record<string, unknown>) }
+        : c
+    ),
+  };
+}
+
 /** Read + validate the registry file. Three-tier contract (same as the
  *  character store):
  *  - unparseable JSON  → quarantine to .bak, warn, treat as missing;
  *  - schema-invalid    → per-connection salvage (valid kept, invalid dropped),
  *                        archive original to .bak, write the cleaned file;
- *  - valid v0 (bare)   → stamp schemaVersion, archive original to .bak.
+ *  - valid v0/v1       → migrate to the v2 shape (two active slots + per-row
+ *                        kind), archive original to .bak.
  *  Keys are persisted still-sealed; the returned registry is decrypted. */
 function readRegistry(dir: string): ReadResult {
   const path = registryPath(dir);
@@ -58,16 +103,35 @@ function readRegistry(dir: string): ReadResult {
 
   const file = ProviderRegistryFileSchema.safeParse(raw);
   if (file.success) {
-    if (!(raw as Record<string, unknown>).schemaVersion) {
+    const rawObj = (raw ?? {}) as Record<string, unknown>;
+    // v0 has no schemaVersion; v1 has schemaVersion 1 + activeProviderId. Both
+    // parse "successfully" under the v2 schema (the unknown key is stripped and
+    // activeTextProviderId defaults to ""), which would SILENTLY lose the active
+    // id — so migrate from the RAW object, never from the parse output. A v2
+    // file (schemaVersion 2 + the slot present) passes straight through.
+    if (rawObj.schemaVersion !== 2 || typeof rawObj.activeTextProviderId !== "string") {
       const backup = backupFile(path);
-      atomicWriteJson(path, file.data);
+      const migrated = migrateToV2(rawObj);
+      atomicWriteJson(path, migrated);
       warnings.push(`providers.json migrated to the versioned format (previous file archived to ${backup ?? "?"}).`);
-      console.warn(`[providers] v0 → v1; archived ${backup ?? "?"}`);
+      console.warn(`[providers] → v2; archived ${backup ?? "?"}`);
+      // Re-parse what we just wrote so the returned registry is validated + typed.
+      const parsed = ProviderRegistryFileSchema.parse(migrated);
+      const vaultKey = loadOrCreateVaultKey(dir);
+      return {
+        registry: {
+          activeTextProviderId: parsed.activeTextProviderId,
+          activeImageProviderId: parsed.activeImageProviderId,
+          connections: decryptConnections(parsed.connections, vaultKey),
+        },
+        warnings,
+      };
     }
     const vaultKey = loadOrCreateVaultKey(dir);
     return {
       registry: {
-        activeProviderId: file.data.activeProviderId,
+        activeTextProviderId: file.data.activeTextProviderId,
+        activeImageProviderId: file.data.activeImageProviderId,
         connections: decryptConnections(file.data.connections, vaultKey),
       },
       warnings,
@@ -84,13 +148,17 @@ function readRegistry(dir: string): ReadResult {
     if (parsed.success) kept.push(parsed.data);
     else dropped += 1;
   }
-  const active = typeof rawObj.activeProviderId === "string" ? rawObj.activeProviderId : "";
+  const rawActive =
+    typeof rawObj.activeTextProviderId === "string" ? rawObj.activeTextProviderId
+    : typeof rawObj.activeProviderId === "string" ? rawObj.activeProviderId : "";
+  const keptText = kept.filter((c) => c.kind === "text");
   const salvaged: ProviderRegistry = {
-    activeProviderId: kept.some((c) => c.id === active) ? active : (kept[0]?.id ?? ""),
-    connections: kept,
+    activeTextProviderId: keptText.some((c) => c.id === rawActive) ? rawActive : (keptText[0]?.id ?? ""),
+    activeImageProviderId: "",
+    connections: kept,   // ProviderConnectionSchema now defaults every kept row to kind: "text"
   };
   const backup = backupFile(path);
-  const sealed: ProviderRegistryFile = { schemaVersion: 1, ...salvaged };
+  const sealed: ProviderRegistryFile = { schemaVersion: 2, ...salvaged };
   atomicWriteJson(path, sealed);
   warnings.push(
     dropped > 0
@@ -101,7 +169,8 @@ function readRegistry(dir: string): ReadResult {
   const vaultKey = loadOrCreateVaultKey(dir);
   return {
     registry: {
-      activeProviderId: salvaged.activeProviderId,
+      activeTextProviderId: salvaged.activeTextProviderId,
+      activeImageProviderId: salvaged.activeImageProviderId,
       connections: decryptConnections(salvaged.connections, vaultKey),
     },
     warnings,
@@ -112,8 +181,9 @@ function writeRegistry(dir: string, reg: ProviderRegistry): void {
   mkdirSync(dir, { recursive: true });
   const vaultKey = loadOrCreateVaultKey(dir);
   const sealed: ProviderRegistryFile = {
-    schemaVersion: 1,
-    activeProviderId: reg.activeProviderId,
+    schemaVersion: 2,
+    activeTextProviderId: reg.activeTextProviderId,
+    activeImageProviderId: reg.activeImageProviderId,
     connections: reg.connections.map((c) =>
       c.apiKey ? { ...c, apiKey: encryptApiKey(c.apiKey, vaultKey) } : c
     ),
@@ -125,7 +195,7 @@ function writeRegistry(dir: string, reg: ProviderRegistry): void {
  *  auto-seeded. Users add their own via the UI. (Only called when no
  *  providers.json exists yet, or after a quarantine.) */
 export function seedRegistry(dir: string): ProviderRegistry {
-  const reg: ProviderRegistry = { activeProviderId: "", connections: [] };
+  const reg: ProviderRegistry = { activeTextProviderId: "", activeImageProviderId: "", connections: [] };
   writeRegistry(dir, reg);
   return reg;
 }
@@ -144,17 +214,19 @@ export function listConnections(dir: string): PublicProviderRegistry {
   const { registry, warnings } = readRegistry(dir);
   const reg = registry ?? seedRegistry(dir);
   return {
-    activeProviderId: reg.activeProviderId,
+    activeTextProviderId: reg.activeTextProviderId,
+    activeImageProviderId: reg.activeImageProviderId,
     connections: reg.connections.map(toPublicConnection),
     warnings,
   };
 }
 
-export function createConnection(dir: string, input: ProviderConnectionInput): PublicProviderConnection {
+export function createConnection(dir: string, input: ProviderConnectionDraft): PublicProviderConnection {
   const reg = getRegistry(dir);
   const id = (input.id ?? input.label).trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "_") ||
     `conn_${Date.now()}`;
   if (reg.connections.some((c) => c.id === id)) throw new Error(`Provider id already exists: ${id}`);
+  const kind: ProviderKind = input.kind ?? "text";
   const now = new Date().toISOString();
   const conn: ProviderConnection = {
     id,
@@ -164,20 +236,33 @@ export function createConnection(dir: string, input: ProviderConnectionInput): P
     temperature: input.temperature ?? 0.8,
     maxTokens: input.maxTokens ?? 1200,
     contextWindow: input.contextWindow ?? 32768,
+    kind,
+    // image-only fields — copied straight off the input when the caller sent them
+    apiStyle: input.apiStyle,
+    safeMode: input.safeMode,
+    size: input.size,
+    aspectRatio: input.aspectRatio,
+    promptProviderId: input.promptProviderId,
+    stylePreset: input.stylePreset,
+    hideWatermark: input.hideWatermark,
+    variants: input.variants,
     createdAt: now,
     updatedAt: now
   };
   if (typeof input.apiKey === "string" && input.apiKey.trim()) conn.apiKey = input.apiKey.trim();
   reg.connections.push(conn);
-  if (!reg.connections.some((c) => c.id === reg.activeProviderId)) {
-    reg.activeProviderId = id;
+  // Auto-activate only when THIS kind has no active connection yet — adding a
+  // text connection must never steal (or be stolen by) the image slot.
+  const activeKey = kind === "text" ? "activeTextProviderId" : "activeImageProviderId";
+  if (!reg.connections.some((c) => c.kind === kind && c.id === reg[activeKey])) {
+    reg[activeKey] = id;
     conn.lastActiveAt = now;
   }
   writeRegistry(dir, reg);
   return toPublicConnection(conn);
 }
 
-export function updateConnection(dir: string, id: string, input: ProviderConnectionInput): PublicProviderConnection {
+export function updateConnection(dir: string, id: string, input: ProviderConnectionDraft): PublicProviderConnection {
   const reg = getRegistry(dir);
   const idx = reg.connections.findIndex((c) => c.id === id);
   if (idx === -1) throw new Error(`Provider not found: ${id}`);
@@ -230,19 +315,38 @@ export function deleteConnection(dir: string, id: string): PublicProviderRegistr
   reg.connections = reg.connections.filter((c) => c.id !== id);
   // Deleting the active connection is allowed — the app falls back to the mock
   // provider until another connection is added (createConnection re-activates).
-  if (reg.activeProviderId === id) reg.activeProviderId = "";
+  // Only the slot this id occupied clears: never promote the other kind.
+  if (reg.activeTextProviderId === id) reg.activeTextProviderId = "";
+  if (reg.activeImageProviderId === id) reg.activeImageProviderId = "";
   writeRegistry(dir, reg);
-  return { activeProviderId: reg.activeProviderId, connections: reg.connections.map(toPublicConnection), warnings: [] };
+  return {
+    activeTextProviderId: reg.activeTextProviderId,
+    activeImageProviderId: reg.activeImageProviderId,
+    connections: reg.connections.map(toPublicConnection),
+    warnings: [],
+  };
 }
 
-export function setActiveConnection(dir: string, id: string): { activeProviderId: string } {
+/** Activate a connection in the slot matching its KIND (a text connection can
+ *  never take the image slot). Returns the full public registry so the client
+ *  can replace its state in one call instead of activate-then-reload. */
+export function setActiveConnection(dir: string, id: string): PublicProviderRegistry {
   const reg = getRegistry(dir);
   const conn = reg.connections.find((c) => c.id === id);
   if (!conn) throw new Error(`Provider not found: ${id}`);
-  reg.activeProviderId = id;
+  if (conn.kind === "image") {
+    reg.activeImageProviderId = id;
+  } else {
+    reg.activeTextProviderId = id;
+  }
   conn.lastActiveAt = new Date().toISOString();
   writeRegistry(dir, reg);
-  return { activeProviderId: id };
+  return {
+    activeTextProviderId: reg.activeTextProviderId,
+    activeImageProviderId: reg.activeImageProviderId,
+    connections: reg.connections.map(toPublicConnection),
+    warnings: [],
+  };
 }
 
 export type ModelsProbeResult = {

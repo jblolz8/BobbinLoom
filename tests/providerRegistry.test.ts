@@ -2,18 +2,23 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ProviderConnectionInput } from "../src/server/providerConfig";
+import { ProviderConnectionSchema } from "../src/schemas";
+import { ProviderManager } from "../src/server/providerManager";
+import { MockProvider } from "../src/server/provider";
 import {
+  activeConnectionOfKind,
   createConnection,
   deleteConnection,
   duplicateConnection,
   fetchProviderModels,
+  getRegistry,
   listConnections,
   seedRegistry,
   setActiveConnection,
   testProviderConnection,
   updateConnection
 } from "../src/server/providerRegistry";
+import type { ProviderConnectionDraft } from "../src/server/providerRegistry";
 
 const tempDirs: string[] = [];
 
@@ -31,7 +36,7 @@ function readRegistryFile(dir: string): unknown {
   return JSON.parse(readFileSync(join(dir, "providers.json"), "utf8"));
 }
 
-function connInput(overrides: Partial<ProviderConnectionInput> = {}): ProviderConnectionInput {
+function connInput(overrides: Partial<ProviderConnectionDraft> = {}): ProviderConnectionDraft {
   return {
     label: "Conn",
     baseUrl: "http://x:1",
@@ -55,12 +60,20 @@ describe("provider registry", () => {
     const dir = tempDir();
 
     const reg = seedRegistry(dir);
-    expect(reg.activeProviderId).toBe("");
+    expect(reg.activeTextProviderId).toBe("");
+    expect(reg.activeImageProviderId).toBe("");
     expect(reg.connections).toEqual([]);
 
     // A providers.json file was written to the temp dir.
-    const onDisk = readRegistryFile(dir) as { activeProviderId: string; connections: unknown[] };
-    expect(onDisk.activeProviderId).toBe("");
+    const onDisk = readRegistryFile(dir) as {
+      schemaVersion: number;
+      activeTextProviderId: string;
+      activeImageProviderId: string;
+      connections: unknown[];
+    };
+    expect(onDisk.schemaVersion).toBe(2);
+    expect(onDisk.activeTextProviderId).toBe("");
+    expect(onDisk.activeImageProviderId).toBe("");
     expect(onDisk.connections).toEqual([]);
   });
 
@@ -74,7 +87,7 @@ describe("provider registry", () => {
     });
 
     const reg = seedRegistry(dir);
-    expect(reg.activeProviderId).toBe("");
+    expect(reg.activeTextProviderId).toBe("");
     expect(reg.connections).toEqual([]);
   });
 
@@ -129,19 +142,19 @@ describe("provider registry", () => {
 
     // First connection on an empty registry becomes active automatically.
     createConnection(dir, connInput({ label: "Active", baseUrl: "http://a:1" }));
-    const disk = readRegistryFile(dir) as { activeProviderId: string };
-    expect(disk.activeProviderId).toBe("active");
+    const disk = readRegistryFile(dir) as { activeTextProviderId: string };
+    expect(disk.activeTextProviderId).toBe("active");
 
-    // Deleting the active connection is allowed and clears activeProviderId.
+    // Deleting the active connection is allowed and clears its slot.
     const after = deleteConnection(dir, "active");
-    expect(after.activeProviderId).toBe("");
+    expect(after.activeTextProviderId).toBe("");
     expect(after.connections).toEqual([]);
 
     // Deleting the last remaining connection yields an empty registry.
     createConnection(dir, connInput({ label: "Solo", baseUrl: "http://s:1" }));
     const emptied = deleteConnection(dir, "solo");
     expect(emptied.connections).toEqual([]);
-    expect(emptied.activeProviderId).toBe("");
+    expect(emptied.activeTextProviderId).toBe("");
 
     // Unknown ids still throw.
     expect(() => deleteConnection(dir, "nope")).toThrow(/not found/i);
@@ -157,8 +170,8 @@ describe("provider registry", () => {
     expect(second.lastActiveAt).toBeUndefined();
 
     setActiveConnection(dir, "second");
-    const disk = readRegistryFile(dir) as { activeProviderId: string; connections: Array<{ id: string; lastActiveAt?: string }> };
-    expect(disk.activeProviderId).toBe("second");
+    const disk = readRegistryFile(dir) as { activeTextProviderId: string; connections: Array<{ id: string; lastActiveAt?: string }> };
+    expect(disk.activeTextProviderId).toBe("second");
     const activeConn = disk.connections.find((c) => c.id === "second");
     expect(activeConn?.lastActiveAt).toBeTruthy();
 
@@ -170,7 +183,7 @@ describe("provider registry", () => {
     createConnection(dir, connInput({ label: "Sec", baseUrl: "http://s:1", apiKey: "sk-secret-9999" }));
 
     const pub = listConnections(dir);
-    expect(pub.activeProviderId).toBe("sec");
+    expect(pub.activeTextProviderId).toBe("sec");
     const sec = pub.connections.find((c) => c.id === "sec");
     expect(sec?.hasApiKey).toBe(true);
     expect(sec?.apiKeyMasked).toBe("••••9999");
@@ -316,6 +329,85 @@ describe("registry file hardening", () => {
     contextWindow: 32768
   };
 
+  it("migrates a v1 registry to v2: activeProviderId becomes the text slot, rows gain kind, original archived", () => {
+    const dir = tempDir();
+    writeFileSync(
+      join(dir, "providers.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        activeProviderId: "ds",
+        connections: [validConn]
+      }),
+      "utf8"
+    );
+
+    const list = listConnections(dir);
+
+    expect(list.connections.map((c) => c.id)).toEqual(["ds"]);
+    expect(list.warnings).toHaveLength(1);
+    expect(list.warnings[0]).toContain("migrated");
+    expect(list.activeTextProviderId).toBe("ds");
+    expect(list.activeImageProviderId).toBe("");
+    expect(list.connections[0].kind).toBe("text");
+    expect(existsSync(join(dir, "providers.json.bak"))).toBe(true);
+    const migrated = JSON.parse(readFileSync(join(dir, "providers.json"), "utf8")) as {
+      schemaVersion: number;
+      activeTextProviderId: string;
+      activeImageProviderId: string;
+      connections: Array<{ id: string; kind: string }>;
+    };
+    expect(migrated.schemaVersion).toBe(2);
+    expect(migrated.activeTextProviderId).toBe("ds");
+    expect(migrated.activeImageProviderId).toBe("");
+    expect(migrated.connections[0].kind).toBe("text");
+  });
+
+  it("migrates a bare v0 file (no schemaVersion) and keeps its active id", () => {
+    const dir = tempDir();
+    writeFileSync(
+      join(dir, "providers.json"),
+      JSON.stringify({ activeProviderId: "ds", connections: [validConn] }),
+      "utf8"
+    );
+
+    const list = listConnections(dir);
+
+    expect(list.warnings).toHaveLength(1);
+    expect(list.warnings[0]).toContain("migrated");
+    expect(list.activeTextProviderId).toBe("ds");
+    expect(list.activeImageProviderId).toBe("");
+    const onDisk = JSON.parse(readFileSync(join(dir, "providers.json"), "utf8")) as {
+      schemaVersion: number;
+      activeTextProviderId: string;
+      activeImageProviderId: string;
+      connections: Array<{ kind: string }>;
+    };
+    expect(onDisk.schemaVersion).toBe(2);
+    expect(onDisk.activeTextProviderId).toBe("ds");
+    expect(onDisk.activeImageProviderId).toBe("");
+    expect(onDisk.connections[0].kind).toBe("text");
+  });
+
+  it("does not re-migrate or re-archive an already-v2 registry", () => {
+    const dir = tempDir();
+    writeFileSync(
+      join(dir, "providers.json"),
+      JSON.stringify({
+        schemaVersion: 2,
+        activeTextProviderId: "ds",
+        activeImageProviderId: "",
+        connections: [{ ...validConn, kind: "text" }]
+      }),
+      "utf8"
+    );
+
+    const list = listConnections(dir);
+
+    expect(list.activeTextProviderId).toBe("ds");
+    expect(list.warnings).toEqual([]);
+    expect(existsSync(join(dir, "providers.json.bak"))).toBe(false);
+  });
+
   it("stamps schemaVersion on a v0 registry and archives the original to .bak", () => {
     const dir = tempDir();
     writeFileSync(
@@ -331,7 +423,7 @@ describe("registry file hardening", () => {
     expect(list.warnings[0]).toContain("migrated");
     expect(existsSync(join(dir, "providers.json.bak"))).toBe(true);
     const stamped = JSON.parse(readFileSync(join(dir, "providers.json"), "utf8"));
-    expect(stamped.schemaVersion).toBe(1);
+    expect(stamped.schemaVersion).toBe(2);
   });
 
   it("quarantines an unparseable providers.json, seeds empty, and reports a warning", () => {
@@ -345,7 +437,7 @@ describe("registry file hardening", () => {
     expect(list.warnings[0]).toContain("unreadable");
     expect(existsSync(join(dir, "providers.json.bak"))).toBe(true);
     const reseeded = JSON.parse(readFileSync(join(dir, "providers.json"), "utf8"));
-    expect(reseeded.schemaVersion).toBe(1);
+    expect(reseeded.schemaVersion).toBe(2);
     expect(reseeded.connections).toEqual([]);
   });
 
@@ -361,7 +453,7 @@ describe("registry file hardening", () => {
     const list = listConnections(dir);
 
     expect(list.connections.map((c) => c.id)).toEqual(["ds"]);
-    expect(list.activeProviderId).toBe("ds"); // dead active id re-pointed
+    expect(list.activeTextProviderId).toBe("ds"); // dead active id re-pointed
     expect(list.warnings).toHaveLength(1);
     expect(list.warnings[0]).toContain("1 invalid connection");
     expect(existsSync(join(dir, "providers.json.bak"))).toBe(true);
@@ -369,7 +461,7 @@ describe("registry file hardening", () => {
       schemaVersion: number;
       connections: Array<{ id: string }>;
     };
-    expect(onDisk.schemaVersion).toBe(1);
+    expect(onDisk.schemaVersion).toBe(2);
     expect(onDisk.connections.map((c) => c.id)).toEqual(["ds"]);
   });
 
@@ -378,5 +470,142 @@ describe("registry file hardening", () => {
     const created = createConnection(dir, { label: "DS", baseUrl: "https://api.deepseek.com/v1", model: "m" });
     const updated = updateConnection(dir, created.id, { label: "DS", baseUrl: "https://api.deepseek.com", model: "m" });
     expect(updated.baseUrl).toBe("https://api.deepseek.com/v1");
+  });
+});
+
+describe("provider connection kind", () => {
+  it("parses a legacy text connection without a kind, defaulting to text", () => {
+    const parsed = ProviderConnectionSchema.parse({
+      id: "a", label: "A", baseUrl: "http://x/v1", model: "m",
+      temperature: 0.8, maxTokens: 100, contextWindow: 4096
+    });
+    expect(parsed.kind).toBe("text");
+  });
+
+  it("accepts an image connection with its own fields", () => {
+    const parsed = ProviderConnectionSchema.parse({
+      id: "venice", label: "Venice", baseUrl: "https://api.venice.ai/api/v1", model: "m",
+      temperature: 0.8, maxTokens: 100, contextWindow: 4096,
+      kind: "image", apiStyle: "venice", safeMode: false, size: "1024x1024",
+      promptProviderId: null
+    });
+    expect(parsed.kind).toBe("image");
+    expect(parsed.apiStyle).toBe("venice");
+  });
+});
+
+describe("kind-aware registry slots", () => {
+  it("keeps independent text and image active slots", () => {
+    const dir = tempDir();
+    const text = createConnection(dir, connInput({ label: "Local Text", baseUrl: "http://t:1" }));
+    const image = createConnection(
+      dir,
+      connInput({
+        label: "Venice",
+        baseUrl: "https://api.venice.ai/api/v1",
+        kind: "image",
+        apiStyle: "venice",
+        safeMode: false,
+        size: "1024x1024",
+        promptProviderId: null
+      })
+    );
+
+    const reg = listConnections(dir);
+    expect(reg.activeTextProviderId).toBe(text.id);
+    expect(reg.activeImageProviderId).toBe(image.id);
+
+    // The image row carries its own fields; the text row carries none of them.
+    const imageRow = reg.connections.find((c) => c.id === image.id);
+    expect(imageRow?.kind).toBe("image");
+    expect(imageRow?.apiStyle).toBe("venice");
+    expect(imageRow?.safeMode).toBe(false);
+    expect(imageRow?.size).toBe("1024x1024");
+    expect(imageRow?.promptProviderId).toBeNull();
+    expect(reg.connections.find((c) => c.id === text.id)?.apiStyle).toBeUndefined();
+
+    // Adding a second text connection does not steal the text slot…
+    const text2 = createConnection(dir, connInput({ label: "Second Text", baseUrl: "http://t:2" }));
+    expect(listConnections(dir).activeTextProviderId).toBe(text.id);
+
+    // …and activating it leaves the image slot alone.
+    setActiveConnection(dir, text2.id);
+    const after = listConnections(dir);
+    expect(after.activeTextProviderId).toBe(text2.id);
+    expect(after.activeImageProviderId).toBe(image.id);
+
+    // Deleting the image connection clears only the image slot.
+    const afterDelete = deleteConnection(dir, image.id);
+    expect(afterDelete.activeImageProviderId).toBe("");
+    expect(afterDelete.activeTextProviderId).toBe(text2.id);
+  });
+
+  it("adding a connection of one kind never steals the other kind's slot", () => {
+    const dir = tempDir();
+    const image = createConnection(dir, connInput({ label: "Images", kind: "image", apiStyle: "openai" }));
+    expect(listConnections(dir).activeImageProviderId).toBe(image.id);
+    expect(listConnections(dir).activeTextProviderId).toBe("");
+
+    const text = createConnection(dir, connInput({ label: "Text" }));
+    const reg = listConnections(dir);
+    expect(reg.activeTextProviderId).toBe(text.id);
+    expect(reg.activeImageProviderId).toBe(image.id);
+  });
+
+  it("duplicates an image connection with its kind and image fields intact", () => {
+    const dir = tempDir();
+    const created = createConnection(
+      dir,
+      connInput({ label: "Venice", kind: "image", apiStyle: "venice", size: "1024x1024", promptProviderId: null, variants: 2 })
+    );
+
+    const dup = duplicateConnection(dir, created.id);
+    expect(dup.kind).toBe("image");
+    expect(dup.apiStyle).toBe("venice");
+    expect(dup.variants).toBe(2);
+    expect(dup.promptProviderId).toBeNull();
+    expect(listConnections(dir).activeImageProviderId).toBe(created.id);
+  });
+
+  it("resolves the active connection per kind, and only per kind", () => {
+    const dir = tempDir();
+    const text = createConnection(dir, connInput({ label: "Text", baseUrl: "http://t:1", contextWindow: 8192 }));
+    createConnection(dir, connInput({ label: "Img", kind: "image", contextWindow: 4096 }));
+
+    const reg = getRegistry(dir);
+    expect(activeConnectionOfKind(reg, "text")?.id).toBe(text.id);
+    expect(activeConnectionOfKind(reg, "text")?.kind).toBe("text");
+    expect(activeConnectionOfKind(reg, "image")?.kind).toBe("image");
+
+    // A dead active id falls back to the first connection OF THAT KIND.
+    setActiveConnection(dir, text.id);
+    deleteConnection(dir, text.id);
+    const after = getRegistry(dir);
+    expect(activeConnectionOfKind(after, "text")).toBeNull();
+    expect(activeConnectionOfKind(after, "image")?.kind).toBe("image");
+  });
+});
+
+describe("provider manager kind resolution", () => {
+  it("does not treat an image connection as the text fallback", () => {
+    const dir = tempDir();
+    createConnection(
+      dir,
+      connInput({
+        label: "Venice Images",
+        baseUrl: "https://api.venice.ai/api/v1",
+        kind: "image",
+        apiStyle: "venice",
+        contextWindow: 4096,
+        maxTokens: 77
+      })
+    );
+
+    const manager = new ProviderManager(dir, {});
+    expect(manager.getProvider().constructor.name).toBe("MockProvider");
+    expect(manager.getProvider()).toBeInstanceOf(MockProvider);
+    // The image connection's numbers must NOT leak into the text turn budget.
+    expect(manager.getContextWindow()).toBe(32768);
+    expect(manager.getMaxTokens()).toBe(1200);
   });
 });

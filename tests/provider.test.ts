@@ -96,6 +96,7 @@ describe("provider config", () => {
   it("resolves a connection with BOBBINLOOM_TIMEOUT_MS and a 120s default", () => {
     const conn: ProviderConnection = {
       id: "ds",
+      kind: "text",
       label: "DeepSeek",
       baseUrl: "https://api.deepseek.com",
       model: "deepseek-chat",
@@ -935,7 +936,7 @@ describe("repairRawControlChars", () => {
 
 describe("resolveConnectionConfig", () => {
   const conn: ProviderConnection = {
-    id: "local_lmstudio", label: "Local", baseUrl: "http://localhost:1234",
+    id: "local_lmstudio", kind: "text", label: "Local", baseUrl: "http://localhost:1234",
     apiKey: "abc", model: "my-model",
     temperature: 0.5, maxTokens: 900, contextWindow: 32768
   };

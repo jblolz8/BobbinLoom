@@ -169,6 +169,15 @@ export const PlayerPersonaSchema = z.object({
 });
 export type PlayerPersona = z.infer<typeof PlayerPersonaSchema>;
 
+export const ProviderKindSchema = z.enum(["text", "image"]);
+export type ProviderKind = z.infer<typeof ProviderKindSchema>;
+
+/** Endpoint dialect for image connections. `openai` = POST /images/generations
+ *  (no negative prompt, 1500-char prompt cap); `venice` = POST /image/generate
+ *  (negative_prompt, seed, variants, style_preset, safe_mode). */
+export const ImageApiStyleSchema = z.enum(["openai", "venice"]);
+export type ImageApiStyle = z.infer<typeof ImageApiStyleSchema>;
+
 export const ProviderConnectionSchema = z.object({
   id: z.string().min(1),
   label: z.string(),
@@ -178,6 +187,25 @@ export const ProviderConnectionSchema = z.object({
   temperature: z.number(),
   maxTokens: z.number(),
   contextWindow: z.number(),
+  /** Registry v2 discriminator. `.default()` is deliberate and NOT a slip: it
+   *  makes `kind` required on the OUTPUT type, so every construction site has
+   *  to stamp it and tsc catches the ones that forget. */
+  kind: ProviderKindSchema.default("text"),
+  // ── image-only; absent on text rows ──
+  apiStyle: ImageApiStyleSchema.optional(),
+  /** true = ask the provider to blur/moderate adult content. Absent = false:
+   *  this app is an adult-content project and the blur is a footgun. */
+  safeMode: z.boolean().optional(),
+  /** "auto" | "1024x1024" | "1536x1024" | … mapped per adapter. */
+  size: z.string().optional(),
+  /** Models that reject width/height (Venice qwen-image family) take this. */
+  aspectRatio: z.string().optional(),
+  /** Text connection that writes the image prompt; absent/null = active text. */
+  promptProviderId: z.string().nullable().optional(),
+  // Venice-native pass-throughs
+  stylePreset: z.string().optional(),
+  hideWatermark: z.boolean().optional(),
+  variants: z.number().int().min(1).max(4).optional(),
   readonly: z.boolean().optional(),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
@@ -186,8 +214,9 @@ export const ProviderConnectionSchema = z.object({
 export type ProviderConnection = z.infer<typeof ProviderConnectionSchema>;
 
 export const ProviderRegistryFileSchema = z.object({
-  schemaVersion: z.number().int().min(1).default(1),
-  activeProviderId: z.string(),
+  schemaVersion: z.number().int().min(1).default(2),
+  activeTextProviderId: z.string().default(""),
+  activeImageProviderId: z.string().default(""),
   connections: z.array(ProviderConnectionSchema)
 });
 export type ProviderRegistryFile = z.infer<typeof ProviderRegistryFileSchema>;
