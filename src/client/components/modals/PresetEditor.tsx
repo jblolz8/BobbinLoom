@@ -12,23 +12,11 @@ import {
   updatePlaythroughPromptSettings,
   updatePreset,
   type PlaythroughPromptSettings,
-  type Preset,
+  type PresetUpdatePayload,
   type PromptModuleSet,
   type PresetModule,
   type PresetSummary
 } from "../../api";
-
-/** The preset/snapshot payloads the client API types carry, extended with the
- *  image block. The block is preset-owned state (not a prompt module), so it
- *  travels on the same save call as `modules` and `characterFormat`. */
-type PresetWithImage = Preset & { imageGeneration?: ImageGenerationSettings };
-type PlaythroughSnapshot = PlaythroughPromptSettings & { imageGeneration?: ImageGenerationSettings };
-type PresetSavePayload = {
-  name?: string;
-  modules?: PromptModuleSet;
-  characterFormat?: CharacterFormat;
-  imageGeneration?: ImageGenerationSettings;
-};
 
 function cloneFormat(format?: CharacterFormat): CharacterFormat {
   if (!format || format.sections.length === 0) return JSON.parse(JSON.stringify(DEFAULT_CHARACTER_FORMAT)) as CharacterFormat;
@@ -271,7 +259,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
 
     setActivePresetId(currentId);
     try {
-      const fullPreset = (await getPreset(currentId)) as PresetWithImage;
+      const fullPreset = await getPreset(currentId);
       setActivePresetName(fullPreset.name);
       setActivePresetReadonly(fullPreset.readonly);
       setPresetModules(fullPreset.modules);
@@ -279,12 +267,11 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
       setPresetImage(cloneImage(fullPreset.imageGeneration));
     } catch {
       if (playthroughPromptSettings) {
-        const snapshot = playthroughPromptSettings as PlaythroughSnapshot;
-        setActivePresetName(snapshot.presetName);
+        setActivePresetName(playthroughPromptSettings.presetName);
         setActivePresetReadonly(false);
-        setPresetModules(snapshot.modules);
-        setPresetFormat(cloneFormat(snapshot.characterFormat));
-        setPresetImage(cloneImage(snapshot.imageGeneration));
+        setPresetModules(playthroughPromptSettings.modules);
+        setPresetFormat(cloneFormat(playthroughPromptSettings.characterFormat));
+        setPresetImage(cloneImage(playthroughPromptSettings.imageGeneration));
       }
     }
     resetPresetState();
@@ -293,7 +280,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
   async function switchPreset(presetId: string) {
     setPresetSaving(true); setStatus(null);
     try {
-      const fullPreset = (await getPreset(presetId)) as PresetWithImage;
+      const fullPreset = await getPreset(presetId);
       setActivePresetId(fullPreset.id); setActivePresetName(fullPreset.name);
       setActivePresetReadonly(fullPreset.readonly); setPresetModules(fullPreset.modules);
       setPresetFormat(cloneFormat(fullPreset.characterFormat));
@@ -315,8 +302,8 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
     if (activePresetReadonly || presetSaving) return;
     setPresetSaving(true); setStatus(null);
     try {
-      const payload: PresetSavePayload = { modules: presetModules, characterFormat: presetFormat, imageGeneration: presetImage };
-      const updated = (await updatePreset(activePresetId, payload)) as PresetWithImage;
+      const payload: PresetUpdatePayload = { modules: presetModules, characterFormat: presetFormat, imageGeneration: presetImage };
+      const updated = await updatePreset(activePresetId, payload);
       setPresetModules(updated.modules); setPresetFormat(cloneFormat(updated.characterFormat));
       setPresetImage(cloneImage(updated.imageGeneration)); resetPresetState();
       setStatus(`"${activePresetName}" saved.`);
@@ -330,8 +317,8 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
     if (!name) { setPresetSaving(false); return; }
     try {
       const created = await createPreset(name);
-      const payload: PresetSavePayload = { modules: presetModules, characterFormat: presetFormat, imageGeneration: presetImage };
-      const updated = (await updatePreset(created.id, payload)) as PresetWithImage;
+      const payload: PresetUpdatePayload = { modules: presetModules, characterFormat: presetFormat, imageGeneration: presetImage };
+      const updated = await updatePreset(created.id, payload);
       setActivePresetId(updated.id); setActivePresetName(updated.name);
       setActivePresetReadonly(updated.readonly); setPresetModules(updated.modules);
       setPresetFormat(cloneFormat(updated.characterFormat));
@@ -361,7 +348,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
     setPresetSaving(true); setStatus(null);
     try {
       await deletePreset(activePresetId);
-      const defaultPreset = (await getPreset("default")) as PresetWithImage;
+      const defaultPreset = await getPreset("default");
       setActivePresetId(defaultPreset.id); setActivePresetName(defaultPreset.name);
       setActivePresetReadonly(defaultPreset.readonly); setPresetModules(defaultPreset.modules);
       setPresetFormat(cloneFormat(defaultPreset.characterFormat));

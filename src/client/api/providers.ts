@@ -2,6 +2,7 @@ import { request } from "./client";
 import type {
   CharacterFormat,
   ImageApiStyle,
+  ImageGenerationSettings,
   ProviderConnection as ProviderConnectionRow,
   ProviderKind
 } from "../../schemas";
@@ -93,12 +94,19 @@ export type PresetSummary = {
   moduleCount: number;
 };
 
+/** Preset-owned image-prompt configuration. Optional on BOTH payloads with no
+ *  default: presets and playthrough snapshots written before the image feature
+ *  have no block, so read sites fall back to `DEFAULT_IMAGE_GENERATION_SETTINGS`
+ *  explicitly (same contract as the server). Declared here — rather than as an
+ *  intersection type at the call site — so every consumer of `getPreset` /
+ *  `updatePreset` / the prompt-settings snapshot sees the field with no cast. */
 export type Preset = {
   id: string;
   name: string;
   readonly: boolean;
   modules: PromptModuleSet;
   characterFormat?: CharacterFormat;
+  imageGeneration?: ImageGenerationSettings;
 };
 
 export type PlaythroughPromptSettings = {
@@ -106,6 +114,7 @@ export type PlaythroughPromptSettings = {
   presetName: string;
   modules: PromptModuleSet;
   characterFormat?: CharacterFormat;
+  imageGeneration?: ImageGenerationSettings;
 };
 
 export function listProviderConnections(): Promise<ProviderRegistry> {
@@ -158,6 +167,15 @@ export function setDefaultPresetId(defaultPresetId: string): Promise<{ defaultPr
   });
 }
 
+/** Write shape for `updatePreset`. The image block is preset-owned state (not a
+ *  prompt module), so it travels on the same save call as the others. */
+export type PresetUpdatePayload = {
+  name?: string;
+  modules?: PromptModuleSet;
+  characterFormat?: CharacterFormat;
+  imageGeneration?: ImageGenerationSettings;
+};
+
 export function listPresets(): Promise<PresetSummary[]> {
   return request<PresetSummary[]>("/api/prompt-presets");
 }
@@ -173,7 +191,7 @@ export function createPreset(name: string, cloneFromId?: string): Promise<Preset
   });
 }
 
-export function updatePreset(id: string, payload: { name?: string; modules?: PromptModuleSet; characterFormat?: CharacterFormat }): Promise<Preset> {
+export function updatePreset(id: string, payload: PresetUpdatePayload): Promise<Preset> {
   return request<Preset>(`/api/prompt-presets/${id}`, {
     method: "PUT",
     body: JSON.stringify(payload)
