@@ -111,7 +111,7 @@ accessor).
 | **API Style** | The endpoint dialect. **OpenAI-compatible** (the default) posts to `<baseUrl>/images/generations`; **Venice** posts to `<baseUrl>/image/generate`. Venice sends negative prompts, seeds, variants and style presets; OpenAI-compatible sends none of them. |
 | **Image Size** | `auto`, `1024x1024`, `1536x1024`, `1024x1536`, `1024x1792`, `1792x1024`, or a value you type. `auto` lets the provider choose. |
 | **Aspect Ratio** | Used **instead of** Image Size for models that reject `width`/`height` (the Venice qwen-image family). Leave empty to send the size. |
-| **Style Preset** | Venice only. Sent as `style_preset`. |
+| **Style Preset** | Venice only. Sent as `style_preset`. A select of the provider's own values (see **Style list** below) plus **None** (= send nothing) and a **Custom…** escape hatch. Values are **case-sensitive and title-cased** upstream — `anime` is rejected with a 400 — and a saved value the provider does not list is flagged in the editor. |
 | **Variants** | 1–4. Every rendered variant is kept on the message. |
 | **Hide Watermark** | Venice only. Requests results without the Venice watermark. |
 | **Safe Mode** | Ask the provider to blur adult content. Off by default; leave it off for this project. |
@@ -121,6 +121,20 @@ accessor).
 *image* model family (`GET <baseUrl>/models?type=image`) — that is how image checkpoints
 are listed on providers exposing more than one family. **Test connection** still issues a
 plain `GET <baseUrl>/models` reachability + auth check.
+
+**Style list.** On a Venice connection the **Style Preset** field is a select populated
+from `GET <baseUrl>/image/styles`. That endpoint is **keyless** — BobbinLoom's
+`POST /api/settings/providers/image-styles` sends the Authorization header only when a key
+is available — so the list loads when the connection is opened, before anything is saved
+(the store's key is used when there is one). **Fetch styles** re-runs it manually.
+
+The values are the provider's own, in the provider's order, and they are **case-sensitive
+and title-cased** (`Anime`, not `anime`). **None** sends no `style_preset` at all (an empty
+value is omitted from the request body, never sent as `""`), and **Custom…** falls back to
+the old free-text field for an endpoint that does not implement the listing. A connection
+whose stored value is not in the fetched list is warned about in the editor, because that
+value is a 400 waiting to happen — and by then the text call that wrote the prompt has
+already run.
 
 Image connections store every shared field (name, base URL, model, temperature, max
 tokens, context window) plus the ones above; the image-only fields are simply absent on

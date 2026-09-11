@@ -30,7 +30,7 @@ Image connections are plain entries in the provider registry (`data/providers.js
 | `size` | `"auto"` \| `"1024x1024"` \| `"1536x1024"` \| … | `openai` sends it verbatim as `size` (`"auto"` included); `venice` parses it into `width`/`height` and **drops it entirely** when it is `"auto"` or unparseable — the provider then picks. |
 | `aspectRatio` | string, e.g. `"3:2"` | Venice only. Used **instead of** `size` for models that reject `width`/`height` (the qwen-image family). |
 | `promptProviderId` | text connection id, or `null` | Which text connection writes the prompt. Absent/null = the current active text connection. A dangling id falls back to the active text connection rather than erroring. |
-| `stylePreset` | string, e.g. `"anime"` | Venice only. Sent as `style_preset`. |
+| `stylePreset` | a value the provider itself lists, e.g. `"Anime"` | Venice only. Sent as `style_preset`. **Case-sensitive and title-cased upstream**: `anime` is a 400 (`Invalid style requested`). The list comes from the keyless `GET {baseUrl}/image/styles`, and the connection editor fills a select from it (with **None** and a **Custom…** escape hatch). An **empty value is omitted** from the body rather than sent. |
 | `hideWatermark` | boolean | Venice only. Sent as `hide_watermark: true` (only when on). |
 | `variants` | integer 1–4 | How many images one request renders. Every returned variant is kept. |
 
@@ -91,7 +91,7 @@ Image connections are plain entries in the provider registry (`data/providers.js
 | `variants` | `req.variants ?? connection.variants ?? 1` | |
 | `seed` | request seed, else `0` | **`0` means random** (documented). |
 | `safe_mode` | connection `safeMode` | Absent = `false`. |
-| `style_preset` | connection | Only sent when set. |
+| `style_preset` | connection | Only sent when set — an empty value is omitted, never sent as `""`. A value the provider does not list is rejected with a 400 that lands **after** the prompt call has already been paid for, which is why the connection editor offers the provider's own list instead of free text. |
 | `hide_watermark` | connection | Only sent as `true` when on. |
 | `aspect_ratio` | connection | Optional. **Mutually exclusive with `width`/`height` upstream** — sending both is what a 400 from the qwen-image family looks like, so the adapter sends one or the other. |
 | `width` / `height` | parsed from `size` | Only when no `aspectRatio` is set and `size` parses as `NNNxNNN`. |
@@ -344,6 +344,20 @@ The OpenAI-compatible `/images/generations` endpoint rejects prompts over 1500 c
 ### Safe mode and the adult-content blur
 
 `safeMode` is off by default, and that is a deliberate default for this project. When it is off, the `openai` dialect sends `moderation: "low"`, which is what disables Venice's upstream adult-content blur; when it is on it sends `moderation: "auto"`. The `venice` dialect sends `safe_mode` directly. If images come back blurred or censored, safe mode is the first thing to check — and note that the NSFW preset's negative prefix already fights censoring tokens (`censored, mosaic censoring, bar censor`).
+
+### Style presets are a closed, case-sensitive list
+
+`style_preset` is not free text: Venice validates it against its own list and rejects anything else with a **400 `Invalid style requested`**. The values are **title-cased** (`Anime`, never `anime`) and the check is case-sensitive — a lowercase value is the exact bug this control was redesigned for.
+
+The failure is costly in one specific way, and it is not the image: the **prompt call has already run** (and been paid for) by the time the image endpoint answers. The playthrough itself is unchanged.
+
+The list is read from `GET {baseUrl}/image/styles`, which is **public** — no key is required, so BobbinLoom proxies it keyless (`POST /api/settings/providers/image-styles`, which attaches the key only when one is available). The connection editor loads it when a Venice connection is opened, in the provider's own order, and offers:
+
+- **None** — nothing is sent. `style_preset` is **omitted** from the body, not sent empty.
+- every listed style, verbatim.
+- **Custom…** — reveals a plain text field, so a self-hosted or future endpoint that does not implement the listing stays usable.
+
+A connection whose **stored** value is not in the fetched list is flagged in the editor, naming the 400 and offering the case-insensitive nearest match — that is precisely the state an older, free-text configuration is left in.
 
 ### Sizes are model-dependent
 
