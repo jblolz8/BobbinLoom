@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { atomicWriteJson, backupFile, quarantineFile } from "./persistence";
 import { maskApiKey, normalizeBaseUrl, normalizeImageBaseUrl } from "./providerConfig";
 import { authHeaders } from "./httpAuth";
+import { detectForgeCouple } from "./imageProvider/shared";
 import { ProviderConnectionSchema, ProviderRegistryFileSchema } from "../schemas";
 import type { ImageApiStyle, ProviderConnection, ProviderKind, ProviderRegistryFile, RegionDirection } from "../schemas";
 import type { ProviderConnectionInput, PublicProviderConnection } from "./providerConfig";
@@ -431,8 +432,13 @@ export type ModelsProbeResult = {
    *  Absent when neither answered (an older build may have no schedulers), and
    *  partially populated when only one did — a missing list is never an error:
    *  the editor falls back to a free-text field, which is how a fork's own
-   *  sampler name gets typed anyway. */
-  dialectOptions?: { samplers?: string[]; schedulers?: string[] };
+   *  sampler name gets typed anyway.
+   *
+   *  `forgeCouple` is the same pass' answer to "is the Forge Couple extension
+   *  installed?" (`/sdapi/v1/script-info`, cached). Present-and-true only when
+   *  the WebUI listed it; an absent key is "not detected" — which is what turns
+   *  character regions on in the editor, so it must never be guessed. */
+  dialectOptions?: { samplers?: string[]; schedulers?: string[]; forgeCouple?: boolean };
 };
 
 /** A finite number, or nothing (a string, null, NaN and Infinity all mean the
@@ -697,15 +703,22 @@ async function probeA1111Models(
       };
     }
     const models = parseA1111Checkpoints(await res.text());
-    // Both lists at once — they are independent, and one failing must not cost
-    // the other. `Promise.all` here can never reject: each fetcher swallows.
-    const [samplers, schedulers] = await Promise.all([
+    // The optional lists at once — they are independent, and one failing must
+    // not cost the others. `Promise.all` here can never reject: each fetcher
+    // swallows, including the detection, which answers "not installed" instead
+    // of throwing.
+    const [samplers, schedulers, forgeCouple] = await Promise.all([
       fetchA1111Names(`${base}/sdapi/v1/samplers`, headers, fetchImpl),
-      fetchA1111Names(`${base}/sdapi/v1/schedulers`, headers, fetchImpl)
+      fetchA1111Names(`${base}/sdapi/v1/schedulers`, headers, fetchImpl),
+      detectForgeCouple(base, { fetchImpl, headers })
     ]);
     const dialectOptions: NonNullable<ModelsProbeResult["dialectOptions"]> = {};
     if (samplers) dialectOptions.samplers = samplers;
     if (schedulers) dialectOptions.schedulers = schedulers;
+    // Reported only when it IS there. An absent key means "not detected" (or a
+    // WebUI that would not say), never a claim about an extension nobody saw —
+    // and `false` would be indistinguishable from a probe that never ran.
+    if (forgeCouple.detected) dialectOptions.forgeCouple = true;
     return {
       ok: true,
       status: res.status,
@@ -714,7 +727,7 @@ async function probeA1111Models(
       // An A1111 listing publishes no `model_spec` constraints, so the map is
       // empty — the same answer as a provider that publishes none.
       modelSpecs: {},
-      ...(samplers || schedulers ? { dialectOptions } : {})
+      ...(samplers || schedulers || dialectOptions.forgeCouple ? { dialectOptions } : {})
     };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : String(e), latencyMs: Date.now() - start, models: [], modelSpecs: {} };

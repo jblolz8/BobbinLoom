@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ChatMessageSchema,
   ImageGenerationSettingsSchema,
@@ -12,6 +12,7 @@ import {
 import { DEFAULT_IMAGE_GENERATION_SETTINGS, DEFAULT_IMAGE_PROMPT_INSTRUCTION } from "../src/engine/imageDefaults";
 import { ProviderManager } from "../src/server/providerManager";
 import { MockProvider } from "../src/server/provider";
+import { clearForgeCoupleCache } from "../src/server/imageProvider/shared";
 import {
   activeConnectionOfKind,
   createConnection,
@@ -384,13 +385,20 @@ describe("provider registry", () => {
     ];
     const SAMPLERS = [{ name: "DPM++ 2M Karras", aliases: [], options: {} }, { name: "Euler a", aliases: [] }];
     const SCHEDULERS = [{ name: "Karras", aliases: [] }, { name: "Automatic", aliases: [] }];
+    /** `/sdapi/v1/script-info`: every script the WebUI has, alwayson or not.
+     *  The default list is a build WITHOUT Forge Couple — which is the user's
+     *  ReForge today, and the state everything must keep rendering in. */
+    const SCRIPTS = [{ name: "txt2img", is_alwayson: false }, { name: "sampler", is_alwayson: false }];
+    const SCRIPT_INFO_URL = `${BASE}/sdapi/v1/script-info`;
+    const FORGE_COUPLE = [{ name: "Forge Couple", is_alwayson: true }];
 
-    /** The WebUI serves three independent lists; each is routed by URL so a
+    /** The WebUI serves four independent lists; each is routed by URL so a
      *  single one can fail in isolation, and every request is recorded. */
     function a1111Fetch(overrides: {
       sdModels?: () => Response;
       samplers?: () => Response;
       schedulers?: () => Response;
+      scriptInfo?: () => Response;
     } = {}) {
       const calls: { url: string; headers: Record<string, string> }[] = [];
       const impl = vi.fn(async (url: string, init?: { headers?: Record<string, string> }) => {
@@ -404,20 +412,29 @@ describe("provider registry", () => {
         if (url.endsWith("/sdapi/v1/schedulers")) {
           return overrides.schedulers?.() ?? new Response(JSON.stringify(SCHEDULERS), { status: 200 });
         }
+        if (url.endsWith("/sdapi/v1/script-info")) {
+          return overrides.scriptInfo?.() ?? new Response(JSON.stringify(SCRIPTS), { status: 200 });
+        }
         return new Response("not found", { status: 404 });
       });
       return { impl: impl as unknown as typeof fetch, calls };
     }
 
+    // The detection cache is per process: one test's answer must never be
+    // another's, or a "detected" assertion can be served by a "not installed"
+    // probe from the test before it.
+    beforeEach(() => clearForgeCoupleCache());
+
     it("probes http://127.0.0.1:7860/sdapi/v1/sd-models at the WebUI ROOT and keeps the server's checkpoint order", async () => {
       const { impl, calls } = a1111Fetch();
       const result = await fetchProviderModels({ baseUrl: BASE, apiStyle: "a1111" }, impl);
 
-      // The exact URL, on the record: no /v1 segment is inserted before sdapi.
+      // The exact URLs, on the record: no /v1 segment is inserted before sdapi.
       expect(calls.map((c) => c.url)).toEqual([
         "http://127.0.0.1:7860/sdapi/v1/sd-models",
         "http://127.0.0.1:7860/sdapi/v1/samplers",
-        "http://127.0.0.1:7860/sdapi/v1/schedulers"
+        "http://127.0.0.1:7860/sdapi/v1/schedulers",
+        "http://127.0.0.1:7860/sdapi/v1/script-info"
       ]);
       expect(calls[0].url).not.toContain("/v1/sdapi");
 
@@ -426,6 +443,31 @@ describe("provider registry", () => {
       expect(result.models).toEqual(["dreamshaper_8.safetensors", "sd_xl_base_1.0.safetensors"]);
       // An A1111 listing publishes no model_spec: the map stays empty, never absent.
       expect(result.modelSpecs).toEqual({});
+    });
+
+    it("reports the Forge Couple extension the WebUI published, and nothing when it has none", async () => {
+      const { impl } = a1111Fetch({
+        scriptInfo: () => new Response(JSON.stringify([...SCRIPTS, ...FORGE_COUPLE]), { status: 200 })
+      });
+      const found = await fetchProviderModels({ baseUrl: BASE, apiStyle: "a1111" }, impl);
+      expect(found.ok).toBe(true);
+      expect(found.dialectOptions?.forgeCouple).toBe(true);
+
+      // No extension → the key is ABSENT (not a false claim either way): the
+      // editor shows "not installed" instead of a silent no-op.
+      clearForgeCoupleCache();
+      const { impl: bare } = a1111Fetch();
+      const missing = await fetchProviderModels({ baseUrl: BASE, apiStyle: "a1111" }, bare);
+      expect(missing.dialectOptions?.forgeCouple).toBeUndefined();
+      expect("forgeCouple" in (missing.dialectOptions ?? {})).toBe(false);
+
+      // A script-info route that does not exist is the same answer: absent,
+      // and the probe itself still succeeds.
+      clearForgeCoupleCache();
+      const { impl: broken } = a1111Fetch({ scriptInfo: () => new Response("boom", { status: 500 }) });
+      const errored = await fetchProviderModels({ baseUrl: BASE, apiStyle: "a1111" }, broken);
+      expect(errored.ok).toBe(true);
+      expect(errored.dialectOptions?.forgeCouple).toBeUndefined();
     });
 
     it("normalizes a trailing slash and never doubles the /v1 in the sdapi path", async () => {
@@ -448,7 +490,10 @@ describe("provider registry", () => {
       const { impl, calls } = a1111Fetch();
       const expected = `Basic ${Buffer.from("alice:s3cret").toString("base64")}`;
       await fetchProviderModels({ baseUrl: BASE, apiKey: "alice:s3cret", apiStyle: "a1111" }, impl);
-      expect(calls).toHaveLength(3);
+      // The three lists PLUS the script-info detection, which must not be the
+      // one call that forgets the credentials.
+      expect(calls).toHaveLength(4);
+      expect(calls.some((c) => c.url === SCRIPT_INFO_URL)).toBe(true);
       for (const call of calls) expect(call.headers.Authorization).toBe(expected);
     });
 

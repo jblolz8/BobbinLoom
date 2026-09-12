@@ -112,8 +112,12 @@ export type ConnectionModelsResult = {
   /** a1111 only: the WebUI's own sampler and scheduler names, for the
    *  editor's suggestion lists. Absent when the WebUI did not publish them —
    *  an older build may have no `/sdapi/v1/schedulers` at all — and possibly
-   *  partially populated. Never an error. */
-  dialectOptions?: { samplers?: string[]; schedulers?: string[] };
+   *  partially populated. Never an error.
+   *
+   *  `forgeCouple` is true only when the WebUI listed the Forge Couple
+   *  extension in `/sdapi/v1/script-info`; an absent key means "not detected",
+   *  which is what the editor turns into "regions are off". */
+  dialectOptions?: { samplers?: string[]; schedulers?: string[]; forgeCouple?: boolean };
   status?: number;
   message?: string;
   latencyMs?: number;

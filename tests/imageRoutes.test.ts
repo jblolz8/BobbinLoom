@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../src/engine/imageDefaults";
 import type { ImageGenerationSettings } from "../src/schemas";
 import type { ProviderConnectionDraft } from "../src/server/providerRegistry";
@@ -13,6 +13,7 @@ import { OPENAI_IMAGE_PROMPT_CAP } from "../src/server/imageProvider/openaiImage
 import { VENICE_IMAGE_PROMPT_CAP } from "../src/server/imageProvider/veniceImageProvider";
 import { clearImageProgress, publishImageProgress, readImageProgress } from "../src/server/imageProgress";
 import { saveImageBytes } from "../src/server/imageStore";
+import { clearForgeCoupleCache } from "../src/server/imageProvider/shared";
 import { ProviderManager } from "../src/server/providerManager";
 import { imageRoutes } from "../src/server/routes/images";
 import { providerRoutes } from "../src/server/routes/providers";
@@ -20,6 +21,12 @@ import { getPlaythroughRecord, updatePlaythroughRecord } from "../src/server/sto
 import { cleanupTempDirs, pngBytes, tempDir, writePlaythroughWithImages } from "./helpers/imageFixtures";
 
 afterEach(cleanupTempDirs);
+
+// The Forge Couple detection cache lives for the life of the process, and an
+// a1111 probe fills it. Without this, a test that probes 127.0.0.1:7860 would
+// be answered by the test before it — including its script-info request
+// disappearing from the recorded call list.
+beforeEach(() => clearForgeCoupleCache());
 
 const PNG_B64 = pngBytes("routes").toString("base64");
 const TEXT_ANSWER = '{"prompt": "a woman in the rain", "negative_prompt": "blurry"}';
@@ -42,8 +49,8 @@ type HarnessOptions = {
   imageSeed?: number;
   /** The `/models` body, when the default (two bare ids) is not enough. */
   modelsPayload?: unknown;
-  /** A1111's three lists (`/sdapi/v1/…`), when a test needs to change one. */
-  a1111Payload?: { checkpoints?: unknown; samplers?: unknown; schedulers?: unknown };
+  /** A1111's own lists (`/sdapi/v1/…`), when a test needs to change one. */
+  a1111Payload?: { checkpoints?: unknown; samplers?: unknown; schedulers?: unknown; scripts?: unknown };
 };
 
 function harness(options: HarnessOptions = {}) {
@@ -89,6 +96,11 @@ function harness(options: HarnessOptions = {}) {
       }
       if (href.endsWith("/sdapi/v1/schedulers")) {
         return new Response(JSON.stringify(a1111.schedulers ?? [{ name: "Karras" }]), { status: 200 });
+      }
+      // The installed-scripts listing. The default build has no Forge Couple —
+      // the user's ReForge today — so detection answers "not installed".
+      if (href.endsWith("/sdapi/v1/script-info")) {
+        return new Response(JSON.stringify(a1111.scripts ?? [{ name: "txt2img", is_alwayson: false }]), { status: 200 });
       }
     }
     if (href.includes("/models")) {
@@ -885,7 +897,8 @@ describe("POST /api/settings/providers/models", () => {
     expect(h.calls.map((c) => c.url)).toEqual([
       "http://127.0.0.1:7860/sdapi/v1/sd-models",
       "http://127.0.0.1:7860/sdapi/v1/samplers",
-      "http://127.0.0.1:7860/sdapi/v1/schedulers"
+      "http://127.0.0.1:7860/sdapi/v1/schedulers",
+      "http://127.0.0.1:7860/sdapi/v1/script-info"
     ]);
     expect(res.json().models).toEqual(["dreamshaper_8.safetensors", "sd_xl_base_1.0.safetensors"]);
     expect(res.json().dialectOptions).toEqual({ samplers: ["DPM++ 2M Karras"], schedulers: ["Karras"] });
@@ -933,7 +946,8 @@ describe("POST /api/settings/providers/models", () => {
     expect(h.calls.map((c) => c.url)).toEqual([
       "http://127.0.0.1:7860/sdapi/v1/sd-models",
       "http://127.0.0.1:7860/sdapi/v1/samplers",
-      "http://127.0.0.1:7860/sdapi/v1/schedulers"
+      "http://127.0.0.1:7860/sdapi/v1/schedulers",
+      "http://127.0.0.1:7860/sdapi/v1/script-info"
     ]);
     expect(res.json().models).toEqual(["dreamshaper_8.safetensors", "sd_xl_base_1.0.safetensors"]);
 
