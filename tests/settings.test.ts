@@ -232,7 +232,7 @@ describe("image generation: shipped preset configs", () => {
     for (const id of ["default", "default-nsfw"]) {
       const image = preset(id).imageGeneration!;
       expect(image.positivePrefix).toBe("anime style");
-      expect(image.promptCharacterLimit).toBe(900);
+      expect(image.promptCharacterLimit).toBe(1200);
       expect(image.includeState).toBe(true);
       expect(image.includeCast).toBe(true);
     }
@@ -242,18 +242,39 @@ describe("image generation: shipped preset configs", () => {
     );
   });
 
-  it("ships the NSFW instruction as the same document plus the Explicit scenes section", () => {
+  it("carries the raised 1200-character limit on every preset that ships an image block", () => {
+    for (const p of presets) {
+      if (!p.imageGeneration) continue;
+      expect(p.imageGeneration.promptCharacterLimit, p.name).toBe(1200);
+    }
+    // Named explicitly: the two shipped presets AND the user's own clone.
+    expect(preset("default").imageGeneration?.promptCharacterLimit).toBe(1200);
+    expect(preset("default-nsfw").imageGeneration?.promptCharacterLimit).toBe(1200);
+    const clone = presets.find((p) => p.name === "Default (NSFW) (copy)")!;
+    expect(clone.imageGeneration?.promptCharacterLimit).toBe(1200);
+    // The clone's custom 1980s-anime prefix and instruction stay the user's own.
+    expect(clone.imageGeneration?.positivePrefix).toBe("1980s anime style, retro anime, vintage anime, cel animation, ");
+    expect(clone.imageGeneration?.instruction).not.toBe(DEFAULT_IMAGE_PROMPT_INSTRUCTION);
+  });
+
+  it("ships the NSFW instruction as the core document with the rating bullet swapped and Explicit scenes inserted", () => {
+    const ratingBullet =
+      "- First tag is the rating that matches what is actually happening: safe, sensitive, nsfw, or explicit. A tame scene stays tame.";
+    const nsfwRatingBullet =
+      "- First tag is the rating: nsfw or explicit when the scene is sexual, safe or sensitive when it is not.";
     const explicitScenes =
-      "Explicit scenes:\n" +
-      "- When the scene text is sexually explicit, depict it at the same explicitness. Name the act, the\n" +
-      "  position, what is exposed, and the visible physical state — plainly, without euphemism, matching\n" +
-      "  the playthrough's Explicit Content module.\n" +
-      "- Keep anatomy, clothing state, and arousal consistent with what the scene text establishes. Do not\n" +
-      "  add acts, participants, or undress the scene did not describe.\n" +
-      "- Never sanitize, blur, censor, fade, or omit what the scene describes, and never add safety,\n" +
-      "  consent, or policy boilerplate. If the scene is not explicit, do not invent explicit content.";
+      "EXPLICIT SCENES\n" +
+      "- When the scene is sexually explicit, tag it at the same explicitness, plainly and without euphemism: the act, the position, what is exposed, what the bodies are doing, visible physical state (sweat, fluids, trembling, flushed skin).\n" +
+      "- Keep the characters' established appearance, clothing state and arousal consistent with what the scene says. Do not add acts, partners or undress the scene did not describe.\n" +
+      "- Never censor, blur, fade or sanitise what the scene describes, and never add safety, boilerplate or refusals. If the scene is not explicit, do not invent explicit content.";
+
+    // Both replacements must actually bite, or the equality below is vacuous.
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(ratingBullet);
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("Return JSON only:");
     expect(preset("default-nsfw").imageGeneration?.instruction).toBe(
-      DEFAULT_IMAGE_PROMPT_INSTRUCTION.replace("Return JSON only:", `${explicitScenes}\n\nReturn JSON only:`)
+      DEFAULT_IMAGE_PROMPT_INSTRUCTION
+        .replace(ratingBullet, nsfwRatingBullet)
+        .replace("Return JSON only:", `${explicitScenes}\n\nReturn JSON only:`)
     );
   });
 
@@ -435,6 +456,6 @@ describe("image generation: preset routes and the playthrough snapshot", () => {
     expect(parsed.imageGeneration).toBeUndefined();
     const resolved = parsed.imageGeneration ?? DEFAULT_IMAGE_GENERATION_SETTINGS;
     expect(resolved.instruction).toBe(DEFAULT_IMAGE_PROMPT_INSTRUCTION);
-    expect(resolved.promptCharacterLimit).toBe(900);
+    expect(resolved.promptCharacterLimit).toBe(1200);
   });
 });
