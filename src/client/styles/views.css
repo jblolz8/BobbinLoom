@@ -954,6 +954,44 @@
   cursor: default;
 }
 
+/* Diagnostic provenance: the JSON body sent to the image provider, collapsed
+   under the image it belongs to. Deliberately quiet — small, muted, monospace,
+   height-capped, and horizontally scrollable so a long prompt cannot widen or
+   push the message off screen. */
+.message-image-request {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.message-image-request-summary {
+  display: inline-block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  cursor: pointer;
+  opacity: 0.65;
+  transition: opacity 0.15s ease;
+}
+
+.message-image-request-summary:hover,
+.message-image-request-summary:focus-visible {
+  opacity: 1;
+}
+
+.message-image-request-pre {
+  margin: 0.3rem 0 0;
+  padding: 0.4rem 0.5rem;
+  max-height: 180px;
+  max-width: 100%;
+  overflow: auto;
+  background: var(--code-block-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+  white-space: pre;
+}
+
 /* Remove control: revealed on hover/focus like the message actions, and always
    visible while its own delete is in flight. */
 .message-image-remove {

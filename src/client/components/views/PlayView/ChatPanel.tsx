@@ -289,6 +289,32 @@ function GeneratingResponse({ showGenerationTime }: { showGenerationTime: boolea
   );
 }
 
+/** Diagnostic disclosure under a generated image: the exact JSON body that was
+ *  sent to the image provider, pretty-printed. Quiet and collapsed on purpose —
+ *  this is provenance, not story content. A stored value that is not JSON (a
+ *  hand-edited record) renders as-is instead of throwing. */
+function ImageRequestDisclosure({ request }: { request: string }) {
+  const formatted = useMemo(() => {
+    try {
+      return JSON.stringify(JSON.parse(request), null, 2);
+    } catch {
+      return request;
+    }
+  }, [request]);
+
+  return (
+    <details className="message-image-request">
+      <summary
+        className="message-image-request-summary"
+        title="The JSON body sent to the image provider"
+      >
+        request
+      </summary>
+      <pre className="message-image-request-pre">{formatted}</pre>
+    </details>
+  );
+}
+
 export function ChatPanel(props: ChatPanelProps) {
   const {
     playthrough, input, onInputChange, onSend, loading, actionLoading,
@@ -503,6 +529,9 @@ export function ChatPanel(props: ChatPanelProps) {
                           {img.durationMs ? ` · ${(img.durationMs / 1000).toFixed(1)}s` : ""}
                           {img.seed ? ` · seed ${img.seed}` : ""}
                         </figcaption>
+                        {/* What we actually sent upstream. Absent on refs
+                            stored before the field existed → no empty box. */}
+                        {img.request ? <ImageRequestDisclosure request={img.request} /> : null}
                       </figure>
                     ))}
                   </div>
