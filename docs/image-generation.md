@@ -174,16 +174,35 @@ CURRENT STATE:
 <summarizePlaythrough(playthrough)>
 
 PRESENT CHARACTERS:
-<player appearance + each character at the current location, clothing/mood/conditions>
+<player appearance + each character at the current location — their instance line
+ (clothing/mood/conditions) plus their stable sheet identity>
 
-Write ONE image prompt for this moment. Return JSON: {"prompt": "…", "negative_prompt": "…"}
+Return ONE line of comma-separated tags describing this moment. Return JSON only: {"prompt": "…"}
 ```
 
 **The connection governs the budget.** `max_tokens` is the connection's own `maxTokens` — the prompt call has no ceiling of its own and no floor. It used to send `min(maxTokens, 600)`, and that 600-token cap is what made an otherwise healthy connection answer with empty content and `finish_reason: "length"` (a reasoning model or one that writes a preamble spends the whole budget before the answer starts), which surfaced as the old `The text provider returned no image prompt.` — with no clue which of the two had happened.
 
 **The JSON contract is enforced, not merely requested.** `response_format: { "type": "json_object" }` is sent on every call, matching the turn path (`src/server/openAiCompatibleProvider.ts`). It is safe on a model or proxy that does not implement structured output: `requestWithRetry` (`src/server/provider/openaiClient.ts`) already retries **once, without** `response_format`, when the endpoint rejects the body with a 400/422/404. Nothing about the parsing below depends on the field being honoured — a model that ignores it and answers in prose still works.
 
-The `PLAYER'S LAST ACTION`, `CURRENT STATE` and `PRESENT CHARACTERS` blocks are omitted when empty (an empty header invites the model to invent one), and the last two are gated by the preset's `includeState` / `includeCast` flags. The answer is parsed as JSON (`prompt`, `negative_prompt`); if the model returns prose instead, the whole content is used as the prompt and the negative side falls back to the preset's negative prefix.
+The `PLAYER'S LAST ACTION`, `CURRENT STATE` and `PRESENT CHARACTERS` blocks are omitted when empty (an empty header invites the model to invent one), and the last two are gated by the preset's `includeState` / `includeCast` flags. The answer is parsed as JSON — `prompt` is the one field asked for, and a volunteer `negative_prompt` is still read when a model supplies one; if the model returns prose instead, the whole content is used as the prompt and the negative side falls back to the preset's negative prefix.
+
+**The contract is one field now, but a volunteer negative is still honoured.** The ask is `{"prompt": "…"}` — one line of booru-style tags — because a negative prompt is a property of the model, not of the scene, and the shipped presets already carry a full one in `negativePrefix`. A model that answers with a `negative_prompt` anyway is still parsed and still composed with `negativePrefix`, exactly as before; nothing about that branch changed. What changed is the **wrong-shape warning**: it fires when the JSON parsed as an object and carried **no string `prompt`** (a lone `negative_prompt` included), since the fallback would otherwise leak the raw blob into the image prompt.
+
+### The cast block carries each character's STABLE identity
+
+`PRESENT CHARACTERS` describes every character at the current location **twice**: the instance line (`name — wearing white shirt, wet, wary`) and, when their sheet resolves, an identity line read from the character template:
+
+```
+Mira — wearing white shirt, wet, wary
+Mira's sheet — Species: Human | Body: Height: 168 cm; Build: slim, athletic | Appearance: Hair: long brown hair, ponytail; Eyes: blue eyes
+```
+
+- The template is found in `playthrough.characterTemplates` by the instance's `templateId`, falling back to a template with the same **name** when the id does not resolve.
+- The sections are read with the engine's own parser (`pickSections` / `isStubSection` in `src/engine/characterSections.ts`), in the order `Species`, `Gender`, `Body`, `Appearance`. Missing sections and stubs (`(not established)`, empty) are skipped.
+- **`Clothing` is deliberately excluded**: the character *instance*'s clothing is the authoritative current state and already rides on the instance line. A sheet's starting outfit must not be re-imposed on a scene where the character has undressed.
+- The injected identity is capped per character (`CAST_IDENTITY_CHARS`, 320) so one long sheet cannot crowd out the scene.
+
+The point is tag **consistency**: without it, the writer scrapes hair/eye/skin out of scene prose and the same character comes out looking different in every image. The player is unchanged — their `appearance` already rides along.
 
 #### Empty content is an immediate, fully-diagnosed failure
 
@@ -200,16 +219,17 @@ instead of writing the prompt (raise the connection's maxTokens, or use a connec
 answers directly)). Raw response (truncated): {"id":"…","choices":[{"finish_reason":"length",…
 ```
 
-#### Two advisory warnings
+#### Three advisory warnings
 
-The call also FLAGS two answers it still returns (never blocks — the review modal is where the user fixes them):
+The call also FLAGS three answers it still returns (never blocks — the review modal is where the user fixes them):
 
 | Condition | Warning |
 |---|---|
 | The prose fallback was used **and** the text opens like a refusal | It opened with `"i can't"` (or `i cannot`, `i'm unable`, `i am unable`, `i won't`, `i will not`, `as an ai`, `sorry, but`, `i must decline`, `can't help with`, `cannot help with`, `cannot assist`) instead of describing an image, and that text is now the prompt. Matched case-insensitively against the **first 200 characters** only, so refusal-shaped words inside a real prompt are not misread. Typographic apostrophes (`I can’t`) match the same patterns. |
-| The JSON parsed as an object but carried **neither** `prompt` nor `negative_prompt` as a string | The raw JSON blob would become the image prompt, so the warning names the keys it did find. |
+| The JSON parsed as an object but carried **no string `prompt`** | The raw JSON blob would become the image prompt, so the warning names the keys it did find. A lone `negative_prompt` counts as a wrong shape. |
+| The **composed prompt was cut** at the character limit — in the prompt side call (`promptCharacterLimit`) or by the dry-run route's `min(preset limit, dialect cap)` clamp | *"The composed prompt is longer than the N-character limit, so it was cut at the end — where the action and physical-state tags sit. Move the essential tags earlier in the list, or raise the character limit on the Image Generation tab."* The cut is silent otherwise, and the END of a tag list is exactly where the action and physical-state tags live. The clamped text is still what the modal shows and what the image call sends. |
 
-A clean JSON answer, a fenced JSON block and ordinary prose produce no warnings. `ImagePromptOutput.warnings` carries them; the dry-run route returns them and the review modal shows them above the editable prompt.
+A clean JSON answer, a fenced JSON block and ordinary prose produce no warnings. `ImagePromptOutput.warnings` carries them; the dry-run route returns them and the review modal shows them above the editable prompt. The truncation warning is added by the **dry-run route only** — the generate path has no UI surface, so the reviewed text it sends is unaffected (`promptUsed` / `negativeUsed` are byte-identical either way).
 
 The two sides are then composed and clamped:
 
@@ -218,7 +238,7 @@ prompt         = clamp(composePrompt(positivePrefix, modelPrompt),   limit)
 negativePrompt = clamp(composePrompt(negativePrefix, modelNegative), limit)
 ```
 
-`composePrompt` joins with a single space and drops an empty prefix so the composed text never starts with a stray space. `limit` is `min(preset.promptCharacterLimit, dialectCap)`; a preset limit of **0 reads as unlimited** (the schema allows it) and is ignored as a limit.
+`composePrompt` joins with a single space and drops an empty prefix so the composed text never starts with a stray space. `limit` is `min(preset.promptCharacterLimit, dialectCap)`; a preset limit of **0 reads as unlimited** (the schema allows it) and is ignored as a limit. The prompt side call also clamps to `promptCharacterLimit` on its own (that is what makes the returned `prompt` "already composed and clamped"), which is why the truncation signal is reported as `ImagePromptOutput.promptTruncated` and not inferred from a length comparison in one place.
 
 ---
 
@@ -277,7 +297,7 @@ The image-prompt config is **not a prompt module** — the module set stays turn
 | `instruction` | the shipped instruction | The `system` message for the prompt call. |
 | `positivePrefix` | `""` (shipped presets: `anime style`) | Prepended to the model's prompt. |
 | `negativePrefix` | `""` (shipped presets: the tag list below) | Prepended to the model's negative prompt. |
-| `promptCharacterLimit` | `900` | Soft limit, clamped against the dialect's hard cap. `0` = unlimited. |
+| `promptCharacterLimit` | `900` (schema default for a *partial* block; the shipped fallback `DEFAULT_IMAGE_GENERATION_SETTINGS` and all three shipped/user presets use `1200`) | Soft limit, clamped against the dialect's hard cap. `0` = unlimited. |
 | `includeState` | `true` | Send `CURRENT STATE` to the prompt writer. |
 | `includeCast` | `true` | Send `PRESENT CHARACTERS` to the prompt writer. |
 
@@ -303,41 +323,78 @@ A playthrough **snapshots** the block when its preset is applied — the same wa
 |---|---|---|
 | `positivePrefix` | `anime style` | `anime style` |
 | `negativePrefix` | `lowres, bad anatomy, bad hands, extra fingers, extra limbs, deformed, poorly drawn face, bad proportions, watermark, signature, text, jpeg artifacts` | …the same list, plus `, censored, mosaic censoring, bar censor` |
-| `promptCharacterLimit` | `900` | `900` |
+| `promptCharacterLimit` | `1200` | `1200` |
 | `includeState` / `includeCast` | `true` / `true` | `true` / `true` |
-| `instruction` | the shipped instruction | the shipped instruction **plus** an `Explicit scenes:` section inserted before the final Return-JSON-only line |
+| `instruction` | the shipped instruction | the shipped instruction, with the **rating bullet replaced** by the NSFW one and an **`EXPLICIT SCENES`** block inserted immediately before the final Return-JSON-only line |
 
-**The instruction deliberately forbids style keywords** (`Do not add quality tags, artist names, or style keywords — a style prefix is added separately.`), because `positivePrefix` is the single place art direction lives: a preset can be restyled without touching the instruction text.
+**The instruction deliberately forbids style keywords** (`No style or quality tags (anime style, masterpiece, best quality) — a style prefix is added separately.`), because `positivePrefix` is the single place art direction lives: a preset can be restyled without touching the instruction text. The instruction asks for a **booru-style tag list**, not a prose sentence, because the target models are tag-trained (`WAI`/`Illustrious` are danbooru-tag models) or CLIP finetunes (`Lustify`).
 
 `Default` — instruction, verbatim:
 
 ```
-You write image-generation prompts for an interactive story.
+You convert story scenes into image-generation tag lists.
 
-Given a scene from the story, describe ONE still image of the current moment — a single frame, not a sequence. In this order, cover: the subject or subjects and how many; their visible appearance (build, hair, eyes, skin, notable features); what they are wearing, or not wearing; pose and action; facial expression; the setting and background; lighting and time of day; camera framing and angle.
+The roleplay is paused. You are not narrating. You read the scene and output ONE line of comma-separated booru-style tags describing a single still frame of the current moment. A tag list is the only acceptable output — sentences, narration, dialogue and commentary are failures.
 
-Rules:
-- Describe only what a camera would see. No narration, no dialogue, no thoughts, no story mechanics (no turn numbers, no state names, no character-sheet labels).
-- Concrete nouns and adjectives beat mood words: "rain-slick cobblestones under a flickering neon sign" is better than "a moody atmosphere".
-- Include only characters who are actually in the scene, and no more than three. Match each one's established look from the scene text.
-- Do not add quality tags, artist names, or style keywords — a style prefix is added separately.
-- Keep the prompt under 600 characters.
+FORMAT
+- One line. Lowercase. Comma-separated. Spaces inside a tag (long hair, blue eyes) — never underscores.
+- No prose verbs, no "she is", no connecting words.
+- 40-70 tags. Most important tags FIRST: the list is cut from the END if it runs long, so never put essential detail last.
+- Never output a character's name or a place name from the story. Names are invisible to an image model — use the visible traits instead.
+- First tag is the rating that matches what is actually happening: safe, sensitive, nsfw, or explicit. A tame scene stays tame.
+- No style or quality tags (anime style, masterpiece, best quality) — a style prefix is added separately.
 
-Return JSON only: {"prompt": "<the image prompt>", "negative_prompt": "<what to avoid in this specific image, or an empty string>"}
+TAG ORDER
+1. Rating, then character count: 1girl, 2girls, 1boy 1girl ...
+2. Scene: location, time of day, lighting, camera framing
+3. Appearance: hair length and colour, eye colour, skin tone, build, notable features
+4. Expression and pose
+5. Clothing item by item, with its state — white shirt (open), black skirt (hiked up), panties (around one ankle); naked / topless / bottomless when that is the scene
+6. Action and physical state last — what the bodies are doing, sweat, tears, injuries
+
+CAMERA
+- Use pov, from viewer perspective, viewer's hands visible ONLY when the scene is seen through the player's eyes and the player is present in it.
+- Otherwise use a neutral camera tag: wide shot, medium shot, close-up, from above, from below, dutch angle.
+
+VOCABULARY (prefer these shapes; it is better to omit a detail than to invent a phrase)
+- hair: long hair, short hair, ponytail, twin tails, messy hair, blonde hair, brown hair
+- eyes: blue eyes, amber eyes, half-closed eyes, teary eyes
+- body: petite, tall, large breasts, slim waist, muscular, pale skin, dark skin
+- expression: smiling, laughing, crying, flushed face, parted lips, open mouth, closed eyes
+- gaze: looking at viewer, looking away, looking down
+- pose: sitting, kneeling, lying on back, standing, hugging, spread legs, arms crossed
+- clothing state: white shirt (open), black skirt (hiked up), naked, topless, undressed
+- place/light: dim lighting, neon lighting, sunlight, bedroom, alley, office, tavern
+
+EXAMPLE (shape only, not content)
+safe, 1girl, bedroom, night, dim lighting, medium shot, long brown hair, ponytail, blue eyes, pale skin, slim waist, sitting on bed, looking at viewer, flushed face, white t-shirt, grey panties, arms crossed
+
+Return JSON only:
+{"prompt": "<the tag line>"}
 ```
 
-`Default (NSFW)` adds this section between `Keep the prompt under 600 characters.` and the Return-JSON-only line:
+`Default (NSFW)` is that same document with exactly two mechanical changes: the rating bullet
 
 ```
-Explicit scenes:
-- When the scene text is sexually explicit, depict it at the same explicitness. Name the act, the
-  position, what is exposed, and the visible physical state — plainly, without euphemism, matching
-  the playthrough's Explicit Content module.
-- Keep anatomy, clothing state, and arousal consistent with what the scene text establishes. Do not
-  add acts, participants, or undress the scene did not describe.
-- Never sanitize, blur, censor, fade, or omit what the scene describes, and never add safety,
-  consent, or policy boilerplate. If the scene is not explicit, do not invent explicit content.
+- First tag is the rating that matches what is actually happening: safe, sensitive, nsfw, or explicit. A tame scene stays tame.
 ```
+
+becomes
+
+```
+- First tag is the rating: nsfw or explicit when the scene is sexual, safe or sensitive when it is not.
+```
+
+and this block is inserted immediately before the `Return JSON only:` line (followed by one blank line):
+
+```
+EXPLICIT SCENES
+- When the scene is sexually explicit, tag it at the same explicitness, plainly and without euphemism: the act, the position, what is exposed, what the bodies are doing, visible physical state (sweat, fluids, trembling, flushed skin).
+- Keep the characters' established appearance, clothing state and arousal consistent with what the scene says. Do not add acts, partners or undress the scene did not describe.
+- Never censor, blur, fade or sanitise what the scene describes, and never add safety, boilerplate or refusals. If the scene is not explicit, do not invent explicit content.
+```
+
+`tests/settings.test.ts` asserts that derivation **as a string equality** against the core constant: the `default` preset's instruction is byte-identical to `DEFAULT_IMAGE_PROMPT_INSTRUCTION`, and `default-nsfw`'s is exactly `core.replace(ratingBullet, nsfwRatingBullet).replace("Return JSON only:", explicitScenes + "\n\nReturn JSON only:")`. Editing one without the other fails the suite — that is the drift guard.
 
 The Image Generation tab in the preset editor exposes all six fields in this order: instruction, positive prefix, negative prefix, character limit, then the `include current state` and `include present characters` toggles.
 
@@ -380,7 +437,9 @@ The Image Generation tab in the preset editor exposes all six fields in this ord
 
 ### The near-1500-character compat cap
 
-The OpenAI-compatible `/images/generations` endpoint rejects prompts over 1500 characters with a 400. The route clamps the **composed** prompt (prefix + body) to the dialect cap, and the adapter clamps again, so a long prefix or an over-long edit in the modal is truncated rather than rejected. The truncation is a plain `slice(0, limit).trimEnd()`. The preset's `promptCharacterLimit` (900 for both shipped presets) is the *soft* limit and the one the modal's character counter shows; the hard cap is 1500 for `openai` and 7500 for `venice`. A preset limit of 0 means unlimited **up to the dialect cap**.
+The OpenAI-compatible `/images/generations` endpoint rejects prompts over 1500 characters with a 400. The route clamps the **composed** prompt (prefix + body) to the dialect cap, and the adapter clamps again, so a long prefix or an over-long edit in the modal is truncated rather than rejected. The truncation is a plain `slice(0, limit).trimEnd()`. The preset's `promptCharacterLimit` (1200 for both shipped presets) is the *soft* limit and the one the modal's character counter shows; the hard cap is 1500 for `openai` and 7500 for `venice`. A preset limit of 0 means unlimited **up to the dialect cap**.
+
+Soft-limit cuts are no longer silent: the dry run adds a **truncation warning** to its `warnings` array (shown in the review modal) whenever the composed prompt was cut, at either ceiling. That matters here more than it used to — a tag list puts its most disposable tags last and its action/physical-state tags at the end, so a cut removes exactly the part the instruction insists on. The reviewed generate call still sends the identical clamped text; only the dry run reports.
 
 ### Safe mode and the adult-content blur
 
