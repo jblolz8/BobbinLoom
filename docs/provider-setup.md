@@ -202,9 +202,9 @@ process**, not from the browser, so the WebUI never sees a cross-origin request 
 | API Style | **Automatic1111 / Forge (local)** |
 | Base URL | `http://127.0.0.1:7860` — the WebUI **root**, with **no `/v1`** (a `/v1` suffix turns every path into `/v1/sdapi/v1/…`, which 404s) |
 | API Key | blank for a default local install |
-| Checkpoint | **Fetch models** lists what `GET /sdapi/v1/sd-models` returns, in the WebUI's own order (recently used first) |
+| Checkpoint | **Fetch models** lists what `GET /sdapi/v1/sd-models` returns, in the WebUI's own order (recently used first). Leaving it **empty is fine** — the checkpoint is then not overridden at all and the WebUI renders with whatever it already has loaded (a text connection, by contrast, still requires a model) |
 | Image Size | `auto` sends no size, so the WebUI's own canvas applies; anything else is parsed into `width`/`height` |
-| Steps / CFG scale / Sampler / Scheduler | all optional — **an empty field is not sent at all**, so the WebUI's own tuning applies. Sampler and Scheduler are free text with the WebUI's own names as suggestions |
+| Steps / CFG scale / Sampler / Scheduler | all optional — **an empty field is not sent at all**, so the WebUI's own tuning applies. Sampler and Scheduler are pickers: their options are the names the WebUI reports from `/sdapi/v1/samplers` and `/sdapi/v1/schedulers`, with a *WebUI default* choice that sends nothing. A build that lists neither falls back to a free-text field |
 | Seed | blank = random (sent as `-1`). **`0` is a real seed here**, unlike Venice |
 | Variants | batch size, 1–4: one request renders the whole batch |
 | Timeout (seconds) | blank = **600 s (10 min)** for this dialect — the global 180 s would cut a healthy local render off mid-sampler |
