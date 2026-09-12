@@ -17,6 +17,10 @@ export type ImagePromptModalProps = {
    *  clamped by the server, so what is shown is what will be sent). */
   prompt: string;
   negativePrompt: string;
+  /** Advisory notes from the prompt-writing call — a suspected refusal used
+   *  verbatim, or JSON that carried neither expected key. Shown above the
+   *  editable prompt so the user sees them BEFORE pressing Generate. */
+  warnings?: string[];
   /** Active image connection, for the provenance caption. */
   providerLabel?: string;
   model?: string;
@@ -37,6 +41,7 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
   const {
     prompt,
     negativePrompt,
+    warnings = [],
     providerLabel,
     model,
     characterLimit = DEFAULT_IMAGE_GENERATION_SETTINGS.promptCharacterLimit,
@@ -89,6 +94,20 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
         </header>
 
         <div className="settings-form image-prompt-form">
+          {/* Advisory, never blocking: the text below is editable and still
+              Generates. Surfaced here so a refusal or a key-less JSON answer is
+              seen BEFORE the image call is paid for. */}
+          {warnings.length > 0 ? (
+            <div className="image-prompt-warnings" role="status">
+              {warnings.map((warning) => (
+                <p key={warning} className="image-prompt-warning">
+                  <Icon name="AlertTriangle" size={13} className="image-prompt-warning-icon" />
+                  <span>{warning}</span>
+                </p>
+              ))}
+            </div>
+          ) : null}
+
           <TextArea
             label="Prompt"
             value={promptDraft}

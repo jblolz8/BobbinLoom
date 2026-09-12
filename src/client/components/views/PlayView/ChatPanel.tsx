@@ -315,6 +315,44 @@ function ImageRequestDisclosure({ request }: { request: string }) {
   );
 }
 
+/** Second, quieter disclosure: the PROMPT side call that wrote this image's
+ *  prompt — the request body and the provider's response. Body only (never
+ *  headers or keys) and collapsed by default, exactly like the image-request
+ *  disclosure above it. The response is shown as the stored (possibly
+ *  truncated) string; a non-JSON one renders as-is instead of throwing. */
+function ImagePromptCallDisclosure({ request, response }: { request: string; response?: string }) {
+  const [requestText, responseText] = useMemo(() => {
+    const pretty = (raw: string | undefined) => {
+      if (!raw) return "";
+      try {
+        return JSON.stringify(JSON.parse(raw), null, 2);
+      } catch {
+        return raw;
+      }
+    };
+    return [pretty(request), pretty(response)];
+  }, [request, response]);
+
+  return (
+    <details className="message-image-request message-image-prompt-call">
+      <summary
+        className="message-image-request-summary"
+        title="The text-provider call that wrote this image's prompt"
+      >
+        prompt call
+      </summary>
+      <p className="message-image-prompt-call-label">Request</p>
+      <pre className="message-image-request-pre">{requestText}</pre>
+      {responseText ? (
+        <>
+          <p className="message-image-prompt-call-label">Response</p>
+          <pre className="message-image-request-pre">{responseText}</pre>
+        </>
+      ) : null}
+    </details>
+  );
+}
+
 export function ChatPanel(props: ChatPanelProps) {
   const {
     playthrough, input, onInputChange, onSend, loading, actionLoading,
@@ -532,6 +570,11 @@ export function ChatPanel(props: ChatPanelProps) {
                         {/* What we actually sent upstream. Absent on refs
                             stored before the field existed → no empty box. */}
                         {img.request ? <ImageRequestDisclosure request={img.request} /> : null}
+                        {/* …and the prompt-writing call behind it. Absent when
+                            the prompt came from the user's own edits. */}
+                        {img.promptRequest ? (
+                          <ImagePromptCallDisclosure request={img.promptRequest} response={img.promptResponse} />
+                        ) : null}
                       </figure>
                     ))}
                   </div>
@@ -647,6 +690,7 @@ export function ChatPanel(props: ChatPanelProps) {
         <ImagePromptModal
           prompt={imagePromptRequest.prompt}
           negativePrompt={imagePromptRequest.negativePrompt}
+          warnings={imagePromptRequest.warnings}
           providerLabel={imageProviderLabel}
           model={imageProviderModel}
           characterLimit={imageCharacterLimit}

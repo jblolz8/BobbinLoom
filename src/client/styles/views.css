@@ -992,6 +992,28 @@
   white-space: pre;
 }
 
+/* The prompt-writing side call, disclosed under the image-request disclosure.
+   Same quiet treatment, plus two labelled blocks (request, response) that a
+   reader can tell apart without expanding a JSON blob first. */
+.message-image-prompt-call {
+  margin-top: 0.05rem;
+}
+
+.message-image-prompt-call-label {
+  margin: 0.45rem 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.message-image-prompt-call .message-image-request-pre {
+  margin-top: 0.2rem;
+  max-height: 150px;
+}
+
 /* Remove control: revealed on hover/focus like the message actions, and always
    visible while its own delete is in flight. */
 .message-image-remove {
@@ -1086,6 +1108,36 @@
   margin: 0;
   font-size: 0.72rem;
   color: var(--text-muted);
+}
+
+/* Advisory notes from the prompt-writing call, above the editable prompt. Same
+   warn treatment as the connection editor's status line (`.conn-status.warn`):
+   visible, but clearly a caution rather than a failure — the text below is
+   still editable and still Generates. */
+.image-prompt-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.image-prompt-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: var(--status-warning, var(--accent-highlight));
+  background: var(--status-warning-bg, var(--accent-translucent));
+  border: 1px solid var(--status-warning-border, var(--border-subtle));
+  border-radius: 8px;
+}
+
+.image-prompt-warning-icon {
+  flex: 0 0 auto;
+  margin-top: 0.15rem;
+  color: var(--status-warning, var(--accent-highlight));
 }
 
 .image-prompt-actions {

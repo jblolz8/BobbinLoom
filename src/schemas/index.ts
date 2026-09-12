@@ -403,6 +403,17 @@ export const MessageImageSchema = z.object({
    *  key. Present so a stored image can answer "what did we actually send?".
    *  OPTIONAL so every ref written before this field parses untouched. */
   request: z.string().optional(),
+  /** Diagnostic provenance for the PROMPT side call: the JSON body sent to the
+   *  text provider that wrote this image's prompt. SAME rules as `request` —
+   *  body only, never headers, never the API key. Absent when the prompt never
+   *  went through the text model (both prompt overrides were supplied).
+   *  OPTIONAL so every ref written before this field parses untouched. */
+  promptRequest: z.string().optional(),
+  /** The prompt side call's RESPONSE, body only, as the text provider returned
+   *  it (chat-completion envelope). Truncated before it is stored so a verbose
+   *  reasoning model cannot bloat the playthrough record. Optional like the
+   *  rest of the provenance fields. */
+  promptResponse: z.string().optional(),
   createdAt: z.string()
 });
 export type MessageImage = z.infer<typeof MessageImageSchema>;

@@ -18,6 +18,11 @@ export function buildImageUrl(file: string): string {
 export type ImagePromptPreview = {
   prompt: string;
   negativePrompt: string;
+  /** Advisory notes from the prompt-writing call — a suspected refusal used
+   *  verbatim, or JSON that carried neither expected key. Shown above the
+   *  editable prompt in the review modal; never blocking. Absent/empty when the
+   *  model answered exactly what was asked for. */
+  warnings?: string[];
 };
 
 export type GenerateMessageImageOptions = {

@@ -302,7 +302,9 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image/prompt", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       prompt: "anime style a woman in the rain",
-      negativePrompt: `${DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix} blurry`
+      negativePrompt: `${DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix} blurry`,
+      // Advisory notes travel with the dry run; none for a clean answer.
+      warnings: []
     });
     // Text call only — no image call, no bytes, no state change.
     expect(h.calls).toHaveLength(1);

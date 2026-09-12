@@ -59,6 +59,18 @@ function resolveImageSettings(playthrough: Playthrough, presets: PromptPreset[])
   return { ...DEFAULT_IMAGE_GENERATION_SETTINGS };
 }
 
+/** The stored prompt-call response is capped: a verbose reasoning model can
+ *  return tens of thousands of characters and the playthrough record is not the
+ *  place for them. The marker keeps the truncation honest — the disclosure
+ *  shows it rather than pretending the body ended there. */
+const PROMPT_RESPONSE_STORE_CHARS = 4000;
+
+function clampStoredPromptResponse(text: string): string {
+  return text.length > PROMPT_RESPONSE_STORE_CHARS
+    ? `${text.slice(0, PROMPT_RESPONSE_STORE_CHARS)}\n…[truncated]`
+    : text;
+}
+
 /** Compact cast block: only characters actually at the current location, plus
  *  the player (who is always in frame). Deliberately short — the scene text is
  *  the primary source and `summarizePlaythrough` already covers world state. */
@@ -128,6 +140,7 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
 
     let prompt: string;
     let negativePrompt: string;
+    let warnings: string[];
     try {
       const result = await generateImagePrompt(promptConfig, settings, {
         messageContent: message.content,
@@ -137,6 +150,7 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
       }, fetchImpl, controller.signal);
       prompt = result.prompt;
       negativePrompt = result.negativePrompt;
+      warnings = result.warnings;
     } catch (error) {
       if (controller.signal.aborted) return;
       const reason = error instanceof Error ? error.message : "Image prompt generation failed";
@@ -148,7 +162,10 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     // what the generate call will send.
     return {
       prompt: clampComposed(prompt, settings, imageConn),
-      negativePrompt: clampComposed(negativePrompt, settings, imageConn)
+      negativePrompt: clampComposed(negativePrompt, settings, imageConn),
+      // Advisory only — the modal shows these above the editable prompt and the
+      // user decides. Never a reason to fail the call.
+      warnings
     };
   });
 
@@ -225,6 +242,9 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     const hasNegative = typeof body.negativeOverride === "string";
     let promptUsed: string;
     let negativeUsed: string;
+    // The prompt-writing side call's provenance, when that call actually ran.
+    // Undefined on the both-overrides path (no text call was made).
+    let promptCall: { request: string; response: string } | undefined;
     if (hasPrompt && hasNegative) {
       promptUsed = clampComposed(body.promptOverride!, settings, imageConn);
       negativeUsed = clampComposed(body.negativeOverride!, settings, imageConn);
@@ -238,6 +258,10 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
         }, fetchImpl, controller.signal);
         promptUsed = clampComposed(hasPrompt ? body.promptOverride! : written.prompt, settings, imageConn);
         negativeUsed = clampComposed(hasNegative ? body.negativeOverride! : written.negativePrompt, settings, imageConn);
+        promptCall = {
+          request: written.rawInput,
+          response: clampStoredPromptResponse(written.rawOutput)
+        };
       } catch (error) {
         if (controller.signal.aborted) return;
         const reason = error instanceof Error ? error.message : "Image prompt generation failed";
@@ -288,6 +312,13 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
         // variant of one call shares it. The raw RESPONSE is deliberately not
         // stored — it carries the base64 payload and would bloat the record.
         request: result.rawRequest,
+        // …and the PROMPT side call's provenance, when one ran. Body only, and
+        // the response is capped (`clampStoredPromptResponse`) so a verbose
+        // reasoning model cannot bloat the playthrough record. Absent on the
+        // both-overrides path, which makes no text call at all.
+        ...(promptCall
+          ? { promptRequest: promptCall.request, promptResponse: promptCall.response }
+          : {}),
         createdAt
       };
     });

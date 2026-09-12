@@ -34,14 +34,21 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
+/** Any credential marker inside a stored string is a leak. Shared by every
+ *  provenance scan on this file, so the two new prompt-call fields are held to
+ *  exactly the same pattern set as the image request. */
+function expectNoCredentialMarkers(text: string, label: string): void {
+  expect(typeof text, `${label} must be a stored string`).toBe("string");
+  const lower = text.toLowerCase();
+  for (const marker of CREDENTIAL_MARKERS) {
+    expect(lower, `${label} leaked "${marker}"`).not.toContain(marker.toLowerCase());
+  }
+}
+
 /** Fails unless `request` is JSON AND free of every credential marker. */
 function expectBodyOnly(request: string): void {
-  expect(typeof request).toBe("string");
   expect(() => JSON.parse(request)).not.toThrow();
-  const lower = request.toLowerCase();
-  for (const marker of CREDENTIAL_MARKERS) {
-    expect(lower, `stored request leaked "${marker}"`).not.toContain(marker.toLowerCase());
-  }
+  expectNoCredentialMarkers(request, "stored request");
 }
 
 type Captured = { url: string; body: Record<string, unknown>; headers: Record<string, string> };
@@ -150,7 +157,7 @@ function routeHarness() {
     return new Response("not found", { status: 404 });
   }) as unknown as typeof fetch;
 
-  createConnection(settingsDir, { label: "Local Text", baseUrl: "http://localhost:1234/v1", model: "text-model", kind: "text" });
+  createConnection(settingsDir, { label: "Local Text", baseUrl: "http://localhost:1234/v1", model: "text-model", kind: "text", apiKey: API_KEY });
   createConnection(settingsDir, {
     label: "Venice Images",
     baseUrl: "https://api.venice.ai/api/v1",
@@ -200,6 +207,40 @@ describe("stored image request — the route", () => {
     const stored = getPlaythroughRecord(h.dataDir, h.playthroughId)!.messages[2].images!;
     expect(stored.map((ref) => ref.request)).toEqual(refs.map((ref: { request?: string }) => ref.request));
   });
+
+  it("stores the PROMPT call's request and response with no credential in either", async () => {
+    const h = routeHarness();
+    const res = await h.app.inject({
+      method: "POST",
+      url: `/api/playthroughs/${h.playthroughId}/messages/${h.messageId}/image`,
+      payload: {}
+    });
+    expect(res.statusCode).toBe(200);
+
+    const textCall = h.calls.find((call) => call.url.includes("/chat/completions"));
+    expect(textCall, "the prompt call must have happened").toBeDefined();
+    // The text connection carries a key in this harness, so the text call DID
+    // send it — a header leak into the stored provenance would show up below.
+    expect(textCall!.headers.Authorization).toBe(`Bearer ${API_KEY}`);
+
+    const refs = res.json().playthrough.messages[2].images;
+    expect(refs).toHaveLength(2);
+    for (const ref of refs) {
+      // Body only, exactly the body the text call sent…
+      expect(JSON.parse(ref.promptRequest)).toEqual(textCall!.body);
+      // …and the provider's own response envelope, nothing around it.
+      expect(JSON.parse(ref.promptResponse).choices[0].message.content).toBe(TEXT_ANSWER);
+      expectNoCredentialMarkers(ref.promptRequest, "stored promptRequest");
+      expectNoCredentialMarkers(ref.promptResponse, "stored promptResponse");
+    }
+    // One prompt call, one body: every variant carries the same provenance.
+    expect(refs[0].promptRequest).toBe(refs[1].promptRequest);
+    expect(refs[0].promptResponse).toBe(refs[1].promptResponse);
+
+    const stored = getPlaythroughRecord(h.dataDir, h.playthroughId)!.messages[2].images!;
+    expect(stored.map((ref) => ref.promptRequest)).toEqual(refs.map((ref: { promptRequest?: string }) => ref.promptRequest));
+    expect(stored.map((ref) => ref.promptResponse)).toEqual(refs.map((ref: { promptResponse?: string }) => ref.promptResponse));
+  });
 });
 
 describe("stored image request — the schema", () => {
@@ -232,5 +273,24 @@ describe("stored image request — the schema", () => {
 
   it("rejects a non-string request", () => {
     expect(() => MessageImageSchema.parse({ ...legacyRef, request: { model: "image-model" } })).toThrow();
+  });
+
+  it("parses a ref stored before the prompt-call fields existed, and keeps them when present", () => {
+    const legacy = MessageImageSchema.parse(legacyRef);
+    expect(legacy).not.toHaveProperty("promptRequest");
+    expect(legacy).not.toHaveProperty("promptResponse");
+
+    const withPromptCall = MessageImageSchema.parse({
+      ...legacyRef,
+      promptRequest: '{"model":"text-model"}',
+      promptResponse: '{"choices":[{"message":{"content":"{}"}}]}'
+    });
+    expect(withPromptCall.promptRequest).toBe('{"model":"text-model"}');
+    expect(withPromptCall.promptResponse).toBe('{"choices":[{"message":{"content":"{}"}}]}');
+  });
+
+  it("rejects a non-string promptRequest or promptResponse", () => {
+    expect(() => MessageImageSchema.parse({ ...legacyRef, promptRequest: { model: "text-model" } })).toThrow();
+    expect(() => MessageImageSchema.parse({ ...legacyRef, promptResponse: 42 })).toThrow();
   });
 });

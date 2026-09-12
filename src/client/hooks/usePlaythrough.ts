@@ -69,6 +69,10 @@ export type ImagePromptRequest = {
   message: ChatMessage;
   prompt: string;
   negativePrompt: string;
+  /** Advisory notes from the prompt-writing call, straight from the dry run —
+   *  a suspected refusal used verbatim, or JSON with no usable key. Shown in
+   *  the modal above the editable prompt; never blocking. */
+  warnings?: string[];
 };
 
 function loadChatSettings(): ChatSettings {
@@ -407,7 +411,7 @@ export function usePlaythrough() {
         const preview = await previewImagePrompt(playthrough.id, message.id, overrides?.imageProviderId, controller.signal);
         // A preview the user cancelled must not pop the modal open again.
         if (controller.signal.aborted) return;
-        setImagePromptRequest({ message, prompt: preview.prompt, negativePrompt: preview.negativePrompt });
+        setImagePromptRequest({ message, prompt: preview.prompt, negativePrompt: preview.negativePrompt, warnings: preview.warnings });
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") {
           setCancelledNotice("Image prompt cancelled.");
@@ -465,7 +469,7 @@ export function usePlaythrough() {
     try {
       const preview = await previewImagePrompt(playthrough.id, request.message.id, undefined, controller.signal);
       if (controller.signal.aborted) return;
-      setImagePromptRequest({ ...request, prompt: preview.prompt, negativePrompt: preview.negativePrompt });
+      setImagePromptRequest({ ...request, prompt: preview.prompt, negativePrompt: preview.negativePrompt, warnings: preview.warnings });
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
         setCancelledNotice("Image prompt cancelled.");
