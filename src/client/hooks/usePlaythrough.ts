@@ -439,7 +439,10 @@ export function usePlaythrough() {
    *  - preview OFF: a single request, no modal, no overrides.
    */
   async function handleGenerateImage(message: ChatMessage, overrides?: ImageGenerationOverrides) {
-    if (!playthrough || imageGeneratingId || imagePreviewMessageId) return;
+    // The abort ref is part of the guard, not just the state: the registry read
+    // below happens BEFORE either in-flight marker is set, so state alone would
+    // let a double-click start two generations.
+    if (!playthrough || imageGeneratingId || imagePreviewMessageId || imageAbortRef.current) return;
     const reviewing = imagePromptPreview && !hasPromptOverrides(overrides);
     setCancelledNotice(null);
     setFailedNotice(null);
@@ -453,7 +456,12 @@ export function usePlaythrough() {
     // One registry read per generation, and a failure here costs only the
     // dialect-specific extras — never the generation.
     const connection = await resolveImageConnection(overrides?.imageProviderId);
-    if (controller.signal.aborted) return;
+    if (controller.signal.aborted) {
+      // Cancelled during that read: leave no in-flight marker behind, or every
+      // later Generate press would be swallowed by the guard above.
+      imageAbortRef.current = null;
+      return;
+    }
 
     if (reviewing) {
       setImagePreviewMessageId(message.id);
@@ -483,7 +491,7 @@ export function usePlaythrough() {
 
     setImageGeneratingId(message.id);
     // Live progress is a1111-only: this is a no-op for every other dialect.
-    startImageProgress(connection);
+    startImageProgress(connection, controller.signal);
     try {
       const res = await generateMessageImage(playthrough.id, message.id, { ...overrides, signal: controller.signal });
       // The response carries the authoritative record — set it exactly like
@@ -526,9 +534,10 @@ export function usePlaythrough() {
    * Best-effort by construction: a failed read is swallowed — it can never
    * disturb the generation — and the loop re-reads only while it has not been
    * stopped, so a response that lands after the generation settled cannot
-   * resurrect a stale readout.
+   * resurrect a stale readout. `signal` is the generation's own: cancelling the
+   * generation also cancels the progress read in flight.
    */
-  function startImageProgress(connection: ResolvedImageConnection | null) {
+  function startImageProgress(connection: ResolvedImageConnection | null, signal?: AbortSignal) {
     stopImageProgress();
     if (connection?.apiStyle !== "a1111") return;
     const connectionId = connection.id;
@@ -537,13 +546,13 @@ export function usePlaythrough() {
 
     const tick = async () => {
       try {
-        const snapshot = await fetchImageProgress(connectionId);
+        const snapshot = await fetchImageProgress(connectionId, signal);
         if (stopped) return;
         setImageProgress(snapshot.active ? snapshot : null);
       } catch {
-        /* a failed progress read is not a generation failure — keep the last
-           readout and try again on the next tick */
-        if (stopped) return;
+        /* a failed (or aborted) progress read is not a generation failure — keep
+           the last readout and try again on the next tick */
+        if (stopped || signal?.aborted) return;
       }
       if (stopped) return;
       timer = window.setTimeout(() => { void tick(); }, IMAGE_PROGRESS_POLL_MS);
