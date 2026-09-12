@@ -480,42 +480,40 @@ export function ImageConnectionEditor({
           <span>Image Settings</span>
         </h5>
         <div className="conn-fields-group">
-          <div className="conn-fields-row-2">
-            <div className="conn-field-group">
-              <span className="field-label-text">API Style</span>
-              <SimpleSelect<ImageApiStyle>
-                size="sm"
-                variant="filled"
-                fullWidth
-                value={form.apiStyle ?? "openai"}
-                onChange={(style) => setForm((f) => ({ ...f, apiStyle: style }))}
-                options={API_STYLE_OPTIONS}
-                aria-label="Image API style"
-              />
-              <p className="conn-field-helper">
-                {a1111
-                  ? "Talks to a local AUTOMATIC1111 / Forge WebUI over its own /sdapi/v1 API — the WebUI must be started with --api. Steps, CFG scale, sampler and scheduler go with every request."
-                  : "Venice sends negative prompts, seeds and style presets; OpenAI-compatible sends none of them."}
-              </p>
-            </div>
+          <div className="conn-field-group">
+            <span className="field-label-text">API Style</span>
+            <SimpleSelect<ImageApiStyle>
+              size="sm"
+              variant="filled"
+              fullWidth
+              value={form.apiStyle ?? "openai"}
+              onChange={(style) => setForm((f) => ({ ...f, apiStyle: style }))}
+              options={API_STYLE_OPTIONS}
+              aria-label="Image API style"
+            />
+            <p className="conn-field-helper">
+              {a1111
+                ? "Talks to a local AUTOMATIC1111 / Forge WebUI over its own /sdapi/v1 API — the WebUI must be started with --api. Steps, CFG scale, sampler and scheduler go with every request."
+                : "Venice sends negative prompts, seeds and style presets; OpenAI-compatible sends none of them."}
+            </p>
+          </div>
 
-            <div className="conn-field-group">
-              <span className="field-label-text">Image Size</span>
-              <SimpleSelect
-                size="sm"
-                variant="filled"
-                fullWidth
-                value={form.size ?? "auto"}
-                onChange={(size) => setForm((f) => ({ ...f, size }))}
-                options={sizeOptions.map((s) => ({ value: s, label: s }))}
-                aria-label="Image size"
-              />
-              <p className="conn-field-helper">
-                {a1111
-                  ? 'Sent as width/height to the WebUI. "auto" sends no size at all, so the WebUI\'s own default applies.'
-                  : 'Sent as width/height. "auto" lets the provider choose.'}
-              </p>
-            </div>
+          <div className="conn-field-group">
+            <span className="field-label-text">Image Size</span>
+            <SimpleSelect
+              size="sm"
+              variant="filled"
+              fullWidth
+              value={form.size ?? "auto"}
+              onChange={(size) => setForm((f) => ({ ...f, size }))}
+              options={sizeOptions.map((s) => ({ value: s, label: s }))}
+              aria-label="Image size"
+            />
+            <p className="conn-field-helper">
+              {a1111
+                ? 'Sent as width/height to the WebUI. "auto" sends no size at all, so the WebUI\'s own default applies.'
+                : 'Sent as width/height. "auto" lets the provider choose.'}
+            </p>
           </div>
 
           {/* Aspect Ratio is a Venice sizing parameter (the qwen-image family
