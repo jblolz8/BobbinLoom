@@ -35,7 +35,15 @@ const ProviderConnectionBody = z.object({
   /** Venice `seed` for every generation this connection makes. On the body
    *  schema or zod strips it and the saved connection silently loses it.
    *  `null` clears a stored seed (the editor's emptied field). */
-  seed: z.number().int().nullable().optional()
+  seed: z.number().int().nullable().optional(),
+  /** A1111 sampling controls and its per-connection timeout. On the body
+   *  schema for the same reason as every field above: zod strips what is not
+   *  declared, so an undeclared field is a setting the editor can never save. */
+  steps: z.number().int().min(1).max(150).optional(),
+  cfgScale: z.number().min(0).max(30).optional(),
+  sampler: z.string().optional(),
+  scheduler: z.string().optional(),
+  timeoutMs: z.number().int().min(1000).optional()
 });
 
 const ProviderIdParam = z.object({ id: z.string() });
@@ -43,7 +51,11 @@ const ProviderIdParam = z.object({ id: z.string() });
 const TestConnectionBody = z.object({
   id: z.string().optional(),
   baseUrl: z.string().min(1).optional(),
-  apiKey: z.string().optional()
+  apiKey: z.string().optional(),
+  /** Same dialect rule as the models probe: a saved `id` wins, a draft states
+   *  its own style so an unsaved a1111 connection is not tested against
+   *  `/v1/models`. */
+  apiStyle: ImageApiStyleSchema.optional()
 });
 
 /** Body of POST /api/settings/providers/image-styles. Every field is optional,
@@ -62,7 +74,11 @@ const ModelsBody = z.object({
   apiKey: z.string().optional(),
   /** Optional model-list flavor, forwarded upstream as `?type=` — image
    *  endpoints (Venice) list image checkpoints under `type=image`. */
-  type: z.string().optional()
+  type: z.string().optional(),
+  /** The connection's dialect: an a1111 probe must reach `/sdapi/v1/sd-models`
+   *  instead of the OpenAI-compatible `/v1/models`. A saved `id` uses the
+   *  STORED style (authoritative); this covers the unsaved draft. */
+  apiStyle: ImageApiStyleSchema.optional()
 });
 
 export const providerRoutes: FastifyPluginAsync<ProviderRoutesOptions> = async (app, options = {}) => {

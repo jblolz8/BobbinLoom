@@ -37,6 +37,8 @@ type HarnessOptions = {
   imageSeed?: number;
   /** The `/models` body, when the default (two bare ids) is not enough. */
   modelsPayload?: unknown;
+  /** A1111's three lists (`/sdapi/v1/…`), when a test needs to change one. */
+  a1111Payload?: { checkpoints?: unknown; samplers?: unknown; schedulers?: unknown };
 };
 
 function harness(options: HarnessOptions = {}) {
@@ -63,6 +65,22 @@ function harness(options: HarnessOptions = {}) {
     }
     if (href.includes("/images/generations")) {
       return new Response(JSON.stringify({ created: 1, data: [{ b64_json: PNG_B64 }] }), { status: 200 });
+    }
+    if (href.includes("/sdapi/v1/")) {
+      const a1111 = options.a1111Payload ?? {};
+      // A real WebUI's shapes: checkpoints carry `title`, samplers/schedulers `name`.
+      if (href.endsWith("/sdapi/v1/sd-models")) {
+        return new Response(
+          JSON.stringify(a1111.checkpoints ?? [{ title: "dreamshaper_8.safetensors" }, { title: "sd_xl_base_1.0.safetensors" }]),
+          { status: 200 }
+        );
+      }
+      if (href.endsWith("/sdapi/v1/samplers")) {
+        return new Response(JSON.stringify(a1111.samplers ?? [{ name: "DPM++ 2M Karras" }]), { status: 200 });
+      }
+      if (href.endsWith("/sdapi/v1/schedulers")) {
+        return new Response(JSON.stringify(a1111.schedulers ?? [{ name: "Karras" }]), { status: 200 });
+      }
     }
     if (href.includes("/models")) {
       return new Response(JSON.stringify(options.modelsPayload ?? { data: [{ id: "lustify-v8" }, { id: "wai-nsfw" }] }), { status: 200 });
@@ -689,5 +707,69 @@ describe("POST /api/settings/providers/models", () => {
     expect("seed" in cleared.json()).toBe(false);
     expect(row(onDisk()).seed).toBeUndefined();
     expect("seed" in row(onDisk())).toBe(false);
+  });
+
+  it("threads the apiStyle through so an a1111 probe hits the WebUI's own endpoint", async () => {
+    const h = harness();
+    const res = await post(h.app, "/api/settings/providers/models", {
+      baseUrl: "http://127.0.0.1:7860",
+      apiStyle: "a1111"
+    });
+    expect(res.statusCode).toBe(200);
+    // The exact URLs, so a stray /v1 prefix cannot hide behind a suffix match.
+    expect(h.calls.map((c) => c.url)).toEqual([
+      "http://127.0.0.1:7860/sdapi/v1/sd-models",
+      "http://127.0.0.1:7860/sdapi/v1/samplers",
+      "http://127.0.0.1:7860/sdapi/v1/schedulers"
+    ]);
+    expect(res.json().models).toEqual(["dreamshaper_8.safetensors", "sd_xl_base_1.0.safetensors"]);
+    expect(res.json().dialectOptions).toEqual({ samplers: ["DPM++ 2M Karras"], schedulers: ["Karras"] });
+  });
+
+  it("keeps the A1111 controls an image connection is created with, and probes it by its STORED style", async () => {
+    const h = harness({ withImage: false });
+    const created = await post(h.app, "/api/settings/providers", {
+      label: "Local SD",
+      baseUrl: "http://127.0.0.1:7860",
+      model: "sd_xl_base_1.0.safetensors",
+      kind: "image",
+      apiStyle: "a1111",
+      steps: 28,
+      cfgScale: 6.5,
+      sampler: "DPM++ 2M Karras",
+      scheduler: "Karras",
+      timeoutMs: 900_000
+    });
+    expect(created.statusCode).toBe(200);
+
+    // zod strips what the body schema does not declare, and createConnection
+    // copies field by field: a missing one is a silently lost setting.
+    const onDisk = JSON.parse(readFileSync(join(h.settingsDir, "providers.json"), "utf8"));
+    const row = onDisk.connections.find((c: { id: string }) => c.id === "local_sd");
+    expect(row).toMatchObject({
+      apiStyle: "a1111",
+      steps: 28,
+      cfgScale: 6.5,
+      sampler: "DPM++ 2M Karras",
+      scheduler: "Karras",
+      timeoutMs: 900_000
+    });
+    // The stored base URL stays at the WebUI ROOT — no /v1 is appended to it.
+    expect(row.baseUrl).toBe("http://127.0.0.1:7860");
+
+    const res = await post(h.app, "/api/settings/providers/models", { id: "local_sd" });
+    expect(res.statusCode).toBe(200);
+    expect(h.calls.map((c) => c.url)).toEqual([
+      "http://127.0.0.1:7860/sdapi/v1/sd-models",
+      "http://127.0.0.1:7860/sdapi/v1/samplers",
+      "http://127.0.0.1:7860/sdapi/v1/schedulers"
+    ]);
+    expect(res.json().models).toEqual(["dreamshaper_8.safetensors", "sd_xl_base_1.0.safetensors"]);
+
+    // The reachability check follows the same style.
+    const tested = await post(h.app, "/api/settings/providers/test", { id: "local_sd" });
+    expect(tested.statusCode).toBe(200);
+    expect(tested.json().ok).toBe(true);
+    expect(h.calls.some((c) => c.url === "http://127.0.0.1:7860/sdapi/v1/sd-models")).toBe(true);
   });
 });

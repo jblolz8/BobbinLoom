@@ -373,6 +373,165 @@ describe("provider registry", () => {
     });
   });
 
+  describe("fetchProviderModels — the a1111 dialect", () => {
+    const BASE = "http://127.0.0.1:7860";
+    // Deliberately NOT alphabetical: a WebUI lists recently-used checkpoints
+    // first and that is a curated order the probe must not rearrange.
+    const CHECKPOINTS = [
+      { title: "dreamshaper_8.safetensors", model_name: "dreamshaper_8", hash: "abc" },
+      { title: "sd_xl_base_1.0.safetensors", model_name: "sd_xl_base_1.0", hash: "def" },
+      { title: "dreamshaper_8.safetensors", model_name: "dreamshaper_8", hash: "abc" }
+    ];
+    const SAMPLERS = [{ name: "DPM++ 2M Karras", aliases: [], options: {} }, { name: "Euler a", aliases: [] }];
+    const SCHEDULERS = [{ name: "Karras", aliases: [] }, { name: "Automatic", aliases: [] }];
+
+    /** The WebUI serves three independent lists; each is routed by URL so a
+     *  single one can fail in isolation, and every request is recorded. */
+    function a1111Fetch(overrides: {
+      sdModels?: () => Response;
+      samplers?: () => Response;
+      schedulers?: () => Response;
+    } = {}) {
+      const calls: { url: string; headers: Record<string, string> }[] = [];
+      const impl = vi.fn(async (url: string, init?: { headers?: Record<string, string> }) => {
+        calls.push({ url, headers: init?.headers ?? {} });
+        if (url.endsWith("/sdapi/v1/sd-models")) {
+          return overrides.sdModels?.() ?? new Response(JSON.stringify(CHECKPOINTS), { status: 200 });
+        }
+        if (url.endsWith("/sdapi/v1/samplers")) {
+          return overrides.samplers?.() ?? new Response(JSON.stringify(SAMPLERS), { status: 200 });
+        }
+        if (url.endsWith("/sdapi/v1/schedulers")) {
+          return overrides.schedulers?.() ?? new Response(JSON.stringify(SCHEDULERS), { status: 200 });
+        }
+        return new Response("not found", { status: 404 });
+      });
+      return { impl: impl as unknown as typeof fetch, calls };
+    }
+
+    it("probes http://127.0.0.1:7860/sdapi/v1/sd-models at the WebUI ROOT and keeps the server's checkpoint order", async () => {
+      const { impl, calls } = a1111Fetch();
+      const result = await fetchProviderModels({ baseUrl: BASE, apiStyle: "a1111" }, impl);
+
+      // The exact URL, on the record: no /v1 segment is inserted before sdapi.
+      expect(calls.map((c) => c.url)).toEqual([
+        "http://127.0.0.1:7860/sdapi/v1/sd-models",
+        "http://127.0.0.1:7860/sdapi/v1/samplers",
+        "http://127.0.0.1:7860/sdapi/v1/schedulers"
+      ]);
+      expect(calls[0].url).not.toContain("/v1/sdapi");
+
+      expect(result.ok).toBe(true);
+      // Order preserved (NOT sorted) and deduped.
+      expect(result.models).toEqual(["dreamshaper_8.safetensors", "sd_xl_base_1.0.safetensors"]);
+      // An A1111 listing publishes no model_spec: the map stays empty, never absent.
+      expect(result.modelSpecs).toEqual({});
+    });
+
+    it("normalizes a trailing slash and never doubles the /v1 in the sdapi path", async () => {
+      const { impl, calls } = a1111Fetch();
+      const result = await fetchProviderModels({ baseUrl: "http://127.0.0.1:7860///", apiStyle: "a1111" }, impl);
+      expect(calls[0].url).toBe("http://127.0.0.1:7860/sdapi/v1/sd-models");
+      expect(result.ok).toBe(true);
+    });
+
+    it("surfaces the WebUI's sampler and scheduler names as dialectOptions", async () => {
+      const { impl } = a1111Fetch();
+      const result = await fetchProviderModels({ baseUrl: BASE, apiStyle: "a1111" }, impl);
+      expect(result.dialectOptions).toEqual({
+        samplers: ["DPM++ 2M Karras", "Euler a"],
+        schedulers: ["Karras", "Automatic"]
+      });
+    });
+
+    it("sends a `user:pass` key as HTTP Basic on every a1111 call", async () => {
+      const { impl, calls } = a1111Fetch();
+      const expected = `Basic ${Buffer.from("alice:s3cret").toString("base64")}`;
+      await fetchProviderModels({ baseUrl: BASE, apiKey: "alice:s3cret", apiStyle: "a1111" }, impl);
+      expect(calls).toHaveLength(3);
+      for (const call of calls) expect(call.headers.Authorization).toBe(expected);
+    });
+
+    it("names the missing --api flag on a 404", async () => {
+      const { impl } = a1111Fetch({ sdModels: () => new Response("Not Found", { status: 404 }) });
+      const result = await fetchProviderModels({ baseUrl: BASE, apiStyle: "a1111" }, impl);
+      expect(result.ok).toBe(false);
+      expect(result.status).toBe(404);
+      expect(result.message).toContain("--api");
+      expect(result.models).toEqual([]);
+      expect(result.dialectOptions).toBeUndefined();
+    });
+
+    it("leaves dialectOptions partially populated when one list fails, and never fails the probe", async () => {
+      const { impl } = a1111Fetch({
+        samplers: () => {
+          throw new Error("boom");
+        },
+        schedulers: () => new Response("nope", { status: 500 })
+      });
+      const result = await fetchProviderModels({ baseUrl: BASE, apiStyle: "a1111" }, impl);
+      expect(result.ok).toBe(true);
+      expect(result.models).toEqual(["dreamshaper_8.safetensors", "sd_xl_base_1.0.safetensors"]);
+      // Both optional lists are missing here — an absent block, not an empty one.
+      expect(result.dialectOptions).toBeUndefined();
+
+      const { impl: oneUp } = a1111Fetch({ samplers: () => new Response("nope", { status: 500 }) });
+      const partial = await fetchProviderModels({ baseUrl: BASE, apiStyle: "a1111" }, oneUp);
+      expect(partial.ok).toBe(true);
+      expect(partial.dialectOptions).toEqual({ schedulers: ["Karras", "Automatic"] });
+    });
+
+    it("strips dialectOptions from the reachability check, like models and modelSpecs", async () => {
+      const { impl } = a1111Fetch();
+      const probe = await testProviderConnection({ baseUrl: BASE, apiStyle: "a1111" }, impl);
+      expect(probe.ok).toBe(true);
+      expect("models" in probe).toBe(false);
+      expect("modelSpecs" in probe).toBe(false);
+      expect("dialectOptions" in probe).toBe(false);
+    });
+
+    it("stores an a1111 connection's base URL at the WebUI root, and its sampling controls", () => {
+      const dir = tempDir();
+      const created = createConnection(
+        dir,
+        connInput({
+          kind: "image",
+          apiStyle: "a1111",
+          baseUrl: "http://127.0.0.1:7860/",
+          steps: 28,
+          cfgScale: 6.5,
+          sampler: "DPM++ 2M Karras",
+          scheduler: "Karras",
+          timeoutMs: 900_000
+        })
+      );
+      expect(created.baseUrl).toBe("http://127.0.0.1:7860");
+      expect(created.steps).toBe(28);
+      expect(created.cfgScale).toBe(6.5);
+      expect(created.sampler).toBe("DPM++ 2M Karras");
+      expect(created.scheduler).toBe("Karras");
+      expect(created.timeoutMs).toBe(900_000);
+
+      // An OpenAI-dialect image connection is still /v1-normalized as before.
+      const venice = createConnection(
+        dir,
+        connInput({ label: "Venice", kind: "image", apiStyle: "venice", baseUrl: "http://localhost:1234" })
+      );
+      expect(venice.baseUrl).toBe("http://localhost:1234/v1");
+    });
+
+    it("keeps an a1111 connection's base URL un-suffixed when the style is only STORED", () => {
+      const dir = tempDir();
+      const created = createConnection(
+        dir,
+        connInput({ kind: "image", apiStyle: "a1111", baseUrl: "http://127.0.0.1:7860" })
+      );
+      // The editor PUTs a new base URL without repeating the style.
+      const updated = updateConnection(dir, created.id, connInput({ baseUrl: "http://127.0.0.1:7861" }));
+      expect(updated.baseUrl).toBe("http://127.0.0.1:7861");
+    });
+  });
+
   describe("duplicateConnection", () => {
     it("copies all fields including the apiKey, with a new unique id and editable copy", () => {
       const dir = tempDir();

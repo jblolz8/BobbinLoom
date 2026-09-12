@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { atomicWriteJson, backupFile, quarantineFile } from "./persistence";
-import { maskApiKey, normalizeBaseUrl } from "./providerConfig";
+import { maskApiKey, normalizeBaseUrl, normalizeImageBaseUrl } from "./providerConfig";
+import { authHeaders } from "./httpAuth";
 import { ProviderConnectionSchema, ProviderRegistryFileSchema } from "../schemas";
 import type { ImageApiStyle, ProviderConnection, ProviderKind, ProviderRegistryFile } from "../schemas";
 import type { ProviderConnectionInput, PublicProviderConnection } from "./providerConfig";
@@ -35,6 +36,12 @@ export type ProviderConnectionDraft = ProviderConnectionInput & {
   /** `null` clears the stored seed (the editor's empty field), the same
    *  convention `apiKey` uses — an absent key cannot overwrite a stored value. */
   seed?: number | null;
+  // ── a1111-only sampling controls; absent = the WebUI's own defaults ──
+  steps?: number;
+  cfgScale?: number;
+  sampler?: string;
+  scheduler?: string;
+  timeoutMs?: number;
 };
 
 /** Connections of one kind, and the active one among them. The kind filter is
@@ -234,7 +241,10 @@ export function createConnection(dir: string, input: ProviderConnectionDraft): P
   const conn: ProviderConnection = {
     id,
     label: input.label,
-    baseUrl: normalizeBaseUrl(input.baseUrl),
+    // Style-aware: an a1111 connection is served from the WebUI ROOT, so it
+    // must NOT gain the OpenAI-style /v1 segment at write time (every request
+    // would then become /v1/sdapi/v1/...). Everything else is unchanged.
+    baseUrl: normalizeImageBaseUrl(input.baseUrl, input.apiStyle),
     model: input.model,
     temperature: input.temperature ?? 0.8,
     maxTokens: input.maxTokens ?? 1200,
@@ -251,6 +261,12 @@ export function createConnection(dir: string, input: ProviderConnectionDraft): P
     variants: input.variants,
     // Never a null on disk: null is only the write-side "clear" signal.
     seed: input.seed ?? undefined,
+    // a1111-only; absent fields stay absent so the WebUI keeps its own defaults
+    steps: input.steps,
+    cfgScale: input.cfgScale,
+    sampler: input.sampler,
+    scheduler: input.scheduler,
+    timeoutMs: input.timeoutMs,
     createdAt: now,
     updatedAt: now
   };
@@ -279,7 +295,13 @@ export function updateConnection(dir: string, id: string, input: ProviderConnect
     ...cur,
     ...rest,
     id: cur.id, // id is server-owned (derived from the label at create time)
-    baseUrl: input.baseUrl !== undefined ? normalizeBaseUrl(input.baseUrl) : cur.baseUrl,
+    // The style may be only STORED (an editor PUT that resends the base URL but
+    // not the style), so the current row's style is the fallback — otherwise an
+    // a1111 row would silently acquire a /v1 suffix on an unrelated edit.
+    baseUrl:
+      input.baseUrl !== undefined
+        ? normalizeImageBaseUrl(input.baseUrl, input.apiStyle ?? cur.apiStyle)
+        : cur.baseUrl,
     apiKey: input.apiKey ?? cur.apiKey,
   };
   if (input.apiKey === null) delete next.apiKey;
@@ -396,6 +418,13 @@ export type ModelsProbeResult = {
    *  when the listing said nothing useful or the probe failed) so a caller can
    *  read it without a guard. */
   modelSpecs: ProviderModelCapabilities;
+  /** A1111 only: the sampler and scheduler names the WebUI itself publishes,
+   *  fetched best-effort from `/sdapi/v1/samplers` and `/sdapi/v1/schedulers`.
+   *  Absent when neither answered (an older build may have no schedulers), and
+   *  partially populated when only one did — a missing list is never an error:
+   *  the editor falls back to a free-text field, which is how a fork's own
+   *  sampler name gets typed anyway. */
+  dialectOptions?: { samplers?: string[]; schedulers?: string[] };
 };
 
 /** A finite number, or nothing (a string, null, NaN and Infinity all mean the
@@ -526,12 +555,17 @@ function parseModels(bodyText: string): { models: string[]; modelSpecs: Provider
  *  The same pass also reads each model's `model_spec.constraints` into
  *  `modelSpecs` (prompt cap, steps, sizing rules), because that is the only
  *  place a provider publishes what a given model actually accepts — and asking
- *  for it twice would be two round trips for one body. */
+ *  for it twice would be two round trips for one body.
+ *
+ *  `apiStyle` picks the DIALECT, not a flavor of the same request: an a1111
+ *  connection shares no path, no list shape and no auth rule with the
+ *  OpenAI-compatible probe, so it is routed to its own implementation. */
 async function probeProviderModels(
-  input: { baseUrl: string; apiKey?: string; type?: string },
+  input: { baseUrl: string; apiKey?: string; type?: string; apiStyle?: ImageApiStyle },
   fetchImpl: typeof fetch = fetch
 ): Promise<ModelsProbeResult> {
-  const base = normalizeBaseUrl(input.baseUrl);
+  if ((input.apiStyle ?? "openai") === "a1111") return probeA1111Models(input, fetchImpl);
+  const base = normalizeImageBaseUrl(input.baseUrl, input.apiStyle);
   const query = input.type ? `?type=${encodeURIComponent(input.type)}` : "";
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
@@ -539,9 +573,7 @@ async function probeProviderModels(
   try {
     const res = await fetchImpl(`${base}/models${query}`, {
       method: "GET",
-      headers: {
-        ...(input.apiKey ? { Authorization: `Bearer ${input.apiKey}` } : {})
-      },
+      headers: authHeaders(input.apiKey, input.apiStyle),
       signal: controller.signal
     });
     const latencyMs = Date.now() - start;
@@ -559,22 +591,149 @@ async function probeProviderModels(
   }
 }
 
+/** A1111's API only exists when the WebUI was started with `--api`; without
+ *  that flag every `/sdapi/v1/*` route answers 404 and the user has no way to
+ *  tell a missing flag from a wrong URL. Appended to the 404 message so the
+ *  settings UI can show the fix instead of a bare "Not Found". */
+export const A1111_API_MISSING_HINT =
+  "the WebUI must be started with --api — without it every /sdapi/v1/* route answers 404";
+
+/** Parse `GET /sdapi/v1/sd-models` → `[{title, model_name, hash, …}]` into
+ *  checkpoint names. The server's ORDER is preserved and duplicates dropped:
+ *  a WebUI lists recently-used checkpoints first, a curated order the UI must
+ *  not silently rearrange (the same contract as the Venice style list, and the
+ *  opposite of the alphabetical OpenAI id list). */
+function parseA1111Checkpoints(bodyText: string): string[] {
+  return parseA1111Names(bodyText, ["title", "model_name"]);
+}
+
+/** Parse `GET /sdapi/v1/samplers` and `/schedulers` → `[{name, aliases, …}]`.
+ *  Tolerant of a bare string array too, so a fork that answers with names only
+ *  still populates the list. */
+function parseA1111Names(bodyText: string, keys: string[] = ["name"]): string[] {
+  try {
+    const parsed = JSON.parse(bodyText) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const names = parsed
+      .map((entry) => {
+        if (typeof entry === "string") return entry.trim() || null;
+        if (!entry || typeof entry !== "object") return null;
+        const row = entry as Record<string, unknown>;
+        for (const key of keys) {
+          const value = row[key];
+          if (typeof value === "string" && value.trim()) return value.trim();
+        }
+        return null;
+      })
+      .filter((n): n is string => Boolean(n));
+    return [...new Set(names)];
+  } catch {
+    return [];
+  }
+}
+
+/** One of A1111's optional lists, best effort: a missing, slow, failed or
+ *  unparseable endpoint yields nothing and must NEVER fail the probe — the
+ *  editor just falls back to a free-text field. */
+async function fetchA1111Names(
+  url: string,
+  headers: Record<string, string>,
+  fetchImpl: typeof fetch
+): Promise<string[] | undefined> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5_000);
+  try {
+    const res = await fetchImpl(url, { method: "GET", headers, signal: controller.signal });
+    if (!res.ok) return undefined;
+    const names = parseA1111Names(await res.text());
+    return names.length ? names : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/** The a1111 dialect's probe: `GET <WebUI ROOT>/sdapi/v1/sd-models` for the
+ *  checkpoints, plus the sampler and scheduler lists in parallel.
+ *
+ *  The base URL is the WebUI ROOT — normalizeImageBaseUrl, never the /v1
+ *  normalization: an OpenAI-style suffix turns every path into
+ *  `/v1/sdapi/v1/...` and 404s. Auth follows the same dialect rule as the
+ *  adapter (`user:pass` → Basic, anything else → Bearer). */
+async function probeA1111Models(
+  input: { baseUrl: string; apiKey?: string },
+  fetchImpl: typeof fetch
+): Promise<ModelsProbeResult> {
+  const base = normalizeImageBaseUrl(input.baseUrl, "a1111");
+  const headers = authHeaders(input.apiKey, "a1111");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  const start = Date.now();
+  try {
+    const res = await fetchImpl(`${base}/sdapi/v1/sd-models`, {
+      method: "GET",
+      headers,
+      signal: controller.signal
+    });
+    const latencyMs = Date.now() - start;
+    if (!res.ok) {
+      const body = (await res.text()).slice(0, 300);
+      return {
+        ok: false,
+        status: res.status,
+        message: res.status === 404 ? `${body} — ${A1111_API_MISSING_HINT}` : body,
+        latencyMs,
+        models: [],
+        modelSpecs: {}
+      };
+    }
+    const models = parseA1111Checkpoints(await res.text());
+    // Both lists at once — they are independent, and one failing must not cost
+    // the other. `Promise.all` here can never reject: each fetcher swallows.
+    const [samplers, schedulers] = await Promise.all([
+      fetchA1111Names(`${base}/sdapi/v1/samplers`, headers, fetchImpl),
+      fetchA1111Names(`${base}/sdapi/v1/schedulers`, headers, fetchImpl)
+    ]);
+    const dialectOptions: NonNullable<ModelsProbeResult["dialectOptions"]> = {};
+    if (samplers) dialectOptions.samplers = samplers;
+    if (schedulers) dialectOptions.schedulers = schedulers;
+    return {
+      ok: true,
+      status: res.status,
+      latencyMs,
+      models,
+      // An A1111 listing publishes no `model_spec` constraints, so the map is
+      // empty — the same answer as a provider that publishes none.
+      modelSpecs: {},
+      ...(samplers || schedulers ? { dialectOptions } : {})
+    };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : String(e), latencyMs: Date.now() - start, models: [], modelSpecs: {} };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 /** Cheap reachability + auth check: GET <base>/models. No token-generating call. */
 export async function testProviderConnection(
-  input: { baseUrl: string; apiKey?: string },
+  input: { baseUrl: string; apiKey?: string; apiStyle?: ImageApiStyle },
   fetchImpl: typeof fetch = fetch
 ): Promise<{ ok: boolean; status?: number; message?: string; latencyMs?: number }> {
-  // The probe answers {ok, models, modelSpecs, status, message, latencyMs}; a
-  // reachability check wants none of the listing, so both are stripped.
-  const { models: _models, modelSpecs: _modelSpecs, ...result } = await probeProviderModels(input, fetchImpl);
+  // The probe answers {ok, models, modelSpecs, dialectOptions, status, message,
+  // latencyMs}; a reachability check wants none of the listing, so all of it is
+  // stripped — models, modelSpecs and the dialect's own option lists.
+  const { models: _models, modelSpecs: _modelSpecs, dialectOptions: _dialectOptions, ...result } =
+    await probeProviderModels(input, fetchImpl);
   return result;
 }
 
 /** Fetch the model list from an OpenAI-compatible server: GET <base>/models
  *  (with `?type=<type>` when the caller asks for a typed list, e.g. image
- *  checkpoints). */
+ *  checkpoints), or from an A1111 WebUI's own `/sdapi/v1/sd-models` when
+ *  `apiStyle` says so. */
 export async function fetchProviderModels(
-  input: { baseUrl: string; apiKey?: string; type?: string },
+  input: { baseUrl: string; apiKey?: string; type?: string; apiStyle?: ImageApiStyle },
   fetchImpl: typeof fetch = fetch
 ): Promise<ModelsProbeResult> {
   return probeProviderModels(input, fetchImpl);

@@ -49,6 +49,9 @@ export type ProviderConnectionPayload = {
   maxTokens?: number;
   contextWindow?: number;
   // ── image-only; absent on text rows ──
+  /** Dialect for an image connection: `openai` | `venice` | `a1111`
+   *  (AUTOMATIC1111 / Forge). The union comes from the schema, so it cannot
+   *  drift behind the server. */
   apiStyle?: ImageApiStyle;
   safeMode?: boolean;
   size?: string;
@@ -60,6 +63,19 @@ export type ProviderConnectionPayload = {
   /** Venice `seed`, sent with every generation. Empty = let the provider pick;
    *  `null` clears a stored seed (the editor's emptied field). */
   seed?: number | null;
+  // ── a1111-only sampling controls; absent = the WebUI's own defaults ──
+  /** 1–150. Absent means the field is omitted and the WebUI's own default
+   *  applies, which is what a user who tuned the WebUI expects. */
+  steps?: number;
+  /** 0–30. */
+  cfgScale?: number;
+  /** Free text: a fork may ship samplers we do not know. The UI offers the
+   *  server's own list (`dialectOptions.samplers`) as suggestions only. */
+  sampler?: string;
+  scheduler?: string;
+  /** Per-connection request timeout in ms (≥1000). Absent = the dialect
+   *  default — 10 minutes for a1111, 180 s otherwise. */
+  timeoutMs?: number;
 };
 
 /** Registry v2: one active slot per kind, plus the read warnings. */
@@ -84,6 +100,11 @@ export type ConnectionModelsResult = {
    *  keyed by model id. Always present; an empty map = the listing said nothing
    *  usable, which is never an error. */
   modelSpecs: ProviderModelCapabilities;
+  /** a1111 only: the WebUI's own sampler and scheduler names, for the
+   *  editor's suggestion lists. Absent when the WebUI did not publish them —
+   *  an older build may have no `/sdapi/v1/schedulers` at all — and possibly
+   *  partially populated. Never an error. */
+  dialectOptions?: { samplers?: string[]; schedulers?: string[] };
   status?: number;
   message?: string;
   latencyMs?: number;
@@ -152,19 +173,31 @@ export function duplicateProviderConnection(id: string): Promise<ProviderConnect
 export function setActiveProviderConnection(id: string): Promise<ProviderRegistry> {
   return request<ProviderRegistry>(`/api/settings/providers/${id}/active`, { method: "PUT", body: JSON.stringify({}) });
 }
-export function testProviderConnection(p: { id?: string; baseUrl?: string; apiKey?: string }): Promise<ConnectionTestResult> {
+export function testProviderConnection(p: {
+  id?: string;
+  baseUrl?: string;
+  apiKey?: string;
+  /** Saved `id` wins; a draft states its own dialect so an unsaved a1111
+   *  connection is not tested against `/v1/models`. */
+  apiStyle?: ImageApiStyle;
+}): Promise<ConnectionTestResult> {
   return request<ConnectionTestResult>("/api/settings/providers/test", { method: "POST", body: JSON.stringify(p) });
 }
 /**
  * Probe `<baseUrl>/models`. `type` narrows the listing on servers that expose
  * more than one model family (`"image"` for image endpoints); it is optional
  * because most OpenAI-compatible text servers ignore it.
+ *
+ * `apiStyle: "a1111"` switches the probe to the WebUI's own
+ * `/sdapi/v1/sd-models` (see `dialectOptions` on the result). A saved `id`
+ * uses the STORED style, which always wins.
  */
 export function fetchProviderModels(p: {
   id?: string;
   baseUrl?: string;
   apiKey?: string;
   type?: "text" | "image";
+  apiStyle?: ImageApiStyle;
 }): Promise<ConnectionModelsResult> {
   return request<ConnectionModelsResult>("/api/settings/providers/models", { method: "POST", body: JSON.stringify(p) });
 }

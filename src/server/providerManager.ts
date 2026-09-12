@@ -3,7 +3,7 @@ import { MockProvider } from "./provider";
 import { OpenAICompatibleProvider } from "./openAiCompatibleProvider";
 import { resolveConnectionConfig } from "./providerConfig";
 import type { PublicProviderConnection, ResolvedProviderConfig } from "./providerConfig";
-import type { ProviderConnection } from "../schemas";
+import type { ImageApiStyle, ProviderConnection } from "../schemas";
 import {
   activeConnectionOfKind,
   createConnection,
@@ -110,23 +110,38 @@ export class ProviderManager {
   }
 
   /** Resolve a probe target: a saved connection id (uses the STORED key — never
-   *  sent back to the client) or an unsaved draft's baseUrl/apiKey. */
-  private resolveProbeTarget(input: { id?: string; baseUrl?: string; apiKey?: string }): { baseUrl: string; apiKey?: string } {
+   *  sent back to the client) or an unsaved draft's baseUrl/apiKey. The dialect
+   *  rides along so the probe can pick the right endpoint: for a saved
+   *  connection the STORED apiStyle is authoritative (a client that sends no
+   *  style must not silently downgrade an a1111 probe to the OpenAI lane),
+   *  while a draft states its own. */
+  private resolveProbeTarget(input: {
+    id?: string;
+    baseUrl?: string;
+    apiKey?: string;
+    apiStyle?: ImageApiStyle;
+  }): { baseUrl: string; apiKey?: string; apiStyle?: ImageApiStyle } {
     if (input.id) {
       const reg = getRegistry(this.dataDir);
       const conn = reg.connections.find((c) => c.id === input.id);
       if (!conn) throw new Error(`Provider not found: ${input.id}`);
-      return { baseUrl: conn.baseUrl, apiKey: conn.apiKey };
+      return { baseUrl: conn.baseUrl, apiKey: conn.apiKey, apiStyle: conn.apiStyle };
     }
     if (!input.baseUrl) throw new Error("baseUrl is required when no connection id is given");
-    return { baseUrl: input.baseUrl, apiKey: input.apiKey };
+    return { baseUrl: input.baseUrl, apiKey: input.apiKey, apiStyle: input.apiStyle };
   }
 
-  async testConnection(input: { id?: string; baseUrl?: string; apiKey?: string }) {
+  async testConnection(input: { id?: string; baseUrl?: string; apiKey?: string; apiStyle?: ImageApiStyle }) {
     return testProviderConnection(this.resolveProbeTarget(input), this.fetchImpl);
   }
 
-  async fetchModels(input: { id?: string; baseUrl?: string; apiKey?: string; type?: string }): Promise<ModelsProbeResult> {
+  async fetchModels(input: {
+    id?: string;
+    baseUrl?: string;
+    apiKey?: string;
+    type?: string;
+    apiStyle?: ImageApiStyle;
+  }): Promise<ModelsProbeResult> {
     return fetchProviderModels({ ...this.resolveProbeTarget(input), type: input.type }, this.fetchImpl);
   }
 
