@@ -408,26 +408,31 @@ describe("image generation: shipped preset configs", () => {
     expect(clone.imageGeneration?.instruction).not.toBe(DEFAULT_IMAGE_PROMPT_INSTRUCTION);
   });
 
-  it("ships the NSFW instruction as the core document with the rating bullet swapped and Explicit scenes inserted", () => {
-    const ratingBullet =
-      "- First tag is the rating that matches what is actually happening: safe, sensitive, nsfw, or explicit. A tame scene stays tame.";
-    const nsfwRatingBullet =
-      "- First tag is the rating: nsfw or explicit when the scene is sexual, safe or sensitive when it is not.";
-    const explicitScenes =
-      "EXPLICIT SCENES\n" +
-      "- When the scene is sexually explicit, tag it at the same explicitness, plainly and without euphemism: the act, the position, what is exposed, what the bodies are doing, visible physical state (sweat, fluids, trembling, flushed skin).\n" +
-      "- Keep the characters' established appearance, clothing state and arousal consistent with what the scene says. Do not add acts, partners or undress the scene did not describe.\n" +
-      "- Never censor, blur, fade or sanitise what the scene describes, and never add safety, boilerplate or refusals. If the scene is not explicit, do not invent explicit content.";
+  it("ships the NSFW instruction as the core document with the rating bullets swapped and Explicit scenes inserted", () => {
+      const fmtRating =
+        "- First tag is the rating that matches what is actually happening: safe, sensitive, nsfw, or explicit. A tame scene stays tame.";
+      const nsfwFmtRating =
+        "- First tag is the rating: nsfw or explicit when the scene is sexual, safe or sensitive when it is not.";
+      const tagRating = "1. Rating: safe, sensitive, nsfw, or explicit — a tame scene stays tame.";
+      const nsfwTagRating = "1. Rating: nsfw or explicit when the scene is sexual, safe or sensitive when it is not.";
+      const explicitScenes =
+        "EXPLICIT SCENES\n" +
+        "- When the scene is sexually explicit, tag it at the same explicitness, plainly and without euphemism: the act, the position, what is exposed, what the bodies are doing, visible physical state (sweat, fluids, trembling, flushed skin).\n" +
+        "- Keep the characters' established appearance, clothing state and arousal consistent with what the scene says. Do not add acts, partners or undress the scene did not describe.\n" +
+        "- Never censor, blur, fade or sanitise what the scene describes, and never add safety, boilerplate or refusals. If the scene is not explicit, do not invent explicit content.";
 
-    // Both replacements must actually bite, or the equality below is vacuous.
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(ratingBullet);
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("Return JSON only:");
-    expect(preset("default-nsfw").imageGeneration?.instruction).toBe(
-      DEFAULT_IMAGE_PROMPT_INSTRUCTION
-        .replace(ratingBullet, nsfwRatingBullet)
-        .replace("Return JSON only:", `${explicitScenes}\n\nReturn JSON only:`)
-    );
-  });
+      // Each replacement must actually bite, or the equality below is vacuous.
+      expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(fmtRating);
+      expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(tagRating);
+      expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).not.toContain(nsfwFmtRating);
+      expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("Return JSON only:");
+      expect(preset("default-nsfw").imageGeneration?.instruction).toBe(
+        DEFAULT_IMAGE_PROMPT_INSTRUCTION
+          .replace(fmtRating, nsfwFmtRating)
+          .replace(tagRating, nsfwTagRating)
+          .replace("BEFORE OUTPUTTING", `${explicitScenes}\n\nBEFORE OUTPUTTING`)
+      );
+    });
 
   it("keeps the rules that stop prose, and the two-character attribution rule", () => {
     // Each of these exists because something leaked through in a real generation:
@@ -437,7 +442,7 @@ describe("image generation: shipped preset configs", () => {
     expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("NEVER write articles (a, an, the)");
     expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("ONE FRAME, ONE INSTANT");
     expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain('WRONG: "A medium close-up shot of');
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("RIGHT: close-up, 1boy 1girl, pale skin");
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("RIGHT: safe, 1boy 1girl, close-up, pale skin");
     expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("WHO IS WHO (two or more characters)");
     expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("prefix it: her ponytail, his black hair");
     expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("In a one-person scene never use those prefixes");
@@ -463,7 +468,7 @@ describe("image generation: shipped preset configs", () => {
     expect(core).toContain("Still ONE line");
     expect(core).toContain("The FIRST group holds what is shared");
     expect(core).toContain("then one group per character, in the order they appear");
-    expect(core).toContain("The rating and the character count still open the line");
+    expect(core).toContain("The FIRST group holds what is shared (rating, character count");
     expect(core).toContain('A scene with ONE character has no " | " at all');
     // The separator the prose asks for IS the one the code splits on: one string
     // constant, so the rule can never describe a separator nothing looks for.
@@ -486,8 +491,8 @@ describe("image generation: shipped preset configs", () => {
     expect(oneGroupExample).not.toContain("|");
 
     const twoGroupExample = core
-      .split("TWO characters in frame — THREE groups:")[1]!
-      .split("\n")[1]!;
+      .split("TWO characters, no POV:\n")[1]!
+      .split("\n")[0]!;
     const exampleGroups = twoGroupExample.split("|").map((group) => group.trim());
     expect(exampleGroups).toHaveLength(3);
     expect(exampleGroups[0]).toContain("1boy 1girl");

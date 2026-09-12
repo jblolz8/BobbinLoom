@@ -60,12 +60,12 @@ describe("generateImagePrompt", () => {
     );
 
     expect(longPrefix.length).toBeGreaterThan(1200);
-    // `composePrompt` joins prefix and body with a space (not a comma), so the
+    // The negative is comma-joined (prefix list, then the model's tags), so the
     // assertion is about the LENGTH surviving, not the separator.
-    expect(out.negativePrompt).toBe(`${longPrefix} volunteered`);
+    expect(out.negativePrompt).toBe(`${longPrefix}, volunteered`);
   });
 
-  it("sends a tag-list instruction and asks for the one-field JSON shape", async () => {
+  it("sends a tag-list instruction and asks for the two-field JSON shape", async () => {
     const { fetchImpl, calls } = stubFetch('{"prompt": "safe, 1girl, bedroom"}');
     await generateImagePrompt(testConfig(), settings(), INPUT, fetchImpl);
 
@@ -74,13 +74,13 @@ describe("generateImagePrompt", () => {
     // a prose sentence.
     expect(system).toBe(settings().instruction);
     expect(system).toContain("booru-style tags");
-    expect(system).toContain('Return JSON only:\n{"prompt": "<the tag line>"}');
+    expect(system).toContain('Return JSON only:\n{"prompt": "<the tag line>", "negative": "<negative tags>"}');
     expect(system).not.toContain("describe ONE still image");
 
-    // …and the trailing context line asks for the same thing, one field only.
+    // …and the trailing context line asks for the same thing, both fields.
     const block = calls[0].body.messages[1].content as string;
     expect(block).toContain("Return ONE line of comma-separated tags describing this moment.");
-    expect(block).toContain('Return JSON only: {"prompt": "…"}');
+    expect(block).toContain('Return JSON only: {"prompt": "…", "negative": "…"}');
     expect(block).not.toContain("negative_prompt");
   });
 
@@ -88,7 +88,18 @@ describe("generateImagePrompt", () => {
     const { fetchImpl } = stubFetch('{"prompt": "safe, 1girl", "negative_prompt": "hands, extra fingers"}');
     const result = await generateImagePrompt(testConfig(), settings(), INPUT, fetchImpl);
     expect(result.prompt).toBe("anime style safe, 1girl");
-    expect(result.negativePrompt).toBe(`${settings().negativePrefix} hands, extra fingers`);
+    expect(result.negativePrompt).toBe(`${settings().negativePrefix}, hands, extra fingers`);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("parses the instruction's `negative` field and comma-joins it after the shipped list", async () => {
+    // The two-field contract the shipped instruction asks for: `negative`, not
+    // the legacy `negative_prompt`. The shipped list (prefix) must come first,
+    // comma-joined, because both sides are comma-separated strings.
+    const { fetchImpl } = stubFetch('{"prompt": "explicit, 1girl", "negative": "human, human ears"}');
+    const result = await generateImagePrompt(testConfig(), settings(), INPUT, fetchImpl);
+    expect(result.prompt).toBe("anime style explicit, 1girl");
+    expect(result.negativePrompt).toBe(`${settings().negativePrefix}, human, human ears`);
     expect(result.warnings).toEqual([]);
   });
 
@@ -111,7 +122,7 @@ describe("generateImagePrompt", () => {
     expect(calls[0].body.messages[1].content).toContain(INPUT.castSummary);
 
     expect(result.prompt).toBe("anime style a woman in a wet alley");
-    expect(result.negativePrompt).toBe(`${settings().negativePrefix} blurry`);
+    expect(result.negativePrompt).toBe(`${settings().negativePrefix}, blurry`);
     expect(result.model).toBe("local-model");
     expect(result.rawInput).toContain("local-model");
     expect(result.rawOutput).toContain("wet alley");

@@ -277,7 +277,7 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
       "http://localhost:1234/v1/chat/completions",
       "https://api.venice.ai/api/v1/image/generate"
     ]);
-    expect(h.calls[1].body.negative_prompt).toBe(`${DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix} blurry`);
+    expect(h.calls[1].body.negative_prompt).toBe(`${DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix}, blurry`);
     expect(h.calls[1].body.width).toBe(1024);
 
     const body = res.json();
@@ -369,7 +369,7 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
     expect(res.statusCode).toBe(200);
     expect(h.calls).toHaveLength(2);
     expect(h.calls[1].body.prompt).toBe("only the positive was edited");
-    expect(h.calls[1].body.negative_prompt).toBe(`${DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix} blurry`);
+    expect(h.calls[1].body.negative_prompt).toBe(`${DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix}, blurry`);
 
     const negativeOnly = await post(h.app, imageUrl(h), { negativeOverride: "only the negative" });
     expect(negativeOnly.statusCode).toBe(200);
@@ -642,7 +642,7 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image/prompt", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       prompt: "anime style a woman in the rain",
-      negativePrompt: `${DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix} blurry`,
+      negativePrompt: `${DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix}, blurry`,
       // Advisory notes travel with the dry run; none for a clean answer.
       warnings: []
     });

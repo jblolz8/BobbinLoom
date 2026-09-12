@@ -157,18 +157,26 @@ export function buildImagePromptContextBlock(input: ImagePromptInput, settings: 
   if (input.previousUserContent) blocks.push(`PLAYER'S LAST ACTION:\n${input.previousUserContent}`);
   if (settings.includeState && input.stateSummary) blocks.push(`CURRENT STATE:\n${input.stateSummary}`);
   if (settings.includeCast && input.castSummary) blocks.push(`PRESENT CHARACTERS:\n${input.castSummary}`);
-  blocks.push('Return ONE line of comma-separated tags describing this moment. Return JSON only: {"prompt": "…"}');
+  blocks.push('Return ONE line of comma-separated tags describing this moment. Return JSON only: {"prompt": "…", "negative": "…"}');
   return blocks.join("\n\n");
 }
 
 /** Compose + clamp a side: preset prefix first, then the model's text. A limit
  *  of 0 means unlimited (the schema allows it), so it is never asked to clamp.
- *  `truncated` says whether the clamp actually cut anything. */
-function compose(prefix: string, body: string, limit: number): { text: string; truncated: boolean } {
-  const composed = composePrompt(prefix, body);
-  if (limit <= 0) return { text: composed, truncated: false };
-  const clamped = clampChars(composed, limit);
-  return { text: clamped, truncated: clamped.length < composed.length };
+ *  `truncated` says whether the clamp actually cut anything.
+ *
+ *  The NEGATIVE side is comma-joined (the shipped list and the model's tags are
+ *  both comma-separated strings, so a space join would splice two lists into
+ *  one undifferentiated run); the positive side stays space-joined. */
+function compose(prefix: string, body: string, limit: number, comma = false): { text: string; truncated: boolean } {
+  const p = prefix.trim();
+  const b = body.trim();
+  const joined = comma
+    ? (!p ? b : !b ? p : `${p}, ${b}`)
+    : composePrompt(p, b);
+  if (limit <= 0) return { text: joined, truncated: false };
+  const clamped = clampChars(joined, limit);
+  return { text: clamped, truncated: clamped.length < joined.length };
 }
 
 /**
@@ -238,7 +246,10 @@ export async function generateImagePrompt(
   let rawNegative = "";
   if (obj) {
     if (typeof obj.prompt === "string") rawPrompt = obj.prompt;
-    if (typeof obj.negative_prompt === "string") rawNegative = obj.negative_prompt;
+    // The instruction asks for a `negative` field; accept a model that still
+    // answers the legacy `negative_prompt` spelling so old contracts keep working.
+    const negativeVal = typeof obj.negative === "string" ? obj.negative : obj.negative_prompt;
+    if (typeof negativeVal === "string") rawNegative = negativeVal;
     if (typeof obj.prompt !== "string") {
       warnings.push(
         `The text model returned JSON with no "prompt" field (keys: ${describeKeys(obj)}), so that raw JSON is now the image prompt. Edit it before generating, or try another text connection.`
@@ -265,7 +276,12 @@ export async function generateImagePrompt(
   // the composed negative to the dialect's hard cap — which is the only ceiling it
   // should ever have. Clamping it here made the route's cap unreachable: the text
   // was already cut before it got there.
-  const composedNegative = compose(settings.negativePrefix, rawNegative, 0);
+  //
+  // The model's own negative is appended to the shipped list, comma-joined (the
+  // `comma` flag): both are comma-separated strings, so a space join would splice
+  // two lists into one undifferentiated run. The shipped list stays first — it is
+  // the baseline; the model's tags extend it for this scene.
+  const composedNegative = compose(settings.negativePrefix, rawNegative, 0, true);
 
   return {
     prompt: composedPrompt.text,
