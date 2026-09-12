@@ -365,10 +365,11 @@ export function ImageConnectionEditor({
       <div className="conn-section">
         <h5 className="form-section-title conn-section-title">
           <Icon name="Plug" size={14} />
-          <span>API Style</span>
+          <span>Connection Basics</span>
         </h5>
         <div className="conn-fields-group">
           <div className="conn-field-group">
+            <span className="field-label-text">API Style</span>
             <SimpleSelect<ImageApiStyle>
               size="sm"
               variant="filled"
@@ -384,14 +385,7 @@ export function ImageConnectionEditor({
                 : "Venice sends negative prompts, seeds and style presets; OpenAI-compatible sends none of them."}
             </p>
           </div>
-        </div>
-      </div>
-      <div className="conn-section">
-        <h5 className="form-section-title conn-section-title">
-          <Icon name="Plug" size={14} />
-          <span>Connection Basics</span>
-        </h5>
-        <div className="conn-fields-group">
+
           <div className="conn-fields-row-2">
             <TextInput
               label="Name"
