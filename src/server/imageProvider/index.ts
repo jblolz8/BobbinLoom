@@ -1,10 +1,12 @@
 import type { ProviderConnection } from "../../schemas";
 import { resolveImageConfig } from "../providerConfig";
 import type { ImageGenerationRequest, ImageGenerationResult, ImageProvider } from "./types";
+import { A1111Provider } from "./a1111Provider";
 import { OpenAIImagesProvider } from "./openaiImagesProvider";
 import { VeniceImageProvider } from "./veniceImageProvider";
 
 export type { ImageGenerationRequest, ImageGenerationResult, ImageProgress, ImageProvider } from "./types";
+export { A1111_IMAGE_PROMPT_CAP, A1111Provider } from "./a1111Provider";
 export { OPENAI_IMAGE_PROMPT_CAP, OpenAIImagesProvider } from "./openaiImagesProvider";
 export { VENICE_IMAGE_PROMPT_CAP, VeniceImageProvider } from "./veniceImageProvider";
 export * from "./shared";
@@ -18,6 +20,7 @@ export function createImageProvider(
 ): ImageProvider {
   const config = resolveImageConfig(conn, env);
   const apiStyle = conn.apiStyle ?? "openai";
+  if (apiStyle === "a1111") return new A1111Provider(config, conn, fetchImpl);
   return apiStyle === "venice"
     ? new VeniceImageProvider(config, conn, fetchImpl)
     : new OpenAIImagesProvider(config, conn, fetchImpl);

@@ -258,6 +258,43 @@ describe("createImageProvider", () => {
   });
 });
 
+describe("createImageProvider — the a1111 dialect", () => {
+  it("selects A1111Provider from the connection's apiStyle", () => {
+    expect(createImageProvider(a1111Conn())).toBeInstanceOf(A1111Provider);
+    // The other two dialects keep their own adapters.
+    expect(createImageProvider(imageConn({ apiStyle: "venice" }))).toBeInstanceOf(VeniceImageProvider);
+    expect(createImageProvider(imageConn({ apiStyle: "openai" }))).toBeInstanceOf(OpenAIImagesProvider);
+  });
+
+  it("keeps the WebUI root as the base URL and gives it the 10-minute default", () => {
+    const provider = createImageProvider(a1111Conn(), {});
+    const config = (provider as unknown as { config: ResolvedProviderConfig }).config;
+    // No /v1 prefix: every path would become /v1/sdapi/v1/... and 404.
+    expect(config.baseUrl).toBe("http://127.0.0.1:7860");
+    expect(config.timeoutMs).toBe(600_000);
+    expect(config.maxRetries).toBe(1);
+  });
+
+  it("takes the prompt cap from the a1111 dialect, not the OpenAI one", () => {
+    expect(A1111_IMAGE_PROMPT_CAP).toBe(10_000);
+    expect(A1111_IMAGE_PROMPT_CAP).toBeGreaterThan(OPENAI_IMAGE_PROMPT_CAP);
+  });
+
+  it("posts A1111 credentials as Basic for user:pass and Bearer for a token", async () => {
+    const basic = stubA1111(a1111Happy());
+    await createImageProvider(a1111Conn({ apiKey: "bob:secret" }), {}, basic.fetchImpl).generateImage({
+      prompt: "a scene"
+    });
+    expect(basic.calls[0].authorization).toBe(`Basic ${Buffer.from("bob:secret").toString("base64")}`);
+
+    const bearer = stubA1111(a1111Happy());
+    await createImageProvider(a1111Conn({ apiKey: "abc123" }), {}, bearer.fetchImpl).generateImage({
+      prompt: "a scene"
+    });
+    expect(bearer.calls[0].authorization).toBe("Bearer abc123");
+  });
+});
+
 describe("ImageProgress", () => {
   it("is carried on the request and read by a provider that can report it", async () => {
     // Type-level contract: `onProgress` is OPTIONAL (a dialect that cannot
