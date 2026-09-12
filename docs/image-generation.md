@@ -1,8 +1,8 @@
 # BobbinLoom — Image Generation
 
-How an assistant message becomes a stored image file: the two image-provider dialects, the text → image-prompt call, the review modal, and the content-addressed store that holds the bytes.
+How an assistant message becomes a stored image file: the three image-provider dialects, the text → image-prompt call, the review modal, and the content-addressed store that holds the bytes.
 
-Source of truth: `src/server/routes/images.ts` (the endpoints), `src/server/imageProvider/` (`index.ts`, `types.ts`, `shared.ts`, `openaiImagesProvider.ts`, `veniceImageProvider.ts`), `src/server/provider/imagePrompt.ts` (the prompt side call), `src/server/imageStore.ts` (content-addressed storage + orphan sweep), `src/engine/imageDefaults.ts` and `data/prompt-presets.json` (preset prompt config), `src/client/components/views/PlayView/` (the chat surface). Related: [`provider-setup.md`](provider-setup.md) (connection registry v2), [`prompt-architecture.md`](prompt-architecture.md) (why the prompt call is a side call).
+Source of truth: `src/server/routes/images.ts` (the endpoints), `src/server/imageProvider/` (`index.ts`, `types.ts`, `shared.ts`, `openaiImagesProvider.ts`, `veniceImageProvider.ts`, `a1111Provider.ts`), `src/server/httpAuth.ts` (the key→header rule), `src/server/imageProgress.ts` (the live progress registry), `src/server/provider/imagePrompt.ts` (the prompt side call), `src/server/imageStore.ts` (content-addressed storage + orphan sweep), `src/engine/imageDefaults.ts` and `data/prompt-presets.json` (preset prompt config), `src/client/components/views/PlayView/` (the chat surface). Related: [`provider-setup.md`](provider-setup.md) (connection registry v2), [`prompt-architecture.md`](prompt-architecture.md) (why the prompt call is a side call).
 
 ---
 
@@ -19,21 +19,26 @@ Nothing about image generation runs during a turn. The prompt call is not part o
 
 ---
 
-## The two connection dialects
+## The three connection dialects
 
-Image connections are plain entries in the provider registry (`data/providers.json`, `schemaVersion: 2`) with `kind: "image"`. They carry the shared connection fields (`baseUrl`, `apiKey`, `model`, …) plus the image-only fields below. `apiStyle` selects the dialect; absent means `openai`.
+Image connections are plain entries in the provider registry (`data/providers.json`, `schemaVersion: 2`) with `kind: "image"`. They carry the shared connection fields (`baseUrl`, `apiKey`, `model`, …) plus the image-only fields below. `apiStyle` selects the dialect — `"openai"`, `"venice"` or `"a1111"`; absent means `openai`.
 
 | Field | Values | Meaning |
 |---|---|---|
-| `apiStyle` | `"openai"` (default) \| `"venice"` | Endpoint dialect. Absent = `openai`, the conservative default — it never sends a field the endpoint might reject. |
-| `safeMode` | boolean, absent = `false` | Ask the provider to blur/moderate adult content. Off by default: this is an adult-content project and the blur is a footgun. |
-| `size` | `"auto"` \| `"1024x1024"` \| `"1536x1024"` \| … | `openai` sends it verbatim as `size` (`"auto"` included); `venice` parses it into `width`/`height` and **drops it entirely** when it is `"auto"` or unparseable — the provider then picks. |
+| `apiStyle` | `"openai"` (default) \| `"venice"` \| `"a1111"` | Endpoint dialect. Absent = `openai`, the conservative default — it never sends a field the endpoint might reject. `"a1111"` talks to a local AUTOMATIC1111 / Forge WebUI over its own `/sdapi/v1/*` API (see below). |
+| `safeMode` | boolean, absent = `false` | Ask the provider to blur/moderate adult content. Off by default: this is an adult-content project and the blur is a footgun. Venice (`safe_mode`) and the OpenAI-compatible `moderation` field only — never sent on `a1111`. |
+| `size` | `"auto"` \| `"1024x1024"` \| `"1536x1024"` \| … | `openai` sends it verbatim as `size` (`"auto"` included); `venice` parses it into `width`/`height` and **drops it entirely** when it is `"auto"` or unparseable — the provider then picks. `a1111` parses it into `width`/`height` and sends **neither** for `"auto"` or an unparseable value, so the WebUI's own canvas size applies. |
 | `aspectRatio` | string, e.g. `"3:2"` | Venice only. Used **instead of** `size` for models that reject `width`/`height` (the qwen-image family). |
 | `promptProviderId` | text connection id, or `null` | Which text connection writes the prompt. Absent/null = the current active text connection. A dangling id falls back to the active text connection rather than erroring. |
 | `stylePreset` | a value the provider itself lists, e.g. `"Anime"` | Venice only. Sent as `style_preset`. **Case-sensitive and title-cased upstream**: `anime` is a 400 (`Invalid style requested`). The list comes from the keyless `GET {baseUrl}/image/styles`, and the connection editor fills a select from it (with **None** and a **Custom…** escape hatch). An **empty value is omitted** from the body rather than sent. |
 | `hideWatermark` | boolean | Venice only. Sent as `hide_watermark: true` (only when on). |
-| `variants` | integer 1–4 | How many images one request renders. Every returned variant is kept. |
-| `seed` | integer, absent = random | Venice only. Sent as `seed` with **every** generation this connection makes, so re-rolls of the same prompt are comparable. **Absent (or `0`, which Venice documents as "pick one at random") means the provider picks** — and then the stored image carries no seed at all. The OpenAI-compatible dialect has no seed field, so a seed set here is simply ignored by it. Editable in the connection editor next to Variants; an emptied field **clears** the stored value rather than storing `0`. |
+| `variants` | integer 1–4 | How many images one request renders. Every returned variant is kept. On `a1111` it means **batch size** (`batch_size`), so one call renders the whole batch. |
+| `seed` | integer, absent = random | **Venice:** sent as `seed` with **every** generation this connection makes, so re-rolls of the same prompt are comparable. **Absent (or `0`, which Venice documents as "pick one at random") means the provider picks** — and then the stored image carries no seed at all. **a1111:** sent as `seed`, where **`-1` means random and `0` is a legitimate deterministic seed** — the opposite of Venice. A blank field is sent as `-1`, so typing `0` genuinely pins the first image. The OpenAI-compatible dialect has no seed field, so a seed set here is simply ignored by it. Editable in the connection editor next to Variants; an emptied field **clears** the stored value rather than storing `0`. |
+| `steps` | integer 1–150, absent = not sent | a1111 only. Sent as `steps`. **Empty omits the field**, so the WebUI's own default applies — which is what a user who already tuned their WebUI expects. |
+| `cfgScale` | number 0–30, absent = not sent | a1111 only. Sent as `cfg_scale`. |
+| `sampler` | string, absent = not sent | a1111 only. Sent as `sampler_name`. Free text; the editor suggests the names the WebUI itself listed (`GET /sdapi/v1/samplers`), because a fork may ship names BobbinLoom was never told. |
+| `scheduler` | string, absent = not sent | a1111 only. Sent as `scheduler`. Free text, suggestions from `GET /sdapi/v1/schedulers`. |
+| `timeoutMs` | integer ms, absent = dialect default | a1111 only. One image's budget. Precedence: connection `timeoutMs` > `BOBBINLOOM_IMAGE_TIMEOUT_MS` > dialect default (**600000 ms** for a1111, 180000 otherwise). The editor takes seconds and stores milliseconds. |
 
 ### `openai` — OpenAI-compatible
 
@@ -99,6 +104,79 @@ Image connections are plain entries in the provider registry (`data/providers.js
 
 **Response shape** — `images`, an array of base64 strings (one per variant), plus a `timing` object; `timing.total` is used as the reported duration when it is a number. An empty or missing `images` array is an error (`Image provider returned no image data`).
 
+### `a1111` — AUTOMATIC1111 / Forge (local)
+
+Talks to a locally hosted AUTOMATIC1111 or Forge WebUI over the WebUI's **own** `/sdapi/v1/*` API — not an OpenAI-compatible surface. The WebUI must be started with `--api`; without it every route below answers 404 (see [`provider-setup.md`](provider-setup.md) → *Local AUTOMATIC1111 / Forge*).
+
+| Endpoint | Purpose |
+|---|---|
+| `POST {baseUrl}/sdapi/v1/txt2img` | Render. One request renders the whole batch. |
+| `GET {baseUrl}/sdapi/v1/sd-models` | The checkpoint list (**Fetch models**), plus the WebUI's sampler/scheduler lists. |
+| `GET {baseUrl}/sdapi/v1/progress?skip_current_image=true` | Polled while a render runs — the live readout. |
+| `POST {baseUrl}/sdapi/v1/interrupt` | Cancel. Fired on abort. |
+
+**The base URL is the WebUI ROOT** — `http://127.0.0.1:7860`, with **no `/v1` suffix**. Every other dialect normalizes to an OpenAI-style `/v1`; this one deliberately does not, because `/v1/sdapi/v1/txt2img` is not a route. Trailing slashes are still stripped (that is the whole of `normalizeImageBaseUrl` for this dialect).
+
+```json
+{
+  "prompt": "anime style rain-slick cobblestones, a lone figure under a flickering neon sign, wide shot, night",
+  "negative_prompt": "lowres, worst quality, low quality, …",
+  "width": 1024,
+  "height": 1024,
+  "steps": 28,
+  "cfg_scale": 6.5,
+  "sampler_name": "DPM++ 2M Karras",
+  "scheduler": "Karras",
+  "seed": -1,
+  "n_iter": 1,
+  "batch_size": 1,
+  "override_settings": { "sd_model_checkpoint": "sd_xl_base_1.0.safetensors" },
+  "override_settings_restore_afterwards": true
+}
+```
+
+| Body field | Source | Notes |
+|---|---|---|
+| `prompt` | composed prompt | Clamped to **10000** characters (`A1111_IMAGE_PROMPT_CAP`) — a sanity ceiling, not a trim. |
+| `negative_prompt` | composed negative | Only sent when non-empty; the same 10000-character ceiling. |
+| `width` / `height` | parsed from `size` | `"auto"`, absent and unparseable all send **neither**, so the WebUI's own canvas size applies. |
+| `steps` | connection `steps` | 1–150. **Omitted when the connection does not set it**, so the WebUI's own default applies. |
+| `cfg_scale` | connection `cfgScale` | 0–30. Omitted when unset. |
+| `sampler_name` | connection `sampler` | Free text. Omitted when unset. |
+| `scheduler` | connection `scheduler` | Free text. Omitted when unset. |
+| `seed` | request `seed` → connection `seed` → `-1` | **`-1` means random on this dialect.** `0` is a **legitimate deterministic seed** here — the opposite of Venice, where `0` is the random sentinel. A blank field is sent as `-1`; a `0` in the body is a real pin. |
+| `n_iter` | constant `1` | |
+| `batch_size` | `req.variants ?? 1`, clamped to 1–4 | `variants` means **batch size** on this dialect: one call renders the whole batch. |
+| `override_settings.sd_model_checkpoint` | connection `model` | Sent only when the model field is non-empty. |
+| `override_settings_restore_afterwards` | constant `true` | |
+
+**Checkpoint switching is per request, and it never becomes a settings change.** The connection's checkpoint travels in `override_settings.sd_model_checkpoint`, applied to **one** request. The adapter never calls `POST /sdapi/v1/options`, because that mutates the user's own WebUI state — which is not BobbinLoom's to change. `override_settings_restore_afterwards: true` is sent **explicitly** whenever `override_settings` is sent, so "one request only" never depends on a fork's default.
+
+**Every sampling field is optional, on purpose.** A1111 accepts any *subset* of its parameters and fills the rest from the WebUI's own settings, so the adapter sends `steps`, `cfg_scale`, `sampler_name` and `scheduler` **only when the connection sets them**. An absent `steps` means "the number the user already set in their WebUI"; overriding it with a hardcoded 20 would silently ignore their tuning.
+
+**Fields that do NOT apply.** `stylePreset`, `safeMode` and `hideWatermark` are never sent — the WebUI has no `style_preset`, `safe_mode` or `hide_watermark` — and `aspectRatio` is unused, because sizing on this dialect is `width`/`height` only. The connection editor **hides all four controls** for an `a1111` connection rather than showing a field that would send nothing.
+
+**Cancel really cancels.** On abort the adapter fires `POST /sdapi/v1/interrupt` — best effort, exactly once per signal, with its own 5 s budget (`A1111_INTERRUPT_TIMEOUT_MS`) and every error swallowed, so a failed interrupt can never turn the user's cancel into an error. An abandoned fetch alone would leave the WebUI sampling and the GPU busy. A successful (un-aborted) generation issues no interrupt at all.
+
+**Response shape** — `{ images: [base64…], info: "<JSON string>" }`. Every entry in `images` becomes a stored image, and an empty or missing `images` array is an error (`Image provider returned no image data`). The **MIME comes from the bytes** (magic-byte sniffed): the WebUI hands back bare base64 with no filename and no format field, so trusting a reported type would put a mislabelled file in the content-addressed store. The **seed stored on the ref is the one the WebUI actually used**, read out of `info` (`seed`, falling back to `all_seeds[0]`, and tolerating a fork that stringifies the numbers). This matters here more than on any other dialect: a random request sent `-1`, which nobody can reproduce from, so reporting back what was asked for would be a lie. A missing, truncated or non-JSON `info` yields **no seed** and never throws — the image is still perfectly usable.
+
+#### The live progress readout
+
+A local render takes minutes, so this dialect reports where it is:
+
+- **The adapter polls** `GET {baseUrl}/sdapi/v1/progress?skip_current_image=true` every **600 ms** (`A1111_PROGRESS_POLL_MS`) while the `txt2img` POST is in flight, each poll with its own **3 s** budget (`A1111_PROGRESS_TIMEOUT_MS`) so a hung read cannot stack up behind the next one. It starts the first poll as soon as the request is away (not one interval later, or a short generation would report nothing at all), and a `settled` flag makes a late response a no-op — a progress sample for a finished job must not move the bar backwards. It reads `progress` (0..1), `state.sampling_step`, `state.sampling_steps` and `eta_relative`, and reports `{ progress, step, steps, etaSeconds }`. Every field is optional: a number the WebUI did not report is **omitted, never zeroed**. Every poll error is swallowed — an old build with no `/progress` route, or one that answers non-JSON, is never a reason to fail a generation that is otherwise fine.
+- **The route** is `GET /api/images/progress?connectionId=…`, answered from an in-memory registry keyed by the **image connection id**. The snapshot is `{ active: true, progress?, step?, steps?, etaSeconds? }`, or `{ active: false }` when nothing is running on that connection (a poll that races the start or the end of a generation must answer, never throw). Without the parameter it is `400 {"error":"connectionId is required"}`. The entry is published from the adapter's `onProgress` and cleared in the generate route's `finally`, so a **failed** render clears it too — a crashed generation must not leave a permanent phantom progress bar in the footer.
+- **The client polls** that endpoint every **700 ms** (`IMAGE_PROGRESS_POLL_MS` in `usePlaythrough.ts`) while an image generation is in flight **and** the active connection is `a1111`; any other dialect starts no polling at all. The loop stops when the generation settles — success, failure or cancel — which also nulls the readout, and a failed read is swallowed (it keeps the last readout and tries again next tick) so a progress blip can never disturb the generation.
+- **The footer shows** `Sampling 12/28 · 43%`, built from whatever has actually been reported: the step pair when both numbers are present, and a percentage from `progress` (falling back to `step / steps`). A job that is still queued, or a build that reports nothing, simply shows no readout.
+
+#### The prompt is chunked, never trimmed
+
+Stable Diffusion's text encoder consumes the prompt in **75-token CLIP chunks** and weights everything past the first chunk less, so the tail of a long tag list quietly loses emphasis. BobbinLoom does **not** cut the prompt to compensate:
+
+- `A1111_IMAGE_PROMPT_CAP` is **10000** characters and it is a **sanity ceiling so a runaway string cannot be posted — not a trim**. A 2000-character prompt is sent unchanged.
+- Instead, the review modal (on an `a1111` connection only) shows an estimate — `About N tokens — M CLIP chunks of 75` — and, when the prompt spills past the first chunk, a warning that the tags past it are **weighted less** and that **the text is sent unchanged — nothing is trimmed, reordered or dropped**. The estimate is ~4 characters per token: an approximation, not a tokenizer (a real CLIP vocabulary would be a new dependency), and it is advisory — it changes nothing about what is posted. It is computed from the **draft**, so it updates as the user edits.
+- The preset's `promptCharacterLimit` (1200 shipped) still applies to the composed prompt — the server clamps to `min(preset limit, 10000)`, which is what the modal's counter shows. That soft limit, **not** the 10000 ceiling, is the only thing that can cut an `a1111` prompt.
+
 ### Timeouts and retries
 
 Image requests get their own budget, because local diffusion queues and Venice's image lane both blow past the 120 s text default:
@@ -108,7 +186,7 @@ BOBBINLOOM_IMAGE_TIMEOUT_MS=180000
 BOBBINLOOM_IMAGE_MAX_RETRIES=1
 ```
 
-Defaults are **180000 ms** and **1** retry. Only the image provider calls use this budget — the prompt-writing call is a text call and uses `BOBBINLOOM_TIMEOUT_MS` / `BOBBINLOOM_MAX_RETRIES`. Retryable statuses are 429, 500, 502, 503 and 504; retries are capped deliberately low because a 60-second generation is not something to repeat twice.
+Defaults are **180000 ms** and **1** retry — except on `a1111`, where the timeout default is **600000 ms (10 minutes)** because a 1024x1024 SDXL batch at 30 steps takes minutes, and the connection can carry its own `timeoutMs` on top (precedence: connection → `BOBBINLOOM_IMAGE_TIMEOUT_MS` → dialect default). The `a1111` adapter does not retry at all: it sends one `txt2img` POST and reports whatever comes back, because a 60-second generation is not something to repeat. Only the image provider calls use this budget — the prompt-writing call is a text call and uses `BOBBINLOOM_TIMEOUT_MS` / `BOBBINLOOM_MAX_RETRIES`. For the retrying dialects, retryable statuses are 429, 500, 502, 503 and 504; retries are capped deliberately low for the same reason.
 
 ---
 
@@ -119,6 +197,7 @@ Defaults are **180000 ms** and **1** retry. Only the image provider calls use th
 | `GET /api/images/:file` | Serve stored bytes. The file name *is* the hash, so the response is `Cache-Control: public, max-age=31536000, immutable`. A name that does not match `^[a-f0-9]{64}\.(png\|jpg\|webp)$` is a 404 before any filesystem call. |
 | `POST /api/playthroughs/:id/messages/:messageId/image/prompt` | Dry run: compose the prompt, generate nothing. |
 | `POST /api/playthroughs/:id/messages/:messageId/image` | Compose (or take) the prompt, render the image, store it, append the ref. |
+| `GET /api/images/progress?connectionId=…` | The live readout for a generation in flight. `{ active: true, progress?, step?, steps?, etaSeconds? }`, or `{ active: false }` when nothing is running; `400 {"error":"connectionId is required"}` without the parameter. In-memory and keyed by image connection; only the `a1111` adapter publishes to it (see *The live progress readout*). |
 | `DELETE /api/playthroughs/:id/messages/:messageId/images/:file` | Drop one image ref, then sweep. Idempotent. |
 | `POST /api/settings/images/sweep` | Manual orphan sweep. |
 
@@ -268,7 +347,7 @@ A message reference is a `MessageImage`:
 | `prompt` | what was sent, default `""` |
 | `negativePrompt` | optional |
 | `providerId`, `model` | provenance, default `""` |
-| `seed` | optional — **the seed that was actually sent**, so a later re-roll with the same prompt and seed is comparable. Absent when the provider picked one (Venice's `0`, or the OpenAI-compatible dialect, which has no seed field at all) — `0` is never stored as if it were a seed. |
+| `seed` | optional — **the seed that was actually used**, so a later re-roll with the same prompt and seed is comparable. On `a1111` it is read back out of the WebUI's `info` string (the authoritative value — the request sent `-1` when the seed was random); on Venice it is what we sent. Absent when the provider picked one (Venice's `0`, a1111 whose `info` said nothing, or the OpenAI-compatible dialect, which has no seed field at all) — `0` is never stored as if it were a seed. |
 | `durationMs` | optional |
 | `request` | optional — the **JSON body that was sent to the image provider** for this image (diagnostic provenance) |
 | `promptRequest` | optional — the **JSON body that was sent to the TEXT provider** that wrote this prompt (diagnostic provenance) |
@@ -448,6 +527,7 @@ The Image Generation tab in the preset editor exposes all six fields in this ord
 | 502 | `{"error":"The text provider returned a non-JSON response while writing the image prompt."}` | The text provider's response envelope was not JSON |
 | 502 | `{"error":"The text provider returned no image prompt (finish_reason: …). Raw response (truncated): …"}` | The model's `content` was empty (or the response carried no choices). The message names the `finish_reason`, whether a reasoning field was present, and quotes the raw body — see *Empty content is an immediate, fully-diagnosed failure* above. `finish_reason: length` + a reasoning field means the connection's budget was spent thinking: raise `maxTokens` or use a connection that answers directly. |
 | 502 | `{"error":"Image provider error <status>: <body>"}` | The image provider returned a non-OK status |
+| 502 | `{"error":"A1111 image provider error <status>: <body> — the WebUI must be started with --api — without it every /sdapi/v1/* route answers 404"}` | The WebUI call failed (a1111 dialect). A **404** means the WebUI is missing `--api` (the hint names it); a **401/403** means `--api-auth` / `--api-key` is on and the key field disagrees — a key with a colon is sent as HTTP Basic, anything else as Bearer (see [`provider-setup.md`](provider-setup.md) → *Local AUTOMATIC1111 / Forge*). |
 | 502 | `{"error":"Image provider returned no image data"}` | The image response carried no usable payload (e.g. a plain `http` URL instead of a data URL) |
 | 500 | `{"error":"Image sweep failed"}` (or the thrown message) | `POST /api/settings/images/sweep` failed |
 
@@ -458,6 +538,8 @@ The Image Generation tab in the preset editor exposes all six fields in this ord
 The OpenAI-compatible `/images/generations` endpoint rejects prompts over 1500 characters with a 400. The route clamps the **composed** prompt (prefix + body) to the dialect cap, and the adapter clamps again, so a long prefix or an over-long edit in the modal is truncated rather than rejected. The truncation is a plain `slice(0, limit).trimEnd()`. The preset's `promptCharacterLimit` (1200 for both shipped presets) is the *soft* limit and the one the modal's character counter shows; the hard cap is 1500 for `openai` and 7500 for `venice`. A preset limit of 0 means unlimited **up to the dialect cap**.
 
 This whole section is about the **prompt**. The negative has its own ceiling — the dialect cap alone, never the preset's soft limit — so none of the soft-limit arithmetic above applies to it (see *The negative has its own ceiling*). It is also worth restating here that the `openai` dialect sends **no `negative_prompt` at all**: this cap is the only clamp the negative could ever meet on that dialect, and it never meets it because the field is not sent.
+
+**The `a1111` ceiling is a sanity cap, not a trim.** The WebUI publishes no prompt cap at all — it chunks the prompt at **75 CLIP tokens** and simply weights everything past the first chunk less — so cutting at the ceiling would silently delete the tail tags the user was explicitly warned about in the review modal instead. `A1111_IMAGE_PROMPT_CAP` is **10000** characters, sized so a runaway string cannot be posted; a 2000-character prompt is sent unchanged. The signal moves to the modal instead: on an `a1111` connection the review modal shows a chunk estimate (`About N tokens — M CLIP chunks of 75`) and, past the first chunk, that the tail tags are weighted less and that **the text is sent unchanged**. The preset's `promptCharacterLimit` still applies to the composed prompt — the server clamps to `min(preset limit, 10000)` — and it is the only thing that can cut an `a1111` prompt below the ceiling. See *The prompt is chunked, never trimmed*.
 
 Soft-limit cuts are no longer silent: the dry run adds a **truncation warning** to its `warnings` array (shown in the review modal) whenever the composed prompt was cut, at either ceiling. That matters here more than it used to — a tag list puts its most disposable tags last and its action/physical-state tags at the end, so a cut removes exactly the part the instruction insists on. The reviewed generate call still sends the identical clamped text; only the dry run reports. The negative is deliberately not part of this warning: it is a curated list, not a model answer, and its only ceiling is the dialect cap.
 

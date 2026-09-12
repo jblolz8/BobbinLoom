@@ -108,13 +108,23 @@ accessor).
 
 | Field | What it does |
 |---|---|
-| **API Style** | The endpoint dialect. **OpenAI-compatible** (the default) posts to `<baseUrl>/images/generations`; **Venice** posts to `<baseUrl>/image/generate`. Venice sends negative prompts, seeds, variants and style presets; OpenAI-compatible sends none of them. |
+| **API Style** | The endpoint dialect. **OpenAI-compatible** (the default) posts to `<baseUrl>/images/generations`; **Venice** posts to `<baseUrl>/image/generate`; **Automatic1111 / Forge (local)** posts to `<baseUrl>/sdapi/v1/txt2img`, the WebUI's own API — which must be started with `--api`. Venice sends negative prompts, seeds, variants and style presets; OpenAI-compatible sends none of them; Automatic1111 sends negative prompts, seeds, variants, steps/CFG/sampler/scheduler and a per-request checkpoint. |
 | **Image Size** | `auto`, `1024x1024`, `1536x1024`, `1024x1536`, `1024x1792`, `1792x1024`, or a value you type. `auto` lets the provider choose. |
 | **Aspect Ratio** | Used **instead of** Image Size for models that reject `width`/`height` (the Venice qwen-image family). Leave empty to send the size. |
 | **Style Preset** | Venice only. Sent as `style_preset`. A select of the provider's own values (see **Style list** below) plus **None** (= send nothing) and a **Custom…** escape hatch. Values are **case-sensitive and title-cased** upstream — `anime` is rejected with a 400 — and a saved value the provider does not list is flagged in the editor. |
 | **Variants** | 1–4. Every rendered variant is kept on the message. |
 | **Hide Watermark** | Venice only. Requests results without the Venice watermark. |
 | **Safe Mode** | Ask the provider to blur adult content. Off by default; leave it off for this project. |
+| **Steps** | Automatic1111 only. 1–150, sent as `steps`. **Empty sends nothing**, so the WebUI's own default applies. |
+| **CFG scale** | Automatic1111 only. 0–30, sent as `cfg_scale`. Empty sends nothing. |
+| **Sampler** | Automatic1111 only. Sent as `sampler_name`. Free text, with the names the WebUI itself listed offered as suggestions — a fork's own names may be typed. |
+| **Scheduler** | Automatic1111 only. Sent as `scheduler`. Free text, same rule as Sampler. |
+| **Timeout (seconds)** | Automatic1111 only. How long one image may take, stored in milliseconds. Empty uses the dialect default — **10 minutes** — because a local render easily outlasts the global 180 s. |
+
+**Aspect Ratio, Style Preset, Hide Watermark and Safe Mode are hidden** on an
+`Automatic1111 / Forge` connection: the WebUI has no `aspect_ratio`, `style_preset`,
+`hide_watermark` or `safe_mode` parameter, so the editor does not show a control that would
+send nothing.
 | **Prompt writer** | Which **text** connection writes the image prompt. Defaults to the current active text provider (stored as `null`); a dangling id also falls back to the active text provider. A prompt writer is required — with no text connection at all, image generation answers 400. |
 
 **Model listing.** **Fetch models** works on an image connection too, and asks for the
@@ -136,6 +146,83 @@ whose stored value is not in the fetched list is warned about in the editor, bec
 value is a 400 waiting to happen — and by then the text call that wrote the prompt has
 already run.
 
+### Local AUTOMATIC1111 / Forge
+
+A locally hosted AUTOMATIC1111 (or Forge) WebUI can render BobbinLoom's prompts over the
+WebUI's **own** `/sdapi/v1/*` API. It is a different dialect from the other two — its base URL
+is the **WebUI root**, not an OpenAI-style `/v1` — and it is the only dialect that reports live
+progress and can actually interrupt a render.
+
+**Start the WebUI with `--api`. It is mandatory.** Without that flag every `/sdapi/v1/*` route
+answers **404**, which looks like a wrong URL rather than a missing flag — so BobbinLoom names
+the cause in its own error text:
+
+```
+A1111 image provider error 404: <body> — the WebUI must be started with --api — without it every /sdapi/v1/* route answers 404
+```
+
+The same hint comes back from **Fetch models** and **Test connection**, which both probe
+`GET /sdapi/v1/sd-models`.
+
+```sh
+# Linux / macOS
+./webui.sh --api
+
+# Windows — add --api to COMMANDLINE_ARGS in webui-user.bat
+set COMMANDLINE_ARGS=--api
+```
+
+**`--listen` when BobbinLoom runs on another machine.** The WebUI binds `127.0.0.1` by
+default, so only a BobbinLoom on the same host can reach it. Add `--listen` (plus `--port` if
+you moved it) and enter that machine's address as the base URL. A same-machine install needs
+neither flag.
+
+**Auth is optional, and the key field carries both kinds.**
+
+| WebUI flag | What to enter in **API Key** | What is sent |
+|---|---|---|
+| *(none — the default)* | leave blank | no `Authorization` header |
+| `--api-auth user:pass` | `user:pass` — **with the colon** | `Authorization: Basic <base64>` |
+| `--api-key <token>` (newer builds, Forge) | the token alone — **no colon** | `Authorization: Bearer <token>` |
+
+The colon is the whole rule: an a1111 key containing a `:` is sent as HTTP Basic, anything
+else as Bearer, because `user:pass` cannot be mistaken for a token and a token never contains
+one. The models probe uses the same rule as the adapter, so testing and rendering can never
+disagree about how a key is presented.
+
+**No CORS configuration is needed.** BobbinLoom calls the WebUI from its **own server
+process**, not from the browser, so the WebUI never sees a cross-origin request and its
+`--cors-allow-origins` flag is irrelevant to this integration.
+
+**The settings to enter** (Settings → Provider → Image Providers → Add connection):
+
+| Field | Value |
+|---|---|
+| Name | anything, e.g. `Local A1111` |
+| API Style | **Automatic1111 / Forge (local)** |
+| Base URL | `http://127.0.0.1:7860` — the WebUI **root**, with **no `/v1`** (a `/v1` suffix turns every path into `/v1/sdapi/v1/…`, which 404s) |
+| API Key | blank for a default local install |
+| Checkpoint | **Fetch models** lists what `GET /sdapi/v1/sd-models` returns, in the WebUI's own order (recently used first) |
+| Image Size | `auto` sends no size, so the WebUI's own canvas applies; anything else is parsed into `width`/`height` |
+| Steps / CFG scale / Sampler / Scheduler | all optional — **an empty field is not sent at all**, so the WebUI's own tuning applies. Sampler and Scheduler are free text with the WebUI's own names as suggestions |
+| Seed | blank = random (sent as `-1`). **`0` is a real seed here**, unlike Venice |
+| Variants | batch size, 1–4: one request renders the whole batch |
+| Timeout (seconds) | blank = **600 s (10 min)** for this dialect — the global 180 s would cut a healthy local render off mid-sampler |
+
+**Test connection** runs the same `/sdapi/v1/sd-models` probe, so a missing `--api`, a wrong
+port or a bad key surfaces there before anything is generated.
+
+**The WebUI keeps its own copy of every image.** BobbinLoom stores the bytes it receives,
+content-addressed, under `data/images/` — and it deliberately does **not** send
+`do_not_save_samples`, so one render leaves a file in both `data/images/` and the WebUI's own
+output folder. Removing an image from a message (or the orphan sweep) only ever touches
+BobbinLoom's copy; delete freely on either side.
+
+**Local model notes** (general SD advice, not BobbinLoom behaviour): Pony-derived checkpoints
+(AutismMix and friends) expect their score tags (`score_9, score_8_up, score_7_up`) in the
+prompt. v-prediction checkpoints (e.g. NoobAI-XL vPred) generally render better with CFG
+**4–6** and an Euler-family sampler.
+
 Image connections store every shared field (name, base URL, model, temperature, max
 tokens, context window) plus the ones above; the image-only fields are simply absent on
 text rows.
@@ -155,7 +242,7 @@ BOBBINLOOM_IMAGE_TIMEOUT_MS=180000
 **text** connection — including the image-prompt side call, which is a text call.
 `BOBBINLOOM_IMAGE_MAX_RETRIES` (default 1) and `BOBBINLOOM_IMAGE_TIMEOUT_MS` (default
 180000) tune the **image** render calls only, which get their own budget because a local
-diffusion queue or an image lane routinely blows past the 120 s text default. All other
+diffusion queue or an image lane routinely blows past the 120 s text default. The image timeout default is **dialect-aware**: 180000 ms normally, **600000 ms (10 minutes) for an `Automatic1111 / Forge` connection**, whose editor also carries a per-connection **Timeout** field. Precedence is connection → env var → dialect default. All other
 provider configuration (base URL, model, API key, params)
 lives in the connection itself — the legacy env-var path (`BOBBINLOOM_PROVIDER`,
 `DEEPSEEK_API_KEY`, `KIMI_API_KEY`, `CUSTOM_OPENAI_API_KEY`, `BOBBINLOOM_MODEL`,
