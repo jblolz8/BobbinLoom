@@ -9,6 +9,7 @@ import type { ImageGenerationSettings } from "../src/schemas";
 import type { ProviderConnectionDraft } from "../src/server/providerRegistry";
 import { createConnection } from "../src/server/providerRegistry";
 import { OPENAI_IMAGE_PROMPT_CAP } from "../src/server/imageProvider/openaiImagesProvider";
+import { VENICE_IMAGE_PROMPT_CAP } from "../src/server/imageProvider/veniceImageProvider";
 import { saveImageBytes } from "../src/server/imageStore";
 import { ProviderManager } from "../src/server/providerManager";
 import { imageRoutes } from "../src/server/routes/images";
@@ -314,6 +315,54 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
     });
     expect(second.statusCode).toBe(200);
     expect((unlimited.calls[0].body.prompt as string).length).toBe(OPENAI_IMAGE_PROMPT_CAP);
+  });
+
+  it("clamps the composed prompt to the preset limit but NOT the composed negative", async () => {
+    // The negative is a fixed list BobbinLoom ships, so it answers to its own
+    // ceiling — the dialect's hard cap — and the preset's `promptCharacterLimit`
+    // (the budget for the model-written tag list) must never cut it. Both sides go
+    // in at the same length, so the asymmetry is the whole assertion.
+    const limit = DEFAULT_IMAGE_GENERATION_SETTINGS.promptCharacterLimit;
+    const longNegative = "n".repeat(limit + 200);
+    const h = harness();
+    const res = await post(h.app, imageUrl(h), {
+      promptOverride: "p".repeat(limit + 200),
+      negativeOverride: longNegative
+    });
+    expect(res.statusCode).toBe(200);
+    // The prompt is still cut to the preset's soft limit…
+    expect((h.calls[0].body.prompt as string).length).toBe(limit);
+    expect(res.json().promptUsed.length).toBe(limit);
+    // …and the negative is not: 1400 characters, comfortably inside the 7500 cap.
+    expect(h.calls[0].body.negative_prompt).toBe(longNegative);
+    expect(res.json().negativeUsed).toBe(longNegative);
+  });
+
+  it("does not clamp a lone negative override to the preset limit either", async () => {
+    // One override only, so the text call still runs — and the override replaces
+    // just the negative side, uncut. (This is the compose path's negative clamp.)
+    const limit = DEFAULT_IMAGE_GENERATION_SETTINGS.promptCharacterLimit;
+    const longNegative = "n".repeat(limit + 200);
+    const h = harness();
+    const res = await post(h.app, imageUrl(h), { negativeOverride: longNegative });
+    expect(res.statusCode).toBe(200);
+    expect(h.calls).toHaveLength(2);
+    expect(h.calls[1].body.negative_prompt).toBe(longNegative);
+    expect(res.json().negativeUsed).toBe(longNegative);
+  });
+
+  it("keeps the dialect cap as the negative's only ceiling", async () => {
+    // Unclampable by the preset limit, not unclampable at all: a negative past the
+    // dialect's hard cap is still cut there. The Venice-native dialect is the only
+    // one that sends a negative prompt at all, and its cap is 7500.
+    const h = harness();
+    const res = await post(h.app, imageUrl(h), {
+      promptOverride: "p",
+      negativeOverride: "n".repeat(VENICE_IMAGE_PROMPT_CAP + 100)
+    });
+    expect(res.statusCode).toBe(200);
+    expect((h.calls[0].body.negative_prompt as string).length).toBe(VENICE_IMAGE_PROMPT_CAP);
+    expect(res.json().negativeUsed.length).toBe(VENICE_IMAGE_PROMPT_CAP);
   });
 
   it("keeps every returned variant", async () => {

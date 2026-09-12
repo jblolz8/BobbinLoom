@@ -40,11 +40,20 @@ function dialectPromptCap(conn: ProviderConnection): number {
 }
 
 /** Clamp to BOTH the preset's soft limit and the dialect's hard cap, ignoring a
- *  0 limit (the schema allows it and it reads as "unlimited"). */
+ *  0 limit (the schema allows it and it reads as "unlimited"). This is the
+ *  PROMPT's budget: a model-written tag list the preset sizes. */
 function composedLimit(settings: ImageGenerationSettings, conn: ProviderConnection): number {
   return settings.promptCharacterLimit > 0
     ? Math.min(settings.promptCharacterLimit, dialectPromptCap(conn))
     : dialectPromptCap(conn);
+}
+
+/** The NEGATIVE has its own ceiling: the dialect's hard cap ALONE. It is a fixed
+ *  list BobbinLoom ships (plus, rarely, the model's volunteered extra), not a
+ *  tag list the preset sizes — so the preset's `promptCharacterLimit` must never
+ *  cut it. Reuses `dialectPromptCap`, so there is one cap source, not two. */
+function clampNegative(text: string, conn: ProviderConnection): string {
+  return clampChars(text, dialectPromptCap(conn));
 }
 
 /** The clamped text plus whether clamping actually cut anything. The cut happens
@@ -213,9 +222,10 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     if (controller.signal.aborted) return;
 
     // Clamp to the dialect cap here too, so what the modal shows is byte-for-byte
-    // what the generate call will send.
+    // what the generate call will send. The PROMPT keeps the preset's soft limit;
+    // the NEGATIVE is a fixed shipped list and answers to the dialect cap alone.
     const composedPrompt = clampComposed(prompt, settings, imageConn);
-    const composedNegative = clampComposed(negativePrompt, settings, imageConn);
+    const composedNegative = clampNegative(negativePrompt, imageConn);
     // The cut happens at the END of the text, which is exactly where the tag
     // list's action and physical-state tags live — say so before the image call
     // is paid for. The prompt side call clamps to the preset limit first, so
@@ -227,7 +237,7 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     }
     return {
       prompt: composedPrompt.text,
-      negativePrompt: composedNegative.text,
+      negativePrompt: composedNegative,
       // Advisory only — the modal shows these above the editable prompt and the
       // user decides. Never a reason to fail the call.
       warnings
@@ -318,7 +328,7 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     let promptCall: { request: string; response: string } | undefined;
     if (hasPrompt && hasNegative) {
       promptUsed = clampComposed(body.promptOverride!, settings, imageConn).text;
-      negativeUsed = clampComposed(body.negativeOverride!, settings, imageConn).text;
+      negativeUsed = clampNegative(body.negativeOverride!, imageConn);
     } else {
       try {
         const written = await generateImagePrompt(promptConfig, settings, {
@@ -328,7 +338,7 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
           castSummary: buildCastBlock(playthrough)
         }, fetchImpl, controller.signal);
         promptUsed = clampComposed(hasPrompt ? body.promptOverride! : written.prompt, settings, imageConn).text;
-        negativeUsed = clampComposed(hasNegative ? body.negativeOverride! : written.negativePrompt, settings, imageConn).text;
+        negativeUsed = clampNegative(hasNegative ? body.negativeOverride! : written.negativePrompt, imageConn);
         promptCall = {
           request: written.rawInput,
           response: clampStoredPromptResponse(written.rawOutput)
