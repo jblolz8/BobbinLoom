@@ -19,7 +19,7 @@ import {
   testProviderConnection,
   updateProviderConnection
 } from "../../api";
-import type { ProviderKind } from "../../../schemas";
+import type { ImageApiStyle, ProviderKind } from "../../../schemas";
 import { ApiKeyField, type ApiKeyFieldProps } from "./providers/ApiKeyField";
 import { ImageConnectionEditor } from "./providers/ImageConnectionEditor";
 import {
@@ -267,19 +267,27 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
 
   function closeEditor() { setEditor({ mode: "closed" }); }
 
-  function probeTarget(): { id?: string; baseUrl?: string; apiKey?: string } {
+  /** The dialect travels with EVERY probe. Without it the server falls back to
+   *  the OpenAI-compatible path (`<base>/v1/models`) and an a1111 WebUI answers
+   *  404 — which is exactly what "Failed (404): {detail: Not Found}" was: a
+   *  saved `id` uses the STORED style server-side, so an unsaved draft (or one
+   *  whose style was just changed) has to state it. */
+  function probeTarget(): { id?: string; baseUrl?: string; apiKey?: string; apiStyle?: ImageApiStyle } {
+    const apiStyle = kind === "image" ? form.apiStyle ?? "openai" : undefined;
     if (editor.mode === "edit") {
       const baseUrlChanged = form.baseUrl.trim() !== editor.connection.baseUrl;
       const apiKeyChanged = form.apiKey !== undefined && form.apiKey !== "";
-      if (baseUrlChanged || apiKeyChanged) {
+      const styleChanged = kind === "image" && apiStyle !== (editor.connection.apiStyle ?? "openai");
+      if (baseUrlChanged || apiKeyChanged || styleChanged) {
         return {
+          apiStyle,
           baseUrl: form.baseUrl.trim(),
           apiKey: form.apiKey !== null ? form.apiKey : undefined
         };
       }
-      return { id: editor.connection.id };
+      return { id: editor.connection.id, apiStyle };
     }
-    return { baseUrl: form.baseUrl.trim(), apiKey: form.apiKey ? form.apiKey : undefined };
+    return { baseUrl: form.baseUrl.trim(), apiKey: form.apiKey ? form.apiKey : undefined , apiStyle };
   }
 
   async function loadModels(target: { id?: string; baseUrl?: string; apiKey?: string }) {
@@ -301,8 +309,11 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
       setDialectOptions(r.dialectOptions ?? {});
       // Image endpoints frequently expose no /models listing at all. Keep the
       // server's message (a 401 must stay visible) and add why it is not fatal.
+      const draftStyle = kind === "image" ? form.apiStyle ?? "openai" : "openai";
       const imageHint = kind === "image"
-        ? " Image endpoints often do not list models — type the model id instead."
+        ? draftStyle === "a1111"
+          ? " Check that the WebUI is running with --api, and that the URL is its root (http://host:port, no /v1) — the checkpoint list comes from /sdapi/v1/sd-models."
+          : " Image endpoints often do not list models — type the model id instead."
         : "";
       setModelsStatus(r.ok
         ? { kind: "ok", text: r.models.length ? `${r.models.length} model${r.models.length === 1 ? "" : "s"} loaded.` : `Connected, but the server returned no models.${imageHint}` }
