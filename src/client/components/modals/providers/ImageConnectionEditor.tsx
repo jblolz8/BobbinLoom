@@ -131,7 +131,7 @@ function dialectCapabilityLines(counts: {
   );
   lines.push(
     counts.samplers > 0 || counts.schedulers > 0
-      ? `${counts.samplers} samplers and ${counts.schedulers} schedulers listed by the WebUI — suggestions only, so any name the build accepts may be typed.`
+      ? `${counts.samplers} samplers and ${counts.schedulers} schedulers listed by the WebUI — they fill the Sampler and Scheduler pickers below.`
       : "The WebUI did not list its samplers/schedulers (an older build has no such route) — the names are free text, so type exactly what your build accepts."
   );
   lines.push("Steps, CFG scale, sampler and scheduler are sent per request; an empty field is not sent at all, so the WebUI's own default applies.");
@@ -149,8 +149,9 @@ export type ImageConnectionEditorProps = {
    *  Read-only; a model the listing did not describe simply has no entry. */
   modelSpecs: ProviderModelCapabilities;
   /** a1111 only: the WebUI's own sampler and scheduler names, from the same
-   *  probe that filled `models`. Offered as `datalist` suggestions — the field
-   *  stays free text, because a fork may ship names we were never told. */
+   *  probe that filled `models`. They populate the two pickers; when a build
+   *  lists nothing (no such route) those fields fall back to free text, because
+   *  a fork may ship names we were never told. */
   dialectOptions?: { samplers?: string[]; schedulers?: string[] };
   modelsStatus: EditorStatus;
   fetchingModels: boolean;
@@ -393,6 +394,12 @@ export function ImageConnectionEditor({
                 </Button>
               }
             />
+            {a1111 && (
+              <p className="conn-field-helper">
+                Leave the checkpoint empty to use whatever the WebUI already has loaded: the request then sends no
+                override at all, and your WebUI's own state is never touched.
+              </p>
+            )}
             {models.length > 0 && (
               <div className="base-form-field form-field" style={{ marginTop: "0.5rem" }}>
                 <span className="field-label-text">
@@ -684,39 +691,67 @@ export function ImageConnectionEditor({
               />
             </div>
 
-            <TextInput
-              label="Sampler"
-              value={form.sampler ?? ""}
-              onChange={(e) => setForm((f) => ({ ...f, sampler: e.target.value }))}
-              placeholder={
-                dialectOptions?.samplers?.length
-                  ? `e.g. ${dialectOptions.samplers[0]}`
-                  : "e.g. DPM++ 2M Karras"
-              }
-              list="a1111-sampler-options"
-              leftIcon={<Icon name="SlidersHorizontal" size={14} />}
-              helperText="Sent as sampler_name. The suggestions below are the names this WebUI reported — a fork's own names may be typed freely."
-            />
-            <datalist id="a1111-sampler-options">
-              {(dialectOptions?.samplers ?? []).map((name) => (
-                <option key={name} value={name} />
-              ))}
-            </datalist>
+            {dialectOptions?.samplers?.length ? (
+              <div className="conn-field-group">
+                <span className="field-label-text">Sampler</span>
+                <SimpleSelect
+                  size="sm"
+                  variant="filled"
+                  fullWidth
+                  value={form.sampler ?? ""}
+                  onChange={(sampler) => setForm((f) => ({ ...f, sampler }))}
+                  options={[
+                    { value: "", label: "WebUI default" },
+                    ...(dialectOptions.samplers ?? []).map((name) => ({ value: name, label: name }))
+                  ]}
+                  aria-label="Sampler"
+                />
+                <p className="conn-field-helper">
+                  Sent as sampler_name. The list is the WebUI's own (/sdapi/v1/samplers). "WebUI default" sends
+                  nothing, so whatever your WebUI has selected applies.
+                </p>
+              </div>
+            ) : (
+              <TextInput
+                label="Sampler"
+                value={form.sampler ?? ""}
+                onChange={(e) => setForm((f) => ({ ...f, sampler: e.target.value }))}
+                placeholder="e.g. DPM++ 2M"
+                leftIcon={<Icon name="SlidersHorizontal" size={14} />}
+                helperText="Sent as sampler_name. This WebUI did not list its samplers — type exactly what it accepts, or leave empty to send none."
+              />
+            )}
 
-            <TextInput
-              label="Scheduler"
-              value={form.scheduler ?? ""}
-              onChange={(e) => setForm((f) => ({ ...f, scheduler: e.target.value }))}
-              placeholder={dialectOptions?.schedulers?.length ? `e.g. ${dialectOptions.schedulers[0]}` : "e.g. Karras"}
-              list="a1111-scheduler-options"
-              leftIcon={<Icon name="Aperture" size={14} />}
-              helperText="Sent as scheduler. Empty sends none, so the WebUI's own default applies."
-            />
-            <datalist id="a1111-scheduler-options">
-              {(dialectOptions?.schedulers ?? []).map((name) => (
-                <option key={name} value={name} />
-              ))}
-            </datalist>
+            {dialectOptions?.schedulers?.length ? (
+              <div className="conn-field-group">
+                <span className="field-label-text">Scheduler</span>
+                <SimpleSelect
+                  size="sm"
+                  variant="filled"
+                  fullWidth
+                  value={form.scheduler ?? ""}
+                  onChange={(scheduler) => setForm((f) => ({ ...f, scheduler }))}
+                  options={[
+                    { value: "", label: "WebUI default" },
+                    ...(dialectOptions.schedulers ?? []).map((name) => ({ value: name, label: name }))
+                  ]}
+                  aria-label="Scheduler"
+                />
+                <p className="conn-field-helper">
+                  Sent as scheduler. The list is the WebUI's own (/sdapi/v1/schedulers) — your build reports
+                  "Automatic" as its default, which is what "WebUI default" leaves in place.
+                </p>
+              </div>
+            ) : (
+              <TextInput
+                label="Scheduler"
+                value={form.scheduler ?? ""}
+                onChange={(e) => setForm((f) => ({ ...f, scheduler: e.target.value }))}
+                placeholder="e.g. Karras"
+                leftIcon={<Icon name="Aperture" size={14} />}
+                helperText="Sent as scheduler. Empty sends none, so the WebUI's own default applies."
+              />
+            )}
 
             <TextInput
               label="Timeout (seconds)"
