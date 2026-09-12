@@ -1,6 +1,7 @@
 import { createReadStream } from "node:fs";
 import type { FastifyPluginAsync, FastifyPluginOptions } from "fastify";
 import { z } from "zod";
+import { isStubSection, pickSections } from "../../engine/characterSections";
 import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../../engine/imageDefaults";
 import type { ChatMessage, ImageGenerationSettings, MessageImage, Playthrough, PromptPreset, ProviderConnection } from "../../schemas";
 import { ImageGenerationSettingsSchema } from "../../schemas";
@@ -40,11 +41,22 @@ function dialectPromptCap(conn: ProviderConnection): number {
 
 /** Clamp to BOTH the preset's soft limit and the dialect's hard cap, ignoring a
  *  0 limit (the schema allows it and it reads as "unlimited"). */
-function clampComposed(text: string, settings: ImageGenerationSettings, conn: ProviderConnection): string {
-  const limit = settings.promptCharacterLimit > 0
+function composedLimit(settings: ImageGenerationSettings, conn: ProviderConnection): number {
+  return settings.promptCharacterLimit > 0
     ? Math.min(settings.promptCharacterLimit, dialectPromptCap(conn))
     : dialectPromptCap(conn);
-  return clampChars(text, limit);
+}
+
+/** The clamped text plus whether clamping actually cut anything. The cut happens
+ *  at the END of the text — where the tag list's action and physical-state tags
+ *  live — so the dry-run route warns when it bites. */
+function clampComposed(
+  text: string,
+  settings: ImageGenerationSettings,
+  conn: ProviderConnection
+): { text: string; truncated: boolean } {
+  const clamped = clampChars(text, composedLimit(settings, conn));
+  return { text: clamped, truncated: clamped.length < text.length };
 }
 
 /** Preset-owned prompt settings, resolved exactly like the rest of the
@@ -71,9 +83,43 @@ function clampStoredPromptResponse(text: string): string {
     : text;
 }
 
+/** How much of a character sheet's STABLE identity is injected per character.
+ *  A few hundred characters: enough for the physical tags the writer must keep
+ *  reproducing, not enough for one long sheet to dominate the prompt. */
+const CAST_IDENTITY_CHARS = 320;
+
+/** The sheet sections that describe what a camera sees and that the scene does
+ *  not change. Deliberately NOT `Clothing`: the character INSTANCE's clothing is
+ *  the authoritative current state and already rides on the line above. */
+const CAST_IDENTITY_SECTIONS = ["Species", "Gender", "Body", "Appearance"] as const;
+
+/** One character's stable identity, read from their sheet with the engine's own
+ *  section parser: the wanted headers in order, stub ("(not established)") and
+ *  missing sections skipped, flattened to one bounded line. Empty when the sheet
+ *  has nothing physical to say. */
+function castIdentity(templateContent: string): string {
+  const parts: string[] = [];
+  for (const section of pickSections(templateContent, CAST_IDENTITY_SECTIONS)) {
+    if (isStubSection(section)) continue;
+    const body = section.body
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .join("; ");
+    if (body) parts.push(`${section.header}: ${body}`);
+  }
+  return clampChars(parts.join(" | "), CAST_IDENTITY_CHARS);
+}
+
 /** Compact cast block: only characters actually at the current location, plus
  *  the player (who is always in frame). Deliberately short — the scene text is
- *  the primary source and `summarizePlaythrough` already covers world state. */
+ *  the primary source and `summarizePlaythrough` already covers world state.
+ *
+ *  Each present character is described TWICE on purpose: the instance line
+ *  (clothing, mood, conditions — the current state) and, when their sheet
+ *  resolves, the stable identity line (species, gender, body, appearance). The
+ *  writer otherwise scrapes hair/eye/skin out of scene prose, and the same
+ *  character comes out looking different in every image. */
 function buildCastBlock(playthrough: Playthrough): string {
   const lines: string[] = [];
   const player = playthrough.playerCharacter;
@@ -85,6 +131,12 @@ function buildCastBlock(playthrough: Playthrough): string {
       : "clothing unspecified";
     const conditions = character.conditions.length ? `, ${character.conditions.join(", ")}` : "";
     lines.push(`${character.name} — ${clothing}, ${character.mood}${conditions}`);
+    // templateId first; a character with a stale/unset id still gets an identity
+    // when a template carries the same name.
+    const template = playthrough.characterTemplates.find((t) => t.id === character.templateId)
+      ?? playthrough.characterTemplates.find((t) => t.name === character.name);
+    const identity = template ? castIdentity(template.content) : "";
+    if (identity) lines.push(`${character.name}'s sheet — ${identity}`);
   }
   return lines.join("\n");
 }
@@ -141,6 +193,7 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     let prompt: string;
     let negativePrompt: string;
     let warnings: string[];
+    let promptTruncated: boolean;
     try {
       const result = await generateImagePrompt(promptConfig, settings, {
         messageContent: message.content,
@@ -151,6 +204,7 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
       prompt = result.prompt;
       negativePrompt = result.negativePrompt;
       warnings = result.warnings;
+      promptTruncated = result.promptTruncated;
     } catch (error) {
       if (controller.signal.aborted) return;
       const reason = error instanceof Error ? error.message : "Image prompt generation failed";
@@ -160,9 +214,20 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
 
     // Clamp to the dialect cap here too, so what the modal shows is byte-for-byte
     // what the generate call will send.
+    const composedPrompt = clampComposed(prompt, settings, imageConn);
+    const composedNegative = clampComposed(negativePrompt, settings, imageConn);
+    // The cut happens at the END of the text, which is exactly where the tag
+    // list's action and physical-state tags live — say so before the image call
+    // is paid for. The prompt side call clamps to the preset limit first, so
+    // both cuts are reported (a ceiling hit anywhere is a ceiling hit).
+    if (promptTruncated || composedPrompt.truncated) {
+      warnings.push(
+        `The composed prompt is longer than the ${composedLimit(settings, imageConn)}-character limit, so it was cut at the end — where the action and physical-state tags sit. Move the essential tags earlier in the list, or raise the character limit on the Image Generation tab.`
+      );
+    }
     return {
-      prompt: clampComposed(prompt, settings, imageConn),
-      negativePrompt: clampComposed(negativePrompt, settings, imageConn),
+      prompt: composedPrompt.text,
+      negativePrompt: composedNegative.text,
       // Advisory only — the modal shows these above the editable prompt and the
       // user decides. Never a reason to fail the call.
       warnings
@@ -246,8 +311,8 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     // Undefined on the both-overrides path (no text call was made).
     let promptCall: { request: string; response: string } | undefined;
     if (hasPrompt && hasNegative) {
-      promptUsed = clampComposed(body.promptOverride!, settings, imageConn);
-      negativeUsed = clampComposed(body.negativeOverride!, settings, imageConn);
+      promptUsed = clampComposed(body.promptOverride!, settings, imageConn).text;
+      negativeUsed = clampComposed(body.negativeOverride!, settings, imageConn).text;
     } else {
       try {
         const written = await generateImagePrompt(promptConfig, settings, {
@@ -256,8 +321,8 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
           stateSummary: summarizePlaythrough(playthrough),
           castSummary: buildCastBlock(playthrough)
         }, fetchImpl, controller.signal);
-        promptUsed = clampComposed(hasPrompt ? body.promptOverride! : written.prompt, settings, imageConn);
-        negativeUsed = clampComposed(hasNegative ? body.negativeOverride! : written.negativePrompt, settings, imageConn);
+        promptUsed = clampComposed(hasPrompt ? body.promptOverride! : written.prompt, settings, imageConn).text;
+        negativeUsed = clampComposed(hasNegative ? body.negativeOverride! : written.negativePrompt, settings, imageConn).text;
         promptCall = {
           request: written.rawInput,
           response: clampStoredPromptResponse(written.rawOutput)

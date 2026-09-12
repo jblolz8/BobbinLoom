@@ -261,7 +261,7 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(h.calls[0].url).toBe("https://api.venice.ai/api/v1/images/generations");
-    // Default promptCharacterLimit (900) is tighter than the dialect cap.
+    // The shipped promptCharacterLimit (1200) is tighter than the dialect cap.
     expect((h.calls[0].body.prompt as string).length).toBe(DEFAULT_IMAGE_GENERATION_SETTINGS.promptCharacterLimit);
     expect(res.json().promptUsed.length).toBe(DEFAULT_IMAGE_GENERATION_SETTINGS.promptCharacterLimit);
 
@@ -295,6 +295,60 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
   });
 });
 
+/** A sheet with a real identity block, ONE stub section, and a `[Clothing]`
+ *  section whose contents must never ride along: the character INSTANCE's
+ *  clothing is the authoritative current state. */
+const SHEET = [
+  "[Species]: Human",
+  "[Gender]: (not established)",
+  "",
+  "[Body]",
+  "- Height: 168 cm",
+  "- Build: slim, athletic",
+  "",
+  "[Appearance]",
+  "- Hair: long brown hair, ponytail",
+  "- Eyes: blue eyes",
+  "",
+  "[Clothing]",
+  "- Top: blue silk gown",
+  ""
+].join("\n");
+
+/** Put one character, at the current location, behind a resolvable template. */
+function withPresentCast(h: ReturnType<typeof harness>, templateContent = SHEET) {
+  const record = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
+  record.characterTemplates = [
+    {
+      id: "tmpl_mira",
+      name: "Mira",
+      version: 1,
+      content: templateContent,
+      summary: "",
+      startingClothing: []
+    }
+  ];
+  record.characters = [
+    {
+      id: "char_mira",
+      templateId: "tmpl_mira",
+      playthroughId: record.id,
+      branchId: record.branchId,
+      name: "Mira",
+      currentLocationId: record.locationId,
+      mood: "wary",
+      towardPlayer: "guarded",
+      memorySummary: "",
+      conditions: ["wet"],
+      flags: [],
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      clothing: [{ slot: "top", name: "white shirt" }]
+    }
+  ];
+  updatePlaythroughRecord(h.dataDir, record);
+}
+
 describe("POST /api/playthroughs/:id/messages/:messageId/image/prompt", () => {
   it("returns the composed prompt and generates nothing", async () => {
     const h = harness();
@@ -324,6 +378,64 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image/prompt", () => {
 
     const noText = harness({ withText: false });
     expect((await post(noText.app, imageUrl(noText, noText.assistantMessageId, "/prompt"), {})).statusCode).toBe(400);
+  });
+
+  it("injects each present character's stable sheet identity into the cast block", async () => {
+    const h = harness();
+    withPresentCast(h);
+    const res = await post(h.app, imageUrl(h, h.assistantMessageId, "/prompt"), {});
+    expect(res.statusCode).toBe(200);
+
+    const block = h.calls[0].body.messages[1].content as string;
+    expect(block).toContain("PRESENT CHARACTERS:");
+    // The instance line is unchanged: clothing, mood, conditions.
+    expect(block).toContain("Mira — wearing white shirt, wary, wet");
+    // …and the STABLE identity from the sheet rides beside it.
+    expect(block).toContain("Species: Human");
+    expect(block).toContain("Build: slim, athletic");
+    expect(block).toContain("Hair: long brown hair, ponytail");
+    expect(block).toContain("Eyes: blue eyes");
+    // A stub section is skipped…
+    expect(block).not.toContain("Gender:");
+    // …and the sheet's Clothing section never leaks: the instance's clothing is
+    // the authoritative current state.
+    expect(block).not.toContain("blue silk gown");
+  });
+
+  it("caps the injected identity so one long sheet cannot dominate the prompt", async () => {
+    const h = harness();
+    withPresentCast(h, `[Species]: Human\n\n[Body]\n- Build: ${"x".repeat(600)}\n`);
+    await post(h.app, imageUrl(h, h.assistantMessageId, "/prompt"), {});
+    const block = h.calls[0].body.messages[1].content as string;
+    expect(block).toContain("Species: Human");
+    const identity = block.split("\n").find((line) => line.includes("'s sheet"))!;
+    expect(identity).toBeDefined();
+    expect(identity.length).toBeLessThan(400);
+    expect(identity.length).toBeGreaterThan(100);
+  });
+
+  it("warns when the composed prompt is cut at the character limit", async () => {
+    const h = harness({
+      imageSettings: { promptCharacterLimit: 60 },
+      textContent: `{"prompt": "${"tag, ".repeat(40)}done"}`
+    });
+    const res = await post(h.app, imageUrl(h, h.assistantMessageId, "/prompt"), {});
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    // The preview still shows the clamped text — the warning is advisory only.
+    expect(body.prompt.length).toBe(60);
+    expect(body.warnings).toHaveLength(1);
+    expect(body.warnings[0]).toContain("60-character limit");
+    expect(body.warnings[0]).toMatch(/cut at the end/);
+    expect(body.warnings[0]).toMatch(/Move the essential tags earlier/);
+    expect(body.warnings[0]).toMatch(/raise the character limit/);
+  });
+
+  it("does not warn when the composed prompt fits", async () => {
+    const h = harness({ imageSettings: { promptCharacterLimit: 200 } });
+    const res = await post(h.app, imageUrl(h, h.assistantMessageId, "/prompt"), {});
+    expect(res.statusCode).toBe(200);
+    expect(res.json().warnings).toEqual([]);
   });
 });
 
