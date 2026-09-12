@@ -8,8 +8,10 @@ import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../src/engine/imageDefaults";
 import type { ImageGenerationSettings } from "../src/schemas";
 import type { ProviderConnectionDraft } from "../src/server/providerRegistry";
 import { createConnection } from "../src/server/providerRegistry";
+import { A1111_IMAGE_PROMPT_CAP } from "../src/server/imageProvider/a1111Provider";
 import { OPENAI_IMAGE_PROMPT_CAP } from "../src/server/imageProvider/openaiImagesProvider";
 import { VENICE_IMAGE_PROMPT_CAP } from "../src/server/imageProvider/veniceImageProvider";
+import { clearImageProgress, publishImageProgress, readImageProgress } from "../src/server/imageProgress";
 import { saveImageBytes } from "../src/server/imageStore";
 import { ProviderManager } from "../src/server/providerManager";
 import { imageRoutes } from "../src/server/routes/images";
@@ -771,5 +773,35 @@ describe("POST /api/settings/providers/models", () => {
     expect(tested.statusCode).toBe(200);
     expect(tested.json().ok).toBe(true);
     expect(h.calls.some((c) => c.url === "http://127.0.0.1:7860/sdapi/v1/sd-models")).toBe(true);
+  });
+});
+
+describe("image progress registry", () => {
+  it("answers {active: false} for an unknown connection instead of throwing", () => {
+    expect(readImageProgress("conn_never_seen")).toEqual({ active: false });
+  });
+
+  it("keeps each connection's snapshot separate, and clears it", () => {
+    publishImageProgress("conn_a", { progress: 0.43, step: 12, steps: 28, etaSeconds: 5 });
+    expect(readImageProgress("conn_a")).toEqual({ active: true, progress: 0.43, step: 12, steps: 28, etaSeconds: 5 });
+    // Keyed by connection: another connection's readout is untouched.
+    expect(readImageProgress("conn_b")).toEqual({ active: false });
+
+    clearImageProgress("conn_a");
+    expect(readImageProgress("conn_a")).toEqual({ active: false });
+    // Clearing twice (or clearing an id that never published) is not an error.
+    expect(() => clearImageProgress("conn_a")).not.toThrow();
+    expect(() => clearImageProgress("conn_never_seen")).not.toThrow();
+  });
+
+  it("omits the numbers the dialect did not report, and stays active at 0%", () => {
+    publishImageProgress("conn_c", { progress: 0 });
+    const snapshot = readImageProgress("conn_c");
+    expect(snapshot).toEqual({ active: true, progress: 0 });
+    // A zero progress is a real reading: `active` is not derived from it.
+    expect("step" in snapshot).toBe(false);
+    expect("steps" in snapshot).toBe(false);
+    expect("etaSeconds" in snapshot).toBe(false);
+    clearImageProgress("conn_c");
   });
 });
