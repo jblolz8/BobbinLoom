@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../../../../engine/imageDefaults";
+import type { ImageApiStyle } from "../../../../schemas";
+import { CLIP_CHUNK_TOKENS, chunkWarning, estimatePromptChunks } from "../../../utils/imagePromptEstimate";
 import { Button, Icon, TextArea } from "../../base";
 
 /**
@@ -32,6 +34,10 @@ export type ImagePromptModalProps = {
   generating: boolean;
   /** The "Re-run text call" request is in flight. */
   rerunning: boolean;
+  /** Dialect of the connection that will render this prompt. Only `a1111`
+   *  adds the CLIP chunk estimate — the other dialects have no equivalent
+   *  published limit to warn about. */
+  apiStyle?: ImageApiStyle;
   onGenerate: (prompt: string, negativePrompt: string) => void;
   onRerun: () => void;
   onClose: () => void;
@@ -47,6 +53,7 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
     characterLimit = DEFAULT_IMAGE_GENERATION_SETTINGS.promptCharacterLimit,
     generating,
     rerunning,
+    apiStyle,
     onGenerate,
     onRerun,
     onClose
@@ -70,6 +77,15 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
   const busy = generating || rerunning;
 
   const caption = [providerLabel, model].filter(Boolean).join(" · ");
+
+  // The a1111 dialect is the one whose prompt length has a published
+  // consequence — CLIP encodes 75 tokens per chunk and weights the tail less —
+  // so the estimate is shown for it alone. Recomputed from the DRAFT, so the
+  // numbers track edits as they are typed; never blocking, the prompt still
+  // generates exactly as written.
+  const a1111 = apiStyle === "a1111";
+  const estimate = a1111 ? estimatePromptChunks(promptDraft) : null;
+  const estimateWarning = a1111 ? chunkWarning(promptDraft) : null;
 
   return (
     <div className="modal-backdrop">
@@ -125,6 +141,32 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
                 : undefined
             }
           />
+          {/* Prompt-length estimate, a1111 only. Advisory: it changes nothing
+              about what is sent — the text below is posted verbatim. */}
+          {estimate ? (
+            <div className="image-prompt-estimate" role="status">
+              <p className="image-prompt-estimate-line">
+                <Icon name="Ruler" size={13} className="image-prompt-estimate-icon" />
+                <span>
+                  About <strong>{estimate.tokens}</strong> tokens — {estimate.chunks} CLIP chunk
+                  {estimate.chunks === 1 ? "" : "s"} of {CLIP_CHUNK_TOKENS}.{" "}
+                  {estimate.chunks === 1
+                    ? "The whole prompt fits the first chunk."
+                    : "Everything past the first chunk is weighted less."}
+                </span>
+              </p>
+              {estimateWarning ? (
+                <p className="image-prompt-estimate-warning">
+                  <Icon name="AlertTriangle" size={13} className="image-prompt-warning-icon" />
+                  <span>{estimateWarning}</span>
+                </p>
+              ) : null}
+              <p className="image-prompt-estimate-note">
+                An approximation (~4 characters per token), not a tokenizer — and never a limit: the text is
+                sent unchanged.
+              </p>
+            </div>
+          ) : null}
           <TextArea
             label="Negative Prompt"
             value={negativeDraft}
@@ -133,7 +175,11 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
             disabled={generating}
             characterCount={negativeDraft.length}
             maxCharacterCount={limit}
-            helperText="Dropped entirely by the OpenAI-compatible dialect, which has no negative prompt."
+            helperText={
+              a1111
+                ? "Sent as negative_prompt — this dialect applies it, so put what you do not want here."
+                : "Dropped entirely by the OpenAI-compatible dialect, which has no negative prompt."
+            }
           />
 
           {caption ? <p className="image-prompt-caption">Image provider: {caption}</p> : null}

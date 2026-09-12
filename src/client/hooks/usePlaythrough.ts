@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChatMessage, Playthrough } from "../../schemas";
+import type { ChatMessage, ImageApiStyle, Playthrough } from "../../schemas";
 import {
   deleteMessageImage,
   editMessage,
@@ -7,6 +7,7 @@ import {
   getContextUsage,
   getPlaythrough,
   listPlaythroughs,
+  listProviderConnections,
   previewImagePrompt,
   questAction,
   resummarizeChapter,
@@ -73,7 +74,40 @@ export type ImagePromptRequest = {
    *  a suspected refusal used verbatim, or JSON with no usable key. Shown in
    *  the modal above the editable prompt; never blocking. */
   warnings?: string[];
+  /** Dialect of the connection that will render this prompt, resolved when the
+   *  preview was requested. Drives the modal's a1111-only chunk estimate;
+   *  absent (a failed registry read) simply shows no estimate. */
+  apiStyle?: ImageApiStyle;
 };
+
+/** The connection an image request will actually use, reduced to what the
+ *  client needs to know about it: which id to poll for progress, and whether
+ *  the dialect reports progress at all. */
+export type ResolvedImageConnection = { id: string; apiStyle: ImageApiStyle };
+
+/**
+ * Which image connection a request will use — the same rule as the server's
+ * `activeConnectionOfKind`, so the client polls the connection the server
+ * actually published progress for: the explicit override, else the active
+ * image slot, else the first image connection.
+ *
+ * Never throws: a failed registry read means "unknown dialect", which costs the
+ * dialect-specific extras (the estimate and the progress poll) and nothing else.
+ */
+async function resolveImageConnection(overrideId?: string): Promise<ResolvedImageConnection | null> {
+  try {
+    const registry = await listProviderConnections();
+    const imageConnections = registry.connections.filter((c) => c.kind === "image");
+    const active =
+      (overrideId ? imageConnections.find((c) => c.id === overrideId) : undefined) ??
+      imageConnections.find((c) => c.id === registry.activeImageProviderId) ??
+      imageConnections[0] ??
+      null;
+    return active ? { id: active.id, apiStyle: active.apiStyle ?? "openai" } : null;
+  } catch {
+    return null;
+  }
+}
 
 function loadChatSettings(): ChatSettings {
   try {
@@ -405,13 +439,26 @@ export function usePlaythrough() {
     imageAbortRef.current = controller;
     const startTime = performance.now();
 
+    // Which dialect will render this, read BEFORE the request goes out: the
+    // modal labels the estimate with it and the progress poller needs the id.
+    // One registry read per generation, and a failure here costs only the
+    // dialect-specific extras — never the generation.
+    const connection = await resolveImageConnection(overrides?.imageProviderId);
+    if (controller.signal.aborted) return;
+
     if (reviewing) {
       setImagePreviewMessageId(message.id);
       try {
         const preview = await previewImagePrompt(playthrough.id, message.id, overrides?.imageProviderId, controller.signal);
         // A preview the user cancelled must not pop the modal open again.
         if (controller.signal.aborted) return;
-        setImagePromptRequest({ message, prompt: preview.prompt, negativePrompt: preview.negativePrompt, warnings: preview.warnings });
+        setImagePromptRequest({
+          message,
+          prompt: preview.prompt,
+          negativePrompt: preview.negativePrompt,
+          warnings: preview.warnings,
+          apiStyle: connection?.apiStyle
+        });
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") {
           setCancelledNotice("Image prompt cancelled.");

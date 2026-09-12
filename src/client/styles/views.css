@@ -1110,6 +1110,51 @@
   color: var(--text-muted);
 }
 
+/* Prompt-length estimate, a1111 only. The review modal is the last place an
+   over-long prompt can be seen before it is rendered — CLIP weights everything
+   past its first 75-token chunk less, and nothing downstream would say so. */
+.image-prompt-estimate {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-surface);
+}
+
+.image-prompt-estimate-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.image-prompt-estimate-icon {
+  flex: 0 0 auto;
+  color: var(--accent-highlight, var(--accent-base));
+}
+
+.image-prompt-estimate-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--status-warning, var(--accent-highlight));
+}
+
+.image-prompt-estimate-note {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
 /* Advisory notes from the prompt-writing call, above the editable prompt. Same
    warn treatment as the connection editor's status line (`.conn-status.warn`):
    visible, but clearly a caution rather than a failure — the text below is
