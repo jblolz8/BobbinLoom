@@ -8,6 +8,7 @@ import type {
   ImageProgress,
   ImageProvider
 } from "../src/server/imageProvider";
+import { A1111_IMAGE_PROMPT_CAP, A1111Provider } from "../src/server/imageProvider/a1111Provider";
 import { OPENAI_IMAGE_PROMPT_CAP, OpenAIImagesProvider } from "../src/server/imageProvider/openaiImagesProvider";
 import { VENICE_IMAGE_PROMPT_CAP, VeniceImageProvider } from "../src/server/imageProvider/veniceImageProvider";
 import { clampChars, dataUrlPayload, parseSize, sniffMime } from "../src/server/imageProvider/shared";
@@ -276,5 +277,137 @@ describe("ImageProgress", () => {
       { progress: 0.5, step: 7, steps: 28, etaSeconds: 4.5 },
       { progress: 0.75 }
     ]);
+  });
+});
+
+// ── A1111 (native /sdapi/v1 dialect) ────────────────────────────────────────
+
+const A1111_BASE = "http://127.0.0.1:7860";
+const A1111_TXT2IMG_URL = `${A1111_BASE}/sdapi/v1/txt2img`;
+const A1111_PROGRESS_URL = `${A1111_BASE}/sdapi/v1/progress?skip_current_image=true`;
+const A1111_INTERRUPT_URL = `${A1111_BASE}/sdapi/v1/interrupt`;
+const JPEG_B64 = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00]).toString("base64");
+
+type A1111Call = {
+  method: string;
+  url: string;
+  body?: Record<string, unknown>;
+  authorization?: string;
+  signal?: AbortSignal | null;
+};
+
+/** Records method/url/body/headers of every call. The A1111 adapter is the
+ *  first one that talks to more than one route, so a call is dispatched by URL
+ *  rather than assumed to be the POST. */
+function stubA1111(
+  handler: (call: A1111Call) => Response | Promise<Response>
+): { fetchImpl: typeof fetch; calls: A1111Call[] } {
+  const calls: A1111Call[] = [];
+  const fetchImpl = (async (url: any, init: any = {}) => {
+    const call: A1111Call = {
+      method: String(init.method ?? "GET"),
+      url: String(url),
+      authorization: init.headers?.Authorization,
+      signal: init.signal ?? null
+    };
+    if (typeof init.body === "string") call.body = JSON.parse(init.body) as Record<string, unknown>;
+    calls.push(call);
+    return handler(call);
+  }) as unknown as typeof fetch;
+  return { fetchImpl, calls };
+}
+
+/** The happy path: txt2img answers, every other route 404s. */
+function a1111Happy(
+  images: string[] = [PNG_B64],
+  info: string | undefined = JSON.stringify({ seed: 12345 })
+): (call: A1111Call) => Response {
+  return (call) => {
+    if (call.url === A1111_TXT2IMG_URL) return jsonResponse(info === undefined ? { images } : { images, info });
+    return jsonResponse({ detail: "Not Found" }, 404);
+  };
+}
+
+function a1111Conn(overrides: Partial<ProviderConnection> = {}): ProviderConnection {
+  return imageConn({
+    id: "a1111_local",
+    label: "Local WebUI",
+    baseUrl: A1111_BASE,
+    model: "sd_xl_base_1.0.safetensors",
+    apiStyle: "a1111",
+    ...overrides
+  });
+}
+
+function a1111Config(overrides: Partial<ResolvedProviderConfig> = {}): ResolvedProviderConfig {
+  return testConfig({
+    providerId: "a1111_local",
+    label: "Local WebUI",
+    baseUrl: A1111_BASE,
+    model: "sd_xl_base_1.0.safetensors",
+    timeoutMs: 600_000,
+    ...overrides
+  });
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+describe("A1111Provider — interrupt", () => {
+  it("posts /sdapi/v1/interrupt exactly once on abort, and never on a clean run", async () => {
+    // A generation that completes normally must not touch the interrupt route:
+    // stopping a WebUI job nobody cancelled would be a nasty surprise.
+    const clean = stubA1111(a1111Happy());
+    const cleanProvider = new A1111Provider(a1111Config(), a1111Conn(), clean.fetchImpl);
+    await cleanProvider.generateImage({ prompt: "a scene" });
+    expect(clean.calls).toHaveLength(1);
+    expect(clean.calls[0].url).toBe(A1111_TXT2IMG_URL);
+    expect(clean.calls.some((call) => call.url === A1111_INTERRUPT_URL)).toBe(false);
+
+    // …and a cancel really cancels: the WebUI keeps sampling until told to stop.
+    const controller = new AbortController();
+    const aborted = stubA1111((call) => {
+      if (call.url === A1111_TXT2IMG_URL) {
+        return new Promise<Response>((_resolve, reject) => {
+          call.signal?.addEventListener("abort", () => reject(new Error("The operation was aborted")), { once: true });
+        });
+      }
+      return jsonResponse({});
+    });
+    const provider = new A1111Provider(a1111Config(), a1111Conn(), aborted.fetchImpl);
+
+    const inFlight = provider.generateImage({ prompt: "a scene", signal: controller.signal });
+    await vi.waitFor(() => expect(aborted.calls.some((call) => call.url === A1111_TXT2IMG_URL)).toBe(true));
+    controller.abort();
+
+    await expect(inFlight).rejects.toThrow(/abort/i);
+    await vi.waitFor(() => expect(aborted.calls.filter((call) => call.url === A1111_INTERRUPT_URL)).toHaveLength(1));
+    expect(aborted.calls.find((call) => call.url === A1111_INTERRUPT_URL)?.method).toBe("POST");
+
+    // Aborting is idempotent: one cancel, one interrupt.
+    controller.abort();
+    await sleep(20);
+    expect(aborted.calls.filter((call) => call.url === A1111_INTERRUPT_URL)).toHaveLength(1);
+  });
+
+  it("swallows a failing interrupt so a cancel is never an error", async () => {
+    const controller = new AbortController();
+    const failing = stubA1111((call) => {
+      if (call.url === A1111_TXT2IMG_URL) {
+        return new Promise<Response>((_resolve, reject) => {
+          call.signal?.addEventListener("abort", () => reject(new Error("The operation was aborted")), { once: true });
+        });
+      }
+      throw new Error("interrupt endpoint exploded");
+    });
+    const provider = new A1111Provider(a1111Config(), a1111Conn(), failing.fetchImpl);
+
+    const inFlight = provider.generateImage({ prompt: "a scene", signal: controller.signal });
+    await vi.waitFor(() => expect(failing.calls.some((call) => call.url === A1111_TXT2IMG_URL)).toBe(true));
+    controller.abort();
+
+    // The abort reason reaches the caller; the interrupt's own failure does not.
+    await expect(inFlight).rejects.toThrow(/abort/i);
+    await vi.waitFor(() => expect(failing.calls.some((call) => call.url === A1111_INTERRUPT_URL)).toBe(true));
+    await sleep(20);
   });
 });
