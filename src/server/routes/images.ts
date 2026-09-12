@@ -283,6 +283,11 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
         model: result.model,
         seed: body.seed ?? result.seed,
         durationMs: result.durationMs,
+        // Diagnostic provenance: the exact body the adapter sent upstream. Body
+        // only (the adapters never fold headers or the key into it), and every
+        // variant of one call shares it. The raw RESPONSE is deliberately not
+        // stored — it carries the base64 payload and would bloat the record.
+        request: result.rawRequest,
         createdAt
       };
     });
