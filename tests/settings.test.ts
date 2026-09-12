@@ -9,7 +9,7 @@ import { MockProvider } from "../src/server/provider";
 import { loadAppSettings, saveAppSettings } from "../src/server/appSettingsStore";
 import { seedRegistry } from "../src/server/providerRegistry";
 import { DEFAULT_IMAGE_GENERATION_SETTINGS, DEFAULT_IMAGE_PROMPT_INSTRUCTION } from "../src/engine/imageDefaults";
-import { PromptPresetSchema } from "../src/schemas";
+import { ImageApiStyleSchema, PromptPresetSchema, ProviderConnectionSchema } from "../src/schemas";
 
 const tempDirs: string[] = [];
 
@@ -110,6 +110,65 @@ describe("app settings store", () => {
     const updated = saveAppSettings(dir, { avatarShape: "square" });
     expect(updated.avatarShape).toBe("square");
     expect(loadAppSettings(dir).avatarShape).toBe("square");
+  });
+});
+
+// ── Wave 1: the a1111 image dialect's connection fields ──
+
+/** A minimal image connection — every field the schema REQUIRES, nothing else,
+ *  so an absence assertion ("this key is not in the parsed row") is meaningful. */
+const A1111_CONNECTION = {
+  id: "a1111_local",
+  kind: "image" as const,
+  label: "Local SD",
+  baseUrl: "http://127.0.0.1:7860",
+  model: "sd_xl_base_1.0.safetensors",
+  temperature: 0.8,
+  maxTokens: 1200,
+  contextWindow: 32768,
+  apiStyle: "a1111" as const
+};
+
+describe("A1111 image connection schema", () => {
+  it("lists a1111 among the image API styles", () => {
+    expect(ImageApiStyleSchema.options).toContain("a1111");
+  });
+
+  it("round-trips the sampling controls and the per-connection timeout", () => {
+    const parsed = ProviderConnectionSchema.safeParse({
+      ...A1111_CONNECTION,
+      steps: 28,
+      cfgScale: 6.5,
+      sampler: "DPM++ 2M Karras",
+      scheduler: "Karras",
+      timeoutMs: 600_000
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.apiStyle).toBe("a1111");
+    expect(parsed.data.steps).toBe(28);
+    expect(parsed.data.cfgScale).toBe(6.5);
+    expect(parsed.data.sampler).toBe("DPM++ 2M Karras");
+    expect(parsed.data.scheduler).toBe("Karras");
+    expect(parsed.data.timeoutMs).toBe(600_000);
+  });
+
+  it("parses a connection without them unchanged — no key is invented", () => {
+    const parsed = ProviderConnectionSchema.safeParse(A1111_CONNECTION);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    for (const field of ["steps", "cfgScale", "sampler", "scheduler", "timeoutMs"] as const) {
+      expect(field in parsed.data).toBe(false);
+    }
+  });
+
+  it("rejects sampling controls outside their published range", () => {
+    expect(ProviderConnectionSchema.safeParse({ ...A1111_CONNECTION, steps: 0 }).success).toBe(false);
+    expect(ProviderConnectionSchema.safeParse({ ...A1111_CONNECTION, steps: 151 }).success).toBe(false);
+    expect(ProviderConnectionSchema.safeParse({ ...A1111_CONNECTION, steps: 28.5 }).success).toBe(false);
+    expect(ProviderConnectionSchema.safeParse({ ...A1111_CONNECTION, cfgScale: 31 }).success).toBe(false);
+    expect(ProviderConnectionSchema.safeParse({ ...A1111_CONNECTION, cfgScale: -1 }).success).toBe(false);
+    expect(ProviderConnectionSchema.safeParse({ ...A1111_CONNECTION, timeoutMs: 999 }).success).toBe(false);
   });
 });
 

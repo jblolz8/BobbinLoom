@@ -175,8 +175,10 @@ export type ProviderKind = z.infer<typeof ProviderKindSchema>;
 
 /** Endpoint dialect for image connections. `openai` = POST /images/generations
  *  (no negative prompt, 1500-char prompt cap); `venice` = POST /image/generate
- *  (negative_prompt, seed, variants, style_preset, safe_mode). */
-export const ImageApiStyleSchema = z.enum(["openai", "venice"]);
+ *  (negative_prompt, seed, variants, style_preset, safe_mode); `a1111` =
+ *  AUTOMATIC1111 / Forge's native /sdapi/v1 API, served from the WebUI ROOT
+ *  (no /v1 prefix), with the checkpoint chosen per request. */
+export const ImageApiStyleSchema = z.enum(["openai", "venice", "a1111"]);
 export type ImageApiStyle = z.infer<typeof ImageApiStyleSchema>;
 
 export const ProviderConnectionSchema = z.object({
@@ -194,6 +196,18 @@ export const ProviderConnectionSchema = z.object({
   kind: ProviderKindSchema.default("text"),
   // ── image-only; absent on text rows ──
   apiStyle: ImageApiStyleSchema.optional(),
+  /** A1111 sampling controls. Absent = the adapter omits the field and the
+   *  WebUI applies its own default, which is the right behaviour for a fork
+   *  whose defaults the user has already tuned in the WebUI. */
+  steps: z.number().int().min(1).max(150).optional(),
+  cfgScale: z.number().min(0).max(30).optional(),
+  /** Free text, validated against the server's own list in the UI (a fork may
+   *  ship samplers we do not know). */
+  sampler: z.string().optional(),
+  scheduler: z.string().optional(),
+  /** Per-connection request timeout in ms. Absent = the dialect default
+   *  (10 min for a1111, 180 s otherwise), which the env var can still override. */
+  timeoutMs: z.number().int().min(1000).optional(),
   /** true = ask the provider to blur/moderate adult content. Absent = false:
    *  this app is an adult-content project and the blur is a footgun. */
   safeMode: z.boolean().optional(),
