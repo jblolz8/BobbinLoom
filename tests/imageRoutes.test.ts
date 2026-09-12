@@ -448,6 +448,78 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
   });
 });
 
+/** A stub the route cannot tell from a real dialect: it reports progress the way
+ *  the a1111 adapter does, then answers (or throws) — so the route's publish and
+ *  its `finally`-clear are what is under test, not the adapter. */
+function stubProvider(
+  h: ReturnType<typeof harness>,
+  generateImage: (request: { onProgress?: (p: { progress: number; step?: number; steps?: number; etaSeconds?: number }) => void }) => Promise<unknown>
+) {
+  h.manager.getImageProvider = () => ({ generateImage: generateImage as never });
+}
+
+function progressUrl(connId: string) {
+  return `/api/images/progress?connectionId=${connId}`;
+}
+
+describe("image progress during a generation", () => {
+  it("reports the connection active mid-flight, and inactive once the response is sent", async () => {
+    const h = harness();
+    const connId = h.manager.imageConnection()!.id;
+    let midFlight: Awaited<ReturnType<FastifyInstance["inject"]>> | undefined;
+    let decoy: Awaited<ReturnType<FastifyInstance["inject"]>> | undefined;
+
+    stubProvider(h, async (request) => {
+      request.onProgress?.({ progress: 0.43, step: 12, steps: 28, etaSeconds: 5 });
+      midFlight = await h.app.inject({ method: "GET", url: progressUrl(connId) });
+      // The key is the CONNECTION that generated; a sibling reads nothing.
+      decoy = await h.app.inject({ method: "GET", url: progressUrl("some_other_conn") });
+      return {
+        images: [{ bytes: pngBytes("progress"), mime: "image/png" }],
+        model: "stub-model",
+        providerId: "venice_images",
+        durationMs: 1,
+        rawRequest: "{}",
+        rawOutput: "{}"
+      };
+    });
+
+    const res = await post(h.app, imageUrl(h), { promptOverride: "p", negativeOverride: "n" });
+    expect(res.statusCode).toBe(200);
+
+    // While the POST was still being served, the endpoint showed the readout.
+    expect(midFlight!.statusCode).toBe(200);
+    expect(midFlight!.json()).toEqual({ active: true, progress: 0.43, step: 12, steps: 28, etaSeconds: 5 });
+    expect(decoy!.json()).toEqual({ active: false });
+
+    // …and once the reply went out, it is cleared: no phantom bar in the footer.
+    const after = await h.app.inject({ method: "GET", url: progressUrl(connId) });
+    expect(after.json()).toEqual({ active: false });
+  });
+
+  it("clears the entry when the generation FAILS mid-render", async () => {
+    const h = harness();
+    const connId = h.manager.imageConnection()!.id;
+    let midFlight: Awaited<ReturnType<FastifyInstance["inject"]>> | undefined;
+
+    stubProvider(h, async (request) => {
+      request.onProgress?.({ progress: 0.5, step: 14, steps: 28 });
+      midFlight = await h.app.inject({ method: "GET", url: progressUrl(connId) });
+      throw new Error("the WebUI died mid-render");
+    });
+
+    const res = await post(h.app, imageUrl(h), { promptOverride: "p", negativeOverride: "n" });
+    expect(res.statusCode).toBe(502);
+    expect(res.json().error).toBe("the WebUI died mid-render");
+    // It WAS active (the failure is not what the readout says)…
+    expect(midFlight!.json()).toMatchObject({ active: true, progress: 0.5 });
+    // …and the failed render cleared it. A crashed generation must not leave a
+    // permanent phantom progress bar behind.
+    const after = await h.app.inject({ method: "GET", url: progressUrl(connId) });
+    expect(after.json()).toEqual({ active: false });
+  });
+});
+
 /** A sheet with a real identity block, ONE stub section, and a `[Clothing]`
  *  section whose contents must never ride along: the character INSTANCE's
  *  clothing is the authoritative current state. */

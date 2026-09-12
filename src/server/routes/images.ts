@@ -7,7 +7,7 @@ import type { ChatMessage, ImageGenerationSettings, MessageImage, Playthrough, P
 import { ImageGenerationSettingsSchema } from "../../schemas";
 import { OPENAI_IMAGE_PROMPT_CAP, VENICE_IMAGE_PROMPT_CAP } from "../imageProvider";
 import { clampChars } from "../imageProvider/shared";
-import { readImageProgress } from "../imageProgress";
+import { clearImageProgress, publishImageProgress, readImageProgress } from "../imageProgress";
 import { imageFilePath, mimeForFile, saveImageBytes, sweepOrphansInDataDir, IMAGES_DIR } from "../imageStore";
 import type { ProviderManager } from "../providerManager";
 import { generateImagePrompt } from "../provider/imagePrompt";
@@ -369,6 +369,10 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
 
     // 2) Generate. `promptUsed`/`negativeUsed` are exactly what is sent here, so
     //    the stored ref and the response agree with what the provider received.
+    //    A dialect that can report progress (a1111) publishes it here, keyed by
+    //    the CONNECTION — the id the client polls with. The entry is cleared in
+    //    the `finally`, so a FAILED render clears it too: a crashed generation
+    //    must not leave a permanent phantom progress bar in the user's footer.
     let result;
     try {
       result = await imageProvider.generateImage({
@@ -381,12 +385,15 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
         safeMode: imageConn.safeMode,
         stylePreset: imageConn.stylePreset,
         hideWatermark: imageConn.hideWatermark,
-        signal: controller.signal
+        signal: controller.signal,
+        onProgress: (progress) => publishImageProgress(imageConn.id, progress)
       });
     } catch (error) {
       if (controller.signal.aborted) return;
       const reason = error instanceof Error ? error.message : "Image generation failed";
       return reply.code(502).send({ error: reason });
+    } finally {
+      clearImageProgress(imageConn.id);
     }
     if (controller.signal.aborted) return;
 
