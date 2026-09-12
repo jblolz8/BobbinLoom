@@ -126,7 +126,7 @@ The generate body is `z.object({ imageProviderId?, promptOverride?, negativeOver
 ```json
 {
   "playthrough": { "...": "the updated record" },
-  "image": { "file": "<sha256>.png", "prompt": "…", "negativePrompt": "…", "providerId": "…", "model": "…", "seed": 1234, "durationMs": 8123, "createdAt": "2026-09-12T00:00:00.000Z" },
+  "image": { "file": "<sha256>.png", "prompt": "…", "negativePrompt": "…", "providerId": "…", "model": "…", "seed": 1234, "durationMs": 8123, "request": "{\"model\":\"…\",\"prompt\":\"…\"}", "createdAt": "2026-09-12T00:00:00.000Z" },
   "promptUsed": "anime style …",
   "negativeUsed": "lowres, bad anatomy, …"
 }
@@ -206,7 +206,12 @@ A message reference is a `MessageImage`:
 | `providerId`, `model` | provenance, default `""` |
 | `seed` | optional — a Venice random (`0`) generation has none |
 | `durationMs` | optional |
+| `request` | optional — the **JSON body that was sent to the image provider** for this image (diagnostic provenance) |
 | `createdAt` | ISO timestamp |
+
+`request` is the exact string the adapter handed upstream, so a stored image can answer *what did we actually send?* — which is the only way to tell "the model ignored `style_preset`" from "we never sent it". It is the request **body only**: never headers, never the API key (`tests/imageRequestProvenance.test.ts` fails if either ever leaks in). Every variant of one call stores the same string, and the raw **response** is deliberately *not* stored — it carries the base64 payload and would bloat the record. The field is `optional`, so refs written before it existed still parse and simply show no request.
+
+Nothing else about a reference is new: `file`, `prompt`, `negativePrompt`, `providerId`, `model`, `seed`, `durationMs` and `createdAt` are unchanged.
 
 Because bytes are *shared*, never owned, deletion cannot be unlink-on-delete. Instead `collectReferencedImages` walks every message of every playthrough and collects the set of live file names, and the sweep deletes only hash-named files that are not in that set (anything else in the directory is left alone — the store does not own that namespace). Raced unlinks are counted as neither success nor failure.
 
@@ -310,6 +315,7 @@ The Image Generation tab in the preset editor exposes all six fields in this ord
 
 - Every **assistant** message gets a footer button: **Generate Image**, or **Generate another** once it has images. It is disabled when there is no image connection, with a tooltip explaining why (`No image provider configured — add one in Settings → Provider → Images`), and while another action is in progress.
 - Generated images stack **inside the same message container, newest last**. Each is a figure with the image, a remove control (`Remove this image` — the tooltip and the confirm dialog both say *the file is deleted if nothing else uses it*), and a caption of `model · <seconds>s · seed <seed>`. The duration and seed parts are omitted when absent — a Venice random seed (`0`) therefore shows no seed.
+- Every generated image carries a compact collapsed **`request`** disclosure under it (inside the same message container and the same figure) revealing the pretty-printed JSON body that went to the image provider — diagnostic provenance, not content, so it is small, muted, monospace, height-capped and horizontally scrollable. A ref stored before the field existed shows no disclosure at all (no empty box).
 - In-flight states are per message: `Writing image prompt…` (the dry run) and `Generating image…` (the render), each with a **Cancel** button. Cancelling reports `Image prompt cancelled.` or `Image generation cancelled.`; a failure reports `Image generation failed — nothing was changed.`
 - `Settings → Chat → Review Image Prompt Before Generating` (default **on**) decides whether the modal appears. On: dry run first, then the reviewed prompt posted back as both overrides. Off: one request, no modal.
 - The image provider caption in the modal is `<label> · <model>` of the image connection the request will use.
@@ -358,6 +364,8 @@ The list is read from `GET {baseUrl}/image/styles`, which is **public** — no k
 - **Custom…** — reveals a plain text field, so a self-hosted or future endpoint that does not implement the listing stays usable.
 
 A connection whose **stored** value is not in the fetched list is flagged in the editor, naming the 400 and offering the case-insensitive nearest match — that is precisely the state an older, free-text configuration is left in.
+
+**Venice publishes no per-model style-preset support flag.** `GET /models?type=image` reports per-model constraints such as the prompt cap and sizes, but nothing that says which styles a given checkpoint honours. So a model may **accept** `style_preset` (no 400, the call succeeds) and still render no visible change — the request is what succeeded, not the style. That ambiguity is why the sent body is stored on the ref and shown under the image in the chat: open the `request` disclosure and look for `style_preset` to confirm what actually left the client before concluding the model ignored it.
 
 ### Sizes are model-dependent
 
