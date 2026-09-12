@@ -126,7 +126,7 @@ The generate body is `z.object({ imageProviderId?, promptOverride?, negativeOver
 ```json
 {
   "playthrough": { "...": "the updated record" },
-  "image": { "file": "<sha256>.png", "prompt": "…", "negativePrompt": "…", "providerId": "…", "model": "…", "seed": 1234, "durationMs": 8123, "request": "{\"model\":\"…\",\"prompt\":\"…\"}", "createdAt": "2026-09-12T00:00:00.000Z" },
+  "image": { "file": "<sha256>.png", "prompt": "…", "negativePrompt": "…", "providerId": "…", "model": "…", "seed": 1234, "durationMs": 8123, "request": "{\"model\":\"…\",\"prompt\":\"…\"}", "promptRequest": "{\"model\":\"…\",\"max_tokens\":12000,\"response_format\":{\"type\":\"json_object\"}}", "promptResponse": "{\"choices\":[{\"message\":{\"content\":\"…\"}}]}", "createdAt": "2026-09-12T00:00:00.000Z" },
   "promptUsed": "anime style …",
   "negativeUsed": "lowres, bad anatomy, …"
 }
@@ -138,8 +138,8 @@ The generate body is `z.object({ imageProviderId?, promptOverride?, negativeOver
 
 `Settings → Chat → Review Image Prompt Before Generating` is **on by default**. The pipeline is two requests:
 
-1. **Footer button** → `POST …/image/prompt` with `{ imageProviderId? }`. The server runs the text → image-prompt call exactly once, persists nothing, generates nothing, and answers `{ "prompt": "…", "negativePrompt": "…" }` — already composed and clamped, so what the modal shows is byte-for-byte what the generate call will send.
-2. **`ImagePromptModal`** ("Review Image Prompt") shows both fields for editing, with **Generate**, **Cancel** and **Re-run text call** (the last replaces the drafts with a fresh text-model draft, staying inside the modal).
+1. **Footer button** → `POST …/image/prompt` with `{ imageProviderId? }`. The server runs the text → image-prompt call exactly once, persists nothing, generates nothing, and answers `{ "prompt": "…", "negativePrompt": "…", "warnings": [] }` — already composed and clamped, so what the modal shows is byte-for-byte what the generate call will send. `warnings` are the prompt call's advisory notes (see below); the modal shows them above the editable prompt.
+2. **`ImagePromptModal`** ("Review Image Prompt") shows both fields for editing, with **Generate**, **Cancel** and **Re-run text call** (the last replaces the drafts with a fresh text-model draft, staying inside the modal). Any warnings from the prompt call appear above the fields, warn-styled, so a suspected refusal or a key-less JSON answer is seen **before** the image call is paid for.
 3. **Generate** → `POST …/image` with **both** `promptOverride` and `negativeOverride` set to the reviewed text. Because both are present, the server **skips the text call entirely** and sends the user's text — the text model is never asked twice, and edits are never discarded.
 
 The in-flight state is a per-message `Writing image prompt…` status with **Cancel** while the dry run is in flight (the hook owns the request and the modal only owns the text, so closing the modal mid-flight aborts the call instead of leaving a stuck spinner); then a `Generating image…` status with **Cancel** during the image call.
@@ -161,7 +161,7 @@ One request: `POST …/image` with no overrides. The server runs the prompt call
 
 ### What the text call receives
 
-`generateImagePrompt` sends one `/chat/completions` request with `temperature: 0.7`, `max_tokens: min(connection.maxTokens, 600)`, and exactly two messages: the preset's `instruction` as `system`, and one `user` message built from:
+`generateImagePrompt` sends one `/chat/completions` request with `temperature: 0.7`, `max_tokens: <the connection's own maxTokens>`, `response_format: { "type": "json_object" }`, and exactly two messages: the preset's `instruction` as `system`, and one `user` message built from:
 
 ```
 SCENE TEXT:
@@ -179,7 +179,37 @@ PRESENT CHARACTERS:
 Write ONE image prompt for this moment. Return JSON: {"prompt": "…", "negative_prompt": "…"}
 ```
 
-The `PLAYER'S LAST ACTION`, `CURRENT STATE` and `PRESENT CHARACTERS` blocks are omitted when empty (an empty header invites the model to invent one), and the last two are gated by the preset's `includeState` / `includeCast` flags. The answer is parsed as JSON (`prompt`, `negative_prompt`); if the model returns prose instead, the whole content is used as the prompt and the negative side falls back to the preset's negative prefix. No prompt at all is an error (`The text provider returned no image prompt.`).
+**The connection governs the budget.** `max_tokens` is the connection's own `maxTokens` — the prompt call has no ceiling of its own and no floor. It used to send `min(maxTokens, 600)`, and that 600-token cap is what made an otherwise healthy connection answer with empty content and `finish_reason: "length"` (a reasoning model or one that writes a preamble spends the whole budget before the answer starts), which surfaced as the old `The text provider returned no image prompt.` — with no clue which of the two had happened.
+
+**The JSON contract is enforced, not merely requested.** `response_format: { "type": "json_object" }` is sent on every call, matching the turn path (`src/server/openAiCompatibleProvider.ts`). It is safe on a model or proxy that does not implement structured output: `requestWithRetry` (`src/server/provider/openaiClient.ts`) already retries **once, without** `response_format`, when the endpoint rejects the body with a 400/422/404. Nothing about the parsing below depends on the field being honoured — a model that ignores it and answers in prose still works.
+
+The `PLAYER'S LAST ACTION`, `CURRENT STATE` and `PRESENT CHARACTERS` blocks are omitted when empty (an empty header invites the model to invent one), and the last two are gated by the preset's `includeState` / `includeCast` flags. The answer is parsed as JSON (`prompt`, `negative_prompt`); if the model returns prose instead, the whole content is used as the prompt and the negative side falls back to the preset's negative prefix.
+
+#### Empty content is an immediate, fully-diagnosed failure
+
+When `choices[0].message.content` is empty or whitespace (or `choices` is empty), the call **fails immediately** — no retry and no deterministic fallback prompt — with one error that carries everything needed to diagnose it without a second round trip:
+
+- the **`finish_reason`** (`length` names the exhausted-budget case directly; `absent` / `absent — the response carried no choices` name the other two),
+- **whether a reasoning field was present**, i.e. `reasoning_content` or `reasoning` on the message, or a content block typed as reasoning/thinking — the "the model spent its output budget thinking" signal, called out explicitly when `content` is empty beside it,
+- a **truncated quote** of the raw response body (the first 400 characters, never the whole body).
+
+```
+The text provider returned no image prompt (finish_reason: length; the message carried
+reasoning_content while content was empty — the model spent its output budget on reasoning
+instead of writing the prompt (raise the connection's maxTokens, or use a connection that
+answers directly)). Raw response (truncated): {"id":"…","choices":[{"finish_reason":"length",…
+```
+
+#### Two advisory warnings
+
+The call also FLAGS two answers it still returns (never blocks — the review modal is where the user fixes them):
+
+| Condition | Warning |
+|---|---|
+| The prose fallback was used **and** the text opens like a refusal | It opened with `"i can't"` (or `i cannot`, `i'm unable`, `i am unable`, `i won't`, `i will not`, `as an ai`, `sorry, but`, `i must decline`, `can't help with`, `cannot help with`, `cannot assist`) instead of describing an image, and that text is now the prompt. Matched case-insensitively against the **first 200 characters** only, so refusal-shaped words inside a real prompt are not misread. Typographic apostrophes (`I can’t`) match the same patterns. |
+| The JSON parsed as an object but carried **neither** `prompt` nor `negative_prompt` as a string | The raw JSON blob would become the image prompt, so the warning names the keys it did find. |
+
+A clean JSON answer, a fenced JSON block and ordinary prose produce no warnings. `ImagePromptOutput.warnings` carries them; the dry-run route returns them and the review modal shows them above the editable prompt.
 
 The two sides are then composed and clamped:
 
@@ -207,11 +237,15 @@ A message reference is a `MessageImage`:
 | `seed` | optional — a Venice random (`0`) generation has none |
 | `durationMs` | optional |
 | `request` | optional — the **JSON body that was sent to the image provider** for this image (diagnostic provenance) |
+| `promptRequest` | optional — the **JSON body that was sent to the TEXT provider** that wrote this prompt (diagnostic provenance) |
+| `promptResponse` | optional — the text provider's **response** to that call, body only, truncated (see below) |
 | `createdAt` | ISO timestamp |
 
-`request` is the exact string the adapter handed upstream, so a stored image can answer *what did we actually send?* — which is the only way to tell "the model ignored `style_preset`" from "we never sent it". It is the request **body only**: never headers, never the API key (`tests/imageRequestProvenance.test.ts` fails if either ever leaks in). Every variant of one call stores the same string, and the raw **response** is deliberately *not* stored — it carries the base64 payload and would bloat the record. The field is `optional`, so refs written before it existed still parse and simply show no request.
+`request` is the exact string the adapter handed upstream, so a stored image can answer *what did we actually send?* — which is the only way to tell "the model ignored `style_preset`" from "we never sent it". It is the request **body only**: never headers, never the API key (`tests/imageRequestProvenance.test.ts` fails if either ever leaks in). Every variant of one call stores the same string, and the raw **response** is deliberately *not* stored — it carries the base64 payload and would bloat the record.
 
-Nothing else about a reference is new: `file`, `prompt`, `negativePrompt`, `providerId`, `model`, `seed`, `durationMs` and `createdAt` are unchanged.
+`promptRequest` / `promptResponse` are the same idea one step earlier in the pipeline: the prompt-writing side call's request body and the provider's response, so a stored image can also answer *why does this prompt look like that?* — the 600-token ceiling bug, a refusal, or a `finish_reason: "length"` is visible in the record instead of costing a round trip. Both are **body only** (never headers or keys — the credential scan in `tests/imageRequestProvenance.test.ts` covers them with the same pattern set as `request`) and both are shared by every variant of one call. `promptResponse` is **truncated at 4000 characters** with a trailing `…[truncated]` marker, so a verbose reasoning model cannot bloat the playthrough record; `promptRequest` is stored verbatim because it is bounded by the preset instruction plus the scene context. Neither field is written when the prompt call did not run — the reviewed-prompt path (both overrides) makes no text call, so there is nothing to record.
+
+All three provenance fields are `optional`, so refs written before they existed still parse and simply show no disclosure. Nothing else about a reference is new: `file`, `prompt`, `negativePrompt`, `providerId`, `model`, `seed`, `durationMs` and `createdAt` are unchanged.
 
 Because bytes are *shared*, never owned, deletion cannot be unlink-on-delete. Instead `collectReferencedImages` walks every message of every playthrough and collects the set of live file names, and the sweep deletes only hash-named files that are not in that set (anything else in the directory is left alone — the store does not own that namespace). Raced unlinks are counted as neither success nor failure.
 
@@ -316,6 +350,7 @@ The Image Generation tab in the preset editor exposes all six fields in this ord
 - Every **assistant** message gets a footer button: **Generate Image**, or **Generate another** once it has images. It is disabled when there is no image connection, with a tooltip explaining why (`No image provider configured — add one in Settings → Provider → Images`), and while another action is in progress.
 - Generated images stack **inside the same message container, newest last**. Each is a figure with the image, a remove control (`Remove this image` — the tooltip and the confirm dialog both say *the file is deleted if nothing else uses it*), and a caption of `model · <seconds>s · seed <seed>`. The duration and seed parts are omitted when absent — a Venice random seed (`0`) therefore shows no seed.
 - Every generated image carries a compact collapsed **`request`** disclosure under it (inside the same message container and the same figure) revealing the pretty-printed JSON body that went to the image provider — diagnostic provenance, not content, so it is small, muted, monospace, height-capped and horizontally scrollable. A ref stored before the field existed shows no disclosure at all (no empty box).
+- Next to it, a second collapsed **`prompt call`** disclosure shows the *prompt-writing* side call: its request body and the text provider's response, labelled `Request` / `Response`, same quiet treatment and also collapsed by default. It is absent when the prompt came from the user's own edits (both overrides), because no text call ran for that image.
 - In-flight states are per message: `Writing image prompt…` (the dry run) and `Generating image…` (the render), each with a **Cancel** button. Cancelling reports `Image prompt cancelled.` or `Image generation cancelled.`; a failure reports `Image generation failed — nothing was changed.`
 - `Settings → Chat → Review Image Prompt Before Generating` (default **on**) decides whether the modal appears. On: dry run first, then the reviewed prompt posted back as both overrides. Off: one request, no modal.
 - The image provider caption in the modal is `<label> · <model>` of the image connection the request will use.
@@ -336,7 +371,7 @@ The Image Generation tab in the preset editor exposes all six fields in this ord
 | 400 | `{"error":"No text provider available to write the image prompt."}` | No text connection at all, so no prompt writer |
 | 502 | `{"error":"Image prompt provider error <status>: <body>"}` | The text provider failed while writing the prompt |
 | 502 | `{"error":"The text provider returned a non-JSON response while writing the image prompt."}` | The text provider's response envelope was not JSON |
-| 502 | `{"error":"The text provider returned no image prompt."}` | The model produced neither JSON nor prose |
+| 502 | `{"error":"The text provider returned no image prompt (finish_reason: …). Raw response (truncated): …"}` | The model's `content` was empty (or the response carried no choices). The message names the `finish_reason`, whether a reasoning field was present, and quotes the raw body — see *Empty content is an immediate, fully-diagnosed failure* above. `finish_reason: length` + a reasoning field means the connection's budget was spent thinking: raise `maxTokens` or use a connection that answers directly. |
 | 502 | `{"error":"Image provider error <status>: <body>"}` | The image provider returned a non-OK status |
 | 502 | `{"error":"Image provider returned no image data"}` | The image response carried no usable payload (e.g. a plain `http` URL instead of a data URL) |
 | 500 | `{"error":"Image sweep failed"}` (or the thrown message) | `POST /api/settings/images/sweep` failed |
