@@ -3,6 +3,7 @@ import { createBlankPlaythrough, createInitialPlaythrough, DEFAULT_CHARACTER_FOR
 import { DEMO_TEMPLATE } from "../src/engine/demoData";
 import { OpenAICompatibleProvider, assembleTurnPrompt, extractJsonPayload, repairRawControlChars } from "../src/server/openAiCompatibleProvider";
 import { A1111_DEFAULT_IMAGE_TIMEOUT_MS, normalizeBaseUrl, normalizeImageBaseUrl, resolveConnectionConfig, resolveImageConfig } from "../src/server/providerConfig";
+import { authHeaders } from "../src/server/httpAuth";
 import type { ResolvedProviderConfig } from "../src/server/providerConfig";
 import { EMPTY_MODULE_SET, PlaythroughPromptSettingsSchema, ScenarioSeedSchema } from "../src/schemas";
 import type { ProviderConnection } from "../src/schemas";
@@ -188,6 +189,40 @@ describe("image provider config", () => {
     const resolved = resolveConnectionConfig(textConn, {});
     expect(resolved.baseUrl).toBe("https://api.deepseek.com/v1");
     expect(resolved.timeoutMs).toBe(120_000);
+  });
+});
+
+describe("authHeaders", () => {
+  it("sends no Authorization header when there is no key", () => {
+    expect(authHeaders(undefined)).toEqual({});
+    expect(authHeaders("")).toEqual({});
+    expect(authHeaders("   ")).toEqual({});
+    expect(authHeaders("", "a1111")).toEqual({});
+  });
+
+  it("sends a colon-less key as Bearer on every dialect — a1111 included", () => {
+    expect(authHeaders("sk-token")).toEqual({ Authorization: "Bearer sk-token" });
+    expect(authHeaders("Bearer-ish-token", "a1111")).toEqual({ Authorization: "Bearer Bearer-ish-token" });
+    expect(authHeaders("sk-token", "venice")).toEqual({ Authorization: "Bearer sk-token" });
+  });
+
+  it("sends a `user:pass` key as HTTP Basic for a1111 — the `--api-auth` form", () => {
+    // A1111's `--api-auth user:pass` is HTTP Basic, not a bearer token.
+    const expected = Buffer.from("alice:s3cret").toString("base64");
+    expect(authHeaders("alice:s3cret", "a1111")).toEqual({ Authorization: `Basic ${expected}` });
+  });
+
+  it("keeps Basic off the other dialects even when the key contains a colon", () => {
+    // Venice/OpenAI keys never carry a colon; one that does is still a token.
+    expect(authHeaders("alice:s3cret", "venice")).toEqual({ Authorization: "Bearer alice:s3cret" });
+    expect(authHeaders("alice:s3cret", "openai")).toEqual({ Authorization: "Bearer alice:s3cret" });
+    expect(authHeaders("alice:s3cret")).toEqual({ Authorization: "Bearer alice:s3cret" });
+  });
+
+  it("trims the key before it is encoded", () => {
+    const expected = Buffer.from("alice:s3cret").toString("base64");
+    expect(authHeaders("  alice:s3cret  ", "a1111")).toEqual({ Authorization: `Basic ${expected}` });
+    expect(authHeaders("  sk-token  ", "venice")).toEqual({ Authorization: "Bearer sk-token" });
   });
 });
 
