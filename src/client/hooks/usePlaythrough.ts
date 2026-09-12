@@ -3,6 +3,7 @@ import type { ChatMessage, ImageApiStyle, Playthrough } from "../../schemas";
 import {
   deleteMessageImage,
   editMessage,
+  fetchImageProgress,
   generateMessageImage,
   getContextUsage,
   getPlaythrough,
@@ -16,6 +17,7 @@ import {
   sendTurn,
   truncatePlaythrough,
   branchPlaythrough,
+  type ImageGenerationProgress,
   type QuestAction,
   type TokenUsage
 } from "../api";
@@ -84,6 +86,9 @@ export type ImagePromptRequest = {
  *  client needs to know about it: which id to poll for progress, and whether
  *  the dialect reports progress at all. */
 export type ResolvedImageConnection = { id: string; apiStyle: ImageApiStyle };
+
+/** Milliseconds between progress reads while an a1111 generation renders. */
+const IMAGE_PROGRESS_POLL_MS = 700;
 
 /**
  * Which image connection a request will use — the same rule as the server's
@@ -275,6 +280,10 @@ export function usePlaythrough() {
   const [imageDeletingId, setImageDeletingId] = useState<string | null>(null);
   const [imagePromptRequest, setImagePromptRequest] = useState<ImagePromptRequest | null>(null);
   const imageAbortRef = useRef<AbortController | null>(null);
+  // Live sampling progress while an a1111 generation renders. `null` reads as
+  // "nothing to show" — only a dialect that can report progress ever fills it.
+  const [imageProgress, setImageProgress] = useState<ImageGenerationProgress | null>(null);
+  const imageProgressStopRef = useRef<(() => void) | null>(null);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
   const [rawInput, setRawInput] = useState<string | null>(null);
   const [rawOutput, setRawOutput] = useState<string | null>(null);
@@ -473,6 +482,8 @@ export function usePlaythrough() {
     }
 
     setImageGeneratingId(message.id);
+    // Live progress is a1111-only: this is a no-op for every other dialect.
+    startImageProgress(connection);
     try {
       const res = await generateMessageImage(playthrough.id, message.id, { ...overrides, signal: controller.signal });
       // The response carries the authoritative record — set it exactly like
@@ -486,6 +497,8 @@ export function usePlaythrough() {
         reportImageFailure(e, startTime, "Image generation failed — nothing was changed.");
       }
     } finally {
+      // Settled — success, failure or cancel — so the readout goes with it.
+      stopImageProgress();
       setImageGeneratingId(null);
       imageAbortRef.current = null;
     }
@@ -493,6 +506,55 @@ export function usePlaythrough() {
 
   function handleCancelImage() {
     imageAbortRef.current?.abort();
+  }
+
+  /** Tear the progress loop down and forget its last readout. Idempotent, and
+   *  called on every path out of a generation (success, failure, cancel). */
+  function stopImageProgress() {
+    imageProgressStopRef.current?.();
+    imageProgressStopRef.current = null;
+    setImageProgress(null);
+  }
+
+  /**
+   * Poll the server's live-progress endpoint for `connection` until
+   * `stopImageProgress`.
+   *
+   * Only the a1111 dialect reports progress, so every other dialect (and an
+   * unresolved connection) starts nothing at all.
+   *
+   * Best-effort by construction: a failed read is swallowed — it can never
+   * disturb the generation — and the loop re-reads only while it has not been
+   * stopped, so a response that lands after the generation settled cannot
+   * resurrect a stale readout.
+   */
+  function startImageProgress(connection: ResolvedImageConnection | null) {
+    stopImageProgress();
+    if (connection?.apiStyle !== "a1111") return;
+    const connectionId = connection.id;
+    let stopped = false;
+    let timer: number | null = null;
+
+    const tick = async () => {
+      try {
+        const snapshot = await fetchImageProgress(connectionId);
+        if (stopped) return;
+        setImageProgress(snapshot.active ? snapshot : null);
+      } catch {
+        /* a failed progress read is not a generation failure — keep the last
+           readout and try again on the next tick */
+        if (stopped) return;
+      }
+      if (stopped) return;
+      timer = window.setTimeout(() => { void tick(); }, IMAGE_PROGRESS_POLL_MS);
+    };
+
+    imageProgressStopRef.current = () => {
+      stopped = true;
+      if (timer !== null) window.clearTimeout(timer);
+      timer = null;
+    };
+    void tick();
   }
 
   /** Cancel/close the prompt modal. Closing mid-flight aborts the text call, so
@@ -767,6 +829,7 @@ export function usePlaythrough() {
     imagePreviewMessageId,
     imageDeletingId,
     imagePromptRequest,
+    imageProgress,
     handleGenerateImage,
     handleCancelImage,
     closeImagePrompt,

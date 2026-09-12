@@ -45,6 +45,39 @@ export type GenerateMessageImageResult = {
 };
 
 /**
+ * Live sampling progress for one connection, as `/api/images/progress` reports
+ * it. Every number is optional: a job that has not reached sampling yet (and a
+ * dialect that cannot report progress at all) sends none of them, so a readout
+ * must render from whatever is present.
+ */
+export type ImageGenerationProgress = {
+  /** False when nothing is running on that connection — the normal answer
+   *  between generations, and never an error. */
+  active: boolean;
+  /** 0..1 across the whole request. */
+  progress?: number;
+  step?: number;
+  steps?: number;
+  etaSeconds?: number;
+};
+
+/**
+ * Read the progress of the generation running on one connection. Safe to call
+ * at any time: an idle connection answers `{active: false}`. Only the a1111
+ * dialect publishes progress, so only its connections ever answer `active:
+ * true` — the endpoint itself is dialect-agnostic.
+ */
+export function fetchImageProgress(
+  connectionId: string,
+  signal?: AbortSignal
+): Promise<ImageGenerationProgress> {
+  return request<ImageGenerationProgress>(
+    `/api/images/progress?connectionId=${encodeURIComponent(connectionId)}`,
+    { signal }
+  );
+}
+
+/**
  * Dry run for the preview modal: runs the text→image-prompt side call only and
  * returns the composed prompt, generating nothing.
  */

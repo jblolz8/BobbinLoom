@@ -1077,6 +1077,40 @@
   color: var(--accent-highlight, var(--accent-base));
 }
 
+/* Live sampling readout in the message footer — a1111 only, since it is the one
+   dialect that reports progress. A slim bar plus the `Sampling 12/28 · 43%`
+   text, inline with the spinner and Cancel so the row never reflows. */
+.message-image-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.message-image-progress-bar {
+  position: relative;
+  width: 72px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border-subtle);
+  overflow: hidden;
+}
+
+.message-image-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-highlight, var(--accent-base));
+  transition: width 0.25s linear;
+}
+
+.message-image-progress-text {
+  white-space: nowrap;
+}
+
 /* ── Image prompt review modal ── */
 
 .image-prompt-modal {

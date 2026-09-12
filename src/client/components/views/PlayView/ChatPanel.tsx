@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChatMessage, Playthrough } from "../../../../schemas";
-import { buildImageUrl, type TokenUsage } from "../../../api";
+import { buildImageUrl, type ImageGenerationProgress, type TokenUsage } from "../../../api";
 import type { FailedResponseNotice, ImagePromptRequest } from "../../../hooks/usePlaythrough";
 import { ContextMeter } from "../../common/ContextMeter";
 import { MarkdownView } from "../../common/MarkdownView";
@@ -56,6 +56,10 @@ export type ChatPanelProps = {
   imagePreviewMessageId?: string | null;
   /** An image is being removed from this message. */
   imageDeletingId?: string | null;
+  /** Live sampling progress for the image being generated on a message (a1111
+   *  only — it is the one dialect that reports it). `null`/absent whenever
+   *  nothing is running, so the footer simply shows no readout. */
+  imageProgress?: ImageGenerationProgress | null;
   /** The composed prompt awaiting review; non-null renders the modal. */
   imagePromptRequest?: ImagePromptRequest | null;
   imageCharacterLimit?: number;
@@ -353,6 +357,35 @@ function ImagePromptCallDisclosure({ request, response }: { request: string; res
   );
 }
 
+/**
+ * The footer readout for a live a1111 generation: `Sampling 12/28 · 43%`, built
+ * from whatever the WebUI has actually reported so far. `null` means there is
+ * nothing worth showing yet — the job is queued, or the dialect (or the build)
+ * reports no progress at all, in which case the footer stays as it was.
+ */
+function imageProgressDisplay(
+  progress: ImageGenerationProgress | null | undefined
+): { label: string; percent: number } | null {
+  if (!progress?.active) return null;
+
+  const stepRatio =
+    progress.step !== undefined && progress.steps !== undefined && progress.steps > 0
+      ? progress.step / progress.steps
+      : null;
+  const ratio = progress.progress ?? stepRatio;
+  const percent = ratio === null || ratio === undefined
+    ? null
+    : Math.round(Math.min(Math.max(ratio, 0), 1) * 100);
+
+  const parts: string[] = [];
+  if (progress.step !== undefined && progress.steps !== undefined) {
+    parts.push(`Sampling ${progress.step}/${progress.steps}`);
+  }
+  if (percent !== null) parts.push(`${percent}%`);
+  if (!parts.length) return null;
+  return { label: parts.join(" · "), percent: percent ?? 0 };
+}
+
 export function ChatPanel(props: ChatPanelProps) {
   const {
     playthrough, input, onInputChange, onSend, loading, actionLoading,
@@ -370,6 +403,7 @@ export function ChatPanel(props: ChatPanelProps) {
     imageGeneratingId = null,
     imagePreviewMessageId = null,
     imageDeletingId = null,
+    imageProgress = null,
     imagePromptRequest = null,
     imageCharacterLimit,
     imageProviderLabel,
@@ -383,6 +417,11 @@ export function ChatPanel(props: ChatPanelProps) {
   } = props;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Live readout for the message whose image is being generated — and only that
+  // message, in the branch that draws its Cancel button. The hook clears the
+  // progress state on every settle path, so this disappears with it.
+  const progressDisplay = imageGeneratingId ? imageProgressDisplay(imageProgress) : null;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -585,6 +624,32 @@ export function ChatPanel(props: ChatPanelProps) {
                       <span className="message-image-status">
                         <Icon name="Loader" size={12} className="animate-spin" /> Generating image…
                       </span>
+                      {/* Live sampling readout, a1111 only: `is the WebUI
+                          actually working on it?` is the question a several-
+                          minute local render raises, and this is the answer. */}
+                      {progressDisplay ? (
+                        <span
+                          className="message-image-progress"
+                          role="progressbar"
+                          aria-valuenow={progressDisplay.percent}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-label="Image generation progress"
+                          title={
+                            imageProgress?.etaSeconds !== undefined && imageProgress.etaSeconds > 0
+                              ? `${progressDisplay.label} · about ${Math.round(imageProgress.etaSeconds)}s left`
+                              : progressDisplay.label
+                          }
+                        >
+                          <span className="message-image-progress-bar" aria-hidden="true">
+                            <span
+                              className="message-image-progress-fill"
+                              style={{ width: `${progressDisplay.percent}%` }}
+                            />
+                          </span>
+                          <span className="message-image-progress-text">{progressDisplay.label}</span>
+                        </span>
+                      ) : null}
                       <Button
                         size="xs"
                         variant="danger"

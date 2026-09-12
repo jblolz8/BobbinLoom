@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   listProviderConnections,
+  type ImageGenerationProgress,
   type PlaythroughPromptSettings,
   type TokenUsage,
   type Persona,
@@ -109,6 +110,10 @@ export type PlayViewProps = {
   imageGeneratingId?: string | null;
   imagePreviewMessageId?: string | null;
   imageDeletingId?: string | null;
+  /** Live a1111 sampling progress for the image in flight, straight from the
+   *  hook. Null whenever nothing is running (and for dialects that cannot
+   *  report progress). */
+  imageProgress?: ImageGenerationProgress | null;
   imagePromptRequest?: ImagePromptRequest | null;
   handleGenerateImage?: (msg: ChatMessage, overrides?: ImageGenerationOverrides) => Promise<void>;
   handleCancelImage?: () => void;
@@ -196,6 +201,7 @@ export function PlayView(props: PlayViewProps) {
     imageGeneratingId = null,
     imagePreviewMessageId = null,
     imageDeletingId = null,
+    imageProgress = null,
     imagePromptRequest = null,
     handleGenerateImage,
     handleCancelImage,
@@ -314,6 +320,7 @@ export function PlayView(props: PlayViewProps) {
           imageGeneratingId={imageGeneratingId}
           imagePreviewMessageId={imagePreviewMessageId}
           imageDeletingId={imageDeletingId}
+          imageProgress={imageProgress}
           imagePromptRequest={imagePromptRequest}
           imageCharacterLimit={imageCharacterLimit}
           imageProviderLabel={imageConnection?.label}

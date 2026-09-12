@@ -356,6 +356,7 @@ export default function App() {
           imageGeneratingId={playthroughHook.imageGeneratingId}
           imagePreviewMessageId={playthroughHook.imagePreviewMessageId}
           imageDeletingId={playthroughHook.imageDeletingId}
+          imageProgress={playthroughHook.imageProgress}
           imagePromptRequest={playthroughHook.imagePromptRequest}
           handleGenerateImage={playthroughHook.handleGenerateImage}
           handleCancelImage={playthroughHook.handleCancelImage}
