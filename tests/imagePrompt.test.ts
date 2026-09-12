@@ -45,6 +45,26 @@ const INPUT = {
 };
 
 describe("generateImagePrompt", () => {
+  it("does not cut the composed negative at the preset's prompt limit", async () => {
+    // The shipped negative is ~650 chars and the model may volunteer more; the
+    // preset's prompt limit sizes the PROMPT, never the negative. The route clamps
+    // the negative to the dialect cap, so the side call must hand it over whole.
+    const longPrefix = `${"tag, ".repeat(320)}tail`;
+    const { fetchImpl } = stubFetch('{"prompt": "a tag line", "negative_prompt": "volunteered"}');
+
+    const out = await generateImagePrompt(
+      testConfig(),
+      settings({ negativePrefix: longPrefix }),
+      INPUT,
+      fetchImpl
+    );
+
+    expect(longPrefix.length).toBeGreaterThan(1200);
+    // `composePrompt` joins prefix and body with a space (not a comma), so the
+    // assertion is about the LENGTH surviving, not the separator.
+    expect(out.negativePrompt).toBe(`${longPrefix} volunteered`);
+  });
+
   it("sends a tag-list instruction and asks for the one-field JSON shape", async () => {
     const { fetchImpl, calls } = stubFetch('{"prompt": "safe, 1girl, bedroom"}');
     await generateImagePrompt(testConfig(), settings(), INPUT, fetchImpl);

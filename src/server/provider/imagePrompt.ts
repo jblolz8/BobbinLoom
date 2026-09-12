@@ -260,7 +260,12 @@ export async function generateImagePrompt(
   }
 
   const composedPrompt = compose(settings.positivePrefix, rawPrompt, settings.promptCharacterLimit);
-  const composedNegative = compose(settings.negativePrefix, rawNegative, settings.promptCharacterLimit);
+  // The negative has NO preset ceiling: it is a fixed list we ship, not a tag list
+  // the preset sizes. A limit of 0 reads as unlimited here, and the route clamps
+  // the composed negative to the dialect's hard cap — which is the only ceiling it
+  // should ever have. Clamping it here made the route's cap unreachable: the text
+  // was already cut before it got there.
+  const composedNegative = compose(settings.negativePrefix, rawNegative, 0);
 
   return {
     prompt: composedPrompt.text,
