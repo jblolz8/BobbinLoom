@@ -31,7 +31,11 @@ const ProviderConnectionBody = z.object({
   promptProviderId: z.string().nullable().optional(),
   stylePreset: z.string().optional(),
   hideWatermark: z.boolean().optional(),
-  variants: z.number().int().min(1).max(4).optional()
+  variants: z.number().int().min(1).max(4).optional(),
+  /** Venice `seed` for every generation this connection makes. On the body
+   *  schema or zod strips it and the saved connection silently loses it.
+   *  `null` clears a stored seed (the editor's emptied field). */
+  seed: z.number().int().nullable().optional()
 });
 
 const ProviderIdParam = z.object({ id: z.string() });

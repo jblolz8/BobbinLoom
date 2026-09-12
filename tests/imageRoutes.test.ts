@@ -31,6 +31,9 @@ type HarnessOptions = {
   imagePayload?: Record<string, unknown>;
   /** Snapshot overrides on the playthrough (e.g. promptCharacterLimit: 0). */
   imageSettings?: Partial<ImageGenerationSettings>;
+  /** Stored on the image CONNECTION, so the route's seed resolution has a
+   *  connection-level fallback to fall back to. */
+  imageSeed?: number;
 };
 
 function harness(options: HarnessOptions = {}) {
@@ -76,7 +79,8 @@ function harness(options: HarnessOptions = {}) {
     model: "image-model",
     kind: "image",
     apiStyle: options.imageApiStyle ?? "venice",
-    size: "1024x1024"
+    size: "1024x1024",
+    ...(options.imageSeed === undefined ? {} : { seed: options.imageSeed })
   };
   if (options.withText !== false) createConnection(settingsDir, textConn);
   if (options.withImage !== false) createConnection(settingsDir, imageConn);
@@ -210,6 +214,42 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
     expect(storedFiles(h.imagesDir)).toEqual([body.image.file]);
     expect(body.playthrough.messages[2].images).toHaveLength(1);
     expect(getPlaythroughRecord(h.dataDir, h.playthroughId)!.messages[2].images).toHaveLength(1);
+  });
+
+  it("uses the connection's seed, sends it, and stamps it on the ref", async () => {
+    const h = harness({ imageSeed: 4242 });
+    const res = await post(h.app, imageUrl(h), {});
+    expect(res.statusCode).toBe(200);
+
+    // It reached the provider…
+    expect(h.calls[1].body.seed).toBe(4242);
+    // …and the stored ref records it, so this image can be reproduced or
+    // compared with a later re-roll.
+    expect(res.json().image.seed).toBe(4242);
+    expect(res.json().playthrough.messages[2].images[0].seed).toBe(4242);
+    expect(getPlaythroughRecord(h.dataDir, h.playthroughId)!.messages[2].images![0].seed).toBe(4242);
+  });
+
+  it("lets a per-request seed beat the connection's", async () => {
+    const h = harness({ imageSeed: 4242 });
+    const res = await post(h.app, imageUrl(h), { seed: 7 });
+    expect(res.statusCode).toBe(200);
+    expect(h.calls[1].body.seed).toBe(7);
+    expect(res.json().image.seed).toBe(7);
+  });
+
+  it("leaves the seed unset (random) when neither the request nor the connection has one", async () => {
+    const h = harness();
+    const res = await post(h.app, imageUrl(h), {});
+    expect(res.statusCode).toBe(200);
+
+    // The body carries Venice's documented 0 = random…
+    expect(h.calls[1].body.seed).toBe(0);
+    // …and the ref carries NOTHING: a random image has no seed to compare, and
+    // a stored 0 would read as one.
+    const image = res.json().image;
+    expect(image.seed).toBeUndefined();
+    expect("seed" in image).toBe(false);
   });
 
   it("appends on a second click instead of replacing", async () => {
@@ -541,5 +581,36 @@ describe("POST /api/settings/providers/models", () => {
     expect(created.kind).toBe("image");
     expect(created.apiStyle).toBe("venice");
     expect(created.variants).toBe(2);
+  });
+
+  it("keeps the seed an image connection is created with, and clears it on an explicit null", async () => {
+    const h = harness({ withImage: false });
+    const base = {
+      label: "Venice Images",
+      baseUrl: "https://api.venice.ai/api/v1",
+      model: "lustify-v8",
+      kind: "image",
+      apiStyle: "venice"
+    } as const;
+
+    // On the body schema or zod strips the field silently.
+    const created = await post(h.app, "/api/settings/providers", { ...base, seed: 4242 });
+    expect(created.statusCode).toBe(200);
+    expect(created.json().seed).toBe(4242);
+    const onDisk = () => JSON.parse(readFileSync(join(h.settingsDir, "providers.json"), "utf8"));
+    const row = (raw: { connections: Array<{ id: string; seed?: number }> }) =>
+      raw.connections.find((c) => c.id === "venice_images")!;
+    expect(row(onDisk()).seed).toBe(4242);
+
+    // Emptied Seed box: null CLEARS it, and an absent field would not.
+    const cleared = await h.app.inject({
+      method: "PUT",
+      url: "/api/settings/providers/venice_images",
+      payload: { ...base, seed: null }
+    });
+    expect(cleared.statusCode).toBe(200);
+    expect("seed" in cleared.json()).toBe(false);
+    expect(row(onDisk()).seed).toBeUndefined();
+    expect("seed" in row(onDisk())).toBe(false);
   });
 });

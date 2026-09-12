@@ -215,6 +215,21 @@ describe("VeniceImageProvider", () => {
     expect(calls[0].body.seed).toBe(4242);
     expect(result.seed).toBe(4242);
   });
+
+  it("reports the seed it actually sent, and no seed at all when the provider picks one", async () => {
+    const { fetchImpl, calls } = stubFetch(() => jsonResponse({ images: [PNG_B64], timing: { total: 1 } }));
+    const provider = new VeniceImageProvider(testConfig(), imageConn(), fetchImpl);
+
+    // The body carries Venice's documented `0` = random, so the RESULT must not
+    // report 0 as a seed: a stored ref has to say "the provider chose".
+    const random = await provider.generateImage({ prompt: "a scene" });
+    expect(calls[0].body.seed).toBe(0);
+    expect(random.seed).toBeUndefined();
+
+    const seeded = await provider.generateImage({ prompt: "a scene", seed: 4242 });
+    expect(calls[1].body.seed).toBe(4242);
+    expect(seeded.seed).toBe(4242);
+  });
 });
 
 describe("createImageProvider", () => {

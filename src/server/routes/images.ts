@@ -297,6 +297,12 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     const controller = abortOnClientDisconnect(reply);
     const imageProvider = manager.getImageProvider(body.imageProviderId);
 
+    // The seed this generation will use: a per-request seed wins, then the
+    // connection's own. Neither present (or 0, which Venice documents as "pick
+    // one at random") leaves it unset and the provider chooses — and then the
+    // ref stores nothing, because a random image is not reproducible anyway.
+    const seed = body.seed ?? imageConn.seed;
+
     // 1) The prompt. SKIPPED only when BOTH overrides are present — that is the
     //    preview-modal path: the user already reviewed (and possibly edited) the
     //    text, so re-running the text model would cost tokens and discard their
@@ -344,7 +350,7 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
         negativePrompt: negativeUsed || undefined,
         size: imageConn.size,
         aspectRatio: imageConn.aspectRatio,
-        seed: body.seed,
+        seed,
         variants: imageConn.variants,
         safeMode: imageConn.safeMode,
         stylePreset: imageConn.stylePreset,
@@ -370,7 +376,12 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
         negativePrompt: negativeUsed || undefined,
         providerId: result.providerId,
         model: result.model,
-        seed: body.seed ?? result.seed,
+        // What the adapter ACTUALLY sent (its own report), not what we asked
+        // for: the OpenAI-compatible dialect has no seed field, so asking for
+        // one there must not stamp a seed the provider never saw. Absent when
+        // the provider picked one at random — which is what makes a re-roll
+        // comparable or not, honestly.
+        seed: result.seed,
         durationMs: result.durationMs,
         // Diagnostic provenance: the exact body the adapter sent upstream. Body
         // only (the adapters never fold headers or the key into it), and every

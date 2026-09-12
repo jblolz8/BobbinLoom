@@ -32,6 +32,9 @@ export type ProviderConnectionDraft = ProviderConnectionInput & {
   stylePreset?: string;
   hideWatermark?: boolean;
   variants?: number;
+  /** `null` clears the stored seed (the editor's empty field), the same
+   *  convention `apiKey` uses — an absent key cannot overwrite a stored value. */
+  seed?: number | null;
 };
 
 /** Connections of one kind, and the active one among them. The kind filter is
@@ -246,6 +249,8 @@ export function createConnection(dir: string, input: ProviderConnectionDraft): P
     stylePreset: input.stylePreset,
     hideWatermark: input.hideWatermark,
     variants: input.variants,
+    // Never a null on disk: null is only the write-side "clear" signal.
+    seed: input.seed ?? undefined,
     createdAt: now,
     updatedAt: now
   };
@@ -267,15 +272,22 @@ export function updateConnection(dir: string, id: string, input: ProviderConnect
   const idx = reg.connections.findIndex((c) => c.id === id);
   if (idx === -1) throw new Error(`Provider not found: ${id}`);
   const cur = reg.connections[idx];
+  // `seed` is pulled OUT of the spread: null is the write-side "clear" signal
+  // and must never reach the persisted row (the schema holds a number only).
+  const { seed, ...rest } = input;
   const next: ProviderConnection = {
     ...cur,
-    ...input,
+    ...rest,
     id: cur.id, // id is server-owned (derived from the label at create time)
     baseUrl: input.baseUrl !== undefined ? normalizeBaseUrl(input.baseUrl) : cur.baseUrl,
     apiKey: input.apiKey ?? cur.apiKey,
   };
   if (input.apiKey === null) delete next.apiKey;
   else if (typeof input.apiKey === "string" && input.apiKey.trim()) next.apiKey = input.apiKey.trim();
+  // null clears a stored seed — an absent field cannot overwrite one, so the
+  // editor's emptied Seed box has no other way to go back to a random seed.
+  if (seed === null) delete next.seed;
+  else if (seed !== undefined) next.seed = seed;
   next.updatedAt = new Date().toISOString();
   reg.connections[idx] = next;
   writeRegistry(dir, reg);

@@ -49,6 +49,9 @@ export type ProviderConnectionPayload = {
   stylePreset?: string;
   hideWatermark?: boolean;
   variants?: number;
+  /** Venice `seed`, sent with every generation. Empty = let the provider pick;
+   *  `null` clears a stored seed (the editor's emptied field). */
+  seed?: number | null;
 };
 
 /** Registry v2: one active slot per kind, plus the read warnings. */

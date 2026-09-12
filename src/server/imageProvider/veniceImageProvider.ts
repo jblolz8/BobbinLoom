@@ -26,13 +26,17 @@ export class VeniceImageProvider implements ImageProvider {
     // aspect_ratio and width/height are mutually exclusive upstream: sending
     // both is what makes a ratio-only model 400.
     const dims = aspectRatio ? null : parseSize(req.size ?? this.connection.size);
+    // The seed this call puts on the wire. Already RESOLVED by the caller (the
+    // route: request body → connection → unset); 0 is Venice's documented
+    // "pick one at random", so it is the same thing as sending nothing.
+    const seed = req.seed ?? 0;
     const body: Record<string, unknown> = {
       model: this.config.model,
       prompt: clampChars(req.prompt, VENICE_IMAGE_PROMPT_CAP),
       format: "png",
       return_binary: false,
       variants: req.variants ?? this.connection.variants ?? 1,
-      seed: req.seed ?? 0, // 0 = random (documented)
+      seed, // 0 = random (documented)
       safe_mode: req.safeMode ?? this.connection.safeMode ?? false
     };
     if (req.negativePrompt) body.negative_prompt = clampChars(req.negativePrompt, VENICE_IMAGE_PROMPT_CAP);
@@ -60,7 +64,10 @@ export class VeniceImageProvider implements ImageProvider {
       }),
       model: this.config.model,
       providerId: this.config.providerId,
-      seed: req.seed,
+      // What was ACTUALLY sent, so the stored ref can be compared or re-rolled.
+      // `0` is not a seed — it is "the provider picked one" — so it reports as
+      // absent rather than as a number nobody chose.
+      seed: seed || undefined,
       durationMs: typeof parsed.timing?.total === "number" ? parsed.timing.total : Date.now() - start,
       rawRequest: JSON.stringify(body),
       rawOutput: text

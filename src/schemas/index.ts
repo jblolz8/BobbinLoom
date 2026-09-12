@@ -207,6 +207,13 @@ export const ProviderConnectionSchema = z.object({
   stylePreset: z.string().optional(),
   hideWatermark: z.boolean().optional(),
   variants: z.number().int().min(1).max(4).optional(),
+  /** Integer seed sent with every image call this connection makes (Venice's
+   *  `seed`). When set, re-rolls of the same prompt are comparable: the same
+   *  seed and prompt reproduce the same image. Absent — or 0, which Venice
+   *  documents as "pick one at random" — lets the provider choose and stores no
+   *  seed on the image. Not every dialect supports one: the OpenAI-compatible
+   *  images API has no seed field, so it is simply ignored there. */
+  seed: z.number().int().optional(),
   readonly: z.boolean().optional(),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),

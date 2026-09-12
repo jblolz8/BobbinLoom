@@ -33,6 +33,7 @@ Image connections are plain entries in the provider registry (`data/providers.js
 | `stylePreset` | a value the provider itself lists, e.g. `"Anime"` | Venice only. Sent as `style_preset`. **Case-sensitive and title-cased upstream**: `anime` is a 400 (`Invalid style requested`). The list comes from the keyless `GET {baseUrl}/image/styles`, and the connection editor fills a select from it (with **None** and a **Custom…** escape hatch). An **empty value is omitted** from the body rather than sent. |
 | `hideWatermark` | boolean | Venice only. Sent as `hide_watermark: true` (only when on). |
 | `variants` | integer 1–4 | How many images one request renders. Every returned variant is kept. |
+| `seed` | integer, absent = random | Venice only. Sent as `seed` with **every** generation this connection makes, so re-rolls of the same prompt are comparable. **Absent (or `0`, which Venice documents as "pick one at random") means the provider picks** — and then the stored image carries no seed at all. The OpenAI-compatible dialect has no seed field, so a seed set here is simply ignored by it. Editable in the connection editor next to Variants; an emptied field **clears** the stored value rather than storing `0`. |
 
 ### `openai` — OpenAI-compatible
 
@@ -89,7 +90,7 @@ Image connections are plain entries in the provider registry (`data/providers.js
 | `format` | constant `"png"` | |
 | `return_binary` | constant `false` | Base64 in JSON, not raw bytes. |
 | `variants` | `req.variants ?? connection.variants ?? 1` | |
-| `seed` | request seed, else `0` | **`0` means random** (documented). |
+| `seed` | request `seed` → connection `seed` → none | **`0` means random** (documented). A connection `seed` therefore makes every generation reproducible; with neither, the body still carries `0` and the adapter reports **no seed**, so the stored ref never claims `0` as a seed. |
 | `safe_mode` | connection `safeMode` | Absent = `false`. |
 | `style_preset` | connection | Only sent when set — an empty value is omitted, never sent as `""`. A value the provider does not list is rejected with a 400 that lands **after** the prompt call has already been paid for, which is why the connection editor offers the provider's own list instead of free text. |
 | `hide_watermark` | connection | Only sent as `true` when on. |
@@ -121,7 +122,7 @@ Defaults are **180000 ms** and **1** retry. Only the image provider calls use th
 | `DELETE /api/playthroughs/:id/messages/:messageId/images/:file` | Drop one image ref, then sweep. Idempotent. |
 | `POST /api/settings/images/sweep` | Manual orphan sweep. |
 
-The generate body is `z.object({ imageProviderId?, promptOverride?, negativeOverride?, seed? })` — all optional. The response is:
+The generate body is `z.object({ imageProviderId?, promptOverride?, negativeOverride?, seed? })` — all optional. A request `seed` wins over the connection's `seed`; with neither, the provider picks at random and the ref stores nothing. The response is:
 
 ```json
 {
@@ -254,7 +255,7 @@ A message reference is a `MessageImage`:
 | `prompt` | what was sent, default `""` |
 | `negativePrompt` | optional |
 | `providerId`, `model` | provenance, default `""` |
-| `seed` | optional — a Venice random (`0`) generation has none |
+| `seed` | optional — **the seed that was actually sent**, so a later re-roll with the same prompt and seed is comparable. Absent when the provider picked one (Venice's `0`, or the OpenAI-compatible dialect, which has no seed field at all) — `0` is never stored as if it were a seed. |
 | `durationMs` | optional |
 | `request` | optional — the **JSON body that was sent to the image provider** for this image (diagnostic provenance) |
 | `promptRequest` | optional — the **JSON body that was sent to the TEXT provider** that wrote this prompt (diagnostic provenance) |

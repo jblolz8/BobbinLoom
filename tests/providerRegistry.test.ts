@@ -133,6 +133,37 @@ describe("provider registry", () => {
     expect(disk.connections.find((c) => c.id === "conn")?.apiKey).not.toContain("persist");
   });
 
+  it("carries an image connection's seed through create and update, and keeps it absent when never set", () => {
+    const dir = tempDir();
+    const image = { kind: "image" as const, apiStyle: "venice" as const };
+    const read = () => (readRegistryFile(dir) as { connections: Array<Record<string, unknown>> }).connections;
+
+    // Never set ⇒ NO key on disk. Not 0: 0 is a real value (Venice reads it as
+    // "pick one at random"), so "absent" has to stay distinguishable from it.
+    createConnection(dir, connInput({ ...image, label: "NoSeed" }));
+    expect("seed" in read().find((c) => c.id === "noseed")!).toBe(false);
+
+    // Created with one, changed by update: both land on disk, and the schema
+    // keeps them when the row is read back (an unlisted field would be stripped).
+    createConnection(dir, connInput({ ...image, label: "Seeded", seed: 4242 }));
+    expect(read().find((c) => c.id === "seeded")?.seed).toBe(4242);
+    expect(listConnections(dir).connections.find((c) => c.id === "seeded")?.seed).toBe(4242);
+
+    updateConnection(dir, "seeded", connInput({ ...image, label: "Seeded", seed: 7 }));
+    expect(read().find((c) => c.id === "seeded")?.seed).toBe(7);
+
+    // An update that omits the field keeps the stored value…
+    updateConnection(dir, "seeded", connInput({ ...image, label: "Seeded" }));
+    expect(read().find((c) => c.id === "seeded")?.seed).toBe(7);
+
+    // …and an explicit null clears it, so an emptied Seed box really does go
+    // back to a random seed (an absent field cannot overwrite a stored one).
+    updateConnection(dir, "seeded", connInput({ ...image, label: "Seeded", seed: null }));
+    const cleared = read().find((c) => c.id === "seeded")!;
+    expect("seed" in cleared).toBe(false);
+    expect(getRegistry(dir).connections.find((c) => c.id === "seeded")?.seed).toBeUndefined();
+  });
+
   it("drops stored keys gracefully when the vault key file is corrupt", () => {
     const dir = tempDir();
     createConnection(dir, connInput({ label: "A", baseUrl: "http://a:1", apiKey: "sk-secret" }));

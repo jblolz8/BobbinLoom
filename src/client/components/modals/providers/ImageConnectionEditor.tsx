@@ -427,6 +427,27 @@ export function ImageConnectionEditor({
             </div>
           </div>
 
+          <div className="conn-fields-row-2">
+            <TextInput
+              label="Seed"
+              type="number"
+              min={0}
+              step={1}
+              value={form.seed === undefined || form.seed === null ? "" : String(form.seed)}
+              onChange={(e) => {
+                // Digits only. An empty field means "let the provider pick" and
+                // is sent as null — NEVER as 0, which the provider reads as a
+                // concrete value rather than "no seed". Null is what CLEARS a
+                // stored seed; an absent field cannot overwrite one.
+                const digits = e.target.value.replace(/\D/g, "");
+                setForm((f) => ({ ...f, seed: digits === "" ? null : Number(digits) }));
+              }}
+              placeholder="Random"
+              leftIcon={<Icon name="Dices" size={14} />}
+              helperText="Leave empty for a random seed. Set a number to make re-rolls comparable — the same seed and prompt reproduce the same image. A seed is only honoured by providers that support one: Venice does, the OpenAI-compatible dialect does not."
+            />
+          </div>
+
           {/* Grouped the way the Chat tab groups its own toggle rows, so the two
               read as a set rather than two loose boxes in the card. */}
           <div className="conn-toggle-group">

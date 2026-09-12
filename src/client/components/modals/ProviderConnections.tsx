@@ -101,6 +101,7 @@ const formFromConnection = (c: ProviderConnection): ProviderConnectionPayload =>
         stylePreset: c.stylePreset ?? "",
         hideWatermark: c.hideWatermark ?? false,
         variants: c.variants ?? 1,
+        seed: c.seed,
         temperature: c.temperature, maxTokens: c.maxTokens, contextWindow: c.contextWindow
       }
     : {
