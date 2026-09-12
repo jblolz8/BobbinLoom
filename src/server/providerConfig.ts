@@ -1,4 +1,4 @@
-import type { ProviderConnection } from "../schemas";
+import type { ImageApiStyle, ProviderConnection } from "../schemas";
 
 export type ResolvedProviderConfig = {
   providerId: string;
@@ -38,6 +38,18 @@ export function normalizeBaseUrl(baseUrl: string): string {
   return trimmed.endsWith("/v1") ? trimmed : `${trimmed}/v1`;
 }
 
+/** A1111 is served from the WebUI root (/sdapi/v1/...), NOT from an
+ *  OpenAI-style /v1 prefix — appending one turns every path into /v1/sdapi/... */
+export function normalizeImageBaseUrl(baseUrl: string, apiStyle: ImageApiStyle = "openai"): string {
+  return apiStyle === "a1111" ? baseUrl.trim().replace(/\/+$/, "") : normalizeBaseUrl(baseUrl);
+}
+
+/** A local WebUI rendering a 1024x1024 SDXL batch at 30 steps takes minutes,
+ *  not seconds; the 180 s generic image default would cut a healthy generation
+ *  off mid-sampler. The connection's own `timeoutMs` overrides this, and so
+ *  does BOBBINLOOM_IMAGE_TIMEOUT_MS. */
+export const A1111_DEFAULT_IMAGE_TIMEOUT_MS = 600_000;
+
 export function numberFromEnv(value: string | undefined, fallback: number): number {
   if (!value) return fallback;
   const parsed = Number(value);
@@ -47,14 +59,22 @@ export function numberFromEnv(value: string | undefined, fallback: number): numb
 /** Image requests get their own timeout: local diffusion queues and Venice's
  *  image lane both blow past the 120s text default, and cutting a generation
  *  off at 120s wastes the whole call. Retries stay at 1 — a 60-second
- *  generation is not something to repeat twice on a 5xx. */
+ *  generation is not something to repeat twice on a 5xx.
+ *
+ *  The base URL is normalized for the DIALECT, not generically: an a1111
+ *  connection is served from the WebUI root and must not gain a /v1 segment.
+ *  Only the base URL is overridden here — `resolveConnectionConfig` still does
+ *  everything else, and text providers keep calling it directly. */
 export function resolveImageConfig(
   conn: ProviderConnection,
   env: NodeJS.ProcessEnv = process.env
 ): ResolvedProviderConfig {
+  const apiStyle = conn.apiStyle ?? "openai";
+  const dialectDefault = apiStyle === "a1111" ? A1111_DEFAULT_IMAGE_TIMEOUT_MS : 180_000;
   return {
     ...resolveConnectionConfig(conn, env),
-    timeoutMs: numberFromEnv(env.BOBBINLOOM_IMAGE_TIMEOUT_MS, 180_000),
+    baseUrl: normalizeImageBaseUrl(conn.baseUrl, apiStyle),
+    timeoutMs: conn.timeoutMs ?? numberFromEnv(env.BOBBINLOOM_IMAGE_TIMEOUT_MS, dialectDefault),
     maxRetries: numberFromEnv(env.BOBBINLOOM_IMAGE_MAX_RETRIES, 1)
   };
 }

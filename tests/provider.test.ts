@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createBlankPlaythrough, createInitialPlaythrough, DEFAULT_CHARACTER_FORMAT, NSFW_CHARACTER_FORMAT, parseUserInput } from "../src/engine/engine";
 import { DEMO_TEMPLATE } from "../src/engine/demoData";
 import { OpenAICompatibleProvider, assembleTurnPrompt, extractJsonPayload, repairRawControlChars } from "../src/server/openAiCompatibleProvider";
-import { normalizeBaseUrl, resolveConnectionConfig } from "../src/server/providerConfig";
+import { A1111_DEFAULT_IMAGE_TIMEOUT_MS, normalizeBaseUrl, normalizeImageBaseUrl, resolveConnectionConfig, resolveImageConfig } from "../src/server/providerConfig";
 import type { ResolvedProviderConfig } from "../src/server/providerConfig";
 import { EMPTY_MODULE_SET, PlaythroughPromptSettingsSchema, ScenarioSeedSchema } from "../src/schemas";
 import type { ProviderConnection } from "../src/schemas";
@@ -111,6 +111,83 @@ describe("provider config", () => {
 
     const defaulted = resolveConnectionConfig(conn, {});
     expect(defaulted.timeoutMs).toBe(120_000);
+  });
+});
+
+describe("image provider config", () => {
+  const a1111Conn: ProviderConnection = {
+    id: "a1111_local",
+    kind: "image",
+    label: "Local SD",
+    baseUrl: "http://127.0.0.1:7860",
+    model: "sd_xl_base_1.0.safetensors",
+    temperature: 0.8,
+    maxTokens: 1200,
+    contextWindow: 32768,
+    apiStyle: "a1111"
+  };
+
+  it("normalizes an a1111 base URL to the WebUI ROOT — no /v1 is appended", () => {
+    // Appending /v1 here would turn every path into /v1/sdapi/v1/... → 404.
+    expect(normalizeImageBaseUrl("http://127.0.0.1:7860", "a1111")).toBe("http://127.0.0.1:7860");
+    expect(normalizeImageBaseUrl("http://127.0.0.1:7860/", "a1111")).toBe("http://127.0.0.1:7860");
+    expect(normalizeImageBaseUrl("  http://127.0.0.1:7860///  ", "a1111")).toBe("http://127.0.0.1:7860");
+    // An a1111 URL that already ends in /v1 is NOT stripped — it is a path.
+    expect(normalizeImageBaseUrl("http://127.0.0.1:7860/v1", "a1111")).toBe("http://127.0.0.1:7860/v1");
+  });
+
+  it("keeps the OpenAI-style normalization for openai, venice and an absent style", () => {
+    expect(normalizeImageBaseUrl("https://api.venice.ai/api/v1", "venice")).toBe("https://api.venice.ai/api/v1");
+    expect(normalizeImageBaseUrl("http://localhost:1234", "openai")).toBe("http://localhost:1234/v1");
+    // Absent style = openai, the conservative default (same as createImageProvider).
+    expect(normalizeImageBaseUrl("http://localhost:1234")).toBe("http://localhost:1234/v1");
+  });
+
+  it("defaults an a1111 request to 10 minutes and leaves the other dialects at 180s", () => {
+    expect(resolveImageConfig(a1111Conn, {}).timeoutMs).toBe(A1111_DEFAULT_IMAGE_TIMEOUT_MS);
+    expect(A1111_DEFAULT_IMAGE_TIMEOUT_MS).toBe(600_000);
+    expect(resolveImageConfig({ ...a1111Conn, apiStyle: "venice" }, {}).timeoutMs).toBe(180_000);
+    expect(resolveImageConfig({ ...a1111Conn, apiStyle: "openai" }, {}).timeoutMs).toBe(180_000);
+    // No style at all is the OpenAI lane, not the a1111 one.
+    expect(resolveImageConfig({ ...a1111Conn, apiStyle: undefined }, {}).timeoutMs).toBe(180_000);
+  });
+
+  it("resolves the timeout connection > env > dialect default", () => {
+    // The connection's own value beats both the env var and the dialect default.
+    expect(
+      resolveImageConfig({ ...a1111Conn, timeoutMs: 120_000 }, { BOBBINLOOM_IMAGE_TIMEOUT_MS: "45000" }).timeoutMs
+    ).toBe(120_000);
+    // The env var beats the dialect default…
+    expect(resolveImageConfig(a1111Conn, { BOBBINLOOM_IMAGE_TIMEOUT_MS: "45000" }).timeoutMs).toBe(45_000);
+    expect(resolveImageConfig({ ...a1111Conn, apiStyle: "venice" }, { BOBBINLOOM_IMAGE_TIMEOUT_MS: "45000" }).timeoutMs).toBe(45_000);
+    // …and a non-numeric env value falls back to the dialect default.
+    expect(resolveImageConfig(a1111Conn, { BOBBINLOOM_IMAGE_TIMEOUT_MS: "soon" }).timeoutMs).toBe(600_000);
+  });
+
+  it("carries the style-aware base URL and keeps the image retry default at 1", () => {
+    const resolved = resolveImageConfig(a1111Conn, {});
+    expect(resolved.baseUrl).toBe("http://127.0.0.1:7860");
+    expect(resolved.maxRetries).toBe(1);
+    expect(resolved.providerId).toBe("a1111_local");
+
+    const venice = resolveImageConfig({ ...a1111Conn, apiStyle: "venice", baseUrl: "https://api.venice.ai/api/v1" }, {});
+    expect(venice.baseUrl).toBe("https://api.venice.ai/api/v1");
+  });
+
+  it("leaves the TEXT connection resolution untouched — still 120s and still /v1-normalized", () => {
+    const textConn: ProviderConnection = {
+      id: "ds",
+      kind: "text",
+      label: "DeepSeek",
+      baseUrl: "https://api.deepseek.com",
+      model: "deepseek-chat",
+      temperature: 0.8,
+      maxTokens: 1400,
+      contextWindow: 65536
+    };
+    const resolved = resolveConnectionConfig(textConn, {});
+    expect(resolved.baseUrl).toBe("https://api.deepseek.com/v1");
+    expect(resolved.timeoutMs).toBe(120_000);
   });
 });
 
