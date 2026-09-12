@@ -29,7 +29,10 @@ type Call = { url: string; body: any };
 type HarnessOptions = {
   withText?: boolean;
   withImage?: boolean;
-  imageApiStyle?: "venice" | "openai";
+  imageApiStyle?: "venice" | "openai" | "a1111";
+  /** The image connection's base URL, when the dialect needs a realistic one
+   *  (an a1111 WebUI lives at its own root, not behind an OpenAI-style /v1). */
+  imageBaseUrl?: string;
   textContent?: string;
   imagePayload?: Record<string, unknown>;
   /** Snapshot overrides on the playthrough (e.g. promptCharacterLimit: 0). */
@@ -71,6 +74,10 @@ function harness(options: HarnessOptions = {}) {
     if (href.includes("/sdapi/v1/")) {
       const a1111 = options.a1111Payload ?? {};
       // A real WebUI's shapes: checkpoints carry `title`, samplers/schedulers `name`.
+      if (href.endsWith("/sdapi/v1/txt2img")) {
+        // `info` is a JSON STRING in the real API; the seed that was used lives there.
+        return new Response(JSON.stringify({ images: [PNG_B64], info: JSON.stringify({ seed: 12345 }) }), { status: 200 });
+      }
       if (href.endsWith("/sdapi/v1/sd-models")) {
         return new Response(
           JSON.stringify(a1111.checkpoints ?? [{ title: "dreamshaper_8.safetensors" }, { title: "sd_xl_base_1.0.safetensors" }]),
@@ -98,7 +105,7 @@ function harness(options: HarnessOptions = {}) {
   };
   const imageConn: ProviderConnectionDraft = {
     label: "Venice Images",
-    baseUrl: "https://api.venice.ai/api/v1",
+    baseUrl: options.imageBaseUrl ?? "https://api.venice.ai/api/v1",
     model: "image-model",
     kind: "image",
     apiStyle: options.imageApiStyle ?? "venice",
@@ -445,6 +452,48 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
     expect(res.json().error).toMatch(/no image prompt/i);
     expect(storedFiles(h.imagesDir)).toHaveLength(0);
     expect(getPlaythroughRecord(h.dataDir, h.playthroughId)!.messages[2].images).toBeUndefined();
+  });
+
+  it("sends an a1111 connection's long tag list uncut, up to the WebUI's own cap", async () => {
+    // A1111 publishes no prompt cap — it chunks at 75 CLIP tokens and only
+    // weights the tail less — so the route must NOT apply the OpenAI dialect's
+    // 1500-character trim. The preset's soft limit is off here, which leaves the
+    // dialect cap as the only ceiling.
+    const h = harness({
+      imageApiStyle: "a1111",
+      imageBaseUrl: "http://127.0.0.1:7860",
+      imageSettings: { promptCharacterLimit: 0 }
+    });
+    const long = "p".repeat(OPENAI_IMAGE_PROMPT_CAP + 500); // 2000: past the OpenAI cap
+    const res = await post(h.app, imageUrl(h), { promptOverride: long, negativeOverride: "n" });
+    expect(res.statusCode).toBe(200);
+
+    const sent = h.calls.find((c) => c.url === "http://127.0.0.1:7860/sdapi/v1/txt2img");
+    expect(sent).toBeDefined();
+    expect(sent!.body.prompt).toBe(long);
+    expect(res.json().promptUsed).toBe(long);
+
+    // The ceiling that IS applied is the a1111 one — the OpenAI cap is not it.
+    const overCap = harness({
+      imageApiStyle: "a1111",
+      imageBaseUrl: "http://127.0.0.1:7860",
+      imageSettings: { promptCharacterLimit: 0 }
+    });
+    const huge = await post(overCap.app, imageUrl(overCap), {
+      promptOverride: "x".repeat(A1111_IMAGE_PROMPT_CAP + 50),
+      negativeOverride: "n"
+    });
+    expect(huge.statusCode).toBe(200);
+    expect(huge.json().promptUsed.length).toBe(A1111_IMAGE_PROMPT_CAP);
+  });
+
+  it("still cuts the same text on a Venice connection at the preset's limit", async () => {
+    const h = harness({ imageSettings: { promptCharacterLimit: 1200 } });
+    const long = "p".repeat(2000);
+    const res = await post(h.app, imageUrl(h), { promptOverride: long, negativeOverride: "n" });
+    expect(res.statusCode).toBe(200);
+    expect((h.calls[0].body.prompt as string).length).toBe(1200);
+    expect(res.json().promptUsed.length).toBe(1200);
   });
 });
 

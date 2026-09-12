@@ -5,7 +5,7 @@ import { isStubSection, pickSections } from "../../engine/characterSections";
 import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../../engine/imageDefaults";
 import type { ChatMessage, ImageGenerationSettings, MessageImage, Playthrough, PromptPreset, ProviderConnection } from "../../schemas";
 import { ImageGenerationSettingsSchema } from "../../schemas";
-import { OPENAI_IMAGE_PROMPT_CAP, VENICE_IMAGE_PROMPT_CAP } from "../imageProvider";
+import { A1111_IMAGE_PROMPT_CAP, OPENAI_IMAGE_PROMPT_CAP, VENICE_IMAGE_PROMPT_CAP } from "../imageProvider";
 import { clampChars } from "../imageProvider/shared";
 import { clearImageProgress, publishImageProgress, readImageProgress } from "../imageProgress";
 import { imageFilePath, mimeForFile, saveImageBytes, sweepOrphansInDataDir, IMAGES_DIR } from "../imageStore";
@@ -34,10 +34,18 @@ const GenerateImageBody = z.object({
 
 const MessageParams = z.object({ id: z.string(), messageId: z.string() });
 
-/** The endpoint's hard prompt cap. Applied to the COMPOSED text so a long
- *  prefix or a long user edit can never 400 the image call. */
+/** The endpoint's hard prompt cap, per dialect. Applied to the COMPOSED text so
+ *  a long prefix or a long user edit can never 400 the image call.
+ *
+ *  a1111 is the odd one out: the WebUI publishes NO prompt cap — it chunks at 75
+ *  CLIP tokens and simply weights everything past the first chunk less — so
+ *  trimming here would silently delete the tail tags the user was explicitly
+ *  warned about in the review modal instead. `A1111_IMAGE_PROMPT_CAP` is a
+ *  runaway-string ceiling, not a trim. */
 function dialectPromptCap(conn: ProviderConnection): number {
-  return (conn.apiStyle ?? "openai") === "venice" ? VENICE_IMAGE_PROMPT_CAP : OPENAI_IMAGE_PROMPT_CAP;
+  const apiStyle = conn.apiStyle ?? "openai";
+  if (apiStyle === "a1111") return A1111_IMAGE_PROMPT_CAP;
+  return apiStyle === "venice" ? VENICE_IMAGE_PROMPT_CAP : OPENAI_IMAGE_PROMPT_CAP;
 }
 
 /** Clamp to BOTH the preset's soft limit and the dialect's hard cap, ignoring a
