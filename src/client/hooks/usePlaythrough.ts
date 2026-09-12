@@ -444,6 +444,12 @@ export function usePlaythrough() {
     // let a double-click start two generations.
     if (!playthrough || imageGeneratingId || imagePreviewMessageId || imageAbortRef.current) return;
     const reviewing = imagePromptPreview && !hasPromptOverrides(overrides);
+    // Accepting the review modal hands the prompt straight to the renderer, and
+    // the message itself already shows the progress bar and the Cancel control —
+    // so the modal has nothing left to say and closes now, rather than sitting
+    // there until the render finishes. (The modal's own close ABORTS a preview;
+    // this path must not touch the abort ref: the render is the point.)
+    if (hasPromptOverrides(overrides)) setImagePromptRequest(null);
     setCancelledNotice(null);
     setFailedNotice(null);
 
