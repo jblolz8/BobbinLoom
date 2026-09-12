@@ -1,9 +1,9 @@
-import type { ProviderConnection } from "../../schemas";
+import type { ProviderConnection, RegionDirection } from "../../schemas";
 import { authHeaders } from "../httpAuth";
 import type { ResolvedProviderConfig } from "../providerConfig";
 import { linkExternalAbort } from "../provider/openaiClient";
 import { A1111_API_MISSING_HINT } from "../providerRegistry";
-import { clampChars, parseSize, sniffMime } from "./shared";
+import { clampChars, detectForgeCouple, parseSize, sniffMime } from "./shared";
 import type { ImageGenerationRequest, ImageGenerationResult, ImageProvider } from "./types";
 
 /** A1111 publishes NO prompt cap — a prompt is chunked at 75 CLIP tokens and
@@ -104,6 +104,12 @@ function a1111HttpError(status: number, text: string): Error {
  *  - Cancel is a REQUEST (`POST /sdapi/v1/interrupt`), not a promise trick: an
  *    aborted fetch alone leaves the WebUI sampling and the GPU busy.
  *  - `variants` maps to `batch_size`, so one call renders the whole batch.
+ *  - When the WebUI has the Forge Couple extension AND the composed prompt
+ *    carries two or more ` | ` groups, the request also carries that
+ *    extension's 17-argument `alwayson_scripts` entry so each character gets
+ *    its own attention region. Both conditions are checked before the entry is
+ *    built: a key naming a script the WebUI does not have is an HTTP 422 on
+ *    EVERY render (`modules/api/api.py`).
  *
  *  Every optional parameter is omitted when the connection does not set it, so
  *  an absent field means "the WebUI's own default" — which is exactly what a
@@ -117,7 +123,8 @@ export class A1111Provider implements ImageProvider {
 
   async generateImage(req: ImageGenerationRequest): Promise<ImageGenerationResult> {
     const start = Date.now();
-    const body = buildTxt2ImgBody(req, this.connection);
+    const plan = await this.regionPlan(req);
+    const body = buildTxt2ImgBody(req, this.connection, plan);
 
     // Cancellation is a POST. `once` keeps it to exactly one interrupt per
     // signal, and the listener is removed on every exit path.
@@ -244,6 +251,34 @@ export class A1111Provider implements ImageProvider {
       cancel();
     }
   }
+
+  /** This request's regions, or null for "exactly today's behaviour".
+   *
+   *  The two LOCAL checks come first and cost nothing: a connection that
+   *  switched regions off, and a prompt with fewer than two groups (one
+   *  character in frame is the common case) both return before any request is
+   *  made. Only then is the extension consulted — and that answer is cached per
+   *  base URL, so even a multi-character scene pays for it once every few
+   *  minutes rather than once per render.
+   *
+   *  A missing, failing or unknown extension is `false` all the way down: the
+   *  caller keeps rendering, just without regions. */
+  private async regionPlan(req: ImageGenerationRequest): Promise<RegionPlan> {
+    if (this.connection.regionsEnabled === false) return null;
+    const groups = promptGroups(req.prompt);
+    if (groups.length < 2) return null;
+    const detection = await detectForgeCouple(this.config.baseUrl, {
+      fetchImpl: this.fetchImpl,
+      headers: authHeaders(this.config.apiKey, "a1111")
+    });
+    if (!detection.detected || !detection.title) return null;
+    return {
+      // The server's OWN spelling: A1111 resolves the key by exact name.
+      script: detection.title,
+      direction: this.connection.regionDirection ?? REGION_DIRECTION_DEFAULT,
+      groups
+    };
+  }
 }
 
 /** The `/sdapi/v1/txt2img` body. A1111 takes any SUBSET of its parameters and
@@ -253,10 +288,15 @@ export class A1111Provider implements ImageProvider {
  *  hardcoded 20 would silently ignore their tuning. */
 function buildTxt2ImgBody(
   req: ImageGenerationRequest,
-  conn: ProviderConnection
+  conn: ProviderConnection,
+  plan: RegionPlan = null
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {
-    prompt: clampChars(req.prompt, A1111_IMAGE_PROMPT_CAP),
+    // With regions engaged the prompt is REBUILT from the groups, so the
+    // separator we hand the extension is literally the one it will find — a
+    // prompt normalized one way and advertised another way would silently be a
+    // single region.
+    prompt: clampChars(plan ? plan.groups.join(FORGE_COUPLE_SEPARATOR) : req.prompt, A1111_IMAGE_PROMPT_CAP),
     seed: req.seed ?? -1, // A1111: -1 = random (0 is a real seed)
     n_iter: 1,
     batch_size: Math.min(Math.max(req.variants ?? 1, 1), 4)
@@ -278,5 +318,61 @@ function buildTxt2ImgBody(
     // Explicit, so "one request" never depends on a fork's default.
     body.override_settings_restore_afterwards = true;
   }
+  if (plan) body.alwayson_scripts = { [plan.script]: { args: forgeCoupleArgs(plan.direction) } };
   return body;
+}
+
+/** Forge Couple's group separator, spelled exactly as the extension's wiki
+ *  does. The string the composed prompt is split on IS the string passed as
+ *  `separator` — one constant, so the two can never drift apart. */
+export const FORGE_COUPLE_SEPARATOR = " | ";
+
+/** Which way the canvas splits when the connection names no direction. */
+export const REGION_DIRECTION_DEFAULT: RegionDirection = "Horizontal";
+
+/** The composed prompt's character groups: split on `|`, each trimmed, empties
+ *  dropped. A group that ends up empty is not a group (a stray separator must
+ *  not invent a character), and a single group means "no regions". */
+export function promptGroups(prompt: string): string[] {
+  return prompt
+    .split("|")
+    .map((group) => group.trim())
+    .filter(Boolean);
+}
+
+/** One request's regions: the extension's own title (which is also the
+ *  `alwayson_scripts` key), the direction, and the groups the prompt is
+ *  rebuilt from. `null` means "no regions" — the body is then byte-identical to
+ *  a render that never heard of the extension. */
+type RegionPlan = { script: string; direction: RegionDirection; groups: string[] } | null;
+
+/** Forge Couple's 17 arguments, in the extension's own order:
+ *  `enable, disable_hr, mode, separator, direction, background,
+ *  background_weight, mapping, common_parser, common_debug, def_in_prompt`,
+ *  then the six Tile-mode slots (left `null`: they are unused, and Tile mode is
+ *  not what this app asks for).
+ *
+ *  Basic mode splits the whole canvas in half — no coordinates — and the FIRST
+ *  group becomes the shared background line, which is where the preset's own
+ *  style prefix already lands. */
+export function forgeCoupleArgs(direction: RegionDirection): Array<boolean | string | number | null> {
+  return [
+    true, // enable
+    true, // disable_hr — the regions must hold for the high-res pass too
+    "Basic", // mode
+    FORGE_COUPLE_SEPARATOR, // separator
+    direction, // direction
+    "First Line", // background
+    0.5, // background_weight
+    null, // mapping (Advanced mode's boxes only)
+    "off", // common_parser
+    false, // common_debug
+    true, // def_in_prompt
+    null, // Tile mode …
+    null,
+    null,
+    null,
+    null,
+    null
+  ];
 }

@@ -909,3 +909,164 @@ describe("A1111Provider — interrupt", () => {
     await sleep(20);
   });
 });
+
+// ── Forge Couple regions (a1111 only) ───────────────────────────────────────
+
+describe("A1111Provider — Forge Couple regions", () => {
+  const SCRIPT_INFO_URL = `${A1111_BASE}/sdapi/v1/script-info`;
+
+  /** A WebUI where txt2img always answers and the extension is installed (or
+   *  not, or its route explodes). */
+  function stubWebUI(extension: "installed" | "absent" | "boom") {
+    return stubA1111((call) => {
+      if (call.url === A1111_TXT2IMG_URL) {
+        return jsonResponse({ images: [PNG_B64], info: JSON.stringify({ seed: 12345 }) });
+      }
+      if (call.url === SCRIPT_INFO_URL) {
+        if (extension === "boom") throw new Error("ECONNREFUSED");
+        return extension === "installed"
+          ? jsonResponse([{ name: "Forge Couple", is_alwayson: true }])
+          : jsonResponse({ detail: "Not Found" }, 404);
+      }
+      return jsonResponse({ detail: "Not Found" }, 404);
+    });
+  }
+
+  beforeEach(() => clearForgeCoupleCache());
+
+  it("sends the extension's 17 documented arguments when it is installed and the prompt has two groups", async () => {
+    const { fetchImpl, calls } = stubWebUI("installed");
+    const provider = new A1111Provider(a1111Config(), a1111Conn(), fetchImpl);
+
+    const result = await provider.generateImage({
+      prompt: "a rainy street at night | 1girl, red hair | 1boy, dark coat"
+    });
+
+    // Detection is a GET at the WebUI root, BEFORE the render it informs.
+    expect(calls.map((call) => call.url)).toEqual([SCRIPT_INFO_URL, A1111_TXT2IMG_URL]);
+    expect(calls[0].method).toBe("GET");
+
+    const body = calls[1].body!;
+    // On the record, exactly as the extension would receive it.
+    console.log(`[a1111] forge couple body ${JSON.stringify(body.alwayson_scripts)}`);
+
+    // The KEY is the server's own title, and the args are the documented 17,
+    // in the documented order — the upstream payload, entry for entry.
+    expect(body.alwayson_scripts).toEqual({
+      "Forge Couple": {
+        args: [
+          true, // enable
+          true, // disable_hr
+          "Basic", // mode
+          " | ", // separator
+          "Horizontal", // direction
+          "First Line", // background
+          0.5, // background_weight
+          null, // mapping
+          "off", // common_parser
+          false, // common_debug
+          true, // def_in_prompt
+          null, // Tile mode …
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      }
+    });
+    expect((body.alwayson_scripts as { "Forge Couple": { args: unknown[] } })["Forge Couple"].args).toHaveLength(17);
+
+    // The prompt stays one line and is regenerated from the groups, so the
+    // separator we advertise is exactly the one the prompt is split on.
+    expect(body.prompt).toBe("a rainy street at night | 1girl, red hair | 1boy, dark coat");
+    expect(result.images).toHaveLength(1);
+  });
+
+  it("normalizes the separator: the string we split on is the string we pass", async () => {
+    const { fetchImpl, calls } = stubWebUI("installed");
+    const provider = new A1111Provider(a1111Config(), a1111Conn({ regionDirection: "Vertical" }), fetchImpl);
+
+    await provider.generateImage({ prompt: "  scene  |1girl, red hair|   1boy, dark coat   " });
+
+    const body = calls[1].body!;
+    expect(body.prompt).toBe("scene | 1girl, red hair | 1boy, dark coat");
+    const args = (body.alwayson_scripts as { "Forge Couple": { args: unknown[] } })["Forge Couple"].args;
+    // The passed separator is the one the normalized prompt carries.
+    expect(args[3]).toBe(" | ");
+    expect((body.prompt as string).split(args[3] as string)).toHaveLength(3);
+    // …and the connection's direction goes through verbatim.
+    expect(args[4]).toBe("Vertical");
+  });
+
+  it("keys the payload with the spelling the SERVER reported, not the one we match on", async () => {
+    const { fetchImpl, calls } = stubA1111((call) =>
+      call.url === A1111_TXT2IMG_URL
+        ? jsonResponse({ images: [PNG_B64] })
+        : jsonResponse([{ name: "forge couple", is_alwayson: true }])
+    );
+    await new A1111Provider(a1111Config(), a1111Conn(), fetchImpl).generateImage({ prompt: "a|b" });
+
+    // A1111 resolves the key by exact name and 422s otherwise, so a title we
+    // invented would poison every render.
+    expect(Object.keys(calls[1].body!.alwayson_scripts as object)).toEqual(["forge couple"]);
+  });
+
+  it("renders normally with NO alwayson_scripts key when the extension is absent (the 422 trap)", async () => {
+    const { fetchImpl, calls } = stubWebUI("absent");
+    const provider = new A1111Provider(a1111Config(), a1111Conn(), fetchImpl);
+
+    const result = await provider.generateImage({ prompt: "scene|1girl|1boy" });
+
+    // A 200 render, with the prompt exactly as composed: an alwayson key for a
+    // script that is not installed is an HTTP 422 on EVERY local render.
+    expect(result.images).toHaveLength(1);
+    const body = calls[1].body!;
+    expect("alwayson_scripts" in body).toBe(false);
+    expect(body.prompt).toBe("scene|1girl|1boy");
+  });
+
+  it("treats a failed script-info as 'not installed' rather than failing the generation", async () => {
+    const { fetchImpl, calls } = stubWebUI("boom");
+    const provider = new A1111Provider(a1111Config(), a1111Conn(), fetchImpl);
+
+    const result = await provider.generateImage({ prompt: "scene|1girl|1boy" });
+
+    expect(result.images).toHaveLength(1);
+    expect("alwayson_scripts" in calls[1].body!).toBe(false);
+  });
+
+  it("sends nothing — and asks nothing — for a single group", async () => {
+    const { fetchImpl, calls } = stubWebUI("installed");
+    const provider = new A1111Provider(a1111Config(), a1111Conn(), fetchImpl);
+
+    await provider.generateImage({ prompt: "1girl, red hair, rainy street" });
+
+    // One character in frame: not even the (free, cached) detection is worth a
+    // round trip, and the body is byte-identical to a render without regions.
+    expect(calls.map((call) => call.url)).toEqual([A1111_TXT2IMG_URL]);
+    expect("alwayson_scripts" in calls[0].body!).toBe(false);
+  });
+
+  it("sends nothing — and asks nothing — when the connection turned regions off", async () => {
+    const { fetchImpl, calls } = stubWebUI("installed");
+    const provider = new A1111Provider(a1111Config(), a1111Conn({ regionsEnabled: false }), fetchImpl);
+
+    await provider.generateImage({ prompt: "scene|1girl|1boy" });
+
+    expect(calls.map((call) => call.url)).toEqual([A1111_TXT2IMG_URL]);
+    expect("alwayson_scripts" in calls[0].body!).toBe(false);
+  });
+
+  it("asks the WebUI once per TTL, not once per generation", async () => {
+    const { fetchImpl, calls } = stubWebUI("installed");
+    const provider = new A1111Provider(a1111Config(), a1111Conn(), fetchImpl);
+
+    await provider.generateImage({ prompt: "scene | 1girl | 1boy" });
+    await provider.generateImage({ prompt: "another scene | 2girls" });
+
+    expect(calls.filter((call) => call.url === SCRIPT_INFO_URL)).toHaveLength(1);
+    expect(calls.filter((call) => call.url === A1111_TXT2IMG_URL)).toHaveLength(2);
+  });
+});
+
