@@ -1,7 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ProviderConnection } from "../src/schemas";
 import type { ResolvedProviderConfig } from "../src/server/providerConfig";
 import { createImageProvider, UnconfiguredImageProvider } from "../src/server/imageProvider";
+import type {
+  ImageGenerationRequest,
+  ImageGenerationResult,
+  ImageProgress,
+  ImageProvider
+} from "../src/server/imageProvider";
 import { OPENAI_IMAGE_PROMPT_CAP, OpenAIImagesProvider } from "../src/server/imageProvider/openaiImagesProvider";
 import { VENICE_IMAGE_PROMPT_CAP, VeniceImageProvider } from "../src/server/imageProvider/veniceImageProvider";
 import { clampChars, dataUrlPayload, parseSize, sniffMime } from "../src/server/imageProvider/shared";
@@ -248,5 +254,27 @@ describe("createImageProvider", () => {
 
   it("UnconfiguredImageProvider throws the actionable message", async () => {
     await expect(new UnconfiguredImageProvider().generateImage()).rejects.toThrow(/No image provider configured/);
+  });
+});
+
+describe("ImageProgress", () => {
+  it("is carried on the request and read by a provider that can report it", async () => {
+    // Type-level contract: `onProgress` is OPTIONAL (a dialect that cannot
+    // report progress simply never calls it) and takes an `ImageProgress`.
+    const seen: ImageProgress[] = [];
+    const provider: ImageProvider = {
+      async generateImage(request: ImageGenerationRequest): Promise<ImageGenerationResult> {
+        request.onProgress?.({ progress: 0.5, step: 7, steps: 28, etaSeconds: 4.5 });
+        request.onProgress?.({ progress: 0.75 });
+        return { images: [], model: "stub", providerId: "stub", durationMs: 1, rawRequest: "{}", rawOutput: "{}" };
+      }
+    };
+
+    await provider.generateImage({ prompt: "a scene", onProgress: (progress) => seen.push(progress) });
+
+    expect(seen).toEqual([
+      { progress: 0.5, step: 7, steps: 28, etaSeconds: 4.5 },
+      { progress: 0.75 }
+    ]);
   });
 });

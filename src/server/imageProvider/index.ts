@@ -4,7 +4,7 @@ import type { ImageGenerationRequest, ImageGenerationResult, ImageProvider } fro
 import { OpenAIImagesProvider } from "./openaiImagesProvider";
 import { VeniceImageProvider } from "./veniceImageProvider";
 
-export type { ImageGenerationRequest, ImageGenerationResult, ImageProvider } from "./types";
+export type { ImageGenerationRequest, ImageGenerationResult, ImageProgress, ImageProvider } from "./types";
 export { OPENAI_IMAGE_PROMPT_CAP, OpenAIImagesProvider } from "./openaiImagesProvider";
 export { VENICE_IMAGE_PROMPT_CAP, VeniceImageProvider } from "./veniceImageProvider";
 export * from "./shared";

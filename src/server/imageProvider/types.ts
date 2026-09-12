@@ -3,6 +3,16 @@
  *  vitest-invisible) for a call that has nothing to do with turns — image
  *  generation never touches the turn counter, snapshots, or the token meter. */
 
+/** Emitted while a slow dialect renders. Best-effort by contract: a dialect
+ *  that cannot report progress simply never calls it. */
+export type ImageProgress = {
+  /** 0..1 across the whole request (a batch reports as one job). */
+  progress: number;
+  step?: number;
+  steps?: number;
+  etaSeconds?: number;
+};
+
 export type ImageGenerationRequest = {
   prompt: string;
   negativePrompt?: string;
@@ -16,6 +26,10 @@ export type ImageGenerationRequest = {
   stylePreset?: string;
   hideWatermark?: boolean;
   signal?: AbortSignal;
+  /** Called while a slow dialect renders. Best-effort: a dialect that cannot
+   *  report progress simply never calls it, and a throw here must never fail
+   *  the generation. */
+  onProgress?: (progress: ImageProgress) => void;
 };
 
 export type ImageGenerationResult = {
