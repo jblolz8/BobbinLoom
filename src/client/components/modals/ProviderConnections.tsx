@@ -103,6 +103,13 @@ const formFromConnection = (c: ProviderConnection): ProviderConnectionPayload =>
         hideWatermark: c.hideWatermark ?? false,
         variants: c.variants ?? 1,
         seed: c.seed,
+        // a1111 sampling controls travel with the row for the same reason: a
+        // save from the editor must never quietly erase the user's settings.
+        steps: c.steps,
+        cfgScale: c.cfgScale,
+        sampler: c.sampler,
+        scheduler: c.scheduler,
+        timeoutMs: c.timeoutMs,
         temperature: c.temperature, maxTokens: c.maxTokens, contextWindow: c.contextWindow
       }
     : {
@@ -136,6 +143,9 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
   // Capabilities for the models in `models`, parsed server-side from the SAME
   // listing response — the editor never fires a second models request for them.
   const [modelSpecs, setModelSpecs] = useState<ProviderModelCapabilities>({});
+  // a1111 only: the WebUI's own sampler/scheduler names, from the SAME probe
+  // response that filled `models` — the editor offers them as a datalist.
+  const [dialectOptions, setDialectOptions] = useState<ConnectionModelsResult["dialectOptions"]>({});
   const [modelsStatus, setModelsStatus] = useState<EditorStatus>(null);
   const [fetchingModels, setFetchingModels] = useState(false);
 
@@ -227,7 +237,7 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
 
   function openCreate() {
     setForm(emptyForm(kind));
-    setModels([]); setModelSpecs({}); setModelsStatus(null);
+    setModels([]); setModelSpecs({}); setDialectOptions({}); setModelsStatus(null);
     setShowKey(false);
     setStatus(null); setTest(null);
     setEditor({ mode: "create" });
@@ -235,7 +245,7 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
 
   function openEdit(c: ProviderConnection) {
     setForm(formFromConnection(c));
-    setModels([]); setModelSpecs({}); setModelsStatus(null);
+    setModels([]); setModelSpecs({}); setDialectOptions({}); setModelsStatus(null);
     setShowKey(false); setStatus(null); setTest(null);
     setEditor({ mode: "edit", connection: c });
     void loadModels({ id: c.id });
@@ -287,6 +297,8 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
       // predates the field, or a listing with no specs, simply yields {} —
       // the editor shows no block rather than an error.
       setModelSpecs(r.modelSpecs ?? {});
+      // …and so do the dialect's own lists (a1111's samplers/schedulers).
+      setDialectOptions(r.dialectOptions ?? {});
       // Image endpoints frequently expose no /models listing at all. Keep the
       // server's message (a 401 must stay visible) and add why it is not fatal.
       const imageHint = kind === "image"
@@ -298,6 +310,7 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
     } catch (err) {
       setModels([]);
       setModelSpecs({});
+      setDialectOptions({});
       setModelsStatus({ kind: "err", text: err instanceof Error ? err.message : String(err) });
     } finally {
       setFetchingModels(false);
@@ -310,7 +323,11 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
     return {
       ...current,
       aspectRatio: current.aspectRatio?.trim() ? current.aspectRatio.trim() : undefined,
-      stylePreset: current.stylePreset?.trim() ? current.stylePreset.trim() : undefined
+      stylePreset: current.stylePreset?.trim() ? current.stylePreset.trim() : undefined,
+      // The a1111 sampler/scheduler are free text: an emptied field means "send
+      // nothing and let the WebUI default apply", not an empty string.
+      sampler: current.sampler?.trim() ? current.sampler.trim() : undefined,
+      scheduler: current.scheduler?.trim() ? current.scheduler.trim() : undefined
     };
   }
 
@@ -442,17 +459,28 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
         <Badge
           className="conn-tag style-tag"
           leftIcon={<Icon name="Palette" size={13} />}
-          title={style === "venice" ? "Venice endpoint (/image/generate)" : "OpenAI-compatible endpoint (/images/generations)"}
+          title={
+            style === "venice"
+              ? "Venice endpoint (/image/generate)"
+              : style === "a1111"
+                ? "Local AUTOMATIC1111 / Forge WebUI (/sdapi/v1)"
+                : "OpenAI-compatible endpoint (/images/generations)"
+          }
         >
-          {style === "venice" ? "Venice" : "OpenAI"}
+          {style === "venice" ? "Venice" : style === "a1111" ? "Automatic1111" : "OpenAI"}
         </Badge>
-        <Badge
-          className={`conn-tag ${c.safeMode ? "safe-on" : "safe-off"}`}
-          leftIcon={c.safeMode ? <Icon name="ShieldAlert" size={13} /> : <Icon name="ShieldOff" size={13} />}
-          title={c.safeMode ? "Safe mode on — the provider blurs adult content" : "Safe mode off — adult content is not blurred"}
-        >
-          {c.safeMode ? "Safe mode on" : "Safe mode off"}
-        </Badge>
+        {/* Safe mode is a provider pass-through with no meaning to a local
+            WebUI, so its badge is not shown for a1111 rather than reading
+            "Safe mode off" on a connection that never had the option. */}
+        {style !== "a1111" && (
+          <Badge
+            className={`conn-tag ${c.safeMode ? "safe-on" : "safe-off"}`}
+            leftIcon={c.safeMode ? <Icon name="ShieldAlert" size={13} /> : <Icon name="ShieldOff" size={13} />}
+            title={c.safeMode ? "Safe mode on — the provider blurs adult content" : "Safe mode off — adult content is not blurred"}
+          >
+            {c.safeMode ? "Safe mode on" : "Safe mode off"}
+          </Badge>
+        )}
         {promptWriterMissing && (
           <Badge
             className="conn-tag warn-tag"
@@ -506,6 +534,7 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
           apiKey={apiKeyProps}
           models={models}
           modelSpecs={modelSpecs}
+          dialectOptions={dialectOptions}
           modelsStatus={modelsStatus}
           fetchingModels={fetchingModels}
           onFetchModels={() => void loadModels(probeTarget())}

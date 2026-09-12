@@ -10,8 +10,28 @@ type EditorStatus = { kind: "ok" | "err"; text: string } | null;
 
 const API_STYLE_OPTIONS: Array<{ value: ImageApiStyle; label: string }> = [
   { value: "openai", label: "OpenAI-compatible" },
-  { value: "venice", label: "Venice" }
+  { value: "venice", label: "Venice" },
+  { value: "a1111", label: "Automatic1111 / Forge (local)" }
 ];
+
+/** A numeric field's raw text as a number, or `undefined` when the field is
+ *  empty or not a number — which is how "send nothing and let the server
+ *  default apply" is expressed. Never 0: an empty field must not become a real
+ *  value (that is what the negative branch on Step/Range does upstream). */
+function optionalNumber(raw: string): number | undefined {
+  const text = raw.trim();
+  if (!text) return undefined;
+  const value = Number(text);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+/** The timeout field in SECONDS, stored as `timeoutMs`. Anything below a
+ *  second is meaningless (and below the schema's 1000 ms floor), so it clamps
+ *  to 1 s rather than round-tripping to an invalid stored value. */
+function timeoutSecondsToMs(raw: string): number | undefined {
+  const seconds = optionalNumber(raw);
+  return seconds === undefined ? undefined : Math.max(1, Math.round(seconds)) * 1000;
+}
 
 /** The Style Preset select's fetched list plus its status line. One state so the
  *  two can never disagree about whether the list is known. */
@@ -91,6 +111,33 @@ function capabilityLines(caps: ModelCapabilities | undefined): string[] {
   return lines;
 }
 
+/**
+ * The a1111 counterpart of `capabilityLines`: the WebUI publishes no
+ * `model_spec.constraints`, so there is nothing per-model to report. What it
+ * DOES tell us — through the same probe — is how many checkpoints it lists and
+ * how many samplers/schedulers it accepts, and that is what this block shows
+ * instead of an empty (and therefore invisible) OpenAI block.
+ */
+function dialectCapabilityLines(counts: {
+  checkpoints: number;
+  samplers: number;
+  schedulers: number;
+}): string[] {
+  const lines: string[] = [];
+  lines.push(
+    counts.checkpoints > 0
+      ? `${counts.checkpoints} checkpoint${counts.checkpoints === 1 ? "" : "s"} listed by the WebUI.`
+      : "No checkpoints listed yet — Fetch models reads the WebUI's own list."
+  );
+  lines.push(
+    counts.samplers > 0 || counts.schedulers > 0
+      ? `${counts.samplers} samplers and ${counts.schedulers} schedulers listed by the WebUI — suggestions only, so any name the build accepts may be typed.`
+      : "The WebUI did not list its samplers/schedulers (an older build has no such route) — the names are free text, so type exactly what your build accepts."
+  );
+  lines.push("Steps, CFG scale, sampler and scheduler are sent per request; an empty field is not sent at all, so the WebUI's own default applies.");
+  return lines;
+}
+
 export type ImageConnectionEditorProps = {
   mode: "create" | "edit";
   editing: ProviderConnection | null;
@@ -101,6 +148,10 @@ export type ImageConnectionEditorProps = {
   /** Per-model capabilities from the provider's own listing, keyed by model id.
    *  Read-only; a model the listing did not describe simply has no entry. */
   modelSpecs: ProviderModelCapabilities;
+  /** a1111 only: the WebUI's own sampler and scheduler names, from the same
+   *  probe that filled `models`. Offered as `datalist` suggestions — the field
+   *  stays free text, because a fork may ship names we were never told. */
+  dialectOptions?: { samplers?: string[]; schedulers?: string[] };
   modelsStatus: EditorStatus;
   fetchingModels: boolean;
   onFetchModels: () => void;
@@ -131,6 +182,7 @@ export function ImageConnectionEditor({
   apiKey,
   models,
   modelSpecs,
+  dialectOptions,
   modelsStatus,
   fetchingModels,
   onFetchModels,
@@ -166,7 +218,10 @@ export function ImageConnectionEditor({
   // that: its values are title-cased (`Anime`) and the field is case-sensitive.
   // The 400 lands after the text model has already written (and been paid for)
   // the prompt, which is why the list is now fetched and the field is a select.
-  const venice = (form.apiStyle ?? "openai") === "venice";
+  const apiStyle = form.apiStyle ?? "openai";
+  const venice = apiStyle === "venice";
+  // The local WebUI dialect: its own fields, none of Venice's pass-throughs.
+  const a1111 = apiStyle === "a1111";
   const styleValue = form.stylePreset ?? "";
   // Seeded from the session cache so a re-opened connection paints its stored
   // value as a real option on the FIRST frame — no re-fetch, nothing to flash.
@@ -266,7 +321,17 @@ export function ImageConnectionEditor({
   // What the provider's own listing says about the SELECTED model. Read-only,
   // and absent for a model the listing did not describe: the block then simply
   // does not render, rather than reporting an error for a convenience.
-  const capsLines = capabilityLines(form.model ? modelSpecs[form.model] : undefined);
+  //
+  // a1111 takes the dialect branch: its WebUI publishes no per-model
+  // constraints at all, so the honest thing to show is the counts it DID give
+  // us (checkpoints, samplers, schedulers) rather than an empty block.
+  const capsLines = a1111
+    ? dialectCapabilityLines({
+        checkpoints: models.length,
+        samplers: dialectOptions?.samplers?.length ?? 0,
+        schedulers: dialectOptions?.schedulers?.length ?? 0
+      })
+    : capabilityLines(form.model ? modelSpecs[form.model] : undefined);
 
   return (
     <form className="conn-editor conn-editor-card" onSubmit={onSubmit}>
@@ -309,10 +374,10 @@ export function ImageConnectionEditor({
         <div className="conn-fields-group">
           <div>
             <TextInput
-              label="Model ID"
+              label={a1111 ? "Checkpoint" : "Model ID"}
               value={form.model}
               onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
-              placeholder="e.g. flux-dev"
+              placeholder={a1111 ? "e.g. sd_xl_base_1.0.safetensors" : "e.g. flux-dev"}
               leftIcon={<Icon name="Images" size={14} />}
               rightElement={
                 <Button
@@ -330,7 +395,11 @@ export function ImageConnectionEditor({
             />
             {models.length > 0 && (
               <div className="base-form-field form-field" style={{ marginTop: "0.5rem" }}>
-                <span className="field-label-text">Select from Fetched Models ({models.length} available)</span>
+                <span className="field-label-text">
+                  {a1111
+                    ? `Select from Fetched Checkpoints (${models.length} available)`
+                    : `Select from Fetched Models (${models.length} available)`}
+                </span>
                 <SimpleSelect
                   size="sm"
                   variant="filled"
@@ -359,11 +428,17 @@ export function ImageConnectionEditor({
                 listing, or when the probe failed. */}
             {capsLines.length > 0 && (
               <div className="base-form-field form-field" style={{ marginTop: "0.5rem" }}>
-                <span className="field-label-text">What “{form.model}” accepts</span>
+                <span className="field-label-text">
+                  {a1111 ? "What this WebUI offers" : `What “${form.model}” accepts`}
+                </span>
                 {capsLines.map((line) => (
                   <p key={line} className="conn-field-helper">{line}</p>
                 ))}
-                <p className="conn-field-helper">Read-only — from the provider's own model listing.</p>
+                <p className="conn-field-helper">
+                  {a1111
+                    ? "Read-only — from the WebUI's own /sdapi/v1 listing."
+                    : "Read-only — from the provider's own model listing."}
+                </p>
               </div>
             )}
           </div>
@@ -389,7 +464,9 @@ export function ImageConnectionEditor({
                 aria-label="Image API style"
               />
               <p className="conn-field-helper">
-                Venice sends negative prompts, seeds and style presets; OpenAI-compatible sends none of them.
+                {a1111
+                  ? "Talks to a local AUTOMATIC1111 / Forge WebUI over its own /sdapi/v1 API — the WebUI must be started with --api. Steps, CFG scale, sampler and scheduler go with every request."
+                  : "Venice sends negative prompts, seeds and style presets; OpenAI-compatible sends none of them."}
               </p>
             </div>
 
@@ -404,20 +481,33 @@ export function ImageConnectionEditor({
                 options={sizeOptions.map((s) => ({ value: s, label: s }))}
                 aria-label="Image size"
               />
-              <p className="conn-field-helper">Sent as width/height. "auto" lets the provider choose.</p>
+              <p className="conn-field-helper">
+                {a1111
+                  ? 'Sent as width/height to the WebUI. "auto" sends no size at all, so the WebUI\'s own default applies.'
+                  : 'Sent as width/height. "auto" lets the provider choose.'}
+              </p>
             </div>
           </div>
 
-          <TextInput
-            label="Aspect Ratio"
-            value={form.aspectRatio ?? ""}
-            onChange={(e) => setForm((f) => ({ ...f, aspectRatio: e.target.value }))}
-            placeholder="e.g. 3:2"
-            leftIcon={<Icon name="Ratio" size={14} />}
-            helperText='Used instead of Image Size for models that reject width/height (the Venice qwen-image family). Leave empty to send the size.'
-          />
+          {/* Aspect Ratio is a Venice sizing parameter (the qwen-image family
+              rejects width/height) and means nothing to the WebUI, so the field
+              is hidden rather than shown-broken for a1111. */}
+          {!a1111 && (
+            <TextInput
+              label="Aspect Ratio"
+              value={form.aspectRatio ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, aspectRatio: e.target.value }))}
+              placeholder="e.g. 3:2"
+              leftIcon={<Icon name="Ratio" size={14} />}
+              helperText='Used instead of Image Size for models that reject width/height (the Venice qwen-image family). Leave empty to send the size.'
+            />
+          )}
 
           <div className="conn-fields-row-2">
+            {/* Style Preset is Venice's `style_preset`; the WebUI has no such
+                parameter, so the whole group is hidden for a1111 rather than
+                shown as a control that would send nothing. */}
+            {!a1111 && (
             <div className="conn-field-group">
               <span className="field-label-text">Style Preset</span>
               {venice ? (
@@ -484,9 +574,10 @@ export function ImageConnectionEditor({
                 </p>
               )}
             </div>
+            )}
 
             <div className="conn-field-group">
-              <span className="field-label-text">Variants</span>
+              <span className="field-label-text">{a1111 ? "Variants (batch size)" : "Variants"}</span>
               <SimpleSelect
                 size="sm"
                 variant="filled"
@@ -496,7 +587,11 @@ export function ImageConnectionEditor({
                 options={VARIANT_OPTIONS.map((v) => ({ value: v, label: v }))}
                 aria-label="Image variants"
               />
-              <p className="conn-field-helper">Venice only. Keep at 1 unless you want several results per request.</p>
+              <p className="conn-field-helper">
+                {a1111
+                  ? "Sent as batch_size: one request renders the whole batch, so 2 takes about twice as long. Each image comes back as its own result."
+                  : "Venice only. Keep at 1 unless you want several results per request."}
+              </p>
             </div>
           </div>
 
@@ -517,31 +612,135 @@ export function ImageConnectionEditor({
               }}
               placeholder="Random"
               leftIcon={<Icon name="Dices" size={14} />}
-              helperText="Leave empty for a random seed. Set a number to make re-rolls comparable — the same seed and prompt reproduce the same image. A seed is only honoured by providers that support one: Venice does, the OpenAI-compatible dialect does not."
+              helperText={
+                a1111
+                  ? "Leave empty for a random seed: blank is sent as -1, which this dialect reads as random. 0 is a real seed here (unlike Venice), so typing 0 pins the first image."
+                  : "Leave empty for a random seed. Set a number to make re-rolls comparable — the same seed and prompt reproduce the same image. A seed is only honoured by providers that support one: Venice does, the OpenAI-compatible dialect does not."
+              }
             />
           </div>
 
           {/* Grouped the way the Chat tab groups its own toggle rows, so the two
-              read as a set rather than two loose boxes in the card. */}
-          <div className="conn-toggle-group">
-            <SwitchRow
-              icon="Shield"
-              title="Safe Mode"
-              description="Ask the provider to blur adult content. Leave off."
-              checked={form.safeMode ?? false}
-              onChange={(e) => setForm((f) => ({ ...f, safeMode: e.target.checked }))}
-            />
+              read as a set rather than two loose boxes in the card. Both are
+              Venice-side pass-throughs (`safe_mode`, `hide_watermark`), so
+              neither is offered for a1111 — the WebUI has no equivalent. */}
+          {!a1111 && (
+            <div className="conn-toggle-group">
+              <SwitchRow
+                icon="Shield"
+                title="Safe Mode"
+                description="Ask the provider to blur adult content. Leave off."
+                checked={form.safeMode ?? false}
+                onChange={(e) => setForm((f) => ({ ...f, safeMode: e.target.checked }))}
+              />
 
-            <SwitchRow
-              icon="EyeOff"
-              title="Hide Watermark"
-              description="Venice only. Request results without the Venice watermark."
-              checked={form.hideWatermark ?? false}
-              onChange={(e) => setForm((f) => ({ ...f, hideWatermark: e.target.checked }))}
-            />
-          </div>
+              <SwitchRow
+                icon="EyeOff"
+                title="Hide Watermark"
+                description="Venice only. Request results without the Venice watermark."
+                checked={form.hideWatermark ?? false}
+                onChange={(e) => setForm((f) => ({ ...f, hideWatermark: e.target.checked }))}
+              />
+            </div>
+          )}
         </div>
       </div>
+
+      {/* a1111 sampling controls. Every field is optional on purpose: an empty
+          one is not sent at all, so the WebUI's own default applies — which is
+          exactly what a user who already tuned the WebUI expects. */}
+      {a1111 && (
+        <div className="conn-section">
+          <h5 className="form-section-title conn-section-title">
+            <Icon name="SlidersHorizontal" size={14} />
+            <span>Sampling</span>
+          </h5>
+          <div className="conn-fields-group">
+            <div className="conn-fields-row-2">
+              <TextInput
+                label="Steps"
+                type="number"
+                min={1}
+                max={150}
+                step={1}
+                value={form.steps === undefined || form.steps === null ? "" : String(form.steps)}
+                onChange={(e) => setForm((f) => ({ ...f, steps: optionalNumber(e.target.value) }))}
+                placeholder="WebUI default"
+                leftIcon={<Icon name="ListChecks" size={14} />}
+                helperText="1–150 sampling steps. Empty sends no steps."
+              />
+
+              <TextInput
+                label="CFG scale"
+                type="number"
+                min={0}
+                max={30}
+                step={0.5}
+                value={form.cfgScale === undefined || form.cfgScale === null ? "" : String(form.cfgScale)}
+                onChange={(e) => setForm((f) => ({ ...f, cfgScale: optionalNumber(e.target.value) }))}
+                placeholder="WebUI default"
+                leftIcon={<Icon name="Gauge" size={14} />}
+                helperText="How strictly the prompt is followed (0–30). Empty sends no value."
+              />
+            </div>
+
+            <TextInput
+              label="Sampler"
+              value={form.sampler ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, sampler: e.target.value }))}
+              placeholder={
+                dialectOptions?.samplers?.length
+                  ? `e.g. ${dialectOptions.samplers[0]}`
+                  : "e.g. DPM++ 2M Karras"
+              }
+              list="a1111-sampler-options"
+              leftIcon={<Icon name="SlidersHorizontal" size={14} />}
+              helperText="Sent as sampler_name. The suggestions below are the names this WebUI reported — a fork's own names may be typed freely."
+            />
+            <datalist id="a1111-sampler-options">
+              {(dialectOptions?.samplers ?? []).map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+
+            <TextInput
+              label="Scheduler"
+              value={form.scheduler ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, scheduler: e.target.value }))}
+              placeholder={dialectOptions?.schedulers?.length ? `e.g. ${dialectOptions.schedulers[0]}` : "e.g. Karras"}
+              list="a1111-scheduler-options"
+              leftIcon={<Icon name="Aperture" size={14} />}
+              helperText="Sent as scheduler. Empty sends none, so the WebUI's own default applies."
+            />
+            <datalist id="a1111-scheduler-options">
+              {(dialectOptions?.schedulers ?? []).map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+
+            <TextInput
+              label="Timeout (seconds)"
+              type="number"
+              min={1}
+              step={1}
+              value={
+                form.timeoutMs === undefined || form.timeoutMs === null
+                  ? ""
+                  : String(Math.round(form.timeoutMs / 1000))
+              }
+              onChange={(e) => setForm((f) => ({ ...f, timeoutMs: timeoutSecondsToMs(e.target.value) }))}
+              placeholder="600"
+              leftIcon={<Icon name="Timer" size={14} />}
+              helperText="How long one image may take (stored in milliseconds). Empty uses the dialect default — 10 minutes for Automatic1111, since a local render easily outlasts the global 180 s."
+            />
+
+            <p className="conn-field-helper">
+              Nothing here is written to the WebUI's settings: the checkpoint travels as a per-request override that
+              the WebUI restores immediately afterwards, and the sampling values live on the request itself.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="conn-section">
         <h5 className="form-section-title conn-section-title">
