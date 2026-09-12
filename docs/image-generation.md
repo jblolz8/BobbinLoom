@@ -71,7 +71,7 @@ Image connections are plain entries in the provider registry (`data/providers.js
 {
   "model": "flux-dev",
   "prompt": "anime style rain-slick cobblestones, a lone figure under a flickering neon sign, wide shot, night",
-  "negative_prompt": "lowres, bad anatomy, bad hands, extra fingers, extra limbs, deformed, poorly drawn face, bad proportions, watermark, signature, text, jpeg artifacts",
+  "negative_prompt": "lowres, worst quality, low quality, normal quality, blurry, out of focus, jpeg artifacts, bad anatomy, deformed, bad proportions, poorly drawn face, long neck, malformed limbs, missing limbs, extra limbs, extra arms, extra legs, bad hands, extra fingers, extra digits, fewer digits, missing fingers, fused fingers, mutated hands, duplicate, text, dialogue, speech bubble, thought bubble, caption, subtitles, comic, comic panel, panel layout, multiple views, 4koma, storyboard, split screen, collage, border, watermark, signature, username, artist name, logo, web address, patreon username, twitter username, stamp, photorealistic, realistic, 3d, cgi",
   "format": "png",
   "return_binary": false,
   "variants": 1,
@@ -86,7 +86,7 @@ Image connections are plain entries in the provider registry (`data/providers.js
 | Body field | Source | Notes |
 |---|---|---|
 | `prompt` | composed prompt | Clamped to **7500** characters (`VENICE_IMAGE_PROMPT_CAP`). |
-| `negative_prompt` | composed negative | Only sent when non-empty; also clamped to 7500. |
+| `negative_prompt` | composed negative | Only sent when non-empty; clamped to the dialect cap (**7500**) alone — the preset's `promptCharacterLimit` does not apply to the negative (see *The negative has its own ceiling*). |
 | `format` | constant `"png"` | |
 | `return_binary` | constant `false` | Base64 in JSON, not raw bytes. |
 | `variants` | `req.variants ?? connection.variants ?? 1` | |
@@ -129,11 +129,11 @@ The generate body is `z.object({ imageProviderId?, promptOverride?, negativeOver
   "playthrough": { "...": "the updated record" },
   "image": { "file": "<sha256>.png", "prompt": "…", "negativePrompt": "…", "providerId": "…", "model": "…", "seed": 1234, "durationMs": 8123, "request": "{\"model\":\"…\",\"prompt\":\"…\"}", "promptRequest": "{\"model\":\"…\",\"max_tokens\":12000,\"response_format\":{\"type\":\"json_object\"}}", "promptResponse": "{\"choices\":[{\"message\":{\"content\":\"…\"}}]}", "createdAt": "2026-09-12T00:00:00.000Z" },
   "promptUsed": "anime style …",
-  "negativeUsed": "lowres, bad anatomy, …"
+  "negativeUsed": "lowres, worst quality, …"
 }
 ```
 
-`promptUsed` / `negativeUsed` are exactly the strings the route handed to the image provider — already prefix-composed, already clamped to the preset's soft limit **and** the dialect's hard cap. `image` is the first variant when `variants > 1`; the rest are appended to the message in the same order.
+`promptUsed` / `negativeUsed` are exactly the strings the route handed to the image provider — already prefix-composed, and already clamped: the **prompt** to the preset's soft limit **and** the dialect's hard cap, the **negative** to the dialect's hard cap alone. `image` is the first variant when `variants > 1`; the rest are appended to the message in the same order.
 
 ### Preview ON — the default path
 
@@ -153,7 +153,7 @@ One request: `POST …/image` with no overrides. The server runs the prompt call
 
 | `promptOverride` | `negativeOverride` | What runs |
 |---|---|---|
-| present | present | **Text call skipped.** Both sides are the overrides (clamped). This is the reviewed-prompt path. |
+| present | present | **Text call skipped.** Both sides are the overrides: the prompt is clamped to the preset's limit and the dialect cap, the negative to the dialect cap alone. This is the reviewed-prompt path. |
 | present | absent | Text call runs; only the negative side comes from the model. The prompt side is the override. |
 | absent | present | Text call runs; only the prompt side comes from the model. The negative side is the override. |
 | absent | absent | Both sides come from the text model. |
@@ -228,18 +228,31 @@ The call also FLAGS three answers it still returns (never blocks — the review 
 |---|---|
 | The prose fallback was used **and** the text opens like a refusal | It opened with `"i can't"` (or `i cannot`, `i'm unable`, `i am unable`, `i won't`, `i will not`, `as an ai`, `sorry, but`, `i must decline`, `can't help with`, `cannot help with`, `cannot assist`) instead of describing an image, and that text is now the prompt. Matched case-insensitively against the **first 200 characters** only, so refusal-shaped words inside a real prompt are not misread. Typographic apostrophes (`I can’t`) match the same patterns. |
 | The JSON parsed as an object but carried **no string `prompt`** | The raw JSON blob would become the image prompt, so the warning names the keys it did find. A lone `negative_prompt` counts as a wrong shape. |
-| The **composed prompt was cut** at the character limit — in the prompt side call (`promptCharacterLimit`) or by the dry-run route's `min(preset limit, dialect cap)` clamp | *"The composed prompt is longer than the N-character limit, so it was cut at the end — where the action and physical-state tags sit. Move the essential tags earlier in the list, or raise the character limit on the Image Generation tab."* The cut is silent otherwise, and the END of a tag list is exactly where the action and physical-state tags live. The clamped text is still what the modal shows and what the image call sends. |
+| The **composed prompt was cut** at the character limit — in the prompt side call (`promptCharacterLimit`) or by the dry-run route's `min(preset limit, dialect cap)` clamp | *"The composed prompt is longer than the N-character limit, so it was cut at the end — where the action and physical-state tags sit. Move the essential tags earlier in the list, or raise the character limit on the Image Generation tab."* The cut is silent otherwise, and the END of a tag list is exactly where the action and physical-state tags live. The clamped text is still what the modal shows and what the image call sends. Tied to the **positive** only: the negative is a fixed shipped list with its own ceiling (the dialect cap), and a negative that somehow exceeded that cap is cut silently. |
 
 A clean JSON answer, a fenced JSON block and ordinary prose produce no warnings. `ImagePromptOutput.warnings` carries them; the dry-run route returns them and the review modal shows them above the editable prompt. The truncation warning is added by the **dry-run route only** — the generate path has no UI surface, so the reviewed text it sends is unaffected (`promptUsed` / `negativeUsed` are byte-identical either way).
 
-The two sides are then composed and clamped:
+The two sides are then composed and clamped — by **different** budgets:
 
 ```
-prompt         = clamp(composePrompt(positivePrefix, modelPrompt),   limit)
-negativePrompt = clamp(composePrompt(negativePrefix, modelNegative), limit)
+prompt         = clamp(composePrompt(positivePrefix, modelPrompt),   min(preset.promptCharacterLimit, dialectCap))
+negativePrompt = clamp(composePrompt(negativePrefix, modelNegative), dialectCap)
 ```
 
-`composePrompt` joins with a single space and drops an empty prefix so the composed text never starts with a stray space. `limit` is `min(preset.promptCharacterLimit, dialectCap)`; a preset limit of **0 reads as unlimited** (the schema allows it) and is ignored as a limit. The prompt side call also clamps to `promptCharacterLimit` on its own (that is what makes the returned `prompt` "already composed and clamped"), which is why the truncation signal is reported as `ImagePromptOutput.promptTruncated` and not inferred from a length comparison in one place.
+`composePrompt` joins with a single space and drops an empty prefix so the composed text never starts with a stray space. For the **prompt**, the limit is `min(preset.promptCharacterLimit, dialectCap)`; a preset limit of **0 reads as unlimited** (the schema allows it) and is ignored as a limit. The prompt side call also clamps to `promptCharacterLimit` on its own (that is what makes the returned `prompt` "already composed and clamped"), which is why the truncation signal is reported as `ImagePromptOutput.promptTruncated` and not inferred from a length comparison in one place.
+
+#### The negative has its own ceiling
+
+The two texts are unrelated budgets, so they no longer share one:
+
+- The **positive** is a model-written tag list that the preset sizes. It keeps `promptCharacterLimit` (1200 shipped), clamped against the dialect's hard cap — that is what the modal's character counter shows, and what the truncation warning is about.
+- The **negative** is a fixed list BobbinLoom **ships** (below), plus — rarely — the model's volunteered extra. Nothing about it is scene-shaped, so the preset's limit must not cut it: it is clamped by the **dialect cap alone** (`VENICE_IMAGE_PROMPT_CAP` = 7500, `OPENAI_IMAGE_PROMPT_CAP` = 1500), read from the same `dialectPromptCap` helper the prompt's clamp uses. One cap source, not two.
+
+In practice that makes the shipped negative unclampable: the Default list is **649 characters** (689 with the NSFW censorship suffix), comfortably inside both caps. A ceiling sized for a 40–70-tag model answer would silently delete the *end* of the list — which is where the clauses that fight photoreal drift and censoring sit (`photorealistic, realistic, 3d, cgi`, and the NSFW `censored, mosaic censoring, bar censor`) — and nothing is gained by cutting a curated list.
+
+The change lives in the route, because the route is where the dialect is known: the dry-run `/api/…/image/prompt` route, the generate route's compose path, and **both** override branches (the both-overrides reviewed path and the one-override path) all clamp the negative through `clampNegative`. A negative that somehow exceeded the dialect cap is still cut there, silently — the truncation warning names the prompt's action/state tags and stays tied to the positive. And note again that the **OpenAI-compatible dialect sends no negative prompt at all** (line 40): its 1500-character cap governs the prompt only, and a negative is only ever sent on the Venice-native dialect.
+
+One seam remains worth knowing: the prompt-writing side call composes a model-volunteered `negative_prompt` under `promptCharacterLimit` on its own, because it holds no connection and therefore no dialect to ask. Models almost never volunteer one now that the contract asks for `prompt` alone, and an override (either branch) never passes through that call — the shipped list, which is the negative in practice, reaches the provider whole.
 
 ---
 
@@ -297,7 +310,7 @@ The image-prompt config is **not a prompt module** — the module set stays turn
 |---|---|---|
 | `instruction` | the shipped instruction | The `system` message for the prompt call. |
 | `positivePrefix` | `""` (shipped presets: `anime style`) | Prepended to the model's prompt. |
-| `negativePrefix` | `""` (shipped presets: the tag list below) | Prepended to the model's negative prompt. |
+| `negativePrefix` | `""` (shipped presets: the 53-tag list below) | Prepended to the model's negative prompt. Clamped by the **dialect cap alone** — `promptCharacterLimit` does not apply to this side. |
 | `promptCharacterLimit` | `900` (schema default for a *partial* block; the shipped fallback `DEFAULT_IMAGE_GENERATION_SETTINGS` and all three shipped/user presets use `1200`) | Soft limit, clamped against the dialect's hard cap. `0` = unlimited. |
 | `includeState` | `true` | Send `CURRENT STATE` to the prompt writer. |
 | `includeCast` | `true` | Send `PRESENT CHARACTERS` to the prompt writer. |
@@ -323,10 +336,14 @@ A playthrough **snapshots** the block when its preset is applied — the same wa
 | | Default | Default (NSFW) |
 |---|---|---|
 | `positivePrefix` | `anime style` | `anime style` |
-| `negativePrefix` | `lowres, bad anatomy, bad hands, extra fingers, extra limbs, deformed, poorly drawn face, bad proportions, watermark, signature, text, jpeg artifacts` | …the same list, plus `, censored, mosaic censoring, bar censor` |
+| `negativePrefix` | `lowres, worst quality, low quality, normal quality, blurry, out of focus, jpeg artifacts, bad anatomy, deformed, bad proportions, poorly drawn face, long neck, malformed limbs, missing limbs, extra limbs, extra arms, extra legs, bad hands, extra fingers, extra digits, fewer digits, missing fingers, fused fingers, mutated hands, duplicate, text, dialogue, speech bubble, thought bubble, caption, subtitles, comic, comic panel, panel layout, multiple views, 4koma, storyboard, split screen, collage, border, watermark, signature, username, artist name, logo, web address, patreon username, twitter username, stamp, photorealistic, realistic, 3d, cgi` | …the same list, plus `, censored, mosaic censoring, bar censor` |
 | `promptCharacterLimit` | `1200` | `1200` |
 | `includeState` / `includeCast` | `true` / `true` | `true` / `true` |
 | `instruction` | the shipped instruction | the shipped instruction, with the **rating bullet replaced** by the NSFW one and an **`EXPLICIT SCENES`** block inserted immediately before the final Return-JSON-only line |
+
+**The negative prefix is a 53-tag suppression list, shipped whole.** It is ordered the way a booru negative should be: quality and artifact tags first (`lowres, worst quality, low quality, normal quality, blurry, out of focus, jpeg artifacts`), then anatomy (`bad anatomy, deformed, bad proportions, poorly drawn face, long neck, malformed limbs, missing limbs, extra limbs, extra arms, extra legs, bad hands, extra fingers, extra digits, fewer digits, missing fingers, fused fingers, mutated hands`), then text and comic-page artifacts (`text, dialogue, speech bubble, thought bubble, caption, subtitles, comic, comic panel, panel layout, multiple views, 4koma, storyboard, split screen, collage, border`), then provenance marks (`watermark, signature, username, artist name, logo, web address, patreon username, twitter username, stamp`), and last the photoreal-drift pair that the anime prefixes need (`photorealistic, realistic, 3d, cgi`).
+
+Three omissions are deliberate and are asserted by `tests/settings.test.ts`: **`manga` is absent** (it names a drawing style as well as a medium, and these presets are anime-prefixed), **`cropped` / `out of frame` are absent** (tight close-ups must stay available), and **no character-count negative appears anywhere** (`multiple girls`, `extra person`) because scenes routinely have two people in them. `extra fingers` is kept *and* the newer `extra digits` / `fewer digits` / `missing fingers` alongside it — different tag models respond to different spellings. The preset's `promptCharacterLimit` never cuts it: the negative answers to the dialect cap alone (**The negative has its own ceiling** above). The editable **`Default (NSFW) (copy)`** the user saved carries the same negative with the censorship suffix, because it is a copy of `default-nsfw`; its 1980s-anime `positivePrefix` and its prose instruction are the user's own and are left alone.
 
 **The instruction deliberately forbids style keywords** (`No style or quality tags (anime style, masterpiece, best quality) — a style prefix is added separately.`), because `positivePrefix` is the single place art direction lives: a preset can be restyled without touching the instruction text. The instruction asks for a **booru-style tag list**, not a prose sentence, because the target models are tag-trained (`WAI`/`Illustrious` are danbooru-tag models) or CLIP finetunes (`Lustify`).
 
@@ -440,7 +457,9 @@ The Image Generation tab in the preset editor exposes all six fields in this ord
 
 The OpenAI-compatible `/images/generations` endpoint rejects prompts over 1500 characters with a 400. The route clamps the **composed** prompt (prefix + body) to the dialect cap, and the adapter clamps again, so a long prefix or an over-long edit in the modal is truncated rather than rejected. The truncation is a plain `slice(0, limit).trimEnd()`. The preset's `promptCharacterLimit` (1200 for both shipped presets) is the *soft* limit and the one the modal's character counter shows; the hard cap is 1500 for `openai` and 7500 for `venice`. A preset limit of 0 means unlimited **up to the dialect cap**.
 
-Soft-limit cuts are no longer silent: the dry run adds a **truncation warning** to its `warnings` array (shown in the review modal) whenever the composed prompt was cut, at either ceiling. That matters here more than it used to — a tag list puts its most disposable tags last and its action/physical-state tags at the end, so a cut removes exactly the part the instruction insists on. The reviewed generate call still sends the identical clamped text; only the dry run reports.
+This whole section is about the **prompt**. The negative has its own ceiling — the dialect cap alone, never the preset's soft limit — so none of the soft-limit arithmetic above applies to it (see *The negative has its own ceiling*). It is also worth restating here that the `openai` dialect sends **no `negative_prompt` at all**: this cap is the only clamp the negative could ever meet on that dialect, and it never meets it because the field is not sent.
+
+Soft-limit cuts are no longer silent: the dry run adds a **truncation warning** to its `warnings` array (shown in the review modal) whenever the composed prompt was cut, at either ceiling. That matters here more than it used to — a tag list puts its most disposable tags last and its action/physical-state tags at the end, so a cut removes exactly the part the instruction insists on. The reviewed generate call still sends the identical clamped text; only the dry run reports. The negative is deliberately not part of this warning: it is a curated list, not a model answer, and its only ceiling is the dialect cap.
 
 ### Safe mode and the adult-content blur
 
