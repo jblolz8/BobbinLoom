@@ -323,6 +323,13 @@ function ImageRequestDisclosure({ request }: { request: string }) {
     }
   }, [request]);
 
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(formatted);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
   return (
     <details className="message-image-request">
       <summary
@@ -331,6 +338,19 @@ function ImageRequestDisclosure({ request }: { request: string }) {
       >
         request
       </summary>
+      <div className="message-image-request-head">
+        <span className="message-image-request-label">Request body</span>
+        <Button
+          size="xs"
+          variant="ghost"
+          iconOnly
+          className="message-image-request-copy"
+          onClick={handleCopy}
+          leftIcon={<Icon name={copied ? "Check" : "Copy"} size={11} />}
+          title="Copy request body"
+          aria-label="Copy request body"
+        />
+      </div>
       <pre className="message-image-request-pre">{formatted}</pre>
     </details>
   );
