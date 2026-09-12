@@ -352,6 +352,159 @@ function a1111Config(overrides: Partial<ResolvedProviderConfig> = {}): ResolvedP
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+describe("A1111Provider — the request body", () => {
+  it("posts the native txt2img body, with the URL and JSON on the record", async () => {
+    const { fetchImpl, calls } = stubA1111(a1111Happy());
+    const conn = a1111Conn({
+      steps: 28,
+      cfgScale: 6.5,
+      sampler: "DPM++ 2M Karras",
+      scheduler: "Karras",
+      variants: 3
+    });
+    const provider = new A1111Provider(a1111Config(), conn, fetchImpl);
+
+    await provider.generateImage({
+      prompt: "a scene",
+      negativePrompt: "blurry, extra fingers",
+      size: "1024x1024",
+      seed: 4242,
+      variants: 3
+    });
+
+    // On the record, exactly as the WebUI would see it.
+    console.log(`[a1111] POST ${calls[0].url}`);
+    console.log(`[a1111] body ${JSON.stringify(calls[0].body)}`);
+
+    expect(calls[0].url).toBe("http://127.0.0.1:7860/sdapi/v1/txt2img");
+    expect(calls[0].method).toBe("POST");
+    expect(calls[0].body).toEqual({
+      prompt: "a scene",
+      negative_prompt: "blurry, extra fingers",
+      seed: 4242,
+      n_iter: 1,
+      batch_size: 3,
+      width: 1024,
+      height: 1024,
+      steps: 28,
+      cfg_scale: 6.5,
+      sampler_name: "DPM++ 2M Karras",
+      scheduler: "Karras",
+      override_settings: { sd_model_checkpoint: "sd_xl_base_1.0.safetensors" },
+      override_settings_restore_afterwards: true
+    });
+  });
+
+  it("never sends the Venice-only concepts", async () => {
+    const { fetchImpl, calls } = stubA1111(a1111Happy());
+    const provider = new A1111Provider(
+      a1111Config(),
+      a1111Conn({ safeMode: true, stylePreset: "cinematic", hideWatermark: true, aspectRatio: "16:9" }),
+      fetchImpl
+    );
+
+    await provider.generateImage({
+      prompt: "a scene",
+      safeMode: true,
+      stylePreset: "cinematic",
+      hideWatermark: true,
+      aspectRatio: "16:9"
+    });
+
+    const body = calls[0].body ?? {};
+    expect(body).not.toHaveProperty("safeMode");
+    expect(body).not.toHaveProperty("safe_mode");
+    expect(body).not.toHaveProperty("stylePreset");
+    expect(body).not.toHaveProperty("style_preset");
+    expect(body).not.toHaveProperty("hideWatermark");
+    expect(body).not.toHaveProperty("hide_watermark");
+    expect(body).not.toHaveProperty("aspectRatio");
+    expect(body).not.toHaveProperty("aspect_ratio");
+  });
+
+  it("omits every key the connection does not set, so the WebUI's own defaults win", async () => {
+    const { fetchImpl, calls } = stubA1111(a1111Happy());
+    const provider = new A1111Provider(a1111Config(), a1111Conn({ model: "" }), fetchImpl);
+
+    await provider.generateImage({ prompt: "a scene" });
+
+    // Only the four keys A1111 needs are there. An absent field means "the
+    // WebUI decides" — which is what a user who tuned their WebUI expects.
+    expect(calls[0].body).toEqual({ prompt: "a scene", seed: -1, n_iter: 1, batch_size: 1 });
+  });
+
+  it("sends -1 for a random seed and 0 as a real seed", async () => {
+    const { fetchImpl, calls } = stubA1111(a1111Happy());
+    const provider = new A1111Provider(a1111Config(), a1111Conn(), fetchImpl);
+
+    await provider.generateImage({ prompt: "a scene" });
+    expect(calls[0].body?.seed).toBe(-1);
+
+    // 0 is a legitimate, reproducible seed here — the opposite of Venice, where
+    // 0 is the "pick one" sentinel and a stored 0 would be a lie.
+    await provider.generateImage({ prompt: "a scene", seed: 0 });
+    expect(calls[1].body?.seed).toBe(0);
+  });
+
+  it("maps size to width/height and omits them for auto or an unparseable value", async () => {
+    const { fetchImpl, calls } = stubA1111(a1111Happy());
+    const provider = new A1111Provider(a1111Config(), a1111Conn({ model: "" }), fetchImpl);
+
+    await provider.generateImage({ prompt: "a scene", size: "832x1216" });
+    expect(calls[0].body?.width).toBe(832);
+    expect(calls[0].body?.height).toBe(1216);
+
+    await provider.generateImage({ prompt: "a scene", size: "auto" });
+    expect(calls[1].body).not.toHaveProperty("width");
+    expect(calls[1].body).not.toHaveProperty("height");
+
+    await provider.generateImage({ prompt: "a scene", size: "huge" });
+    expect(calls[2].body).not.toHaveProperty("width");
+    expect(calls[2].body).not.toHaveProperty("height");
+  });
+
+  it("clamps batch_size to 1..4", async () => {
+    const { fetchImpl, calls } = stubA1111(a1111Happy());
+    const provider = new A1111Provider(a1111Config(), a1111Conn({ model: "" }), fetchImpl);
+
+    await provider.generateImage({ prompt: "a scene", variants: 0 });
+    expect(calls[0].body?.batch_size).toBe(1);
+
+    await provider.generateImage({ prompt: "a scene", variants: 9 });
+    expect(calls[1].body?.batch_size).toBe(4);
+  });
+
+  it("sends override_settings only when the connection names a checkpoint", async () => {
+    const named = stubA1111(a1111Happy());
+    await new A1111Provider(a1111Config(), a1111Conn({ model: "sdxl.safetensors" }), named.fetchImpl).generateImage({
+      prompt: "a scene"
+    });
+    expect(named.calls[0].body?.override_settings).toEqual({ sd_model_checkpoint: "sdxl.safetensors" });
+    // The swap must last exactly one request: a fork whose default is "keep"
+    // would otherwise silently rewrite the user's WebUI checkpoint.
+    expect(named.calls[0].body?.override_settings_restore_afterwards).toBe(true);
+
+    const unnamed = stubA1111(a1111Happy());
+    await new A1111Provider(a1111Config(), a1111Conn({ model: "" }), unnamed.fetchImpl).generateImage({ prompt: "a scene" });
+    expect(unnamed.calls[0].body).not.toHaveProperty("override_settings");
+    expect(unnamed.calls[0].body).not.toHaveProperty("override_settings_restore_afterwards");
+  });
+
+  it("keeps a long prompt, clamping only at the 10 000-char sanity ceiling", async () => {
+    const { fetchImpl, calls } = stubA1111(a1111Happy());
+    const provider = new A1111Provider(a1111Config(), a1111Conn({ model: "" }), fetchImpl);
+    const long = "tag, ".repeat(340); // ~1700 chars — past the Venice/OpenAI caps
+
+    await provider.generateImage({ prompt: long });
+
+    expect(A1111_IMAGE_PROMPT_CAP).toBe(10_000);
+    expect(calls[0].body?.prompt).toBe(long);
+
+    await provider.generateImage({ prompt: "z".repeat(A1111_IMAGE_PROMPT_CAP + 500) });
+    expect((calls[1].body?.prompt as string).length).toBe(A1111_IMAGE_PROMPT_CAP);
+  });
+});
+
 describe("A1111Provider — interrupt", () => {
   it("posts /sdapi/v1/interrupt exactly once on abort, and never on a clean run", async () => {
     // A generation that completes normally must not touch the interrupt route:

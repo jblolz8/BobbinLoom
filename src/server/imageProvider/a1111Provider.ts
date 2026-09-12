@@ -2,7 +2,7 @@ import type { ProviderConnection } from "../../schemas";
 import { authHeaders } from "../httpAuth";
 import type { ResolvedProviderConfig } from "../providerConfig";
 import { linkExternalAbort } from "../provider/openaiClient";
-import { clampChars, sniffMime } from "./shared";
+import { clampChars, parseSize, sniffMime } from "./shared";
 import type { ImageGenerationRequest, ImageGenerationResult, ImageProvider } from "./types";
 
 /** A1111 publishes NO prompt cap — a prompt is chunked at 75 CLIP tokens and
@@ -47,12 +47,7 @@ export class A1111Provider implements ImageProvider {
 
   async generateImage(req: ImageGenerationRequest): Promise<ImageGenerationResult> {
     const start = Date.now();
-    const body: Record<string, unknown> = {
-      prompt: clampChars(req.prompt, A1111_IMAGE_PROMPT_CAP),
-      seed: req.seed ?? -1, // A1111: -1 = random (0 is a real seed)
-      n_iter: 1,
-      batch_size: Math.min(Math.max(req.variants ?? 1, 1), 4)
-    };
+    const body = buildTxt2ImgBody(req, this.connection);
 
     // Cancellation is a POST. `once` keeps it to exactly one interrupt per
     // signal, and the listener is removed on every exit path.
@@ -125,4 +120,39 @@ export class A1111Provider implements ImageProvider {
       cancel();
     }
   }
+}
+
+/** The `/sdapi/v1/txt2img` body. A1111 takes any SUBSET of its parameters and
+ *  fills in the rest from the WebUI's own settings, so the rule here is "send a
+ *  field only when the connection actually asks for it": an absent `steps` means
+ *  "the number the user already set in their WebUI", and overriding that with a
+ *  hardcoded 20 would silently ignore their tuning. */
+function buildTxt2ImgBody(
+  req: ImageGenerationRequest,
+  conn: ProviderConnection
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    prompt: clampChars(req.prompt, A1111_IMAGE_PROMPT_CAP),
+    seed: req.seed ?? -1, // A1111: -1 = random (0 is a real seed)
+    n_iter: 1,
+    batch_size: Math.min(Math.max(req.variants ?? 1, 1), 4)
+  };
+  if (req.negativePrompt) body.negative_prompt = clampChars(req.negativePrompt, A1111_IMAGE_PROMPT_CAP);
+  // "auto" / absent / unparseable → no width/height at all, so the WebUI's own
+  // canvas size applies rather than a size this app invented.
+  const dims = parseSize(req.size);
+  if (dims) {
+    body.width = dims.width;
+    body.height = dims.height;
+  }
+  if (conn.steps !== undefined) body.steps = conn.steps;
+  if (conn.cfgScale !== undefined) body.cfg_scale = conn.cfgScale;
+  if (conn.sampler) body.sampler_name = conn.sampler;
+  if (conn.scheduler) body.scheduler = conn.scheduler;
+  if (conn.model) {
+    body.override_settings = { sd_model_checkpoint: conn.model };
+    // Explicit, so "one request" never depends on a fork's default.
+    body.override_settings_restore_afterwards = true;
+  }
+  return body;
 }
