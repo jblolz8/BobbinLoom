@@ -606,39 +606,42 @@ export function ChatPanel(props: ChatPanelProps) {
                 {msg.images && msg.images.length > 0 ? (
                   <div className="message-images">
                     {msg.images.map((img, index) => (
-                      <figure key={`${img.file}-${index}`} className="message-image">
-                        <button
-                          type="button"
-                          className="message-image-open"
-                          title="View full screen"
-                          aria-label="View this image full screen"
-                          onClick={() =>
-                            setViewerImage({
-                              src: buildImageUrl(img.file),
-                              alt: img.prompt.slice(0, 120),
-                              title: img.prompt,
-                              caption: imageCaption(img)
-                            })
-                          }
-                        >
-                          <img
-                            src={buildImageUrl(img.file)}
-                            alt={img.prompt.slice(0, 120)}
-                            title={img.prompt}
-                            loading="lazy"
-                          />
-                        </button>
-                        <button
-                          type="button"
-                          className="message-image-remove"
-                          title="Remove this image? The file is deleted if nothing else uses it."
-                          aria-label="Remove this image"
-                          onClick={() => onDeleteImage?.(msg, img.file)}
-                          disabled={imageDeletingId === msg.id || imageGeneratingId === msg.id}
-                        >
-                          <Icon name={imageDeletingId === msg.id ? "Loader" : "X"} size={11} className={imageDeletingId === msg.id ? "animate-spin" : ""} />
-                        </button>
-                        <figcaption title={img.prompt}>{imageCaption(img)}</figcaption>
+                      <div className="message-image-block">
+                        <figure className="message-image">
+                          <button
+                            type="button"
+                            className="message-image-open"
+                            title="View full screen"
+                            aria-label="View this image full screen"
+                            onClick={() =>
+                              setViewerImage({
+                                src: buildImageUrl(img.file),
+                                alt: img.prompt.slice(0, 120),
+                                title: img.prompt,
+                                caption: imageCaption(img)
+                              })
+                            }
+                          >
+                            <img
+                              src={buildImageUrl(img.file)}
+                              alt={img.prompt.slice(0, 120)}
+                              title={img.prompt}
+                              loading="lazy"
+                            />
+                          </button>
+                          <button
+                            type="button"
+                            className="message-image-remove"
+                            title="Remove this image? The file is deleted if nothing else uses it."
+                            aria-label="Remove this image"
+                            onClick={() => onDeleteImage?.(msg, img.file)}
+                            disabled={imageDeletingId === msg.id || imageGeneratingId === msg.id}
+                          >
+                            <Icon name={imageDeletingId === msg.id ? "Loader" : "X"} size={11} className={imageDeletingId === msg.id ? "animate-spin" : ""} />
+                          </button>
+                          <figcaption title={img.prompt}>{imageCaption(img)}</figcaption>
+                        </figure>
+
                         {/* What we actually sent upstream. Absent on refs
                             stored before the field existed → no empty box. */}
                         {img.request ? <ImageRequestDisclosure request={img.request} /> : null}
@@ -647,7 +650,8 @@ export function ChatPanel(props: ChatPanelProps) {
                         {img.promptRequest ? (
                           <ImagePromptCallDisclosure request={img.promptRequest} response={img.promptResponse} />
                         ) : null}
-                      </figure>
+                      </div>
+
                     ))}
                   </div>
                 ) : null}
