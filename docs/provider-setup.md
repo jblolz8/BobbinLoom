@@ -227,6 +227,45 @@ Image connections store every shared field (name, base URL, model, temperature, 
 tokens, context window) plus the ones above; the image-only fields are simply absent on
 text rows.
 
+### Forge Couple (per-character regions)
+
+**Optional — BobbinLoom renders without it.** [Forge Couple](https://github.com/Haoming02/sd-forge-couple)
+is a WebUI extension that conditions each part of the canvas on its own line of the
+prompt. That is what stops a two-character scene from mixing the two people's hair, eye
+colour and clothing. BobbinLoom's image instruction already groups the characters for it
+(see [`image-generation.md`](image-generation.md) → *Multi-character regions*); the
+extension is what turns those groups into regions on the wire. **It is not a BobbinLoom
+setting** — install it in the WebUI, or not at all.
+
+**Install it** (WebUI side only):
+
+1. Open the WebUI's **Extensions** tab → **Install from URL**.
+2. Paste `https://github.com/Haoming02/sd-forge-couple` into *URL for extension's git
+   repository* and click **Install**.
+3. Go to the **Installed** tab and click **Apply and restart UI** — a plain **Reload UI**
+   does not pick up a brand-new extension. Restarting the WebUI process works too, and so
+   does `git clone` into its `extensions/` folder.
+4. Nothing to configure. BobbinLoom finds the extension by itself through
+   `GET /sdapi/v1/script-info`; the extension's own accordion in `txt2img` can stay
+   untouched, because the request carries its settings explicitly.
+
+**It is NOT installed on this instance yet, so nothing has changed.** Regions are
+currently disabled in practice: on every render the adapter checks the extension first
+(the image connection's **Regions** setting is on by default, but that switch alone engages
+nothing), finds no listing, and sends exactly the body it sent before the feature existed
+— same fields, no error, no failed or slower generation, and a one-character scene takes
+that same path even with the extension installed. BobbinLoom re-checks a given WebUI at
+most every **~5 minutes**, so a freshly installed extension may take that long to be
+noticed; restarting BobbinLoom's server makes it immediate.
+
+**Builds it is known to target.** The extension's own README covers the Forge WebUI (Forge
+Classic / Forge Neo) and SD1/SDXL checkpoints. If a given build cannot load it, nothing
+breaks: the payload is only ever sent when `/sdapi/v1/script-info` actually lists it, so
+the failure mode is *no regions*, never a failed render (an `alwayson_scripts` key the
+WebUI does not know is an HTTP **422**). See
+[`image-generation.md`](image-generation.md) → *Multi-character regions* for what engages
+regions, the Horizontal/Vertical direction and the background line.
+
 ---
 
 ## Environment variables (optional)
