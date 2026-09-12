@@ -171,6 +171,48 @@ describe("GET /api/images/:file", () => {
   });
 });
 
+describe("GET /api/images/progress", () => {
+  it("400s when the connectionId query parameter is absent", async () => {
+    const h = harness();
+    const res = await h.app.inject({ method: "GET", url: "/api/images/progress" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "connectionId is required" });
+  });
+
+  it("400s an empty connectionId — the same thing as absent", async () => {
+    const h = harness();
+    const res = await h.app.inject({ method: "GET", url: "/api/images/progress?connectionId=" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: "connectionId is required" });
+  });
+
+  it("answers {active: false} for a connection with nothing running", async () => {
+    const h = harness();
+    const res = await h.app.inject({ method: "GET", url: "/api/images/progress?connectionId=venice_images" });
+    expect(res.statusCode).toBe(200);
+    // The frozen shape: `active` is always present, the numbers only when known.
+    expect(res.json()).toEqual({ active: false });
+  });
+
+  it("serves the snapshot published under that connection id", async () => {
+    const h = harness();
+    const connId = h.manager.imageConnection()!.id;
+    publishImageProgress(connId, { progress: 0.43, step: 12, steps: 28, etaSeconds: 5 });
+
+    const res = await h.app.inject({ method: "GET", url: `/api/images/progress?connectionId=${connId}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ active: true, progress: 0.43, step: 12, steps: 28, etaSeconds: 5 });
+
+    // A different connection is a different readout — the key is the CONNECTION.
+    const other = await h.app.inject({ method: "GET", url: "/api/images/progress?connectionId=some_other_conn" });
+    expect(other.json()).toEqual({ active: false });
+
+    clearImageProgress(connId);
+    const cleared = await h.app.inject({ method: "GET", url: `/api/images/progress?connectionId=${connId}` });
+    expect(cleared.json()).toEqual({ active: false });
+  });
+});
+
 describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
   it("404s an unknown playthrough and an unknown message", async () => {
     const h = harness();

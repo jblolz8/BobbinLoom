@@ -7,6 +7,7 @@ import type { ChatMessage, ImageGenerationSettings, MessageImage, Playthrough, P
 import { ImageGenerationSettingsSchema } from "../../schemas";
 import { OPENAI_IMAGE_PROMPT_CAP, VENICE_IMAGE_PROMPT_CAP } from "../imageProvider";
 import { clampChars } from "../imageProvider/shared";
+import { readImageProgress } from "../imageProgress";
 import { imageFilePath, mimeForFile, saveImageBytes, sweepOrphansInDataDir, IMAGES_DIR } from "../imageStore";
 import type { ProviderManager } from "../providerManager";
 import { generateImagePrompt } from "../provider/imagePrompt";
@@ -167,6 +168,21 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
   const manager = options.manager ?? providerManager;
   const loadPresets = options.loadPresets ?? defaultLoadPresets;
   const fetchImpl = options.fetchImpl ?? fetch;
+
+  // Live progress for a generation in flight — the client polls this (every
+  // ~700 ms) while an a1111 WebUI renders. Always a snapshot, never a wait: a
+  // connection with nothing running answers `{active: false}`, which the footer
+  // reads as "no readout". Registered above `/api/images/:file`; find-my-way
+  // prefers the static segment over the parameter either way, and the order
+  // keeps the intent visible.
+  app.get("/api/images/progress", async (request, reply) => {
+    // `?connectionId=` (empty) and a repeated parameter both mean the same as
+    // absent: there is no readout to look up, which is a 400 and not a 500.
+    const parsed = z.object({ connectionId: z.string().optional() }).safeParse(request.query);
+    const connectionId = parsed.success ? parsed.data.connectionId?.trim() : undefined;
+    if (!connectionId) return reply.code(400).send({ error: "connectionId is required" });
+    return reply.send(readImageProgress(connectionId));
+  });
 
   // Content-addressed read: the file name IS the hash, so an immutable cache
   // header is safe. The name is validated before any filesystem call.
