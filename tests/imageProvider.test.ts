@@ -505,6 +505,107 @@ describe("A1111Provider — the request body", () => {
   });
 });
 
+describe("A1111Provider — progress", () => {
+  const progressBody = { progress: 0.43, eta_relative: 12.5, state: { sampling_step: 12, sampling_steps: 28 } };
+
+  it("polls the WebUI's progress route while the POST is in flight", async () => {
+    let release!: () => void;
+    const held = new Promise<Response>((resolve) => {
+      release = () => resolve(jsonResponse({ images: [PNG_B64], info: JSON.stringify({ seed: 1 }) }));
+    });
+    const { fetchImpl, calls } = stubA1111((call) => {
+      if (call.url === A1111_TXT2IMG_URL) return held;
+      if (call.url === A1111_PROGRESS_URL) return jsonResponse(progressBody);
+      return jsonResponse({}, 404);
+    });
+
+    const seen: ImageProgress[] = [];
+    const provider = new A1111Provider(a1111Config(), a1111Conn(), fetchImpl);
+    const inFlight = provider.generateImage({ prompt: "a scene", onProgress: (progress) => seen.push(progress) });
+
+    await vi.waitFor(() => expect(seen.length).toBeGreaterThan(0));
+    expect(seen[0]).toEqual({ progress: 0.43, step: 12, steps: 28, etaSeconds: 12.5 });
+    // A read, against the WebUI's own route, with the current image skipped.
+    const progressCalls = calls.filter((call) => call.url === A1111_PROGRESS_URL);
+    expect(progressCalls[0].method).toBe("GET");
+    expect(progressCalls[0].url).toBe("http://127.0.0.1:7860/sdapi/v1/progress?skip_current_image=true");
+
+    release();
+    const result = await inFlight;
+    expect(result.images).toHaveLength(1);
+  });
+
+  it("does not poll at all when the request passes no onProgress", async () => {
+    const { fetchImpl, calls } = stubA1111(a1111Happy());
+    await new A1111Provider(a1111Config(), a1111Conn(), fetchImpl).generateImage({ prompt: "a scene" });
+    // No callback, no polling: this is a local WebUI's own /progress route, not
+    // something to hammer on behalf of a caller that is not listening.
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe(A1111_TXT2IMG_URL);
+  });
+
+  it("keeps sampling on its interval and stops the moment the POST settles", async () => {
+    const { fetchImpl, calls } = stubA1111(async (call) => {
+      if (call.url === A1111_TXT2IMG_URL) {
+        await sleep(700);
+        return jsonResponse({ images: [PNG_B64], info: JSON.stringify({ seed: 1 }) });
+      }
+      return jsonResponse({ progress: 0.1, state: {} });
+    });
+
+    const provider = new A1111Provider(a1111Config(), a1111Conn(), fetchImpl);
+    await provider.generateImage({ prompt: "a scene", onProgress: () => {} });
+
+    const polls = calls.filter((call) => call.url === A1111_PROGRESS_URL).length;
+    expect(polls).toBeGreaterThanOrEqual(2); // t≈0 and t≈600, not one lone sample
+
+    await sleep(700);
+    expect(calls.filter((call) => call.url === A1111_PROGRESS_URL).length).toBe(polls);
+  });
+
+  it("never fails the generation when the progress route is broken", async () => {
+    const broken = stubA1111((call) => {
+      if (call.url === A1111_TXT2IMG_URL) return jsonResponse({ images: [PNG_B64], info: JSON.stringify({ seed: 1 }) });
+      throw new Error("progress route unreachable");
+    });
+    const seen: ImageProgress[] = [];
+    const result = await new A1111Provider(a1111Config(), a1111Conn(), broken.fetchImpl).generateImage({
+      prompt: "a scene",
+      onProgress: (progress) => seen.push(progress)
+    });
+    expect(result.images).toHaveLength(1);
+
+    // A 200 that is not even JSON is equally not the generation's problem.
+    const garbage = stubA1111((call) => {
+      if (call.url === A1111_TXT2IMG_URL) return jsonResponse({ images: [PNG_B64], info: JSON.stringify({ seed: 1 }) });
+      return new Response("not json at all", { status: 200 });
+    });
+    const second = await new A1111Provider(a1111Config(), a1111Conn(), garbage.fetchImpl).generateImage({
+      prompt: "a scene",
+      onProgress: () => {}
+    });
+    expect(second.images).toHaveLength(1);
+  });
+
+  it("ignores a progress response that lands after the POST settled", async () => {
+    const { fetchImpl } = stubA1111(async (call) => {
+      if (call.url === A1111_TXT2IMG_URL) return jsonResponse({ images: [PNG_B64], info: JSON.stringify({ seed: 1 }) });
+      // Slower than the generation itself: this sample describes a job that is
+      // already over, and publishing it would move the bar backwards.
+      await sleep(40);
+      return jsonResponse(progressBody);
+    });
+
+    const seen: ImageProgress[] = [];
+    await new A1111Provider(a1111Config(), a1111Conn(), fetchImpl).generateImage({
+      prompt: "a scene",
+      onProgress: (progress) => seen.push(progress)
+    });
+    await sleep(80);
+    expect(seen).toEqual([]);
+  });
+});
+
 describe("A1111Provider — interrupt", () => {
   it("posts /sdapi/v1/interrupt exactly once on abort, and never on a clean run", async () => {
     // A generation that completes normally must not touch the interrupt route:

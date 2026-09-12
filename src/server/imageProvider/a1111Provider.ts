@@ -15,6 +15,15 @@ export const A1111_IMAGE_PROMPT_CAP = 10_000;
  *  WebUI that is busy sampling cannot hold the cancel path open. */
 export const A1111_INTERRUPT_TIMEOUT_MS = 5_000;
 
+/** How often the WebUI's `/progress` route is read while a generation runs.
+ *  One small local GET per ~600 ms: cheap against a localhost WebUI, and fine
+ *  grained enough that the footer bar moves. */
+export const A1111_PROGRESS_POLL_MS = 600;
+
+/** Per-poll budget. A `/progress` read that hangs must not stack up behind the
+ *  next poll — and it is discarded anyway once the generation settles. */
+export const A1111_PROGRESS_TIMEOUT_MS = 3_000;
+
 /** An `AbortSignal` that fires after `ms`, with the timer handed back so the
  *  caller can cancel it — a leaked timer would keep a test's event loop alive.
  *  (No `AbortSignal.timeout`: one shape, works on every Node this app runs.) */
@@ -22,6 +31,20 @@ function timeoutSignal(ms: number): { signal: AbortSignal; cancel: () => void } 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
   return { signal: controller.signal, cancel: () => clearTimeout(timer) };
+}
+
+/** `GET /sdapi/v1/progress?skip_current_image=true`. Every field is optional on
+ *  purpose: an older build's shape must degrade to "no news", never to a throw. */
+type A1111ProgressResponse = {
+  progress?: number;
+  eta_relative?: number;
+  state?: { sampling_step?: number; sampling_steps?: number };
+};
+
+/** A finite number, or nothing — a string, null, NaN and Infinity all mean the
+ *  WebUI did not report that field. */
+function optionalNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 /** A1111 speaks its own native `/sdapi/v1/*` API:
@@ -56,8 +79,57 @@ export class A1111Provider implements ImageProvider {
     };
     req.signal?.addEventListener("abort", interrupt, { once: true });
 
+    // Once this flips, nothing that arrives late may touch the result — a
+    // progress sample for a finished job would move the caller's bar backwards.
+    let settled = false;
+    let pollTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const pollProgress = async (): Promise<void> => {
+      const { signal, cancel } = timeoutSignal(A1111_PROGRESS_TIMEOUT_MS);
+      try {
+        const res = await this.fetchImpl(`${this.config.baseUrl}/sdapi/v1/progress?skip_current_image=true`, {
+          method: "GET",
+          headers: authHeaders(this.config.apiKey, "a1111"),
+          signal
+        });
+        if (!res.ok || settled) return;
+        const data = (await res.json()) as A1111ProgressResponse;
+        if (settled) return;
+        req.onProgress?.({
+          progress: optionalNumber(data?.progress) ?? 0,
+          step: optionalNumber(data?.state?.sampling_step),
+          steps: optionalNumber(data?.state?.sampling_steps),
+          etaSeconds: optionalNumber(data?.eta_relative)
+        });
+      } catch {
+        // Progress is a nicety. The route can be missing on an old build, slow
+        // while the GPU is busy, or answer something that is not JSON — none of
+        // which is a reason to fail a generation that is otherwise fine. A
+        // throwing callback is swallowed for the same reason.
+      } finally {
+        cancel();
+      }
+    };
+
+    const schedulePoll = (): void => {
+      pollTimer = setTimeout(() => {
+        void pollProgress().finally(() => {
+          if (!settled) schedulePoll();
+        });
+      }, A1111_PROGRESS_POLL_MS);
+    };
+
     try {
-      const res = await this.postTxt2Img(body, req.signal);
+      const pending = this.postTxt2Img(body, req.signal);
+      // Poll from the moment the request is away, not one interval later: a
+      // short generation would otherwise report nothing at all.
+      if (req.onProgress) {
+        void pollProgress().finally(() => {
+          if (!settled) schedulePoll();
+        });
+      }
+
+      const res = await pending;
       const text = await res.text();
       if (!res.ok) throw new Error(`A1111 image provider error ${res.status}: ${text.slice(0, 300)}`);
 
@@ -80,6 +152,8 @@ export class A1111Provider implements ImageProvider {
         rawOutput: text
       };
     } finally {
+      settled = true;
+      if (pollTimer) clearTimeout(pollTimer);
       req.signal?.removeEventListener("abort", interrupt);
     }
   }
