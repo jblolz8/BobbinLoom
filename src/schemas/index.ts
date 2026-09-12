@@ -398,6 +398,11 @@ export const MessageImageSchema = z.object({
   model: z.string().default(""),
   seed: z.number().optional(),
   durationMs: z.number().int().nonnegative().optional(),
+  /** Diagnostic provenance: the EXACT JSON request body that was sent to the
+   *  image provider for this image. Body only — never headers, never the API
+   *  key. Present so a stored image can answer "what did we actually send?".
+   *  OPTIONAL so every ref written before this field parses untouched. */
+  request: z.string().optional(),
   createdAt: z.string()
 });
 export type MessageImage = z.infer<typeof MessageImageSchema>;
