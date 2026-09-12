@@ -462,6 +462,8 @@ A connection whose **stored** value is not in the fetched list is flagged in the
 
 **Venice publishes no per-model style-preset support flag.** `GET /models?type=image` reports per-model constraints such as the prompt cap and sizes, but nothing that says which styles a given checkpoint honours. So a model may **accept** `style_preset` (no 400, the call succeeds) and still render no visible change — the request is what succeeded, not the style. That ambiguity is why the sent body is stored on the ref and shown under the image in the chat: open the `request` disclosure and look for `style_preset` to confirm what actually left the client before concluding the model ignored it.
 
+**The model-agnostic lever is the preset's `positivePrefix`.** Venice gates `style_preset` per model and publishes no support list — neither the Image Models docs page nor `GET /models?type=image` carries a flag saying which checkpoints honour it — so a preset is a request, not a guarantee. The positive prefix, by contrast, is text prepended to the prompt by BobbinLoom itself, so it reaches every model regardless. When a style must land whatever model is selected, put the style keywords there (Settings → Presets → Image Generation → Positive Prefix). The connection editor's Style Preset helper says the same thing next to the control.
+
 ### Sizes are model-dependent
 
 There is no one size that works everywhere, and the failure is a 400 from the provider, not from BobbinLoom:

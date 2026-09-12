@@ -401,7 +401,11 @@ export function ImageConnectionEditor({
                   )}
                   <p className="conn-field-helper">
                     Venice only. The list is the provider's own (fetched from the keyless <code>/image/styles</code>);
-                    values are case-sensitive and title-cased. None sends no <code>style_preset</code>.
+                    values are case-sensitive and title-cased. None sends no <code>style_preset</code>. Venice applies a style
+                    preset on only <strong>some</strong> models and publishes no list of which ones — the Models API
+                    carries no support flag either — so a preset can be accepted with no visible effect. When a style
+                    must land whatever model is set, put the style keywords in the preset's <strong>Positive Prefix</strong>
+                    instead: that reaches every model.
                   </p>
                 </>
               ) : (
