@@ -181,6 +181,12 @@ export type ProviderKind = z.infer<typeof ProviderKindSchema>;
 export const ImageApiStyleSchema = z.enum(["openai", "venice", "a1111"]);
 export type ImageApiStyle = z.infer<typeof ImageApiStyleSchema>;
 
+/** Which way Forge Couple splits the canvas, in its OWN spelling: the value
+ *  goes on the wire verbatim (`direction` in the 17-argument alwayson
+ *  payload), so the union is case-sensitive on purpose. */
+export const RegionDirectionSchema = z.enum(["Horizontal", "Vertical"]);
+export type RegionDirection = z.infer<typeof RegionDirectionSchema>;
+
 export const ProviderConnectionSchema = z.object({
   id: z.string().min(1),
   label: z.string(),
@@ -208,6 +214,15 @@ export const ProviderConnectionSchema = z.object({
   /** Per-connection request timeout in ms. Absent = the dialect default
    *  (10 min for a1111, 180 s otherwise), which the env var can still override. */
   timeoutMs: z.number().int().min(1000).optional(),
+  /** Forge Couple regions (a1111 only): give each character in frame its own
+   *  attention region so traits stop bleeding between them. Absent = ON: the
+   *  normal flow auto-engages, and only when the composed prompt has 2 or more
+   *  ` | ` groups AND the WebUI really has the extension (detected, never
+   *  assumed); `false` turns regions off for this connection. */
+  regionsEnabled: z.boolean().optional(),
+  /** Which way the regions split. Absent = Horizontal (blocks map left to
+   *  right). */
+  regionDirection: RegionDirectionSchema.optional(),
   /** true = ask the provider to blur/moderate adult content. Absent = false:
    *  this app is an adult-content project and the blur is a footgun. */
   safeMode: z.boolean().optional(),

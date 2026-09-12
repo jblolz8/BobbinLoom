@@ -4,7 +4,8 @@ import type {
   ImageApiStyle,
   ImageGenerationSettings,
   ProviderConnection as ProviderConnectionRow,
-  ProviderKind
+  ProviderKind,
+  RegionDirection
 } from "../../schemas";
 // Type-only, so it is erased at build time and the client bundle never reaches
 // `src/server` at runtime. The capability shape is PRODUCED there; hand-copying
@@ -76,6 +77,14 @@ export type ProviderConnectionPayload = {
   /** Per-connection request timeout in ms (≥1000). Absent = the dialect
    *  default — 10 minutes for a1111, 180 s otherwise. */
   timeoutMs?: number;
+  // ── a1111-only: Forge Couple regions ──
+  /** Give each character in frame its own attention region. Absent = ON; the
+   *  regions engage when the extension is installed AND the prompt has 2+
+   *  ` | ` groups. `false` turns them off for this connection. */
+  regionsEnabled?: boolean;
+  /** Which way the regions split. Absent = Horizontal (blocks map left to
+   *  right). Case-sensitive: it goes on the wire verbatim. */
+  regionDirection?: RegionDirection;
 };
 
 /** Registry v2: one active slot per kind, plus the read warnings. */

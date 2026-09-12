@@ -520,6 +520,57 @@ describe("provider registry", () => {
       expect(venice.baseUrl).toBe("http://localhost:1234/v1");
     });
 
+    it("keeps the Forge Couple region fields through the schema and a create/update round trip", () => {
+      const dir = tempDir();
+
+      // The SCHEMA half first: zod strips undeclared keys, so a field missing
+      // from ProviderConnectionSchema is a setting the editor can never save.
+      const parsed = ProviderConnectionSchema.parse({
+        id: "a1111_local",
+        label: "Local WebUI",
+        baseUrl: "http://127.0.0.1:7860",
+        model: "sd_xl_base_1.0.safetensors",
+        temperature: 0.8,
+        maxTokens: 1200,
+        contextWindow: 32768,
+        kind: "image",
+        regionsEnabled: false,
+        regionDirection: "Vertical"
+      });
+      expect(parsed.regionsEnabled).toBe(false);
+      expect(parsed.regionDirection).toBe("Vertical");
+
+      // …then the registry path, which copies field by field: a field not
+      // copied here is silently dropped even when the schema declares it.
+      const created = createConnection(
+        dir,
+        connInput({
+          kind: "image",
+          apiStyle: "a1111",
+          baseUrl: "http://127.0.0.1:7860",
+          regionsEnabled: false,
+          regionDirection: "Vertical"
+        })
+      );
+      expect(created.regionsEnabled).toBe(false);
+      expect(created.regionDirection).toBe("Vertical");
+
+      const row = (readRegistryFile(dir) as { connections: Array<{ id: string }> }).connections.find(
+        (c) => c.id === created.id
+      )!;
+      expect(row).toMatchObject({ regionsEnabled: false, regionDirection: "Vertical" });
+
+      // An update carries them too — and a direction the enum does not take is
+      // not silently stored as something else.
+      const updated = updateConnection(
+        dir,
+        created.id,
+        connInput({ regionsEnabled: true, regionDirection: "Horizontal" })
+      );
+      expect(updated.regionsEnabled).toBe(true);
+      expect(updated.regionDirection).toBe("Horizontal");
+    });
+
     it("keeps an a1111 connection's base URL un-suffixed when the style is only STORED", () => {
       const dir = tempDir();
       const created = createConnection(

@@ -4,7 +4,7 @@ import { atomicWriteJson, backupFile, quarantineFile } from "./persistence";
 import { maskApiKey, normalizeBaseUrl, normalizeImageBaseUrl } from "./providerConfig";
 import { authHeaders } from "./httpAuth";
 import { ProviderConnectionSchema, ProviderRegistryFileSchema } from "../schemas";
-import type { ImageApiStyle, ProviderConnection, ProviderKind, ProviderRegistryFile } from "../schemas";
+import type { ImageApiStyle, ProviderConnection, ProviderKind, ProviderRegistryFile, RegionDirection } from "../schemas";
 import type { ProviderConnectionInput, PublicProviderConnection } from "./providerConfig";
 import { decryptApiKey, encryptApiKey, loadOrCreateVaultKey } from "./keyVault";
 
@@ -42,6 +42,9 @@ export type ProviderConnectionDraft = ProviderConnectionInput & {
   sampler?: string;
   scheduler?: string;
   timeoutMs?: number;
+  // ── a1111-only: Forge Couple regions (absent = on, Horizontal) ──
+  regionsEnabled?: boolean;
+  regionDirection?: RegionDirection;
 };
 
 /** Connections of one kind, and the active one among them. The kind filter is
@@ -267,6 +270,11 @@ export function createConnection(dir: string, input: ProviderConnectionDraft): P
     sampler: input.sampler,
     scheduler: input.scheduler,
     timeoutMs: input.timeoutMs,
+    // Forge Couple regions. `undefined` is meaningful here: an absent
+    // regionsEnabled means ON, and an absent direction means Horizontal — the
+    // adapter (not this row) owns those defaults.
+    regionsEnabled: input.regionsEnabled,
+    regionDirection: input.regionDirection,
     createdAt: now,
     updatedAt: now
   };

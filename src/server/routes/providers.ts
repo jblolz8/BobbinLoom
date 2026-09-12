@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyPluginOptions } from "fastify";
 import { z } from "zod";
-import { ImageApiStyleSchema, ProviderKindSchema } from "../../schemas";
+import { ImageApiStyleSchema, ProviderKindSchema, RegionDirectionSchema } from "../../schemas";
 import type { ProviderManager } from "../providerManager";
 import { providerManager } from "./helpers";
 
@@ -49,7 +49,12 @@ const ProviderConnectionBody = z.object({
   cfgScale: z.number().min(0).max(30).optional(),
   sampler: z.string().optional(),
   scheduler: z.string().optional(),
-  timeoutMs: z.number().int().min(1000).optional()
+  timeoutMs: z.number().int().min(1000).optional(),
+  /** Forge Couple regions (a1111 only). On the body schema for the same reason
+   *  as every field above: zod strips what is not declared, so an undeclared
+   *  field is a setting the editor can never save. */
+  regionsEnabled: z.boolean().optional(),
+  regionDirection: RegionDirectionSchema.optional()
 }).superRefine((value, ctx) => {
   // A text connection cannot work without a model id. An image connection can
   // (see `model` above). `kind` is always sent by the client; a body with no

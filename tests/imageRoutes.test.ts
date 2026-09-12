@@ -899,6 +899,8 @@ describe("POST /api/settings/providers/models", () => {
       model: "sd_xl_base_1.0.safetensors",
       kind: "image",
       apiStyle: "a1111",
+      regionsEnabled: false,
+      regionDirection: "Vertical",
       steps: 28,
       cfgScale: 6.5,
       sampler: "DPM++ 2M Karras",
@@ -913,6 +915,10 @@ describe("POST /api/settings/providers/models", () => {
     const row = onDisk.connections.find((c: { id: string }) => c.id === "local_sd");
     expect(row).toMatchObject({
       apiStyle: "a1111",
+      // The Forge Couple region fields are settings the editor saves through
+      // THIS body: zod strips an undeclared key, so an undeclared field can
+      // never be persisted at all.
+      regionDirection: "Vertical",
       steps: 28,
       cfgScale: 6.5,
       sampler: "DPM++ 2M Karras",
