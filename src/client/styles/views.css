@@ -8071,3 +8071,20 @@ button.ai-brainstorm-toggle-btn.active,
   padding-top: 0.5rem;
   border-top: 1px solid var(--border-subtle);
 }
+/* The thumbnail IS the control that opens the full-screen viewer. The wrapper
+   stays deliberately bare so the `.message-image img` rules above keep
+   applying — the img is still a descendant of .message-image. */
+.message-image-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+
+.message-image-open:focus-visible {
+  outline: 2px solid var(--accent-base);
+  outline-offset: 2px;
+  border-radius: 10px;
+}

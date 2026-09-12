@@ -4,6 +4,7 @@ import { buildImageUrl, type ImageGenerationProgress, type TokenUsage } from "..
 import type { FailedResponseNotice, ImagePromptRequest } from "../../../hooks/usePlaythrough";
 import { ContextMeter } from "../../common/ContextMeter";
 import { MarkdownView } from "../../common/MarkdownView";
+import { ImageViewer, type ImageViewerImage } from "../../common/ImageViewer";
 import { Badge, Button, Icon, ModelBadge, TextArea } from "../../base";
 import { ImagePromptModal } from "./ImagePromptModal";
 
@@ -82,6 +83,22 @@ function prettyJson(raw: string | null): string {
   } catch {
     return raw;
   }
+}
+
+/** One reference on a message — the same shape the server stores. */
+type MessageImage = NonNullable<ChatMessage["images"]>[number];
+
+/** The caption under a generated image. This is the ONE source for it: the
+ *  thumbnail's figcaption and the full-screen viewer both render this string,
+ *  so the two can never disagree about what was rendered. */
+function imageCaption(image: MessageImage): string {
+  return [
+    image.model,
+    image.durationMs ? `${(image.durationMs / 1000).toFixed(1)}s` : "",
+    image.seed ? `seed ${image.seed}` : ""
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function formatMessageTime(iso?: string): string {
@@ -416,6 +433,11 @@ export function ChatPanel(props: ChatPanelProps) {
     onImagePromptClose
   } = props;
 
+  // The image open in the full-screen viewer, or null. One instance serves
+  // every image in the transcript: the thumbnail is the control, this is the
+  // view, and the state lives here because only one can be open at a time.
+  const [viewerImage, setViewerImage] = useState<ImageViewerImage | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Live readout for the message whose image is being generated — and only that
@@ -585,12 +607,27 @@ export function ChatPanel(props: ChatPanelProps) {
                   <div className="message-images">
                     {msg.images.map((img, index) => (
                       <figure key={`${img.file}-${index}`} className="message-image">
-                        <img
-                          src={buildImageUrl(img.file)}
-                          alt={img.prompt.slice(0, 120)}
-                          title={img.prompt}
-                          loading="lazy"
-                        />
+                        <button
+                          type="button"
+                          className="message-image-open"
+                          title="View full screen"
+                          aria-label="View this image full screen"
+                          onClick={() =>
+                            setViewerImage({
+                              src: buildImageUrl(img.file),
+                              alt: img.prompt.slice(0, 120),
+                              title: img.prompt,
+                              caption: imageCaption(img)
+                            })
+                          }
+                        >
+                          <img
+                            src={buildImageUrl(img.file)}
+                            alt={img.prompt.slice(0, 120)}
+                            title={img.prompt}
+                            loading="lazy"
+                          />
+                        </button>
                         <button
                           type="button"
                           className="message-image-remove"
@@ -601,11 +638,7 @@ export function ChatPanel(props: ChatPanelProps) {
                         >
                           <Icon name={imageDeletingId === msg.id ? "Loader" : "X"} size={11} className={imageDeletingId === msg.id ? "animate-spin" : ""} />
                         </button>
-                        <figcaption title={img.prompt}>
-                          {img.model}
-                          {img.durationMs ? ` · ${(img.durationMs / 1000).toFixed(1)}s` : ""}
-                          {img.seed ? ` · seed ${img.seed}` : ""}
-                        </figcaption>
+                        <figcaption title={img.prompt}>{imageCaption(img)}</figcaption>
                         {/* What we actually sent upstream. Absent on refs
                             stored before the field existed → no empty box. */}
                         {img.request ? <ImageRequestDisclosure request={img.request} /> : null}
@@ -767,6 +800,8 @@ export function ChatPanel(props: ChatPanelProps) {
           onClose={() => onImagePromptClose?.()}
         />
       ) : null}
+
+      <ImageViewer image={viewerImage} onClose={() => setViewerImage(null)} />
 
       {choicesEnabled && choices.length > 0 && !loading ? (
         <div className="choices">

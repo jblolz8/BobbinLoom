@@ -7799,4 +7799,66 @@ button.crop-auto-detect-btn:hover:not(:disabled),
     display: none !important;
   }
 }
+/* ── Full-screen image viewer (common/ImageViewer) ── */
 
+/* The picture wants the viewport, so the backdrop's own padding is trimmed to
+   leave only a margin — and the section carries no panel styling: at this size
+   a modal background would only frame a frame. */
+.image-viewer-backdrop {
+  padding: 1.25rem;
+}
+
+.image-viewer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.image-viewer-image {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: calc(100vw - 2.5rem);
+  max-height: calc(100vh - 5.5rem);
+  border: 1px solid var(--border-main);
+  border-radius: 12px;
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-card);
+}
+
+.image-viewer-close {
+  position: absolute;
+  top: -0.75rem;
+  right: -0.75rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border-main);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.image-viewer-close:hover,
+.image-viewer-close:focus-visible {
+  background: var(--status-danger-bg);
+  border-color: var(--status-danger-border);
+  color: var(--status-danger);
+}
+
+.image-viewer-caption {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: center;
+}
