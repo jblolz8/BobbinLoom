@@ -422,6 +422,27 @@ describe("image generation: shipped preset configs", () => {
     );
   });
 
+  it("keeps the rules that stop prose, and the two-character attribution rule", () => {
+    // Each of these exists because something leaked through in a real generation:
+    // a sentence with articles and a copula, a chained movement, and a
+    // two-character scene where nothing said whose hair or eyes were whose.
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("Every item is a TAG, not a clause");
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("NEVER write articles (a, an, the)");
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("ONE FRAME, ONE INSTANT");
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain('WRONG: "A medium close-up shot of');
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("RIGHT: close-up, 1boy 1girl, pale skin");
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("WHO IS WHO (two or more characters)");
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("prefix it: her ponytail, his black hair");
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("In a one-person scene never use those prefixes");
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("THE PLAYER (POV scenes)");
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(
+      "No style or quality tags (anime style, masterpiece, best quality)"
+    );
+    // It is ordered for the encoder: the frame-defining tags sit in the first chunk.
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("The FIRST ~300 CHARACTERS carry the most weight");
+    expect(preset("default").imageGeneration?.instruction).toBe(DEFAULT_IMAGE_PROMPT_INSTRUCTION);
+  });
+
   it("leaves the user-owned preset without a block, so it exercises the read-time fallback", () => {
     const userOwned = presets.find((p) => p.name === "pplong NSFW")!;
     expect(userOwned.readonly).toBe(false);

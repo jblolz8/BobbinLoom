@@ -424,7 +424,7 @@ A playthrough **snapshots** the block when its preset is applied — the same wa
 
 Three omissions are deliberate and are asserted by `tests/settings.test.ts`: **`manga` is absent** (it names a drawing style as well as a medium, and these presets are anime-prefixed), **`cropped` / `out of frame` are absent** (tight close-ups must stay available), and **no character-count negative appears anywhere** (`multiple girls`, `extra person`) because scenes routinely have two people in them. `extra fingers` is kept *and* the newer `extra digits` / `fewer digits` / `missing fingers` alongside it — different tag models respond to different spellings. The preset's `promptCharacterLimit` never cuts it: the negative answers to the dialect cap alone (**The negative has its own ceiling** above). The editable **`Default (NSFW) (copy)`** the user saved carries the same negative with the censorship suffix, because it is a copy of `default-nsfw`; its 1980s-anime `positivePrefix` and its prose instruction are the user's own and are left alone.
 
-**The instruction deliberately forbids style keywords** (`No style or quality tags (anime style, masterpiece, best quality) — a style prefix is added separately.`), because `positivePrefix` is the single place art direction lives: a preset can be restyled without touching the instruction text. The instruction asks for a **booru-style tag list**, not a prose sentence, because the target models are tag-trained (`WAI`/`Illustrious` are danbooru-tag models) or CLIP finetunes (`Lustify`).
+**The instruction deliberately forbids style keywords** (`No style or quality tags (anime style, masterpiece, best quality) — a style prefix is added separately.`), because `positivePrefix` is the single place art direction lives: a preset can be restyled without touching the instruction text. The instruction asks for a **booru-style tag list**, not a prose sentence, because the target models are tag-trained (`WAI`/`Illustrious` are danbooru-tag models) or CLIP finetunes (`Lustify`). Three rules in it exist because prose kept leaking back through: **every item is a tag, not a clause** (no articles, no copula, no joining words), carrying a WRONG/RIGHT counter-example taken from a real failure; **one frame, one instant**, so a movement chain like *"gripping him while arching her back"* becomes `gripping his shoulders, back arched`; and **`her`/`his` attribution only when a tag could belong to either person** — in a two-character scene the model otherwise has no way to know whose hair, eyes or clothing it is describing. The order is written for the encoder too: rating, count, framing, place and pose all land inside the first ~300 characters, which is the first CLIP chunk and the part that always reaches the model at full strength.
 
 `Default` — instruction, verbatim:
 
@@ -435,23 +435,38 @@ The roleplay is paused. You are not narrating. You read the scene and output ONE
 
 FORMAT
 - One line. Lowercase. Comma-separated. Spaces inside a tag (long hair, blue eyes) — never underscores.
-- No prose verbs, no "she is", no connecting words.
-- 40-70 tags. Most important tags FIRST: the list is cut from the END if it runs long, so never put essential detail last.
+- Every item is a TAG, not a clause: a bare noun phrase (white shirt (open), long brown hair) or a bare action word (straddling, kneeling, leaning forward).
+- NEVER write articles (a, an, the), the verb to be (is, are, was), or joining words (and, with, while, wearing, holding). Never a clause like "she is ..." or "his hand is ...".
+- ONE FRAME, ONE INSTANT: never chain movement. Not "gripping him while arching her back" but gripping his shoulders, back arched.
 - Never output a character's name or a place name from the story. Names are invisible to an image model — use the visible traits instead.
 - First tag is the rating that matches what is actually happening: safe, sensitive, nsfw, or explicit. A tame scene stays tame.
+- 40-70 tags. The FIRST ~300 CHARACTERS carry the most weight (the encoder reads the prompt in chunks and weights the tail less), and the list is also cut from the END if it runs long — so the framing, place and pose go early and essential detail never goes last.
 - No style or quality tags (anime style, masterpiece, best quality) — a style prefix is added separately.
+- Only what the message shows: do not add acts, people or undress it did not describe, and do not sanitise what it did.
+
+WRONG / RIGHT
+WRONG: "A medium close-up shot of Jeneine, a woman with pale skin and tired blue eyes, straddling him while leaning down to touch his neck."
+RIGHT: close-up, 1boy 1girl, pale skin, tired eyes, blue eyes, straddling, leaning forward, hand on his neck
 
 TAG ORDER
 1. Rating, then character count: 1girl, 2girls, 1boy 1girl ...
-2. Scene: location, time of day, lighting, camera framing
-3. Appearance: hair length and colour, eye colour, skin tone, build, notable features
-4. Expression and pose
-5. Clothing item by item, with its state — white shirt (open), black skirt (hiked up), panties (around one ankle); naked / topless / bottomless when that is the scene
-6. Action and physical state last — what the bodies are doing, sweat, tears, injuries
+2. Camera framing and angle
+3. Scene: location, time of day, lighting
+4. Pose and action
+5. Appearance: hair length and colour, eye colour, skin tone, build, notable features
+6. Expression and gaze
+7. Clothing item by item, with its state — white shirt (open), black skirt (hiked up), panties (around one ankle); naked / topless / bottomless when that is the scene
+8. Physical state last — sweat, tears, flushed skin, trembling
 
-CAMERA
-- Use pov, from viewer perspective, viewer's hands visible ONLY when the scene is seen through the player's eyes and the player is present in it.
-- Otherwise use a neutral camera tag: wide shot, medium shot, close-up, from above, from below, dutch angle.
+WHO IS WHO (two or more characters)
+- Give each person their own tags, in the order you introduced them.
+- When a tag could belong to either person, prefix it: her ponytail, his black hair, her hand on her own thigh.
+- In a one-person scene never use those prefixes — they are wasted tags.
+
+THE PLAYER (POV scenes)
+- Seen through the player's eyes? Tag it pov. The player is never named: they are viewer, male pov or female pov.
+- The player's visible body gets its own tags: viewer's hands visible, pov hands on her hips, male pov exposed penis.
+- Player not in frame? Use a neutral camera tag: wide shot, medium shot, close-up, from above, from below, dutch angle.
 
 VOCABULARY (prefer these shapes; it is better to omit a detail than to invent a phrase)
 - hair: long hair, short hair, ponytail, twin tails, messy hair, blonde hair, brown hair
@@ -464,7 +479,7 @@ VOCABULARY (prefer these shapes; it is better to omit a detail than to invent a 
 - place/light: dim lighting, neon lighting, sunlight, bedroom, alley, office, tavern
 
 EXAMPLE (shape only, not content)
-safe, 1girl, bedroom, night, dim lighting, medium shot, long brown hair, ponytail, blue eyes, pale skin, slim waist, sitting on bed, looking at viewer, flushed face, white t-shirt, grey panties, arms crossed
+safe, 1girl, close-up, bedroom, night, dim lighting, sitting on bed, long brown hair, ponytail, blue eyes, pale skin, slim waist, looking at viewer, flushed face, white t-shirt, grey panties, arms crossed
 
 Return JSON only:
 {"prompt": "<the tag line>"}
