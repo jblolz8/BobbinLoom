@@ -263,7 +263,7 @@ A playthrough **snapshots** the block when its preset is applied — the same wa
 | | Default | Default (NSFW) |
 |---|---|---|
 | `positivePrefix` | `anime style` | `anime style` |
-| `negativePrefix` | `lowres, bad anatomy, bad hands, extra fingers, extra limbs, deformed, poorly drawn face, bad proportions, watermark, signature, text, jpeg artifacts` | …the same list, plus `, censored, mosaic censoring, bar censor, child, loli, shota` |
+| `negativePrefix` | `lowres, bad anatomy, bad hands, extra fingers, extra limbs, deformed, poorly drawn face, bad proportions, watermark, signature, text, jpeg artifacts` | …the same list, plus `, censored, mosaic censoring, bar censor` |
 | `promptCharacterLimit` | `900` | `900` |
 | `includeState` / `includeCast` | `true` / `true` | `true` / `true` |
 | `instruction` | the shipped instruction | the shipped instruction **plus** an `Explicit scenes:` section inserted before the final Return-JSON-only line |

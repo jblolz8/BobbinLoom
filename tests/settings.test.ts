@@ -238,7 +238,7 @@ describe("image generation: shipped preset configs", () => {
     }
     expect(preset("default").imageGeneration?.negativePrefix).toBe(DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix);
     expect(preset("default-nsfw").imageGeneration?.negativePrefix).toBe(
-      `${DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix}, censored, mosaic censoring, bar censor, child, loli, shota`
+      `${DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix}, censored, mosaic censoring, bar censor`
     );
   });
 
