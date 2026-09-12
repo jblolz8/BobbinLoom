@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProviderConnection } from "../src/schemas";
 import type { ResolvedProviderConfig } from "../src/server/providerConfig";
 import { createImageProvider, UnconfiguredImageProvider } from "../src/server/imageProvider";
@@ -11,7 +11,15 @@ import type {
 import { A1111_IMAGE_PROMPT_CAP, A1111Provider } from "../src/server/imageProvider/a1111Provider";
 import { OPENAI_IMAGE_PROMPT_CAP, OpenAIImagesProvider } from "../src/server/imageProvider/openaiImagesProvider";
 import { VENICE_IMAGE_PROMPT_CAP, VeniceImageProvider } from "../src/server/imageProvider/veniceImageProvider";
-import { clampChars, dataUrlPayload, parseSize, sniffMime } from "../src/server/imageProvider/shared";
+import {
+  clampChars,
+  clearForgeCoupleCache,
+  dataUrlPayload,
+  detectForgeCouple,
+  FORGE_COUPLE_TTL_MS,
+  parseSize,
+  sniffMime
+} from "../src/server/imageProvider/shared";
 import { makePng, PNG_SIGNATURE } from "./helpers/pngBuilder";
 
 const PNG_BYTES = makePng("image-provider-fixture");
@@ -86,6 +94,120 @@ describe("imageProvider/shared", () => {
     expect(dataUrlPayload(`data:image/png;base64,${PNG_B64}`)).toBe(PNG_B64);
     expect(dataUrlPayload("https://example.com/a.png")).toBeNull();
     expect(dataUrlPayload(undefined)).toBeNull();
+  });
+});
+
+describe("imageProvider/shared — Forge Couple detection", () => {
+  const BASE = "http://127.0.0.1:7860";
+
+  /** Records every URL and answers from a table. */
+  function stubRoutes(
+    respond: (url: string) => Response
+  ): { fetchImpl: typeof fetch; calls: Array<{ url: string; headers: Record<string, string> }> } {
+    const calls: Array<{ url: string; headers: Record<string, string> }> = [];
+    const fetchImpl = (async (url: any, init: any = {}) => {
+      calls.push({ url: String(url), headers: init.headers ?? {} });
+      return respond(String(url));
+    }) as unknown as typeof fetch;
+    return { fetchImpl, calls };
+  }
+
+  /** A Forge/ReForge build with (or without) the extension installed. The
+   *  real route also lists the built-in scripts; only `name` + `is_alwayson`
+   *  matter here. */
+  const scriptInfo = (...names: Array<string | { name: string; is_alwayson: boolean }>) => names;
+  const INSTALLED = scriptInfo(
+    { name: "sampler", is_alwayson: false },
+    { name: "Forge Couple", is_alwayson: true },
+    { name: "forge couple inpaint", is_alwayson: true }
+  );
+
+  beforeEach(() => clearForgeCoupleCache());
+
+  it("reads /sdapi/v1/script-info at the WebUI root and keeps the server's own title", async () => {
+    const { fetchImpl, calls } = stubRoutes(() => jsonResponse(INSTALLED));
+    const found = await detectForgeCouple(BASE, { fetchImpl, headers: { Authorization: "Basic abc" } });
+
+    // The exact URL: the a1111 base URL is verbatim, so no /v1 may appear.
+    expect(calls.map((c) => c.url)).toEqual([`${BASE}/sdapi/v1/script-info`]);
+    expect(calls[0].url).not.toContain("/v1/sdapi");
+    // The same auth rule as every other a1111 call.
+    expect(calls[0].headers.Authorization).toBe("Basic abc");
+
+    // Matched case-INSENSITIVELY, but the TITLE the server reported is what
+    // comes back: that string is the alwayson_scripts key, and A1111 looks it
+    // up by exact name. ("forge couple inpaint" is a DIFFERENT script and must
+    // not win: the name match is exact apart from case.)
+    expect(found).toEqual({ detected: true, title: "Forge Couple" });
+
+    // A lowercase-only build is matched just the same, and its own spelling
+    // comes back.
+    const lower = stubRoutes(() => jsonResponse(scriptInfo({ name: "forge couple", is_alwayson: true })));
+    expect(await detectForgeCouple("http://127.0.0.1:7862", { fetchImpl: lower.fetchImpl })).toEqual({
+      detected: true,
+      title: "forge couple"
+    });
+  });
+
+  it("prefers the alwayson entry when the name appears more than once", async () => {
+    const { fetchImpl } = stubRoutes(() =>
+      jsonResponse(scriptInfo({ name: "Forge Couple", is_alwayson: false }, { name: "forge couple", is_alwayson: true }))
+    );
+    expect(await detectForgeCouple(BASE, { fetchImpl })).toEqual({ detected: true, title: "forge couple" });
+  });
+
+  it("answers 'not detected' — never an error — for a missing route, a bad body or a transport failure", async () => {
+    clearForgeCoupleCache();
+    const missing = stubRoutes(() => new Response("Not Found", { status: 404 }));
+    expect(await detectForgeCouple(BASE, { fetchImpl: missing.fetchImpl })).toEqual({ detected: false });
+
+    clearForgeCoupleCache();
+    const html = stubRoutes(() => new Response("<html>nope</html>", { status: 200 }));
+    expect(await detectForgeCouple(BASE, { fetchImpl: html.fetchImpl })).toEqual({ detected: false });
+
+    clearForgeCoupleCache();
+    const object = stubRoutes(() => jsonResponse({ detail: "expected a list" }));
+    expect(await detectForgeCouple(BASE, { fetchImpl: object.fetchImpl })).toEqual({ detected: false });
+
+    clearForgeCoupleCache();
+    const noMatch = stubRoutes(() => jsonResponse(scriptInfo({ name: "sampler", is_alwayson: false })));
+    expect(await detectForgeCouple(BASE, { fetchImpl: noMatch.fetchImpl })).toEqual({ detected: false });
+
+    clearForgeCoupleCache();
+    const boom = stubRoutes(() => {
+      throw new Error("ECONNREFUSED");
+    });
+    await expect(detectForgeCouple(BASE, { fetchImpl: boom.fetchImpl })).resolves.toEqual({ detected: false });
+  });
+
+  it("caches per base URL for a short TTL, and forgets the answer once it lapses", async () => {
+    clearForgeCoupleCache();
+    let clock = 1_000_000;
+    const now = () => clock;
+    const { fetchImpl, calls } = stubRoutes(() => jsonResponse(INSTALLED));
+
+    // Two reads inside the TTL = ONE request. The answer, including a negative
+    // one, is otherwise paid for by every single generation.
+    expect(await detectForgeCouple(BASE, { fetchImpl, now })).toEqual({ detected: true, title: "Forge Couple" });
+    expect(await detectForgeCouple(BASE, { fetchImpl, now })).toEqual({ detected: true, title: "Forge Couple" });
+    expect(calls).toHaveLength(1);
+
+    // A different WebUI has its own entry, and does not inherit this one's.
+    const other = stubRoutes(() => new Response("nope", { status: 500 }));
+    expect(await detectForgeCouple("http://127.0.0.1:7861", { fetchImpl: other.fetchImpl, now })).toEqual({
+      detected: false
+    });
+    expect(other.calls).toHaveLength(1);
+
+    // A trailing slash is the same WebUI, not a second one.
+    expect(await detectForgeCouple(`${BASE}///`, { fetchImpl, now })).toEqual({ detected: true, title: "Forge Couple" });
+    expect(calls).toHaveLength(1);
+
+    // Past the TTL the WebUI is asked again — that is how a restart that adds
+    // (or removes) the extension is noticed without a server restart.
+    clock += FORGE_COUPLE_TTL_MS + 1;
+    expect(await detectForgeCouple(BASE, { fetchImpl, now })).toEqual({ detected: true, title: "Forge Couple" });
+    expect(calls).toHaveLength(2);
   });
 });
 
