@@ -1,6 +1,6 @@
 import { useEffect, useState, type Dispatch, type FormEvent, type MouseEvent, type SetStateAction } from "react";
 import { Button, Icon, SimpleSelect, SwitchRow, TextInput } from "../../base";
-import type { ImageApiStyle } from "../../../../schemas";
+import type { ImageApiStyle, RegionDirection } from "../../../../schemas";
 import { fetchProviderImageStyles } from "../../../api";
 import type { ModelCapabilities, ProviderConnection, ProviderConnectionPayload, ProviderModelCapabilities } from "../../../api";
 import { CUSTOM_STYLE_OPTION, imageStyleDisplay } from "../../../utils/imageStyleOptions";
@@ -12,6 +12,15 @@ const API_STYLE_OPTIONS: Array<{ value: ImageApiStyle; label: string }> = [
   { value: "openai", label: "OpenAI-compatible" },
   { value: "venice", label: "Venice" },
   { value: "a1111", label: "Automatic1111 / Forge (local)" }
+];
+
+/** Forge Couple ‘direction’, in the extension’s own spelling: Horizontal
+ *  maps left→right, Vertical top→bottom, and the value goes on the wire
+ *  verbatim. The labels spell out the geometry because the words alone do not
+ *  say which way the blocks run. */
+const REGION_DIRECTION_OPTIONS: Array<{ value: RegionDirection; label: string }> = [
+  { value: "Horizontal", label: "Horizontal — left to right" },
+  { value: "Vertical", label: "Vertical — top to bottom" }
 ];
 
 /** A numeric field's raw text as a number, or `undefined` when the field is
@@ -151,8 +160,13 @@ export type ImageConnectionEditorProps = {
   /** a1111 only: the WebUI's own sampler and scheduler names, from the same
    *  probe that filled `models`. They populate the two pickers; when a build
    *  lists nothing (no such route) those fields fall back to free text, because
-   *  a fork may ship names we were never told. */
-  dialectOptions?: { samplers?: string[]; schedulers?: string[] };
+   *  a fork may ship names we were never told.
+   *
+   *  `forgeCouple` is that same probe's answer to "is the Forge Couple
+   *  extension installed?" — present (true) only when the WebUI listed it, so
+   *  an absent value means "not detected", never "switched off". Nothing in
+   *  the region settings below can reach the wire without it. */
+  dialectOptions?: { samplers?: string[]; schedulers?: string[]; forgeCouple?: boolean };
   modelsStatus: EditorStatus;
   fetchingModels: boolean;
   onFetchModels: () => void;
@@ -223,6 +237,14 @@ export function ImageConnectionEditor({
   const venice = apiStyle === "venice";
   // The local WebUI dialect: its own fields, none of Venice's pass-throughs.
   const a1111 = apiStyle === "a1111";
+  // Forge Couple detection, as the probe reported it. Read as a three-way on
+  // purpose: the API answers 422 `always on script not found` for an alwayson
+  // key the extension does not own, so the payload is never sent blind — and
+  // "not probed yet" is not the same claim as "not installed".
+  const forgeCoupleDetected = dialectOptions?.forgeCouple === true;
+  // The probe answers at least once per opened connection (its status line is
+  // what says so); before that, or after a failed probe, we simply do not know.
+  const forgeCoupleChecked = modelsStatus !== null && modelsStatus.kind === "ok";
   const styleValue = form.stylePreset ?? "";
   // Seeded from the session cache so a re-opened connection paints its stored
   // value as a real option on the FIRST frame — no re-fetch, nothing to flash.
@@ -772,6 +794,76 @@ export function ImageConnectionEditor({
             <p className="conn-field-helper">
               Nothing here is written to the WebUI's settings: the checkpoint travels as a per-request override that
               the WebUI restores immediately afterwards, and the sampling values live on the request itself.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Forge Couple regions (a1111 only). These two are stored preferences,
+          not a wire switch: the adapter composes the alwayson payload only when
+          the extension is really installed AND the prompt came back with two or
+          more ` | ` groups. With no extension — or a scene with one character —
+          the request is exactly the one this editor made before the section
+          existed, which is why the detection line below is never silent. */}
+      {a1111 && (
+        <div className="conn-section">
+          <h5 className="form-section-title conn-section-title">
+            <Icon name="LayoutGrid" size={14} />
+            <span>Character Regions</span>
+          </h5>
+          <div className="conn-fields-group">
+            <div className="conn-field-group">
+              <span className="field-label-text">Region direction</span>
+              <SimpleSelect<RegionDirection>
+                size="sm"
+                variant="filled"
+                fullWidth
+                value={form.regionDirection ?? "Horizontal"}
+                onChange={(direction) => setForm((f) => ({ ...f, regionDirection: direction }))}
+                options={REGION_DIRECTION_OPTIONS}
+                aria-label="Region direction"
+              />
+              <p className="conn-field-helper">
+                How the canvas is divided between characters. Horizontal gives each one a column, left to right,
+                in the order they appear in the prompt; Vertical gives each one a band, top to bottom. Sent as
+                Forge Couple's own <code>direction</code>, so the two spellings are its, not ours.
+              </p>
+            </div>
+
+            <div className="conn-toggle-group">
+              <SwitchRow
+                icon="Users"
+                title="Regions"
+                description="Give each character its own attention region when the scene has two or more of them, so their traits stop bleeding into one another. A scene with one character has no regions at all, whatever this is set to."
+                checked={form.regionsEnabled ?? true}
+                onChange={(e) => setForm((f) => ({ ...f, regionsEnabled: e.target.checked }))}
+              />
+            </div>
+
+            {forgeCoupleDetected ? (
+              <p className="conn-status ok">
+                Forge Couple detected in this WebUI — with two or more characters in frame, each one gets its
+                own attention region. The regions travel on the request itself; nothing in the WebUI's own
+                settings is changed.
+              </p>
+            ) : forgeCoupleChecked ? (
+              <p className="conn-status warn">
+                Forge Couple is <strong>not installed</strong> in this WebUI, so regions are disabled and renders
+                are unchanged by the two settings above. Install the <strong>Forge Couple</strong> extension
+                (<code>sd-forge-couple</code>) from the WebUI's Extensions tab, restart it, then Fetch models to
+                re-check — a WebUI that has it will say so here.
+              </p>
+            ) : (
+              <p className="conn-status">
+                This WebUI's extension list is not known here yet — Fetch models against it, and this line
+                reports whether Forge Couple is installed. Until it is, regions are disabled and renders are
+                unchanged.
+              </p>
+            )}
+            <p className="conn-field-helper">
+              Read-only detection: the same /sdapi/v1/script-info probe that fills the checkpoint list, run when
+              the connection is opened or Fetch models is pressed. The API rejects the region payload with a 422
+              when the extension is absent, so it is never sent on a guess.
             </p>
           </div>
         </div>

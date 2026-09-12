@@ -79,6 +79,11 @@ const emptyForm = (kind: ProviderKind): ProviderConnectionPayload =>
         stylePreset: "",
         hideWatermark: false,
         variants: 1,
+        // Forge Couple regions (a1111 only). Stated rather than left to the
+        // server's default so the switch and the select open in the state the
+        // form actually holds: ON, Horizontal.
+        regionsEnabled: true,
+        regionDirection: "Horizontal",
         temperature: 0.8, maxTokens: 1200, contextWindow: 32768
       }
     : {
@@ -110,6 +115,11 @@ const formFromConnection = (c: ProviderConnection): ProviderConnectionPayload =>
         sampler: c.sampler,
         scheduler: c.scheduler,
         timeoutMs: c.timeoutMs,
+        // Forge Couple regions travel with the row too: a field the form does
+        // not carry is a field the next save would quietly clear, which is the
+        // same trap the sampling controls above were caught in.
+        regionsEnabled: c.regionsEnabled,
+        regionDirection: c.regionDirection,
         temperature: c.temperature, maxTokens: c.maxTokens, contextWindow: c.contextWindow
       }
     : {
