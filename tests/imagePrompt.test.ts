@@ -54,7 +54,8 @@ describe("generateImagePrompt", () => {
     expect(calls[0].url).toBe("http://localhost:1234/v1/chat/completions");
     expect(calls[0].body.model).toBe("local-model");
     expect(calls[0].body.temperature).toBe(0.7);
-    expect(calls[0].body.max_tokens).toBe(600);
+    // The CONNECTION governs the budget: no artificial ceiling here.
+    expect(calls[0].body.max_tokens).toBe(1200);
     expect(calls[0].body.messages[0].role).toBe("system");
     expect(calls[0].body.messages[0].content).toBe(settings().instruction);
     expect(calls[0].body.messages[1].content).toContain(INPUT.messageContent);
@@ -70,7 +71,7 @@ describe("generateImagePrompt", () => {
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
   });
 
-  it("caps max_tokens at the provider's own maxTokens and accepts a fenced JSON block", async () => {
+  it("sends the connection's own maxTokens and accepts a fenced JSON block", async () => {
     const { fetchImpl, calls } = stubFetch('```json\n{"prompt": "a bridge", "negative_prompt": ""}\n```');
     const result = await generateImagePrompt(testConfig({ maxTokens: 200 }), settings(), INPUT, fetchImpl);
     expect(calls[0].body.max_tokens).toBe(200);
