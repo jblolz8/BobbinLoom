@@ -9,6 +9,7 @@ import { MockProvider } from "../src/server/provider";
 import { loadAppSettings, saveAppSettings } from "../src/server/appSettingsStore";
 import { seedRegistry } from "../src/server/providerRegistry";
 import { DEFAULT_IMAGE_GENERATION_SETTINGS, DEFAULT_IMAGE_PROMPT_INSTRUCTION } from "../src/engine/imageDefaults";
+import { FORGE_COUPLE_SEPARATOR } from "../src/server/imageProvider/a1111Provider";
 import { ImageApiStyleSchema, PromptPresetSchema, ProviderConnectionSchema } from "../src/schemas";
 
 const tempDirs: string[] = [];
@@ -441,6 +442,42 @@ describe("image generation: shipped preset configs", () => {
     // It is ordered for the encoder: the frame-defining tags sit in the first chunk.
     expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("The FIRST ~300 CHARACTERS carry the most weight");
     expect(preset("default").imageGeneration?.instruction).toBe(DEFAULT_IMAGE_PROMPT_INSTRUCTION);
+  });
+
+  it("pins the MULTIPLE CHARACTERS grouping rule the region splitter depends on", () => {
+    // Two characters in one frame is the whole reason character regions exist:
+    // the writer has to hand back one group per person, separated by the SAME
+    // ` | ` the adapter splits on and passes to the extension as its separator,
+    // with the shared scene first (that group becomes the background line, where
+    // the preset's style prefix lands). A one-character scene must produce ONE
+    // group — a stray separator would invent a region for nobody.
+    const core = DEFAULT_IMAGE_PROMPT_INSTRUCTION;
+    expect(core).toContain("MULTIPLE CHARACTERS");
+    expect(core).toContain('separate the groups with " | "');
+    expect(core).toContain("Still ONE line");
+    expect(core).toContain("The FIRST group holds what is shared");
+    expect(core).toContain("then one group per character, in the order they appear");
+    expect(core).toContain("The rating and the character count still open the line");
+    expect(core).toContain('A scene with ONE character has no " | " at all');
+    // The separator the prose asks for IS the one the code splits on: one string
+    // constant, so the rule can never describe a separator nothing looks for.
+    expect(FORGE_COUPLE_SEPARATOR).toBe(" | ");
+    expect(core).toContain(FORGE_COUPLE_SEPARATOR);
+    // Both shipped presets carry it — `default` byte-identically, NSFW by the
+    // same derivation the drift guard above asserts.
+    for (const id of ["default", "default-nsfw"]) {
+      expect(preset(id).imageGeneration?.instruction, id).toContain("MULTIPLE CHARACTERS");
+      expect(preset(id).imageGeneration?.instruction, id).toContain('separate the groups with " | "');
+    }
+    // The shipped EXAMPLE stays a SINGLE-group example — it is a one-character
+    // scene, so it models no separator at all (the rule's last line).
+    const example = core.split("EXAMPLE (shape only, not content)\n")[1]!.split("\n")[0]!;
+    expect(example).toContain("1girl");
+    expect(example).not.toContain("|");
+    // The user's own clone is theirs: the rule never reached it.
+    expect(presets.find((p) => p.name === "Default (NSFW) (copy)")!.imageGeneration?.instruction).not.toContain(
+      "MULTIPLE CHARACTERS"
+    );
   });
 
   it("leaves the user-owned preset without a block, so it exercises the read-time fallback", () => {

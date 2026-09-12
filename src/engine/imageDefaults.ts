@@ -39,6 +39,12 @@ WHO IS WHO (two or more characters)
 - When a tag could belong to either person, prefix it: her ponytail, his black hair, her hand on her own thigh.
 - In a one-person scene never use those prefixes — they are wasted tags.
 
+MULTIPLE CHARACTERS (two or more characters in frame)
+- Keep each character's tags together and separate the groups with " | " — a space, a pipe, a space. Still ONE line: a pipe groups the tags, it never starts a new line.
+- The FIRST group holds what is shared (scene, lighting, the interaction); then one group per character, in the order they appear.
+- The rating and the character count still open the line, in that first group.
+- A scene with ONE character has no " | " at all.
+
 THE PLAYER (POV scenes)
 - Seen through the player's eyes? Tag it pov. The player is never named: they are viewer, male pov or female pov.
 - The player's visible body gets its own tags: viewer's hands visible, pov hands on her hips, male pov exposed penis.
