@@ -505,6 +505,91 @@ describe("A1111Provider — the request body", () => {
   });
 });
 
+describe("A1111Provider — the response", () => {
+  const a1111 = (fetchImpl: typeof fetch, conn: ProviderConnection = a1111Conn()) =>
+    new A1111Provider(a1111Config(), conn, fetchImpl);
+
+  it("decodes every base64 image, sniffing each mime from its own bytes", async () => {
+    const { fetchImpl } = stubA1111(a1111Happy([PNG_B64, JPEG_B64]));
+    const result = await a1111(fetchImpl).generateImage({ prompt: "a scene" });
+
+    // batch_size > 1 answers with several payloads; a bare base64 blob carries
+    // no filename and no format, so the magic bytes are the only honest source.
+    expect(result.images).toHaveLength(2);
+    expect(result.images[0].mime).toBe("image/png");
+    expect(result.images[0].bytes.subarray(0, 8)).toEqual(PNG_SIGNATURE);
+    expect(result.images[1].mime).toBe("image/jpeg");
+    expect(result.images[1].bytes[0]).toBe(0xff);
+    expect(result.images[1].bytes[1]).toBe(0xd8);
+    expect(result.model).toBe("sd_xl_base_1.0.safetensors");
+    expect(result.providerId).toBe("a1111_local");
+    expect(result.durationMs).toBeGreaterThanOrEqual(0);
+    expect(result.rawRequest).toContain('"n_iter":1');
+    expect(result.rawOutput).toContain(PNG_B64.slice(0, 32));
+  });
+
+  it("reports the seed the WebUI actually used, out of the info JSON string", async () => {
+    const seeded = stubA1111(a1111Happy([PNG_B64], JSON.stringify({ seed: 12345, all_seeds: [12345] })));
+    const result = await a1111(seeded.fetchImpl).generateImage({ prompt: "a scene", seed: 0 });
+    expect(result.seed).toBe(12345);
+
+    // A request with no seed sends -1 (random) — `-1` is not the seed that was
+    // used, so what comes back is the info's real one, never the sentinel.
+    const random = stubA1111(a1111Happy([PNG_B64], JSON.stringify({ seed: 987654 })));
+    const rolled = await a1111(random.fetchImpl).generateImage({ prompt: "a scene" });
+    expect(rolled.seed).toBe(987654);
+
+    // `all_seeds` is the documented fallback when `seed` is absent.
+    const fallback = stubA1111(a1111Happy([PNG_B64], JSON.stringify({ all_seeds: [777, 778] })));
+    const fromAll = await a1111(fallback.fetchImpl).generateImage({ prompt: "a scene" });
+    expect(fromAll.seed).toBe(777);
+  });
+
+  it("tolerates a missing, empty or garbled info without throwing", async () => {
+    const cases: Array<Record<string, unknown>> = [
+      { images: [PNG_B64] },
+      { images: [PNG_B64], info: "" },
+      { images: [PNG_B64], info: "{not json" },
+      { images: [PNG_B64], info: "42" },
+      { images: [PNG_B64], info: JSON.stringify({ seed: "nope" }) },
+      { images: [PNG_B64], info: JSON.stringify({ all_seeds: [] }) }
+    ];
+    for (const payload of cases) {
+      const { fetchImpl } = stubA1111((call) =>
+        call.url === A1111_TXT2IMG_URL ? jsonResponse(payload) : jsonResponse({}, 404)
+      );
+      const result = await a1111(fetchImpl).generateImage({ prompt: "a scene" });
+      // The image is still usable; only the provenance is unknown.
+      expect(result.images).toHaveLength(1);
+      expect(result.seed).toBeUndefined();
+    }
+  });
+
+  it("rejects an empty image list", async () => {
+    const { fetchImpl } = stubA1111(a1111Happy([]));
+    await expect(a1111(fetchImpl).generateImage({ prompt: "a scene" })).rejects.toThrow(/no image data/);
+  });
+
+  it("names the status and an excerpt of the body when the call fails", async () => {
+    const { fetchImpl } = stubA1111((call) =>
+      call.url === A1111_TXT2IMG_URL ? jsonResponse({ detail: "prompt too long" }, 500) : jsonResponse({}, 404)
+    );
+    const provider = a1111(fetchImpl);
+    const thrown = await provider.generateImage({ prompt: "a scene" }).catch((error: unknown) => error);
+    expect(thrown).toBeInstanceOf(Error);
+    const message = thrown instanceof Error ? thrown.message : "";
+    expect(message).toMatch(/500/);
+    expect(message).toMatch(/prompt too long/);
+  });
+
+  it("tells the user that a 404 usually means the WebUI lacks --api", async () => {
+    const { fetchImpl } = stubA1111(() => new Response("Not Found", { status: 404 }));
+    const provider = a1111(fetchImpl);
+    await expect(provider.generateImage({ prompt: "a scene" })).rejects.toThrow(/404/);
+    await expect(provider.generateImage({ prompt: "a scene" })).rejects.toThrow(/--api/);
+  });
+});
+
 describe("A1111Provider — progress", () => {
   const progressBody = { progress: 0.43, eta_relative: 12.5, state: { sampling_step: 12, sampling_steps: 28 } };
 

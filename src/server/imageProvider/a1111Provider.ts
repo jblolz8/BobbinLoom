@@ -2,6 +2,7 @@ import type { ProviderConnection } from "../../schemas";
 import { authHeaders } from "../httpAuth";
 import type { ResolvedProviderConfig } from "../providerConfig";
 import { linkExternalAbort } from "../provider/openaiClient";
+import { A1111_API_MISSING_HINT } from "../providerRegistry";
 import { clampChars, parseSize, sniffMime } from "./shared";
 import type { ImageGenerationRequest, ImageGenerationResult, ImageProvider } from "./types";
 
@@ -45,6 +46,52 @@ type A1111ProgressResponse = {
  *  WebUI did not report that field. */
 function optionalNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+/** A1111 answers with `info` as a JSON STRING (not an object), and it is the only
+ *  place the seed that was actually used appears — a request that asked for a
+ *  random image sent `-1`, which is not a seed anybody can reproduce from.
+ *
+ *  Every part of this is optional: a build that omits `info`, truncates it, or
+ *  answers something that is not a JSON object yields "unknown seed", never a
+ *  throw — the image itself is still perfectly usable. `all_seeds[0]` is the
+ *  documented fallback for a batch. */
+function seedFromInfo(info: unknown): number | undefined {
+  let parsed: unknown = info;
+  if (typeof info === "string") {
+    if (!info.trim()) return undefined;
+    try {
+      parsed = JSON.parse(info);
+    } catch {
+      return undefined;
+    }
+  }
+  if (!parsed || typeof parsed !== "object") return undefined;
+  const record = parsed as { seed?: unknown; all_seeds?: unknown };
+  const direct = lenientNumber(record.seed);
+  if (direct !== undefined) return direct;
+  return Array.isArray(record.all_seeds) ? lenientNumber(record.all_seeds[0]) : undefined;
+}
+
+/** Numbers, and numeric strings (some forks stringify the whole info object).
+ *  Anything else — including NaN and Infinity — is "not reported". */
+function lenientNumber(value: unknown): number | undefined {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+/** A non-2xx from the WebUI, with the status and a usable excerpt of the body.
+ *  A 404 gets the one cause that is worth naming: without `--api` the WebUI
+ *  answers 404 on EVERY `/sdapi/v1/*` route, so "Not Found" alone leaves the
+ *  user with nothing to check. */
+function a1111HttpError(status: number, text: string): Error {
+  const excerpt = text.replace(/\s+/g, " ").trim().slice(0, 300);
+  const hint = status === 404 ? ` — ${A1111_API_MISSING_HINT}` : "";
+  return new Error(`A1111 image provider error ${status}: ${excerpt}${hint}`);
 }
 
 /** A1111 speaks its own native `/sdapi/v1/*` API:
@@ -131,9 +178,9 @@ export class A1111Provider implements ImageProvider {
 
       const res = await pending;
       const text = await res.text();
-      if (!res.ok) throw new Error(`A1111 image provider error ${res.status}: ${text.slice(0, 300)}`);
+      if (!res.ok) throw a1111HttpError(res.status, text);
 
-      const parsed = JSON.parse(text) as { images?: string[] };
+      const parsed = JSON.parse(text) as { images?: string[]; info?: unknown };
       const payloads = Array.isArray(parsed.images) ? parsed.images : [];
       if (!payloads.length) throw new Error("Image provider returned no image data");
 
@@ -147,6 +194,9 @@ export class A1111Provider implements ImageProvider {
         }),
         model: this.config.model,
         providerId: this.config.providerId,
+        // The seed the WebUI used, read back out of `info` — absent when it did
+        // not say, which is honest, unlike reporting the -1 we sent.
+        seed: seedFromInfo(parsed.info),
         durationMs: Date.now() - start,
         rawRequest: JSON.stringify(body),
         rawOutput: text
