@@ -257,6 +257,91 @@ describe("image generation: shipped preset configs", () => {
     expect(clone.imageGeneration?.instruction).not.toBe(DEFAULT_IMAGE_PROMPT_INSTRUCTION);
   });
 
+  it("ships the user-approved negative tag set byte-for-byte, in order", () => {
+    // The reviewed list, reproduced here so a silent edit to the constant OR to
+    // the JSON fails instead of shipping. Order is part of the contract: the list
+    // goes out exactly as written.
+    const approved = [
+      "lowres",
+      "worst quality",
+      "low quality",
+      "normal quality",
+      "blurry",
+      "out of focus",
+      "jpeg artifacts",
+      "bad anatomy",
+      "deformed",
+      "bad proportions",
+      "poorly drawn face",
+      "long neck",
+      "malformed limbs",
+      "missing limbs",
+      "extra limbs",
+      "extra arms",
+      "extra legs",
+      "bad hands",
+      "extra fingers",
+      "extra digits",
+      "fewer digits",
+      "missing fingers",
+      "fused fingers",
+      "mutated hands",
+      "duplicate",
+      "text",
+      "dialogue",
+      "speech bubble",
+      "thought bubble",
+      "caption",
+      "subtitles",
+      "comic",
+      "comic panel",
+      "panel layout",
+      "multiple views",
+      "4koma",
+      "storyboard",
+      "split screen",
+      "collage",
+      "border",
+      "watermark",
+      "signature",
+      "username",
+      "artist name",
+      "logo",
+      "web address",
+      "patreon username",
+      "twitter username",
+      "stamp",
+      "photorealistic",
+      "realistic",
+      "3d",
+      "cgi"
+    ].join(", ");
+
+    expect(DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix).toBe(approved);
+    expect(preset("default").imageGeneration?.negativePrefix).toBe(approved);
+
+    // Deliberate omissions, each for a reason: `manga` names a drawing style as
+    // well as a medium and these presets are anime-prefixed; `cropped` and
+    // `out of frame` would fight the tight close-ups that are wanted; a
+    // character-count negative would fight every two-person scene.
+    for (const omitted of ["manga", "cropped", "out of frame", "multiple girls", "extra person"]) {
+      expect(approved).not.toContain(omitted);
+    }
+  });
+
+  it("keeps the user's clone of Default (NSFW) on the same negative, and its own positive", () => {
+    // The clone is a copy of `default-nsfw`, so a negative that drifts from it is
+    // a papercut the user was told would ride along — but its 1980s-anime style
+    // prefix and its prose instruction are the user's own and must not be touched.
+    const clone = presets.find((p) => p.name === "Default (NSFW) (copy)")!;
+    expect(clone.imageGeneration?.negativePrefix).toBe(preset("default-nsfw").imageGeneration?.negativePrefix);
+    expect(clone.imageGeneration?.negativePrefix).toBe(
+      `${DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix}, censored, mosaic censoring, bar censor`
+    );
+    expect(clone.imageGeneration?.positivePrefix).toBe("1980s anime style, retro anime, vintage anime, cel animation, ");
+    expect(clone.imageGeneration?.instruction).not.toBe(DEFAULT_IMAGE_PROMPT_INSTRUCTION);
+  });
+
   it("ships the NSFW instruction as the core document with the rating bullet swapped and Explicit scenes inserted", () => {
     const ratingBullet =
       "- First tag is the rating that matches what is actually happening: safe, sensitive, nsfw, or explicit. A tame scene stays tame.";

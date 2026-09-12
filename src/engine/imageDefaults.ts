@@ -57,8 +57,14 @@ export const DEFAULT_IMAGE_GENERATION_SETTINGS: ImageGenerationSettings = {
   instruction: DEFAULT_IMAGE_PROMPT_INSTRUCTION,
   positivePrefix: "anime style",
   negativePrefix:
-    "lowres, bad anatomy, bad hands, extra fingers, extra limbs, deformed, poorly drawn face, " +
-    "bad proportions, watermark, signature, text, jpeg artifacts",
+    "lowres, worst quality, low quality, normal quality, blurry, out of focus, jpeg artifacts, " +
+    "bad anatomy, deformed, bad proportions, poorly drawn face, long neck, malformed limbs, " +
+    "missing limbs, extra limbs, extra arms, extra legs, bad hands, extra fingers, extra digits, " +
+    "fewer digits, missing fingers, fused fingers, mutated hands, duplicate, text, dialogue, " +
+    "speech bubble, thought bubble, caption, subtitles, comic, comic panel, panel layout, " +
+    "multiple views, 4koma, storyboard, split screen, collage, border, watermark, signature, username, " +
+    "artist name, logo, web address, patreon username, twitter username, stamp, photorealistic, " +
+    "realistic, 3d, cgi",
   promptCharacterLimit: IMAGE_PROMPT_CHARACTER_LIMIT,
   includeState: true,
   includeCast: true
