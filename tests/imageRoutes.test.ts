@@ -34,6 +34,8 @@ type HarnessOptions = {
   /** Stored on the image CONNECTION, so the route's seed resolution has a
    *  connection-level fallback to fall back to. */
   imageSeed?: number;
+  /** The `/models` body, when the default (two bare ids) is not enough. */
+  modelsPayload?: unknown;
 };
 
 function harness(options: HarnessOptions = {}) {
@@ -62,7 +64,7 @@ function harness(options: HarnessOptions = {}) {
       return new Response(JSON.stringify({ created: 1, data: [{ b64_json: PNG_B64 }] }), { status: 200 });
     }
     if (href.includes("/models")) {
-      return new Response(JSON.stringify({ data: [{ id: "lustify-v8" }, { id: "wai-nsfw" }] }), { status: 200 });
+      return new Response(JSON.stringify(options.modelsPayload ?? { data: [{ id: "lustify-v8" }, { id: "wai-nsfw" }] }), { status: 200 });
     }
     return new Response("not found", { status: 404 });
   }) as unknown as typeof fetch;
@@ -555,6 +557,32 @@ describe("POST /api/settings/providers/models", () => {
     const h = harness();
     await post(h.app, "/api/settings/providers/models", { baseUrl: "http://localhost:1234/v1" });
     expect(h.calls[0].url).toBe("http://localhost:1234/v1/models");
+  });
+
+  it("returns the capability map read from the same listing, and nothing for a model that publishes none", async () => {
+    const h = harness({
+      modelsPayload: {
+        data: [
+          {
+            id: "lustify-v8",
+            model_spec: { constraints: { promptCharacterLimit: 7500, widthHeightDivisor: 8 } }
+          },
+          { id: "wai-nsfw" }
+        ]
+      }
+    });
+    const res = await post(h.app, "/api/settings/providers/models", {
+      baseUrl: "https://api.venice.ai/api/v1",
+      type: "image"
+    });
+    expect(res.statusCode).toBe(200);
+    // The id list is unchanged…
+    expect(res.json().models).toEqual(["lustify-v8", "wai-nsfw"]);
+    // …and the per-model constraints ride along, with no entry for the model
+    // that published no `model_spec`.
+    expect(res.json().modelSpecs).toEqual({
+      "lustify-v8": { promptCharacterLimit: 7500, widthHeightDivisor: 8 }
+    });
   });
 
   it("preserves the kind and image fields when an image connection is created", async () => {

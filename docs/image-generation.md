@@ -468,7 +468,22 @@ A connection whose **stored** value is not in the fetched list is flagged in the
 
 There is no one size that works everywhere, and the failure is a 400 from the provider, not from BobbinLoom:
 
-- Pixel models take `width`/`height` (from `size`); **aspect-ratio models (the qwen-image family) reject them**. Set **Aspect Ratio** on the connection instead — the adapter then sends `aspect_ratio` and omits `width`/`height`, because the two are mutually exclusive upstream.
+- Pixel models take `width`/`height` (from `size`); **aspect-ratio models (the qwen-image family) reject them**. Set **Aspect Ratio** on the connection instead — the adapter then sends `aspect_ratio` and **drops the connection's `size` entirely**, because the two are mutually exclusive upstream.
 - `size: "auto"` (and any unparseable value) means "the provider picks".
-- `GET /models?type=image` reports the per-model constraints, including `model_spec.constraints.promptCharacterLimit`, so the model listing is the fastest way to check what a checkpoint accepts.
+- `GET /models?type=image` reports each model's `model_spec.constraints` — the prompt cap, the step range, `widthHeightDivisor`, and either a list of `aspectRatios` (a ratio model) or no ratios at all (a pixel model). It is the only place a provider publishes what a checkpoint accepts, so it is the only honest way to answer *which sizing parameter does this model take?*
 - A plain `http` URL in an image response is not fetched — the adapter only accepts inline base64 or a data URL.
+
+### The editor shows what the selected model accepts
+
+`POST /api/settings/providers/models` parses that response twice over: the id list (`models`, unchanged — deduped and sorted) and a per-model capability map (`modelSpecs`, keyed by id) read from the **same** body, so surfacing a model's constraints costs no second request. The probe's shape is `{ ok, models, modelSpecs, status, message, latencyMs }`; `testProviderConnection` still answers only `{ ok, status, message, latencyMs }`.
+
+The map is tolerant by construction, because it is an optional convenience and never a reason to fail a call:
+
+- every capability field is optional — an omitted one simply says nothing;
+- a model with **no `model_spec`** has no entry at all (never an empty object);
+- `resolution` is collected structurally (a flat list of tiers or an object keyed by aspect ratio) and flattened to strings;
+- a malformed body, a non-2xx status, or a rejected request all yield `{}` — never a throw.
+
+The image editor renders it **read-only** under the Model field whenever the listing knows the model: the prompt character limit, the step range, and the sizing rule *with the numbers that matter* — `width/height in multiples of 8`, or `aspect_ratio, one of 1:1, 3:2, 16:9 (default 1:1) — it does not take width/height`. Nothing renders when the model is unknown to the listing or the probe failed.
+
+That block is the answer to the sizing confusion above: `aspect_ratio` and `width`/`height` are mutually exclusive upstream, so a model silently ignores whichever one it does not take (and the connection's `size` is dropped the moment an aspect ratio is set), and only the provider's own listing says which one a given checkpoint wants.

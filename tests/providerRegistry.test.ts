@@ -299,6 +299,78 @@ describe("provider registry", () => {
       expect(result.message).toBeTruthy();
       expect(result.models).toEqual([]);
     });
+
+    it("carries the per-model capability map beside the ids, and maps an unpublished model to nothing", async () => {
+      const fetchImpl = vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                id: "lustify-v8",
+                model_spec: {
+                  constraints: {
+                    promptCharacterLimit: 7500,
+                    steps: { default: 20, max: 30 },
+                    widthHeightDivisor: 8,
+                    aspectRatios: ["1:1", "3:2", "16:9"],
+                    defaultAspectRatio: "1:1",
+                    resolution: { "1:1": ["1024x1024", "512x512"] }
+                  }
+                }
+              },
+              { id: "aaa-no-spec" },
+              { id: "only-limit", model_spec: { constraints: { promptCharacterLimit: 1200 } } },
+              { id: "ratio-model", model_spec: { constraints: { aspectRatios: "3:2" } } }
+            ]
+          }),
+          { status: 200 }
+        )
+      );
+
+      const result = await fetchProviderModels({ baseUrl: "http://test.local" }, fetchImpl);
+
+      // The id list means exactly what it always meant: deduped + sorted.
+      expect(result.models).toEqual(["aaa-no-spec", "lustify-v8", "only-limit", "ratio-model"]);
+      // Capabilities are read from the SAME response.
+      expect(result.modelSpecs["lustify-v8"]).toEqual({
+        promptCharacterLimit: 7500,
+        steps: { default: 20, max: 30 },
+        widthHeightDivisor: 8,
+        aspectRatios: ["1:1", "3:2", "16:9"],
+        defaultAspectRatio: "1:1",
+        resolutions: ["1024x1024", "512x512"]
+      });
+      // No model_spec ⇒ no entry at all (not an empty object).
+      expect("aaa-no-spec" in result.modelSpecs).toBe(false);
+      // A partial constraints block carries only what it published.
+      expect(result.modelSpecs["only-limit"]).toEqual({ promptCharacterLimit: 1200 });
+      // A bare string is a one-value list.
+      expect(result.modelSpecs["ratio-model"]).toEqual({ aspectRatios: ["3:2"] });
+    });
+
+    it("leaves the capability map empty — and does not throw — on a malformed or failed response", async () => {
+      const garbled = vi.fn(async () => new Response("<html>not json</html>", { status: 200 }));
+      const unparseable = await fetchProviderModels({ baseUrl: "http://test.local" }, garbled);
+      expect(unparseable.models).toEqual([]);
+      expect(unparseable.modelSpecs).toEqual({});
+
+      const failing = vi.fn(async () => new Response("unauthorized", { status: 401 }));
+      const failed = await fetchProviderModels({ baseUrl: "http://test.local" }, failing);
+      expect(failed.ok).toBe(false);
+      expect(failed.modelSpecs).toEqual({});
+
+      const throwing = vi.fn(async () => {
+        throw new Error("boom");
+      });
+      const thrown = await fetchProviderModels({ baseUrl: "http://test.local" }, throwing);
+      expect(thrown.modelSpecs).toEqual({});
+
+      // The reachability check's own contract is untouched: neither the listing
+      // nor its capabilities ride along.
+      const probe = await testProviderConnection({ baseUrl: "http://test.local" }, garbled);
+      expect("modelSpecs" in probe).toBe(false);
+      expect("models" in probe).toBe(false);
+    });
   });
 
   describe("duplicateConnection", () => {

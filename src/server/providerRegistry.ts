@@ -361,17 +361,125 @@ export function setActiveConnection(dir: string, id: string): PublicProviderRegi
   };
 }
 
+/** Steps one model publishes: its default and its ceiling. */
+export type ModelStepRange = { default?: number; max?: number };
+
+/** What a model's `model_spec.constraints` says it accepts. Deliberately a
+ *  plain, tolerant shape: every field is optional, an omitted one simply says
+ *  nothing, and a model whose spec publishes nothing useful maps to no entry at
+ *  all rather than to an empty object. The UI reads this to show WHICH sizing
+ *  parameter a model takes — `aspectRatios` is present when the model wants
+ *  `aspect_ratio` (and rejects `width`/`height`), `widthHeightDivisor` when it
+ *  wants `width`/`height`. */
+export type ModelCapabilities = {
+  promptCharacterLimit?: number;
+  steps?: ModelStepRange;
+  /** `width`/`height` must be multiples of this. */
+  widthHeightDivisor?: number;
+  aspectRatios?: string[];
+  defaultAspectRatio?: string;
+  /** Whatever the model's `resolution` field publishes, flattened to plain
+   *  tier strings. */
+  resolutions?: string[];
+};
+
+/** Per-model capabilities, keyed by the model id the same listing returned. */
+export type ProviderModelCapabilities = Record<string, ModelCapabilities>;
+
 export type ModelsProbeResult = {
   ok: boolean;
   status?: number;
   message?: string;
   latencyMs?: number;
   models: string[];
+  /** Parsed from the SAME response as `models`. Always present (an empty map
+   *  when the listing said nothing useful or the probe failed) so a caller can
+   *  read it without a guard. */
+  modelSpecs: ProviderModelCapabilities;
 };
 
-/** Parse model ids from the common OpenAI-compatible /models response shapes:
- *  { data: [{ id }] }, { models: [...] }, or a bare array. Dedupes + sorts. */
-function parseModelIds(bodyText: string): string[] {
+/** A finite number, or nothing (a string, null, NaN and Infinity all mean the
+ *  provider said nothing usable). */
+function numberOrUndefined(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+/** A string, or an array of them, deduped and trimmed. Anything else — or an
+ *  empty result — is absent. */
+function stringsOrUndefined(value: unknown): string[] | undefined {
+  const list = typeof value === "string" ? [value] : Array.isArray(value) ? value : null;
+  if (!list) return undefined;
+  const trimmed = list
+    .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+    .filter(Boolean);
+  return trimmed.length ? [...new Set(trimmed)] : undefined;
+}
+
+/** Every string inside an arbitrary value, deduped. `resolution` is published
+ *  in more than one shape (a flat list of tiers, or an object keyed by aspect
+ *  ratio), so the tiers are collected structurally instead of guessing one
+ *  shape. Depth-bounded: a pathological body must not recurse forever. */
+function collectStrings(value: unknown, depth = 0): string[] {
+  if (depth > 3) return [];
+  if (typeof value === "string") return value.trim() ? [value.trim()] : [];
+  if (Array.isArray(value)) return value.flatMap((entry) => collectStrings(entry, depth + 1));
+  if (value && typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).flatMap((entry) => collectStrings(entry, depth + 1));
+  }
+  return [];
+}
+
+/** `steps` as either a bare number (the default) or `{ default, max }`. */
+function parseSteps(value: unknown): ModelStepRange | undefined {
+  if (typeof value === "number") {
+    const only = numberOrUndefined(value);
+    return only === undefined ? undefined : { default: only };
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const steps: ModelStepRange = {
+    default: numberOrUndefined(raw.default),
+    max: numberOrUndefined(raw.max)
+  };
+  return steps.default === undefined && steps.max === undefined ? undefined : steps;
+}
+
+/** One model's `model_spec.constraints`, tolerant by construction: each field
+ *  is carried only when the provider actually published a usable value, and a
+ *  constraints object that says nothing usable maps to `null`. */
+function parseCapabilities(constraints: unknown): ModelCapabilities | null {
+  if (!constraints || typeof constraints !== "object" || Array.isArray(constraints)) return null;
+  const raw = constraints as Record<string, unknown>;
+  const caps: ModelCapabilities = {};
+
+  const promptCharacterLimit = numberOrUndefined(raw.promptCharacterLimit);
+  if (promptCharacterLimit !== undefined) caps.promptCharacterLimit = promptCharacterLimit;
+
+  const steps = parseSteps(raw.steps);
+  if (steps) caps.steps = steps;
+
+  const widthHeightDivisor = numberOrUndefined(raw.widthHeightDivisor);
+  if (widthHeightDivisor !== undefined) caps.widthHeightDivisor = widthHeightDivisor;
+
+  const aspectRatios = stringsOrUndefined(raw.aspectRatios);
+  if (aspectRatios) caps.aspectRatios = aspectRatios;
+
+  const defaultAspectRatio = stringsOrUndefined(raw.defaultAspectRatio);
+  if (defaultAspectRatio) caps.defaultAspectRatio = defaultAspectRatio[0];
+
+  const resolutions = [...new Set(collectStrings(raw.resolution))];
+  if (resolutions.length) caps.resolutions = resolutions;
+
+  return Object.keys(caps).length ? caps : null;
+}
+
+/** Parse the model list out of the common OpenAI-compatible `/models` response
+ *  shapes: `{ data: [{ id, model_spec }] }`, `{ models: [...] }`, or a bare
+ *  array. Ids are deduped + sorted (and mean exactly what they always meant);
+ *  `modelSpecs` is the per-model capability map read from the SAME response, so
+ *  showing a model's constraints costs no second request. A model with no
+ *  `model_spec` maps to nothing — never to an empty capability object. */
+function parseModels(bodyText: string): { models: string[]; modelSpecs: ProviderModelCapabilities } {
   try {
     const parsed = JSON.parse(bodyText) as unknown;
     let raw: unknown[] = [];
@@ -382,19 +490,30 @@ function parseModelIds(bodyText: string): string[] {
       if (Array.isArray(obj.data)) raw = obj.data;
       else if (Array.isArray(obj.models)) raw = obj.models;
     }
-    const ids = raw
-      .map((entry) => {
-        if (typeof entry === "string") return entry;
-        if (entry && typeof entry === "object") {
-          const id = (entry as Record<string, unknown>).id;
-          return typeof id === "string" ? id : null;
-        }
-        return null;
-      })
-      .filter((s): s is string => Boolean(s));
-    return [...new Set(ids)].sort((a, b) => a.localeCompare(b));
+    const ids: string[] = [];
+    const modelSpecs: ProviderModelCapabilities = {};
+    for (const entry of raw) {
+      if (typeof entry === "string") {
+        if (entry) ids.push(entry);
+        continue;
+      }
+      if (!entry || typeof entry !== "object") continue;
+      const row = entry as Record<string, unknown>;
+      if (typeof row.id !== "string" || !row.id) continue;
+      ids.push(row.id);
+      const spec = row.model_spec && typeof row.model_spec === "object"
+        ? (row.model_spec as Record<string, unknown>)
+        : null;
+      const caps = parseCapabilities(spec?.constraints);
+      // First mention wins: a duplicate id is the same model twice.
+      if (caps && !modelSpecs[row.id]) modelSpecs[row.id] = caps;
+    }
+    return {
+      models: [...new Set(ids)].sort((a, b) => a.localeCompare(b)),
+      modelSpecs
+    };
   } catch {
-    return [];
+    return { models: [], modelSpecs: {} };
   }
 }
 
@@ -402,7 +521,12 @@ function parseModelIds(bodyText: string): string[] {
  *  response is parseable. Used by both the test and fetch-models paths.
  *  `type` is forwarded as the `type` query parameter — image endpoints (Venice)
  *  list image checkpoints behind `GET /models?type=image` and return a text
- *  list without it. */
+ *  list without it.
+ *
+ *  The same pass also reads each model's `model_spec.constraints` into
+ *  `modelSpecs` (prompt cap, steps, sizing rules), because that is the only
+ *  place a provider publishes what a given model actually accepts — and asking
+ *  for it twice would be two round trips for one body. */
 async function probeProviderModels(
   input: { baseUrl: string; apiKey?: string; type?: string },
   fetchImpl: typeof fetch = fetch
@@ -422,11 +546,14 @@ async function probeProviderModels(
     });
     const latencyMs = Date.now() - start;
     if (res.ok) {
-      return { ok: true, status: res.status, latencyMs, models: parseModelIds(await res.text()) };
+      // One parse serves both halves: the id list and the per-model
+      // capabilities, so the UI never needs a second request for them.
+      return { ok: true, status: res.status, latencyMs, ...parseModels(await res.text()) };
     }
-    return { ok: false, status: res.status, message: (await res.text()).slice(0, 300), latencyMs, models: [] };
+    // A failed probe says nothing about any model: an EMPTY map, not an error.
+    return { ok: false, status: res.status, message: (await res.text()).slice(0, 300), latencyMs, models: [], modelSpecs: {} };
   } catch (e) {
-    return { ok: false, message: e instanceof Error ? e.message : String(e), latencyMs: Date.now() - start, models: [] };
+    return { ok: false, message: e instanceof Error ? e.message : String(e), latencyMs: Date.now() - start, models: [], modelSpecs: {} };
   } finally {
     clearTimeout(timeout);
   }
@@ -437,7 +564,9 @@ export async function testProviderConnection(
   input: { baseUrl: string; apiKey?: string },
   fetchImpl: typeof fetch = fetch
 ): Promise<{ ok: boolean; status?: number; message?: string; latencyMs?: number }> {
-  const { models: _models, ...result } = await probeProviderModels(input, fetchImpl);
+  // The probe answers {ok, models, modelSpecs, status, message, latencyMs}; a
+  // reachability check wants none of the listing, so both are stripped.
+  const { models: _models, modelSpecs: _modelSpecs, ...result } = await probeProviderModels(input, fetchImpl);
   return result;
 }
 

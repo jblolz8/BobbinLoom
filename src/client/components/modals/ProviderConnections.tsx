@@ -5,6 +5,7 @@ import type {
   ConnectionTestResult,
   ProviderConnection,
   ProviderConnectionPayload,
+  ProviderModelCapabilities,
   ProviderRegistry
 } from "../../api";
 import {
@@ -132,6 +133,9 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
   const [status, setStatus] = useState<EditorStatus>(null);
   const [test, setTest] = useState<EditorStatus>(null);
   const [models, setModels] = useState<string[]>([]);
+  // Capabilities for the models in `models`, parsed server-side from the SAME
+  // listing response — the editor never fires a second models request for them.
+  const [modelSpecs, setModelSpecs] = useState<ProviderModelCapabilities>({});
   const [modelsStatus, setModelsStatus] = useState<EditorStatus>(null);
   const [fetchingModels, setFetchingModels] = useState(false);
 
@@ -223,7 +227,7 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
 
   function openCreate() {
     setForm(emptyForm(kind));
-    setModels([]); setModelsStatus(null);
+    setModels([]); setModelSpecs({}); setModelsStatus(null);
     setShowKey(false);
     setStatus(null); setTest(null);
     setEditor({ mode: "create" });
@@ -231,7 +235,7 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
 
   function openEdit(c: ProviderConnection) {
     setForm(formFromConnection(c));
-    setModels([]); setModelsStatus(null);
+    setModels([]); setModelSpecs({}); setModelsStatus(null);
     setShowKey(false); setStatus(null); setTest(null);
     setEditor({ mode: "edit", connection: c });
     void loadModels({ id: c.id });
@@ -279,6 +283,10 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
         kind === "image" ? { ...target, type: "image" } : target
       );
       setModels(r.models);
+      // Capabilities ride along with the ids (same response). A server that
+      // predates the field, or a listing with no specs, simply yields {} —
+      // the editor shows no block rather than an error.
+      setModelSpecs(r.modelSpecs ?? {});
       // Image endpoints frequently expose no /models listing at all. Keep the
       // server's message (a 401 must stay visible) and add why it is not fatal.
       const imageHint = kind === "image"
@@ -289,6 +297,7 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
         : { kind: "err", text: r.message ? `Failed (${r.status ?? ""}): ${r.message}${imageHint}` : `Failed to load models.${imageHint}` });
     } catch (err) {
       setModels([]);
+      setModelSpecs({});
       setModelsStatus({ kind: "err", text: err instanceof Error ? err.message : String(err) });
     } finally {
       setFetchingModels(false);
@@ -496,6 +505,7 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
           setForm={setForm}
           apiKey={apiKeyProps}
           models={models}
+          modelSpecs={modelSpecs}
           modelsStatus={modelsStatus}
           fetchingModels={fetchingModels}
           onFetchModels={() => void loadModels(probeTarget())}

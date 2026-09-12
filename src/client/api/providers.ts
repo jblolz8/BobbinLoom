@@ -6,6 +6,14 @@ import type {
   ProviderConnection as ProviderConnectionRow,
   ProviderKind
 } from "../../schemas";
+// Type-only, so it is erased at build time and the client bundle never reaches
+// `src/server` at runtime. The capability shape is PRODUCED there; hand-copying
+// it here is the drift this file already warns about for the connection row.
+import type { ProviderModelCapabilities } from "../../server/providerRegistry";
+
+/** Re-exported so a consumer can name one model's capability shape without
+ *  reaching into the server module itself. */
+export type { ModelCapabilities, ModelStepRange, ProviderModelCapabilities } from "../../server/providerRegistry";
 
 /**
  * A connection as the API returns it: the persisted row with the secret
@@ -72,6 +80,10 @@ export type ConnectionTestResult = {
 export type ConnectionModelsResult = {
   ok: boolean;
   models: string[];
+  /** Per-model capabilities from the same response (`model_spec.constraints`),
+   *  keyed by model id. Always present; an empty map = the listing said nothing
+   *  usable, which is never an error. */
+  modelSpecs: ProviderModelCapabilities;
   status?: number;
   message?: string;
   latencyMs?: number;

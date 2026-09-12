@@ -2,7 +2,7 @@ import { useEffect, useState, type Dispatch, type FormEvent, type MouseEvent, ty
 import { Button, Icon, SimpleSelect, SwitchRow, TextInput } from "../../base";
 import type { ImageApiStyle } from "../../../../schemas";
 import { fetchProviderImageStyles } from "../../../api";
-import type { ProviderConnection, ProviderConnectionPayload } from "../../../api";
+import type { ModelCapabilities, ProviderConnection, ProviderConnectionPayload, ProviderModelCapabilities } from "../../../api";
 import { CUSTOM_STYLE_OPTION, imageStyleDisplay } from "../../../utils/imageStyleOptions";
 import { ApiKeyField, type ApiKeyFieldProps } from "./ApiKeyField";
 
@@ -49,12 +49,48 @@ const IMAGE_SIZE_OPTIONS = ["auto", "1024x1024", "1536x1024", "1024x1536", "1024
 const VARIANT_OPTIONS = ["1", "2", "3", "4"];
 
 /**
- * The image-provider editor. Its fields are its own: endpoint dialect, size or
- * aspect ratio, the Venice pass-throughs, and — the odd one out — the text
- * connection that WRITES the prompt, since an image endpoint cannot compose one.
+ * The read-only capability lines for one model's provider-published spec. [] for
+ * a model the listing did not describe — a convenience block, never an error.
  *
- * State and requests live in `ProviderConnections`, like the text editor.
+ * Centered on the SIZING parameter on purpose: `aspect_ratio` and
+ * `width`/`height` are mutually exclusive upstream, so a model takes one and
+ * ignores the other. That is exactly the confusion this block removes.
  */
+function capabilityLines(caps: ModelCapabilities | undefined): string[] {
+  if (!caps) return [];
+  const lines: string[] = [];
+
+  if (caps.promptCharacterLimit !== undefined) {
+    lines.push(`Prompt limit: ${caps.promptCharacterLimit} characters.`);
+  }
+
+  if (caps.steps) {
+    const parts: string[] = [];
+    if (caps.steps.default !== undefined) parts.push(`${caps.steps.default} default`);
+    if (caps.steps.max !== undefined) parts.push(`up to ${caps.steps.max}`);
+    if (parts.length) lines.push(`Steps: ${parts.join(", ")}.`);
+  }
+
+  const ratios = caps.aspectRatios?.length ? caps.aspectRatios.join(", ") : "";
+  const defaultRatio = caps.defaultAspectRatio ? ` (default ${caps.defaultAspectRatio})` : "";
+  const divisor = caps.widthHeightDivisor;
+  if (divisor !== undefined && ratios) {
+    lines.push(`Sizing: width/height in multiples of ${divisor}, or aspect_ratio from ${ratios}${defaultRatio}.`);
+  } else if (divisor !== undefined) {
+    lines.push(`Sizing: this model takes width/height, in multiples of ${divisor}.`);
+  } else if (ratios) {
+    lines.push(
+      `Sizing: this model takes aspect_ratio, one of ${ratios}${defaultRatio} — it does not take width/height, so set Aspect Ratio above (Image Size is then not sent).`
+    );
+  }
+
+  if (caps.resolutions?.length) {
+    lines.push(`Resolutions: ${caps.resolutions.join(", ")}.`);
+  }
+
+  return lines;
+}
+
 export type ImageConnectionEditorProps = {
   mode: "create" | "edit";
   editing: ProviderConnection | null;
@@ -62,6 +98,9 @@ export type ImageConnectionEditorProps = {
   setForm: Dispatch<SetStateAction<ProviderConnectionPayload>>;
   apiKey: ApiKeyFieldProps;
   models: string[];
+  /** Per-model capabilities from the provider's own listing, keyed by model id.
+   *  Read-only; a model the listing did not describe simply has no entry. */
+  modelSpecs: ProviderModelCapabilities;
   modelsStatus: EditorStatus;
   fetchingModels: boolean;
   onFetchModels: () => void;
@@ -75,6 +114,15 @@ export type ImageConnectionEditorProps = {
   textConnections: ProviderConnection[];
 };
 
+/**
+ * The image-provider editor. Its fields are its own: endpoint dialect, size or
+ * aspect ratio, the Venice pass-throughs, and — the odd one out — the text
+ * connection that WRITES the prompt, since an image endpoint cannot compose one.
+ * It also shows, read-only, what the provider's own model listing says about the
+ * selected model.
+ *
+ * State and requests live in `ProviderConnections`, like the text editor.
+ */
 export function ImageConnectionEditor({
   mode,
   editing,
@@ -82,6 +130,7 @@ export function ImageConnectionEditor({
   setForm,
   apiKey,
   models,
+  modelSpecs,
   modelsStatus,
   fetchingModels,
   onFetchModels,
@@ -214,6 +263,11 @@ export function ImageConnectionEditor({
     setForm((f) => ({ ...f, stylePreset: next }));
   }
 
+  // What the provider's own listing says about the SELECTED model. Read-only,
+  // and absent for a model the listing did not describe: the block then simply
+  // does not render, rather than reporting an error for a convenience.
+  const capsLines = capabilityLines(form.model ? modelSpecs[form.model] : undefined);
+
   return (
     <form className="conn-editor conn-editor-card" onSubmit={onSubmit}>
       <div className="conn-editor-header">
@@ -297,6 +351,21 @@ export function ImageConnectionEditor({
               </div>
             )}
             {modelsStatus && <p className={`conn-status ${modelsStatus.kind}`}>{modelsStatus.text}</p>}
+
+            {/* Read-only capabilities for the model in the field above, read from
+                the provider's OWN listing (the same response that filled the
+                list) — the only place a provider says which sizing parameter a
+                model takes. Nothing renders when the model is unknown to the
+                listing, or when the probe failed. */}
+            {capsLines.length > 0 && (
+              <div className="base-form-field form-field" style={{ marginTop: "0.5rem" }}>
+                <span className="field-label-text">What “{form.model}” accepts</span>
+                {capsLines.map((line) => (
+                  <p key={line} className="conn-field-helper">{line}</p>
+                ))}
+                <p className="conn-field-helper">Read-only — from the provider's own model listing.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
