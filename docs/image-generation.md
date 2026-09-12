@@ -509,8 +509,15 @@ VOCABULARY (prefer these shapes; it is better to omit a detail than to invent a 
 - clothing state: white shirt (open), black skirt (hiked up), naked, topless, undressed
 - place/light: dim lighting, neon lighting, sunlight, bedroom, alley, office, tavern
 
-EXAMPLE (shape only, not content)
+EXAMPLES (shape only, not content)
+
+ONE character in frame — ONE group, no " | " at all:
 safe, 1girl, close-up, bedroom, night, dim lighting, sitting on bed, long brown hair, ponytail, blue eyes, pale skin, slim waist, looking at viewer, flushed face, white t-shirt, grey panties, arms crossed
+
+TWO characters in frame — THREE groups: the shared scene first, then one group per character, in the order they appear:
+safe, 1boy 1girl, medium shot, tavern, night, warm lantern light, sitting side by side | her long red hair, braid, green eyes, her white blouse, leaning on his shoulder, smiling | his dark hair, glasses, his brown coat, arm around her waist, looking at her
+
+Count GROUPS, not people. A POV scene is seen through the player's eyes, so the PLAYER is never a group — their pov / viewer tags ride in the first group with everything else that is shared. One girl in a POV frame is still ONE group; two girls plus the player is THREE groups.
 
 Return JSON only:
 {"prompt": "<the tag line>"}
