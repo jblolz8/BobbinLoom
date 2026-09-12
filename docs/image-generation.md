@@ -39,6 +39,8 @@ Image connections are plain entries in the provider registry (`data/providers.js
 | `sampler` | string, absent = not sent | a1111 only. Sent as `sampler_name`. Free text; the editor suggests the names the WebUI itself listed (`GET /sdapi/v1/samplers`), because a fork may ship names BobbinLoom was never told. |
 | `scheduler` | string, absent = not sent | a1111 only. Sent as `scheduler`. Free text, suggestions from `GET /sdapi/v1/schedulers`. |
 | `timeoutMs` | integer ms, absent = dialect default | a1111 only. One image's budget. Precedence: connection `timeoutMs` > `BOBBINLOOM_IMAGE_TIMEOUT_MS` > dialect default (**600000 ms** for a1111, 180000 otherwise). The editor takes seconds and stores milliseconds. |
+| `regionsEnabled` | boolean, absent = **on** | a1111 only. Whether a two-character prompt may be split into per-character regions. Absence is "on" because the split is invisible when it cannot happen: it also needs the extension installed and two or more prompt groups. `false` pins this connection to today's single-prompt render. See [*Multi-character regions*](#multi-character-regions-forge-couple). |
+| `regionDirection` | `"Horizontal"` (default) \| `"Vertical"` | a1111 only. Which way Basic mode tiles the canvas: Horizontal maps the prompt groups left → right, Vertical top → bottom. |
 
 ### `openai` — OpenAI-compatible
 
@@ -112,6 +114,7 @@ Talks to a locally hosted AUTOMATIC1111 or Forge WebUI over the WebUI's **own** 
 |---|---|
 | `POST {baseUrl}/sdapi/v1/txt2img` | Render. One request renders the whole batch. |
 | `GET {baseUrl}/sdapi/v1/sd-models` | The checkpoint list (**Fetch models**), plus the WebUI's sampler/scheduler lists. |
+| `GET {baseUrl}/sdapi/v1/script-info` | Read once per base URL to see whether **Forge Couple** is installed — the gate on per-character regions (see [*Multi-character regions*](#multi-character-regions-forge-couple)). Cached ~5 minutes; a failure means "not installed", never an error. |
 | `GET {baseUrl}/sdapi/v1/progress?skip_current_image=true` | Polled while a render runs — the live readout. |
 | `POST {baseUrl}/sdapi/v1/interrupt` | Cancel. Fired on abort. |
 
@@ -159,6 +162,28 @@ Talks to a locally hosted AUTOMATIC1111 or Forge WebUI over the WebUI's **own** 
 **Cancel really cancels.** On abort the adapter fires `POST /sdapi/v1/interrupt` — best effort, exactly once per signal, with its own 5 s budget (`A1111_INTERRUPT_TIMEOUT_MS`) and every error swallowed, so a failed interrupt can never turn the user's cancel into an error. An abandoned fetch alone would leave the WebUI sampling and the GPU busy. A successful (un-aborted) generation issues no interrupt at all.
 
 **Response shape** — `{ images: [base64…], info: "<JSON string>" }`. Every entry in `images` becomes a stored image, and an empty or missing `images` array is an error (`Image provider returned no image data`). The **MIME comes from the bytes** (magic-byte sniffed): the WebUI hands back bare base64 with no filename and no format field, so trusting a reported type would put a mislabelled file in the content-addressed store. The **seed stored on the ref is the one the WebUI actually used**, read out of `info` (`seed`, falling back to `all_seeds[0]`, and tolerating a fork that stringifies the numbers). This matters here more than on any other dialect: a random request sent `-1`, which nobody can reproduce from, so reporting back what was asked for would be a lie. A missing, truncated or non-JSON `info` yields **no seed** and never throws — the image is still perfectly usable.
+
+#### Multi-character regions (Forge Couple)
+
+A two-character prompt is **one** conditioning vector, so hair, eye colour and clothing bleed between the people in frame. When the local WebUI has the **Forge Couple** extension installed, the `a1111` adapter sends that extension's own `alwayson_scripts` entry for a two-character prompt, and each character's group is conditioned on its own region of the canvas instead. Installing it is a WebUI-side step — see [`provider-setup.md`](provider-setup.md) → *Forge Couple (per-character regions)*.
+
+**Three conditions, and every one of them has to hold.** Regions engage only when:
+
+- the connection has regions **on** — `regionsEnabled`, absent = on — **and**
+- the WebUI really has the extension: `GET {baseUrl}/sdapi/v1/script-info` lists an alwayson script whose name is `forge couple` (matched case-insensitively, exactly — a build that merely starts with that name is a different script). The answer is cached per base URL for **~5 minutes**, so a render does not pay for the probe every time, and the `alwayson_scripts` key is the **server's own spelling of the title**, because A1111 looks that key up by exact name — **and**
+- the composed prompt carries **two or more non-empty groups** (split on `|`, each trimmed, empties dropped — a stray separator must not invent a character).
+
+Miss any one of them and the request body is **byte-identical to a render from before this feature existed**. Detection is not politeness: A1111 answers **HTTP 422 `always on script <name> not found`** for an `alwayson_scripts` key it does not know, so the payload can never be sent blind. A refused, malformed or timed-out `script-info` call means **not detected** — never an error, never a blocked render, and never a silent retry storm (the probe has its own 5 s budget).
+
+**The writer decides how many people are in frame.** The instruction's MULTIPLE CHARACTERS rule turns the scene into one group per visible character, with the shared scene first; the writer's count tags (`1girl`, `1boy 1girl`, `2girls`, in the line's first group) are how it says who is visible. A character who is in the room but out of frame is simply not in the tag list, so the prompt holds **one group** and no regions engage — the cast stays the writer's business, the geometry stays the renderer's. And if the writer ignores the rule, the same fallback applies: one group, today's behaviour.
+
+**The first group is the background line.** The adapter asks for Forge Couple's `background: "First Line"` (weight **0.5**), so the first group — the shared scene — applies to the **whole** image while the groups after it tile the canvas. That is exactly where the preset's `positivePrefix` lands (it is prefixed to the composed prompt, i.e. into group one), which is why `anime style` reaches every region instead of being confined to one of them. It is also why the shared scene goes first in the instruction: put a character first and the style prefix ends up conditioning that character's region alone.
+
+**Horizontal by default, Vertical on request.** Basic mode tiles the canvas along one axis, and `regionDirection` (absent = `Horizontal`) chooses it: **Horizontal** maps the groups left → right, **Vertical** top → bottom. A scene whose composition fights the left/right split — two people stacked instead of side by side, a wide room with someone behind the other — is what the switch is for. The adapter rebuilds the prompt from the trimmed groups joined by that same ` | `, so the string it splits on is literally the string it hands the extension as `separator` — a prompt normalized one way and advertised another way would silently be a single region.
+
+**Basic mode only, deliberately.** Forge Couple also offers Advanced mode (a per-region box you place by hand) and Mask mode (a painted mask). Neither is sendable from a tag list, because both want coordinates BobbinLoom has no way to know. **Advanced mode — real per-region boxes — is a deliberate later upgrade, not an oversight**: the honest limitation today is that a composition straddling the split (two people lying down, one behind the other) may not match Basic's geometry, and the direction switch is the only lever for it.
+
+**What the extension says about itself.** Its own README warns that effectiveness depends on how well the checkpoint follows prompts, and that a checkpoint which cannot compose two people to begin with will not be rescued by regions. That matches this app's own advice: the models these presets target (`WAI`/`Illustrious`-class danbooru-tag checkpoints, or CLIP SDXL finetunes) are the ones worth trying.
 
 #### The live progress readout
 
@@ -424,7 +449,7 @@ A playthrough **snapshots** the block when its preset is applied — the same wa
 
 Three omissions are deliberate and are asserted by `tests/settings.test.ts`: **`manga` is absent** (it names a drawing style as well as a medium, and these presets are anime-prefixed), **`cropped` / `out of frame` are absent** (tight close-ups must stay available), and **no character-count negative appears anywhere** (`multiple girls`, `extra person`) because scenes routinely have two people in them. `extra fingers` is kept *and* the newer `extra digits` / `fewer digits` / `missing fingers` alongside it — different tag models respond to different spellings. The preset's `promptCharacterLimit` never cuts it: the negative answers to the dialect cap alone (**The negative has its own ceiling** above). The editable **`Default (NSFW) (copy)`** the user saved carries the same negative with the censorship suffix, because it is a copy of `default-nsfw`; its 1980s-anime `positivePrefix` and its prose instruction are the user's own and are left alone.
 
-**The instruction deliberately forbids style keywords** (`No style or quality tags (anime style, masterpiece, best quality) — a style prefix is added separately.`), because `positivePrefix` is the single place art direction lives: a preset can be restyled without touching the instruction text. The instruction asks for a **booru-style tag list**, not a prose sentence, because the target models are tag-trained (`WAI`/`Illustrious` are danbooru-tag models) or CLIP finetunes (`Lustify`). Three rules in it exist because prose kept leaking back through: **every item is a tag, not a clause** (no articles, no copula, no joining words), carrying a WRONG/RIGHT counter-example taken from a real failure; **one frame, one instant**, so a movement chain like *"gripping him while arching her back"* becomes `gripping his shoulders, back arched`; and **`her`/`his` attribution only when a tag could belong to either person** — in a two-character scene the model otherwise has no way to know whose hair, eyes or clothing it is describing. The order is written for the encoder too: rating, count, framing, place and pose all land inside the first ~300 characters, which is the first CLIP chunk and the part that always reaches the model at full strength.
+**The instruction deliberately forbids style keywords** (`No style or quality tags (anime style, masterpiece, best quality) — a style prefix is added separately.`), because `positivePrefix` is the single place art direction lives: a preset can be restyled without touching the instruction text. The instruction asks for a **booru-style tag list**, not a prose sentence, because the target models are tag-trained (`WAI`/`Illustrious` are danbooru-tag models) or CLIP finetunes (`Lustify`). Three rules in it exist because prose kept leaking back through: **every item is a tag, not a clause** (no articles, no copula, no joining words), carrying a WRONG/RIGHT counter-example taken from a real failure; **one frame, one instant**, so a movement chain like *"gripping him while arching her back"* becomes `gripping his shoulders, back arched`; and **`her`/`his` attribution only when a tag could belong to either person** — in a two-character scene the model otherwise has no way to know whose hair, eyes or clothing it is describing. A fourth rule, **MULTIPLE CHARACTERS**, exists for the renderer rather than for the encoder: each person's tags stay together in one ` | `-separated group with the shared scene first, so a two-character prompt can be split into per-character regions (see [*Multi-character regions*](#multi-character-regions-forge-couple)), while a one-character scene has no separator at all. The order is written for the encoder too: rating, count, framing, place and pose all land inside the first ~300 characters, which is the first CLIP chunk and the part that always reaches the model at full strength.
 
 `Default` — instruction, verbatim:
 
@@ -462,6 +487,12 @@ WHO IS WHO (two or more characters)
 - Give each person their own tags, in the order you introduced them.
 - When a tag could belong to either person, prefix it: her ponytail, his black hair, her hand on her own thigh.
 - In a one-person scene never use those prefixes — they are wasted tags.
+
+MULTIPLE CHARACTERS (two or more characters in frame)
+- Keep each character's tags together and separate the groups with " | " — a space, a pipe, a space. Still ONE line: a pipe groups the tags, it never starts a new line.
+- The FIRST group holds what is shared (scene, lighting, the interaction); then one group per character, in the order they appear.
+- The rating and the character count still open the line, in that first group.
+- A scene with ONE character has no " | " at all.
 
 THE PLAYER (POV scenes)
 - Seen through the player's eyes? Tag it pov. The player is never named: they are viewer, male pov or female pov.
