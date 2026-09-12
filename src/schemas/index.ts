@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DEFAULT_IMAGE_PROMPT_INSTRUCTION } from "../engine/imageDefaults";
+import { DEFAULT_IMAGE_PROMPT_INSTRUCTION, IMAGE_PROMPT_CHARACTER_LIMIT } from "../engine/imageDefaults";
 
 export const ClothingItemSchema = z.object({
   slot: z.string(),
@@ -341,7 +341,9 @@ export const ImageGenerationSettingsSchema = z.object({
   instruction: z.string().default(DEFAULT_IMAGE_PROMPT_INSTRUCTION),
   positivePrefix: z.string().default(""),
   negativePrefix: z.string().default(""),
-  promptCharacterLimit: z.number().int().min(0).default(900),
+  // Sourced from the shipped limit so a partial block can never default to a stale
+  // number while the presets and the fallback say something else.
+  promptCharacterLimit: z.number().int().min(0).default(IMAGE_PROMPT_CHARACTER_LIMIT),
   includeState: z.boolean().default(true),
   includeCast: z.boolean().default(true)
 });

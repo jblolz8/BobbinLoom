@@ -48,13 +48,18 @@ Return JSON only:
 /** Read-time fallback for any preset that has no `imageGeneration` block (all
  *  of them, before this feature landed) and for playthrough snapshots taken
  *  before it. Read sites resolve `preset.imageGeneration ?? DEFAULT`. */
+/** The shipped character limit for the composed image prompt. A plain number so
+ *  `ImageGenerationSettingsSchema` can default to it without referencing the
+ *  constant that the schema itself types (that is a circular type). */
+export const IMAGE_PROMPT_CHARACTER_LIMIT = 1200;
+
 export const DEFAULT_IMAGE_GENERATION_SETTINGS: ImageGenerationSettings = {
   instruction: DEFAULT_IMAGE_PROMPT_INSTRUCTION,
   positivePrefix: "anime style",
   negativePrefix:
     "lowres, bad anatomy, bad hands, extra fingers, extra limbs, deformed, poorly drawn face, " +
     "bad proportions, watermark, signature, text, jpeg artifacts",
-  promptCharacterLimit: 1200,
+  promptCharacterLimit: IMAGE_PROMPT_CHARACTER_LIMIT,
   includeState: true,
   includeCast: true
 };

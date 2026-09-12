@@ -354,7 +354,7 @@ describe("image generation: preset routes and the playthrough snapshot", () => {
     // Inner fields carry defaults, so a partial block arrives complete.
     expect(body.imageGeneration.positivePrefix).toBe("photorealistic, 35mm film");
     expect(body.imageGeneration.instruction).toBe(DEFAULT_IMAGE_PROMPT_INSTRUCTION);
-    expect(body.imageGeneration.promptCharacterLimit).toBe(900);
+    expect(body.imageGeneration.promptCharacterLimit).toBe(DEFAULT_IMAGE_GENERATION_SETTINGS.promptCharacterLimit);
     expect(body.imageGeneration.includeState).toBe(true);
     expect(body.imageGeneration.includeCast).toBe(true);
     // Persisted, not merely echoed.

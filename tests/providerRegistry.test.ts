@@ -745,7 +745,7 @@ describe("shared schema additions (message images + image generation settings)",
     });
     expect(preset.imageGeneration?.positivePrefix).toBe("anime style");
     expect(preset.imageGeneration?.negativePrefix).toBe("");
-    expect(preset.imageGeneration?.promptCharacterLimit).toBe(900);
+    expect(preset.imageGeneration?.promptCharacterLimit).toBe(DEFAULT_IMAGE_GENERATION_SETTINGS.promptCharacterLimit);
     expect(preset.imageGeneration?.includeState).toBe(true);
     expect(preset.imageGeneration?.includeCast).toBe(true);
     expect((preset.imageGeneration?.instruction ?? "").length).toBeGreaterThan(100);
