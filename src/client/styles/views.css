@@ -928,7 +928,7 @@
 
 .message-image {
   position: relative;
-  margin: 0;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
@@ -954,6 +954,15 @@
   cursor: default;
 }
 
+/* Groups one image and its diagnostic disclosures. The image figure is centered
+   inside it; the disclosures below span the full available width. */
+.message-image-block {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
 /* Diagnostic provenance: the JSON body sent to the image provider, collapsed
    under the image it belongs to. Deliberately quiet — small, muted, monospace,
    height-capped, and horizontally scrollable so a long prompt cannot widen or
@@ -961,6 +970,34 @@
 .message-image-request {
   font-size: 0.68rem;
   color: var(--text-muted);
+  width: 100%;
+}
+
+/* Copy button row above the request body — the disclosure has one affordance
+   that ErrorNotice already had: copy the JSON to paste it into a report. */
+.message-image-request-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.message-image-request-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.message-image-request-copy {
+  opacity: 0.65;
+}
+
+.message-image-request-copy:hover:not(:disabled) {
+  opacity: 1;
 }
 
 .message-image-request-summary {
@@ -981,7 +1018,7 @@
   padding: 0.4rem 0.5rem;
   max-height: 180px;
   max-width: 100%;
-  overflow: auto;
+  overflow-y: auto;
   background: var(--code-block-bg);
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
@@ -989,7 +1026,8 @@
   font-size: 0.68rem;
   line-height: 1.4;
   color: var(--text-muted);
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 /* The prompt-writing side call, disclosed under the image-request disclosure.
