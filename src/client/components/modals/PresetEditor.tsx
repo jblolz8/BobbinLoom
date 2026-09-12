@@ -507,7 +507,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
         ) : activeContextTab === "image" ? (
           <div className="format-editor">
             <p className="module-hint">
-              {`The image prompt the text model writes for a message, before it is handed to the image provider. The model must answer with JSON only — {"prompt": "…", "negative_prompt": "…"} — and the positive and negative prefixes below are prepended to those two fields. The composed prompt is then clamped to the character limit. Keep style and quality keywords out of the instruction: the positive prefix is where art direction lives, so a preset can be restyled by editing one line.`}
+              {`The image prompt the text model writes for a message, before it is handed to the image provider. The model must answer with JSON only — {"prompt": "…"} — with one line of comma-separated booru-style tags, and the positive prefix below is prepended to it. The negative prefix is prepended only when the model volunteers a negative prompt. The composed prompt is then clamped to the character limit, which cuts from the end. Keep style and quality keywords out of the instruction: the positive prefix is where art direction lives, so a preset can be restyled by editing one line.`}
             </p>
             <div className="settings-form">
               <label>

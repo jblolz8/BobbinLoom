@@ -17,12 +17,17 @@ export type ImagePromptOutput = {
    *  what the image provider receives. */
   prompt: string;
   negativePrompt: string;
+  /** True when the COMPOSED prompt had to be cut to `promptCharacterLimit`
+   *  inside this call. The cut lands at the END of the text — where a tag list
+   *  keeps its action and physical-state tags — so the dry-run route turns this
+   *  into a warning for the review modal. The text is still returned as-is. */
+  promptTruncated: boolean;
   rawInput: string;
   rawOutput: string;
   model: string;
   durationMs: number;
   /** Advisory notes about the model's answer — a suspected refusal used
-   *  verbatim, or JSON that carried neither expected key. Never blocking: the
+   *  verbatim, or JSON that carried no `prompt` string. Never blocking: the
    *  text above is still returned as-is and the review modal is where the user
    *  fixes it. Empty when the answer looked exactly like what was asked for. */
   warnings: string[];
@@ -152,15 +157,18 @@ export function buildImagePromptContextBlock(input: ImagePromptInput, settings: 
   if (input.previousUserContent) blocks.push(`PLAYER'S LAST ACTION:\n${input.previousUserContent}`);
   if (settings.includeState && input.stateSummary) blocks.push(`CURRENT STATE:\n${input.stateSummary}`);
   if (settings.includeCast && input.castSummary) blocks.push(`PRESENT CHARACTERS:\n${input.castSummary}`);
-  blocks.push('Write ONE image prompt for this moment. Return JSON: {"prompt": "…", "negative_prompt": "…"}');
+  blocks.push('Return ONE line of comma-separated tags describing this moment. Return JSON only: {"prompt": "…"}');
   return blocks.join("\n\n");
 }
 
 /** Compose + clamp a side: preset prefix first, then the model's text. A limit
- *  of 0 means unlimited (the schema allows it), so it is never asked to clamp. */
-function compose(prefix: string, body: string, limit: number): string {
+ *  of 0 means unlimited (the schema allows it), so it is never asked to clamp.
+ *  `truncated` says whether the clamp actually cut anything. */
+function compose(prefix: string, body: string, limit: number): { text: string; truncated: boolean } {
   const composed = composePrompt(prefix, body);
-  return limit > 0 ? clampChars(composed, limit) : composed;
+  if (limit <= 0) return { text: composed, truncated: false };
+  const clamped = clampChars(composed, limit);
+  return { text: clamped, truncated: clamped.length < composed.length };
 }
 
 /**
@@ -231,11 +239,9 @@ export async function generateImagePrompt(
   if (obj) {
     if (typeof obj.prompt === "string") rawPrompt = obj.prompt;
     if (typeof obj.negative_prompt === "string") rawNegative = obj.negative_prompt;
-    // JSON that parsed but names neither key: the fallback below would leak the
-    // raw blob into the image prompt, so say so before the user generates.
-    if (typeof obj.prompt !== "string" && typeof obj.negative_prompt !== "string") {
+    if (typeof obj.prompt !== "string") {
       warnings.push(
-        `The text model returned JSON with neither "prompt" nor "negative_prompt" (keys: ${describeKeys(obj)}), so that raw JSON is now the image prompt. Edit it before generating, or try another text connection.`
+        `The text model returned JSON with no "prompt" field (keys: ${describeKeys(obj)}), so that raw JSON is now the image prompt. Edit it before generating, or try another text connection.`
       );
     }
   }
@@ -253,9 +259,13 @@ export async function generateImagePrompt(
     }
   }
 
+  const composedPrompt = compose(settings.positivePrefix, rawPrompt, settings.promptCharacterLimit);
+  const composedNegative = compose(settings.negativePrefix, rawNegative, settings.promptCharacterLimit);
+
   return {
-    prompt: compose(settings.positivePrefix, rawPrompt, settings.promptCharacterLimit),
-    negativePrompt: compose(settings.negativePrefix, rawNegative, settings.promptCharacterLimit),
+    prompt: composedPrompt.text,
+    negativePrompt: composedNegative.text,
+    promptTruncated: composedPrompt.truncated,
     rawInput: JSON.stringify(body),
     rawOutput: text,
     model: config.model,

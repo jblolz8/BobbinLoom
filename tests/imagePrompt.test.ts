@@ -45,6 +45,33 @@ const INPUT = {
 };
 
 describe("generateImagePrompt", () => {
+  it("sends a tag-list instruction and asks for the one-field JSON shape", async () => {
+    const { fetchImpl, calls } = stubFetch('{"prompt": "safe, 1girl, bedroom"}');
+    await generateImagePrompt(testConfig(), settings(), INPUT, fetchImpl);
+
+    const system = calls[0].body.messages[0].content as string;
+    // The system message IS the preset instruction: a booru-style tag list, not
+    // a prose sentence.
+    expect(system).toBe(settings().instruction);
+    expect(system).toContain("booru-style tags");
+    expect(system).toContain('Return JSON only:\n{"prompt": "<the tag line>"}');
+    expect(system).not.toContain("describe ONE still image");
+
+    // …and the trailing context line asks for the same thing, one field only.
+    const block = calls[0].body.messages[1].content as string;
+    expect(block).toContain("Return ONE line of comma-separated tags describing this moment.");
+    expect(block).toContain('Return JSON only: {"prompt": "…"}');
+    expect(block).not.toContain("negative_prompt");
+  });
+
+  it("still accepts a volunteer negative_prompt and composes it with the prefix", async () => {
+    const { fetchImpl } = stubFetch('{"prompt": "safe, 1girl", "negative_prompt": "hands, extra fingers"}');
+    const result = await generateImagePrompt(testConfig(), settings(), INPUT, fetchImpl);
+    expect(result.prompt).toBe("anime style safe, 1girl");
+    expect(result.negativePrompt).toBe(`${settings().negativePrefix} hands, extra fingers`);
+    expect(result.warnings).toEqual([]);
+  });
+
   it("parses the JSON contract and composes the preset prefixes", async () => {
     const { fetchImpl, calls } = stubFetch('{"prompt": "a woman in a wet alley", "negative_prompt": "blurry"}');
     const result = await generateImagePrompt(testConfig(), settings(), INPUT, fetchImpl);
@@ -93,6 +120,15 @@ describe("generateImagePrompt", () => {
     expect(result.prompt).toBe("anime style");
     expect(result.prompt.length).toBeLessThanOrEqual(12);
     expect(result.prompt).not.toMatch(/\s$/);
+    // The cut is reported so the dry-run route can warn the user.
+    expect(result.promptTruncated).toBe(true);
+  });
+
+  it("reports no truncation when the composed prompt fits the limit", async () => {
+    const { fetchImpl } = stubFetch('{"prompt": "safe, 1girl, bedroom", "negative_prompt": ""}');
+    const result = await generateImagePrompt(testConfig(), settings(), INPUT, fetchImpl);
+    expect(result.prompt).toBe("anime style safe, 1girl, bedroom");
+    expect(result.promptTruncated).toBe(false);
   });
 
   it("drops the state and cast blocks when the settings say so", async () => {

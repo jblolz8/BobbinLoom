@@ -206,18 +206,29 @@ describe("advisory warnings", () => {
     expect(result.warnings).toEqual([]);
   });
 
-  it("flags JSON that parsed but carried neither expected key, naming the keys", async () => {
+  it("flags JSON that parsed but carried no prompt string, naming the keys", async () => {
     const content = JSON.stringify({ description: "a bridge at dusk", style: "anime" });
     const { fetchImpl } = stubFetch(() => textEnvelope({ content }));
 
     const result = await generateImagePrompt(testConfig(), settings(), INPUT, fetchImpl);
 
     expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0]).toMatch(/neither "prompt" nor "negative_prompt"/);
+    expect(result.warnings[0]).toMatch(/no "prompt" field/);
     expect(result.warnings[0]).toContain('"description"');
     expect(result.warnings[0]).toContain('"style"');
     // Unchanged behaviour: the raw JSON is what the prompt would carry.
     expect(result.prompt).toContain("a bridge at dusk");
+  });
+
+  it("flags a volunteer negative with no prompt as the same wrong shape", async () => {
+    // The one-field contract: a negative alone is still not a prompt.
+    const { fetchImpl } = stubFetch(() => textEnvelope({ content: '{"negative_prompt": "blurry"}' }));
+
+    const result = await generateImagePrompt(testConfig(), settings(), INPUT, fetchImpl);
+
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toMatch(/no "prompt" field/);
+    expect(result.warnings[0]).toContain('"negative_prompt"');
   });
 
   it("stays silent for clean JSON, a fenced block and plain prose", async () => {
