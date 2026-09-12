@@ -255,18 +255,20 @@ export class A1111Provider implements ImageProvider {
   /** This request's regions, or null for "exactly today's behaviour".
    *
    *  The two LOCAL checks come first and cost nothing: a connection that
-   *  switched regions off, and a prompt with fewer than two groups (one
-   *  character in frame is the common case) both return before any request is
-   *  made. Only then is the extension consulted — and that answer is cached per
-   *  base URL, so even a multi-character scene pays for it once every few
-   *  minutes rather than once per render.
+   *  switched regions off, and a prompt with fewer than THREE groups both
+   *  return before any request is made. Three, not two, because the first group
+   *  is the shared scene — two groups means ONE character in frame and nothing
+   *  to separate, and sending regions anyway would only halve the weight of the
+   *  scene tags for no benefit. Only then is the extension consulted — and that
+   *  answer is cached per base URL, so even a multi-character scene pays for it
+   *  once every few minutes rather than once per render.
    *
    *  A missing, failing or unknown extension is `false` all the way down: the
    *  caller keeps rendering, just without regions. */
   private async regionPlan(req: ImageGenerationRequest): Promise<RegionPlan> {
     if (this.connection.regionsEnabled === false) return null;
     const groups = promptGroups(req.prompt);
-    if (groups.length < 2) return null;
+    if (groups.length < 3) return null;
     const detection = await detectForgeCouple(this.config.baseUrl, {
       fetchImpl: this.fetchImpl,
       headers: authHeaders(this.config.apiKey, "a1111")
@@ -318,7 +320,9 @@ function buildTxt2ImgBody(
     // Explicit, so "one request" never depends on a fork's default.
     body.override_settings_restore_afterwards = true;
   }
-  if (plan) body.alwayson_scripts = { [plan.script]: { args: forgeCoupleArgs(plan.direction) } };
+  if (plan) {
+    body.alwayson_scripts = { [plan.script]: { args: forgeCoupleArgs(plan.direction, plan.groups.length) } };
+  }
   return body;
 }
 
@@ -355,16 +359,22 @@ type RegionPlan = { script: string; direction: RegionDirection; groups: string[]
  *  Basic mode splits the whole canvas in half — no coordinates — and the FIRST
  *  group becomes the shared background line, which is where the preset's own
  *  style prefix already lands. */
-export function forgeCoupleArgs(direction: RegionDirection): Array<boolean | string | number | null> {
+/** Forge Couple's 17 arguments, in the extension's own order. The mapping slot
+ *  is the one entry that is not a scalar — Advanced mode reads its geometry
+ *  from an array of boxes. */
+export function forgeCoupleArgs(
+  direction: RegionDirection,
+  groupCount: number
+): Array<boolean | string | number | number[][] | null> {
   return [
     true, // enable
     true, // disable_hr — the regions must hold for the high-res pass too
-    "Basic", // mode
+    FORGE_COUPLE_MODE, // mode — Advanced; Basic cannot carry what we send
     FORGE_COUPLE_SEPARATOR, // separator
-    direction, // direction
-    "First Line", // background
-    0.5, // background_weight
-    null, // mapping (Advanced mode's boxes only)
+    null, // direction — Advanced geometry is the mapping, not a direction
+    null, // background — no separate global line; the shared group IS one
+    null, // background_weight
+    forgeCoupleMapping(direction, groupCount), // mapping
     "off", // common_parser
     false, // common_debug
     true, // def_in_prompt
@@ -375,4 +385,40 @@ export function forgeCoupleArgs(direction: RegionDirection): Array<boolean | str
     null,
     null
   ];
+}
+
+/** Advanced mode, deliberately — Basic mode cannot express what this app sends.
+ *  Its handler (`scripts/forge_couple.py`) rejects a prompt outright unless it
+ *  carries at least THREE lines (`len(couples) < 3 - int(background == "None")`)
+ *  and builds its geometry from the WebUI's own persisted UI state. A two-group
+ *  prompt — a shared scene plus one character, i.e. any POV scene where the
+ *  viewer is never named — therefore died on a live WebUI with
+ *  "[Forge Couple] ERROR - Not Enough Lines in Prompt... [2 / 3]".
+ *  Advanced mode takes the geometry FROM US: it validates
+ *  `len(couples) == len(mapping)` and nothing else. */
+export const FORGE_COUPLE_MODE = "Advanced";
+
+/** The shared group's weight across the whole frame — the same number the
+ *  extension's own "Global Effect Weight" defaults to. */
+export const FORGE_COUPLE_BACKGROUND_WEIGHT = 0.5;
+
+/** One box per group, `[x1, x2, y1, y2, weight]` in 0..1 canvas fractions —
+ *  the shape the extension's Advanced mapping and its own `validate_mapping`
+ *  expect (numbers only, coords inside 0..1, x2 >= x1, y2 >= y1).
+ *
+ *  The FIRST group is the shared scene, so it gets the WHOLE FRAME at the
+ *  background weight: that is exactly what Basic mode's "First Line" global
+ *  effect did, reproduced under our control. Every group after it is a
+ *  character and gets an equal slice — columns when Horizontal, rows when
+ *  Vertical. A lone character takes the whole frame, since there is nothing to
+ *  separate it from. */
+export function forgeCoupleMapping(direction: RegionDirection, groupCount: number): number[][] {
+  const boxes: number[][] = [[0, 1, 0, 1, FORGE_COUPLE_BACKGROUND_WEIGHT]];
+  const characters = Math.max(1, groupCount - 1);
+  for (let index = 0; index < characters; index += 1) {
+    const from = index / characters;
+    const to = (index + 1) / characters;
+    boxes.push(direction === "Vertical" ? [0, 1, from, to, 1] : [from, to, 0, 1, 1]);
+  }
+  return boxes;
 }

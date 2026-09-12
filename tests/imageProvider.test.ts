@@ -8,7 +8,7 @@ import type {
   ImageProgress,
   ImageProvider
 } from "../src/server/imageProvider";
-import { A1111_IMAGE_PROMPT_CAP, A1111Provider } from "../src/server/imageProvider/a1111Provider";
+import { A1111_IMAGE_PROMPT_CAP, A1111Provider, forgeCoupleMapping } from "../src/server/imageProvider/a1111Provider";
 import { OPENAI_IMAGE_PROMPT_CAP, OpenAIImagesProvider } from "../src/server/imageProvider/openaiImagesProvider";
 import { VENICE_IMAGE_PROMPT_CAP, VeniceImageProvider } from "../src/server/imageProvider/veniceImageProvider";
 import {
@@ -934,7 +934,7 @@ describe("A1111Provider — Forge Couple regions", () => {
 
   beforeEach(() => clearForgeCoupleCache());
 
-  it("sends the extension's 17 documented arguments when it is installed and the prompt has two groups", async () => {
+  it("sends the extension's 17 documented arguments when it is installed and the prompt has two characters", async () => {
     const { fetchImpl, calls } = stubWebUI("installed");
     const provider = new A1111Provider(a1111Config(), a1111Conn(), fetchImpl);
 
@@ -957,12 +957,18 @@ describe("A1111Provider — Forge Couple regions", () => {
         args: [
           true, // enable
           true, // disable_hr
-          "Basic", // mode
+          "Advanced", // mode — Basic needs 3+ lines and the WebUI's own state
           " | ", // separator
-          "Horizontal", // direction
-          "First Line", // background
-          0.5, // background_weight
-          null, // mapping
+          null, // direction: Advanced geometry is the mapping
+          null, // background: the shared group is the full-frame box below
+          null, // background_weight
+          // one box per group: the shared scene fills the frame at the
+          // background weight, then one column per character
+          [
+            [0, 1, 0, 1, 0.5],
+            [0, 0.5, 0, 1, 1],
+            [0.5, 1, 0, 1, 1]
+          ],
           "off", // common_parser
           false, // common_debug
           true, // def_in_prompt
@@ -995,8 +1001,13 @@ describe("A1111Provider — Forge Couple regions", () => {
     // The passed separator is the one the normalized prompt carries.
     expect(args[3]).toBe(" | ");
     expect((body.prompt as string).split(args[3] as string)).toHaveLength(3);
-    // …and the connection's direction goes through verbatim.
-    expect(args[4]).toBe("Vertical");
+    // …and the connection's direction arrives as ROWS in the mapping, which is
+    // where Advanced mode reads its geometry from.
+    expect(args[7]).toEqual([
+      [0, 1, 0, 1, 0.5],
+      [0, 1, 0, 0.5, 1],
+      [0, 1, 0.5, 1, 1]
+    ]);
   });
 
   it("keys the payload with the spelling the SERVER reported, not the one we match on", async () => {
@@ -1005,11 +1016,69 @@ describe("A1111Provider — Forge Couple regions", () => {
         ? jsonResponse({ images: [PNG_B64] })
         : jsonResponse([{ name: "forge couple", is_alwayson: true }])
     );
-    await new A1111Provider(a1111Config(), a1111Conn(), fetchImpl).generateImage({ prompt: "a|b" });
+    await new A1111Provider(a1111Config(), a1111Conn(), fetchImpl).generateImage({ prompt: "a|b|c" });
 
     // A1111 resolves the key by exact name and 422s otherwise, so a title we
     // invented would poison every render.
     expect(Object.keys(calls[1].body!.alwayson_scripts as object)).toEqual(["forge couple"]);
+  });
+
+  it("sends NO payload for a two-group prompt — one character, nothing to separate", async () => {
+    // The live bug: a shared scene plus ONE character (a POV scene where the
+    // viewer is never named) reached the extension's Basic mode, which
+    // hard-requires three prompt lines and answered
+    // "[Forge Couple] ERROR - Not Enough Lines in Prompt... [2 / 3]".
+    // One character needs no regions, so this render is exactly what it was
+    // before regions existed — no detection call, no alwayson key.
+    const { fetchImpl, calls } = stubWebUI("installed");
+    const provider = new A1111Provider(a1111Config(), a1111Conn(), fetchImpl);
+
+    await provider.generateImage({ prompt: "a rainy street at night | 1girl, red hair" });
+
+    expect(calls.map((call) => call.url)).toEqual([A1111_TXT2IMG_URL]);
+    expect("alwayson_scripts" in calls[0].body!).toBe(false);
+    expect(calls[0].body!.prompt).toBe("a rainy street at night | 1girl, red hair");
+  });
+
+  it("boxes one region per group, inside the extension's own validator", () => {
+    // validate_mapping (lib_couple/ui_funcs.py) demands numbers in 0..1 with
+    // x2 >= x1 and y2 >= y1; Advanced mode asserts len(couples) == len(mapping).
+    const horizontal = forgeCoupleMapping("Horizontal", 3);
+    expect(horizontal).toEqual([
+      [0, 1, 0, 1, 0.5],
+      [0, 0.5, 0, 1, 1],
+      [0.5, 1, 0, 1, 1]
+    ]);
+    expect(forgeCoupleMapping("Vertical", 3)).toEqual([
+      [0, 1, 0, 1, 0.5],
+      [0, 1, 0, 0.5, 1],
+      [0, 1, 0.5, 1, 1]
+    ]);
+    // four groups -> thirds; a lone character keeps the whole frame
+    expect(forgeCoupleMapping("Horizontal", 4)).toEqual([
+      [0, 1, 0, 1, 0.5],
+      [0, 1 / 3, 0, 1, 1],
+      [1 / 3, 2 / 3, 0, 1, 1],
+      [2 / 3, 1, 0, 1, 1]
+    ]);
+    expect(forgeCoupleMapping("Horizontal", 2)).toHaveLength(2);
+
+    for (const count of [2, 3, 4, 5]) {
+      const boxes = forgeCoupleMapping("Horizontal", count);
+      // exactly one box per group, whichever way the canvas splits
+      expect(boxes).toHaveLength(count);
+      expect(forgeCoupleMapping("Vertical", count)).toHaveLength(count);
+      for (const [x1, x2, y1, y2, weight] of boxes) {
+        for (const value of [x1, x2, y1, y2]) {
+          expect(typeof value).toBe("number");
+          expect(value).toBeGreaterThanOrEqual(0);
+          expect(value).toBeLessThanOrEqual(1);
+        }
+        expect(x2).toBeGreaterThanOrEqual(x1);
+        expect(y2).toBeGreaterThanOrEqual(y1);
+        expect(weight).toBeGreaterThan(0);
+      }
+    }
   });
 
   it("renders normally with NO alwayson_scripts key when the extension is absent (the 422 trap)", async () => {

@@ -801,8 +801,8 @@ export function ImageConnectionEditor({
 
       {/* Forge Couple regions (a1111 only). These two are stored preferences,
           not a wire switch: the adapter composes the alwayson payload only when
-          the extension is really installed AND the prompt came back with two or
-          more ` | ` groups. With no extension — or a scene with one character —
+          the extension is really installed AND the prompt came back with three
+          or more ` | ` groups — a shared scene plus at least two characters. With no extension — or a scene with one character —
           the request is exactly the one this editor made before the section
           existed, which is why the detection line below is never silent. */}
       {a1111 && (
@@ -825,8 +825,9 @@ export function ImageConnectionEditor({
               />
               <p className="conn-field-helper">
                 How the canvas is divided between characters. Horizontal gives each one a column, left to right,
-                in the order they appear in the prompt; Vertical gives each one a band, top to bottom. Sent as
-                Forge Couple's own <code>direction</code>, so the two spellings are its, not ours.
+                in the order they appear in the prompt; Vertical gives each one a band, top to bottom. The
+                geometry travels as the extension's <code>Advanced</code> region mapping, so the split is ours
+                and the WebUI's own settings are never touched.
               </p>
             </div>
 
