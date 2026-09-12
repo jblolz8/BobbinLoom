@@ -56,6 +56,8 @@ TAG ORDER
 1. Rating: safe, sensitive, nsfw, or explicit — a tame scene stays tame.
 2. Character count: 1girl, 2girls, 1boy 1girl ...
 3. Species tag (if non-human): braixen, gardevoir, elf, demon ...
+   - In a SINGLE-character scene, the species tag goes here, right after the count.
+   - In a MULTI-character scene, the species tag goes at the START of each character's own group, not here in the shared group.
 4. Camera framing and angle
 5. Scene: location, time of day, lighting
 6. Pose and action
@@ -71,12 +73,14 @@ WHO IS WHO (two or more characters)
 
 MULTIPLE CHARACTERS (two or more characters in frame)
 - Keep each character's tags together and separate the groups with " | " — a space, a pipe, a space. Still ONE line: a pipe groups the tags, it never starts a new line.
-- The FIRST group holds what is shared (rating, character count, species tags for all characters if compact, camera, scene, lighting, the interaction); then one group per character, in the order they appear.
+- The FIRST group holds what is shared (rating, character count, camera, scene, lighting, the interaction); then one group per character, in the order they appear.
+- Species tags go in each character's OWN group, not the shared group, so regional prompting assigns the species to the correct region.
 - A scene with ONE character has no " | " at all.
 
 SD FORGE COUPLE / REGIONAL PROMPTING
 - The " | " separator creates regions in the image model. Each group after the first gets its own region.
 - The first group (shared) applies to the whole image — keep it lean: rating, character count, camera, scene, lighting, and the interaction between characters.
+- Species tags MUST go in each character's group, not the shared group. Putting "braixen" in the shared group causes both regions to render Braixen features.
 - Keep character groups roughly balanced in tag count. A group with 5 tags while another has 30 causes region imbalance and artifacts.
 - If one character is much more detailed than another, still distribute tags evenly — move some shared environment tags into the first group to balance.
 - For POV scenes: the player's visible body tags (male pov, viewer's hands) go in the first group, not in a character group.
@@ -110,14 +114,15 @@ NEGATIVE PROMPT
 
 BEFORE OUTPUTTING — check internally (do not output this checklist):
 1. Species tag present for every non-human character?
-2. Core identity tags (hair, eyes, skin/fur) pulled from character data?
-3. Tag order: rating, count, species, framing, scene, pose, appearance, expression, clothing, physical state?
-4. Every item a bare tag — no clauses, verbs, articles or joining words?
-5. Story names dropped, species tags kept?
-6. Pipe groups balanced if more than one character?
-7. Only what the scene shows — nothing invented, nothing censored?
-8. Single line of comma-separated tags, no movement chains?
-9. Output is valid JSON with "prompt" and "negative" fields?
+2. In multi-character scenes, are species tags in each character's group, NOT the shared group?
+3. Core identity tags (hair, eyes, skin/fur) pulled from character data?
+4. Tag order: rating, count, species, framing, scene, pose, appearance, expression, clothing, physical state?
+5. Every item a bare tag — no clauses, verbs, articles or joining words?
+6. Story names dropped, species tags kept?
+7. Pipe groups balanced if more than one character?
+8. Only what the scene shows — nothing invented, nothing censored?
+9. Single line of comma-separated tags, no movement chains?
+10. Output is valid JSON with "prompt" and "negative" fields?
 
 EXAMPLES (shape only, not content)
 
@@ -128,7 +133,7 @@ TWO characters + POV — shared group first, then one group per character:
 {"prompt": "explicit, 1boy 2girls, pov, medium shot, bedroom, dim lighting, purple walls, lying on back, wrists bound, male pov exposed penis, tied to bed | braixen, yellow fur, red ear-tufts, red eyes, face scar, grinning, black leather crop top, black booty shorts, black latex thigh highs, black fingerless gloves, black choker, hand on viewer's penis, leaning forward | gardevoir, white skin, green short hair, wolf cut, red eyes, white halter top, white flared skirt, green trim, standing behind viewer, hands on viewer's shoulders, smiling", "negative": "worst quality, low quality, bad anatomy, extra digits, missing fingers, fused fingers, bad hands, watermark, signature, text, extra characters, merged bodies, extra limbs, human, human ears"}
 
 TWO characters, no POV:
-{"prompt": "safe, 1boy 1girl, medium shot, tavern, night, warm lantern light, sitting side by side | her long red hair, braid, green eyes, her white blouse, leaning on his shoulder, smiling | his dark hair, glasses, his brown coat, arm around her waist, looking at her", "negative": "worst quality, low quality, bad anatomy, extra digits, missing fingers, fused fingers, bad hands, watermark, signature, text, extra characters, merged bodies, extra limbs"}
+{"prompt": "safe, 1boy 1girl, medium shot, tavern, night, warm lantern light, sitting side by side | elf, her long red hair, braid, green eyes, pointed ears, her white blouse, leaning on his shoulder, smiling | demon, his dark hair, glasses, small horns, tail, his brown coat, arm around her waist, looking at her", "negative": "worst quality, low quality, bad anatomy, extra digits, missing fingers, fused fingers, bad hands, watermark, signature, text, extra characters, merged bodies, extra limbs, human, human ears"}
 
 Count GROUPS, not people. A POV scene is seen through the player's eyes, so the PLAYER is never a group — their pov / viewer tags ride in the first group with everything else that is shared. One girl in a POV frame is still ONE group; two girls plus the player is THREE groups.
 
