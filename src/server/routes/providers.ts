@@ -15,7 +15,13 @@ const ProviderConnectionBody = z.object({
   label: z.string().min(1),
   baseUrl: z.string().min(1),
   apiKey: z.string().nullable().optional(),
-  model: z.string().min(1),
+  /** NOT `.min(1)`: an IMAGE connection may legitimately have NO model. On the
+   *  a1111 dialect an empty model means "whatever checkpoint the WebUI already
+   *  has loaded" (the adapter then omits `override_settings` entirely), and the
+   *  WebUI's checkpoint list is not always populated — demanding one made a
+   *  valid local connection unsaveable with a 500. Text connections still
+   *  require a model: see the superRefine on this schema. */
+  model: z.string().optional(),
   temperature: z.number().optional(),
   maxTokens: z.number().optional(),
   contextWindow: z.number().optional(),
@@ -44,6 +50,19 @@ const ProviderConnectionBody = z.object({
   sampler: z.string().optional(),
   scheduler: z.string().optional(),
   timeoutMs: z.number().int().min(1000).optional()
+}).superRefine((value, ctx) => {
+  // A text connection cannot work without a model id. An image connection can
+  // (see `model` above). `kind` is always sent by the client; a body with no
+  // kind but an apiStyle is still an image connection, and a body with neither
+  // keeps the pre-existing rule so nothing that used to validate now sneaks by.
+  const isText = (value.kind ?? (value.apiStyle ? "image" : "text")) === "text";
+  if (isText && !value.model?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["model"],
+      message: "A text connection needs a model id."
+    });
+  }
 });
 
 const ProviderIdParam = z.object({ id: z.string() });
@@ -90,13 +109,17 @@ export const providerRoutes: FastifyPluginAsync<ProviderRoutesOptions> = async (
 
   app.post("/api/settings/providers", async (request) => {
     const body = ProviderConnectionBody.parse(request.body ?? {});
-    return manager.createConnection(body);
+    // `model` is optional ON THE BODY (an image connection may have none) but
+    // required by the registry's input type, which stamps a string field. An
+    // absent model is therefore normalised to "" here — the same value the
+    // editor's empty form uses, and what the adapters treat as "send nothing".
+    return manager.createConnection({ ...body, model: body.model ?? "" });
   });
 
   app.put("/api/settings/providers/:id", async (request) => {
     const { id } = ProviderIdParam.parse(request.params);
     const body = ProviderConnectionBody.parse(request.body ?? {});
-    return manager.updateConnection(id, body);
+    return manager.updateConnection(id, { ...body, model: body.model ?? "" });
   });
 
   app.delete("/api/settings/providers/:id", async (request) => {

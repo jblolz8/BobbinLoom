@@ -968,3 +968,69 @@ describe("image progress registry", () => {
     clearImageProgress("conn_c");
   });
 });
+
+describe("provider connections — the model field", () => {
+  /** The bug: `model: z.string().min(1)` on the connection body meant an a1111
+   *  connection with NO checkpoint could not be saved at all (500, "String must
+   *  contain at least 1 character(s)", path ["model"]). An empty checkpoint is a
+   *  legitimate local choice: the adapter then sends no `override_settings`, so
+   *  the WebUI keeps whatever it already has loaded. */
+  it("saves an a1111 connection with no checkpoint, keeping its sampling controls", async () => {
+    const { app } = harness({ withImage: false, withText: false });
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/settings/providers",
+      payload: {
+        kind: "image",
+        label: "ReForge",
+        baseUrl: "http://192.168.1.2:7860",
+        model: "",
+        apiStyle: "a1111",
+        size: "1024x1024",
+        steps: 28,
+        cfgScale: 6,
+        sampler: "Euler a",
+        scheduler: "Karras",
+        timeoutMs: 600000
+      }
+    });
+
+    expect(res.statusCode).toBe(200);
+    const saved = res.json() as { model: string; apiStyle: string; steps?: number; timeoutMs?: number };
+    expect(saved.model).toBe("");
+    expect(saved.apiStyle).toBe("a1111");
+    expect(saved.steps).toBe(28);
+    expect(saved.timeoutMs).toBe(600000);
+  });
+
+  it("still refuses a text connection with no model", async () => {
+    const { app } = harness({ withImage: false, withText: false });
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/settings/providers",
+      payload: { kind: "text", label: "Local Text", baseUrl: "http://localhost:1234/v1", model: "" }
+    });
+
+    // 500, not 400: a ZodError thrown in a handler reaches Fastify's default
+    // error path, so a validation problem is reported as an Internal Server
+    // Error. That is pre-existing behaviour on every provider route (and it is
+    // what made the a1111 500 look like a crash); the assertion pins the status
+    // quo so the message is at least asserted, and the mapping is a follow-up.
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toContain("model");
+    expect(res.body).toContain("A text connection needs a model id.");
+  });
+
+  it("treats a body with an apiStyle and no kind as an image connection", async () => {
+    // zod strips nothing here — `kind` is optional on the body, and an apiStyle
+    // is proof of intent: demanding a model of it would revive the same 500.
+    const { app } = harness({ withImage: false, withText: false });
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/settings/providers",
+      payload: { label: "Draft", baseUrl: "http://192.168.1.2:7860", model: "", apiStyle: "a1111" }
+    });
+
+    expect(res.statusCode).toBe(200);
+  });
+});
