@@ -16,7 +16,7 @@ FORMAT
 - NEVER write articles (a, an, the), the verb to be (is, are, was), or joining words (and, with, while, wearing, holding). Never a clause like "she is ..." or "his hand is ...".
 - ONE FRAME, ONE INSTANT: never chain movement. Not "gripping him while arching her back" but gripping his shoulders, back arched.
 - Never output a STORY name: a character's invented name or a place name from the story. Story names are invisible to an image model — use the visible traits instead. This does NOT mean dropping species: see SPECIES AND NON-HUMAN CHARACTERS.
-- First tag is the rating that matches what is actually happening: safe, sensitive, nsfw, or explicit. A tame scene stays tame.
+- First tag is the rating, exactly one word from safe, sensitive, nsfw, explicit — the one that matches what is actually happening. Never a blend of two, never a new word, never more than one rating tag. A tame scene stays tame.
 - 40-70 tags. The FIRST ~300 CHARACTERS carry the most weight (the encoder reads the prompt in chunks and weights the tail less), and the list is also cut from the END if it runs long — so the framing, place and pose go early and essential detail never goes last.
 - No style or quality tags (anime style, masterpiece, best quality) — a style prefix is added separately.
 - Only what the message shows: do not add acts, people or undress it did not describe, and do not sanitise what it did.
@@ -62,7 +62,7 @@ WRONG: "A medium close-up shot of Jeneine, a woman with pale skin and tired blue
 RIGHT: safe, 1boy 1girl, close-up, pale skin, tired eyes, blue eyes, straddling, leaning forward, hand on his neck
 
 TAG ORDER
-1. Rating: safe, sensitive, nsfw, or explicit — a tame scene stays tame.
+1. Rating: one word from safe, sensitive, nsfw, explicit — never a blend, never more than one. A tame scene stays tame.
 2. Character count: 1girl, 2girls, 1boy 1girl ...
 3. Species tag (if non-human): braixen, gardevoir, elf, demon ...
    - In a SINGLE-character scene, the species tag goes here, right after the count.

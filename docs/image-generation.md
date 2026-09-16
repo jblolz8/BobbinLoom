@@ -303,13 +303,15 @@ The `PLAYER'S LAST ACTION`, `CURRENT STATE` and `PRESENT CHARACTERS` blocks are 
 
 ```
 Mira — wearing white shirt, wet, wary
+Mira's hair — long brown hair, ponytail
 Mira's sheet — Species: Human | Body: Height: 168 cm; Build: slim, athletic | Appearance: Hair: long brown hair, ponytail; Eyes: blue eyes
 ```
 
 - The template is found in `playthrough.characterTemplates` by the instance's `templateId`, falling back to a template with the same **name** when the id does not resolve.
 - The sections are read with the engine's own parser (`pickSections` / `isStubSection` in `src/engine/characterSections.ts`), in the order `Species`, `Gender`, `Body`, `Appearance`. Missing sections and stubs (`(not established)`, empty) are skipped.
 - **`Clothing` is deliberately excluded**: the character *instance*'s clothing is the authoritative current state and already rides on the instance line. A sheet's starting outfit must not be re-imposed on a scene where the character has undressed.
-- The injected identity is capped per character (`CAST_IDENTITY_CHARS`, 320) so one long sheet cannot crowd out the scene.
+- The injected identity is capped per character (`CAST_IDENTITY_CHARS`, **600**) so one long sheet cannot crowd out the scene. It was 320, and 320 starved `[Appearance]`: a sheet puts `[Body]` first and it runs 130-205 characters, so the clamp landed inside `[Appearance]` and cut its LATER bullets — where `Hair` usually sits. A live generation rendered a character with no hair at all while her sheet carried `- Hair: Long light brown, messy, often in a loose ponytail`; the writer's tags mirrored exactly the text that survived the cut.
+- **Hair gets a line of its own, before the sheet line** (`<name>'s hair — …`), extracted by LABEL (`Hair:`, `Hair style:`, `Hair colour:`) from anywhere in the sheet and clamped separately at 120 characters. Label-anchored on purpose: a sheet may also describe ear-tufts "acting as hair" under the Ears bullet, and matching any line containing "hair" would headline the wrong feature. The headline is what makes the feature un-losable — the identity budget can trim the sheet line, it cannot touch this one.
 
 The point is tag **consistency**: without it, the writer scrapes hair/eye/skin out of scene prose and the same character comes out looking different in every image.
 
@@ -471,7 +473,7 @@ FORMAT
 - NEVER write articles (a, an, the), the verb to be (is, are, was), or joining words (and, with, while, wearing, holding). Never a clause like "she is ..." or "his hand is ...".
 - ONE FRAME, ONE INSTANT: never chain movement. Not "gripping him while arching her back" but gripping his shoulders, back arched.
 - Never output a character's name or a place name from the story. Names are invisible to an image model — use the visible traits instead.
-- First tag is the rating that matches what is actually happening: safe, sensitive, nsfw, or explicit. A tame scene stays tame.
+- First tag is the rating, exactly one word from safe, sensitive, nsfw, explicit — the one that matches what is actually happening. Never a blend of two, never a new word, never more than one rating tag. A tame scene stays tame.
 - 40-70 tags. The FIRST ~300 CHARACTERS carry the most weight (the encoder reads the prompt in chunks and weights the tail less), and the list is also cut from the END if it runs long — so the framing, place and pose go early and essential detail never goes last.
 - No style or quality tags (anime style, masterpiece, best quality) — a style prefix is added separately.
 - Only what the message shows: do not add acts, people or undress it did not describe, and do not sanitise what it did.
@@ -481,7 +483,7 @@ WRONG: "A medium close-up shot of Jeneine, a woman with pale skin and tired blue
 RIGHT: close-up, 1boy 1girl, pale skin, tired eyes, blue eyes, straddling, leaning forward, hand on his neck
 
 TAG ORDER
-1. Rating: safe, sensitive, nsfw, or explicit — a tame scene stays tame.
+1. Rating: one word from safe, sensitive, nsfw, explicit — never a blend, never more than one. A tame scene stays tame.
 2. Character count: 1girl, 2girls, 1boy 1girl ...
 3. Species tag (if non-human): braixen, gardevoir, elf, demon ...
    - In a SINGLE-character scene, the species tag goes here, right after the count.
@@ -547,13 +549,13 @@ Return JSON only:
 `Default (NSFW)` is that same document with exactly two mechanical changes: the rating bullet
 
 ```
-- First tag is the rating that matches what is actually happening: safe, sensitive, nsfw, or explicit. A tame scene stays tame.
+- First tag is the rating, exactly one word from safe, sensitive, nsfw, explicit — the one that matches what is actually happening. Never a blend of two, never a new word, never more than one rating tag. A tame scene stays tame.
 ```
 
 becomes
 
 ```
-- First tag is the rating: nsfw or explicit when the scene is sexual, safe or sensitive when it is not.
+- First tag is the rating, exactly one word from safe, sensitive, nsfw, explicit — nsfw or explicit when the scene is sexual, safe or sensitive when it is not. Never a blend of two, never a new word, never more than one rating tag.
 ```
 
 and this block is inserted immediately before the `Return JSON only:` line (followed by one blank line):

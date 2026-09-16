@@ -19,9 +19,26 @@ import { clampChars } from "../imageProvider/shared";
  */
 
 /** How much of a character sheet's STABLE identity is injected per character.
- *  A few hundred characters: enough for the physical tags the writer must keep
- *  reproducing, not enough for one long sheet to dominate the prompt. */
-const CAST_IDENTITY_CHARS = 320;
+ *  Enough for the physical tags the writer must keep reproducing, not enough for
+ *  one long sheet to dominate the prompt.
+ *
+ *  Raised 320 → 600 because 320 was starving `[Appearance]`: a typical sheet puts
+ *  `[Body]` first and it runs 130-205 characters, so the clamp landed INSIDE
+ *  `[Appearance]` and cut its later bullets — which is where `Hair` usually sits.
+ *  A live generation rendered a character with no hair at all while the sheet
+ *  carried `- Hair: Long light brown, messy, often in a loose ponytail`; the
+ *  writer's tags mirrored exactly the text that survived the cut and nothing more. */
+const CAST_IDENTITY_CHARS = 600;
+
+/** A sheet line whose LABEL is the hair itself — `Hair:`, `Hair style:`,
+ *  `Hair colour:` — anywhere in the sheet. Deliberately label-anchored: a sheet
+ *  may also describe ear-tufts "acting as hair" under `[Appearance]`'s Ears
+ *  bullet, and matching any line containing "hair" would headline the wrong
+ *  feature. */
+const HAIR_LABEL = /^[-*\u2022]?\s*hair(\s+(style|colour|color|length|type))?\s*:\s*(.+)$/i;
+
+/** The hair line's own ceiling — a headline, not a description. */
+const HAIR_LINE_CHARS = 120;
 
 /** The sheet sections that describe what a camera sees and that the scene does
  *  not change. Deliberately NOT `Clothing`: the character INSTANCE's clothing is
@@ -52,6 +69,21 @@ function castIdentity(templateContent: string): string {
   return clampChars(parts.join(" | "), CAST_IDENTITY_CHARS);
 }
 
+/** The character's hair, as a line of its own.
+ *
+ *  A HEADLINE, emitted before the sheet line and clamped independently, so no
+ *  amount of `[Body]` can order it away and no identity budget can cut it. Hair
+ *  colour and style are what a viewer notices first when they are wrong, and they
+ *  are the one identity feature the writer cannot recover from prose when the
+ *  sheet carries them and the context does not. */
+function castHair(content: string): string {
+  for (const line of content.split("\n")) {
+    const match = HAIR_LABEL.exec(line.trim());
+    if (match) return clampChars(match[3].trim(), HAIR_LINE_CHARS);
+  }
+  return "";
+}
+
 /** The scene's PLACE and the player's visible physical state — the two things a
  *  frame shows that the cast block does not already carry.
  *
@@ -65,7 +97,7 @@ export function buildImageStateBlock(playthrough: Playthrough): string {
   const lines: string[] = [];
 
   if (location) {
-    lines.push(`Location: ${location.name}${location.description ? ` \u2014 ${location.description}` : ""}`);
+    lines.push(`Location: ${location.name}${location.description ? ` — ${location.description}` : ""}`);
     if (location.state) lines.push(`Location state: ${location.state}`);
   } else {
     lines.push(`Location: ${playthrough.locationId}`);
@@ -99,12 +131,12 @@ export function buildImageCastBlock(playthrough: Playthrough): string {
   const player = playthrough.playerCharacter;
 
   lines.push(
-    "THE CAMERA (the player \u2014 the scene is seen through this person; never tag their stored " +
+    "THE CAMERA (the player — the scene is seen through this person; never tag their stored " +
     "appearance or clothing, and never give them a \" | \" group):"
   );
   const firstSentence = player.description.trim().split(". ")[0] ?? "";
   const cameraNote = clampChars(firstSentence || player.description.trim(), CAMERA_DESCRIPTION_CHARS);
-  lines.push(`${player.name}${cameraNote ? ` \u2014 ${cameraNote}` : ""}`);
+  lines.push(`${player.name}${cameraNote ? ` — ${cameraNote}` : ""}`);
 
   for (const character of playthrough.characters) {
     if (character.currentLocationId !== playthrough.locationId) continue;
@@ -115,13 +147,17 @@ export function buildImageCastBlock(playthrough: Playthrough): string {
     // `mood` is a stored slug (`overwhelmed_content`); a reader — and a tag
     // writer — should not have to decode an identifier.
     const mood = character.mood.replace(/_/g, " ").trim() || "unspecified mood";
-    lines.push(`${character.name} \u2014 ${clothing}, ${mood}${conditions}`);
+    lines.push(`${character.name} — ${clothing}, ${mood}${conditions}`);
     // templateId first; a character with a stale/unset id still gets an identity
     // when a template carries the same name.
     const template = playthrough.characterTemplates.find((t) => t.id === character.templateId)
       ?? playthrough.characterTemplates.find((t) => t.name === character.name);
+    // Hair headline first, then the full identity line: the identity budget can
+    // trim the sheet line, it cannot touch this one.
+    const hair = template ? castHair(template.content) : "";
+    if (hair) lines.push(`${character.name}'s hair — ${hair}`);
     const identity = template ? castIdentity(template.content) : "";
-    if (identity) lines.push(`${character.name}'s sheet \u2014 ${identity}`);
+    if (identity) lines.push(`${character.name}'s sheet — ${identity}`);
   }
 
   return lines.join("\n");

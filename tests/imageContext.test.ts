@@ -150,3 +150,54 @@ describe("the shipped instruction's player rules", () => {
     expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("viewer's waistband gripped");
   });
 });
+
+/** A sheet whose `[Body]` is long and whose `Hair` bullet sits LAST in
+ *  `[Appearance]` — the shape that rendered a character with no hair at all
+ *  while the identity line was clamped to 320 characters. */
+function bodyHeavyFixture() {
+  const pt = fixture() as any;
+  // Sized on purpose: the sheet line lands above the old 320-character cap and
+  // below the 600 one, so the test proves the difference rather than the cap.
+  const body = "[Body]\n" + Array.from({ length: 5 }, (_, i) => `- Measurement ${i}: ${"x".repeat(22)}`).join("\n");
+  const details = Array.from({ length: 4 }, (_, i) => `- Detail ${i}: ${"y".repeat(18)}`).join("\n");
+  pt.characterTemplates[0].content =
+    `[Species]: Human\n\n[Gender]: Female\n\n${body}\n\n[Appearance]\n- Skin: pale\n${details}\n- Hair: black, twin tails`;
+  return pt;
+}
+
+describe("hair survives the identity budget", () => {
+  it("headlines the character's hair before the sheet line", () => {
+    const block = buildImageCastBlock(fixture());
+    expect(block).toContain("Jeneine's hair — light brown, loose ponytail");
+    expect(block.indexOf("Jeneine's hair")).toBeLessThan(block.indexOf("Jeneine's sheet"));
+  });
+
+  it("keeps hair in the sheet line past the old 320-character cut", () => {
+    const block = buildImageCastBlock(bodyHeavyFixture());
+    const sheetLine = block.split("\n").find((line) => line.includes("'s sheet"))!;
+    // The proof this is a regression guard and not a tautology: hair sits past
+    // the point where the old cap stopped reading.
+    expect(sheetLine.length).toBeGreaterThan(320);
+    expect(sheetLine.length).toBeLessThan(600);
+    expect(sheetLine.indexOf("twin tails")).toBeGreaterThan(320);
+    expect(block).toContain("Jeneine's hair — black, twin tails");
+  });
+
+  it("claims nothing about hair when the sheet has none", () => {
+    const pt = fixture() as any;
+    pt.characterTemplates[0].content = "[Species]: Human\n\n[Gender]: Female\n\n[Appearance]\n- Eyes: green eyes";
+    const block = buildImageCastBlock(pt);
+    expect(block).not.toContain("'s hair —");
+    expect(block).toContain("green eyes");
+  });
+});
+
+describe("the shipped rating bullet", () => {
+  it("allows exactly one word and forbids a blend", () => {
+    // A live generation answered `nsensitive` — not a booru rating tag, and the
+    // bullet that asked for the rating was the only place it could have come from.
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("exactly one word from safe, sensitive, nsfw, explicit");
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("Never a blend of two, never a new word");
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("1. Rating: one word from safe, sensitive, nsfw, explicit");
+  });
+});

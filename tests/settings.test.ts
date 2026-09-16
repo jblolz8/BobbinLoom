@@ -410,11 +410,11 @@ describe("image generation: shipped preset configs", () => {
 
   it("ships the NSFW instruction as the core document with the rating bullets swapped and Explicit scenes inserted", () => {
       const fmtRating =
-        "- First tag is the rating that matches what is actually happening: safe, sensitive, nsfw, or explicit. A tame scene stays tame.";
+        "- First tag is the rating, exactly one word from safe, sensitive, nsfw, explicit — the one that matches what is actually happening. Never a blend of two, never a new word, never more than one rating tag. A tame scene stays tame.";
       const nsfwFmtRating =
-        "- First tag is the rating: nsfw or explicit when the scene is sexual, safe or sensitive when it is not.";
-      const tagRating = "1. Rating: safe, sensitive, nsfw, or explicit — a tame scene stays tame.";
-      const nsfwTagRating = "1. Rating: nsfw or explicit when the scene is sexual, safe or sensitive when it is not.";
+        "- First tag is the rating, exactly one word from safe, sensitive, nsfw, explicit — nsfw or explicit when the scene is sexual, safe or sensitive when it is not. Never a blend of two, never a new word, never more than one rating tag.";
+      const tagRating = "1. Rating: one word from safe, sensitive, nsfw, explicit — never a blend, never more than one. A tame scene stays tame.";
+      const nsfwTagRating = "1. Rating: one word from safe, sensitive, nsfw, explicit — nsfw or explicit when the scene is sexual, safe or sensitive when it is not, never a blend.";
       const explicitScenes =
         "EXPLICIT SCENES\n" +
         "- When the scene is sexually explicit, tag it at the same explicitness, plainly and without euphemism: the act, the position, what is exposed, what the bodies are doing, visible physical state (sweat, fluids, trembling, flushed skin).\n" +

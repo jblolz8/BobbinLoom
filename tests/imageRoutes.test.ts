@@ -696,7 +696,9 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image/prompt", () => {
     expect(block).toContain("Species: Human");
     const identity = block.split("\n").find((line) => line.includes("'s sheet"))!;
     expect(identity).toBeDefined();
-    expect(identity.length).toBeLessThan(400);
+    // `CAST_IDENTITY_CHARS` is 600: the 320 it used to be starved `[Appearance]`
+    // whenever `[Body]` ran long, which is how hair went missing from a render.
+    expect(identity.length).toBeLessThan(700);
     expect(identity.length).toBeGreaterThan(100);
   });
 
