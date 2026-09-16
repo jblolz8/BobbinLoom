@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../src/engine/imageDefaults";
 import type { ImageGenerationSettings } from "../src/schemas";
 import type { ResolvedProviderConfig } from "../src/server/providerConfig";
-import { generateImagePrompt } from "../src/server/provider/imagePrompt";
+import { generateImagePrompt, buildImagePromptContextBlock } from "../src/server/provider/imagePrompt";
 
 function testConfig(overrides: Partial<ResolvedProviderConfig> = {}): ResolvedProviderConfig {
   return {
@@ -191,5 +191,51 @@ describe("generateImagePrompt", () => {
     const fetchImpl = (async () =>
       new Response("upstream exploded", { status: 500 })) as unknown as typeof fetch;
     await expect(generateImagePrompt(testConfig(), settings(), INPUT, fetchImpl)).rejects.toThrow(/500/);
+  });
+});
+
+describe("the history block in the context", () => {
+  const HISTORY = "PREVIOUS MESSAGES (what happened BEFORE the scene text below — continuity only, NOT the frame to render):\nAssistant: an earlier beat";
+
+  it("opens the message, and SCENE TEXT stays the frame that follows it", () => {
+    const block = buildImagePromptContextBlock({ ...INPUT, history: HISTORY }, settings());
+    expect(block.startsWith("PREVIOUS MESSAGES")).toBe(true);
+    expect(block).toContain("an earlier beat");
+    expect(block.indexOf("SCENE TEXT:")).toBeGreaterThan(block.indexOf("PREVIOUS MESSAGES"));
+  });
+
+  it("emits no history block when none was built", () => {
+    // The count is 0, the message is the first one, or there is nothing prose-like
+    // behind it — all three arrive as an absent field, never as an empty header.
+    const block = buildImagePromptContextBlock(INPUT, settings());
+    expect(block.startsWith("SCENE TEXT:")).toBe(true);
+    expect(block).not.toContain("PREVIOUS MESSAGES");
+  });
+});
+
+describe("the instruction mode in the side call", () => {
+  it("sends the scene document when the block is in scene mode", async () => {
+    const { fetchImpl, calls } = stubFetch('{"prompt": "a bridge"}');
+    await generateImagePrompt(testConfig(), settings({ instructionMode: "scene" }), INPUT, fetchImpl);
+
+    const system = calls[0].body.messages[0].content as string;
+    expect(system).toContain("NO CAMERA — THE PLAYER IS NOT IN THIS FRAME");
+    expect(system).not.toContain("THE PLAYER (POV scenes)");
+    // The rest of the document is the same text: only the perspective moved.
+    expect(system).toContain("Return JSON only:");
+    expect(system).toContain("NEGATIVE PROMPT");
+  });
+
+  it("sends the pov document unchanged when the block is in pov mode", async () => {
+    const { fetchImpl, calls } = stubFetch('{"prompt": "a bridge"}');
+    await generateImagePrompt(testConfig(), settings(), INPUT, fetchImpl);
+    expect(calls[0].body.messages[0].content).toBe(settings().instruction);
+  });
+
+  it("never rewrites an instruction that carries neither variant", async () => {
+    const custom = "Just write me some tags.";
+    const { fetchImpl, calls } = stubFetch('{"prompt": "a bridge"}');
+    await generateImagePrompt(testConfig(), settings({ instruction: custom, instructionMode: "scene" }), INPUT, fetchImpl);
+    expect(calls[0].body.messages[0].content).toBe(custom);
   });
 });

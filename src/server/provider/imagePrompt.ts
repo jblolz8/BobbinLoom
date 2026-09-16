@@ -1,4 +1,5 @@
 import type { ImageGenerationSettings } from "../../schemas";
+import { applyInstructionMode } from "../../engine/imageDefaults";
 import { clampChars, composePrompt } from "../imageProvider/shared";
 import type { ResolvedProviderConfig } from "../providerConfig";
 import { requestWithRetry } from "./openaiClient";
@@ -7,6 +8,10 @@ import { extractJsonPayload } from "./patchParser";
 export type ImagePromptInput = {
   messageContent: string;
   previousUserContent?: string;
+  /** The already-rendered history block (`buildImageHistoryBlock`) — what happened
+   *  BEFORE this frame. Absent when the count is 0 or there is nothing behind the
+   *  message, and then no block is emitted at all. */
+  history?: string;
   stateSummary?: string;
   castSummary?: string;
 };
@@ -190,7 +195,12 @@ function emptyContentError(
  * invent one).
  */
 export function buildImagePromptContextBlock(input: ImagePromptInput, settings: ImageGenerationSettings): string {
-  const blocks: string[] = [`SCENE TEXT:\n${input.messageContent}`];
+  const blocks: string[] = [];
+  // The history block OPENS the message: all non-current material is grouped ahead
+  // of the frame, and the parts that already work (SCENE TEXT first among them,
+  // then state and cast) keep the positions they had.
+  if (input.history) blocks.push(input.history);
+  blocks.push(`SCENE TEXT:\n${input.messageContent}`);
   if (input.previousUserContent) blocks.push(`PLAYER'S LAST ACTION:\n${input.previousUserContent}`);
   if (settings.includeState && input.stateSummary) blocks.push(`CURRENT STATE:\n${input.stateSummary}`);
   if (settings.includeCast && input.castSummary) blocks.push(`PRESENT CHARACTERS:\n${input.castSummary}`);
@@ -245,7 +255,11 @@ export async function generateImagePrompt(
     // field on a 400/422/404.
     response_format: JSON_RESPONSE_FORMAT,
     messages: [
-      { role: "system", content: settings.instruction },
+      // The mode is applied HERE, idempotently: text already in that mode comes back
+      // unchanged, so an instruction carrying neither perspective variant (a
+      // hand-written one) is never touched. The preset editor rewrites its field on
+      // a mode change for the same reason — what is shown is what is sent.
+      { role: "system", content: applyInstructionMode(settings.instruction, settings.instructionMode) },
       { role: "user", content: buildImagePromptContextBlock(input, settings) }
     ]
   };

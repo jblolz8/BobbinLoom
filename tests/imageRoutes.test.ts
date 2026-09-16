@@ -1097,3 +1097,55 @@ describe("provider connections — the model field", () => {
     expect(res.statusCode).toBe(200);
   });
 });
+
+describe("image prompt context: the history window and the instruction mode", () => {
+  it("sends the messages behind the frame, and drops the action block they duplicate", async () => {
+    const h = harness();
+    await post(h.app, imageUrl(h), {});
+
+    const block = h.calls[0].body.messages[1].content as string;
+    expect(block.startsWith("PREVIOUS MESSAGES")).toBe(true);
+    expect(block).toContain("Assistant: message 0 of Run");
+    expect(block).toContain("User: message 1 of Run");
+    // This fixture's nearest user message is INSIDE the window, so the
+    // single-action block would be the same prose twice.
+    expect(block).not.toContain("PLAYER'S LAST ACTION");
+    expect(block.indexOf("SCENE TEXT:")).toBeGreaterThan(block.indexOf("PREVIOUS MESSAGES"));
+  });
+
+  it("sends no history block at count 0, and keeps the action block", async () => {
+    const h = harness({ imageSettings: { historyMessages: 0 } });
+    await post(h.app, imageUrl(h), {});
+
+    const block = h.calls[0].body.messages[1].content as string;
+    expect(block.startsWith("SCENE TEXT:")).toBe(true);
+    expect(block).not.toContain("PREVIOUS MESSAGES");
+    expect(block).toContain("PLAYER'S LAST ACTION:\nmessage 1 of Run");
+  });
+
+  it("takes the mode from the playthrough's own snapshot", async () => {
+    const h = harness({ imageSettings: { instructionMode: "scene" } });
+    withPresentCast(h);
+    await post(h.app, imageUrl(h), {});
+
+    const system = h.calls[0].body.messages[0].content as string;
+    const block = h.calls[0].body.messages[1].content as string;
+    expect(system).toContain("NO CAMERA — THE PLAYER IS NOT IN THIS FRAME");
+    expect(system).not.toContain("THE PLAYER (POV scenes)");
+    // The context follows: no camera line, and the characters still described.
+    expect(block).not.toContain("THE CAMERA");
+    expect(block).toContain("Mira");
+  });
+
+  it("sends the dry run and the generate call byte-identical context", async () => {
+    const h = harness();
+    const preview = await post(h.app, imageUrl(h, h.assistantMessageId, "/prompt"), {});
+    expect(preview.statusCode).toBe(200);
+    const dryBlock = h.calls[0].body.messages[1].content as string;
+
+    await post(h.app, imageUrl(h), {});
+    // The review modal promises the user is looking at what will be sent — that
+    // only holds while both routes share one input builder.
+    expect(h.calls[1].body.messages[1].content).toBe(dryBlock);
+  });
+});

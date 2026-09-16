@@ -9,8 +9,9 @@ import { clampChars } from "../imageProvider/shared";
 import { clearImageProgress, publishImageProgress, readImageProgress } from "../imageProgress";
 import { imageFilePath, mimeForFile, saveImageBytes, sweepOrphansInDataDir, IMAGES_DIR } from "../imageStore";
 import type { ProviderManager } from "../providerManager";
+import { buildImageCastBlock, buildImageHistoryBlock, buildImageStateBlock } from "../provider/imageContext";
+import type { ImagePromptInput } from "../provider/imagePrompt";
 import { generateImagePrompt } from "../provider/imagePrompt";
-import { buildImageCastBlock, buildImageStateBlock } from "../provider/imageContext";
 import { getPlaythroughRecord, updatePlaythroughRecord } from "../store";
 import { abortOnClientDisconnect, dataDir as defaultDataDir, loadPresets as defaultLoadPresets, providerManager } from "./helpers";
 
@@ -105,14 +106,41 @@ function clampStoredPromptResponse(text: string): string {
 }
 
 /** The nearest visible user message before `message` — the action the image is
- *  answering. Hidden (state-only) user messages are skipped. */
-function previousUserContent(playthrough: { messages: ChatMessage[] }, message: ChatMessage): string | undefined {
+ *  answering. Hidden (state-only) user messages are skipped. Returns the message
+ *  rather than its text so the caller can tell whether the history window already
+ *  carries it. */
+function previousUserMessage(playthrough: { messages: ChatMessage[] }, message: ChatMessage): ChatMessage | undefined {
   const index = playthrough.messages.findIndex((m) => m.id === message.id);
   for (let i = index - 1; i >= 0; i -= 1) {
     const candidate = playthrough.messages[i];
-    if (candidate.role === "user" && !candidate.hidden) return candidate.content;
+    if (candidate.role === "user" && !candidate.hidden) return candidate;
   }
   return undefined;
+}
+
+/** Everything the text → image-prompt call is given, built in ONE place: the dry
+ *  run and the generate call must send the same context or the review modal stops
+ *  being a review of what will actually be sent. */
+function buildImagePromptInput(
+  playthrough: Playthrough,
+  message: ChatMessage,
+  settings: ImageGenerationSettings
+): ImagePromptInput {
+  const history = buildImageHistoryBlock(playthrough, message, settings.historyMessages);
+  const action = previousUserMessage(playthrough, message);
+  return {
+    messageContent: message.content,
+    // Inside the window the action is already in the history block, and the same
+    // prose twice in one user message is waste — so the explicit block is only for
+    // the case the window could not reach back that far.
+    previousUserContent: action && !history.messageIds.includes(action.id) ? action.content : undefined,
+    history: history.text || undefined,
+    stateSummary: buildImageStateBlock(playthrough),
+    // The mode decides whether the player is described at all: in `scene` mode the
+    // frame is not seen through their eyes, so naming them is what put their
+    // wardrobe on the character.
+    castSummary: buildImageCastBlock(playthrough, settings.instructionMode)
+  };
 }
 
 export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, options = {}) => {
@@ -174,12 +202,9 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     let promptTruncated: boolean;
     let promptDurationMs: number;
     try {
-      const result = await generateImagePrompt(promptConfig, settings, {
-        messageContent: message.content,
-        previousUserContent: previousUserContent(playthrough, message),
-        stateSummary: buildImageStateBlock(playthrough),
-        castSummary: buildImageCastBlock(playthrough)
-      }, fetchImpl, controller.signal);
+      const result = await generateImagePrompt(promptConfig, settings,
+        buildImagePromptInput(playthrough, message, settings),
+        fetchImpl, controller.signal);
       prompt = result.prompt;
       negativePrompt = result.negativePrompt;
       warnings = result.warnings;
@@ -310,12 +335,9 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
       negativeUsed = clampNegative(body.negativeOverride!, imageConn);
     } else {
       try {
-        const written = await generateImagePrompt(promptConfig, settings, {
-          messageContent: message.content,
-          previousUserContent: previousUserContent(playthrough, message),
-          stateSummary: buildImageStateBlock(playthrough),
-          castSummary: buildImageCastBlock(playthrough)
-        }, fetchImpl, controller.signal);
+        const written = await generateImagePrompt(promptConfig, settings,
+          buildImagePromptInput(playthrough, message, settings),
+          fetchImpl, controller.signal);
         promptUsed = clampComposed(hasPrompt ? body.promptOverride! : written.prompt, settings, imageConn).text;
         negativeUsed = clampNegative(hasNegative ? body.negativeOverride! : written.negativePrompt, imageConn);
         promptCall = {
