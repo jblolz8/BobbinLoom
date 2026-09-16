@@ -1,4 +1,4 @@
-import type { ChatMessage, ImageInstructionMode, Playthrough } from "../../schemas";
+import type { ChatMessage, ImageInstructionMode, Playthrough, PlayerCharacter } from "../../schemas";
 import { isStubSection, pickSections } from "../../engine/characterSections";
 import { clampChars } from "../imageProvider/shared";
 
@@ -112,6 +112,26 @@ export function buildImageStateBlock(playthrough: Playthrough): string {
   return lines.join("\n");
 }
 
+/** The PLAYER's sheet line, for a Scene frame.
+ *
+ *  A POV frame sends no player line at all (their block is the camera). A Scene
+ *  frame shows the player the way it shows anyone else, so the same two lines a
+ *  character gets have to exist for them — and a persona has no sheet SECTIONS, so
+ *  the parts come straight off `playerCharacter`.
+ *
+ *  The FIRST SENTENCE of the description is deliberate: it is what carries gender
+ *  and pronouns (the count tag and every `his`/`her` attribution depend on them),
+ *  while the rest of a persona's prose is wardrobe and appearance material the
+ *  writer must not turn into tags. `bodyType` and `appearance` are the fields the
+ *  Character Sheet editor writes for exactly this purpose. */
+function playerIdentity(player: PlayerCharacter): string {
+  const firstSentence = player.description.trim().split(". ")[0] ?? "";
+  const parts = [firstSentence, player.bodyType, player.appearance]
+    .map((part) => (part ?? "").trim())
+    .filter(Boolean);
+  return clampChars(parts.join(" | "), CAST_IDENTITY_CHARS);
+}
+
 /** Compact cast block: the player as THE CAMERA, then every character actually
  *  at the current location. Deliberately short — the scene text is the primary
  *  source of what is happening.
@@ -131,14 +151,28 @@ export function buildImageStateBlock(playthrough: Playthrough): string {
  *  their eyes, so naming them here is what produced the wardrobe tags in the
  *  first place. The Scene instruction states the rule instead of this block
  *  restating the player — the two are coupled, so a change that re-adds a camera
- *  line has to reword that instruction's `NO CAMERA` passage too. */
+ *  line has to reword that instruction's Scene passage too. */
 export function buildImageCastBlock(
   playthrough: Playthrough,
   mode: ImageInstructionMode = "pov"
 ): string {
   const lines: string[] = [];
 
-  if (mode !== "scene") {
+  if (mode === "scene") {
+    // A Scene frame shows the player the way it shows anyone else, so they get the
+    // same two lines a character gets. Their wardrobe used to be withheld here for
+    // good reason — in a POV frame those tags painted the CHARACTER with the
+    // player's features — but a third-person frame has no camera to confuse them
+    // with, and leaving them out produced tags for a person with no clothes.
+    const player = playthrough.playerCharacter;
+    const clothing = player.clothing.length
+      ? `wearing ${player.clothing.map((item) => item.name).join(", ")}`
+      : "clothing unspecified";
+    const conditions = player.conditions.length ? `, ${player.conditions.join(", ")}` : "";
+    lines.push(`${player.name} — ${clothing}${conditions}`);
+    const identity = playerIdentity(player);
+    if (identity) lines.push(`${player.name}'s sheet — ${identity}`);
+  } else {
     const player = playthrough.playerCharacter;
     lines.push(
       "THE CAMERA (the player — the scene is seen through this person; never tag their stored " +

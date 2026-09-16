@@ -1130,11 +1130,16 @@ describe("image prompt context: the history window and the instruction mode", ()
 
     const system = h.calls[0].body.messages[0].content as string;
     const block = h.calls[0].body.messages[1].content as string;
-    expect(system).toContain("NO CAMERA — THE PLAYER IS NOT IN THIS FRAME");
+    expect(system).toContain("THE PLAYER IS A CHARACTER IN THIS FRAME");
     expect(system).not.toContain("THE PLAYER (POV scenes)");
     // The context follows: no camera line, and the characters still described.
     expect(block).not.toContain("THE CAMERA");
     expect(block).toContain("Mira");
+    // …and the player is one of the people in the frame: the same two lines anyone
+    // else gets. (This harness's player brings no wardrobe, so the instance line says
+    // so rather than inventing one.)
+    expect(block).toContain("Anon — wearing White Long Sleeve Shirt, Necktie, Black Slacks, Black Shoes");
+    expect(block).toContain("Anon's sheet — A male human | average | Fair skin. Black hair. Black eye color.");
   });
 
   it("sends the dry run and the generate call byte-identical context", async () => {

@@ -8,7 +8,9 @@ import type { ImageGenerationSettings, ImageInstructionMode } from "../schemas";
 /** The instruction's perspective-specific passages, POV on the left and Scene on
  *  the right. `applyInstructionMode` swaps whichever side of a pair it finds, so
  *  the swap is SYMMETRICAL (pov → scene → pov round-trips) and a no-op on an
- *  instruction that carries neither side (a hand-written one).
+ *  instruction that carries neither side (a hand-written one), and in the `pov`
+ *  direction it also rewrites the LEGACY Scene wording below, which is what a
+ *  document saved before the Scene frame learned about the player contains.
  *
  *  The POV side of every pair is a VERBATIM substring of
  *  `DEFAULT_IMAGE_PROMPT_INSTRUCTION`; `tests/settings.test.ts` asserts that, so a
@@ -34,20 +36,46 @@ const POV_CAMERA_SECTION = `THE PLAYER (POV scenes)
 - The player's visible body gets its own tags: viewer's hands visible, pov hands on her hips, male pov exposed penis.
 - Player not in frame? Use a neutral camera tag: wide shot, medium shot, close-up, from above, from below, dutch angle.`;
 
-const SCENE_PLAYER_RULES = `NO CAMERA — THE PLAYER IS NOT IN THIS FRAME
-- This frame is NOT seen through the player's eyes and the player is NOT in it. Nothing about the player may enter the tag line: no appearance, no wardrobe, no position.
-- NEVER tag pov, male pov, female pov, viewer's hands, viewer's chest visible or viewer's waistband. Those tags belong to a POV frame only.
-- No player block is provided for this frame. Do not infer one and do not invent one.
-- Every person the frame shows is a CHARACTER: their own tags, and in a multi-character scene their own " | " group.`;
+const SCENE_PLAYER_RULES = `THE PLAYER IS A CHARACTER IN THIS FRAME
+- This frame is seen from OUTSIDE: the player stands in it like everyone else, and everything visible about them is tag material — position, state, clothing, appearance.
+- The player's block is in the CAST with everyone else's: the same instance line (what they are wearing and doing at this instant) and the same identity line. Read it exactly as you read a character's.
+- The player NEVER contributes pov, male pov, female pov, viewer's hands, viewer's chest visible or viewer's waistband: those belong to the eye-level POV frame only, and this frame has no camera.
+- The player's own " | " group belongs to them when the frame needs groups: in a multi-character scene, everyone present gets one.
+- A garment the scene has removed stays removed: the player's CURRENT clothing comes from their instance line, never from a stored outfit.
+- The player's name is prose like every other name — never a tag (see DISTINGUISHING NAMES FROM TAGS).`;
 
-const SCENE_REFERENCE_LINE = `- Character appearance data is provided in the context before the scene: the CAST block for every character in frame. Extract visible traits for the CHARACTERS — the frame is seen from outside, so the player is not a character here (see NO CAMERA above).`;
+const SCENE_REFERENCE_LINE = `- Character appearance data is provided in the context before the scene: the CAST block for everyone in frame, the player included. Extract visible traits for the people the frame shows — the player has a block of their own here, so their appearance and wardrobe are tag material like anyone else's (see THE PLAYER IS A CHARACTER IN THIS FRAME above).`;
 
-const SCENE_REGION_LINE = `- The player contributes nothing to any group here: with no camera in frame there are no pov / viewer tags, and every group after the first belongs to a character.`;
+const SCENE_REGION_LINE = `- Group the player the way you group a character. With them in frame there is no camera taking the shared group for itself, so every group after the first belongs to a person the frame shows — the player included.`;
 
 const SCENE_CAMERA_SECTION = `CAMERA AND FRAMING
 - The frame is third-person: never tag pov, male pov, female pov or viewer's anything.
 - Take the framing and the angle from what the scene itself implies — wide shot, medium shot, close-up, from above, from below, dutch angle — and place them early, right after the rating and the character count.
-- Everyone visible is a character and is tagged as one.`;
+- The character count counts the people the frame shows: the player included, so one player and one character is 1boy, 1girl.
+- Everyone visible is a character and is tagged as one — the player included.`;
+
+/** The SCENE side of each pair as it shipped while a third-person frame meant "no
+ *  player at all". Nothing writes this text any more, but documents written while it
+ *  was current still contain it, and `applyInstructionMode` has to rewrite what is IN
+ *  the document — without these, a preset saved in the old Scene wording would stop
+ *  switching. Index-aligned with `PERSPECTIVE_PAIRS`: entry `i` is the old wording of
+ *  pair `i`, which `tests/settings.test.ts` asserts. */
+export const LEGACY_SCENE_SIDES: ReadonlyArray<string> = [
+  `NO CAMERA — THE PLAYER IS NOT IN THIS FRAME
+- This frame is NOT seen through the player's eyes and the player is NOT in it. Nothing about the player may enter the tag line: no appearance, no wardrobe, no position.
+- NEVER tag pov, male pov, female pov, viewer's hands, viewer's chest visible or viewer's waistband. Those tags belong to a POV frame only.
+- No player block is provided for this frame. Do not infer one and do not invent one.
+- Every person the frame shows is a CHARACTER: their own tags, and in a multi-character scene their own " | " group.`,
+
+  `- Character appearance data is provided in the context before the scene: the CAST block for every character in frame. Extract visible traits for the CHARACTERS — the frame is seen from outside, so the player is not a character here (see NO CAMERA above).`,
+
+  `- The player contributes nothing to any group here: with no camera in frame there are no pov / viewer tags, and every group after the first belongs to a character.`,
+
+  `CAMERA AND FRAMING
+- The frame is third-person: never tag pov, male pov, female pov or viewer's anything.
+- Take the framing and the angle from what the scene itself implies — wide shot, medium shot, close-up, from above, from below, dutch angle — and place them early, right after the rating and the character count.
+- Everyone visible is a character and is tagged as one.`
+];
 
 export const PERSPECTIVE_PAIRS: ReadonlyArray<readonly [pov: string, scene: string]> = [
   [POV_PLAYER_RULES, SCENE_PLAYER_RULES],
@@ -61,21 +89,37 @@ export const PERSPECTIVE_PAIRS: ReadonlyArray<readonly [pov: string, scene: stri
  *  carries neither side. */
 export function applyInstructionMode(instruction: string, mode: ImageInstructionMode): string {
   let out = instruction;
-  for (const [pov, scene] of PERSPECTIVE_PAIRS) {
-    const [from, to] = mode === "scene" ? [pov, scene] : [scene, pov];
-    if (!out.includes(from)) continue;
-    // The FUNCTION form of `replace` is deliberate: a string replacement treats
-    // `$&`, `$1` and `` $` `` in the replacement as capture patterns, and the
-    // instruction text is not something to re-interpret.
-    out = out.replace(from, () => to);
-  }
+  PERSPECTIVE_PAIRS.forEach(([pov, scene], index) => {
+    if (mode === "scene") {
+      if (out.includes(pov)) out = out.replace(pov, () => scene);
+      return;
+    }
+    if (out.includes(scene)) out = out.replace(scene, () => pov);
+    // …and the wording that was current before, which is what a document written
+    // then actually holds. ONE-WAY on purpose: a document switched back to Scene
+    // gets today's text.
+    const legacy = LEGACY_SCENE_SIDES[index];
+    if (legacy !== undefined && out.includes(legacy)) out = out.replace(legacy, () => pov);
+  });
+  // The FUNCTION form of `replace` is deliberate: a string replacement treats
+  // `$&`, `$1` and `` $` `` in the replacement as capture patterns, and the
+  // instruction text is not something to re-interpret.
   return out;
 }
 
 /** Whether any perspective passage is present, i.e. whether the mode means
  *  anything for this instruction. The preset editor says so when it does not. */
 export function instructionModeApplies(instruction: string): boolean {
-  return PERSPECTIVE_PAIRS.some(([pov, scene]) => instruction.includes(pov) || instruction.includes(scene));
+  return PERSPECTIVE_PAIRS.some(([pov, scene], index) => {
+    const legacy = LEGACY_SCENE_SIDES[index];
+    return (
+      instruction.includes(pov) ||
+      instruction.includes(scene) ||
+      // `legacy !== undefined` rather than a bare truthiness test: `includes("")`
+      // is true, so an out-of-range entry would make this claim everything applies.
+      (legacy !== undefined && instruction.includes(legacy))
+    );
+  });
 }
 
 export const DEFAULT_IMAGE_PROMPT_INSTRUCTION = `You convert story scenes into image-generation tag lists.

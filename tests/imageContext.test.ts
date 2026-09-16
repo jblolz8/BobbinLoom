@@ -246,17 +246,33 @@ describe("buildImageHistoryBlock", () => {
 });
 
 describe("buildImageCastBlock — the scene mode", () => {
-  it("drops the player entirely when the frame is not seen through their eyes", () => {
-    const block = buildImageCastBlock(fixture(), "scene");
-    expect(block).not.toContain("THE CAMERA");
-    expect(block).not.toContain("Anon");
-    // The characters stay: they are who the frame shows.
-    expect(block).toContain("Jeneine");
+  it("describes the player like any other character in scene mode", () => {
+    const scene = buildImageCastBlock(fixture(), "scene");
+    expect(scene).not.toContain("THE CAMERA");
+    // The instance line: what the frame shows NOW, wardrobe and state included.
+    expect(scene).toContain("Anon — wearing White Long Sleeve Shirt, Necktie, Black Slacks, handcuffed");
+    // The sheet line: the stable facts, straight off the persona (there is no sheet
+    // template for the player).
+    expect(scene).toContain("Anon's sheet — A male human | average | Fair skin. Black hair. Black eye color.");
+    // …and the characters keep the same shape beside them.
+    expect(scene).toContain("Jeneine — wearing Faded gray hoodie");
+  });
+
+  it("keeps the persona's later prose out of a scene frame", () => {
+    const scene = buildImageCastBlock(fixture(), "scene");
+    // Only the FIRST sentence is identity (gender and pronouns): the rest of the
+    // description is the wardrobe material that leaked onto a character before.
+    expect(scene).not.toContain("short-sighted");
   });
 
   it("keeps the camera block by default and in pov mode", () => {
+    const pov = buildImageCastBlock(fixture(), "pov");
+    expect(pov).toContain("THE CAMERA");
+    // POV still sends no wardrobe and no appearance for the player: that rule exists
+    // because those tags leaked onto the character, and it is what the mode chooses.
     expect(buildImageCastBlock(fixture())).toContain("THE CAMERA");
-    expect(buildImageCastBlock(fixture(), "pov")).toContain("THE CAMERA");
+    expect(pov).not.toContain("White Long Sleeve Shirt");
+    expect(pov).not.toContain("Fair skin");
   });
 });
 

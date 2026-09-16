@@ -219,7 +219,7 @@ describe("the instruction mode in the side call", () => {
     await generateImagePrompt(testConfig(), settings({ instructionMode: "scene" }), INPUT, fetchImpl);
 
     const system = calls[0].body.messages[0].content as string;
-    expect(system).toContain("NO CAMERA — THE PLAYER IS NOT IN THIS FRAME");
+    expect(system).toContain("THE PLAYER IS A CHARACTER IN THIS FRAME");
     expect(system).not.toContain("THE PLAYER (POV scenes)");
     // The rest of the document is the same text: only the perspective moved.
     expect(system).toContain("Return JSON only:");

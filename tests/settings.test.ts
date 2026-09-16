@@ -8,7 +8,7 @@ import { ProviderManager } from "../src/server/providerManager";
 import { MockProvider } from "../src/server/provider";
 import { loadAppSettings, saveAppSettings } from "../src/server/appSettingsStore";
 import { seedRegistry } from "../src/server/providerRegistry";
-import { DEFAULT_IMAGE_GENERATION_SETTINGS, DEFAULT_IMAGE_PROMPT_INSTRUCTION, PERSPECTIVE_PAIRS, applyInstructionMode, instructionModeApplies } from "../src/engine/imageDefaults";
+import { DEFAULT_IMAGE_GENERATION_SETTINGS, DEFAULT_IMAGE_PROMPT_INSTRUCTION, LEGACY_SCENE_SIDES, PERSPECTIVE_PAIRS, applyInstructionMode, instructionModeApplies } from "../src/engine/imageDefaults";
 import { FORGE_COUPLE_SEPARATOR } from "../src/server/imageProvider/a1111Provider";
 import { ImageApiStyleSchema, ImageGenerationSettingsSchema, PromptPresetSchema, ProviderConnectionSchema } from "../src/schemas";
 
@@ -292,7 +292,7 @@ describe("image generation: shipped preset configs", () => {
     for (const id of ["default", "default-nsfw"]) {
       const shipped = preset(id).imageGeneration!.instruction as string;
       const scene = applyInstructionMode(shipped, "scene");
-      expect(scene, id).toContain("NO CAMERA — THE PLAYER IS NOT IN THIS FRAME");
+      expect(scene, id).toContain("THE PLAYER IS A CHARACTER IN THIS FRAME");
       expect(scene, id).not.toContain("THE PLAYER (POV scenes)");
       // And back: the swap is its own inverse on the shipped documents too.
       expect(applyInstructionMode(scene, "pov"), id).toBe(shipped);
@@ -550,7 +550,7 @@ describe("image prompt: the instruction mode", () => {
 
   it("swaps the perspective passages both ways", () => {
     const scene = applyInstructionMode(pov, "scene");
-    expect(scene).toContain("NO CAMERA — THE PLAYER IS NOT IN THIS FRAME");
+    expect(scene).toContain("THE PLAYER IS A CHARACTER IN THIS FRAME");
     expect(scene).toContain("CAMERA AND FRAMING");
     expect(scene).not.toContain("THE PLAYER IS NOT A CHARACTER");
     expect(scene).not.toContain("THE PLAYER (POV scenes)");
@@ -579,6 +579,55 @@ describe("image prompt: the instruction mode", () => {
   it("keeps every scene passage out of the shipped instruction", () => {
     for (const [, sceneSide] of PERSPECTIVE_PAIRS) {
       expect(pov, sceneSide.slice(0, 40)).not.toContain(sceneSide);
+    }
+  });
+
+  it("still switches a preset saved with the legacy Scene wording", () => {
+    // Verbatim as it shipped while a third-person frame meant "no player at all".
+    // A document written then must not go inert: the swap has to rewrite what is IN
+    // the document, not what we would write today.
+    const legacy = `NO CAMERA — THE PLAYER IS NOT IN THIS FRAME
+- This frame is NOT seen through the player's eyes and the player is NOT in it. Nothing about the player may enter the tag line: no appearance, no wardrobe, no position.
+- NEVER tag pov, male pov, female pov, viewer's hands, viewer's chest visible or viewer's waistband. Those tags belong to a POV frame only.
+- No player block is provided for this frame. Do not infer one and do not invent one.
+- Every person the frame shows is a CHARACTER: their own tags, and in a multi-character scene their own " | " group.`;
+    const saved = ["HEAD", legacy, "TAIL"].join("\n");
+
+    expect(instructionModeApplies(saved)).toBe(true);
+    const asPov = applyInstructionMode(saved, "pov");
+    expect(asPov).not.toContain("NO CAMERA");
+    expect(asPov).toContain("THE PLAYER IS NOT A CHARACTER");
+    expect(asPov.startsWith("HEAD")).toBe(true);
+    expect(asPov.endsWith("TAIL")).toBe(true);
+    // Switching back to scene gives TODAY's wording, not the old text: the legacy
+    // pass is one-way.
+    const backToScene = applyInstructionMode(asPov, "scene");
+    expect(backToScene).toContain("THE PLAYER IS A CHARACTER IN THIS FRAME");
+    expect(backToScene).not.toContain("NO CAMERA");
+  });
+
+  it("rewrites every legacy Scene passage, and keeps one per pair", () => {
+    // The mapping is by INDEX: a pair added without its legacy entry would silently
+    // stop rewriting that passage, so both halves of that are asserted.
+    expect(LEGACY_SCENE_SIDES).toHaveLength(PERSPECTIVE_PAIRS.length);
+
+    const saved = ["HEAD", ...LEGACY_SCENE_SIDES, "TAIL"].join("\n");
+    const asPov = applyInstructionMode(saved, "pov");
+    for (const [povSide] of PERSPECTIVE_PAIRS) {
+      expect(asPov, povSide.slice(0, 40)).toContain(povSide);
+    }
+    for (const old of LEGACY_SCENE_SIDES) {
+      expect(asPov, old.slice(0, 40)).not.toContain(old);
+    }
+    expect(asPov.startsWith("HEAD")).toBe(true);
+    expect(asPov.endsWith("TAIL")).toBe(true);
+
+    const backToScene = applyInstructionMode(asPov, "scene");
+    for (const [, sceneSide] of PERSPECTIVE_PAIRS) {
+      expect(backToScene, sceneSide.slice(0, 40)).toContain(sceneSide);
+    }
+    for (const old of LEGACY_SCENE_SIDES) {
+      expect(backToScene, old.slice(0, 40)).not.toContain(old);
     }
   });
 });
