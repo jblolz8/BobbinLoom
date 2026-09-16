@@ -163,21 +163,27 @@ Both meter routes must build the same query embedding `generateTurn` does, or th
 Image generation needs a text model, but its call to that model is a **side call**, not a
 turn (`src/server/provider/imagePrompt.ts`):
 
-- It builds its own two-message request — `system` = the preset's image instruction, one
-  `user` message of scene text + world state + present cast — and sends it straight to the
-  connection that writes image prompts (the image connection's `promptProviderId`, else
-  the active text connection). Nothing is appended to the message array above and nothing
+- It builds its own two-message request — `system` = the preset's image instruction as
+  read in the block's `instructionMode` (POV or Scene), one `user` message of a history
+  window + scene text + world state + present cast, plus ONE earlier answer as a shape
+  reference when the preset asks for it — and sends it straight to the connection that
+  writes image prompts (the image connection's `promptProviderId`, else the active text
+  connection). What each block carries, and what it deliberately withholds:
+  [`image-generation.md`](image-generation.md). Nothing is appended to the message array above and nothing
   from it enters the transcript.
 - It therefore does **not** touch the turn counter, snapshots, world state, the token
   meter, or `tokenCalibration`, and it writes no playthrough record.
-- It does consume the text connection's tokens, for its own small request:
-  `temperature: 0.7` and `max_tokens: min(connection.maxTokens, 600)`.
+- It does consume the text connection's tokens, for its own request: `temperature: 0.7`
+  and `max_tokens: <the connection's own maxTokens>`. It has no ceiling of its own — the
+  old `min(maxTokens, 600)` made a reasoning model spend the whole budget before the
+  answer started and answer with empty content at `finish_reason: length`.
 - It is not a `TurnProvider` method. Adding one there would force a stub into every turn
   mock for a call that has nothing to do with turns.
 
 **The image-prompt configuration is preset-owned, not a prompt module.** The module set
-(`modules.turn`) stays turn-only: the image instruction, the positive/negative prefixes,
-the character limit and the `includeState` / `includeCast` flags live in a separate
+(`modules.turn`) stays turn-only: the image instruction and its mode, the
+positive/negative prefixes, the character limit, the history count and the
+`includeState` / `includeCast` / `includePreviousAnswer` flags live in a separate
 `imageGeneration` block on the preset, snapshotted onto the playthrough alongside the
 modules and the character format when the preset is applied. Fields, resolution order and
 the shipped values: [`image-generation.md`](image-generation.md).

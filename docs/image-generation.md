@@ -2,7 +2,7 @@
 
 How an assistant message becomes a stored image file: the three image-provider dialects, the text → image-prompt call, the review modal, and the content-addressed store that holds the bytes.
 
-Source of truth: `src/server/routes/images.ts` (the endpoints), `src/server/imageProvider/` (`index.ts`, `types.ts`, `shared.ts`, `openaiImagesProvider.ts`, `veniceImageProvider.ts`, `a1111Provider.ts`), `src/server/httpAuth.ts` (the key→header rule), `src/server/imageProgress.ts` (the live progress registry), `src/server/provider/imagePrompt.ts` (the prompt side call), `src/server/imageStore.ts` (content-addressed storage + orphan sweep), `src/engine/imageDefaults.ts` and `data/prompt-presets.json` (preset prompt config), `src/client/components/views/PlayView/` (the chat surface). Related: [`provider-setup.md`](provider-setup.md) (connection registry v2), [`prompt-architecture.md`](prompt-architecture.md) (why the prompt call is a side call).
+Source of truth: `src/server/routes/images.ts` (the endpoints), `src/server/imageProvider/` (`index.ts`, `types.ts`, `shared.ts`, `openaiImagesProvider.ts`, `veniceImageProvider.ts`, `a1111Provider.ts`), `src/server/httpAuth.ts` (the key→header rule), `src/server/imageProgress.ts` (the live progress registry), `src/server/provider/imagePrompt.ts` (the prompt side call), `src/server/imageStore.ts` (content-addressed storage + orphan sweep), `src/server/provider/imageContext.ts` (the context blocks: state, cast, history, the reference answer), `src/engine/imageDefaults.ts` and `data/prompt-presets.json` (preset prompt config, and the POV/Scene instruction swap), `src/client/components/views/PlayView/` (the chat surface), `src/client/components/modals/PresetEditor.tsx` (the Image Generation tab), `src/client/engine/displayFormat.ts` (the image caption, shared with the full-screen viewer). Related: [`provider-setup.md`](provider-setup.md) (connection registry v2), [`prompt-architecture.md`](prompt-architecture.md) (why the prompt call is a side call).
 
 ---
 
@@ -16,6 +16,8 @@ An image is generated **per assistant message**. Two connections are involved an
 Only assistant messages can carry images (`images attach to assistant messages only`). Generated images are stored as content-addressed files under `data/images/` and referenced from the message, so the playthrough record only carries file names and metadata — never the bytes.
 
 Nothing about image generation runs during a turn. The prompt call is not part of the turn message array and does not touch the turn counter, snapshots, world state, or the token meter. See [`prompt-architecture.md`](prompt-architecture.md) → *Side calls*.
+
+**The writer's context is preset-owned and configurable**: how many messages of history it sees, which perspective its instruction is read in (POV or Scene), and whether it is shown one earlier answer as a shape reference. The first two change what the writer knows about the scene; the third changes what it imitates. All three live in the image block (see [*Preset-owned prompt configuration*](#preset-owned-prompt-configuration)) and none of them is a per-device setting — they decide what the server sends, not what this browser does.
 
 ---
 
@@ -225,8 +227,9 @@ Defaults are **180000 ms** and **1** retry — except on `a1111`, where the time
 | `GET /api/images/progress?connectionId=…` | The live readout for a generation in flight. `{ active: true, progress?, step?, steps?, etaSeconds? }`, or `{ active: false }` when nothing is running; `400 {"error":"connectionId is required"}` without the parameter. In-memory and keyed by image connection; only the `a1111` adapter publishes to it (see *The live progress readout*). |
 | `DELETE /api/playthroughs/:id/messages/:messageId/images/:file` | Drop one image ref, then sweep. Idempotent. |
 | `POST /api/settings/images/sweep` | Manual orphan sweep. |
+| `POST /api/playthroughs/:id/prompt-settings/refresh-image-prompt` | Copy the image block alone from the playthrough's own preset. Not an image route: it lives in `src/server/routes/playthroughs.ts` and exists because a snapshot is deliberate — see [*Snapshot semantics*](#snapshot-semantics). |
 
-The generate body is `z.object({ imageProviderId?, promptOverride?, negativeOverride?, seed? })` — all optional. A request `seed` wins over the connection's `seed`; with neither, the provider picks at random and the ref stores nothing. The response is:
+The generate body is `z.object({ imageProviderId?, promptOverride?, negativeOverride?, seed?, promptDurationMs?, writerPrompt?, writerNegative? })` — all optional. The last three are the review path's echo: the dry run measured the text call and holds the writer's answer, and this request makes no text call of its own, so the client hands them back for the ref to store (see [*The previous-answer reference*](#the-previous-answer-reference)). A request `seed` wins over the connection's `seed`; with neither, the provider picks at random and the ref stores nothing. The response is:
 
 ```json
 {
@@ -237,13 +240,15 @@ The generate body is `z.object({ imageProviderId?, promptOverride?, negativeOver
 }
 ```
 
+The `image` object also carries `writerPrompt` / `writerNegative` — the writer's own answer, un-composed — when a text call produced one or the client echoed it back, and the prompt fillip fields are unchanged otherwise. `writerPrompt` is absent on an older client's both-overrides path.
+
 `promptUsed` / `negativeUsed` are exactly the strings the route handed to the image provider — already prefix-composed, and already clamped: the **prompt** to the preset's soft limit **and** the dialect's hard cap, the **negative** to the dialect's hard cap alone. `image` is the first variant when `variants > 1`; the rest are appended to the message in the same order.
 
 ### Preview ON — the default path
 
 `Settings → Chat → Review Image Prompt Before Generating` is **on by default**. The pipeline is two requests:
 
-1. **Footer button** → `POST …/image/prompt` with `{ imageProviderId? }`. The server runs the text → image-prompt call exactly once, persists nothing, generates nothing, and answers `{ "prompt": "…", "negativePrompt": "…", "warnings": [] }` — already composed and clamped, so what the modal shows is byte-for-byte what the generate call will send. `warnings` are the prompt call's advisory notes (see below); the modal shows them above the editable prompt.
+1. **Footer button** → `POST …/image/prompt` with `{ imageProviderId? }`. The server runs the text → image-prompt call exactly once, persists nothing, generates nothing, and answers `{ "prompt": "…", "negativePrompt": "…", "warnings": [], "promptDurationMs": 3100, "writerPrompt": "…", "writerNegative": "…", "context": { "historyMessages": 6, "instructionMode": "pov" } }` — already composed and clamped, so what the modal shows is byte-for-byte what the generate call will send. `warnings` are the prompt call's advisory notes (see below); the modal shows them above the editable prompt. `writerPrompt` / `writerNegative` are the model's own answer, and `context` reports what the writer was actually given: the number of messages the history window CARRIED (not the number the preset asks for — they differ on a chat's first message) and the perspective in force.
 2. **`ImagePromptModal`** ("Review Image Prompt") shows both fields for editing, with **Generate**, **Cancel** and **Re-run text call** (the last replaces the drafts with a fresh text-model draft, staying inside the modal). Any warnings from the prompt call appear above the fields, warn-styled, so a suspected refusal or a key-less JSON answer is seen **before** the image call is paid for.
 3. **Generate** → `POST …/image` with **both** `promptOverride` and `negativeOverride` set to the reviewed text. Because both are present, the server **skips the text call entirely** and sends the user's text — the text model is never asked twice, and edits are never discarded.
 
@@ -269,11 +274,28 @@ One request: `POST …/image` with no overrides. The server runs the prompt call
 `generateImagePrompt` sends one `/chat/completions` request with `temperature: 0.7`, `max_tokens: <the connection's own maxTokens>`, `response_format: { "type": "json_object" }`, and exactly two messages: the preset's `instruction` as `system`, and one `user` message built from:
 
 ```
+PREVIOUS MESSAGES (what happened BEFORE the scene text below — continuity only,
+NOT the frame to render):
+<buildImageHistoryBlock — the last N prose messages behind this one, oldest
+ first, labelled User:/Assistant:. Skipped: system messages, hidden (state-only)
+ user messages, empty ones. Capped at 6000 characters by dropping whole OLD
+ messages first; one message bigger than the whole budget keeps its TAIL, with a
+ leading marker. Absent when the count is 0 or there is nothing behind the
+ message. Present only when the preset's historyMessages > 0>
+
+PREVIOUS IMAGE PROMPT (ONE earlier answer, for SHAPE only — its content belongs
+to that earlier moment; do not copy its scene, clothing, pose or place):
+<the newest PRIOR image's writerPrompt, plus a Negative: line when it carried
+ one. Absent on the first image, on refs that stored no answer, and when
+ includePreviousAnswer is off. Present only when that flag is on>
+
 SCENE TEXT:
 <the assistant message content>
 
 PLAYER'S LAST ACTION:
-<the nearest visible (non-hidden) user message before it>
+<the nearest visible (non-hidden) user message before it — OMITTED whenever the
+ history window already carries that same message, so the prose is never sent
+ twice>
 
 CURRENT STATE:
 <buildImageStateBlock(playthrough) — the place, plus the player's VISIBLE physical
@@ -286,14 +308,36 @@ PRESENT CHARACTERS:
  stored appearance or clothing), then each character at the current location:
  their instance line (clothing/mood/conditions) plus their stable sheet identity>
 
-Return ONE line of comma-separated tags describing this moment. Return JSON only: {"prompt": "…"}
+Return ONE line of comma-separated tags describing this moment. Return JSON only: {"prompt": "…", "negative": "…"}
 ```
 
 **The connection governs the budget.** `max_tokens` is the connection's own `maxTokens` — the prompt call has no ceiling of its own and no floor. It used to send `min(maxTokens, 600)`, and that 600-token cap is what made an otherwise healthy connection answer with empty content and `finish_reason: "length"` (a reasoning model or one that writes a preamble spends the whole budget before the answer starts), which surfaced as the old `The text provider returned no image prompt.` — with no clue which of the two had happened.
 
 **The JSON contract is enforced, not merely requested.** `response_format: { "type": "json_object" }` is sent on every call, matching the turn path (`src/server/openAiCompatibleProvider.ts`). It is safe on a model or proxy that does not implement structured output: `requestWithRetry` (`src/server/provider/openaiClient.ts`) already retries **once, without** `response_format`, when the endpoint rejects the body with a 400/422/404. Nothing about the parsing below depends on the field being honoured — a model that ignores it and answers in prose still works.
 
-The `PLAYER'S LAST ACTION`, `CURRENT STATE` and `PRESENT CHARACTERS` blocks are omitted when empty (an empty header invites the model to invent one), and the last two are gated by the preset's `includeState` / `includeCast` flags. The two context blocks come from `src/server/provider/imageContext.ts` — see [The context blocks](#the-context-blocks) for what each one deliberately withholds. The answer is parsed as JSON — `prompt` and `negative` are the fields asked for (a model that still answers the legacy `negative_prompt` spelling is parsed the same way); if the model returns prose instead, the whole content is used as the prompt and the negative side falls back to the preset's negative prefix.
+Every block is omitted when empty (an empty header invites the model to invent one), and each is gated by its own field: `includeState` / `includeCast` for the two original context blocks, `historyMessages > 0` for the history window, `includePreviousAnswer` for the reference. **All non-current material is grouped AHEAD of `SCENE TEXT`**, deliberately: an example placed at the end of the message sits closest to the model's own output and anchors hardest. The blocks come from `src/server/provider/imageContext.ts`, and each one withholds more than it carries — the state block leaves out every turn-only category (inventory, quests, reachable locations, absent characters, per-character memory), and the cast block leaves out the player's wardrobe for the reason above.
+
+The dry run and the generate call build this input in **one** place (`buildImagePromptInput` in `src/server/routes/images.ts`). That is what makes the review modal a review of what will actually be sent, and a test asserts the two requests' user messages are byte-identical.
+
+#### The history window
+
+`buildImageHistoryBlock` walks **backwards** from the frame for `historyMessages` messages and renders them oldest-first as one block, labelled `User:` / `Assistant:`. The selection rules:
+
+- **Skipped**: system messages, hidden (state-only) user messages, and empty ones — the same material the turn prompt keeps out of a frame's view. A chapter-opening assistant message is ordinary prose and stays.
+- **Budget: 6000 characters** (`IMAGE_HISTORY_CHARS`). Whole **older** messages are dropped first — half a sentence of an older beat is worse than not having it, and the nearest beats are the ones that carry continuity. A single message larger than the whole budget keeps its **TAIL**, with a leading `…[earlier text omitted]` marker: the end of an earlier message is the state it left the scene in, which is the part the writer needs. Nothing else is ever cut mid-sentence.
+- It returns `messageIds`, and the caller uses them to **drop the `PLAYER'S LAST ACTION` block** whenever the window already carries that message — the same prose twice in one user message is waste, and the window is the only place it is needed. The block survives only when the window could not reach back that far.
+- It is a **pure read**: nothing about image generation touches the turn counter, snapshots, or the token meter.
+- **Cost:** the shipped instruction is ~15.5K characters (~3.6K tokens at the app's own ~4-chars/token estimate), so the window is a fraction of a call that is already paid for once per image, and it is capped.
+
+#### The previous-answer reference
+
+`includePreviousAnswer` gives the writer **one** earlier answer as an example. It is off by default, and the reason is the feature's own cost: an in-context example dominates a tag model — output converges on its framing, pose pairings and scene vocabulary, and because the example describes a *different* instant it can re-introduce clothing or positions the current frame has moved past. Exactly one example, never more.
+
+- **Source: the prompt call's OWN answer** (`writerPrompt` / `writerNegative` on the ref), not the composed/sent prompt — the composed text carries `positivePrefix` (`anime style`), which would contradict the instruction's own "no style tags" rule and invite the writer to emit it, after which the composer prefixes it again.
+- **Stored at write time, not re-derived.** `promptResponse` holds the answer *fenced inside a provider envelope* (every stored response in the live data is ```` ```json ````-fenced and unparseable by a plain `JSON.parse`), so reading it back would mean re-parsing a string we already had. The ref carries the parsed answer instead, capped by the same `clampStoredPromptResponse` as the response body.
+- **`previousWriterAnswer` walks backwards from the target inclusive**, so every ref already on the target message is prior — a re-roll of the same frame is the closest reference there is — then earlier messages. It **never looks forward**: a later message's answer must not reach an earlier image, or a branch or a replay would see context the first run did not. Refs with no stored answer are skipped silently.
+- **The echo is load-bearing.** On the review path the dry run writes the answer and the generate request makes no text call, so the client echoes `writerPrompt` / `writerNegative` back exactly like `promptDurationMs`. Without it, the reference would apply to every image *except* the reviewed ones — the likeliest to be "desirable".
+- The block is labelled `PREVIOUS IMAGE PROMPT (ONE earlier answer, for SHAPE only — …)`, carries a `Negative:` line when the earlier answer had one, and sits with the history **ahead of the frame**. The instruction carries the matching rule: the example shows the SHAPE, its content belongs to an earlier moment, and when it disagrees with this frame, this frame wins. The answer is parsed as JSON — `prompt` and `negative` are the fields asked for (a model that still answers the legacy `negative_prompt` spelling is parsed the same way); if the model returns prose instead, the whole content is used as the prompt and the negative side falls back to the preset's negative prefix.
 
 **The contract is two fields, and the negative is comma-joined onto the shipped list.** The ask is `{"prompt": "…", "negative": "…"}` — one line of booru-style tags for the prompt, and a scene-tuned set of negative tags on the negative side. A model that answers only `{"prompt": "…"}` still works (the negative side then falls back to the preset's shipped list alone). The two sides are composed differently: the negative is **comma-joined** — the preset's `negativePrefix` list first, then the model's tags — because both are comma-separated strings and a space join would splice two lists into one undifferentiated run. The **wrong-shape warning** fires when the JSON parsed as an object and carried **no string `prompt`** (a lone `negative` or `negative_prompt` included), since the fallback would otherwise leak the raw blob into the image prompt.
 
@@ -382,7 +426,10 @@ A message reference is a `MessageImage`:
 | `negativePrompt` | optional |
 | `providerId`, `model` | provenance, default `""` |
 | `seed` | optional — **the seed that was actually used**, so a later re-roll with the same prompt and seed is comparable. On `a1111` it is read back out of the WebUI's `info` string (the authoritative value — the request sent `-1` when the seed was random); on Venice it is what we sent. Absent when the provider picked one (Venice's `0`, a1111 whose `info` said nothing, or the OpenAI-compatible dialect, which has no seed field at all) — `0` is never stored as if it were a seed. |
-| `durationMs` | optional |
+| `durationMs` | optional — the RENDER time (`model · render 25.9s`). |
+| `promptDurationMs` | optional — the **text provider's** measured time for the prompt that produced this image: the other half of the same story, and measured on whichever request ran the call (the dry run's, echoed back on the review path). |
+| `writerPrompt` | optional — the prompt call's **own answer**, before `positivePrefix` and clamping were composed onto it. The composed text stays on `prompt`. Stored at write time so a later image can be handed one earlier answer as a shape reference, and so the raw answer is readable without re-parsing the fenced JSON inside `promptResponse`. Absent when no text call ran and the client echoed nothing. |
+| `writerNegative` | optional — the same, for the model's own negative tags. |
 | `request` | optional — the **JSON body that was sent to the image provider** for this image (diagnostic provenance) |
 | `promptRequest` | optional — the **JSON body that was sent to the TEXT provider** that wrote this prompt (diagnostic provenance) |
 | `promptResponse` | optional — the text provider's **response** to that call, body only, truncated (see below) |
@@ -427,6 +474,9 @@ The image-prompt config is **not a prompt module** — the module set stays turn
 | `promptCharacterLimit` | `900` (schema default for a *partial* block; the shipped fallback `DEFAULT_IMAGE_GENERATION_SETTINGS` and all three shipped/user presets use `1200`) | Soft limit, clamped against the dialect's hard cap. `0` = unlimited. |
 | `includeState` | `true` | Send `CURRENT STATE` to the prompt writer. |
 | `includeCast` | `true` | Send `PRESENT CHARACTERS` to the prompt writer. |
+| `instructionMode` | `"pov"` | Which perspective the instruction is read in. `pov` is the shipped document unchanged; `scene` swaps four perspective passages for their third-person counterparts AND drops the player from the cast block. See [*Instruction modes*](#instruction-modes-pov--scene). |
+| `historyMessages` | `6` (`IMAGE_HISTORY_MESSAGES`; max `12`) | How many messages behind the frame the writer sees. `0` = off. The **read-time** default is the shipped value, like the two flags above — so a snapshot written before this field existed gains history on its next image, with no other change. |
+| `includePreviousAnswer` | `false` | Give the writer ONE earlier answer as a shape reference. Off by default: an in-context example anchors a tag model. See [*The previous-answer reference*](#the-previous-answer-reference). |
 
 ### Resolution order
 
@@ -441,6 +491,25 @@ Each step is parsed through `ImageGenerationSettingsSchema`, so a partial block 
 ### Snapshot semantics
 
 A playthrough **snapshots** the block when its preset is applied — the same way it snapshots the prompt modules and the character format. Editing a preset's instruction therefore affects **new** playthroughs only; an existing playthrough must have its preset re-selected to pick up the new text. (The preset editor says so on the Image Generation tab.)
+
+**Reaching an existing playthrough: the refresh action, not a preset re-select.** Re-selecting the preset would rewrite the turn modules and the sheet format as well, which is a far bigger change than "pick up the new text". So the preset editor's Image Generation tab shows a marker naming the preset whenever the playthrough's block differs from it — the comparison covers **all nine fields**, hand-listed in `imageBlockDiffers`, and a field missing from that list would make the marker lie — with a **Refresh image prompt from preset** button beside it. The button posts `POST /api/playthroughs/:id/prompt-settings/refresh-image-prompt`, which copies `imageGeneration` and **nothing else**, and clears it entirely when the preset ships no block (so the read sites fall back to the shipped defaults).
+
+### Instruction modes (POV / Scene)
+
+`instructionMode` is a **swap, not a second document**. The shipped instruction is one text; four of its passages state the POV contract, and each is held in `PERSPECTIVE_PAIRS` (`src/engine/imageDefaults.ts`) as a literal POV/Scene pair:
+
+| Passage | POV | Scene |
+|---|---|---|
+| the perspective rules block | `THE PLAYER IS NOT A CHARACTER` (the wardrobe-leak rules, and what the player may contribute to the shared group) | `NO CAMERA — THE PLAYER IS NOT IN THIS FRAME` |
+| `CHARACTER REFERENCE`'s first bullet | "…and the camera block for the player" | the cast block only, "the frame is seen from outside" |
+| the `SD FORGE COUPLE` POV bullet | the player's body tags go in the first group | the player contributes nothing to any group |
+| the camera section | `THE PLAYER (POV scenes)` | `CAMERA AND FRAMING` |
+
+`applyInstructionMode(text, mode)` swaps whichever side of each pair it finds, which makes it **its own inverse** (pov → scene → pov round-trips the document byte for byte) and a **no-op on an instruction that carries neither side** — a hand-written one. The editor says so when that is the case ("this instruction carries neither the POV nor the Scene perspective rules, so the mode does not change it"). The swap is applied **twice** on purpose: the preset editor rewrites the instruction field when the dropdown changes (so the textarea never shows a document other than the one that will be sent), and the side call applies it again, idempotently, so the system message can never disagree with the block that gates the cast.
+
+**The mode's other half is context, not text.** In `scene` mode `buildImageCastBlock` sends **no player line at all** — not even a "not the camera" one — because naming the player in that block is exactly what put a persona's wardrobe onto a character in the first place. The Scene instruction states the rule instead, and the code comment ties the two together: a change that re-adds a camera line has to reword that passage. **The player cannot be tagged in Scene mode**, which is the honest v1 limit; "the player is visibly in frame, so tag them, in their own group" is a follow-up that needs the player's appearance back in the cast block and a live-output check first.
+
+`tests/settings.test.ts` is the drift guard for all of it: every POV side must be a **verbatim substring** of the shipped constant (or the swap silently stops matching), every Scene side must be absent from it, both shipped presets must round-trip scene → pov unchanged, and the derived NSFW document must survive the swap.
 
 ### The two shipped presets
 
@@ -460,130 +529,50 @@ Three omissions are deliberate and are asserted by `tests/settings.test.ts`: **`
 
 **The instruction deliberately forbids style keywords** (`No style or quality tags (anime style, masterpiece, best quality) — a style prefix is added separately.`), because `positivePrefix` is the single place art direction lives: a preset can be restyled without touching the instruction text. The instruction asks for a **booru-style tag list**, not a prose sentence, because the target models are tag-trained (`WAI`/`Illustrious` are danbooru-tag models) or CLIP finetunes (`Lustify`). Three rules in it exist because prose kept leaking back through: **every item is a tag, not a clause** (no articles, no copula, no joining words), carrying a WRONG/RIGHT counter-example taken from a real failure; **one frame, one instant**, so a movement chain like *"gripping him while arching her back"* becomes `gripping his shoulders, back arched`; and **`her`/`his` attribution only when a tag could belong to either person** — in a two-character scene the model otherwise has no way to know whose hair, eyes or clothing it is describing. A fourth rule, **MULTIPLE CHARACTERS**, exists for the renderer rather than for the encoder: each person's tags stay together in one ` | `-separated group with the shared scene first, so a two-character prompt can be split into per-character regions (see [*Multi-character regions*](#multi-character-regions-forge-couple)), while a one-character scene has no separator at all. The order is written for the encoder too: rating, count, framing, place and pose all land inside the first ~300 characters, which is the first CLIP chunk and the part that always reaches the model at full strength.
 
-`Default` — instruction, verbatim:
+`Default` — the instruction, by section (not copied here):
 
-```
-You convert story scenes into image-generation tag lists.
+This section used to carry the whole document verbatim, and it drifted: the copy held **7,215 of the constant's 14,545 characters**, missing `SPECIES AND NON-HUMAN CHARACTERS`, the `CHARACTER REFERENCE` core-identity list, the tag-discipline bullets, the `NEGATIVE PROMPT` section, the `BEFORE OUTPUTTING` checklist and both worked examples — while calling itself "verbatim". The text lives in `DEFAULT_IMAGE_PROMPT_INSTRUCTION`, and `tests/settings.test.ts` pins the shipped preset to it **byte for byte**, so nothing here needs to be a second copy that can rot.
 
-The roleplay is paused. You are not narrating. You read the scene and output ONE line of comma-separated booru-style tags describing a single still frame of the current moment. A tag list is the only acceptable output — sentences, narration, dialogue and commentary are failures.
+Its sections, in order, each a rule rather than prose:
 
-FORMAT
-- One line. Lowercase. Comma-separated. Spaces inside a tag (long hair, blue eyes) — never underscores.
-- Every item is a TAG, not a clause: a bare noun phrase (white shirt (open), long brown hair) or a bare action word (straddling, kneeling, leaning forward).
-- NEVER write articles (a, an, the), the verb to be (is, are, was), or joining words (and, with, while, wearing, holding). Never a clause like "she is ..." or "his hand is ...".
-- ONE FRAME, ONE INSTANT: never chain movement. Not "gripping him while arching her back" but gripping his shoulders, back arched.
-- Never output a character's name or a place name from the story. Names are invisible to an image model — use the visible traits instead.
-- First tag is the rating, exactly one word from safe, sensitive, nsfw, explicit — the one that matches what is actually happening. Never a blend of two, never a new word, never more than one rating tag. A tame scene stays tame.
-- 40-70 tags. The FIRST ~300 CHARACTERS carry the most weight (the encoder reads the prompt in chunks and weights the tail less), and the list is also cut from the END if it runs long — so the framing, place and pose go early and essential detail never goes last.
-- No style or quality tags (anime style, masterpiece, best quality) — a style prefix is added separately.
-- Only what the message shows: do not add acts, people or undress it did not describe, and do not sanitise what it did.
+| Section | What it decides |
+|---|---|
+| opening paragraph + `FORMAT` | JSON only, one line of tags, the 40–70 count, the rating tag first, the ~300-character weighting (the first CLIP chunk), no style keywords, "only what the message shows", and the tag discipline rules (no filler to reach a count, no invisible qualities, no compound action sentences) |
+| `DISTINGUISHING NAMES FROM TAGS` | story names never; species/race/franchise tags always |
+| `SPECIES AND NON-HUMAN CHARACTERS` | the species tag anchors the model's template — traits alone produce a human with fur and ear-tufts |
+| `THE PLAYER IS NOT A CHARACTER` | the persona's wardrobe must not become the character's tags. A **perspective passage** (swapped in Scene mode) |
+| `CHARACTER REFERENCE` | the core identity tags that must appear every time a character is in frame, read from the cast block |
+| `WRONG / RIGHT` | the prose-leak counter-example, taken from a real failure |
+| `TAG ORDER` | rating, count, species, framing, scene, pose, appearance, expression, clothing, physical state |
+| `WHO IS WHO` | `her ponytail` / `his black hair` attribution in a two-character scene |
+| `MULTIPLE CHARACTERS` | one group per character, separated by a pipe, the shared scene first |
+| `SD FORGE COUPLE / REGIONAL PROMPTING` | why the grouping exists, and what the player contributes to it. Partly a **perspective passage** |
+| `THE PLAYER (POV scenes)` | the POV camera rules. The **perspective section** |
+| `VOCABULARY` | preferred tag shapes, so a detail is omitted rather than invented |
+| `NEGATIVE PROMPT` | what to counter for this scene, under 20 tags |
+| `BEFORE OUTPUTTING` | the internal checklist, never output |
+| `EXAMPLES` | one-group, two-group and two-group-with-POV shapes |
 
-WRONG / RIGHT
-WRONG: "A medium close-up shot of Jeneine, a woman with pale skin and tired blue eyes, straddling him while leaning down to touch his neck."
-RIGHT: close-up, 1boy 1girl, pale skin, tired eyes, blue eyes, straddling, leaning forward, hand on his neck
+`Default (NSFW)` is that same document with exactly two mechanical changes, asserted as a **string equality** against the core constant so the two cannot drift apart:
 
-TAG ORDER
-1. Rating: one word from safe, sensitive, nsfw, explicit — never a blend, never more than one. A tame scene stays tame.
-2. Character count: 1girl, 2girls, 1boy 1girl ...
-3. Species tag (if non-human): braixen, gardevoir, elf, demon ...
-   - In a SINGLE-character scene, the species tag goes here, right after the count.
-   - In a MULTI-character scene, the species tag goes at the START of each character's own group, not here in the shared group.
-4. Camera framing and angle
-5. Scene: location, time of day, lighting
-6. Pose and action
-7. Appearance: hair length and colour, eye colour, skin tone or fur colour, build, species features, notable features
-8. Expression and gaze
-9. Clothing item by item, with its state — white shirt (open), black skirt (hiked up), panties (around one ankle); naked / topless / bottomless when that is the scene
-10. Physical state last — sweat, tears, flushed skin, trembling
+- the **two** rating bullets are replaced (`... — nsfw or explicit when the scene is sexual, safe or sensitive when it is not, never a blend.`);
+- an `EXPLICIT SCENES` block — three bullets: tag the act plainly at the same explicitness, keep established appearance/clothing/arousal consistent, never censor or sanitise — is inserted immediately **before `BEFORE OUTPUTTING`**, not before the `Return JSON only:` line, which is where it was described before that was true.
 
-THE PLAYER IS NOT A CHARACTER
-- The context includes the player: the person the scene is seen through. Their block explains WHO THE CAMERA IS. It is NOT a tag source.
-- NEVER tag the player's stored or visible appearance and wardrobe: no hair colour, no eye colour, no skin tone, no glasses, no shirt, no necktie, no slacks, no shoes. Those tags in the shared group paint the CHARACTER with the player's features — the single most common failure of this task.
-- This rule is about the PLAYER only. The characters' own hair, eyes, skin and clothing tags are REQUIRED — see CHARACTER REFERENCE below.
-- The player NEVER opens a " | " group. A group holding the player's sheet steals half the image and squeezes the character into the other half.
-- The player contributes exactly these to the FIRST (shared) group: pov, male pov, female pov, viewer's hands, viewer's chest visible, male pov exposed penis, and an interaction whose object is a body part or the edge of the player's clothing (hand on viewer's waistband, viewer's waistband gripped).
-- When the scene has the player undressed or gripped, tag the INTERACTION or the character's reaction, never the garment: hand on viewer's waistband — not white shirt, not black slacks.
-- Nothing else about the player belongs in the tag line.
-
-WHO IS WHO (two or more characters)
-- Give each person their own tags, in the order you introduced them.
-- When a tag could belong to either person, prefix it: her ponytail, his black hair, her hand on her own thigh.
-- In a one-person scene never use those prefixes — they are wasted tags.
-
-MULTIPLE CHARACTERS (two or more characters in frame)
-- Keep each character's tags together and separate the groups with " | " — a space, a pipe, a space. Still ONE line: a pipe groups the tags, it never starts a new line.
-- The FIRST group holds what is shared (scene, lighting, the interaction); then one group per character, in the order they appear.
-- The rating and the character count still open the line, in that first group.
-- A scene with ONE character has no " | " at all.
-
-THE PLAYER (POV scenes)
-- Seen through the player's eyes? Tag it pov. The player is never named: they are viewer, male pov or female pov.
-- Never tag the player's stored appearance or clothing — see THE PLAYER IS NOT A CHARACTER.
-- The player's visible body gets its own tags: viewer's hands visible, pov hands on her hips, male pov exposed penis.
-- Player not in frame? Use a neutral camera tag: wide shot, medium shot, close-up, from above, from below, dutch angle.
-
-VOCABULARY (prefer these shapes; it is better to omit a detail than to invent a phrase)
-- hair: long hair, short hair, ponytail, twin tails, messy hair, blonde hair, brown hair
-- eyes: blue eyes, amber eyes, half-closed eyes, teary eyes
-- body: petite, tall, large breasts, slim waist, muscular, pale skin, dark skin
-- expression: smiling, laughing, crying, flushed face, parted lips, open mouth, closed eyes
-- gaze: looking at viewer, looking away, looking down
-- pose: sitting, kneeling, lying on back, standing, hugging, spread legs, arms crossed
-- clothing state: white shirt (open), black skirt (hiked up), naked, topless, undressed
-- place/light: dim lighting, neon lighting, sunlight, bedroom, alley, office, tavern
-
-EXAMPLES (shape only, not content)
-
-ONE character in frame — ONE group, no " | " at all:
-safe, 1girl, close-up, bedroom, night, dim lighting, sitting on bed, long brown hair, ponytail, blue eyes, pale skin, slim waist, looking at viewer, flushed face, white t-shirt, grey panties, arms crossed
-
-TWO characters in frame — THREE groups: the shared scene first, then one group per character, in the order they appear:
-safe, 1boy 1girl, medium shot, tavern, night, warm lantern light, sitting side by side | her long red hair, braid, green eyes, her white blouse, leaning on his shoulder, smiling | his dark hair, glasses, his brown coat, arm around her waist, looking at her
-
-Count GROUPS, not people. A POV scene is seen through the player's eyes, so the PLAYER is never a group — their pov / viewer tags ride in the first group with everything else that is shared. One girl in a POV frame is still ONE group; two girls plus the player is THREE groups.
-
-Return JSON only:
-{"prompt": "<the tag line>"}
-```
-
-`Default (NSFW)` is that same document with exactly two mechanical changes: the rating bullet
-
-```
-- First tag is the rating, exactly one word from safe, sensitive, nsfw, explicit — the one that matches what is actually happening. Never a blend of two, never a new word, never more than one rating tag. A tame scene stays tame.
-```
-
-becomes
-
-```
-- First tag is the rating, exactly one word from safe, sensitive, nsfw, explicit — nsfw or explicit when the scene is sexual, safe or sensitive when it is not. Never a blend of two, never a new word, never more than one rating tag.
-```
-
-and this block is inserted immediately before the `Return JSON only:` line (followed by one blank line):
-
-```
-EXPLICIT SCENES
-- When the scene is sexually explicit, tag it at the same explicitness, plainly and without euphemism: the act, the position, what is exposed, what the bodies are doing, visible physical state (sweat, fluids, trembling, flushed skin).
-- Keep the characters' established appearance, clothing state and arousal consistent with what the scene says. Do not add acts, partners or undress the scene did not describe.
-- Never censor, blur, fade or sanitise what the scene describes, and never add safety, boilerplate or refusals. If the scene is not explicit, do not invent explicit content.
-```
-
-`tests/settings.test.ts` asserts that derivation **as a string equality** against the core constant: the `default` preset's instruction is byte-identical to `DEFAULT_IMAGE_PROMPT_INSTRUCTION`, and `default-nsfw`'s is exactly `core.replace(ratingBullet, nsfwRatingBullet).replace("Return JSON only:", explicitScenes + "\n\nReturn JSON only:")`. Editing one without the other fails the suite — that is the drift guard.
-
-The Image Generation tab in the preset editor exposes all six fields in this order: instruction, positive prefix, negative prefix, character limit, then the `include current state` and `include present characters` toggles.
+The Image Generation tab in the preset editor exposes **nine** fields in this order: instruction mode, instruction, positive prefix, negative prefix, character limit, the `include current state` and `include present characters` toggles, the history count, and the `include previous image prompt response` toggle. Changing the mode rewrites the instruction field in place, so the textarea always shows the document that will be sent.
 
 ---
 
 ## The chat surface
 
-`src/client/components/views/PlayView/ChatPanel.tsx`, `usePlaythrough.ts`, `ImagePromptModal.tsx`.
+`src/client/components/views/PlayView/ChatPanel.tsx`, `usePlaythrough.ts`, `ImagePromptModal.tsx`, `src/client/engine/displayFormat.ts` (the caption and `formatDuration`).
 
 - Every **assistant** message gets a footer button: **Generate Image**, or **Generate another** once it has images. It is disabled when there is no image connection, with a tooltip explaining why (`No image provider configured — add one in Settings → Provider → Images`), and while another action is in progress.
-- Generated images stack **inside the same message container, newest last**. Each is a figure with the image, a remove control (`Remove this image` — the tooltip and the confirm dialog both say *the file is deleted if nothing else uses it*), and a caption of `model · <seconds>s · seed <seed>`. The duration and seed parts are omitted when absent — a Venice random seed (`0`) therefore shows no seed. Clicking the image opens it full screen (`common/ImageViewer` — a shared component, not chat-specific): Escape, a backdrop click or its close button dismiss it, and it carries the same caption the thumbnail does.
-- Every generated image carries a compact collapsed **`request`** disclosure under it (inside the same message container and the same figure) revealing the pretty-printed JSON body that went to the image provider — diagnostic provenance, not content, so it is small, muted, monospace, height-capped and horizontally scrollable. A ref stored before the field existed shows no disclosure at all (no empty box).
-- Next to it, a second collapsed **`prompt call`** disclosure shows the *prompt-writing* side call: its request body and the text provider's response, labelled `Request` / `Response`, same quiet treatment and also collapsed by default. It is absent when the prompt came from the user's own edits (both overrides), because no text call ran for that image.
-- In-flight states are per message: `Writing image prompt…` (the dry run) and `Generating image…` (the render), each with a **Cancel** button. Cancelling reports `Image prompt cancelled.` or `Image generation cancelled.`; a failure reports `Image generation failed — nothing was changed.`
-- `Settings → Chat → Review Image Prompt Before Generating` (default **on**) decides whether the modal appears. On: dry run first, then the reviewed prompt posted back as both overrides. Off: one request, no modal.
-- The image provider caption in the modal is `<label> · <model>` of the image connection the request will use.
+- Generated images stack **inside the same message container, newest last**. Each is a figure with the image, a remove control (`Remove this image` — the tooltip and the confirm dialog both say *the file is deleted if nothing else uses it*), and a caption of `model · prompt 3.4s · render 25.9s · seed N`. Every part is omitted when absent: a Venice random seed (`0`) shows no seed, and a ref written before `promptDurationMs` existed keeps the unlabelled caption it had. The two times are labelled **only when both exist**, so the label never lies about which half a single number is. `shortModelName` drops the extension and hash tag (`waiANINSFWPONYXL_v140`), and the caption **wraps**: it carries the model, both times and the seed, which does not fit one line in a phone-width panel, and an ellipsis was hiding the seed. The formatter and the caption itself live in `src/client/engine/displayFormat.ts` — pure functions, unit-tested without a React renderer, and shared with the full-screen viewer so the two can never disagree. Clicking the image opens it full screen (`common/ImageViewer` — a shared component, not chat-specific): Escape, a backdrop click or its close button dismiss it, and it carries the same caption the thumbnail does.
+- Every generated image carries a compact collapsed **`request`** disclosure under it (inside the same message container and the same figure) revealing the pretty-printed JSON body that went to the image provider — diagnostic provenance, not content, so it is small, muted, monospace, height-capped and horizontally scrollable, with a **Copy** button. A ref stored before the field existed shows no disclosure at all (no empty box).
+- Next to it, a second collapsed **`prompt call`** disclosure shows the *prompt-writing* side call: its request body and the text provider's response, labelled `Request` / `Response`, same quiet treatment and also collapsed by default, each block with its **own** Copy button (independent copied state — one affordance per block, not one per panel). It is absent when the prompt came from the user's own edits (both overrides), because no text call ran for that image.
+- In-flight states are per message, each with a **live elapsed counter** beside it and a **Cancel** button: `Writing image prompt… 4.2s` (the dry run) then `Generating image… 1m 03s` (the render). The counters are driven by phase stamps the HOOK sets once (`imagePromptStartedAt` / `imageGeneratingStartedAt`) and tick from `performance.now()` at both ends — deriving them from a message id or a progress payload would restart the clock every 700 ms, and `Date.now()` minus a `performance.now()` stamp is the machine's uptime. `formatDuration` is minute-aware (`1m 23s`), because a local render is minutes and `110.0s` is not a number anyone reads at a glance. Cancelling reports `Image prompt cancelled.` or `Image generation cancelled.`; a failure reports `Image generation failed — nothing was changed.`
+- `Settings → Chat` is grouped into **Chat Message / Image Generation / Debugging**. The Image Generation group holds `Review Image Prompt Before Generating` (default **on**) — which decides whether the modal appears at all: on, dry run first, then the reviewed prompt posted back as both overrides; off, one request and no modal — and `Generate Image right after AI Response` (per-device, default **off**). The latter fires from the two places a turn's state lands (`handleSend`, which covers Continue, and `confirmRetry`), and skips **silently** whatever it cannot do: chapter openings, a message that already has images, another phase in flight, and — resolved before any state is touched — a user with no image connection, who would otherwise get a failure notice after every turn. Review still wins, so the modal appears for confirmation. It costs one text call plus a render per turn, which is why it is opt-in and why the toggle's own description says so.
+- The image provider caption in the modal is `<label> · <model>` of the image connection the request will use, and beneath it sits the **context line** the dry run reports: `Context: 6 previous messages · POV instruction` (or `Context: this message only`, or `· Scene instruction (third-person)`). It names what the writer was actually given, because a prompt that looks wrong for a reason that has nothing to do with the model — an empty window on a first message, a scene instruction in force — is otherwise indistinguishable from a bad answer, and the alternative is paying for a render to find out.
 
 ---
 
