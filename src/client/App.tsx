@@ -362,7 +362,10 @@ export default function App() {
           handleCancelImage={playthroughHook.handleCancelImage}
           closeImagePrompt={playthroughHook.closeImagePrompt}
           rerunImagePrompt={playthroughHook.rerunImagePrompt}
-          handleDeleteImage={playthroughHook.handleDeleteImage}
+          requestDeleteImage={playthroughHook.requestDeleteImage}
+          confirmDeleteImage={playthroughHook.confirmDeleteImage}
+          deleteImageTarget={playthroughHook.deleteImageTarget}
+          setDeleteImageTarget={playthroughHook.setDeleteImageTarget}
           startEdit={playthroughHook.startEdit}
           cancelEdit={playthroughHook.cancelEdit}
           saveEdit={playthroughHook.saveEdit}

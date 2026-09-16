@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  buildImageUrl,
   listProviderConnections,
   type ImageGenerationProgress,
   type PlaythroughPromptSettings,
@@ -8,7 +9,7 @@ import {
   type QuestAction
 } from "../../../api";
 import type { ChatMessage, Playthrough } from "../../../../schemas";
-import type { FailedResponseNotice, ImageGenerationOverrides, ImagePromptRequest } from "../../../hooks/usePlaythrough";
+import type { DeleteImageTarget, FailedResponseNotice, ImageGenerationOverrides, ImagePromptRequest } from "../../../hooks/usePlaythrough";
 import { ScenePanel } from "./ScenePanel";
 import { ChatPanel } from "./ChatPanel";
 import { InfoPanel } from "./InfoPanel/InfoPanel";
@@ -119,7 +120,11 @@ export type PlayViewProps = {
   handleCancelImage?: () => void;
   closeImagePrompt?: () => void;
   rerunImagePrompt?: () => Promise<void>;
-  handleDeleteImage?: (msg: ChatMessage, file: string) => Promise<void>;
+  /** The generated image queued for removal, if any — drives the delete ConfirmModal. */
+  deleteImageTarget: DeleteImageTarget | null;
+  setDeleteImageTarget: (target: DeleteImageTarget | null) => void;
+  requestDeleteImage?: (msg: ChatMessage, file: string) => void;
+  confirmDeleteImage?: () => Promise<void>;
 };
 
 export function PlayView(props: PlayViewProps) {
@@ -207,7 +212,10 @@ export function PlayView(props: PlayViewProps) {
     handleCancelImage,
     closeImagePrompt,
     rerunImagePrompt,
-    handleDeleteImage
+    requestDeleteImage,
+    confirmDeleteImage,
+    deleteImageTarget,
+    setDeleteImageTarget
   } = props;
 
   const [timelinesOpen, setTimelinesOpen] = useState(false);
@@ -327,7 +335,7 @@ export function PlayView(props: PlayViewProps) {
           imageProviderModel={imageConnection?.model}
           onGenerateImage={(msg) => { void handleGenerateImage?.(msg); }}
           onCancelImage={handleCancelImage}
-          onDeleteImage={(msg, file) => { void handleDeleteImage?.(msg, file); }}
+          onDeleteImage={(msg, file) => requestDeleteImage?.(msg, file)}
           onImagePromptGenerate={(prompt, negativePrompt) => {
             const request = imagePromptRequest;
             if (!request) return;
@@ -398,6 +406,31 @@ export function PlayView(props: PlayViewProps) {
             <span className="mobile-tab-label">Info</span>
           </button>
         </nav>
+      ) : null}
+
+      {/* Removing a generated image is destructive (the file is swept once nothing
+          else references it), so it asks through the shared ConfirmModal like
+          retry/truncate instead of a native window.confirm. A message can hold
+          several images, so the modal previews exactly which one is going. */}
+      {deleteImageTarget ? (
+        <ConfirmModal
+          title="Remove this image?"
+          message="It is removed from this message. The file is deleted if nothing else uses it."
+          confirmLabel={imageDeletingId === deleteImageTarget.messageId ? "Removing…" : "Yes, remove"}
+          danger
+          maxWidth={420}
+          isLoading={imageDeletingId === deleteImageTarget.messageId}
+          onConfirm={() => { void confirmDeleteImage?.(); }}
+          onCancel={() => setDeleteImageTarget(null)}
+        >
+          <div className="delete-image-preview">
+            <img
+              src={buildImageUrl(deleteImageTarget.file)}
+              alt={deleteImageTarget.prompt.slice(0, 120)}
+              title={deleteImageTarget.prompt}
+            />
+          </div>
+        </ConfirmModal>
       ) : null}
 
       {retryTarget ? (

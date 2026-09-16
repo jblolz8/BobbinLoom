@@ -33,6 +33,11 @@ const CONTINUE_INSTRUCTION =
   "Continue the story from the player's last message. Write the next scene as the " +
   "world and its characters; do not take actions on behalf of the player.";
 
+/** One generated image queued for removal: the thumbnail's X sets it, PlayView's
+ *  ConfirmModal renders it, `confirmDeleteImage` consumes it. `prompt` is only the
+ *  preview's alt text — the content-addressed file name is the identity. */
+export type DeleteImageTarget = { messageId: string; file: string; prompt: string };
+
 function draftKey(playthroughId: string): string {
   return `${DRAFT_KEY_PREFIX}${playthroughId}`;
 }
@@ -293,6 +298,7 @@ export function usePlaythrough() {
   const [retryTarget, setRetryTarget] = useState<ChatMessage | null>(null);
   const [truncateTarget, setTruncateTarget] = useState<ChatMessage | null>(null);
   const [branchTarget, setBranchTarget] = useState<ChatMessage | null>(null);
+  const [deleteImageTarget, setDeleteImageTarget] = useState<DeleteImageTarget | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [resummarizingChapterId, setResummarizingChapterId] = useState<string | null>(null);
   const [viewingChapterId, setViewingChapterId] = useState<string | null>(null);
@@ -607,21 +613,34 @@ export function usePlaythrough() {
   }
 
   /**
-   * Drop one generated image from a message. The server sweeps the file when
-   * nothing else references those bytes, so the confirmation is worded to cover
-   * both cases rather than trying to count references on the client.
+   * Ask to drop one generated image from a message. Nothing is sent yet — this only
+   * queues the target, and PlayView's ConfirmModal asks the question (the same
+   * retry/truncate shape). The server sweeps the file when nothing else references
+   * those bytes, so the confirmation is worded to cover both cases rather than
+   * trying to count references on the client.
    */
-  async function handleDeleteImage(message: ChatMessage, file: string) {
+  function requestDeleteImage(message: ChatMessage, file: string) {
     if (!playthrough || imageGeneratingId || imagePreviewMessageId || imageDeletingId) return;
-    if (!window.confirm("Remove this image? The file is deleted if nothing else uses it.")) return;
+    const image = (message.images ?? []).find((i) => i.file === file);
+    setDeleteImageTarget({ messageId: message.id, file, prompt: image?.prompt ?? "" });
+  }
+
+  /** The confirmed half of `requestDeleteImage`: the body the X button used to run
+   *  inline behind `window.confirm`. The modal closes on success AND on failure —
+   *  a failed removal surfaces through the usual in-chat failure notice. */
+  async function confirmDeleteImage() {
+    const target = deleteImageTarget;
+    if (!playthrough || !target || imageDeletingId) return;
     setCancelledNotice(null);
     setFailedNotice(null);
-    setImageDeletingId(message.id);
+    setImageDeletingId(target.messageId);
     const startTime = performance.now();
     try {
-      const res = await deleteMessageImage(playthrough.id, message.id, file);
+      const res = await deleteMessageImage(playthrough.id, target.messageId, target.file);
       setPlaythrough(res.playthrough);
+      setDeleteImageTarget(null);
     } catch (e) {
+      setDeleteImageTarget(null);
       reportImageFailure(e, startTime, "Removing the image failed — nothing was changed.");
     } finally {
       setImageDeletingId(null);
@@ -849,7 +868,10 @@ export function usePlaythrough() {
     handleCancelImage,
     closeImagePrompt,
     rerunImagePrompt,
-    handleDeleteImage,
+    requestDeleteImage,
+    confirmDeleteImage,
+    deleteImageTarget,
+    setDeleteImageTarget,
     startEdit,
     cancelEdit,
     saveEdit,
