@@ -670,6 +670,21 @@ describe("image generation: preset routes and the playthrough snapshot", () => {
     expect(res.json().imageGeneration).toEqual(IMAGE_BLOCK);
   });
 
+  it("snapshots the block at CREATION, not only when a preset is applied", async () => {
+    // The app creates playthroughs from a preset, so the record must carry that
+    // preset's block from the start. Without it the Image Generation tab's "still
+    // using the block it was created with" marker compares against nothing, and
+    // the read sites fall back to the shipped defaults on a preset that never
+    // shipped them.
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/playthroughs",
+      payload: { name: "Created with a block", blank: true, presetId: "user-with-image" }
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().promptSettings.imageGeneration).toEqual(IMAGE_BLOCK);
+  });
+
 
   it("rejects a write to a read-only preset and leaves the file untouched", async () => {
     const before = readFileSync(presetsFile(), "utf8");

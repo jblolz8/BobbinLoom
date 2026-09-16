@@ -10,7 +10,7 @@ import type { ParsedCard } from "./characterCards/parseCard";
 import { createBlankPlaythrough, createInitialPlaythrough, createPlaythroughFromSeed, ensureMessageTurns, restoreSnapshotState } from "../engine/engine";
 import { loadAppSettings } from "./appSettingsStore";
 import { DEMO_TEMPLATE } from "../engine/demoData";
-import type { CharacterFormat, CharacterTemplate, LoadFailure, LorebookFile, LorebookSummary, PlayerPersona, Playthrough, PlaythroughListResponse, PromptModuleSet, PromptPreset, ScenarioSeed, TurnSnapshot } from "../schemas";
+import type { CharacterFormat, CharacterTemplate, ImageGenerationSettings, LoadFailure, LorebookFile, LorebookSummary, PlayerPersona, Playthrough, PlaythroughListResponse, PromptModuleSet, PromptPreset, ScenarioSeed, TurnSnapshot } from "../schemas";
 import { CharacterTemplateSchema, EMPTY_MODULE_SET, PlayerPersonaSchema, PlaythroughSchema } from "../schemas";
 
 function ensureStoreDir(dir: string): void {
@@ -66,7 +66,7 @@ const PERSONAS_DIR = join(process.cwd(), "data", "personas");
 
 // --- Preset helpers ---
 
-export function loadDefaultPreset(): { id: string; name: string; modules: PromptModuleSet; characterFormat?: CharacterFormat } {
+export function loadDefaultPreset(): { id: string; name: string; modules: PromptModuleSet; characterFormat?: CharacterFormat; imageGeneration?: ImageGenerationSettings } {
   const presetsPath = join(process.cwd(), "data", "prompt-presets.json");
   try {
     const raw = readFileSync(presetsPath, "utf8");
@@ -83,6 +83,10 @@ export function loadDefaultPreset(): { id: string; name: string; modules: Prompt
         name: chosen.name,
         modules: chosen.modules,
         characterFormat: chosen.characterFormat,
+        // The image block rides along too: a playthrough created from a preset must
+        // SNAPSHOT it, or the Image Generation tab's "still using the block it was
+        // created with" marker compares against nothing.
+        imageGeneration: chosen.imageGeneration,
       };
     }
   } catch {
@@ -731,12 +735,12 @@ export function resolveCast(castIds?: string[], dir: string = CHARACTERS_DIR): C
 
 export function createBlankPlaythroughRecord(
   dir: string, name: string, personaId?: string, castIds: string[] = [], lorebookIds?: string[],
-  scenarioDescription?: string, presetOverride?: { id: string; name: string; modules: PromptModuleSet; characterFormat?: CharacterFormat }
+  scenarioDescription?: string, presetOverride?: { id: string; name: string; modules: PromptModuleSet; characterFormat?: CharacterFormat; imageGeneration?: ImageGenerationSettings }
 ): Playthrough {
   const preset = presetOverride ?? loadDefaultPreset();
   const persona = personaId ? (getPersona(personaId) ?? loadDefaultPersona()) : loadDefaultPersona();
   const cast = resolveCast(castIds) ?? [];
-  const playthrough = createBlankPlaythrough(name, preset.modules, preset.id, preset.name, persona, cast, preset.characterFormat);
+  const playthrough = createBlankPlaythrough(name, preset.modules, preset.id, preset.name, persona, cast, preset.characterFormat, preset.imageGeneration);
   if (lorebookIds) playthrough.lorebookIds = lorebookIds;
   if (scenarioDescription) playthrough.scenarioDescription = scenarioDescription;
   if (personaId) playthrough.personaId = personaId;
@@ -745,11 +749,11 @@ export function createBlankPlaythroughRecord(
   return playthrough;
 }
 
-export function createPlaythroughRecord(dir: string, name: string, personaId?: string, castIds?: string[], lorebookIds?: string[], scenarioDescription?: string, presetOverride?: { id: string; name: string; modules: PromptModuleSet; characterFormat?: CharacterFormat }): Playthrough {
+export function createPlaythroughRecord(dir: string, name: string, personaId?: string, castIds?: string[], lorebookIds?: string[], scenarioDescription?: string, presetOverride?: { id: string; name: string; modules: PromptModuleSet; characterFormat?: CharacterFormat; imageGeneration?: ImageGenerationSettings }): Playthrough {
   const preset = presetOverride ?? loadDefaultPreset();
   const persona = personaId ? (getPersona(personaId) ?? loadDefaultPersona()) : loadDefaultPersona();
   const cast = resolveCast(castIds);
-  const playthrough = createInitialPlaythrough(name, preset.modules, preset.id, preset.name, persona, cast, preset.characterFormat);
+  const playthrough = createInitialPlaythrough(name, preset.modules, preset.id, preset.name, persona, cast, preset.characterFormat, preset.imageGeneration);
   if (lorebookIds) playthrough.lorebookIds = lorebookIds;
   if (scenarioDescription) playthrough.scenarioDescription = scenarioDescription;
   if (personaId) playthrough.personaId = personaId;
@@ -766,12 +770,12 @@ export function createPlaythroughRecord(dir: string, name: string, personaId?: s
  */
 export function createPlaythroughFromSeedRecord(
   dir: string, name: string, seed: ScenarioSeed, personaId?: string, castIds?: string[], lorebookIds?: string[],
-  scenarioDescription?: string, presetOverride?: { id: string; name: string; modules: PromptModuleSet; characterFormat?: CharacterFormat },
+  scenarioDescription?: string, presetOverride?: { id: string; name: string; modules: PromptModuleSet; characterFormat?: CharacterFormat; imageGeneration?: ImageGenerationSettings },
   includeOpening = true
 ): Playthrough {
   const preset = presetOverride ?? loadDefaultPreset();
   const persona = personaId ? (getPersona(personaId) ?? loadDefaultPersona()) : loadDefaultPersona();
-  const playthrough = createPlaythroughFromSeed(name, seed, preset.modules, preset.id, preset.name, persona, resolveCast(castIds), includeOpening, preset.characterFormat);
+  const playthrough = createPlaythroughFromSeed(name, seed, preset.modules, preset.id, preset.name, persona, resolveCast(castIds), includeOpening, preset.characterFormat, preset.imageGeneration);
   if (lorebookIds) playthrough.lorebookIds = lorebookIds;
   if (scenarioDescription) playthrough.scenarioDescription = scenarioDescription;
   if (personaId) playthrough.personaId = personaId;
