@@ -1,10 +1,83 @@
-import type { ImageGenerationSettings } from "../schemas";
+import type { ImageGenerationSettings, ImageInstructionMode } from "../schemas";
 
 /** Shipped image-prompt instruction for the Default presets. It deliberately
  *  forbids style keywords: `positivePrefix` is the single place art direction
  *  lives, so a preset can be restyled without touching this text. It asks for a
  *  booru-style TAG LIST (not prose) because the target models are
  *  danbooru-tag-trained (WAI/Illustrious) or CLIP SDXL finetunes (Lustify). */
+/** The instruction's perspective-specific passages, POV on the left and Scene on
+ *  the right. `applyInstructionMode` swaps whichever side of a pair it finds, so
+ *  the swap is SYMMETRICAL (pov → scene → pov round-trips) and a no-op on an
+ *  instruction that carries neither side (a hand-written one).
+ *
+ *  The POV side of every pair is a VERBATIM substring of
+ *  `DEFAULT_IMAGE_PROMPT_INSTRUCTION`; `tests/settings.test.ts` asserts that, so a
+ *  later edit to the shipped wording fails loudly instead of silently disabling
+ *  the swap. The Scene side is new text, and must contain none of the POV side's
+ *  wording (also asserted). */
+const POV_PLAYER_RULES = `THE PLAYER IS NOT A CHARACTER
+- The context includes the player: the person the scene is seen through. Their block explains WHO THE CAMERA IS. It is NOT a tag source.
+- NEVER tag the player's stored or visible appearance and wardrobe: no hair colour, no eye colour, no skin tone, no glasses, no shirt, no necktie, no slacks, no shoes. Those tags in the shared group paint the CHARACTER with the player's features — the single most common failure of this task.
+- This rule is about the PLAYER only. The characters' own hair, eyes, skin and clothing tags are REQUIRED — see CHARACTER REFERENCE below.
+- The player NEVER opens a " | " group. A group holding the player's sheet steals half the image and squeezes the character into the other half.
+- The player contributes exactly these to the FIRST (shared) group: pov, male pov, female pov, viewer's hands, viewer's chest visible, male pov exposed penis, and an interaction whose object is a body part or the edge of the player's clothing (hand on viewer's waistband, viewer's waistband gripped).
+- When the scene has the player undressed or gripped, tag the INTERACTION or the character's reaction, never the garment: hand on viewer's waistband — not white shirt, not black slacks.
+- Nothing else about the player belongs in the tag line.`;
+
+const POV_REFERENCE_LINE = `- Character appearance data is provided in the context before the scene: the CAST block for every character in frame, and the camera block for the player. Extract visible traits for the CHARACTERS — the player is not a character (see THE PLAYER IS NOT A CHARACTER above).`;
+
+const POV_REGION_LINE = `- For POV scenes: the player's body tags (male pov, viewer's hands, viewer's chest visible) go in the first group, not in a character group — and that is ALL the player contributes. Never the player's stored appearance or clothing, and never a group of their own.`;
+
+const POV_CAMERA_SECTION = `THE PLAYER (POV scenes)
+- Seen through the player's eyes? Tag it pov. The player is never named: they are viewer, male pov or female pov.
+- Never tag the player's stored appearance or clothing — see THE PLAYER IS NOT A CHARACTER.
+- The player's visible body gets its own tags: viewer's hands visible, pov hands on her hips, male pov exposed penis.
+- Player not in frame? Use a neutral camera tag: wide shot, medium shot, close-up, from above, from below, dutch angle.`;
+
+const SCENE_PLAYER_RULES = `NO CAMERA — THE PLAYER IS NOT IN THIS FRAME
+- This frame is NOT seen through the player's eyes and the player is NOT in it. Nothing about the player may enter the tag line: no appearance, no wardrobe, no position.
+- NEVER tag pov, male pov, female pov, viewer's hands, viewer's chest visible or viewer's waistband. Those tags belong to a POV frame only.
+- No player block is provided for this frame. Do not infer one and do not invent one.
+- Every person the frame shows is a CHARACTER: their own tags, and in a multi-character scene their own " | " group.`;
+
+const SCENE_REFERENCE_LINE = `- Character appearance data is provided in the context before the scene: the CAST block for every character in frame. Extract visible traits for the CHARACTERS — the frame is seen from outside, so the player is not a character here (see NO CAMERA above).`;
+
+const SCENE_REGION_LINE = `- The player contributes nothing to any group here: with no camera in frame there are no pov / viewer tags, and every group after the first belongs to a character.`;
+
+const SCENE_CAMERA_SECTION = `CAMERA AND FRAMING
+- The frame is third-person: never tag pov, male pov, female pov or viewer's anything.
+- Take the framing and the angle from what the scene itself implies — wide shot, medium shot, close-up, from above, from below, dutch angle — and place them early, right after the rating and the character count.
+- Everyone visible is a character and is tagged as one.`;
+
+export const PERSPECTIVE_PAIRS: ReadonlyArray<readonly [pov: string, scene: string]> = [
+  [POV_PLAYER_RULES, SCENE_PLAYER_RULES],
+  [POV_REFERENCE_LINE, SCENE_REFERENCE_LINE],
+  [POV_REGION_LINE, SCENE_REGION_LINE],
+  [POV_CAMERA_SECTION, SCENE_CAMERA_SECTION]
+];
+
+/** The instruction as it reads in `mode`. Scans every pair and swaps whichever
+ *  side is present, which makes this its own inverse and a no-op on text that
+ *  carries neither side. */
+export function applyInstructionMode(instruction: string, mode: ImageInstructionMode): string {
+  let out = instruction;
+  for (const [pov, scene] of PERSPECTIVE_PAIRS) {
+    const [from, to] = mode === "scene" ? [pov, scene] : [scene, pov];
+    if (!out.includes(from)) continue;
+    // The FUNCTION form of `replace` is deliberate: a string replacement treats
+    // `$&`, `$1` and `` $` `` in the replacement as capture patterns, and the
+    // instruction text is not something to re-interpret.
+    out = out.replace(from, () => to);
+  }
+  return out;
+}
+
+/** Whether any perspective passage is present, i.e. whether the mode means
+ *  anything for this instruction. The preset editor says so when it does not. */
+export function instructionModeApplies(instruction: string): boolean {
+  return PERSPECTIVE_PAIRS.some(([pov, scene]) => instruction.includes(pov) || instruction.includes(scene));
+}
+
 export const DEFAULT_IMAGE_PROMPT_INSTRUCTION = `You convert story scenes into image-generation tag lists.
 
 The roleplay is paused. You are not narrating. You read the scene and output ONE line of comma-separated booru-style tags describing a single still frame of the current moment. A tag list is the only acceptable output — sentences, narration, dialogue and commentary are failures.
@@ -20,6 +93,10 @@ FORMAT
 - 40-70 tags. The FIRST ~300 CHARACTERS carry the most weight (the encoder reads the prompt in chunks and weights the tail less), and the list is also cut from the END if it runs long — so the framing, place and pose go early and essential detail never goes last.
 - No style or quality tags (anime style, masterpiece, best quality) — a style prefix is added separately.
 - Only what the message shows: do not add acts, people or undress it did not describe, and do not sanitise what it did.
+- THE FRAME IS THE CURRENT MESSAGE. Any history you are given is background that explains how the scene got here — it is not a second scene to draw. Tag the instant the scene text describes and nothing earlier.
+- Do not resurrect what the frame has moved past: a garment the scene has already removed stays removed, someone who has left the frame is not in it, a pose the scene has changed out of is gone. Earlier prose is context for the CURRENT state, never a competing source of tags.
+- The rating describes THIS frame. A tame moment after an explicit one is still tagged tame.
+- A PREVIOUS IMAGE PROMPT may be given as ONE example. It shows the SHAPE to aim for — tag style, order, level of detail — while its content belongs to an earlier moment. Never copy its scene, its clothing states, its pose or its place. Describe only what the scene text shows, and when the example disagrees with this frame, this frame wins.
 - Tag discipline: no filler tags to reach the count (if 35 tags fully describe the frame, output 35); no repeated concept in different words (smiling + grinning); no invisible qualities (mood, personality, scent, thoughts, backstory); no atmosphere that is not literally visible (tense atmosphere, romantic mood).
 - Action tags are single concrete gestures, never compound sentences. "straddling" is a tag; "pinching viewer's ear while thumb flicking viewer's penis" is prose. Break it apart: straddling, pinching viewer's ear, hand on viewer's penis. An action too specific to render meaningfully simplifies to the closest visible posture (hand on viewer's penis).
 
@@ -158,8 +235,17 @@ Return JSON only:
  *  constant that the schema itself types (that is a circular type). */
 export const IMAGE_PROMPT_CHARACTER_LIMIT = 1200;
 
+/** How many messages of history the image prompt writer sees by default. 0 turns
+ *  the block off. Plain numbers so `ImageGenerationSettingsSchema` can default to
+ *  them without referencing a constant the schema itself types (the same reason
+ *  `IMAGE_PROMPT_CHARACTER_LIMIT` lives here). */
+export const IMAGE_HISTORY_MESSAGES = 6;
+export const IMAGE_HISTORY_MESSAGES_MAX = 12;
+
 export const DEFAULT_IMAGE_GENERATION_SETTINGS: ImageGenerationSettings = {
   instruction: DEFAULT_IMAGE_PROMPT_INSTRUCTION,
+  // POV is what every shipped preset has always been; switching is the user's move.
+  instructionMode: "pov",
   positivePrefix: "anime style",
   negativePrefix:
     "lowres, worst quality, low quality, normal quality, blurry, out of focus, jpeg artifacts, " +
@@ -172,5 +258,7 @@ export const DEFAULT_IMAGE_GENERATION_SETTINGS: ImageGenerationSettings = {
     "realistic, 3d, cgi",
   promptCharacterLimit: IMAGE_PROMPT_CHARACTER_LIMIT,
   includeState: true,
-  includeCast: true
+  includeCast: true,
+  historyMessages: IMAGE_HISTORY_MESSAGES,
+  includePreviousAnswer: false
 };

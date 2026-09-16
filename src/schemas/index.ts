@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DEFAULT_IMAGE_PROMPT_INSTRUCTION, IMAGE_PROMPT_CHARACTER_LIMIT } from "../engine/imageDefaults";
+import { DEFAULT_IMAGE_PROMPT_INSTRUCTION, IMAGE_HISTORY_MESSAGES, IMAGE_HISTORY_MESSAGES_MAX, IMAGE_PROMPT_CHARACTER_LIMIT } from "../engine/imageDefaults";
 
 export const ClothingItemSchema = z.object({
   slot: z.string(),
@@ -373,15 +373,33 @@ export type CharacterFormat = z.infer<typeof CharacterFormatSchema>;
 // complete one; the field on the preset/snapshot is `.optional()` with no
 // default, so every existing preset and playthrough keeps parsing and read
 // sites fall back to DEFAULT_IMAGE_GENERATION_SETTINGS explicitly.
+/** Which perspective the image instruction writes from. `pov` is the POV
+ *  document the shipped presets have always carried; `scene` swaps the
+ *  perspective rules for their third-person counterparts and (at call time)
+ *  drops the player from the context. Kept as a field on the block rather than
+ *  as extra preset entries, so the instruction text stays one source of truth
+ *  (see `applyInstructionMode`). */
+export const ImageInstructionModeSchema = z.enum(["pov", "scene"]);
+export type ImageInstructionMode = z.infer<typeof ImageInstructionModeSchema>;
+
 export const ImageGenerationSettingsSchema = z.object({
   instruction: z.string().default(DEFAULT_IMAGE_PROMPT_INSTRUCTION),
+  instructionMode: ImageInstructionModeSchema.default("pov"),
   positivePrefix: z.string().default(""),
   negativePrefix: z.string().default(""),
   // Sourced from the shipped limit so a partial block can never default to a stale
   // number while the presets and the fallback say something else.
   promptCharacterLimit: z.number().int().min(0).default(IMAGE_PROMPT_CHARACTER_LIMIT),
   includeState: z.boolean().default(true),
-  includeCast: z.boolean().default(true)
+  includeCast: z.boolean().default(true),
+  // Same convention as the two flags above: the READ-TIME default is the shipped
+  // value, so a snapshot written before these fields existed behaves like a preset
+  // that ships them. A playthrough therefore gains history context on its next
+  // image with no other change — intended, and documented.
+  historyMessages: z.number().int().min(0).max(IMAGE_HISTORY_MESSAGES_MAX).default(IMAGE_HISTORY_MESSAGES),
+  /** Give the prompt writer ONE earlier answer as a SHAPE reference. OFF by
+   *  default: an in-context example anchors a tag model, so it is opt-in. */
+  includePreviousAnswer: z.boolean().default(false)
 });
 export type ImageGenerationSettings = z.infer<typeof ImageGenerationSettingsSchema>;
 

@@ -8,9 +8,9 @@ import { ProviderManager } from "../src/server/providerManager";
 import { MockProvider } from "../src/server/provider";
 import { loadAppSettings, saveAppSettings } from "../src/server/appSettingsStore";
 import { seedRegistry } from "../src/server/providerRegistry";
-import { DEFAULT_IMAGE_GENERATION_SETTINGS, DEFAULT_IMAGE_PROMPT_INSTRUCTION } from "../src/engine/imageDefaults";
+import { DEFAULT_IMAGE_GENERATION_SETTINGS, DEFAULT_IMAGE_PROMPT_INSTRUCTION, PERSPECTIVE_PAIRS, applyInstructionMode, instructionModeApplies } from "../src/engine/imageDefaults";
 import { FORGE_COUPLE_SEPARATOR } from "../src/server/imageProvider/a1111Provider";
-import { ImageApiStyleSchema, PromptPresetSchema, ProviderConnectionSchema } from "../src/schemas";
+import { ImageApiStyleSchema, ImageGenerationSettingsSchema, PromptPresetSchema, ProviderConnectionSchema } from "../src/schemas";
 
 const tempDirs: string[] = [];
 
@@ -288,6 +288,20 @@ describe("image generation: shipped preset configs", () => {
     expect(preset("default").imageGeneration?.instruction).toBe(DEFAULT_IMAGE_PROMPT_INSTRUCTION);
   });
 
+  it("swaps both read-only presets' perspective rules without touching their own parts", () => {
+    for (const id of ["default", "default-nsfw"]) {
+      const shipped = preset(id).imageGeneration!.instruction as string;
+      const scene = applyInstructionMode(shipped, "scene");
+      expect(scene, id).toContain("NO CAMERA — THE PLAYER IS NOT IN THIS FRAME");
+      expect(scene, id).not.toContain("THE PLAYER (POV scenes)");
+      // And back: the swap is its own inverse on the shipped documents too.
+      expect(applyInstructionMode(scene, "pov"), id).toBe(shipped);
+    }
+    // The NSFW-only block is not perspective text, so it survives the swap.
+    const nsfwScene = applyInstructionMode(preset("default-nsfw").imageGeneration!.instruction as string, "scene");
+    expect(nsfwScene).toContain("EXPLICIT SCENES");
+  });
+
   it("ships the reviewed prefixes, character limit and flags on both read-only presets", () => {
     for (const id of ["default", "default-nsfw"]) {
       const image = preset(id).imageGeneration!;
@@ -295,6 +309,10 @@ describe("image generation: shipped preset configs", () => {
       expect(image.promptCharacterLimit).toBe(1200);
       expect(image.includeState).toBe(true);
       expect(image.includeCast).toBe(true);
+      // POV is what these documents ARE, so the shipped mode matches the text.
+      expect(image.instructionMode).toBe("pov");
+      expect(image.historyMessages).toBe(6);
+      expect(image.includePreviousAnswer).toBe(false);
     }
     expect(preset("default").imageGeneration?.negativePrefix).toBe(DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix);
     expect(preset("default-nsfw").imageGeneration?.negativePrefix).toBe(
@@ -526,13 +544,69 @@ describe("image generation: shipped preset configs", () => {
   });
 });
 
+describe("image prompt: the instruction mode", () => {
+  const pov = DEFAULT_IMAGE_PROMPT_INSTRUCTION;
+
+  it("defaults a partial image block to POV mode, 6 history messages and no reference", () => {
+    const parsed = ImageGenerationSettingsSchema.parse({ instruction: "x" });
+    expect(parsed.instructionMode).toBe("pov");
+    expect(parsed.historyMessages).toBe(6);
+    expect(parsed.includePreviousAnswer).toBe(false);
+  });
+
+  it("rejects an unknown mode and an out-of-range history count", () => {
+    expect(ImageGenerationSettingsSchema.safeParse({ instructionMode: "third" }).success).toBe(false);
+    expect(ImageGenerationSettingsSchema.safeParse({ historyMessages: 13 }).success).toBe(false);
+    expect(ImageGenerationSettingsSchema.safeParse({ historyMessages: -1 }).success).toBe(false);
+  });
+
+  it("swaps the perspective passages both ways", () => {
+    const scene = applyInstructionMode(pov, "scene");
+    expect(scene).toContain("NO CAMERA — THE PLAYER IS NOT IN THIS FRAME");
+    expect(scene).toContain("CAMERA AND FRAMING");
+    expect(scene).not.toContain("THE PLAYER IS NOT A CHARACTER");
+    expect(scene).not.toContain("THE PLAYER (POV scenes)");
+    // Symmetrical: switching back restores the shipped document byte for byte.
+    expect(applyInstructionMode(scene, "pov")).toBe(pov);
+    // Idempotent: applying the mode the text is already in changes nothing.
+    expect(applyInstructionMode(scene, "scene")).toBe(scene);
+    expect(applyInstructionMode(pov, "pov")).toBe(pov);
+  });
+
+  it("leaves a hand-written instruction alone, and says the mode does not apply", () => {
+    const custom = "Write one line of tags, nothing else.";
+    expect(applyInstructionMode(custom, "scene")).toBe(custom);
+    expect(instructionModeApplies(custom)).toBe(false);
+    expect(instructionModeApplies(pov)).toBe(true);
+  });
+
+  it("keeps every pov passage a verbatim substring of the shipped instruction", () => {
+    // The swap searches for these literally: if the shipped wording moves, this
+    // fails here rather than silently disabling the mode.
+    for (const [povSide] of PERSPECTIVE_PAIRS) {
+      expect(pov, povSide.slice(0, 40)).toContain(povSide);
+    }
+  });
+
+  it("keeps every scene passage out of the shipped instruction", () => {
+    for (const [, sceneSide] of PERSPECTIVE_PAIRS) {
+      expect(pov, sceneSide.slice(0, 40)).not.toContain(sceneSide);
+    }
+  });
+});
+
 const IMAGE_BLOCK = {
   instruction: "A test instruction.",
+  // Non-default on purpose: create/read/update/snapshot all deep-equal this block,
+  // so these three only pass if they survive every hop.
+  instructionMode: "scene",
   positivePrefix: "test prefix",
   negativePrefix: "test negative",
   promptCharacterLimit: 111,
   includeState: false,
-  includeCast: true
+  includeCast: true,
+  historyMessages: 3,
+  includePreviousAnswer: true
 };
 
 /** The preset routes resolve `data/` from the process cwd, so this block swaps
