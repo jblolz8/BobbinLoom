@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { DEFAULT_CHARACTER_FORMAT } from "../../../engine/characterFormat";
 import { DEFAULT_IMAGE_GENERATION_SETTINGS, applyInstructionMode, instructionModeApplies } from "../../../engine/imageDefaults";
 import type { CharacterFormat, CharacterFormatSection, ImageGenerationSettings } from "../../../schemas";
+import { Badge, Button, Checkbox, Icon, SimpleSelect, SwitchRow, Tabs, TextArea, TextInput } from "../base";
 import {
   createPreset,
   deletePreset,
@@ -546,12 +547,23 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
     <>
       <section className="prompt-config">
         <div className="preset-bar">
-          <label>Preset: <select value={activePresetId} onChange={(e) => void switchPreset(e.target.value)} disabled={presetSaving}>{presets.map((p) => <option key={p.id} value={p.id}>{p.name} {p.readonly ? "(read-only)" : ""}</option>)}</select></label>
+          <div className="preset-bar-field">
+            <span className="field-label-text">Preset</span>
+            <SimpleSelect
+              value={activePresetId}
+              onChange={(id) => void switchPreset(id)}
+              options={presets.map((p) => ({ value: p.id, label: p.readonly ? `${p.name} (read-only)` : p.name }))}
+              disabled={presetSaving}
+              size="sm"
+              fullWidth
+              aria-label="Prompt preset"
+            />
+          </div>
           <div className="preset-actions">
-            <button onClick={() => void savePreset()} disabled={activePresetReadonly || !presetDirty || presetSaving}>Save</button>
-            <button onClick={() => void savePresetAs()} disabled={presetSaving}>Save as New…</button>
-            <button onClick={() => void renamePreset()} disabled={activePresetReadonly || presetSaving}>Rename</button>
-            <button className="danger" onClick={() => void removePreset()} disabled={activePresetReadonly || presetSaving}>Delete</button>
+            <Button size="sm" variant="primary" onClick={() => void savePreset()} disabled={activePresetReadonly || !presetDirty || presetSaving}>Save</Button>
+            <Button size="sm" variant="secondary" onClick={() => void savePresetAs()} disabled={presetSaving}>Save as New…</Button>
+            <Button size="sm" variant="secondary" onClick={() => void renamePreset()} disabled={activePresetReadonly || presetSaving}>Rename</Button>
+            <Button size="sm" variant="danger" onClick={() => void removePreset()} disabled={activePresetReadonly || presetSaving}>Delete</Button>
           </div>
         </div>
         {playthroughId ? (
@@ -565,21 +577,22 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
         )}
         {activePresetReadonly ? <p className="module-hint">Read-only. Use "Save as New…" to create an editable copy.</p> : null}
 
-        <div className="preset-context-tabs">
-          {CONTEXT_TABS.map((tab) => {
+        <Tabs
+          tabs={CONTEXT_TABS.map((tab) => ({
+            id: tab.value,
+            label: tab.label,
             // The image tab holds one settings block, not a list, so it has no count.
-            const count =
+            badge:
               tab.value === "sheet" ? presetFormat.sections.length
               : tab.value === "turn" ? presetModules.turn.length
-              : null;
-            return (
-              <button key={tab.value} className={`editor-tab${activeContextTab === tab.value ? " active" : ""}`} onClick={() => setActiveContextTab(tab.value)}>
-                {tab.label}
-                {count === null ? null : <span className="tab-badge">{count}</span>}
-              </button>
-            );
-          })}
-        </div>
+              : undefined
+          }))}
+          activeTab={activeContextTab}
+          onChange={setActiveContextTab}
+          variant="underline"
+          size="sm"
+          ariaLabel="Prompt configuration sections"
+        />
 
         {activeContextTab === "sheet" ? (
           <div className="format-editor">
@@ -625,7 +638,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                 </button>
               </div>
             ) : null}
-            <div className="settings-form">
+            <div className="preset-form">
               <label>
                 Instruction Mode
                 <select
@@ -775,7 +788,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
         <div className="modal-backdrop">
           <section className="modal module-edit-modal">
             <header className="modal-header"><h2>Edit Module</h2><button onClick={() => setEditingModule(null)}>Close</button></header>
-            <div className="settings-form">
+            <div className="preset-form">
               <label>Name <input value={editModuleForm.name} onChange={(e) => setEditModuleForm((f) => ({ ...f, name: e.target.value }))} /></label>
               <label>Description <textarea rows={2} value={editModuleForm.description} onChange={(e) => setEditModuleForm((f) => ({ ...f, description: e.target.value }))} /></label>
               <label>Content <textarea rows={10} value={editModuleForm.content} onChange={(e) => setEditModuleForm((f) => ({ ...f, content: e.target.value }))} /></label>
