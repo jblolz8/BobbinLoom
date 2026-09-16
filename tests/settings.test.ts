@@ -699,4 +699,117 @@ describe("image generation: preset routes and the playthrough snapshot", () => {
     expect(resolved.instruction).toBe(DEFAULT_IMAGE_PROMPT_INSTRUCTION);
     expect(resolved.promptCharacterLimit).toBe(1200);
   });
+
+  it("refreshes ONLY the image prompt block, leaving modules and format alone", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/playthroughs",
+      payload: { name: "Refreshable", blank: true, presetId: "user-with-image" }
+    });
+    const id = created.json().id as string;
+
+    // Read the preset rather than assuming the shared fixture's state: sibling
+    // tests in this describe edit it too, and only one of them restores it.
+    const originalPreset = (await app.inject({ method: "GET", url: "/api/prompt-presets/user-with-image" })).json().imageGeneration;
+    const before = (await app.inject({
+      method: "PUT",
+      url: `/api/playthroughs/${id}/prompt-settings`,
+      payload: { presetId: "user-with-image" }
+    })).json();
+    expect(before.imageGeneration).toEqual(originalPreset);
+
+    // The preset's instruction moves on (this is what editing a preset does) and
+    // the playthrough keeps running the block it was created with — the whole
+    // reason the refresh action exists.
+    const edited = await app.inject({
+      method: "PUT",
+      url: "/api/prompt-presets/user-with-image",
+      payload: { imageGeneration: { ...originalPreset, instruction: "REWRITTEN INSTRUCTION" } }
+    });
+    expect(edited.statusCode).toBe(200);
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/playthroughs/${id}/prompt-settings/refresh-image-prompt`
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().imageGeneration.instruction).toBe("REWRITTEN INSTRUCTION");
+    // Surgical: the rest of the prompt settings are untouched. Re-selecting the
+    // preset instead would have rewritten these too.
+    expect(res.json().modules).toEqual(before.modules);
+    expect(res.json().characterFormat).toEqual(before.characterFormat);
+    expect(res.json().presetName).toBe(before.presetName);
+    // …and it is on disk, not merely echoed.
+    const stored = JSON.parse(readFileSync(join(playthroughsDir, `${id}.json`), "utf8"));
+    expect(stored.promptSettings.imageGeneration.instruction).toBe("REWRITTEN INSTRUCTION");
+    expect(stored.promptSettings.modules).toEqual(before.modules);
+
+    // Restore the shared fixture for the tests after this one.
+    await app.inject({
+      method: "PUT",
+      url: "/api/prompt-presets/user-with-image",
+      payload: { imageGeneration: originalPreset }
+    });
+  });
+
+  it("leaves the snapshot cleared when the preset ships no block", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/playthroughs",
+      // `user-plain` is the fixture with no block: `user-no-image` gets one
+      // written to it by a sibling test earlier in this describe.
+      payload: { name: "Blockless", blank: true, presetId: "user-plain" }
+    });
+    const id = created.json().id as string;
+    const seeded = await app.inject({
+      method: "PUT",
+      url: `/api/playthroughs/${id}/prompt-settings`,
+      payload: { presetId: "user-plain" }
+    });
+    expect(seeded.json().imageGeneration).toBeUndefined();
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/playthroughs/${id}/prompt-settings/refresh-image-prompt`
+    });
+    expect(res.statusCode).toBe(200);
+    // Undefined, not a copy of nothing: the read sites then fall back to
+    // DEFAULT_IMAGE_GENERATION_SETTINGS, which is the current shipped text.
+    expect(res.json().imageGeneration).toBeUndefined();
+  });
+
+  it("404s a refresh whose preset is gone, and names it", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/prompt-presets",
+      payload: { name: "Doomed", cloneFromId: "user-with-image" }
+    });
+    const presetId = created.json().id as string;
+    const pt = await app.inject({
+      method: "POST",
+      url: "/api/playthroughs",
+      payload: { name: "Orphan", blank: true, presetId }
+    });
+    const id = pt.json().id as string;
+    await app.inject({ method: "PUT", url: `/api/playthroughs/${id}/prompt-settings`, payload: { presetId } });
+    await app.inject({ method: "DELETE", url: `/api/prompt-presets/${presetId}` });
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/playthroughs/${id}/prompt-settings/refresh-image-prompt`
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error).toContain("Doomed");
+  });
+
+  it("404s a refresh for an unknown playthrough", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/playthroughs/nope/prompt-settings/refresh-image-prompt"
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error).toBe("Playthrough not found");
+  });
 });
+
+

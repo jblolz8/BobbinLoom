@@ -3,7 +3,7 @@ import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../../../../engine/imageDefau
 import type { ImageApiStyle } from "../../../../schemas";
 import { CLIP_CHUNK_TOKENS, chunkWarning, estimatePromptChunks } from "../../../utils/imagePromptEstimate";
 import { Button, Icon, TextArea } from "../../base";
-import { formatDuration } from "./ChatPanel";
+import { formatDuration } from "../../../engine/displayFormat";
 
 /**
  * The review step between the text model writing an image prompt and the image

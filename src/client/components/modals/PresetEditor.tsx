@@ -9,6 +9,7 @@ import {
   getPreset,
   listPresets,
   setDefaultPresetId,
+  refreshImagePromptBlock,
   updatePlaythroughPromptSettings,
   updatePreset,
   type PlaythroughPromptSettings,
@@ -17,6 +18,32 @@ import {
   type PresetModule,
   type PresetSummary
 } from "../../api";
+
+/**
+ * Whether a playthrough is still running an image prompt block that differs from
+ * its preset's current one. Defaults are filled in before comparing, because a
+ * preset may legitimately omit any field (the read sites default them) and a raw
+ * object comparison would then report a difference that does not exist.
+ */
+function imageBlockDiffers(
+  snapshot: ImageGenerationSettings | undefined,
+  preset: ImageGenerationSettings | undefined
+): boolean {
+  const fields = (block?: ImageGenerationSettings) => {
+    const merged = { ...DEFAULT_IMAGE_GENERATION_SETTINGS, ...(block ?? {}) };
+    return [
+      merged.instruction,
+      merged.positivePrefix,
+      merged.negativePrefix,
+      merged.promptCharacterLimit,
+      merged.includeCast,
+      merged.includeState
+    ];
+  };
+  const a = fields(snapshot);
+  const b = fields(preset);
+  return a.some((value, index) => value !== b[index]);
+}
 
 function cloneFormat(format?: CharacterFormat): CharacterFormat {
   if (!format || format.sections.length === 0) return JSON.parse(JSON.stringify(DEFAULT_CHARACTER_FORMAT)) as CharacterFormat;
@@ -164,6 +191,8 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
   const [presetImage, setPresetImage] = useState<ImageGenerationSettings>(() => cloneImage(undefined));
   const [presetDirty, setPresetDirty] = useState(false);
   const [presetSaving, setPresetSaving] = useState(false);
+  /** The surgical image-block refresh is in flight. */
+  const [refreshingBlock, setRefreshingBlock] = useState(false);
   const [editingModule, setEditingModule] = useState<PresetModule | null>(null);
   const [editModuleForm, setEditModuleForm] = useState<{ name: string; description: string; content: string }>({ name: "", description: "", content: "" });
   const [activeContextTab, setActiveContextTab] = useState<EditorTab>("turn");
@@ -275,6 +304,23 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
       }
     }
     resetPresetState();
+  }
+
+  /** Pull just the image prompt block from the preset, leaving the turn modules
+   *  and the sheet format this playthrough runs exactly as they are. */
+  async function refreshImageBlock() {
+    if (!playthroughId || refreshingBlock) return;
+    setRefreshingBlock(true);
+    setStatus(null);
+    try {
+      const updated = await refreshImagePromptBlock(playthroughId);
+      onPlaythroughPromptSettings(updated);
+      setStatus("Image prompt block refreshed from the preset.");
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRefreshingBlock(false);
+    }
   }
 
   async function switchPreset(presetId: string) {
@@ -509,6 +555,21 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
             <p className="module-hint">
               {`The image prompt the text model writes for a message, before it is handed to the image provider. The model must answer with JSON only — {"prompt": "…"} — with one line of comma-separated booru-style tags, and the positive prefix below is prepended to it. The negative prefix is prepended only when the model volunteers a negative prompt. The composed prompt is then clamped to the character limit, which cuts from the end. Keep style and quality keywords out of the instruction: the positive prefix is where art direction lives, so a preset can be restyled by editing one line.`}
             </p>
+            {playthroughId && imageBlockDiffers(playthroughPromptSettings?.imageGeneration, presetImage) ? (
+              <div className="image-block-refresh">
+                <span className="image-block-refresh-text">
+                  {`This playthrough is still using the image prompt block it was created with, and it differs from "${activePresetName}". Refreshing copies the block from that preset into this playthrough — the turn modules and the sheet format stay untouched.`}
+                </span>
+                <button
+                  type="button"
+                  className="add-module-btn"
+                  onClick={() => { void refreshImageBlock(); }}
+                  disabled={refreshingBlock}
+                >
+                  {refreshingBlock ? "Refreshing…" : "Refresh image prompt from preset"}
+                </button>
+              </div>
+            ) : null}
             <div className="settings-form">
               <label>
                 Instruction

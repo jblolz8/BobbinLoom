@@ -2738,6 +2738,25 @@
   gap: 0.45rem;
 }
 
+/* The stale-image-prompt marker in the preset editor's Image Generation tab: the
+   playthrough is still running the block it was created with. */
+.image-block-refresh {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0.6rem 0 0.9rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--status-warning-border, var(--border-main));
+  border-radius: 8px;
+  background: var(--status-warning-bg, var(--bg-surface-elevated));
+}
+
+.image-block-refresh-text {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
 /* The review modal's own live clock, shown only while a re-run is in flight. */
 .image-prompt-elapsed {
   align-self: center;

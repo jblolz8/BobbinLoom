@@ -295,6 +295,20 @@ export function deletePreset(id: string): Promise<void> {
   return request<void>(`/api/prompt-presets/${id}`, { method: "DELETE" });
 }
 
+/**
+ * Refresh ONLY the playthrough's image prompt block from its own preset.
+ * Surgical on purpose: re-selecting the preset would rewrite the turn modules and
+ * the sheet format as well, which is a far bigger change than "pick up the new
+ * instruction". Answers the updated prompt settings, exactly like the full preset
+ * switch, so the caller updates the playthrough the same way.
+ */
+export function refreshImagePromptBlock(playthroughId: string): Promise<PlaythroughPromptSettings> {
+  return request<PlaythroughPromptSettings>(
+    `/api/playthroughs/${playthroughId}/prompt-settings/refresh-image-prompt`,
+    { method: "POST" }
+  );
+}
+
 export function updatePlaythroughPromptSettings(
   playthroughId: string,
   presetId: string

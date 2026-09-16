@@ -300,6 +300,44 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
     return playthrough.promptSettings;
   });
 
+  /**
+   * Refresh the image prompt block alone, from the preset this playthrough was
+   * created with.
+   *
+   * The snapshot is deliberate: a playthrough keeps the settings it was applied
+   * with, so an edited instruction reaches no existing playthrough until its
+   * preset is re-selected. Re-selecting is not a substitute here — it rewrites
+   * the turn modules and the sheet format too, which is a far bigger change than
+   * "pick up the new instruction". This route touches `imageGeneration` and
+   * nothing else.
+   *
+   * A preset that ships no block CLEARS the snapshot rather than copying nothing:
+   * the read sites then fall back to DEFAULT_IMAGE_GENERATION_SETTINGS, which is
+   * the current shipped text.
+   */
+  app.post("/api/playthroughs/:id/prompt-settings/refresh-image-prompt", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const playthrough = getPlaythroughRecord(dataDir, params.id);
+    if (!playthrough) return reply.code(404).send({ error: "Playthrough not found" });
+
+    const current = playthrough.promptSettings;
+    if (!current) return reply.code(400).send({ error: "This playthrough has no prompt settings to refresh." });
+
+    const preset = loadPresets().find((p) => p.id === current.presetId);
+    if (!preset) {
+      return reply.code(404).send({
+        error: `The preset "${current.presetName}" this playthrough was created with no longer exists, so there is nothing to refresh from.`
+      });
+    }
+
+    playthrough.promptSettings = {
+      ...current,
+      imageGeneration: preset.imageGeneration ? JSON.parse(JSON.stringify(preset.imageGeneration)) : undefined
+    };
+    updatePlaythroughRecord(dataDir, playthrough);
+    return playthrough.promptSettings;
+  });
+
   app.post("/api/playthroughs/:id/quest-action", async (request, reply) => {
     const params = z.object({ id: z.string() }).parse(request.params);
     const body = QuestActionBody.parse(request.body);

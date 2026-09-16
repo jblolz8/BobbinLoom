@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useElapsed } from "../../../hooks/useElapsed";
+import { formatDuration, imageCaption } from "../../../engine/displayFormat";
 import type { ChatMessage, Playthrough } from "../../../../schemas";
 import { buildImageUrl, type ImageGenerationProgress, type TokenUsage } from "../../../api";
 import type { FailedResponseNotice, ImagePromptRequest } from "../../../hooks/usePlaythrough";
@@ -93,23 +94,8 @@ function prettyJson(raw: string | null): string {
 /** One reference on a message — the same shape the server stores. */
 type MessageImage = NonNullable<ChatMessage["images"]>[number];
 
-/** The caption under a generated image. This is the ONE source for it: the
- *  thumbnail's figcaption and the full-screen viewer both render this string,
- *  so the two can never disagree about what was rendered. */
-function imageCaption(image: MessageImage): string {
-  // Both providers' halves, labelled, once the text side is known. A ref from
-  // before `promptDurationMs` existed keeps the exact caption it had: an
-  // unlabelled render time.
-  const render = image.durationMs ? (image.promptDurationMs ? `render ${formatDuration(image.durationMs)}` : formatDuration(image.durationMs)) : "";
-  return [
-    image.model,
-    image.promptDurationMs ? `prompt ${formatDuration(image.promptDurationMs)}` : "",
-    render,
-    image.seed ? `seed ${image.seed}` : ""
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
+/** The caption itself lives in `engine/displayFormat` — it is pure, it is shared
+ *  with the full-screen viewer, and it is unit-tested there. */
 
 function formatMessageTime(iso?: string): string {
   if (!iso) return "";
@@ -146,18 +132,6 @@ function formatMessageFullDate(iso?: string): string {
   } catch {
     return "";
   }
-}
-
-/** Every duration in the panel, in one voice: `4.2s` under a minute, `1m 23s`
- *  above it (a local render is minutes, and `110.0s` is not a number anyone
- *  reads at a glance). Used by the turn badge, the image caption and the live
- *  phase counters. */
-export function formatDuration(ms?: number | null): string {
-  if (ms === undefined || ms === null) return "";
-  if (ms < 100) return "<0.1s";
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  const totalSeconds = Math.round(ms / 1000);
-  return `${Math.floor(totalSeconds / 60)}m ${String(totalSeconds % 60).padStart(2, "0")}s`;
 }
 
 function DebugBox(props: {

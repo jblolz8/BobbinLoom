@@ -958,9 +958,11 @@
 .message-image figcaption {
   font-size: 0.7rem;
   color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* Wraps instead of ellipsizing: the caption carries the model, BOTH provider
+     times and the seed, which does not fit one line at 320-420px of width — and
+     the ellipsis was hiding the seed entirely (measured: 495px of text in a 311px
+     box on a phone, 420px on desktop). */
+  overflow-wrap: anywhere;
   cursor: default;
 }
 
@@ -3064,6 +3066,12 @@
 
   .mobile-hidden {
     display: none !important;
+  }
+
+  /* Message actions are revealed by :hover on desktop. A phone has no hover, so
+     the row would be invisible until tapped blind — show it outright. */
+  .message-actions {
+    opacity: 1;
   }
 
   .mobile-tab-bar {
