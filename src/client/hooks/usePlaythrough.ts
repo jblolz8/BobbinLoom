@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChatMessage, ImageApiStyle, Playthrough } from "../../schemas";
+import type { ChatMessage, ImageApiStyle, ImageInstructionMode, Playthrough } from "../../schemas";
 import {
   deleteMessageImage,
   editMessage,
@@ -84,6 +84,13 @@ export type ImagePromptRequest = {
   /** The text provider's measured time for THIS draft — shown live in the modal
    *  and handed back on the generate request so the ref can report it. */
   promptDurationMs?: number;
+  /** The model's own answer for THIS draft. Echoed back on the reviewed path,
+   *  where the generate request makes no text call of its own. */
+  writerPrompt?: string;
+  writerNegative?: string;
+  /** What the writer was given for THIS draft (history window + perspective),
+   *  straight from the dry run's own report. */
+  context?: { historyMessages: number; instructionMode: ImageInstructionMode };
   /** Advisory notes from the prompt-writing call, straight from the dry run —
    *  a suspected refusal used verbatim, or JSON with no usable key. Shown in
    *  the modal above the editable prompt; never blocking. */
@@ -514,7 +521,10 @@ export function usePlaythrough() {
           negativePrompt: preview.negativePrompt,
           warnings: preview.warnings,
           apiStyle: connection?.apiStyle,
-          promptDurationMs: preview.promptDurationMs
+          promptDurationMs: preview.promptDurationMs,
+          writerPrompt: preview.writerPrompt,
+          writerNegative: preview.writerNegative,
+          context: preview.context
         });
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") {
@@ -542,6 +552,15 @@ export function usePlaythrough() {
         // the modal already showed back so the stored ref can report it.
         promptDurationMs: overrides && imagePromptRequest?.message.id === message.id
           ? imagePromptRequest.promptDurationMs
+          : undefined,
+        // The writer's own answer, echoed for the same reason as the measured time:
+        // this request makes no text call, so it can only come from the dry run that
+        // wrote it — and without it the ref cannot serve as a later reference.
+        writerPrompt: overrides && imagePromptRequest?.message.id === message.id
+          ? imagePromptRequest.writerPrompt
+          : undefined,
+        writerNegative: overrides && imagePromptRequest?.message.id === message.id
+          ? imagePromptRequest.writerNegative
           : undefined,
         signal: controller.signal
       });
@@ -664,7 +683,7 @@ export function usePlaythrough() {
     try {
       const preview = await previewImagePrompt(playthrough.id, request.message.id, undefined, controller.signal);
       if (controller.signal.aborted) return;
-      setImagePromptRequest({ ...request, prompt: preview.prompt, negativePrompt: preview.negativePrompt, warnings: preview.warnings, promptDurationMs: preview.promptDurationMs });
+      setImagePromptRequest({ ...request, prompt: preview.prompt, negativePrompt: preview.negativePrompt, warnings: preview.warnings, promptDurationMs: preview.promptDurationMs, writerPrompt: preview.writerPrompt, writerNegative: preview.writerNegative, context: preview.context });
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
         setCancelledNotice("Image prompt cancelled.");

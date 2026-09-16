@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_CHARACTER_FORMAT } from "../../../engine/characterFormat";
-import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../../../engine/imageDefaults";
+import { DEFAULT_IMAGE_GENERATION_SETTINGS, applyInstructionMode, instructionModeApplies } from "../../../engine/imageDefaults";
 import type { CharacterFormat, CharacterFormatSection, ImageGenerationSettings } from "../../../schemas";
 import {
   createPreset,
@@ -31,13 +31,19 @@ function imageBlockDiffers(
 ): boolean {
   const fields = (block?: ImageGenerationSettings) => {
     const merged = { ...DEFAULT_IMAGE_GENERATION_SETTINGS, ...(block ?? {}) };
+    // Hand-written on purpose, and it has to grow with the schema: a field missing
+    // here makes the "this playthrough is still on its own block" marker lie about
+    // a difference it cannot see.
     return [
       merged.instruction,
+      merged.instructionMode,
       merged.positivePrefix,
       merged.negativePrefix,
       merged.promptCharacterLimit,
       merged.includeCast,
-      merged.includeState
+      merged.includeState,
+      merged.historyMessages,
+      merged.includePreviousAnswer
     ];
   };
   const a = fields(snapshot);
@@ -553,7 +559,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
         ) : activeContextTab === "image" ? (
           <div className="format-editor">
             <p className="module-hint">
-              {`The image prompt the text model writes for a message, before it is handed to the image provider. The model must answer with JSON only — {"prompt": "…"} — with one line of comma-separated booru-style tags, and the positive prefix below is prepended to it. The negative prefix is prepended only when the model volunteers a negative prompt. The composed prompt is then clamped to the character limit, which cuts from the end. Keep style and quality keywords out of the instruction: the positive prefix is where art direction lives, so a preset can be restyled by editing one line.`}
+              {`The image prompt the text model writes for a message, before it is handed to the image provider. The model must answer with JSON only — {"prompt": "…", "negative": "…"} — with one line of comma-separated booru-style tags, and the positive prefix below is prepended to it. The negative prefix is joined onto the model's own negative tags. The composed prompt is then clamped to the character limit, which cuts from the end. Keep style and quality keywords out of the instruction: the positive prefix is where art direction lives, so a preset can be restyled by editing one line.`}
             </p>
             {playthroughId && imageBlockDiffers(playthroughPromptSettings?.imageGeneration, presetImage) ? (
               <div className="image-block-refresh">
@@ -571,6 +577,33 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
               </div>
             ) : null}
             <div className="settings-form">
+              <label>
+                Instruction Mode
+                <select
+                  value={presetImage.instructionMode}
+                  onChange={(e) => {
+                    const mode = e.target.value === "scene" ? "scene" : "pov";
+                    // Rewrite the field as well as the flag: the textarea must never
+                    // show a document other than the one that will be sent. The
+                    // server applies the same swap at call time, idempotently, so
+                    // the two can never disagree.
+                    updateImage({ instructionMode: mode, instruction: applyInstructionMode(presetImage.instruction, mode) });
+                  }}
+                  disabled={activePresetReadonly}
+                >
+                  <option value="pov">POV — the scene is seen through the player's eyes</option>
+                  <option value="scene">Scene — third-person frame, the player is not in it</option>
+                </select>
+              </label>
+              {!instructionModeApplies(presetImage.instruction) ? (
+                <p className="module-hint">
+                  {`This instruction carries neither the POV nor the Scene perspective rules, so the mode does not change it — it is your own text.`}
+                </p>
+              ) : (
+                <p className="module-hint">
+                  {`Scene mode also drops the player from the context the writer receives, so they cannot be tagged at all. Switching rewrites the field below; switching back restores it.`}
+                </p>
+              )}
               <label>
                 Instruction
                 <textarea
@@ -629,6 +662,27 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                 disabled={activePresetReadonly}
               />
               include present characters
+            </label>
+            <label className="format-inline-toggle" title="How many messages of chat history the prompt writer sees. 0 turns the block off.">
+              <input
+                type="number"
+                min={0}
+                max={12}
+                step={1}
+                value={presetImage.historyMessages}
+                onChange={(e) => updateImage({ historyMessages: Math.min(12, Math.max(0, Math.floor(Number(e.target.value) || 0))) })}
+                disabled={activePresetReadonly}
+              />
+              previous messages of history
+            </label>
+            <label className="format-inline-toggle" title="Give the prompt writer ONE earlier answer as a shape reference. Off by default: an in-context example anchors a tag model.">
+              <input
+                type="checkbox"
+                checked={presetImage.includePreviousAnswer}
+                onChange={(e) => updateImage({ includePreviousAnswer: e.target.checked })}
+                disabled={activePresetReadonly}
+              />
+              include previous image prompt response
             </label>
             <p className="module-hint">
               A playthrough snapshots this block when its preset is applied, so editing it here does not change a playthrough already using this preset — re-select the preset for that playthrough to pick up the new text.

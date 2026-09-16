@@ -1,5 +1,5 @@
 import { request } from "./client";
-import type { MessageImage, Playthrough } from "../../schemas";
+import type { ImageInstructionMode, MessageImage, Playthrough } from "../../schemas";
 
 /** The persisted message attachment, straight from the schema (one source of
  *  truth shared with the server). */
@@ -22,6 +22,14 @@ export type ImagePromptPreview = {
    *  and the client hands it back on the generate request so the stored ref can
    *  report the text provider's half of the result. */
   promptDurationMs?: number;
+  /** The model's own answer, BEFORE the preset prefix was composed onto it. The
+   *  reviewed path runs no text call of its own, so the client echoes this back or
+   *  the ref cannot record what the writer wrote — and the next image cannot use it
+   *  as a reference. */
+  writerPrompt?: string;
+  writerNegative?: string;
+  /** What the prompt writer was actually given, for the modal's context line. */
+  context?: { historyMessages: number; instructionMode: ImageInstructionMode };
   /** Advisory notes from the prompt-writing call — a suspected refusal used
    *  verbatim, or JSON that carried neither expected key. Shown above the
    *  editable prompt in the review modal; never blocking. Absent/empty when the
@@ -40,6 +48,10 @@ export type GenerateMessageImageOptions = {
   /** The dry run's measured text-provider time, echoed back so the stored ref
    *  can show it (this request runs no text call of its own). */
   promptDurationMs?: number;
+  /** The dry run's copy of the writer's own answer, echoed back for the same
+   *  reason — this request runs no text call, so the ref would otherwise lose it. */
+  writerPrompt?: string;
+  writerNegative?: string;
   signal?: AbortSignal;
 };
 
@@ -122,6 +134,8 @@ export function generateMessageImage(
   if (opts.negativeOverride !== undefined) body.negativeOverride = opts.negativeOverride;
   if (opts.seed !== undefined) body.seed = opts.seed;
   if (opts.promptDurationMs !== undefined) body.promptDurationMs = opts.promptDurationMs;
+  if (opts.writerPrompt !== undefined) body.writerPrompt = opts.writerPrompt;
+  if (opts.writerNegative !== undefined) body.writerNegative = opts.writerNegative;
 
   return request<GenerateMessageImageResult>(
     `/api/playthroughs/${playthroughId}/messages/${messageId}/image`,

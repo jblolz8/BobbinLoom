@@ -862,6 +862,7 @@ export function ChatPanel(props: ChatPanelProps) {
           model={imageProviderModel}
           characterLimit={imageCharacterLimit}
           apiStyle={imagePromptRequest.apiStyle}
+          context={imagePromptRequest.context}
           generating={imageGeneratingId === imagePromptRequest.message.id}
           rerunning={imagePreviewMessageId === imagePromptRequest.message.id}
           onGenerate={(prompt, negativePrompt) => onImagePromptGenerate?.(prompt, negativePrompt)}

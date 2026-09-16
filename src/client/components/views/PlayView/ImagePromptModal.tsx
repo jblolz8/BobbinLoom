@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../../../../engine/imageDefaults";
-import type { ImageApiStyle } from "../../../../schemas";
+import type { ImageApiStyle, ImageInstructionMode } from "../../../../schemas";
 import { CLIP_CHUNK_TOKENS, chunkWarning, estimatePromptChunks } from "../../../utils/imagePromptEstimate";
 import { Button, Icon, TextArea } from "../../base";
 import { formatDuration } from "../../../engine/displayFormat";
@@ -39,6 +39,11 @@ export type ImagePromptModalProps = {
    *  phase. Rendered while the re-run runs, so a slow provider looks slow
    *  instead of frozen. */
   promptElapsedMs?: number | null;
+  /** What the dry run reported giving the prompt writer: how many messages of
+   *  history it actually carried, and which perspective the instruction was read
+   *  in. Diagnostic — it answers "why does this prompt look like that?" before the
+   *  render is paid for. */
+  context?: { historyMessages: number; instructionMode: ImageInstructionMode };
   /** Dialect of the connection that will render this prompt. Only `a1111`
    *  adds the CLIP chunk estimate — the other dialects have no equivalent
    *  published limit to warn about. */
@@ -59,6 +64,7 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
     generating,
     rerunning,
     promptElapsedMs = null,
+    context,
     apiStyle,
     onGenerate,
     onRerun,
@@ -189,6 +195,18 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
           />
 
           {caption ? <p className="image-prompt-caption">Image provider: {caption}</p> : null}
+          {/* What the writer was actually given. The prompt above can look wrong
+              for reasons that have nothing to do with the model — the window is
+              empty on a first message, or the scene instruction is in force — and
+              this is the one place to see that before paying for the render. */}
+          {context ? (
+            <p className="image-prompt-caption">
+              {context.historyMessages > 0
+                ? `Context: ${context.historyMessages} previous message${context.historyMessages === 1 ? "" : "s"}`
+                : "Context: this message only"}
+              {context.instructionMode === "scene" ? " · Scene instruction (third-person)" : " · POV instruction"}
+            </p>
+          ) : null}
 
           <div className="settings-actions image-prompt-actions">
             <Button
