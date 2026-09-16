@@ -650,7 +650,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                 </p>
               ) : (
                 <p className="module-hint">
-                  {`Scene mode also drops the player from the context the writer receives, so they cannot be tagged at all. Switching rewrites the field below; switching back restores it.`}
+                  {`Switching rewrites this instruction's perspective rules: Scene makes the player a person IN the frame (their own clothing and appearance, like any character), POV makes the frame the player's own eyes. The field below always holds the POV form — the mode is applied when the prompt call is made, so what the writer receives follows the dropdown.`}
                 </p>
               )}
               <label>
