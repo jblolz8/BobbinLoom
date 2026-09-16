@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_IMAGE_PROMPT_INSTRUCTION } from "../src/engine/imageDefaults";
-import type { ImageGenerationSettings } from "../src/schemas";
-import { buildImageCastBlock, buildImageStateBlock } from "../src/server/provider/imageContext";
+import type { ImageGenerationSettings, Playthrough } from "../src/schemas";
+import { IMAGE_HISTORY_HEADER, buildImageCastBlock, buildImageHistoryBlock, buildImageStateBlock } from "../src/server/provider/imageContext";
 
 /** A playthrough carrying exactly what the two builders read, plus the material
  *  they must NOT emit: the player's wardrobe and appearance, an absent
@@ -75,6 +75,22 @@ function fixture() {
 const settings = (overrides: Partial<ImageGenerationSettings> = {}): ImageGenerationSettings =>
   ({ includeState: true, includeCast: true, ...overrides } as ImageGenerationSettings);
 
+/** A bare message list for the history-block tests: roles, prose, and the two
+ *  shapes the window must skip (a hidden state-only user message, a system one). */
+function conversation(
+  entries: Array<{ role: "user" | "assistant" | "system"; content: string; hidden?: boolean }>
+): Playthrough {
+  return {
+    messages: entries.map((entry, i) => ({
+      id: `m${i}`,
+      role: entry.role,
+      content: entry.content,
+      createdAt: new Date(2026, 0, 1, 0, i).toISOString(),
+      ...(entry.hidden ? { hidden: true } : {})
+    }))
+  } as unknown as Playthrough;
+}
+
 describe("buildImageStateBlock", () => {
   const block = buildImageStateBlock(fixture());
 
@@ -97,6 +113,92 @@ describe("buildImageStateBlock", () => {
     }
     // No character sheet text either: the cast block owns that.
     expect(block).not.toContain("Jeneine");
+  });
+});
+
+describe("buildImageHistoryBlock", () => {
+  /** The target frame is the LAST message, so everything ahead of it is history. */
+  const target = (pt: Playthrough) => pt.messages[pt.messages.length - 1];
+
+  it("renders the nearest messages oldest-first, skipping hidden and system ones", () => {
+    const pt = conversation([
+      { role: "assistant", content: "first beat" },
+      { role: "user", content: "state-only narration", hidden: true },
+      { role: "user", content: "second beat" },
+      { role: "system", content: "a system note" },
+      { role: "assistant", content: "third beat" },
+      { role: "assistant", content: "the frame to render" }
+    ]);
+
+    const block = buildImageHistoryBlock(pt, target(pt), 6);
+    expect(block.text.startsWith(IMAGE_HISTORY_HEADER)).toBe(true);
+    expect(block.text).toContain("Assistant: first beat");
+    expect(block.text).toContain("User: second beat");
+    expect(block.text).toContain("Assistant: third beat");
+    // The mechanical state and the frame itself never enter the window. (The
+    // header says "NOT the frame to render", so assert on the LABELLED form.)
+    expect(block.text).not.toContain("state-only narration");
+    expect(block.text).not.toContain("a system note");
+    expect(block.text).not.toContain("Assistant: the frame to render");
+    expect(block.messageIds).toHaveLength(3);
+    // Chronological: the oldest picked message comes first.
+    expect(block.text.indexOf("first beat")).toBeLessThan(block.text.indexOf("third beat"));
+  });
+
+  it("honours the count, and gives the first message in a chat no history at all", () => {
+    const pt = conversation([
+      { role: "user", content: "a" },
+      { role: "assistant", content: "b" },
+      { role: "assistant", content: "c" },
+      { role: "assistant", content: "frame" }
+    ]);
+    expect(buildImageHistoryBlock(pt, target(pt), 2).messageIds).toHaveLength(2);
+    expect(buildImageHistoryBlock(pt, target(pt), 0).text).toBe("");
+    expect(buildImageHistoryBlock(pt, pt.messages[0], 6).text).toBe("");
+  });
+
+  it("drops whole older messages before cutting the nearest one", () => {
+    const long = (label: string) => `${label} ${"x".repeat(2500)}`;
+    const pt = conversation([
+      { role: "assistant", content: long("oldest beat") },
+      { role: "assistant", content: long("middle beat") },
+      { role: "assistant", content: long("newest beat") },
+      { role: "assistant", content: "frame" }
+    ]);
+    // 3 x 2500 = 7500 > the 6000 budget: the oldest goes WHOLE, and what is left
+    // is under the budget, so nothing is cut mid-sentence.
+    const block = buildImageHistoryBlock(pt, target(pt), 6);
+    expect(block.text).toContain("newest beat");
+    expect(block.text).toContain("middle beat");
+    expect(block.text).not.toContain("oldest beat");
+    expect(block.text).not.toContain("…[earlier text omitted]");
+  });
+
+  it("keeps the TAIL of one message bigger than the whole budget", () => {
+    const pt = conversation([
+      { role: "assistant", content: `${"y".repeat(7000)} the end of the beat` },
+      { role: "assistant", content: "frame" }
+    ]);
+    const block = buildImageHistoryBlock(pt, target(pt), 6);
+    // The end of an earlier message is the state it left the scene in — that is
+    // the part worth keeping, so the marker goes at the FRONT.
+    expect(block.text).toContain("…[earlier text omitted]");
+    expect(block.text).toContain("the end of the beat");
+  });
+});
+
+describe("buildImageCastBlock — the scene mode", () => {
+  it("drops the player entirely when the frame is not seen through their eyes", () => {
+    const block = buildImageCastBlock(fixture(), "scene");
+    expect(block).not.toContain("THE CAMERA");
+    expect(block).not.toContain("Anon");
+    // The characters stay: they are who the frame shows.
+    expect(block).toContain("Jeneine");
+  });
+
+  it("keeps the camera block by default and in pov mode", () => {
+    expect(buildImageCastBlock(fixture())).toContain("THE CAMERA");
+    expect(buildImageCastBlock(fixture(), "pov")).toContain("THE CAMERA");
   });
 });
 

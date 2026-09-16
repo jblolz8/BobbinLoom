@@ -1,4 +1,4 @@
-import type { Playthrough } from "../../schemas";
+import type { ChatMessage, ImageInstructionMode, Playthrough } from "../../schemas";
 import { isStubSection, pickSections } from "../../engine/characterSections";
 import { clampChars } from "../imageProvider/shared";
 
@@ -125,18 +125,29 @@ export function buildImageStateBlock(playthrough: Playthrough): string {
  *  The player gets NO appearance or clothing line. A POV frame needs to know who
  *  the camera is (for the count tag and for `his`/`her` attribution) and nothing
  *  else about them, and the wardrobe was the exact material that leaked into the
- *  shared group and onto the character. */
-export function buildImageCastBlock(playthrough: Playthrough): string {
+ *  shared group and onto the character.
+ *
+ *  In `scene` mode the player is not sent AT ALL: the frame is not seen through
+ *  their eyes, so naming them here is what produced the wardrobe tags in the
+ *  first place. The Scene instruction states the rule instead of this block
+ *  restating the player — the two are coupled, so a change that re-adds a camera
+ *  line has to reword that instruction's `NO CAMERA` passage too. */
+export function buildImageCastBlock(
+  playthrough: Playthrough,
+  mode: ImageInstructionMode = "pov"
+): string {
   const lines: string[] = [];
-  const player = playthrough.playerCharacter;
 
-  lines.push(
-    "THE CAMERA (the player — the scene is seen through this person; never tag their stored " +
-    "appearance or clothing, and never give them a \" | \" group):"
-  );
-  const firstSentence = player.description.trim().split(". ")[0] ?? "";
-  const cameraNote = clampChars(firstSentence || player.description.trim(), CAMERA_DESCRIPTION_CHARS);
-  lines.push(`${player.name}${cameraNote ? ` — ${cameraNote}` : ""}`);
+  if (mode !== "scene") {
+    const player = playthrough.playerCharacter;
+    lines.push(
+      "THE CAMERA (the player — the scene is seen through this person; never tag their stored " +
+      "appearance or clothing, and never give them a \" | \" group):"
+    );
+    const firstSentence = player.description.trim().split(". ")[0] ?? "";
+    const cameraNote = clampChars(firstSentence || player.description.trim(), CAMERA_DESCRIPTION_CHARS);
+    lines.push(`${player.name}${cameraNote ? ` — ${cameraNote}` : ""}`);
+  }
 
   for (const character of playthrough.characters) {
     if (character.currentLocationId !== playthrough.locationId) continue;
@@ -161,4 +172,70 @@ export function buildImageCastBlock(playthrough: Playthrough): string {
   }
 
   return lines.join("\n");
+}
+
+/** Opening line of the history block. The header names the frame explicitly: the
+ *  block sits ABOVE the scene text, so a bare "PREVIOUS MESSAGES" reads as if it
+ *  were the thing to draw. */
+export const IMAGE_HISTORY_HEADER =
+  "PREVIOUS MESSAGES (what happened BEFORE the scene text below — continuity only, NOT the frame to render):";
+
+/** Character budget for the whole history block. Deliberately small next to the
+ *  shipped instruction (~15.5K characters): extra prose is cheap to add and
+ *  expensive in attention, and the writer's job is one frame, not the plot. */
+const IMAGE_HISTORY_CHARS = 6000;
+
+export type ImageHistoryBlock = { text: string; messageIds: string[] };
+
+/** The prose messages immediately before `message`, oldest first, as one block.
+ *
+ *  Hidden (state-only) user messages and system messages are the mechanical state
+ *  the writer must not see, exactly as in the routes' `previousUserMessage`; a
+ *  chapter-opening assistant message is ordinary prose and stays, and the budget
+ *  below is what keeps a long recap from crowding the frame.
+ *
+ *  `messageIds` is what lets the caller avoid sending the same prose twice: the
+ *  nearest user message rides the `PLAYER'S LAST ACTION` block, so when the window
+ *  already carries it the caller drops that block. */
+export function buildImageHistoryBlock(
+  playthrough: Playthrough,
+  message: ChatMessage,
+  count: number
+): ImageHistoryBlock {
+  const empty: ImageHistoryBlock = { text: "", messageIds: [] };
+  if (count <= 0) return empty;
+  const index = playthrough.messages.findIndex((m) => m.id === message.id);
+  if (index <= 0) return empty;
+
+  const newestFirst: ChatMessage[] = [];
+  for (let i = index - 1; i >= 0 && newestFirst.length < count; i -= 1) {
+    const candidate = playthrough.messages[i];
+    if (candidate.role === "system" || candidate.hidden) continue;
+    if (!candidate.content.trim()) continue;
+    newestFirst.push(candidate);
+  }
+  if (!newestFirst.length) return empty;
+
+  // Whole OLD messages go first: half a sentence of an older beat is worse than
+  // not having it, and the nearest beats are the ones that carry continuity.
+  let chars = newestFirst.reduce((total, entry) => total + entry.content.length, 0);
+  while (newestFirst.length > 1 && chars > IMAGE_HISTORY_CHARS) {
+    chars -= newestFirst[newestFirst.length - 1].content.length;
+    newestFirst.pop();
+  }
+
+  const lines = [...newestFirst].reverse().map((entry) => {
+    // A single message over the whole budget keeps its TAIL: the end of an earlier
+    // message is the state it left the scene in, which is the part the writer
+    // needs. Everything else above is dropped whole, never cut mid-sentence.
+    const body = entry.content.length > IMAGE_HISTORY_CHARS
+      ? `…[earlier text omitted] ${entry.content.trim().slice(-IMAGE_HISTORY_CHARS)}`
+      : entry.content.trim();
+    return `${entry.role === "user" ? "User" : "Assistant"}: ${body}`;
+  });
+
+  return {
+    text: [IMAGE_HISTORY_HEADER, ...lines].join("\n"),
+    messageIds: newestFirst.map((entry) => entry.id)
+  };
 }
