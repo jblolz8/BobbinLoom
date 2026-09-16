@@ -3,6 +3,7 @@ import { DEFAULT_CHARACTER_FORMAT } from "../../../engine/characterFormat";
 import { DEFAULT_IMAGE_GENERATION_SETTINGS, IMAGE_HISTORY_MESSAGES_MAX, applyInstructionMode, instructionModeApplies } from "../../../engine/imageDefaults";
 import type { CharacterFormat, CharacterFormatSection, ImageGenerationSettings, ImageInstructionMode } from "../../../schemas";
 import { Badge, Button, Checkbox, Icon, SimpleSelect, SwitchRow, Tabs, TextArea, TextInput, type SimpleSelectOption } from "../base";
+import { ConfirmModal } from "../common/ConfirmModal";
 import {
   createPreset,
   deletePreset,
@@ -119,6 +120,15 @@ const INSTRUCTION_MODE_OPTIONS: Array<SimpleSelectOption<ImageInstructionMode>> 
   { value: "pov", label: "POV — the scene is seen through the player's eyes" },
   { value: "scene", label: "Scene — third-person frame, everyone in it is a character" }
 ];
+
+/** One dialog at a time. A union rather than four booleans, and one render helper
+ *  below rather than four backdrops — the repo's pattern for modal confirmations. */
+type PendingDialog =
+  | { kind: "newPresetName"; value: string }
+  | { kind: "renamePreset"; value: string }
+  | { kind: "deletePreset" }
+  | { kind: "deleteModule"; moduleId: string; name: string }
+  | { kind: "deleteSection"; index: number; name: string };
 
 type CharacterFormatRowProps = {
   section: CharacterFormatSection;
@@ -237,6 +247,10 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
   const [editModuleForm, setEditModuleForm] = useState<{ name: string; description: string; content: string }>({ name: "", description: "", content: "" });
   const [activeContextTab, setActiveContextTab] = useState<EditorTab>("turn");
   const [status, setStatus] = useState<string | null>(null);
+  /** A failure and a success used to look identical. Every catch reports through
+   *  `reportStatus(..., true)` so the line can say so. */
+  const [statusError, setStatusError] = useState(false);
+  const [dialog, setDialog] = useState<PendingDialog | null>(null);
 
   // Pointer-based drag state for reordering Character Sheet sections (works for
   // both mouse and touch). dragIndex = row being dragged; overIndex = current
@@ -247,6 +261,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const overIndexRef = useRef<number | null>(null);
 
+  function reportStatus(text: string | null, isError = false) { reportStatus(text); setStatusError(isError); }
   function resetPresetState() { setPresetDirty(false); setEditingModule(null); }
   function markDirty() { setPresetDirty(true); }
 
@@ -367,13 +382,13 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
   async function refreshImageBlock() {
     if (!playthroughId || refreshingBlock) return;
     setRefreshingBlock(true);
-    setStatus(null);
+    reportStatus(null);
     try {
       const updated = await refreshImagePromptBlock(playthroughId);
       onPlaythroughPromptSettings(updated);
-      setStatus("Image prompt block refreshed from the preset.");
+      reportStatus("Image prompt block refreshed from the preset.");
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e));
+      reportStatus(e instanceof Error ? e.message : String(e));
     } finally {
       setRefreshingBlock(false);
     }
@@ -381,7 +396,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
 
   async function switchPreset(presetId: string) {
     if (presetSaving) return;
-    setPresetSaving(true); setStatus(null);
+    setPresetSaving(true); reportStatus(null);
     try {
       const fullPreset = await getPreset(presetId);
       // The WRITE comes first. An optimistic switch left the dropdown showing a
@@ -394,37 +409,40 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
         // This playthrough now runs it, so a re-sync would only re-fetch the same
         // preset.
         syncedPresetId.current = presetId;
-        setStatus(`Switched to "${fullPreset.name}" and applied to this playthrough.`);
+        reportStatus(`Switched to "${fullPreset.name}" and applied to this playthrough.`);
       } else {
         await setDefaultPresetId(presetId);
-        setStatus(`"${fullPreset.name}" is now the default for NEW playthroughs — existing ones keep theirs.`);
+        reportStatus(`"${fullPreset.name}" is now the default for NEW playthroughs — existing ones keep theirs.`);
       }
       setActivePresetId(fullPreset.id); setActivePresetName(fullPreset.name);
       setActivePresetReadonly(fullPreset.readonly); setPresetModules(fullPreset.modules);
       setPresetFormat(cloneFormat(fullPreset.characterFormat));
       setPresetImage(cloneImage(fullPreset.imageGeneration));
       resetPresetState();
-    } catch (e) { setStatus(e instanceof Error ? e.message : String(e)); }
+    } catch (e) { reportStatus(e instanceof Error ? e.message : String(e), true); }
     finally { setPresetSaving(false); }
   }
 
   async function savePreset() {
     if (activePresetReadonly || presetSaving) return;
-    setPresetSaving(true); setStatus(null);
+    setPresetSaving(true); reportStatus(null);
     try {
       const payload: PresetUpdatePayload = { modules: presetModules, characterFormat: presetFormat, imageGeneration: presetImage };
       const updated = await updatePreset(activePresetId, payload);
       setPresetModules(updated.modules); setPresetFormat(cloneFormat(updated.characterFormat));
       setPresetImage(cloneImage(updated.imageGeneration)); resetPresetState();
-      setStatus(`"${activePresetName}" saved.`);
-    } catch (e) { setStatus(e instanceof Error ? e.message : String(e)); }
+      reportStatus(`"${activePresetName}" saved.`);
+    } catch (e) { reportStatus(e instanceof Error ? e.message : String(e), true); }
     finally { setPresetSaving(false); }
   }
 
-  async function savePresetAs() {
-    setPresetSaving(true); setStatus(null);
-    const name = window.prompt("New preset name:", `${activePresetName} (copy)`);
-    if (!name) { setPresetSaving(false); return; }
+  function savePresetAs() {
+    setDialog({ kind: "newPresetName", value: `${activePresetName} (copy)` });
+  }
+
+  async function createPresetFromName(name: string) {
+    if (!name || presetSaving) return;
+    setPresetSaving(true); reportStatus(null);
     try {
       const created = await createPreset(name);
       const payload: PresetUpdatePayload = { modules: presetModules, characterFormat: presetFormat, imageGeneration: presetImage };
@@ -434,28 +452,36 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
       setPresetFormat(cloneFormat(updated.characterFormat));
       setPresetImage(cloneImage(updated.imageGeneration));
       setPresets(await listPresets()); resetPresetState();
-      setStatus(`Saved as "${updated.name}".`);
-    } catch (e) { setStatus(e instanceof Error ? e.message : String(e)); }
-    finally { setPresetSaving(false); }
+      reportStatus(`Saved as "${updated.name}".`);
+    } catch (e) { reportStatus(e instanceof Error ? e.message : String(e), true); }
+    finally { setPresetSaving(false); setDialog(null); }
   }
 
-  async function renamePreset() {
+  function renamePreset() {
     if (activePresetReadonly || presetSaving) return;
-    const name = window.prompt("Rename preset:", activePresetName);
-    if (!name || name === activePresetName) return;
-    setPresetSaving(true); setStatus(null);
+    setDialog({ kind: "renamePreset", value: activePresetName });
+  }
+
+  async function renamePresetTo(name: string) {
+    if (!name || name === activePresetName || presetSaving) return;
+    setPresetSaving(true); reportStatus(null);
     try {
       const updated = await updatePreset(activePresetId, { name });
       setActivePresetName(updated.name); setPresets(await listPresets());
-      setStatus(`Renamed to "${updated.name}".`);
-    } catch (e) { setStatus(e instanceof Error ? e.message : String(e)); }
-    finally { setPresetSaving(false); }
+      reportStatus(`Renamed to "${updated.name}".`);
+    } catch (e) { reportStatus(e instanceof Error ? e.message : String(e), true); }
+    finally { setPresetSaving(false); setDialog(null); }
   }
 
-  async function removePreset() {
+  function removePreset() {
     if (activePresetReadonly || presetSaving) return;
-    if (!window.confirm(`Delete preset "${activePresetName}"? This cannot be undone.`)) return;
-    setPresetSaving(true); setStatus(null);
+    setDialog({ kind: "deletePreset" });
+  }
+
+  /** The dialog stays open (with its spinner) until the delete lands: a failure has to
+   *  be visible where the user pressed, not only in the status line behind it. */
+  async function deleteActivePreset() {
+    setPresetSaving(true); reportStatus(null);
     try {
       await deletePreset(activePresetId);
       const defaultPreset = await getPreset("default");
@@ -464,9 +490,9 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
       setPresetFormat(cloneFormat(defaultPreset.characterFormat));
       setPresetImage(cloneImage(defaultPreset.imageGeneration));
       setPresets(await listPresets()); resetPresetState();
-      setStatus("Preset deleted. Switched to Default.");
-    } catch (e) { setStatus(e instanceof Error ? e.message : String(e)); }
-    finally { setPresetSaving(false); }
+      reportStatus("Preset deleted. Switched to Default.");
+    } catch (e) { reportStatus(e instanceof Error ? e.message : String(e), true); }
+    finally { setPresetSaving(false); setDialog(null); }
   }
 
   function toggleModule(moduleId: string) {
@@ -504,10 +530,14 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
     markDirty();
   }
 
-  function deleteModule(moduleId: string) {
-    if (!window.confirm("Delete this module?")) return;
+  function deleteModule(moduleId: string, name: string) {
+    setDialog({ kind: "deleteModule", moduleId, name });
+  }
+
+  function applyModuleDelete(moduleId: string) {
     setPresetModules((prev) => ({ ...prev, turn: prev.turn.filter((m) => m.id !== moduleId) }));
     markDirty();
+    setDialog(null);
   }
 
   function addNewModule() {
@@ -537,9 +567,13 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
   }
 
   function removeFormatSection(index: number) {
-    if (!window.confirm("Delete this section from the format?")) return;
+    setDialog({ kind: "deleteSection", index, name: presetFormat.sections[index]?.name ?? "" });
+  }
+
+  function applySectionDelete(index: number) {
     setPresetFormat((prev) => ({ ...prev, sections: reindex(prev.sections.filter((_, i) => i !== index)) }));
     markDirty();
+    setDialog(null);
   }
 
   // ── Image generation (preset-owned prompt config) ──
@@ -555,10 +589,10 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
     if (editingPlaythroughBlock) {
       // The optimistic state above keeps the control responsive; the write is what
       // makes it real, and a failure says so rather than leaving the panel lying.
-      setStatus(null);
+      reportStatus(null);
       void patchPlaythroughImageBlock(playthroughId!, patch)
-        .then((updated) => { onPlaythroughPromptSettings(updated); setStatus("Saved to this playthrough."); })
-        .catch((e) => setStatus(e instanceof Error ? e.message : String(e)));
+        .then((updated) => { onPlaythroughPromptSettings(updated); reportStatus("Saved to this playthrough."); })
+        .catch((e) => reportStatus(e instanceof Error ? e.message : String(e), true));
       return;
     }
     markDirty();
@@ -573,6 +607,68 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
       return { ...prev, sections: reindex(sections) };
     });
     markDirty();
+  }
+
+  /** One dialog, whichever kind is pending. The two name dialogs are the SAME modal
+   *  with a TextInput inside it — ConfirmModal takes children, so no new component. */
+  function renderDialog() {
+    if (!dialog) return null;
+    if (dialog.kind === "deletePreset") {
+      return (
+        <ConfirmModal
+          title={`Delete preset "${activePresetName}"?`}
+          message="This cannot be undone. Playthroughs already using it keep their own snapshot and keep working."
+          confirmLabel="Delete"
+          danger
+          isLoading={presetSaving}
+          onConfirm={() => { void deleteActivePreset(); }}
+          onCancel={() => setDialog(null)}
+        />
+      );
+    }
+    if (dialog.kind === "deleteModule") {
+      return (
+        <ConfirmModal
+          title={`Delete module "${dialog.name}"?`}
+          message="It is dropped from this preset when you press Save — nothing is written until then."
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => applyModuleDelete(dialog.moduleId)}
+          onCancel={() => setDialog(null)}
+        />
+      );
+    }
+    if (dialog.kind === "deleteSection") {
+      return (
+        <ConfirmModal
+          title={`Remove section "${dialog.name}" from the format?`}
+          message="Existing sheets are untouched: the format decides what generated sheets must contain, and nothing is written until you save."
+          confirmLabel="Remove"
+          danger
+          onConfirm={() => applySectionDelete(dialog.index)}
+          onCancel={() => setDialog(null)}
+        />
+      );
+    }
+    const isNew = dialog.kind === "newPresetName";
+    return (
+      <ConfirmModal
+        title={isNew ? "Save as new preset" : "Rename preset"}
+        message={isNew ? "A copy of the current work under its own name. Switch to it to make it a playthrough's preset." : undefined}
+        confirmLabel={isNew ? "Create" : "Rename"}
+        confirmDisabled={!dialog.value.trim() || (!isNew && dialog.value.trim() === activePresetName)}
+        isLoading={presetSaving}
+        onConfirm={() => { void (isNew ? createPresetFromName(dialog.value.trim()) : renamePresetTo(dialog.value.trim())); }}
+        onCancel={() => setDialog(null)}
+      >
+        <TextInput
+          label="Name"
+          value={dialog.value}
+          onChange={(e) => setDialog({ ...dialog, value: e.target.value })}
+          autoFocus
+        />
+      </ConfirmModal>
+    );
   }
 
   return (
@@ -821,7 +917,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                           <Button variant="ghost" size="xs" iconOnly title="Edit" aria-label={`Edit ${mod.name}`} onClick={() => openEditModule(mod)}>
                             <Icon name="Pencil" size={14} />
                           </Button>
-                          <Button variant="ghost" size="xs" iconOnly className="danger-icon" title="Delete" aria-label={`Delete ${mod.name}`} onClick={() => deleteModule(mod.id)}>
+                          <Button variant="ghost" size="xs" iconOnly className="danger-icon" title="Delete" aria-label={`Delete ${mod.name}`} onClick={() => deleteModule(mod.id, mod.name)}>
                             <Icon name="X" size={14} />
                           </Button>
                         </div>
@@ -842,7 +938,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
             </Button>
           </>
         )}
-        {status ? <pre className="settings-status">{status}</pre> : null}
+        {status ? <pre className={`settings-status${statusError ? " status-error" : ""}`}>{status}</pre> : null}
       </section>
 
       {editingModule ? (
@@ -880,6 +976,8 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
           </section>
         </div>
       ) : null}
+
+      {dialog ? renderDialog() : null}
     </>
   );
 }
