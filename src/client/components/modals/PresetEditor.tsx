@@ -155,42 +155,67 @@ function CharacterFormatRow({ section, index, readonly, isDragging, isDropTarget
     >
       <div className="format-section-head">
         <span className="format-index">{index + 1}.</span>
-        <input
-          className="format-section-name"
+        <TextInput
+          containerClassName="format-name-field"
+          size="sm"
           value={section.name}
           onChange={(e) => onChange(index, { name: e.target.value })}
           placeholder="Section name, e.g. Occupation"
           disabled={readonly}
+          aria-label={`Section ${index + 1} name`}
         />
-        <label className="format-inline-toggle" title="Render as [Name]: value on one line">
-          <input type="checkbox" checked={!!section.inline} onChange={(e) => onChange(index, { inline: e.target.checked })} disabled={readonly} />
-          inline
-        </label>
+        <Checkbox
+          containerClassName="format-inline-toggle"
+          label="inline"
+          title="Render as [Name]: value on one line"
+          checked={!!section.inline}
+          onChange={(e) => onChange(index, { inline: e.target.checked })}
+          disabled={readonly}
+        />
         <div className="module-row-actions">
+          {/* Kept hand-rolled: a base component cannot express the pointer-drag
+              affordance (native HTML5 drag has no touch support, which is why this
+              uses pointer events at all). Tokenized, not flattened. */}
           <span
             className="format-drag-handle"
             title="Drag to reorder"
             onPointerDown={(e) => onGripPointerDown(e, index)}
-          >⋮⋮</span>
-          <button className="icon-btn danger-icon" title="Delete section" onClick={() => onRemove(index)} disabled={readonly}>✕</button>
+          >
+            <Icon name="GripVertical" size={14} />
+          </span>
+          <Button
+            variant="ghost"
+            size="xs"
+            iconOnly
+            className="danger-icon"
+            title="Delete section"
+            aria-label={`Delete section ${index + 1}`}
+            onClick={() => onRemove(index)}
+            disabled={readonly}
+          >
+            <Icon name="X" size={14} />
+          </Button>
         </div>
       </div>
-      <textarea
-        className="format-instruction"
+      <TextArea
+        size="sm"
         rows={2}
         value={section.instruction}
         onChange={(e) => onChange(index, { instruction: e.target.value })}
         placeholder="Instruction for the model: what this section should contain."
         disabled={readonly}
+        aria-label={`Section ${index + 1} instruction`}
       />
-      <textarea
-        className="format-examples"
+      <TextArea
+        size="sm"
         rows={4}
+        className="format-examples-input"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => onChange(index, { examples: textToExamples(draft) })}
         placeholder="Optional example content — shown to the model. One line per bullet; write freely, no formatting needed."
         disabled={readonly}
+        aria-label={`Section ${index + 1} examples`}
       />
     </div>
   );
@@ -618,7 +643,16 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                 onRemove={removeFormatSection}
               />
             ))}
-            <button className="add-module-btn" onClick={addFormatSection} disabled={activePresetReadonly}>+ Add Section</button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="add-module-btn"
+              leftIcon={<Icon name="Plus" size={14} />}
+              onClick={addFormatSection}
+              disabled={activePresetReadonly}
+            >
+              Add Section
+            </Button>
             {dragGhost ? (
               <div className="format-drag-ghost" style={{ left: dragGhost.x, top: dragGhost.y }}>
                 <span className="format-drag-ghost-name">{dragGhost.name}</span>
@@ -635,14 +669,17 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                 <span className="image-block-refresh-text">
                   {`This playthrough's image block differs from "${activePresetName}" — either it was created before the preset was edited, or it was changed here. Refreshing copies the preset's block into this playthrough; the turn modules and the sheet format stay untouched.`}
                 </span>
-                <button
-                  type="button"
+                <Button
+                  variant="outline"
+                  size="sm"
                   className="add-module-btn"
+                  leftIcon={<Icon name="RefreshCw" size={14} />}
+                  isLoading={refreshingBlock}
                   onClick={() => { void refreshImageBlock(); }}
                   disabled={refreshingBlock}
                 >
-                  {refreshingBlock ? "Refreshing…" : "Refresh image prompt from preset"}
-                </button>
+                  Refresh image prompt from preset
+                </Button>
               </div>
             ) : null}
             <div className="preset-form">
@@ -767,12 +804,26 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                     const idx = sortedModules.indexOf(mod);
                     return (
                       <div key={mod.id} className="module-row">
-                        <label className="module-toggle" title={mod.description}><input type="checkbox" checked={mod.enabled} onChange={() => toggleModule(mod.id)} /><span className="module-name">{mod.name}</span></label>
+                        <Checkbox
+                          containerClassName="module-toggle"
+                          label={<span className="module-name">{mod.name}</span>}
+                          title={mod.description}
+                          checked={mod.enabled}
+                          onChange={() => toggleModule(mod.id)}
+                        />
                         <div className="module-row-actions">
-                          <button className="icon-btn" title="Move up" onClick={() => moveModule(mod.id, -1)} disabled={idx === 0}>↑</button>
-                          <button className="icon-btn" title="Move down" onClick={() => moveModule(mod.id, 1)} disabled={idx === sortedModules.length - 1}>↓</button>
-                          <button className="icon-btn" title="Edit" onClick={() => openEditModule(mod)}>✎</button>
-                          <button className="icon-btn danger-icon" title="Delete" onClick={() => deleteModule(mod.id)}>✕</button>
+                          <Button variant="ghost" size="xs" iconOnly title="Move up" aria-label={`Move ${mod.name} up`} onClick={() => moveModule(mod.id, -1)} disabled={idx === 0}>
+                            <Icon name="ArrowUp" size={14} />
+                          </Button>
+                          <Button variant="ghost" size="xs" iconOnly title="Move down" aria-label={`Move ${mod.name} down`} onClick={() => moveModule(mod.id, 1)} disabled={idx === sortedModules.length - 1}>
+                            <Icon name="ArrowDown" size={14} />
+                          </Button>
+                          <Button variant="ghost" size="xs" iconOnly title="Edit" aria-label={`Edit ${mod.name}`} onClick={() => openEditModule(mod)}>
+                            <Icon name="Pencil" size={14} />
+                          </Button>
+                          <Button variant="ghost" size="xs" iconOnly className="danger-icon" title="Delete" aria-label={`Delete ${mod.name}`} onClick={() => deleteModule(mod.id)}>
+                            <Icon name="X" size={14} />
+                          </Button>
                         </div>
                       </div>
                     );
@@ -780,7 +831,15 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                 </div>
               );
             })()}
-            <button className="add-module-btn" onClick={addNewModule}>+ Add Module</button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="add-module-btn"
+              leftIcon={<Icon name="Plus" size={14} />}
+              onClick={addNewModule}
+            >
+              Add Module
+            </Button>
           </>
         )}
         {status ? <pre className="settings-status">{status}</pre> : null}
@@ -789,12 +848,34 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
       {editingModule ? (
         <div className="modal-backdrop">
           <section className="modal module-edit-modal">
-            <header className="modal-header"><h2>Edit Module</h2><button onClick={() => setEditingModule(null)}>Close</button></header>
+            <header className="modal-header">
+              <h2>Edit Module</h2>
+              <Button variant="ghost" size="sm" onClick={() => setEditingModule(null)}>Close</Button>
+            </header>
             <div className="preset-form">
-              <label>Name <input value={editModuleForm.name} onChange={(e) => setEditModuleForm((f) => ({ ...f, name: e.target.value }))} /></label>
-              <label>Description <textarea rows={2} value={editModuleForm.description} onChange={(e) => setEditModuleForm((f) => ({ ...f, description: e.target.value }))} /></label>
-              <label>Content <textarea rows={10} value={editModuleForm.content} onChange={(e) => setEditModuleForm((f) => ({ ...f, content: e.target.value }))} /></label>
-              <div className="settings-actions"><button onClick={saveEditModule}>Save</button><button onClick={() => setEditingModule(null)}>Cancel</button></div>
+              <TextInput
+                label="Name"
+                value={editModuleForm.name}
+                onChange={(e) => setEditModuleForm((f) => ({ ...f, name: e.target.value }))}
+              />
+              <TextArea
+                label="Description"
+                rows={2}
+                value={editModuleForm.description}
+                onChange={(e) => setEditModuleForm((f) => ({ ...f, description: e.target.value }))}
+                helperText="Shown as the row's tooltip in the Turn tab."
+              />
+              <TextArea
+                label="Content"
+                rows={10}
+                value={editModuleForm.content}
+                onChange={(e) => setEditModuleForm((f) => ({ ...f, content: e.target.value }))}
+                helperText="Sent to the model verbatim when this module is enabled."
+              />
+              <div className="settings-actions">
+                <Button variant="primary" onClick={saveEditModule}>Save</Button>
+                <Button variant="secondary" onClick={() => setEditingModule(null)}>Cancel</Button>
+              </div>
             </div>
           </section>
         </div>

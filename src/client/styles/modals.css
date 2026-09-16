@@ -392,6 +392,12 @@
   gap: 0.25rem;
 }
 
+/* The section-name TextInput takes the row's slack where the raw input used to. */
+.format-name-field {
+  flex: 1;
+  min-width: 0;
+}
+
 .preset-actions {
   display: flex;
   gap: 0.4rem;
@@ -443,7 +449,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.35rem 0;
-  border-bottom: 1px solid #1c2230;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .module-row:last-child {
@@ -457,10 +463,6 @@
   cursor: pointer;
   flex: 1;
   min-width: 0;
-}
-
-.module-toggle input[type="checkbox"] {
-  flex-shrink: 0;
 }
 
 .module-name {
@@ -477,52 +479,18 @@
   flex-shrink: 0;
 }
 
-.icon-btn {
-  border: 1px solid #2a303d;
-  background: #1a1f2b;
-  color: #9aa4b2;
-  border-radius: 6px;
-  padding: 0.15rem 0.4rem;
-  font-size: 0.75rem;
-  cursor: pointer;
-  line-height: 1;
-}
-
-.icon-btn:hover:not(:disabled) {
-  background: #252b38;
-  color: #eceff4;
-}
-
-.icon-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-@media (max-width: 480px) {
-  .module-row-actions .icon-btn {
-    padding: 0.25rem 0.45rem;
-    min-height: 32px;
-    min-width: 32px;
-    font-size: 0.82rem;
-  }
-}
-
 .danger-icon {
-  color: #d08080;
+  color: var(--status-danger);
 }
 
 .danger-icon:hover:not(:disabled) {
-  color: #f0a0a0;
-  border-color: #6a3a3a;
+  color: var(--status-danger);
+  border-color: var(--status-danger);
 }
 
 .add-module-btn {
   align-self: flex-start;
   border-style: dashed;
-  border-color: #3a4150;
-  background: none;
-  color: #8a93a5;
-  padding: 0.45rem 0.8rem;
 }
 
 .add-module-btn:hover {
@@ -538,7 +506,7 @@
 }
 
 .format-section-row {
-  border: 1px solid #2a303d;
+  border: 1px solid var(--border-main);
   border-radius: 10px;
   padding: 0.6rem;
   display: flex;
@@ -554,30 +522,15 @@
 
 .format-index {
   font-size: 0.8rem;
-  color: #8a93a5;
+  color: var(--text-muted);
   min-width: 1.4rem;
   text-align: right;
 }
 
-.format-section-name {
-  flex: 1;
-  min-width: 0;
-  font-weight: 600;
-  border: 1px solid #3a4150;
-  background: #0f131b;
-  color: #eceff4;
-  border-radius: 8px;
-  padding: 0.35rem 0.5rem;
-}
-
 .format-inline-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
   font-size: 0.78rem;
-  color: #8a93a5;
+  color: var(--text-secondary);
   white-space: nowrap;
-  cursor: pointer;
 }
 
 @media (max-width: 540px) {
@@ -593,33 +546,26 @@
   }
 }
 
-.format-instruction,
-.format-examples {
-  border: 1px solid #2a303d;
-  background: #0f131b;
-  color: #eceff4;
-  border-radius: 8px;
-  padding: 0.4rem 0.5rem;
-  font-size: 0.8rem;
-  resize: vertical;
-}
-
-.format-examples {
-  color: #a8c9a0;
+/* The examples field keeps its distinct green — it is example CONTENT, not an
+   instruction — but as a token, so a custom theme can move it. The border/background/
+   padding the legacy pair hardcoded are gone: the base TextArea owns those now. */
+.format-examples-input {
+  color: var(--status-success);
 }
 
 .format-drag-handle {
   cursor: grab;
-  color: #8a93a5;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-secondary);
   padding: 0.1rem 0.3rem;
   user-select: none;
   border-radius: 4px;
-  letter-spacing: 0.05em;
   touch-action: none; /* let pointer drags (mouse + touch) drive reorder, not page scroll */
 }
 .format-drag-handle:hover {
-  color: #d7dce4;
-  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  background: var(--bg-surface-hover);
 }
 .format-drag-handle:active {
   cursor: grabbing;
