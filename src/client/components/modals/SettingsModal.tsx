@@ -46,6 +46,9 @@ export type SettingsModalProps = {
    *  provider. Optional (default on) so the modal can be rendered without a
    *  chat-settings source. */
   imagePromptPreview?: boolean;
+  /** Generate an image for every completed turn, without pressing the button. */
+  autoImageAfterTurn?: boolean;
+  setAutoImageAfterTurn?: (auto: boolean) => void;
   setImagePromptPreview?: (show: boolean) => void;
 };
 
@@ -69,6 +72,8 @@ export function SettingsModal(props: SettingsModalProps) {
     showModelName = true,
     setShowModelName,
     imagePromptPreview = true,
+    autoImageAfterTurn = false,
+    setAutoImageAfterTurn,
     setImagePromptPreview,
   } = props;
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("provider");
@@ -133,61 +138,78 @@ export function SettingsModal(props: SettingsModalProps) {
               Customize which components and visual indicators appear in the Chat panel.
             </p>
 
-            <SwitchRow
-              icon="MessageSquare"
-              title="Show Choices"
-              description="Display suggested action choice buttons below turn responses"
-              checked={choicesEnabled}
-              onChange={(e) => setChoicesEnabled(e.target.checked)}
-            />
+            <h4 className="chat-settings-section-title">Chat Message</h4>
+            <div className="chat-settings-section">
+              <SwitchRow
+                icon="MessageSquare"
+                title="Show Choices"
+                description="Display suggested action choice buttons below turn responses"
+                checked={choicesEnabled}
+                onChange={(e) => setChoicesEnabled(e.target.checked)}
+              />
 
-            <SwitchRow
-              icon="Image"
-              title="Review Image Prompt Before Generating"
-              description="Show the prompt the text model wrote before it is sent to the image provider. Off sends it straight through."
-              checked={imagePromptPreview}
-              onChange={(e) => setImagePromptPreview?.(e.target.checked)}
-            />
+              <SwitchRow
+                icon="Clock"
+                title="Display Response Generation Time"
+                description="Show generation duration badge on AI responses"
+                checked={showGenerationTime}
+                onChange={(e) => setShowGenerationTime?.(e.target.checked)}
+              />
 
-            <SwitchRow
-              icon="BarChart2"
-              title="Show Context Usage"
-              description="Display the Context Meter token and memory usage indicator"
-              checked={showContextUsage}
-              onChange={(e) => setShowContextUsage(e.target.checked)}
-            />
+              <SwitchRow
+                iconNode={<Icon name="Calendar" size={15} className="ds-icon-accent" />}
+                title="Display Chat Message Timestamps"
+                description="Show timestamps on chat messages"
+                checked={showMessageTimestamps}
+                onChange={(e) => setShowMessageTimestamps?.(e.target.checked)}
+              />
 
-            <SwitchRow
-              icon="Wrench"
-              title="Show Debug Accordion"
-              description="Display the expandable raw prompt, response, and patch inspector"
-              checked={showDebug}
-              onChange={(e) => setShowDebug(e.target.checked)}
-            />
+              <SwitchRow
+                iconNode={<Icon name="Bot" size={15} className="ds-icon-accent" />}
+                title="Display AI Model Name"
+                description="Show model name and provider icon badge on AI responses"
+                checked={showModelName}
+                onChange={(e) => setShowModelName?.(e.target.checked)}
+              />
 
-            <SwitchRow
-              icon="Clock"
-              title="Display Response Generation Time"
-              description="Show generation duration badge on AI responses"
-              checked={showGenerationTime}
-              onChange={(e) => setShowGenerationTime?.(e.target.checked)}
-            />
+              <SwitchRow
+                icon="BarChart2"
+                title="Show Context Usage"
+                description="Display the Context Meter token and memory usage indicator"
+                checked={showContextUsage}
+                onChange={(e) => setShowContextUsage(e.target.checked)}
+              />
+            </div>
 
-            <SwitchRow
-              iconNode={<Icon name="Calendar" size={15} className="ds-icon-accent" />}
-              title="Display Chat Message Timestamps"
-              description="Show timestamps on chat messages"
-              checked={showMessageTimestamps}
-              onChange={(e) => setShowMessageTimestamps?.(e.target.checked)}
-            />
+            <h4 className="chat-settings-section-title">Image Generation</h4>
+            <div className="chat-settings-section">
+              <SwitchRow
+                icon="Image"
+                title="Review Image Prompt Before Generating"
+                description="Show the prompt the text model wrote before it is sent to the image provider. Off sends it straight through."
+                checked={imagePromptPreview}
+                onChange={(e) => setImagePromptPreview?.(e.target.checked)}
+              />
 
-            <SwitchRow
-              iconNode={<Icon name="Bot" size={15} className="ds-icon-accent" />}
-              title="Display AI Model Name"
-              description="Show model name and provider icon badge on AI responses"
-              checked={showModelName}
-              onChange={(e) => setShowModelName?.(e.target.checked)}
-            />
+              <SwitchRow
+                icon="Sparkles"
+                title="Generate Image right after AI Response"
+                description="Write and render an image for every completed turn. Costs one text call plus a render per turn — a local render takes minutes. With review on, the prompt modal still appears first."
+                checked={autoImageAfterTurn}
+                onChange={(e) => setAutoImageAfterTurn?.(e.target.checked)}
+              />
+            </div>
+
+            <h4 className="chat-settings-section-title">Debugging</h4>
+            <div className="chat-settings-section">
+              <SwitchRow
+                icon="Wrench"
+                title="Show Debug Accordion"
+                description="Display the expandable raw prompt, response, and patch inspector"
+                checked={showDebug}
+                onChange={(e) => setShowDebug(e.target.checked)}
+              />
+            </div>
           </div>
         )}
         </div>

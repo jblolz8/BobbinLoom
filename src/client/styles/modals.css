@@ -2716,6 +2716,36 @@
   color: var(--text-secondary);
 }
 
+/* Sub-headers inside the Chat tab: the rows are grouped by what they affect —
+   the message itself, image generation, diagnostics — instead of one
+   undifferentiated column of switches. */
+.chat-settings-section-title {
+  margin: 0.8rem 0 0.1rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.chat-settings-section-title:first-of-type {
+  margin-top: 0.5rem;
+}
+
+.chat-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+/* The review modal's own live clock, shown only while a re-run is in flight. */
+.image-prompt-elapsed {
+  align-self: center;
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
 /* ── Diff Modal (CCv2 → BL conversion) ── */
 
 .diff-modal {

@@ -377,6 +377,43 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
     expect(negativeOnly.json().negativeUsed).toBe("only the negative");
   });
 
+  it("times the text provider on the request that actually made the call", async () => {
+    const h = harness();
+    // No overrides: THIS request runs the prompt side call, so the duration it
+    // reports and stores is measured here.
+    const res = await post(h.app, imageUrl(h), {});
+    expect(res.statusCode).toBe(200);
+    expect(typeof res.json().promptDurationMs).toBe("number");
+    expect(res.json().promptDurationMs).toBeGreaterThanOrEqual(0);
+    expect(res.json().image.promptDurationMs).toBe(res.json().promptDurationMs);
+  });
+
+  it("stores the text time the client echoes back on the reviewed path", async () => {
+    const h = harness();
+    // Both overrides ⇒ no text call in this request (the dry run made it), so
+    // the number can ONLY come from the client. Without the echo the ref would
+    // lose the text provider's half of the result exactly when review is ON.
+    const res = await post(h.app, imageUrl(h), {
+      promptOverride: "p",
+      negativeOverride: "n",
+      promptDurationMs: 3210
+    });
+    expect(res.statusCode).toBe(200);
+    expect(h.calls).toHaveLength(1);
+    expect(res.json().promptDurationMs).toBe(3210);
+    expect(res.json().image.promptDurationMs).toBe(3210);
+  });
+
+  it("omits the text time when nobody measured it, and still stores a valid ref", async () => {
+    const h = harness();
+    const res = await post(h.app, imageUrl(h), { promptOverride: "p", negativeOverride: "n" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().promptDurationMs).toBeUndefined();
+    // Absent, not null/zero — the shape every ref written before the field
+    // existed has, which is what keeps old records parsing.
+    expect("promptDurationMs" in res.json().image).toBe(false);
+  });
+
   it("clamps a long override to the preset limit, and to the dialect cap when the limit is off", async () => {
     const h = harness({ imageApiStyle: "openai" });
     const res = await post(h.app, imageUrl(h), {
@@ -640,12 +677,16 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image/prompt", () => {
     const h = harness();
     const res = await post(h.app, imageUrl(h, h.assistantMessageId, "/prompt"), {});
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({
+    // `toMatchObject`, not `toEqual`: the dry run also reports how long the text
+    // provider took, which is a real measurement rather than a fixed value.
+    expect(res.json()).toMatchObject({
       prompt: "anime style a woman in the rain",
       negativePrompt: `${DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix}, blurry`,
       // Advisory notes travel with the dry run; none for a clean answer.
       warnings: []
     });
+    // The text provider's half of the result, measured by this call.
+    expect(typeof res.json().promptDurationMs).toBe("number");
     // Text call only — no image call, no bytes, no state change.
     expect(h.calls).toHaveLength(1);
     expect(h.calls[0].url).toBe("http://localhost:1234/v1/chat/completions");

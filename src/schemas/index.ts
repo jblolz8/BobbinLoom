@@ -436,6 +436,15 @@ export const MessageImageSchema = z.object({
   model: z.string().default(""),
   seed: z.number().optional(),
   durationMs: z.number().int().nonnegative().optional(),
+  /** How long the PROMPT side call took, when one ran — the text provider's
+   *  half of the result, kept separate from `durationMs` (the render).
+   *  With "Review Image Prompt Before Generating" ON, the prompt is written by
+   *  the dry-run call and the generate request makes no text call at all, so
+   *  the client echoes the measured value back through the generate body for
+   *  the ref to carry it. OPTIONAL, and deliberately no `.default()`: a default
+   *  makes the field REQUIRED in `z.infer` and breaks every ref literal in the
+   *  repo (the zod `.default()` trap). */
+  promptDurationMs: z.number().int().nonnegative().optional(),
   /** Diagnostic provenance: the EXACT JSON request body that was sent to the
    *  image provider for this image. Body only — never headers, never the API
    *  key. Present so a stored image can answer "what did we actually send?".

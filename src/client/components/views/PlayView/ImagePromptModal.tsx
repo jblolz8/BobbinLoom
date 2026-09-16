@@ -3,6 +3,7 @@ import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../../../../engine/imageDefau
 import type { ImageApiStyle } from "../../../../schemas";
 import { CLIP_CHUNK_TOKENS, chunkWarning, estimatePromptChunks } from "../../../utils/imagePromptEstimate";
 import { Button, Icon, TextArea } from "../../base";
+import { formatDuration } from "./ChatPanel";
 
 /**
  * The review step between the text model writing an image prompt and the image
@@ -34,6 +35,10 @@ export type ImagePromptModalProps = {
   generating: boolean;
   /** The "Re-run text call" request is in flight. */
   rerunning: boolean;
+  /** Live elapsed time of the in-flight text call, from the hook that owns the
+   *  phase. Rendered while the re-run runs, so a slow provider looks slow
+   *  instead of frozen. */
+  promptElapsedMs?: number | null;
   /** Dialect of the connection that will render this prompt. Only `a1111`
    *  adds the CLIP chunk estimate — the other dialects have no equivalent
    *  published limit to warn about. */
@@ -53,6 +58,7 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
     characterLimit = DEFAULT_IMAGE_GENERATION_SETTINGS.promptCharacterLimit,
     generating,
     rerunning,
+    promptElapsedMs = null,
     apiStyle,
     onGenerate,
     onRerun,
@@ -215,6 +221,9 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
             >
               Re-run text call
             </Button>
+            {rerunning && promptElapsedMs !== null ? (
+              <span className="image-prompt-elapsed">{formatDuration(promptElapsedMs)}</span>
+            ) : null}
           </div>
         </div>
       </section>

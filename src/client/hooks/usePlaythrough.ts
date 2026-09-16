@@ -59,6 +59,10 @@ type ChatSettings = {
   showMessageTimestamps: boolean;
   showModelName: boolean;
   imagePromptPreview: boolean;
+  /** Generate an image for every completed turn without pressing the button.
+   *  OFF by default: it costs a text call plus a render per turn, and a local
+   *  render runs for minutes. */
+  autoImageAfterTurn: boolean;
 };
 
 /** Overrides the preview modal posts back. When BOTH prompt fields are present
@@ -77,6 +81,9 @@ export type ImagePromptRequest = {
   message: ChatMessage;
   prompt: string;
   negativePrompt: string;
+  /** The text provider's measured time for THIS draft — shown live in the modal
+   *  and handed back on the generate request so the ref can report it. */
+  promptDurationMs?: number;
   /** Advisory notes from the prompt-writing call, straight from the dry run —
    *  a suspected refusal used verbatim, or JSON with no usable key. Shown in
    *  the modal above the editable prompt; never blocking. */
@@ -132,6 +139,7 @@ function loadChatSettings(): ChatSettings {
         showMessageTimestamps: typeof parsed.showMessageTimestamps === "boolean" ? parsed.showMessageTimestamps : true,
         showModelName: typeof parsed.showModelName === "boolean" ? parsed.showModelName : true,
         imagePromptPreview: typeof parsed.imagePromptPreview === "boolean" ? parsed.imagePromptPreview : true,
+        autoImageAfterTurn: typeof parsed.autoImageAfterTurn === "boolean" ? parsed.autoImageAfterTurn : false,
       };
     }
   } catch {}
@@ -143,6 +151,7 @@ function loadChatSettings(): ChatSettings {
     showMessageTimestamps: true,
     showModelName: true,
     imagePromptPreview: true,
+    autoImageAfterTurn: false,
   };
 }
 
@@ -207,10 +216,19 @@ export function usePlaythrough() {
   const showMessageTimestamps = chatSettings.showMessageTimestamps;
   const showModelName = chatSettings.showModelName;
   const imagePromptPreview = chatSettings.imagePromptPreview;
+  const autoImageAfterTurn = chatSettings.autoImageAfterTurn;
 
   const setChoicesEnabled = (val: boolean) => {
     setChatSettingsState((prev) => {
       const next = { ...prev, choicesEnabled: val };
+      saveChatSettings(next);
+      return next;
+    });
+  };
+
+  const setAutoImageAfterTurn = (val: boolean) => {
+    setChatSettingsState((prev) => {
+      const next = { ...prev, autoImageAfterTurn: val };
       saveChatSettings(next);
       return next;
     });
@@ -281,6 +299,12 @@ export function usePlaythrough() {
   // is in flight drives the ChatPanel footer, and one abort ref covers both
   // requests, so "Cancel" always kills whichever call is running.
   const [imageGeneratingId, setImageGeneratingId] = useState<string | null>(null);
+  /** When each in-flight phase began, for the live counters. Set ONCE per phase
+   *  and never derived from the ids beside them: `imageProgress` lands every
+   *  700ms (and the prompt/response state flips more often than that), so a
+   *  derived clock would restart on every update. */
+  const [imagePromptStartedAt, setImagePromptStartedAt] = useState<number | null>(null);
+  const [imageGeneratingStartedAt, setImageGeneratingStartedAt] = useState<number | null>(null);
   const [imagePreviewMessageId, setImagePreviewMessageId] = useState<string | null>(null);
   const [imageDeletingId, setImageDeletingId] = useState<string | null>(null);
   const [imagePromptRequest, setImagePromptRequest] = useState<ImagePromptRequest | null>(null);
@@ -392,6 +416,8 @@ export function usePlaythrough() {
       setRawInput(response.rawInput ?? null);
       setRawOutput(response.rawOutput ?? null);
       if (!isContinue) void persistDraft(playthrough.id, "");
+      // Continuations included; chapter openings are excluded in the guard.
+      void maybeAutoGenerateImage(response.state.messages[response.state.messages.length - 1]);
     } catch (e) {
       const durationMs = Math.round(performance.now() - startTime);
       if (!isContinue) setInput(currentInput);
@@ -477,6 +503,7 @@ export function usePlaythrough() {
 
     if (reviewing) {
       setImagePreviewMessageId(message.id);
+      setImagePromptStartedAt(performance.now());
       try {
         const preview = await previewImagePrompt(playthrough.id, message.id, overrides?.imageProviderId, controller.signal);
         // A preview the user cancelled must not pop the modal open again.
@@ -486,7 +513,8 @@ export function usePlaythrough() {
           prompt: preview.prompt,
           negativePrompt: preview.negativePrompt,
           warnings: preview.warnings,
-          apiStyle: connection?.apiStyle
+          apiStyle: connection?.apiStyle,
+          promptDurationMs: preview.promptDurationMs
         });
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") {
@@ -496,16 +524,27 @@ export function usePlaythrough() {
         }
       } finally {
         setImagePreviewMessageId(null);
+        setImagePromptStartedAt(null);
         imageAbortRef.current = null;
       }
       return;
     }
 
     setImageGeneratingId(message.id);
+    setImageGeneratingStartedAt(performance.now());
     // Live progress is a1111-only: this is a no-op for every other dialect.
     startImageProgress(connection, controller.signal);
     try {
-      const res = await generateMessageImage(playthrough.id, message.id, { ...overrides, signal: controller.signal });
+      const res = await generateMessageImage(playthrough.id, message.id, {
+        ...overrides,
+        // The reviewed path: the prompt was written by the dry run, so THIS
+        // request makes no text call and can measure nothing — hand the number
+        // the modal already showed back so the stored ref can report it.
+        promptDurationMs: overrides && imagePromptRequest?.message.id === message.id
+          ? imagePromptRequest.promptDurationMs
+          : undefined,
+        signal: controller.signal
+      });
       // The response carries the authoritative record — set it exactly like
       // `handleSend` does with `response.state`.
       setPlaythrough(res.playthrough);
@@ -520,8 +559,33 @@ export function usePlaythrough() {
       // Settled — success, failure or cancel — so the readout goes with it.
       stopImageProgress();
       setImageGeneratingId(null);
+      setImageGeneratingStartedAt(null);
       imageAbortRef.current = null;
     }
+  }
+
+  /**
+   * Opt-in auto-image: fire the image flow for the answer a turn just produced.
+   *
+   * Silent by construction — this runs after EVERY turn, so anything it cannot
+   * do it must skip without a word. A missing image connection is the common
+   * case (the user has no image provider configured), and reporting it would
+   * spray a failure notice after every single turn; the manual Generate button
+   * still reports it, which is where the user is actually looking.
+   *
+   * Review ON still wins: this is the ordinary entry point, so the review modal
+   * appears for confirmation exactly as it does for a manual press.
+   */
+  async function maybeAutoGenerateImage(message: ChatMessage | undefined) {
+    if (!autoImageAfterTurn || !playthrough) return;
+    if (!message || message.role !== "assistant" || message.chapterOpening) return;
+    // Already has an image (a re-run, a branch copy) — one answer, one image.
+    if (message.images?.length) return;
+    // Never fight a manual press or another phase.
+    if (imageGeneratingId || imagePreviewMessageId || imageDeletingId || imageAbortRef.current) return;
+    // Resolved before anything is touched: no state, no notice, no marker.
+    if (!(await resolveImageConnection())) return;
+    await handleGenerateImage(message);
   }
 
   function handleCancelImage() {
@@ -593,13 +657,14 @@ export function usePlaythrough() {
     const controller = new AbortController();
     imageAbortRef.current = controller;
     setImagePreviewMessageId(request.message.id);
+    setImagePromptStartedAt(performance.now());
     setCancelledNotice(null);
     setFailedNotice(null);
     const startTime = performance.now();
     try {
       const preview = await previewImagePrompt(playthrough.id, request.message.id, undefined, controller.signal);
       if (controller.signal.aborted) return;
-      setImagePromptRequest({ ...request, prompt: preview.prompt, negativePrompt: preview.negativePrompt, warnings: preview.warnings });
+      setImagePromptRequest({ ...request, prompt: preview.prompt, negativePrompt: preview.negativePrompt, warnings: preview.warnings, promptDurationMs: preview.promptDurationMs });
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
         setCancelledNotice("Image prompt cancelled.");
@@ -608,6 +673,7 @@ export function usePlaythrough() {
       }
     } finally {
       setImagePreviewMessageId(null);
+      setImagePromptStartedAt(null);
       imageAbortRef.current = null;
     }
   }
@@ -689,6 +755,7 @@ export function usePlaythrough() {
       setRawOutput(response.rawOutput ?? null);
       setRetryTarget(null);
       cancelEdit();
+      void maybeAutoGenerateImage(response.state.messages[response.state.messages.length - 1]);
     } catch (e) {
       const durationMs = Math.round(performance.now() - startTime);
       const rawErr = e instanceof Error ? e.message : String(e);
@@ -862,6 +929,10 @@ export function usePlaythrough() {
     imageGeneratingId,
     imagePreviewMessageId,
     imageDeletingId,
+    imagePromptStartedAt,
+    imageGeneratingStartedAt,
+    autoImageAfterTurn,
+    setAutoImageAfterTurn,
     imagePromptRequest,
     imageProgress,
     handleGenerateImage,

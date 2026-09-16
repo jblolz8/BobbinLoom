@@ -111,6 +111,12 @@ export type PlayViewProps = {
   imageGeneratingId?: string | null;
   imagePreviewMessageId?: string | null;
   imageDeletingId?: string | null;
+  /** Generate an image after every completed turn (per-device chat setting). */
+  autoImageAfterTurn?: boolean;
+  setAutoImageAfterTurn?: (auto: boolean) => void;
+  /** Phase start stamps for the live counters, owned by the hook. */
+  imagePromptStartedAt?: number | null;
+  imageGeneratingStartedAt?: number | null;
   /** Live a1111 sampling progress for the image in flight, straight from the
    *  hook. Null whenever nothing is running (and for dialects that cannot
    *  report progress). */
@@ -206,6 +212,10 @@ export function PlayView(props: PlayViewProps) {
     imageGeneratingId = null,
     imagePreviewMessageId = null,
     imageDeletingId = null,
+    autoImageAfterTurn = false,
+    setAutoImageAfterTurn,
+    imagePromptStartedAt = null,
+    imageGeneratingStartedAt = null,
     imageProgress = null,
     imagePromptRequest = null,
     handleGenerateImage,
@@ -328,6 +338,8 @@ export function PlayView(props: PlayViewProps) {
           imageGeneratingId={imageGeneratingId}
           imagePreviewMessageId={imagePreviewMessageId}
           imageDeletingId={imageDeletingId}
+          imagePromptStartedAt={imagePromptStartedAt}
+          imageGeneratingStartedAt={imageGeneratingStartedAt}
           imageProgress={imageProgress}
           imagePromptRequest={imagePromptRequest}
           imageCharacterLimit={imageCharacterLimit}
@@ -533,6 +545,8 @@ export function PlayView(props: PlayViewProps) {
         setShowModelName={setShowModelName}
         imagePromptPreview={imagePromptPreview}
         setImagePromptPreview={setImagePromptPreview}
+        autoImageAfterTurn={autoImageAfterTurn}
+        setAutoImageAfterTurn={setAutoImageAfterTurn}
       />
 
       <PersonaManager

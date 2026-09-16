@@ -1116,6 +1116,13 @@
   color: var(--text-muted);
 }
 
+/* The live phase counter beside `Writing image prompt…` / `Generating image…`.
+   Tabular figures so a ticking number does not jitter the row's width. */
+.message-image-elapsed {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
 .message-image-generate {
   color: var(--accent-highlight, var(--accent-base));
 }

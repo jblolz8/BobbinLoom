@@ -28,7 +28,11 @@ const GenerateImageBody = z.object({
   imageProviderId: z.string().optional(),
   promptOverride: z.string().optional(),
   negativeOverride: z.string().optional(),
-  seed: z.number().int().optional()
+  seed: z.number().int().optional(),
+  /** The text provider's measured time, echoed back by the client when the
+   *  prompt was already written (the review-modal path runs the dry call, so
+   *  this request makes no text call of its own and has nothing to measure). */
+  promptDurationMs: z.number().int().nonnegative().optional()
 });
 
 const MessageParams = z.object({ id: z.string(), messageId: z.string() });
@@ -168,6 +172,7 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     let negativePrompt: string;
     let warnings: string[];
     let promptTruncated: boolean;
+    let promptDurationMs: number;
     try {
       const result = await generateImagePrompt(promptConfig, settings, {
         messageContent: message.content,
@@ -179,6 +184,7 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
       negativePrompt = result.negativePrompt;
       warnings = result.warnings;
       promptTruncated = result.promptTruncated;
+      promptDurationMs = result.durationMs;
     } catch (error) {
       if (controller.signal.aborted) return;
       const reason = error instanceof Error ? error.message : "Image prompt generation failed";
@@ -205,7 +211,11 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
       negativePrompt: composedNegative,
       // Advisory only — the modal shows these above the editable prompt and the
       // user decides. Never a reason to fail the call.
-      warnings
+      warnings,
+      // The text provider's half of the result. Carried in the dry-run response
+      // so the preview modal can show it AND so the client can hand it back on
+      // the generate request that stores the ref.
+      promptDurationMs
     };
   });
 
@@ -291,6 +301,10 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     // The prompt-writing side call's provenance, when that call actually ran.
     // Undefined on the both-overrides path (no text call was made).
     let promptCall: { request: string; response: string } | undefined;
+    // The text provider's measured time. Measured here when this request made
+    // the call; taken from the body when the prompt was written earlier (the
+    // review-modal path), so the stored ref carries the number either way.
+    let promptDurationMs: number | undefined = body.promptDurationMs;
     if (hasPrompt && hasNegative) {
       promptUsed = clampComposed(body.promptOverride!, settings, imageConn).text;
       negativeUsed = clampNegative(body.negativeOverride!, imageConn);
@@ -308,6 +322,7 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
           request: written.rawInput,
           response: clampStoredPromptResponse(written.rawOutput)
         };
+        promptDurationMs = written.durationMs;
       } catch (error) {
         if (controller.signal.aborted) return;
         const reason = error instanceof Error ? error.message : "Image prompt generation failed";
@@ -365,6 +380,10 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
         // comparable or not, honestly.
         seed: result.seed,
         durationMs: result.durationMs,
+        // Optional on the ref: absent when no text call was ever measured (a
+        // ref generated before this field existed, or both overrides supplied
+        // by a client that did not echo a time back).
+        promptDurationMs,
         // Diagnostic provenance: the exact body the adapter sent upstream. Body
         // only (the adapters never fold headers or the key into it), and every
         // variant of one call shares it. The raw RESPONSE is deliberately not
@@ -383,6 +402,6 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     message.images = [...(message.images ?? []), ...refs];
     updatePlaythroughRecord(dataDir, playthrough);
 
-    return reply.send({ playthrough, image: refs[0], promptUsed, negativeUsed });
+    return reply.send({ playthrough, image: refs[0], promptUsed, negativeUsed, promptDurationMs });
   });
 };

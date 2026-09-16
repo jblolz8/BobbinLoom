@@ -353,9 +353,13 @@ export default function App() {
           handleCancel={playthroughHook.handleCancel}
           imagePromptPreview={playthroughHook.imagePromptPreview}
           setImagePromptPreview={playthroughHook.setImagePromptPreview}
+          autoImageAfterTurn={playthroughHook.autoImageAfterTurn}
+          setAutoImageAfterTurn={playthroughHook.setAutoImageAfterTurn}
           imageGeneratingId={playthroughHook.imageGeneratingId}
           imagePreviewMessageId={playthroughHook.imagePreviewMessageId}
           imageDeletingId={playthroughHook.imageDeletingId}
+          imagePromptStartedAt={playthroughHook.imagePromptStartedAt}
+          imageGeneratingStartedAt={playthroughHook.imageGeneratingStartedAt}
           imageProgress={playthroughHook.imageProgress}
           imagePromptRequest={playthroughHook.imagePromptRequest}
           handleGenerateImage={playthroughHook.handleGenerateImage}
@@ -450,6 +454,8 @@ export default function App() {
             showModelName={playthroughHook.showModelName}
             setShowModelName={playthroughHook.setShowModelName}
             imagePromptPreview={playthroughHook.imagePromptPreview}
+            autoImageAfterTurn={playthroughHook.autoImageAfterTurn}
+            setAutoImageAfterTurn={playthroughHook.setAutoImageAfterTurn}
             setImagePromptPreview={playthroughHook.setImagePromptPreview}
           />
           <PersonaManager

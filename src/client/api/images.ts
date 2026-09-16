@@ -18,6 +18,10 @@ export function buildImageUrl(file: string): string {
 export type ImagePromptPreview = {
   prompt: string;
   negativePrompt: string;
+  /** How long the text provider took to write this prompt. The modal shows it,
+   *  and the client hands it back on the generate request so the stored ref can
+   *  report the text provider's half of the result. */
+  promptDurationMs?: number;
   /** Advisory notes from the prompt-writing call — a suspected refusal used
    *  verbatim, or JSON that carried neither expected key. Shown above the
    *  editable prompt in the review modal; never blocking. Absent/empty when the
@@ -33,6 +37,9 @@ export type GenerateMessageImageOptions = {
   promptOverride?: string;
   negativeOverride?: string;
   seed?: number;
+  /** The dry run's measured text-provider time, echoed back so the stored ref
+   *  can show it (this request runs no text call of its own). */
+  promptDurationMs?: number;
   signal?: AbortSignal;
 };
 
@@ -42,6 +49,8 @@ export type GenerateMessageImageResult = {
   /** What was actually sent, after prefixes and clamping. */
   promptUsed: string;
   negativeUsed: string;
+  /** The text provider's measured time, when one ran (or was echoed back). */
+  promptDurationMs?: number;
 };
 
 /**
@@ -112,6 +121,7 @@ export function generateMessageImage(
   if (opts.promptOverride !== undefined) body.promptOverride = opts.promptOverride;
   if (opts.negativeOverride !== undefined) body.negativeOverride = opts.negativeOverride;
   if (opts.seed !== undefined) body.seed = opts.seed;
+  if (opts.promptDurationMs !== undefined) body.promptDurationMs = opts.promptDurationMs;
 
   return request<GenerateMessageImageResult>(
     `/api/playthroughs/${playthroughId}/messages/${messageId}/image`,

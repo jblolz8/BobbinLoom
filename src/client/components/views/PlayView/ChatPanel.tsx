@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useElapsed } from "../../../hooks/useElapsed";
 import type { ChatMessage, Playthrough } from "../../../../schemas";
 import { buildImageUrl, type ImageGenerationProgress, type TokenUsage } from "../../../api";
 import type { FailedResponseNotice, ImagePromptRequest } from "../../../hooks/usePlaythrough";
@@ -55,6 +56,10 @@ export type ChatPanelProps = {
   imageGeneratingId?: string | null;
   /** The text call that writes a prompt is in flight for this message. */
   imagePreviewMessageId?: string | null;
+  /** When those two phases began, for the live counters. Set once per phase by
+   *  the hook that owns the phase — never derived here from the ids above. */
+  imagePromptStartedAt?: number | null;
+  imageGeneratingStartedAt?: number | null;
   /** An image is being removed from this message. */
   imageDeletingId?: string | null;
   /** Live sampling progress for the image being generated on a message (a1111
@@ -92,9 +97,14 @@ type MessageImage = NonNullable<ChatMessage["images"]>[number];
  *  thumbnail's figcaption and the full-screen viewer both render this string,
  *  so the two can never disagree about what was rendered. */
 function imageCaption(image: MessageImage): string {
+  // Both providers' halves, labelled, once the text side is known. A ref from
+  // before `promptDurationMs` existed keeps the exact caption it had: an
+  // unlabelled render time.
+  const render = image.durationMs ? (image.promptDurationMs ? `render ${formatDuration(image.durationMs)}` : formatDuration(image.durationMs)) : "";
   return [
     image.model,
-    image.durationMs ? `${(image.durationMs / 1000).toFixed(1)}s` : "",
+    image.promptDurationMs ? `prompt ${formatDuration(image.promptDurationMs)}` : "",
+    render,
     image.seed ? `seed ${image.seed}` : ""
   ]
     .filter(Boolean)
@@ -138,10 +148,16 @@ function formatMessageFullDate(iso?: string): string {
   }
 }
 
-function formatDuration(ms?: number): string {
+/** Every duration in the panel, in one voice: `4.2s` under a minute, `1m 23s`
+ *  above it (a local render is minutes, and `110.0s` is not a number anyone
+ *  reads at a glance). Used by the turn badge, the image caption and the live
+ *  phase counters. */
+export function formatDuration(ms?: number | null): string {
   if (ms === undefined || ms === null) return "";
   if (ms < 100) return "<0.1s";
-  return `${(ms / 1000).toFixed(1)}s`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  const totalSeconds = Math.round(ms / 1000);
+  return `${Math.floor(totalSeconds / 60)}m ${String(totalSeconds % 60).padStart(2, "0")}s`;
 }
 
 function DebugBox(props: {
@@ -361,7 +377,22 @@ function ImageRequestDisclosure({ request }: { request: string }) {
  *  headers or keys) and collapsed by default, exactly like the image-request
  *  disclosure above it. The response is shown as the stored (possibly
  *  truncated) string; a non-JSON one renders as-is instead of throwing. */
-function ImagePromptCallDisclosure({ request, response }: { request: string; response?: string }) {
+function ImagePromptCallDisclosure({
+  request,
+  response,
+  promptDurationMs
+}: {
+  request: string;
+  response?: string;
+  /** How long the text provider took, when the call was measured. */
+  promptDurationMs?: number;
+}) {
+  const [copied, setCopied] = useState<"request" | "response" | null>(null);
+  const copy = (which: "request" | "response", text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(which);
+    setTimeout(() => setCopied(null), 1500);
+  };
   const [requestText, responseText] = useMemo(() => {
     const pretty = (raw: string | undefined) => {
       if (!raw) return "";
@@ -380,13 +411,37 @@ function ImagePromptCallDisclosure({ request, response }: { request: string; res
         className="message-image-request-summary"
         title="The text-provider call that wrote this image's prompt"
       >
-        prompt call
+        prompt call{promptDurationMs ? ` · ${formatDuration(promptDurationMs)}` : ""}
       </summary>
-      <p className="message-image-prompt-call-label">Request</p>
+      <div className="message-image-request-head">
+        <span className="message-image-request-label">Request</span>
+        <Button
+          size="xs"
+          variant="ghost"
+          iconOnly
+          className="message-image-request-copy"
+          onClick={() => copy("request", requestText)}
+          leftIcon={<Icon name={copied === "request" ? "Check" : "Copy"} size={11} />}
+          title="Copy prompt call request"
+          aria-label="Copy prompt call request"
+        />
+      </div>
       <pre className="message-image-request-pre">{requestText}</pre>
       {responseText ? (
         <>
-          <p className="message-image-prompt-call-label">Response</p>
+          <div className="message-image-request-head">
+            <span className="message-image-request-label">Response</span>
+            <Button
+              size="xs"
+              variant="ghost"
+              iconOnly
+              className="message-image-request-copy"
+              onClick={() => copy("response", responseText)}
+              leftIcon={<Icon name={copied === "response" ? "Check" : "Copy"} size={11} />}
+              title="Copy prompt call response"
+              aria-label="Copy prompt call response"
+            />
+          </div>
           <pre className="message-image-request-pre">{responseText}</pre>
         </>
       ) : null}
@@ -439,6 +494,8 @@ export function ChatPanel(props: ChatPanelProps) {
     hasImageProvider = false,
     imageGeneratingId = null,
     imagePreviewMessageId = null,
+    imagePromptStartedAt = null,
+    imageGeneratingStartedAt = null,
     imageDeletingId = null,
     imageProgress = null,
     imagePromptRequest = null,
@@ -464,6 +521,10 @@ export function ChatPanel(props: ChatPanelProps) {
   // message, in the branch that draws its Cancel button. The hook clears the
   // progress state on every settle path, so this disappears with it.
   const progressDisplay = imageGeneratingId ? imageProgressDisplay(imageProgress) : null;
+  // Two hooks, both top-level: at most one prompt phase and one render phase can
+  // be in flight, so there is nothing per-message to key them by.
+  const promptElapsedMs = useElapsed(imagePromptStartedAt, imagePreviewMessageId !== null && imagePreviewMessageId !== undefined);
+  const renderElapsedMs = useElapsed(imageGeneratingStartedAt, imageGeneratingId !== null && imageGeneratingId !== undefined);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -668,7 +729,11 @@ export function ChatPanel(props: ChatPanelProps) {
                         {/* …and the prompt-writing call behind it. Absent when
                             the prompt came from the user's own edits. */}
                         {img.promptRequest ? (
-                          <ImagePromptCallDisclosure request={img.promptRequest} response={img.promptResponse} />
+                          <ImagePromptCallDisclosure
+                            request={img.promptRequest}
+                            response={img.promptResponse}
+                            promptDurationMs={img.promptDurationMs}
+                          />
                         ) : null}
                       </div>
 
@@ -680,6 +745,9 @@ export function ChatPanel(props: ChatPanelProps) {
                     <>
                       <span className="message-image-status">
                         <Icon name="Loader" size={12} className="animate-spin" /> Generating image…
+                        {renderElapsedMs !== null ? (
+                          <span className="message-image-elapsed">{formatDuration(renderElapsedMs)}</span>
+                        ) : null}
                       </span>
                       {/* Live sampling readout, a1111 only: `is the WebUI
                           actually working on it?` is the question a several-
@@ -721,6 +789,9 @@ export function ChatPanel(props: ChatPanelProps) {
                     <>
                       <span className="message-image-status">
                         <Icon name="Loader" size={12} className="animate-spin" /> Writing image prompt…
+                        {promptElapsedMs !== null ? (
+                          <span className="message-image-elapsed">{formatDuration(promptElapsedMs)}</span>
+                        ) : null}
                       </span>
                       <Button
                         size="xs"
@@ -822,6 +893,7 @@ export function ChatPanel(props: ChatPanelProps) {
           onGenerate={(prompt, negativePrompt) => onImagePromptGenerate?.(prompt, negativePrompt)}
           onRerun={() => onImagePromptRerun?.()}
           onClose={() => onImagePromptClose?.()}
+          promptElapsedMs={promptElapsedMs}
         />
       ) : null}
 
