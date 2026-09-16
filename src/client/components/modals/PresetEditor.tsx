@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_CHARACTER_FORMAT } from "../../../engine/characterFormat";
-import { DEFAULT_IMAGE_GENERATION_SETTINGS, applyInstructionMode, instructionModeApplies } from "../../../engine/imageDefaults";
-import type { CharacterFormat, CharacterFormatSection, ImageGenerationSettings } from "../../../schemas";
-import { Badge, Button, Checkbox, Icon, SimpleSelect, SwitchRow, Tabs, TextArea, TextInput } from "../base";
+import { DEFAULT_IMAGE_GENERATION_SETTINGS, IMAGE_HISTORY_MESSAGES_MAX, applyInstructionMode, instructionModeApplies } from "../../../engine/imageDefaults";
+import type { CharacterFormat, CharacterFormatSection, ImageGenerationSettings, ImageInstructionMode } from "../../../schemas";
+import { Badge, Button, Checkbox, Icon, SimpleSelect, SwitchRow, Tabs, TextArea, TextInput, type SimpleSelectOption } from "../base";
 import {
   createPreset,
   deletePreset,
@@ -111,6 +111,13 @@ const CONTEXT_TABS: Array<{ value: EditorTab; label: string }> = [
   { value: "turn", label: "Turn" },
   { value: "sheet", label: "Character Sheet" },
   { value: "image", label: "Image Generation" }
+];
+
+/** The two perspectives, as a base SimpleSelect option list (it is string-generic,
+ *  so the union type rides along and the handler gets a clean "pov" | "scene"). */
+const INSTRUCTION_MODE_OPTIONS: Array<SimpleSelectOption<ImageInstructionMode>> = [
+  { value: "pov", label: "POV — the scene is seen through the player's eyes" },
+  { value: "scene", label: "Scene — third-person frame, everyone in it is a character" }
 ];
 
 type CharacterFormatRowProps = {
@@ -639,24 +646,22 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
               </div>
             ) : null}
             <div className="preset-form">
-              <label>
-                Instruction Mode
-                <select
+              <div className="preset-field">
+                <span className="field-label-text">Instruction Mode</span>
+                <SimpleSelect
                   value={presetImage.instructionMode}
-                  onChange={(e) => {
-                    const mode = e.target.value === "scene" ? "scene" : "pov";
-                    // Rewrite the field as well as the flag: the textarea must never
-                    // show a document other than the one that will be sent. The
-                    // server applies the same swap at call time, idempotently, so
-                    // the two can never disagree.
-                    updateImage({ instructionMode: mode, instruction: applyInstructionMode(presetImage.instruction, mode) });
-                  }}
+                  // Rewrite the field as well as the flag: the textarea must never show
+                  // a document other than the one that will be sent. The server applies
+                  // the same swap at call time, idempotently, so the two can never
+                  // disagree.
+                  onChange={(mode) => updateImage({ instructionMode: mode, instruction: applyInstructionMode(presetImage.instruction, mode) })}
+                  options={INSTRUCTION_MODE_OPTIONS}
                   disabled={imageFieldsDisabled}
-                >
-                  <option value="pov">POV — the scene is seen through the player's eyes</option>
-                  <option value="scene">Scene — third-person frame, everyone in it is a character</option>
-                </select>
-              </label>
+                  size="sm"
+                  fullWidth
+                  aria-label="Instruction mode"
+                />
+              </div>
               {!instructionModeApplies(presetImage.instruction) ? (
                 <p className="module-hint">
                   {`This instruction carries neither the POV nor the Scene perspective rules, so the mode does not change it — it is your own text.`}
@@ -666,86 +671,83 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                   {`Switching rewrites the instruction below: Scene makes the player a person IN the frame — their own clothing and appearance, like any character — and POV makes the frame the player's own eyes, with no player tags at all. The cast block the writer receives follows the mode too. The server applies the same swap when the prompt call is made, so the field and the call can never disagree.`}
                 </p>
               )}
-              <label>
-                Instruction
-                <textarea
-                  className="format-instruction"
-                  rows={12}
-                  value={presetImage.instruction}
-                  onChange={(e) => updateImage({ instruction: e.target.value })}
-                  placeholder="How the model should describe the current moment as one still image…"
-                  disabled={imageFieldsDisabled}
-                />
-              </label>
-              <label>
-                Positive Prefix
-                <input
-                  value={presetImage.positivePrefix}
-                  onChange={(e) => updateImage({ positivePrefix: e.target.value })}
-                  placeholder="anime style"
-                  disabled={imageFieldsDisabled}
-                />
-              </label>
-              <label>
-                Negative Prefix
-                <input
-                  value={presetImage.negativePrefix}
-                  onChange={(e) => updateImage({ negativePrefix: e.target.value })}
-                  placeholder="lowres, bad anatomy, watermark, text…"
-                  disabled={imageFieldsDisabled}
-                />
-              </label>
-              <label>
-                Character Limit
-                <input
-                  type="number"
-                  min={0}
-                  step={50}
-                  value={presetImage.promptCharacterLimit}
-                  onChange={(e) => updateImage({ promptCharacterLimit: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
-                  disabled={imageFieldsDisabled}
-                />
-              </label>
-            </div>
-            <label className="format-inline-toggle" title="Send the current scene state to the prompt writer">
-              <input
-                type="checkbox"
+              <TextArea
+                label="Instruction"
+                rows={12}
+                size="sm"
+                value={presetImage.instruction}
+                onChange={(e) => updateImage({ instruction: e.target.value })}
+                placeholder="How the model should describe the current moment as one still image…"
+                disabled={imageFieldsDisabled}
+                characterCount={presetImage.instruction.length}
+                maxCharacterCount={presetImage.promptCharacterLimit > 0 ? presetImage.promptCharacterLimit : undefined}
+              />
+              <TextInput
+                label="Positive Prefix"
+                value={presetImage.positivePrefix}
+                onChange={(e) => updateImage({ positivePrefix: e.target.value })}
+                placeholder="anime style"
+                disabled={imageFieldsDisabled}
+                size="sm"
+                helperText="Prefixed to every generated prompt — the one place art direction lives, so the instruction itself stays style-free."
+              />
+              <TextInput
+                label="Negative Prefix"
+                value={presetImage.negativePrefix}
+                onChange={(e) => updateImage({ negativePrefix: e.target.value })}
+                placeholder="lowres, bad anatomy, watermark, text…"
+                disabled={imageFieldsDisabled}
+                size="sm"
+                helperText="Appended after the shipped negative tags, not instead of them."
+              />
+              <TextInput
+                label="Character Limit"
+                type="number"
+                min={0}
+                step={50}
+                value={presetImage.promptCharacterLimit}
+                onChange={(e) => updateImage({ promptCharacterLimit: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+                disabled={imageFieldsDisabled}
+                size="sm"
+                helperText="A soft cap on the COMPOSED prompt: the writer is told it and the composer cuts the tag line to it. 0 leaves the provider's own cap as the only limit."
+              />
+              <SwitchRow
+                icon="MapPin"
+                title="Include current state"
+                description="The location and the player's visible conditions."
                 checked={presetImage.includeState}
                 onChange={(e) => updateImage({ includeState: e.target.checked })}
                 disabled={imageFieldsDisabled}
               />
-              include current state
-            </label>
-            <label className="format-inline-toggle" title="Send the characters present in the scene to the prompt writer">
-              <input
-                type="checkbox"
+              <SwitchRow
+                icon="Users"
+                title="Include present characters"
+                description="Who is in frame, with their clothing, mood and sheet identity."
                 checked={presetImage.includeCast}
                 onChange={(e) => updateImage({ includeCast: e.target.checked })}
                 disabled={imageFieldsDisabled}
               />
-              include present characters
-            </label>
-            <label className="format-inline-toggle" title="How many messages of chat history the prompt writer sees. 0 turns the block off.">
-              <input
+              <TextInput
+                label="Previous messages of history"
                 type="number"
                 min={0}
-                max={12}
+                max={IMAGE_HISTORY_MESSAGES_MAX}
                 step={1}
                 value={presetImage.historyMessages}
-                onChange={(e) => updateImage({ historyMessages: Math.min(12, Math.max(0, Math.floor(Number(e.target.value) || 0))) })}
+                onChange={(e) => updateImage({ historyMessages: Math.min(IMAGE_HISTORY_MESSAGES_MAX, Math.max(0, Math.floor(Number(e.target.value) || 0))) })}
                 disabled={imageFieldsDisabled}
+                size="sm"
+                helperText="How many messages behind the frame the writer sees as continuity. 0 turns the block off."
               />
-              previous messages of history
-            </label>
-            <label className="format-inline-toggle" title="Give the prompt writer ONE earlier answer as a shape reference. Off by default: an in-context example anchors a tag model.">
-              <input
-                type="checkbox"
+              <SwitchRow
+                icon="History"
+                title="Include previous image prompt response"
+                description="ONE earlier answer, for SHAPE only — its scene, clothing and pose belong to that earlier moment. Off by default: an in-context example anchors a tag model."
                 checked={presetImage.includePreviousAnswer}
                 onChange={(e) => updateImage({ includePreviousAnswer: e.target.checked })}
                 disabled={imageFieldsDisabled}
               />
-              include previous image prompt response
-            </label>
+            </div>
             <p className="module-hint">
               {editingPlaythroughBlock
                 ? `"${activePresetName}" is a read-only shipped preset, so these changes are saved to THIS playthrough's own image block — the preset itself is never touched. "Refresh image prompt from preset" above puts it back.`
