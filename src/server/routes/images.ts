@@ -1,7 +1,6 @@
 import { createReadStream } from "node:fs";
 import type { FastifyPluginAsync, FastifyPluginOptions } from "fastify";
 import { z } from "zod";
-import { isStubSection, pickSections } from "../../engine/characterSections";
 import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../../engine/imageDefaults";
 import type { ChatMessage, ImageGenerationSettings, MessageImage, Playthrough, PromptPreset, ProviderConnection } from "../../schemas";
 import { ImageGenerationSettingsSchema } from "../../schemas";
@@ -11,7 +10,7 @@ import { clearImageProgress, publishImageProgress, readImageProgress } from "../
 import { imageFilePath, mimeForFile, saveImageBytes, sweepOrphansInDataDir, IMAGES_DIR } from "../imageStore";
 import type { ProviderManager } from "../providerManager";
 import { generateImagePrompt } from "../provider/imagePrompt";
-import { summarizePlaythrough } from "../provider/promptBuilder";
+import { buildImageCastBlock, buildImageStateBlock } from "../provider/imageContext";
 import { getPlaythroughRecord, updatePlaythroughRecord } from "../store";
 import { abortOnClientDisconnect, dataDir as defaultDataDir, loadPresets as defaultLoadPresets, providerManager } from "./helpers";
 
@@ -101,64 +100,6 @@ function clampStoredPromptResponse(text: string): string {
     : text;
 }
 
-/** How much of a character sheet's STABLE identity is injected per character.
- *  A few hundred characters: enough for the physical tags the writer must keep
- *  reproducing, not enough for one long sheet to dominate the prompt. */
-const CAST_IDENTITY_CHARS = 320;
-
-/** The sheet sections that describe what a camera sees and that the scene does
- *  not change. Deliberately NOT `Clothing`: the character INSTANCE's clothing is
- *  the authoritative current state and already rides on the line above. */
-const CAST_IDENTITY_SECTIONS = ["Species", "Gender", "Body", "Appearance"] as const;
-
-/** One character's stable identity, read from their sheet with the engine's own
- *  section parser: the wanted headers in order, stub ("(not established)") and
- *  missing sections skipped, flattened to one bounded line. Empty when the sheet
- *  has nothing physical to say. */
-function castIdentity(templateContent: string): string {
-  const parts: string[] = [];
-  for (const section of pickSections(templateContent, CAST_IDENTITY_SECTIONS)) {
-    if (isStubSection(section)) continue;
-    const body = section.body
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .join("; ");
-    if (body) parts.push(`${section.header}: ${body}`);
-  }
-  return clampChars(parts.join(" | "), CAST_IDENTITY_CHARS);
-}
-
-/** Compact cast block: only characters actually at the current location, plus
- *  the player (who is always in frame). Deliberately short — the scene text is
- *  the primary source and `summarizePlaythrough` already covers world state.
- *
- *  Each present character is described TWICE on purpose: the instance line
- *  (clothing, mood, conditions — the current state) and, when their sheet
- *  resolves, the stable identity line (species, gender, body, appearance). The
- *  writer otherwise scrapes hair/eye/skin out of scene prose, and the same
- *  character comes out looking different in every image. */
-function buildCastBlock(playthrough: Playthrough): string {
-  const lines: string[] = [];
-  const player = playthrough.playerCharacter;
-  if (player?.appearance) lines.push(`${player.name} (player) — ${player.appearance}`);
-  for (const character of playthrough.characters) {
-    if (character.currentLocationId !== playthrough.locationId) continue;
-    const clothing = character.clothing.length
-      ? `wearing ${character.clothing.map((item) => item.name).join(", ")}`
-      : "clothing unspecified";
-    const conditions = character.conditions.length ? `, ${character.conditions.join(", ")}` : "";
-    lines.push(`${character.name} — ${clothing}, ${character.mood}${conditions}`);
-    // templateId first; a character with a stale/unset id still gets an identity
-    // when a template carries the same name.
-    const template = playthrough.characterTemplates.find((t) => t.id === character.templateId)
-      ?? playthrough.characterTemplates.find((t) => t.name === character.name);
-    const identity = template ? castIdentity(template.content) : "";
-    if (identity) lines.push(`${character.name}'s sheet — ${identity}`);
-  }
-  return lines.join("\n");
-}
-
 /** The nearest visible user message before `message` — the action the image is
  *  answering. Hidden (state-only) user messages are skipped. */
 function previousUserContent(playthrough: { messages: ChatMessage[] }, message: ChatMessage): string | undefined {
@@ -231,8 +172,8 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
       const result = await generateImagePrompt(promptConfig, settings, {
         messageContent: message.content,
         previousUserContent: previousUserContent(playthrough, message),
-        stateSummary: summarizePlaythrough(playthrough),
-        castSummary: buildCastBlock(playthrough)
+        stateSummary: buildImageStateBlock(playthrough),
+        castSummary: buildImageCastBlock(playthrough)
       }, fetchImpl, controller.signal);
       prompt = result.prompt;
       negativePrompt = result.negativePrompt;
@@ -358,8 +299,8 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
         const written = await generateImagePrompt(promptConfig, settings, {
           messageContent: message.content,
           previousUserContent: previousUserContent(playthrough, message),
-          stateSummary: summarizePlaythrough(playthrough),
-          castSummary: buildCastBlock(playthrough)
+          stateSummary: buildImageStateBlock(playthrough),
+          castSummary: buildImageCastBlock(playthrough)
         }, fetchImpl, controller.signal);
         promptUsed = clampComposed(hasPrompt ? body.promptOverride! : written.prompt, settings, imageConn).text;
         negativeUsed = clampNegative(hasNegative ? body.negativeOverride! : written.negativePrompt, imageConn);

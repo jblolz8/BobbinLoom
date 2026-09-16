@@ -36,8 +36,17 @@ SPECIES AND NON-HUMAN CHARACTERS
 - A gijinka / humanoid variant still carries the species tag plus "gijinka" or "humanoid".
 - If unsure whether a token is a name or a tag: if it describes WHO the character is species-wise, include it; if it's just what they are called in the story, drop it.
 
+THE PLAYER IS NOT A CHARACTER
+- The context includes the player: the person the scene is seen through. Their block explains WHO THE CAMERA IS. It is NOT a tag source.
+- NEVER tag the player's stored or visible appearance and wardrobe: no hair colour, no eye colour, no skin tone, no glasses, no shirt, no necktie, no slacks, no shoes. Those tags in the shared group paint the CHARACTER with the player's features — the single most common failure of this task.
+- This rule is about the PLAYER only. The characters' own hair, eyes, skin and clothing tags are REQUIRED — see CHARACTER REFERENCE below.
+- The player NEVER opens a " | " group. A group holding the player's sheet steals half the image and squeezes the character into the other half.
+- The player contributes exactly these to the FIRST (shared) group: pov, male pov, female pov, viewer's hands, viewer's chest visible, male pov exposed penis, and an interaction whose object is a body part or the edge of the player's clothing (hand on viewer's waistband, viewer's waistband gripped).
+- When the scene has the player undressed or gripped, tag the INTERACTION or the character's reaction, never the garment: hand on viewer's waistband — not white shirt, not black slacks.
+- Nothing else about the player belongs in the tag line.
+
 CHARACTER REFERENCE
-- Character appearance data is provided in the context before the scene. Extract visible traits from there.
+- Character appearance data is provided in the context before the scene: the CAST block for every character in frame, and the camera block for the player. Extract visible traits for the CHARACTERS — the player is not a character (see THE PLAYER IS NOT A CHARACTER above).
 - CORE IDENTITY TAGS must appear every time that character is in frame, even if the current scene message doesn't mention them:
   - Species (if non-human)
   - Hair color and length
@@ -83,10 +92,11 @@ SD FORGE COUPLE / REGIONAL PROMPTING
 - Species tags MUST go in each character's group, not the shared group. Putting "braixen" in the shared group causes both regions to render Braixen features.
 - Keep character groups roughly balanced in tag count. A group with 5 tags while another has 30 causes region imbalance and artifacts.
 - If one character is much more detailed than another, still distribute tags evenly — move some shared environment tags into the first group to balance.
-- For POV scenes: the player's visible body tags (male pov, viewer's hands) go in the first group, not in a character group.
+- For POV scenes: the player's body tags (male pov, viewer's hands, viewer's chest visible) go in the first group, not in a character group — and that is ALL the player contributes. Never the player's stored appearance or clothing, and never a group of their own.
 
 THE PLAYER (POV scenes)
 - Seen through the player's eyes? Tag it pov. The player is never named: they are viewer, male pov or female pov.
+- Never tag the player's stored appearance or clothing — see THE PLAYER IS NOT A CHARACTER.
 - The player's visible body gets its own tags: viewer's hands visible, pov hands on her hips, male pov exposed penis.
 - Player not in frame? Use a neutral camera tag: wide shot, medium shot, close-up, from above, from below, dutch angle.
 

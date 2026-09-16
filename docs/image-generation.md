@@ -276,11 +276,15 @@ PLAYER'S LAST ACTION:
 <the nearest visible (non-hidden) user message before it>
 
 CURRENT STATE:
-<summarizePlaythrough(playthrough)>
+<buildImageStateBlock(playthrough) — the place, plus the player's VISIBLE physical
+ state. Not summarizePlaythrough: that is the turn block (inventory, quests,
+ allowed ids, reachable locations, absent characters, per-character memory) and it
+ also carried the player's description, appearance and wardrobe>
 
 PRESENT CHARACTERS:
-<player appearance + each character at the current location — their instance line
- (clothing/mood/conditions) plus their stable sheet identity>
+<buildImageCastBlock(playthrough) — the player as THE CAMERA (never tag their
+ stored appearance or clothing), then each character at the current location:
+ their instance line (clothing/mood/conditions) plus their stable sheet identity>
 
 Return ONE line of comma-separated tags describing this moment. Return JSON only: {"prompt": "…"}
 ```
@@ -289,7 +293,7 @@ Return ONE line of comma-separated tags describing this moment. Return JSON only
 
 **The JSON contract is enforced, not merely requested.** `response_format: { "type": "json_object" }` is sent on every call, matching the turn path (`src/server/openAiCompatibleProvider.ts`). It is safe on a model or proxy that does not implement structured output: `requestWithRetry` (`src/server/provider/openaiClient.ts`) already retries **once, without** `response_format`, when the endpoint rejects the body with a 400/422/404. Nothing about the parsing below depends on the field being honoured — a model that ignores it and answers in prose still works.
 
-The `PLAYER'S LAST ACTION`, `CURRENT STATE` and `PRESENT CHARACTERS` blocks are omitted when empty (an empty header invites the model to invent one), and the last two are gated by the preset's `includeState` / `includeCast` flags. The answer is parsed as JSON — `prompt` and `negative` are the fields asked for (a model that still answers the legacy `negative_prompt` spelling is parsed the same way); if the model returns prose instead, the whole content is used as the prompt and the negative side falls back to the preset's negative prefix.
+The `PLAYER'S LAST ACTION`, `CURRENT STATE` and `PRESENT CHARACTERS` blocks are omitted when empty (an empty header invites the model to invent one), and the last two are gated by the preset's `includeState` / `includeCast` flags. The two context blocks come from `src/server/provider/imageContext.ts` — see [The context blocks](#the-context-blocks) for what each one deliberately withholds. The answer is parsed as JSON — `prompt` and `negative` are the fields asked for (a model that still answers the legacy `negative_prompt` spelling is parsed the same way); if the model returns prose instead, the whole content is used as the prompt and the negative side falls back to the preset's negative prefix.
 
 **The contract is two fields, and the negative is comma-joined onto the shipped list.** The ask is `{"prompt": "…", "negative": "…"}` — one line of booru-style tags for the prompt, and a scene-tuned set of negative tags on the negative side. A model that answers only `{"prompt": "…"}` still works (the negative side then falls back to the preset's shipped list alone). The two sides are composed differently: the negative is **comma-joined** — the preset's `negativePrefix` list first, then the model's tags — because both are comma-separated strings and a space join would splice two lists into one undifferentiated run. The **wrong-shape warning** fires when the JSON parsed as an object and carried **no string `prompt`** (a lone `negative` or `negative_prompt` included), since the fallback would otherwise leak the raw blob into the image prompt.
 
@@ -307,7 +311,9 @@ Mira's sheet — Species: Human | Body: Height: 168 cm; Build: slim, athletic | 
 - **`Clothing` is deliberately excluded**: the character *instance*'s clothing is the authoritative current state and already rides on the instance line. A sheet's starting outfit must not be re-imposed on a scene where the character has undressed.
 - The injected identity is capped per character (`CAST_IDENTITY_CHARS`, 320) so one long sheet cannot crowd out the scene.
 
-The point is tag **consistency**: without it, the writer scrapes hair/eye/skin out of scene prose and the same character comes out looking different in every image. The player is unchanged — their `appearance` already rides along.
+The point is tag **consistency**: without it, the writer scrapes hair/eye/skin out of scene prose and the same character comes out looking different in every image.
+
+**The player is the opposite case: nothing about them rides along.** The block opens with `THE CAMERA (the player — the scene is seen through this person; never tag their stored appearance or clothing, and never give them a " | " group)`, followed by the player's name and the **first sentence of their description only** — enough for gender and pronouns, which the count tag (`1boy`) and every `his`/`her` attribution depend on. The rest of a persona's prose, and all of their `appearance` / `bodyType` / `clothing`, are withheld. That is not tidiness: a per-image analysis of three stored generations found the persona's own wardrobe coming back as tags (`fair skin, black hair, black eyes, glasses, white long sleeve shirt, necktie, black slacks`), twice inside the SHARED group — which Forge Couple paints across the whole frame at weight 0.5 — and once as a third ` | ` group, which hands half the canvas to the player's wardrobe. Removing the text at the source is what makes the instruction's `THE PLAYER IS NOT A CHARACTER` rules enforceable rather than merely stated.
 
 #### Empty content is an immediate, fully-diagnosed failure
 
@@ -324,7 +330,7 @@ instead of writing the prompt (raise the connection's maxTokens, or use a connec
 answers directly)). Raw response (truncated): {"id":"…","choices":[{"finish_reason":"length",…
 ```
 
-#### Three advisory warnings
+#### Four advisory warnings
 
 The call also FLAGS three answers it still returns (never blocks — the review modal is where the user fixes them):
 
@@ -332,9 +338,10 @@ The call also FLAGS three answers it still returns (never blocks — the review 
 |---|---|
 | The prose fallback was used **and** the text opens like a refusal | It opened with `"i can't"` (or `i cannot`, `i'm unable`, `i am unable`, `i won't`, `i will not`, `as an ai`, `sorry, but`, `i must decline`, `can't help with`, `cannot help with`, `cannot assist`) instead of describing an image, and that text is now the prompt. Matched case-insensitively against the **first 200 characters** only, so refusal-shaped words inside a real prompt are not misread. Typographic apostrophes (`I can’t`) match the same patterns. |
 | The JSON parsed as an object but carried **no string `prompt`** | The raw JSON blob would become the image prompt, so the warning names the keys it did find. A lone `negative_prompt` counts as a wrong shape. |
+| The `prompt` value is itself **JSON**, or **reads as prose** | `{"prompt": "{\"prompt\": \"One naked woman…\"}"}` is a real stored shape: the outer object parses, `obj.prompt` is a string, so nothing else caught it and the JSON rendered as the image prompt. Detected by a leading `{` / a nested `"prompt"` key, or — for prose — by a sentence-shaped answer (a copula beside sentence punctuation in the first 200 characters, no tag separator in the first 60 on a text over 120 characters, or over 600 characters with fewer than 6 commas). Deliberately conservative: a **terse** answer (`a woman in the rain`) is NOT flagged, because nagging on every short tag line trains the user to ignore the panel. Suppressed entirely when the no-`prompt`-field warning already fired (one cause, one warning) and when a refusal was flagged (a refusal *is* prose). |
 | The **composed prompt was cut** at the character limit — in the prompt side call (`promptCharacterLimit`) or by the dry-run route's `min(preset limit, dialect cap)` clamp | *"The composed prompt is longer than the N-character limit, so it was cut at the end — where the action and physical-state tags sit. Move the essential tags earlier in the list, or raise the character limit on the Image Generation tab."* The cut is silent otherwise, and the END of a tag list is exactly where the action and physical-state tags live. The clamped text is still what the modal shows and what the image call sends. Tied to the **positive** only: the negative is a fixed shipped list with its own ceiling (the dialect cap), and a negative that somehow exceeded that cap is cut silently. |
 
-A clean JSON answer, a fenced JSON block and ordinary prose produce no warnings. `ImagePromptOutput.warnings` carries them; the dry-run route returns them and the review modal shows them above the editable prompt. The truncation warning is added by the **dry-run route only** — the generate path has no UI surface, so the reviewed text it sends is unaffected (`promptUsed` / `negativeUsed` are byte-identical either way).
+A clean JSON answer, a fenced JSON block, a terse tag line and a two-group tag line produce no warnings. `ImagePromptOutput.warnings` carries them; the dry-run route returns them and the review modal shows them above the editable prompt. The truncation warning is added by the **dry-run route only** — the generate path has no UI surface, so the reviewed text it sends is unaffected (`promptUsed` / `negativeUsed` are byte-identical either way).
 
 The two sides are then composed and clamped — by **different** budgets:
 
@@ -474,14 +481,27 @@ WRONG: "A medium close-up shot of Jeneine, a woman with pale skin and tired blue
 RIGHT: close-up, 1boy 1girl, pale skin, tired eyes, blue eyes, straddling, leaning forward, hand on his neck
 
 TAG ORDER
-1. Rating, then character count: 1girl, 2girls, 1boy 1girl ...
-2. Camera framing and angle
-3. Scene: location, time of day, lighting
-4. Pose and action
-5. Appearance: hair length and colour, eye colour, skin tone, build, notable features
-6. Expression and gaze
-7. Clothing item by item, with its state — white shirt (open), black skirt (hiked up), panties (around one ankle); naked / topless / bottomless when that is the scene
-8. Physical state last — sweat, tears, flushed skin, trembling
+1. Rating: safe, sensitive, nsfw, or explicit — a tame scene stays tame.
+2. Character count: 1girl, 2girls, 1boy 1girl ...
+3. Species tag (if non-human): braixen, gardevoir, elf, demon ...
+   - In a SINGLE-character scene, the species tag goes here, right after the count.
+   - In a MULTI-character scene, the species tag goes at the START of each character's own group, not here in the shared group.
+4. Camera framing and angle
+5. Scene: location, time of day, lighting
+6. Pose and action
+7. Appearance: hair length and colour, eye colour, skin tone or fur colour, build, species features, notable features
+8. Expression and gaze
+9. Clothing item by item, with its state — white shirt (open), black skirt (hiked up), panties (around one ankle); naked / topless / bottomless when that is the scene
+10. Physical state last — sweat, tears, flushed skin, trembling
+
+THE PLAYER IS NOT A CHARACTER
+- The context includes the player: the person the scene is seen through. Their block explains WHO THE CAMERA IS. It is NOT a tag source.
+- NEVER tag the player's stored or visible appearance and wardrobe: no hair colour, no eye colour, no skin tone, no glasses, no shirt, no necktie, no slacks, no shoes. Those tags in the shared group paint the CHARACTER with the player's features — the single most common failure of this task.
+- This rule is about the PLAYER only. The characters' own hair, eyes, skin and clothing tags are REQUIRED — see CHARACTER REFERENCE below.
+- The player NEVER opens a " | " group. A group holding the player's sheet steals half the image and squeezes the character into the other half.
+- The player contributes exactly these to the FIRST (shared) group: pov, male pov, female pov, viewer's hands, viewer's chest visible, male pov exposed penis, and an interaction whose object is a body part or the edge of the player's clothing (hand on viewer's waistband, viewer's waistband gripped).
+- When the scene has the player undressed or gripped, tag the INTERACTION or the character's reaction, never the garment: hand on viewer's waistband — not white shirt, not black slacks.
+- Nothing else about the player belongs in the tag line.
 
 WHO IS WHO (two or more characters)
 - Give each person their own tags, in the order you introduced them.
@@ -496,6 +516,7 @@ MULTIPLE CHARACTERS (two or more characters in frame)
 
 THE PLAYER (POV scenes)
 - Seen through the player's eyes? Tag it pov. The player is never named: they are viewer, male pov or female pov.
+- Never tag the player's stored appearance or clothing — see THE PLAYER IS NOT A CHARACTER.
 - The player's visible body gets its own tags: viewer's hands visible, pov hands on her hips, male pov exposed penis.
 - Player not in frame? Use a neutral camera tag: wide shot, medium shot, close-up, from above, from below, dutch angle.
 

@@ -99,6 +99,43 @@ function describeKeys(obj: Record<string, unknown>): string {
  *  is safe on endpoints without structured output. */
 const JSON_RESPONSE_FORMAT = { type: "json_object" } as const;
 
+/** A JSON object nested inside the `prompt` value — a real shape from a live run:
+ *  `{"prompt": "{\"prompt\": \"One naked woman…\"}"}`. The outer object parses,
+ *  `obj.prompt` is a string, and the answer therefore used to pass silently. */
+const NESTED_JSON_IN_PROMPT = /\{\s*"(prompt|negative|negative_prompt)"\s*:/i;
+
+/** Whether a line reads as a TAG LIST rather than prose. Deliberately
+ *  conservative — a false positive here is noise in the review modal, which is
+ *  worse than missing a borderline case. A terse answer ("a woman in the rain")
+ *  is NOT prose for this purpose: it is a short tag line written by a lazy model,
+ *  and nagging on every terse answer would train the user to ignore the panel.
+ *  The observed failures are long, sentence-shaped answers. */
+function looksLikeProse(text: string): boolean {
+  // No tag separator anywhere near the start, on a text long enough to need one.
+  if (text.length > 120 && !text.slice(0, 60).includes(",")) return true;
+  const head = text.slice(0, 200);
+  // A tag line has no copula; a sentence describing a scene usually has one
+  // beside its punctuation ("The man, with fair skin, is sitting on…").
+  if (/\b(is|are|was|were)\b/.test(head) && /[.!?]/.test(head)) return true;
+  if (text.length > 600 && (text.match(/,/g) ?? []).length < 6) return true;
+  return false;
+}
+
+/** The prompt SHAPE warning, or null when the answer looks like a tag line. Two
+ *  failures are worth naming because both render badly and both used to pass in
+ *  silence: JSON nested inside the `prompt` value, and prose where tags belong. */
+function promptShapeWarning(raw: string): string | null {
+  const text = raw.trim();
+  if (!text) return null;
+  if (text.startsWith("{") || NESTED_JSON_IN_PROMPT.test(text)) {
+    return 'The text model answered with a JSON object inside the "prompt" value instead of a tag line, so that JSON is now the image prompt. Edit it before generating, or try another text connection.';
+  }
+  if (looksLikeProse(text)) {
+    return 'The "prompt" value reads as prose rather than a comma-separated tag line. Booru-trained image models weight tags, not sentences, so expect a weak result — edit it before generating, or try another text connection.';
+  }
+  return null;
+}
+
 type ReasoningSignal = "reasoning_content" | "reasoning" | "a reasoning block" | null;
 
 /** A content block typed as reasoning/thinking (Anthropic-style proxying). */
@@ -268,6 +305,16 @@ export async function generateImagePrompt(
         `The text model looks like it refused — it opened with "${refusal}" instead of describing an image, and that text is now the prompt. Review it before generating, or try another text connection.`
       );
     }
+  }
+
+  // Shape check on whatever ended up as the prompt. Skipped in the two cases that
+  // already have their own, more specific warning: a refusal IS prose, and a JSON
+  // blob standing in for a missing `prompt` field is already named as such — two
+  // warnings for one cause is noise in the review modal.
+  const missingPromptField = Boolean(obj && typeof obj.prompt !== "string");
+  if (!matchedRefusal(rawPrompt) && !missingPromptField) {
+    const shape = promptShapeWarning(rawPrompt);
+    if (shape) warnings.push(shape);
   }
 
   const composedPrompt = compose(settings.positivePrefix, rawPrompt, settings.promptCharacterLimit);
