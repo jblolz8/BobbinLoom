@@ -181,6 +181,26 @@
   line-height: 1.45;
 }
 
+/* Thumbnail of the exact generated image being deleted, inside the confirm modal —
+   a message can hold several images, so the question shows which one is going. */
+.delete-image-preview {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 1rem;
+}
+
+.delete-image-preview img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 180px;
+  max-height: 180px;
+  object-fit: contain;
+  border: 1px solid var(--border-main);
+  border-radius: 8px;
+  background: var(--bg-panel);
+}
+
 .modal-form-fields {
   margin: 1rem 0;
   display: flex;
@@ -7824,6 +7844,9 @@ button.crop-auto-detect-btn:hover:not(:disabled),
   height: auto;
   max-width: calc(100vw - 2.5rem);
   max-height: calc(100vh - 5.5rem);
+  /* dvh keeps the caption + close affordance inside the visible area while the
+     mobile URL bar is showing (older browsers ignore this line and keep vh). */
+  max-height: calc(100dvh - 5.5rem);
   border: 1px solid var(--border-main);
   border-radius: 12px;
   background: var(--bg-panel);
