@@ -239,3 +239,60 @@ describe("the instruction mode in the side call", () => {
     expect(calls[0].body.messages[0].content).toBe(custom);
   });
 });
+
+describe("the writer's own answer in the result", () => {
+  it("returns the model's tag line beside the composed prompt", async () => {
+    const { fetchImpl } = stubFetch('{"prompt": "close-up, 1girl, blue eyes", "negative": "bad hands"}');
+    const out = await generateImagePrompt(testConfig(), settings(), INPUT, fetchImpl);
+
+    expect(out.writerPrompt).toBe("close-up, 1girl, blue eyes");
+    expect(out.writerNegative).toBe("bad hands");
+    // …and the composed text is what the image provider gets. The two must differ:
+    // the reference is the answer, not the prefixed result.
+    expect(out.prompt).toBe("anime style close-up, 1girl, blue eyes");
+    expect(out.prompt).not.toBe(out.writerPrompt);
+  });
+
+  it("keeps a fenced or prose answer as written", async () => {
+    const { fetchImpl } = stubFetch("```json\n{\"prompt\": \"a wet alley\"}\n```");
+    const out = await generateImagePrompt(testConfig(), settings(), INPUT, fetchImpl);
+    expect(out.writerPrompt).toBe("a wet alley");
+    // No model-written negative → nothing to store on that side.
+    expect(out.writerNegative).toBe("");
+  });
+});
+
+describe("the previous-answer reference in the context", () => {
+  const answer = { prompt: "close-up, 1girl, blue eyes", negative: "bad hands" };
+
+  it("emits one labelled earlier answer ahead of the scene text", () => {
+    const block = buildImagePromptContextBlock(
+      { ...INPUT, previousAnswer: answer },
+      settings({ includePreviousAnswer: true })
+    );
+    expect(block).toContain("PREVIOUS IMAGE PROMPT");
+    expect(block).toContain("close-up, 1girl, blue eyes");
+    expect(block).toContain("Negative: bad hands");
+    // Ahead of the frame, with the history: an example at the END of the message
+    // would sit closest to the model's own output and anchor hardest.
+    expect(block.indexOf("PREVIOUS IMAGE PROMPT")).toBeLessThan(block.indexOf("SCENE TEXT:"));
+  });
+
+  it("emits nothing when the toggle is off, or when there is no earlier answer", () => {
+    expect(
+      buildImagePromptContextBlock({ ...INPUT, previousAnswer: answer }, settings())
+    ).not.toContain("PREVIOUS IMAGE PROMPT");
+    expect(
+      buildImagePromptContextBlock(INPUT, settings({ includePreviousAnswer: true }))
+    ).not.toContain("PREVIOUS IMAGE PROMPT");
+  });
+
+  it("omits the negative line when the earlier answer carried none", () => {
+    const block = buildImagePromptContextBlock(
+      { ...INPUT, previousAnswer: { prompt: "close-up, 1girl" } },
+      settings({ includePreviousAnswer: true })
+    );
+    expect(block).toContain("close-up, 1girl");
+    expect(block).not.toContain("Negative:");
+  });
+});

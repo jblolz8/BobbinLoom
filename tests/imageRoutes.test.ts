@@ -1149,3 +1149,115 @@ describe("image prompt context: the history window and the instruction mode", ()
     expect(h.calls[1].body.messages[1].content).toBe(dryBlock);
   });
 });
+
+/** Put a ref carrying a writer answer on a message, as a real generation would. */
+function seedAnswer(
+  h: ReturnType<typeof harness>,
+  messageIndex: number,
+  answer: { writerPrompt?: string; writerNegative?: string }
+) {
+  const record = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
+  const message = record.messages[messageIndex];
+  message.images = [
+    ...(message.images ?? []),
+    {
+      file: `${"b".repeat(64)}.png`,
+      prompt: "an earlier composed prompt",
+      providerId: "venice_images",
+      model: "test-image-model",
+      createdAt: new Date().toISOString(),
+      ...answer
+    }
+  ];
+  updatePlaythroughRecord(h.dataDir, record);
+}
+
+describe("image prompt context: the writer's answer and the reference", () => {
+  const ANSWER = "close-up, 1girl, blue eyes";
+
+  it("stores the writer's own answer beside the composed prompt", async () => {
+    const h = harness();
+    const res = await post(h.app, imageUrl(h), {});
+    const image = res.json().image;
+
+    expect(image.writerPrompt).toBe("a woman in the rain");
+    expect(image.writerNegative).toBe("blurry");
+    // The provider gets the COMPOSED text; the answer has no prefix on it.
+    expect(image.prompt).toBe("anime style a woman in the rain");
+  });
+
+  it("stores the echoed answer when the request made no text call", async () => {
+    const h = harness();
+    const res = await post(h.app, imageUrl(h), {
+      promptOverride: "reviewed tags",
+      negativeOverride: "reviewed negative",
+      writerPrompt: "model tags",
+      writerNegative: "model negative"
+    });
+    const image = res.json().image;
+
+    expect(image.writerPrompt).toBe("model tags");
+    expect(image.writerNegative).toBe("model negative");
+    // An override is the FINAL composed text — the preset prefix is never applied
+    // twice — so what the provider got is exactly what was reviewed.
+    expect(image.prompt).toBe("reviewed tags");
+    // No text call ran here, so there is no prompt-call provenance either.
+    expect("promptRequest" in image).toBe(false);
+  });
+
+  it("stores no answer at all on the reviewed path without an echo", async () => {
+    const h = harness();
+    const res = await post(h.app, imageUrl(h), { promptOverride: "reviewed", negativeOverride: "neg" });
+    expect("writerPrompt" in res.json().image).toBe(false);
+  });
+
+  it("reports the answer and the context it was given from the dry run", async () => {
+    const h = harness();
+    const res = await post(h.app, imageUrl(h, h.assistantMessageId, "/prompt"), {});
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().writerPrompt).toBe("a woman in the rain");
+    // The count is what the window CARRIED: this fixture's frame is the third
+    // message, so two. The modal says that rather than what the preset asks for.
+    expect(res.json().context).toEqual({ historyMessages: 2, instructionMode: "pov" });
+  });
+
+  it("offers one earlier answer as a reference when the preset asks for it", async () => {
+    const h = harness({ imageSettings: { includePreviousAnswer: true } });
+    seedAnswer(h, 0, { writerPrompt: ANSWER, writerNegative: "bad hands" });
+    await post(h.app, imageUrl(h), {});
+
+    const block = h.calls[0].body.messages[1].content as string;
+    expect(block).toContain("PREVIOUS IMAGE PROMPT");
+    expect(block).toContain(ANSWER);
+    expect(block).toContain("Negative: bad hands");
+    expect(block.indexOf("PREVIOUS IMAGE PROMPT")).toBeLessThan(block.indexOf("SCENE TEXT:"));
+  });
+
+  it("sends no reference when the toggle is off, even with an answer stored", async () => {
+    const h = harness();
+    seedAnswer(h, 0, { writerPrompt: ANSWER });
+    await post(h.app, imageUrl(h), {});
+    expect(h.calls[0].body.messages[1].content).not.toContain("PREVIOUS IMAGE PROMPT");
+  });
+
+  it("prefers the closest prior answer: an earlier variant on the same message", async () => {
+    const h = harness({ imageSettings: { includePreviousAnswer: true } });
+    seedAnswer(h, 0, { writerPrompt: "EARLIER MESSAGE ANSWER" });
+    seedAnswer(h, 2, { writerPrompt: "SAME FRAME VARIANT" });
+    await post(h.app, imageUrl(h), {});
+
+    const block = h.calls[0].body.messages[1].content as string;
+    expect(block).toContain("SAME FRAME VARIANT");
+    expect(block).not.toContain("EARLIER MESSAGE ANSWER");
+  });
+
+  it("never uses a later message's answer for an earlier frame", async () => {
+    const h = harness({ imageSettings: { includePreviousAnswer: true } });
+    const record = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
+    seedAnswer(h, 2, { writerPrompt: "LATER ANSWER" });
+
+    await post(h.app, imageUrl(h, record.messages[0].id), {});
+    expect(h.calls[0].body.messages[1].content).not.toContain("LATER ANSWER");
+  });
+});

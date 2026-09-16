@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_IMAGE_PROMPT_INSTRUCTION } from "../src/engine/imageDefaults";
 import type { ImageGenerationSettings, Playthrough } from "../src/schemas";
-import { IMAGE_HISTORY_HEADER, buildImageCastBlock, buildImageHistoryBlock, buildImageStateBlock } from "../src/server/provider/imageContext";
+import { IMAGE_HISTORY_HEADER, buildImageCastBlock, buildImageHistoryBlock, buildImageStateBlock, previousWriterAnswer } from "../src/server/provider/imageContext";
 
 /** A playthrough carrying exactly what the two builders read, plus the material
  *  they must NOT emit: the player's wardrobe and appearance, an absent
@@ -76,9 +76,16 @@ const settings = (overrides: Partial<ImageGenerationSettings> = {}): ImageGenera
   ({ includeState: true, includeCast: true, ...overrides } as ImageGenerationSettings);
 
 /** A bare message list for the history-block tests: roles, prose, and the two
- *  shapes the window must skip (a hidden state-only user message, a system one). */
+ *  shapes the window must skip (a hidden state-only user message, a system one).
+ *  `images` seeds refs for the previous-answer tests, where only `writerPrompt` /
+ *  `writerNegative` matter. */
 function conversation(
-  entries: Array<{ role: "user" | "assistant" | "system"; content: string; hidden?: boolean }>
+  entries: Array<{
+    role: "user" | "assistant" | "system";
+    content: string;
+    hidden?: boolean;
+    images?: Array<{ writerPrompt?: string; writerNegative?: string }>;
+  }>
 ): Playthrough {
   return {
     messages: entries.map((entry, i) => ({
@@ -86,7 +93,19 @@ function conversation(
       role: entry.role,
       content: entry.content,
       createdAt: new Date(2026, 0, 1, 0, i).toISOString(),
-      ...(entry.hidden ? { hidden: true } : {})
+      ...(entry.hidden ? { hidden: true } : {}),
+      ...(entry.images
+        ? {
+            images: entry.images.map((image) => ({
+              file: `${"a".repeat(64)}.png`,
+              prompt: "a composed prompt",
+              providerId: "p",
+              model: "m",
+              createdAt: "2026-01-01T00:00:00.000Z",
+              ...image
+            }))
+          }
+        : {})
     }))
   } as unknown as Playthrough;
 }
@@ -113,6 +132,45 @@ describe("buildImageStateBlock", () => {
     }
     // No character sheet text either: the cast block owns that.
     expect(block).not.toContain("Jeneine");
+  });
+});
+
+describe("previousWriterAnswer", () => {
+  const target = (pt: Playthrough) => pt.messages[pt.messages.length - 1];
+
+  it("takes the newest answer stored before this frame", () => {
+    const pt = conversation([
+      { role: "assistant", content: "a", images: [{ writerPrompt: "OLD ANSWER" }] },
+      { role: "user", content: "b" },
+      { role: "assistant", content: "c", images: [{ writerPrompt: "NEW ANSWER", writerNegative: "bad hands" }] },
+      { role: "assistant", content: "the frame" }
+    ]);
+    expect(previousWriterAnswer(pt, target(pt))).toEqual({ prompt: "NEW ANSWER", negative: "bad hands" });
+  });
+
+  it("counts an earlier variant on the SAME message — a re-roll's closest reference", () => {
+    const pt = conversation([
+      { role: "assistant", content: "a", images: [{ writerPrompt: "EARLIER MESSAGE ANSWER" }] },
+      { role: "assistant", content: "the frame", images: [{ writerPrompt: "SAME FRAME VARIANT" }] }
+    ]);
+    expect(previousWriterAnswer(pt, target(pt))).toEqual({ prompt: "SAME FRAME VARIANT" });
+  });
+
+  it("skips refs that stored no answer, and answers nothing when none exists", () => {
+    const pt = conversation([
+      { role: "assistant", content: "a", images: [{}, { writerPrompt: "   " }] },
+      { role: "assistant", content: "b", images: [{}] },
+      { role: "assistant", content: "the frame" }
+    ]);
+    expect(previousWriterAnswer(pt, target(pt))).toBeUndefined();
+  });
+
+  it("never looks FORWARD: a later message's answer is not this frame's reference", () => {
+    const pt = conversation([
+      { role: "assistant", content: "the frame" },
+      { role: "assistant", content: "later", images: [{ writerPrompt: "LATER ANSWER" }] }
+    ]);
+    expect(previousWriterAnswer(pt, pt.messages[0])).toBeUndefined();
   });
 });
 

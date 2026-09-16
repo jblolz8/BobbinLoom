@@ -808,6 +808,11 @@ describe("image generation: preset routes and the playthrough snapshot", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().imageGeneration.instruction).toBe("REWRITTEN INSTRUCTION");
+    // The whole block travels, not just the instruction: a mode or a count the
+    // playthrough never picked up would be a refresh that half-worked.
+    expect(res.json().imageGeneration.instructionMode).toBe("scene");
+    expect(res.json().imageGeneration.historyMessages).toBe(3);
+    expect(res.json().imageGeneration.includePreviousAnswer).toBe(true);
     // Surgical: the rest of the prompt settings are untouched. Re-selecting the
     // preset instead would have rewritten these too.
     expect(res.json().modules).toEqual(before.modules);

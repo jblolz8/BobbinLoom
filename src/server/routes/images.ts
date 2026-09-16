@@ -9,7 +9,7 @@ import { clampChars } from "../imageProvider/shared";
 import { clearImageProgress, publishImageProgress, readImageProgress } from "../imageProgress";
 import { imageFilePath, mimeForFile, saveImageBytes, sweepOrphansInDataDir, IMAGES_DIR } from "../imageStore";
 import type { ProviderManager } from "../providerManager";
-import { buildImageCastBlock, buildImageHistoryBlock, buildImageStateBlock } from "../provider/imageContext";
+import { buildImageCastBlock, buildImageHistoryBlock, buildImageStateBlock, previousWriterAnswer } from "../provider/imageContext";
 import type { ImagePromptInput } from "../provider/imagePrompt";
 import { generateImagePrompt } from "../provider/imagePrompt";
 import { getPlaythroughRecord, updatePlaythroughRecord } from "../store";
@@ -33,7 +33,12 @@ const GenerateImageBody = z.object({
   /** The text provider's measured time, echoed back by the client when the
    *  prompt was already written (the review-modal path runs the dry call, so
    *  this request makes no text call of its own and has nothing to measure). */
-  promptDurationMs: z.number().int().nonnegative().optional()
+  promptDurationMs: z.number().int().nonnegative().optional(),
+  /** The prompt call's own answer, echoed back for the same reason: on the review
+   *  path no text call runs here, so the only way the ref can carry what the writer
+   *  wrote is for the client to hand it over. */
+  writerPrompt: z.string().optional(),
+  writerNegative: z.string().optional()
 });
 
 const MessageParams = z.object({ id: z.string(), messageId: z.string() });
@@ -125,21 +130,29 @@ function buildImagePromptInput(
   playthrough: Playthrough,
   message: ChatMessage,
   settings: ImageGenerationSettings
-): ImagePromptInput {
+): { input: ImagePromptInput; historyMessages: number } {
   const history = buildImageHistoryBlock(playthrough, message, settings.historyMessages);
   const action = previousUserMessage(playthrough, message);
   return {
-    messageContent: message.content,
-    // Inside the window the action is already in the history block, and the same
-    // prose twice in one user message is waste — so the explicit block is only for
-    // the case the window could not reach back that far.
-    previousUserContent: action && !history.messageIds.includes(action.id) ? action.content : undefined,
-    history: history.text || undefined,
-    stateSummary: buildImageStateBlock(playthrough),
-    // The mode decides whether the player is described at all: in `scene` mode the
-    // frame is not seen through their eyes, so naming them is what put their
-    // wardrobe on the character.
-    castSummary: buildImageCastBlock(playthrough, settings.instructionMode)
+    input: {
+      messageContent: message.content,
+      // Inside the window the action is already in the history block, and the same
+      // prose twice in one user message is waste — so the explicit block is only for
+      // the case the window could not reach back that far.
+      previousUserContent: action && !history.messageIds.includes(action.id) ? action.content : undefined,
+      history: history.text || undefined,
+      // Gated here as well as in the block: with the toggle off the answer is not
+      // even read, so nothing downstream can leak it into a request.
+      previousAnswer: settings.includePreviousAnswer ? previousWriterAnswer(playthrough, message) : undefined,
+      stateSummary: buildImageStateBlock(playthrough),
+      // The mode decides whether the player is described at all: in `scene` mode the
+      // frame is not seen through their eyes, so naming them is what put their
+      // wardrobe on the character.
+      castSummary: buildImageCastBlock(playthrough, settings.instructionMode)
+    },
+    // What the history block ACTUALLY carried — the dry run reports it, so the
+    // modal can say what the writer was given rather than what was configured.
+    historyMessages: history.messageIds.length
   };
 }
 
@@ -201,15 +214,22 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     let warnings: string[];
     let promptTruncated: boolean;
     let promptDurationMs: number;
+    let writerPrompt: string;
+    let writerNegative: string;
+    const promptContext = buildImagePromptInput(playthrough, message, settings);
     try {
       const result = await generateImagePrompt(promptConfig, settings,
-        buildImagePromptInput(playthrough, message, settings),
+        promptContext.input,
         fetchImpl, controller.signal);
       prompt = result.prompt;
       negativePrompt = result.negativePrompt;
       warnings = result.warnings;
       promptTruncated = result.promptTruncated;
       promptDurationMs = result.durationMs;
+      // The model's own answer, echoed back by the modal so the generate call that
+      // makes no text call of its own can still store what the writer wrote.
+      writerPrompt = result.writerPrompt;
+      writerNegative = result.writerNegative;
     } catch (error) {
       if (controller.signal.aborted) return;
       const reason = error instanceof Error ? error.message : "Image prompt generation failed";
@@ -240,7 +260,15 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
       // The text provider's half of the result. Carried in the dry-run response
       // so the preview modal can show it AND so the client can hand it back on
       // the generate request that stores the ref.
-      promptDurationMs
+      promptDurationMs,
+      // …and the writer's own answer, which only this call can produce on the
+      // review path.
+      writerPrompt,
+      writerNegative,
+      // What the writer was actually given, for the modal's context line. The count
+      // is what the history block CARRIED, not what the preset asks for — on the
+      // first message of a chat they differ.
+      context: { historyMessages: promptContext.historyMessages, instructionMode: settings.instructionMode }
     };
   });
 
@@ -330,13 +358,19 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     // the call; taken from the body when the prompt was written earlier (the
     // review-modal path), so the stored ref carries the number either way.
     let promptDurationMs: number | undefined = body.promptDurationMs;
+    // The writer's own answer, un-composed — what a LATER image may be handed as a
+    // shape reference. On the review path the dry run wrote it and this request
+    // makes no text call, so the client echoes it back (exactly like the measured
+    // time above); otherwise the call below replaces both with what it just got.
+    let writerPrompt: string | undefined = body.writerPrompt ? clampStoredPromptResponse(body.writerPrompt) : undefined;
+    let writerNegative: string | undefined = body.writerNegative ? clampStoredPromptResponse(body.writerNegative) : undefined;
     if (hasPrompt && hasNegative) {
       promptUsed = clampComposed(body.promptOverride!, settings, imageConn).text;
       negativeUsed = clampNegative(body.negativeOverride!, imageConn);
     } else {
       try {
         const written = await generateImagePrompt(promptConfig, settings,
-          buildImagePromptInput(playthrough, message, settings),
+          buildImagePromptInput(playthrough, message, settings).input,
           fetchImpl, controller.signal);
         promptUsed = clampComposed(hasPrompt ? body.promptOverride! : written.prompt, settings, imageConn).text;
         negativeUsed = clampNegative(hasNegative ? body.negativeOverride! : written.negativePrompt, imageConn);
@@ -345,6 +379,8 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
           response: clampStoredPromptResponse(written.rawOutput)
         };
         promptDurationMs = written.durationMs;
+        writerPrompt = written.writerPrompt || undefined;
+        writerNegative = written.writerNegative || undefined;
       } catch (error) {
         if (controller.signal.aborted) return;
         const reason = error instanceof Error ? error.message : "Image prompt generation failed";
@@ -406,6 +442,9 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
         // ref generated before this field existed, or both overrides supplied
         // by a client that did not echo a time back).
         promptDurationMs,
+        // The writer's own answer, when one was produced here or echoed back — the
+        // reference the NEXT image may be given. The composed text is on `prompt`.
+        ...(writerPrompt ? { writerPrompt, writerNegative: writerNegative || undefined } : {}),
         // Diagnostic provenance: the exact body the adapter sent upstream. Body
         // only (the adapters never fold headers or the key into it), and every
         // variant of one call shares it. The raw RESPONSE is deliberately not

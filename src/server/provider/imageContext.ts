@@ -239,3 +239,29 @@ export function buildImageHistoryBlock(
     messageIds: newestFirst.map((entry) => entry.id)
   };
 }
+
+/** One earlier answer to hand the writer as a SHAPE reference, or undefined.
+ *
+ *  Walks BACKWARDS from the target message INCLUSIVE: every ref already on the
+ *  target is prior (a re-roll of the same frame is the closest reference there is),
+ *  then earlier messages. Never a later message's ref — a branch or a replay has to
+ *  be given the same context it had the first time. Refs written before
+ *  `writerPrompt` existed, and refs from the both-overrides path with no echoed
+ *  answer, are skipped silently. */
+export function previousWriterAnswer(
+  playthrough: Playthrough,
+  message: ChatMessage
+): { prompt: string; negative?: string } | undefined {
+  const index = playthrough.messages.findIndex((m) => m.id === message.id);
+  if (index < 0) return undefined;
+  for (let i = index; i >= 0; i -= 1) {
+    const refs = playthrough.messages[i].images ?? [];
+    for (let r = refs.length - 1; r >= 0; r -= 1) {
+      const answer = refs[r].writerPrompt?.trim();
+      if (!answer) continue;
+      const negative = refs[r].writerNegative?.trim();
+      return { prompt: answer, negative: negative || undefined };
+    }
+  }
+  return undefined;
+}

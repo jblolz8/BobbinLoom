@@ -463,6 +463,16 @@ export const MessageImageSchema = z.object({
    *  makes the field REQUIRED in `z.infer` and breaks every ref literal in the
    *  repo (the zod `.default()` trap). */
   promptDurationMs: z.number().int().nonnegative().optional(),
+  /** The prompt call's OWN answer: the model's tag line before the preset's
+   *  positive prefix and any clamping were applied. Stored so a later image can be
+   *  handed ONE earlier answer as a shape reference, and so the raw answer is
+   *  readable without re-parsing the fenced JSON inside `promptResponse`.
+   *  OPTIONAL, deliberately no `.default()` — a default makes the field required in
+   *  `z.infer` and breaks every ref literal in the repo (the zod `.default()`
+   *  trap already documented on the field above). Absent when no text call ran and
+   *  nothing was echoed back (the both-overrides path from an older client). */
+  writerPrompt: z.string().optional(),
+  writerNegative: z.string().optional(),
   /** Diagnostic provenance: the EXACT JSON request body that was sent to the
    *  image provider for this image. Body only — never headers, never the API
    *  key. Present so a stored image can answer "what did we actually send?".

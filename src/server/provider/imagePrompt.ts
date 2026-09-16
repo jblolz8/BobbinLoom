@@ -12,6 +12,10 @@ export type ImagePromptInput = {
    *  BEFORE this frame. Absent when the count is 0 or there is nothing behind the
    *  message, and then no block is emitted at all. */
   history?: string;
+  /** ONE earlier answer to offer as a shape reference, when the preset asks for it
+   *  (see `PREVIOUS_ANSWER_HEADER`). Absent when the toggle is off, when no earlier
+   *  image stored an answer, or when the earlier answer was empty. */
+  previousAnswer?: { prompt: string; negative?: string };
   stateSummary?: string;
   castSummary?: string;
 };
@@ -29,6 +33,12 @@ export type ImagePromptOutput = {
   promptTruncated: boolean;
   rawInput: string;
   rawOutput: string;
+  /** The model's own answer, BEFORE the preset's positive prefix was composed onto
+   *  it. The composed text above is what the image provider receives; this is what
+   *  a later image may be given as a shape reference, and it is the pair that
+   *  cannot be recovered from `rawOutput` without re-parsing fenced JSON. */
+  writerPrompt: string;
+  writerNegative: string;
   model: string;
   durationMs: number;
   /** Advisory notes about the model's answer — a suspected refusal used
@@ -200,6 +210,18 @@ export function buildImagePromptContextBlock(input: ImagePromptInput, settings: 
   // of the frame, and the parts that already work (SCENE TEXT first among them,
   // then state and cast) keep the positions they had.
   if (input.history) blocks.push(input.history);
+  // …and the reference example rides with it, for the same reason. At the END of
+  // the message it would sit closest to the model's own output, where an example
+  // anchors hardest — exactly what this feature has to avoid.
+  if (settings.includePreviousAnswer && input.previousAnswer?.prompt) {
+    blocks.push(
+      [
+        PREVIOUS_ANSWER_HEADER,
+        input.previousAnswer.prompt,
+        ...(input.previousAnswer.negative ? [`Negative: ${input.previousAnswer.negative}`] : [])
+      ].join("\n")
+    );
+  }
   blocks.push(`SCENE TEXT:\n${input.messageContent}`);
   if (input.previousUserContent) blocks.push(`PLAYER'S LAST ACTION:\n${input.previousUserContent}`);
   if (settings.includeState && input.stateSummary) blocks.push(`CURRENT STATE:\n${input.stateSummary}`);
@@ -225,6 +247,9 @@ function compose(prefix: string, body: string, limit: number, comma = false): { 
   const clamped = clampChars(joined, limit);
   return { text: clamped, truncated: clamped.length < joined.length };
 }
+
+export const PREVIOUS_ANSWER_HEADER =
+  "PREVIOUS IMAGE PROMPT (ONE earlier answer, for SHAPE only — its content belongs to that earlier moment; do not copy its scene, clothing, pose or place):";
 
 /**
  * The text → image-prompt SIDE CALL.
@@ -350,6 +375,10 @@ export async function generateImagePrompt(
     promptTruncated: composedPrompt.truncated,
     rawInput: JSON.stringify(body),
     rawOutput: text,
+    // The answer as the MODEL wrote it: `rawPrompt`/`rawNegative` are read before
+    // `compose` runs, so this is the pair with no prefix and no clamp on it.
+    writerPrompt: rawPrompt.trim(),
+    writerNegative: rawNegative.trim(),
     model: config.model,
     durationMs: Date.now() - start,
     warnings
