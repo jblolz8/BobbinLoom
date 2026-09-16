@@ -10,6 +10,7 @@ import {
   listPresets,
   setDefaultPresetId,
   refreshImagePromptBlock,
+  patchPlaythroughImageBlock,
   updatePlaythroughPromptSettings,
   updatePreset,
   type PlaythroughPromptSettings,
@@ -510,8 +511,23 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
 
   // ── Image generation (preset-owned prompt config) ──
 
+  /** Where an image-block edit LANDS. A read-only preset cannot be written, but the
+   *  block is this playthrough's to own — the mode is this story's frame — so the
+   *  fields stay live and the write goes to the playthrough's own snapshot. */
+  const editingPlaythroughBlock = activePresetReadonly && !!playthroughId;
+  const imageFieldsDisabled = activePresetReadonly && !playthroughId;
+
   function updateImage(patch: Partial<ImageGenerationSettings>) {
     setPresetImage((prev) => ({ ...prev, ...patch }));
+    if (editingPlaythroughBlock) {
+      // The optimistic state above keeps the control responsive; the write is what
+      // makes it real, and a failure says so rather than leaving the panel lying.
+      setStatus(null);
+      void patchPlaythroughImageBlock(playthroughId!, patch)
+        .then((updated) => { onPlaythroughPromptSettings(updated); setStatus("Saved to this playthrough."); })
+        .catch((e) => setStatus(e instanceof Error ? e.message : String(e)));
+      return;
+    }
     markDirty();
   }
 
@@ -597,7 +613,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
             {playthroughId && imageBlockDiffers(playthroughPromptSettings?.imageGeneration, presetImage) ? (
               <div className="image-block-refresh">
                 <span className="image-block-refresh-text">
-                  {`This playthrough is still using the image prompt block it was created with, and it differs from "${activePresetName}". Refreshing copies the block from that preset into this playthrough — the turn modules and the sheet format stay untouched.`}
+                  {`This playthrough's image block differs from "${activePresetName}" — either it was created before the preset was edited, or it was changed here. Refreshing copies the preset's block into this playthrough; the turn modules and the sheet format stay untouched.`}
                 </span>
                 <button
                   type="button"
@@ -622,7 +638,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                     // the two can never disagree.
                     updateImage({ instructionMode: mode, instruction: applyInstructionMode(presetImage.instruction, mode) });
                   }}
-                  disabled={activePresetReadonly}
+                  disabled={imageFieldsDisabled}
                 >
                   <option value="pov">POV — the scene is seen through the player's eyes</option>
                   <option value="scene">Scene — third-person frame, the player is not in it</option>
@@ -645,7 +661,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                   value={presetImage.instruction}
                   onChange={(e) => updateImage({ instruction: e.target.value })}
                   placeholder="How the model should describe the current moment as one still image…"
-                  disabled={activePresetReadonly}
+                  disabled={imageFieldsDisabled}
                 />
               </label>
               <label>
@@ -654,7 +670,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                   value={presetImage.positivePrefix}
                   onChange={(e) => updateImage({ positivePrefix: e.target.value })}
                   placeholder="anime style"
-                  disabled={activePresetReadonly}
+                  disabled={imageFieldsDisabled}
                 />
               </label>
               <label>
@@ -663,7 +679,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                   value={presetImage.negativePrefix}
                   onChange={(e) => updateImage({ negativePrefix: e.target.value })}
                   placeholder="lowres, bad anatomy, watermark, text…"
-                  disabled={activePresetReadonly}
+                  disabled={imageFieldsDisabled}
                 />
               </label>
               <label>
@@ -674,7 +690,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                   step={50}
                   value={presetImage.promptCharacterLimit}
                   onChange={(e) => updateImage({ promptCharacterLimit: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
-                  disabled={activePresetReadonly}
+                  disabled={imageFieldsDisabled}
                 />
               </label>
             </div>
@@ -683,7 +699,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                 type="checkbox"
                 checked={presetImage.includeState}
                 onChange={(e) => updateImage({ includeState: e.target.checked })}
-                disabled={activePresetReadonly}
+                disabled={imageFieldsDisabled}
               />
               include current state
             </label>
@@ -692,7 +708,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                 type="checkbox"
                 checked={presetImage.includeCast}
                 onChange={(e) => updateImage({ includeCast: e.target.checked })}
-                disabled={activePresetReadonly}
+                disabled={imageFieldsDisabled}
               />
               include present characters
             </label>
@@ -704,7 +720,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                 step={1}
                 value={presetImage.historyMessages}
                 onChange={(e) => updateImage({ historyMessages: Math.min(12, Math.max(0, Math.floor(Number(e.target.value) || 0))) })}
-                disabled={activePresetReadonly}
+                disabled={imageFieldsDisabled}
               />
               previous messages of history
             </label>
@@ -713,12 +729,16 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                 type="checkbox"
                 checked={presetImage.includePreviousAnswer}
                 onChange={(e) => updateImage({ includePreviousAnswer: e.target.checked })}
-                disabled={activePresetReadonly}
+                disabled={imageFieldsDisabled}
               />
               include previous image prompt response
             </label>
             <p className="module-hint">
-              A playthrough snapshots this block when its preset is applied, so editing it here does not change a playthrough already using this preset — re-select the preset for that playthrough to pick up the new text.
+              {editingPlaythroughBlock
+                ? `"${activePresetName}" is a read-only shipped preset, so these changes are saved to THIS playthrough's own image block — the preset itself is never touched. "Refresh image prompt from preset" above puts it back.`
+                : imageFieldsDisabled
+                  ? `"${activePresetName}" is read-only and no playthrough is open, so this block cannot be edited here. Use "Save as New…" for an editable copy.`
+                  : `Changes here are saved to "${activePresetName}" when you press Save. A playthrough snapshots this block when its preset is applied, so an edit does not change a playthrough already using this preset — use "Refresh image prompt from preset" on it instead.`}
             </p>
           </div>
         ) : (
