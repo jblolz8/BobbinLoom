@@ -474,7 +474,7 @@ The image-prompt config is **not a prompt module** — the module set stays turn
 | `promptCharacterLimit` | `900` (schema default for a *partial* block; the shipped fallback `DEFAULT_IMAGE_GENERATION_SETTINGS` and all three shipped/user presets use `1200`) | Soft limit, clamped against the dialect's hard cap. `0` = unlimited. |
 | `includeState` | `true` | Send `CURRENT STATE` to the prompt writer. |
 | `includeCast` | `true` | Send `PRESENT CHARACTERS` to the prompt writer. |
-| `instructionMode` | `"pov"` | Which perspective the instruction is read in. `pov` is the shipped document unchanged; `scene` swaps four perspective passages for their third-person counterparts AND drops the player from the cast block. See [*Instruction modes*](#instruction-modes-pov--scene). |
+| `instructionMode` | `"pov"` | Which perspective the instruction is read in. `pov` is the shipped document unchanged; `scene` swaps four perspective passages for their third-person counterparts **and** makes the player a character in the cast block, with an instance line and an identity line of their own. See [*Instruction modes*](#instruction-modes-pov--scene). |
 | `historyMessages` | `6` (`IMAGE_HISTORY_MESSAGES`; max `12`) | How many messages behind the frame the writer sees. `0` = off. The **read-time** default is the shipped value, like the two flags above — so a snapshot written before this field existed gains history on its next image, with no other change. |
 | `includePreviousAnswer` | `false` | Give the writer ONE earlier answer as a shape reference. Off by default: an in-context example anchors a tag model. See [*The previous-answer reference*](#the-previous-answer-reference). |
 
@@ -500,14 +500,18 @@ A playthrough **snapshots** the block when its preset is applied — the same wa
 
 | Passage | POV | Scene |
 |---|---|---|
-| the perspective rules block | `THE PLAYER IS NOT A CHARACTER` (the wardrobe-leak rules, and what the player may contribute to the shared group) | `NO CAMERA — THE PLAYER IS NOT IN THIS FRAME` |
-| `CHARACTER REFERENCE`'s first bullet | "…and the camera block for the player" | the cast block only, "the frame is seen from outside" |
-| the `SD FORGE COUPLE` POV bullet | the player's body tags go in the first group | the player contributes nothing to any group |
-| the camera section | `THE PLAYER (POV scenes)` | `CAMERA AND FRAMING` |
+| the perspective rules block | `THE PLAYER IS NOT A CHARACTER` (the wardrobe-leak rules, and what the player may contribute to the shared group) | `THE PLAYER IS A CHARACTER IN THIS FRAME` (the player is tag material — appearance, clothing, position — but never `pov` / `viewer's` tags, and they get their own group in a crowded frame) |
+| `CHARACTER REFERENCE`'s first bullet | "…and the camera block for the player" | "the CAST block for everyone in frame, the player included" |
+| the `SD FORGE COUPLE` POV bullet | the player's body tags go in the first group | the player is grouped the way a character is |
+| the camera section | `THE PLAYER (POV scenes)` | `CAMERA AND FRAMING`, plus the count-tag rule (one player and one character is `1boy, 1girl`) |
 
 `applyInstructionMode(text, mode)` swaps whichever side of each pair it finds, which makes it **its own inverse** (pov → scene → pov round-trips the document byte for byte) and a **no-op on an instruction that carries neither side** — a hand-written one. The editor says so when that is the case ("this instruction carries neither the POV nor the Scene perspective rules, so the mode does not change it"). The swap is applied **twice** on purpose: the preset editor rewrites the instruction field when the dropdown changes (so the textarea never shows a document other than the one that will be sent), and the side call applies it again, idempotently, so the system message can never disagree with the block that gates the cast.
 
-**The mode's other half is context, not text.** In `scene` mode `buildImageCastBlock` sends **no player line at all** — not even a "not the camera" one — because naming the player in that block is exactly what put a persona's wardrobe onto a character in the first place. The Scene instruction states the rule instead, and the code comment ties the two together: a change that re-adds a camera line has to reword that passage. **The player cannot be tagged in Scene mode**, which is the honest v1 limit; "the player is visibly in frame, so tag them, in their own group" is a follow-up that needs the player's appearance back in the cast block and a live-output check first.
+**Documents written under the old wording still switch.** `LEGACY_SCENE_SIDES` holds the four Scene passages **as they shipped while "third-person" meant "no player at all"**. Nothing writes them any more, but a preset saved while they were current still contains them, and a swap has to rewrite what is *in* the document rather than what we would write today — without them, that preset would silently go inert (the mode would stop changing anything). The mapping is **by index**, aligned with `PERSPECTIVE_PAIRS` and asserted; the legacy pass runs in the **`pov` direction only**, so a document switched back to Scene gets today's text.
+
+**The mode's other half is context, not text.** The cast block follows the mode, because the instruction alone cannot supply a fact the context withheld: in `scene` mode `buildImageCastBlock` gives the player the **same two lines any character gets** — an instance line (`Anon — wearing White Long Sleeve Shirt, Necktie, Black Slacks, handcuffed`, or `clothing unspecified` when the persona brings none) and an identity line built by `playerIdentity()` from the persona's **first sentence** + `bodyType` + `appearance`, clamped to the same 600 characters a character's sheet gets.
+
+The first sentence is the load-bearing part: it is what carries gender and pronouns, which the count tag and every `his` / `her` attribution depend on. The **rest** of a persona's description is deliberately left out — that prose is the wardrobe material that leaked onto a character in the first place — and a persona has no sheet **sections**, so there is no template to read instead. Those three fields are the persona editor's own answer to "what is stable about this person". POV keeps the old rule untouched: a camera line and **no** wardrobe, because there the character really is the subject of a lens the player is holding the wrong way — the failure mode that made the split necessary.
 
 `tests/settings.test.ts` is the drift guard for all of it: every POV side must be a **verbatim substring** of the shipped constant (or the swap silently stops matching), every Scene side must be absent from it, both shipped presets must round-trip scene → pov unchanged, and the derived NSFW document must survive the swap.
 
@@ -540,7 +544,7 @@ Its sections, in order, each a rule rather than prose:
 | opening paragraph + `FORMAT` | JSON only, one line of tags, the 40–70 count, the rating tag first, the ~300-character weighting (the first CLIP chunk), no style keywords, "only what the message shows", and the tag discipline rules (no filler to reach a count, no invisible qualities, no compound action sentences) |
 | `DISTINGUISHING NAMES FROM TAGS` | story names never; species/race/franchise tags always |
 | `SPECIES AND NON-HUMAN CHARACTERS` | the species tag anchors the model's template — traits alone produce a human with fur and ear-tufts |
-| `THE PLAYER IS NOT A CHARACTER` | the persona's wardrobe must not become the character's tags. A **perspective passage** (swapped in Scene mode) |
+| `THE PLAYER IS NOT A CHARACTER` | the persona's wardrobe must not become the character's tags. A **perspective passage** — the Scene side replaces it with `THE PLAYER IS A CHARACTER IN THIS FRAME` |
 | `CHARACTER REFERENCE` | the core identity tags that must appear every time a character is in frame, read from the cast block |
 | `WRONG / RIGHT` | the prose-leak counter-example, taken from a real failure |
 | `TAG ORDER` | rating, count, species, framing, scene, pose, appearance, expression, clothing, physical state |
