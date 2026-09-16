@@ -322,20 +322,17 @@ describe("image generation: shipped preset configs", () => {
 
   it("carries the raised 1200-character limit on every preset that ships an image block", () => {
     for (const p of presets) {
-      if (!p.imageGeneration) continue;
+      // SHIPPED only: a user-owned preset's limit is the user's to change, and
+      // asserting it here is the same coupling that broke on their last clone.
+      if (!p.imageGeneration || !p.readonly) continue;
       expect(p.imageGeneration.promptCharacterLimit, p.name).toBe(1200);
     }
-    // Named explicitly: the two shipped presets AND the user's own clone.
+    // Named explicitly: the two SHIPPED presets. A user-owned preset is not checked
+    // here — its prefix, instruction and limits are the user's own, and pinning
+    // them is exactly how this file went red when they re-made their clone from
+    // Default (NSFW) instead of the old 1980s-anime copy.
     expect(preset("default").imageGeneration?.promptCharacterLimit).toBe(1200);
     expect(preset("default-nsfw").imageGeneration?.promptCharacterLimit).toBe(1200);
-    // A user-owned preset: present is checked, absent is their prerogative.
-    const clone = presets.find((p) => p.name === "Default (NSFW) (copy)");
-    if (clone) {
-      expect(clone.imageGeneration?.promptCharacterLimit).toBe(1200);
-      // The clone's custom 1980s-anime prefix and instruction stay the user's own.
-      expect(clone.imageGeneration?.positivePrefix).toBe("1980s anime style, retro anime, vintage anime, cel animation, ");
-      expect(clone.imageGeneration?.instruction).not.toBe(DEFAULT_IMAGE_PROMPT_INSTRUCTION);
-    }
   });
 
   it("ships the user-approved negative tag set byte-for-byte, in order", () => {
@@ -410,20 +407,14 @@ describe("image generation: shipped preset configs", () => {
     }
   });
 
-  it("keeps the user's clone of Default (NSFW) on the same negative, and its own positive", () => {
-    // The clone is a copy of `default-nsfw`, so a negative that drifts from it is
-    // a papercut the user was told would ride along — but its 1980s-anime style
-    // prefix and its prose instruction are the user's own and must not be touched.
-    // It is ALSO the user's to delete, so its absence is not a failure: only a
-    // clone that is present is checked. (It has been deleted once already.)
-    const clone = presets.find((p) => p.name === "Default (NSFW) (copy)");
-    if (!clone) return;
-    expect(clone.imageGeneration?.negativePrefix).toBe(preset("default-nsfw").imageGeneration?.negativePrefix);
-    expect(clone.imageGeneration?.negativePrefix).toBe(
-      `${DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix}, censored, mosaic censoring, bar censor`
-    );
-    expect(clone.imageGeneration?.positivePrefix).toBe("1980s anime style, retro anime, vintage anime, cel animation, ");
-    expect(clone.imageGeneration?.instruction).not.toBe(DEFAULT_IMAGE_PROMPT_INSTRUCTION);
+  it("treats a user-owned preset as opaque: only that it parses", () => {
+    // A preset the USER owns is theirs to edit, rename or delete. Pinning its text,
+    // prefix or limit is how this file went red when they re-made their clone from
+    // Default (NSFW) — the shipped presets are ours to pin, theirs is not.
+    for (const p of presets) {
+      if (p.readonly) continue;
+      expect(PromptPresetSchema.safeParse(p).success, p.name).toBe(true);
+    }
   });
 
   it("ships the NSFW instruction as the core document with the rating bullets swapped and Explicit scenes inserted", () => {
@@ -521,11 +512,8 @@ describe("image generation: shipped preset configs", () => {
     expect(core).toContain("the PLAYER is never a group");
     expect(core).toContain("One girl in a POV frame is still ONE group");
     // The user's own clone is theirs: the rule never reached it, and if they
-    // have deleted it there is nothing to check.
-    const userClone = presets.find((p) => p.name === "Default (NSFW) (copy)");
-    if (userClone) {
-      expect(userClone.imageGeneration?.instruction).not.toContain("MULTIPLE CHARACTERS");
-    }
+    // have deleted it there is nothing to check. Nothing about its text is
+    // asserted — a preset the user owns is opaque to these pins.
   });
 
   it("leaves a user-owned preset without a block, so it exercises the read-time fallback", () => {
@@ -681,6 +669,7 @@ describe("image generation: preset routes and the playthrough snapshot", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().imageGeneration).toEqual(IMAGE_BLOCK);
   });
+
 
   it("rejects a write to a read-only preset and leaves the file untouched", async () => {
     const before = readFileSync(presetsFile(), "utf8");

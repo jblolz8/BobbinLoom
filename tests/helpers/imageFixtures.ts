@@ -4,7 +4,8 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { MessageImage, Playthrough } from "../../src/schemas";
+import { EMPTY_MODULE_SET, type MessageImage, type Playthrough } from "../../src/schemas";
+import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../../src/engine/imageDefaults";
 import { createBlankPlaythroughRecord, updatePlaythroughRecord } from "../../src/server/store";
 import { makePng } from "./pngBuilder";
 
@@ -50,7 +51,17 @@ export function writePlaythroughWithImages(
   filesPerMessage: string[][] = [],
   overrides: Partial<Playthrough> = {}
 ): Playthrough {
-  const pt = createBlankPlaythroughRecord(dir, name);
+  // An EXPLICIT preset override, so this fixture never consults
+  // data/user-settings.json + data/prompt-presets.json. Without it the record
+  // inherits whatever default preset the running app has set — the day it was
+  // switched to Default (NSFW), three route tests started composing a different
+  // negative prompt and failed on the user's own setting.
+  const pt = createBlankPlaythroughRecord(dir, name, undefined, [], undefined, undefined, {
+    id: "default",
+    name: "Default",
+    modules: EMPTY_MODULE_SET,
+    imageGeneration: DEFAULT_IMAGE_GENERATION_SETTINGS
+  });
   pt.messages = filesPerMessage.map((files, i) => ({
     id: `msg_${name.replace(/\W+/g, "_")}_${i}`,
     role: i % 2 === 0 ? ("assistant" as const) : ("user" as const),
