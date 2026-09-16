@@ -641,7 +641,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                   disabled={imageFieldsDisabled}
                 >
                   <option value="pov">POV — the scene is seen through the player's eyes</option>
-                  <option value="scene">Scene — third-person frame, the player is not in it</option>
+                  <option value="scene">Scene — third-person frame, everyone in it is a character</option>
                 </select>
               </label>
               {!instructionModeApplies(presetImage.instruction) ? (
@@ -650,7 +650,7 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                 </p>
               ) : (
                 <p className="module-hint">
-                  {`Switching rewrites this instruction's perspective rules: Scene makes the player a person IN the frame (their own clothing and appearance, like any character), POV makes the frame the player's own eyes. The field below always holds the POV form — the mode is applied when the prompt call is made, so what the writer receives follows the dropdown.`}
+                  {`Switching rewrites the instruction below: Scene makes the player a person IN the frame — their own clothing and appearance, like any character — and POV makes the frame the player's own eyes, with no player tags at all. The cast block the writer receives follows the mode too. The server applies the same swap when the prompt call is made, so the field and the call can never disagree.`}
                 </p>
               )}
               <label>
