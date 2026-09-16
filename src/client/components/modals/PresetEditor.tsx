@@ -261,22 +261,29 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const overIndexRef = useRef<number | null>(null);
 
-  function reportStatus(text: string | null, isError = false) { reportStatus(text); setStatusError(isError); }
+  function reportStatus(text: string | null, isError = false) { setStatus(text); setStatusError(isError); }
   function resetPresetState() { setPresetDirty(false); setEditingModule(null); }
   function markDirty() { setPresetDirty(true); }
 
-  /** The PLAYTHROUGH's presetId this editor last loaded from. Not the selected
-   *  preset: "Save as New…" legitimately shows a copy the playthrough is not
-   *  running yet, and a re-sync must not undo that. */
-  const syncedPresetId = useRef<string | null>(null);
+  /** The playthrough presetId this editor last loaded from, or null for "no
+   *  playthrough open" (it loaded the global default). **undefined means nothing has
+   *  loaded yet, and that is NOT the same as null**: on Home there is no playthrough,
+   *  so a null-initialized ref compared null to null, skipped the load on the very
+   *  first mount, and left the editor on empty defaults — no presets in the picker, no
+   *  modules in the Turn tab, the shipped sheet format instead of the preset's.
+   *
+   *  Not the selected preset either: "Save as New…" legitimately shows a copy the
+   *  playthrough is not running yet, and a re-sync must not undo that. */
+  const syncedPresetId = useRef<string | null | undefined>(undefined);
 
   // One loader for both cases — the first mount and "the playthrough's preset
   // changed underneath us" — so the two can never race into a double fetch. A
   // re-sync never lands on top of unsaved edits.
   useEffect(() => {
     const incoming = playthroughPromptSettings?.presetId ?? null;
-    if (incoming === syncedPresetId.current) return;
-    if (syncedPresetId.current !== null && presetDirty) return;
+    const loaded = syncedPresetId.current !== undefined;
+    if (loaded && incoming === syncedPresetId.current) return;
+    if (loaded && presetDirty) return;
     syncedPresetId.current = incoming;
     void loadPresetData(incoming ?? undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -812,8 +819,11 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
                 onChange={(e) => updateImage({ instruction: e.target.value })}
                 placeholder="How the model should describe the current moment as one still image…"
                 disabled={imageFieldsDisabled}
+                // The COUNT only. `promptCharacterLimit` caps the COMPOSED prompt (the
+                // tag line), not this text — the shipped instructions are 15-16k chars,
+                // so pairing them rendered every preset as "16105 / 1200" and looked
+                // like a violation instead of a fact.
                 characterCount={presetImage.instruction.length}
-                maxCharacterCount={presetImage.promptCharacterLimit > 0 ? presetImage.promptCharacterLimit : undefined}
               />
               <TextInput
                 label="Positive Prefix"
