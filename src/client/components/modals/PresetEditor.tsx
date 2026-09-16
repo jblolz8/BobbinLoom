@@ -216,9 +216,22 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
   function resetPresetState() { setPresetDirty(false); setEditingModule(null); }
   function markDirty() { setPresetDirty(true); }
 
+  /** The PLAYTHROUGH's presetId this editor last loaded from. Not the selected
+   *  preset: "Save as New…" legitimately shows a copy the playthrough is not
+   *  running yet, and a re-sync must not undo that. */
+  const syncedPresetId = useRef<string | null>(null);
+
+  // One loader for both cases — the first mount and "the playthrough's preset
+  // changed underneath us" — so the two can never race into a double fetch. A
+  // re-sync never lands on top of unsaved edits.
   useEffect(() => {
-    void loadPresetData();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    const incoming = playthroughPromptSettings?.presetId ?? null;
+    if (incoming === syncedPresetId.current) return;
+    if (syncedPresetId.current !== null && presetDirty) return;
+    syncedPresetId.current = incoming;
+    void loadPresetData(incoming ?? undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playthroughPromptSettings?.presetId, presetDirty]);
 
   const setRowRef = (index: number) => (el: HTMLDivElement | null) => { rowRefs.current[index] = el; };
 
@@ -278,11 +291,14 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragIndex]);
 
-  async function loadPresetData() {
+  /** Load the preset the playthrough runs (`explicitId`), or the global default for
+   *  new playthroughs when there is none. Called by the single loader effect above,
+   *  which is also what re-syncs when the playthrough's preset changes. */
+  async function loadPresetData(explicitId?: string) {
     const summaries = await listPresets();
     setPresets(summaries);
 
-    let currentId = playthroughPromptSettings?.presetId;
+    let currentId = explicitId;
     if (!currentId) {
       try {
         const { defaultPresetId } = await getDefaultPresetId();
@@ -330,22 +346,30 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
   }
 
   async function switchPreset(presetId: string) {
+    if (presetSaving) return;
     setPresetSaving(true); setStatus(null);
     try {
       const fullPreset = await getPreset(presetId);
+      // The WRITE comes first. An optimistic switch left the dropdown showing a
+      // preset the playthrough never got, with the reason buried in the status
+      // line — and the two branches mean different things, which is why they say
+      // so now.
+      if (playthroughId) {
+        const updated = await updatePlaythroughPromptSettings(playthroughId, presetId);
+        onPlaythroughPromptSettings(updated);
+        // This playthrough now runs it, so a re-sync would only re-fetch the same
+        // preset.
+        syncedPresetId.current = presetId;
+        setStatus(`Switched to "${fullPreset.name}" and applied to this playthrough.`);
+      } else {
+        await setDefaultPresetId(presetId);
+        setStatus(`"${fullPreset.name}" is now the default for NEW playthroughs — existing ones keep theirs.`);
+      }
       setActivePresetId(fullPreset.id); setActivePresetName(fullPreset.name);
       setActivePresetReadonly(fullPreset.readonly); setPresetModules(fullPreset.modules);
       setPresetFormat(cloneFormat(fullPreset.characterFormat));
       setPresetImage(cloneImage(fullPreset.imageGeneration));
       resetPresetState();
-      if (playthroughId) {
-        const updated = await updatePlaythroughPromptSettings(playthroughId, presetId);
-        onPlaythroughPromptSettings(updated);
-        setStatus(`Switched to "${fullPreset.name}" and applied to playthrough.`);
-      } else {
-        await setDefaultPresetId(presetId);
-        setStatus(`Switched to "${fullPreset.name}" as global default.`);
-      }
     } catch (e) { setStatus(e instanceof Error ? e.message : String(e)); }
     finally { setPresetSaving(false); }
   }
@@ -514,6 +538,15 @@ export function PresetEditor({ playthroughId, playthroughPromptSettings, onPlayt
             <button className="danger" onClick={() => void removePreset()} disabled={activePresetReadonly || presetSaving}>Delete</button>
           </div>
         </div>
+        {playthroughId ? (
+          <p className="module-hint">
+            {`Applies to THIS playthrough: it keeps the settings it was applied with, so editing a preset afterwards does not reach it — use "Refresh image prompt from preset" on the Image Generation tab for that.`}
+          </p>
+        ) : (
+          <p className="module-hint">
+            {`No playthrough open: switching here sets the default preset for NEW playthroughs. Existing ones keep theirs.`}
+          </p>
+        )}
         {activePresetReadonly ? <p className="module-hint">Read-only. Use "Save as New…" to create an editable copy.</p> : null}
 
         <div className="preset-context-tabs">
