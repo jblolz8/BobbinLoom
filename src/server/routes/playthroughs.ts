@@ -1,7 +1,9 @@
 import type { FastifyPluginAsync, FastifyPluginOptions } from "fastify";
 import { z } from "zod";
 import type { PromptPreset, ScenarioPreferences } from "../../schemas";
+import { ImageGenerationSettingsSchema } from "../../schemas";
 import { parseUserInput } from "../../engine/engine";
+import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../../engine/imageDefaults";
 import { assembleTurnPrompt } from "../openAiCompatibleProvider";
 import {
   createBlankPlaythroughRecord,
@@ -333,6 +335,49 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
     playthrough.promptSettings = {
       ...current,
       imageGeneration: preset.imageGeneration ? JSON.parse(JSON.stringify(preset.imageGeneration)) : undefined
+    };
+    updatePlaythroughRecord(dataDir, playthrough);
+    return playthrough.promptSettings;
+  });
+
+  /**
+   * Merge a PARTIAL image block into this playthrough's own snapshot.
+   *
+   * Deliberately not a preset write. The shipped presets are read-only, and the
+   * Instruction Mode is a property of THIS story's frame — the field has to be
+   * reachable without cloning the preset first. Everything the block needs already
+   * lives on the playthrough, and `refresh-image-prompt` above is the way back to
+   * the preset it came from.
+   */
+  app.patch("/api/playthroughs/:id/prompt-settings/image-block", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const playthrough = getPlaythroughRecord(dataDir, params.id);
+    if (!playthrough) return reply.code(404).send({ error: "Playthrough not found" });
+
+    const current = playthrough.promptSettings;
+    if (!current) return reply.code(400).send({ error: "This playthrough has no prompt settings." });
+
+    // Parsed against the FULL schema so an unknown mode or an out-of-range count is
+    // a 400 with the reason, not a half-written block (and not the 500 a thrown
+    // ZodError would produce). Fields absent from the body keep their snapshot
+    // value; a snapshot with no block starts from the shipped defaults, which is
+    // exactly what the read sites would have resolved.
+    const parsed = ImageGenerationSettingsSchema.partial().safeParse(request.body ?? {});
+    if (!parsed.success) {
+      const reason = parsed.error.issues.map((issue) => `${issue.path.join(".") || "body"} ${issue.message}`).join("; ");
+      return reply.code(400).send({ error: `Invalid image block patch: ${reason}` });
+    }
+
+    // The BASE is exactly what the read sites resolve for this playthrough —
+    // snapshot, else its preset, else the shipped defaults — so a partial write
+    // changes the field asked for and nothing else. Merging from an empty object
+    // would silently drop the preset's `anime style` positive prefix and the whole
+    // shipped negative list on a playthrough whose preset ships no block.
+    const presetBlock = loadPresets().find((p) => p.id === current.presetId)?.imageGeneration;
+    const base = current.imageGeneration ?? presetBlock ?? DEFAULT_IMAGE_GENERATION_SETTINGS;
+    playthrough.promptSettings = {
+      ...current,
+      imageGeneration: ImageGenerationSettingsSchema.parse({ ...base, ...parsed.data })
     };
     updatePlaythroughRecord(dataDir, playthrough);
     return playthrough.promptSettings;

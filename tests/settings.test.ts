@@ -861,6 +861,104 @@ describe("image generation: preset routes and the playthrough snapshot", () => {
     expect(res.json().imageGeneration).toBeUndefined();
   });
 
+  it("patches ONE field of the playthrough's image block, leaving the rest", async () => {
+    // What a read-only preset needs: the shipped block cannot be edited, so the
+    // Instruction Mode is written to THIS playthrough's snapshot instead.
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/playthroughs",
+      payload: { name: "Patchable", blank: true, presetId: "user-with-image" }
+    });
+    const id = created.json().id as string;
+    // Taken from the record itself, not from IMAGE_BLOCK: sibling tests in this
+    // describe edit the shared `user-with-image` fixture, so the only honest
+    // baseline is this playthrough's own snapshot.
+    const preState = created.json().promptSettings.imageGeneration;
+    const beforePreset = readFileSync(presetsFile(), "utf8");
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/playthroughs/${id}/prompt-settings/image-block`,
+      payload: { instructionMode: "pov" }
+    });
+    expect(res.statusCode).toBe(200);
+    // One field changed, every other one survived the merge…
+    expect(res.json().imageGeneration).toEqual({ ...preState, instructionMode: "pov" });
+    // …on disk, not merely echoed…
+    const stored = JSON.parse(readFileSync(join(playthroughsDir, `${id}.json`), "utf8"));
+    expect(stored.promptSettings.imageGeneration.instructionMode).toBe("pov");
+    // …and the preset it came from is untouched.
+    expect(readFileSync(presetsFile(), "utf8")).toBe(beforePreset);
+  });
+
+  it("400s an invalid patch, with the reason, and writes nothing", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/playthroughs",
+      payload: { name: "Unpatched", blank: true, presetId: "user-with-image" }
+    });
+    const id = created.json().id as string;
+    const file = join(playthroughsDir, `${id}.json`);
+    const before = readFileSync(file, "utf8");
+
+    for (const payload of [{ instructionMode: "third" }, { historyMessages: 99 }]) {
+      const res = await app.inject({ method: "PATCH", url: `/api/playthroughs/${id}/prompt-settings/image-block`, payload });
+      expect(res.statusCode, JSON.stringify(payload)).toBe(400);
+      expect(res.json().error).toContain("Invalid image block patch");
+    }
+    // A 400 with the reason, rather than the 500 a thrown ZodError would produce —
+    // and no half-written block behind it.
+    expect(readFileSync(file, "utf8")).toBe(before);
+  });
+
+  it("400s a playthrough with no prompt settings at all", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/playthroughs",
+      payload: { name: "Settingsless", blank: true, presetId: "user-with-image" }
+    });
+    const id = created.json().id as string;
+    const file = join(playthroughsDir, `${id}.json`);
+    const record = JSON.parse(readFileSync(file, "utf8"));
+    delete record.promptSettings;
+    writeFileSync(file, JSON.stringify(record));
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/playthroughs/${id}/prompt-settings/image-block`,
+      payload: { instructionMode: "scene" }
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain("no prompt settings");
+  });
+
+  it("completes a snapshot that never carried a block, from the shipped defaults", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/playthroughs",
+      payload: { name: "Blockless patch", blank: true, presetId: "user-plain" }
+    });
+    const id = created.json().id as string;
+    // Seeded through the preset apply, exactly like the sibling "clears" test, so
+    // the snapshot is known to carry no block before the patch.
+    const seeded = await app.inject({
+      method: "PUT",
+      url: `/api/playthroughs/${id}/prompt-settings`,
+      payload: { presetId: "user-plain" }
+    });
+    expect(seeded.json().imageGeneration).toBeUndefined();
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/playthroughs/${id}/prompt-settings/image-block`,
+      payload: { instructionMode: "scene" }
+    });
+    expect(res.statusCode).toBe(200);
+    // The read sites would have resolved DEFAULT_IMAGE_GENERATION_SETTINGS for this
+    // playthrough, so the merge starts from there — not from an empty block.
+    expect(res.json().imageGeneration).toEqual({ ...DEFAULT_IMAGE_GENERATION_SETTINGS, instructionMode: "scene" });
+  });
+
   it("404s a refresh whose preset is gone, and names it", async () => {
     const created = await app.inject({
       method: "POST",

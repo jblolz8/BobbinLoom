@@ -318,3 +318,22 @@ export function updatePlaythroughPromptSettings(
     body: JSON.stringify({ presetId })
   });
 }
+
+/**
+ * Merge a PARTIAL image block into the playthrough's own snapshot.
+ *
+ * The one write that does not go through a preset: a read-only preset cannot be
+ * edited, and the Instruction Mode is a property of this story's frame, so the
+ * fields have to be reachable without cloning the preset first. The read sites
+ * resolve snapshot → preset → shipped defaults, so a snapshot that never carried a
+ * block is completed by this route rather than half-written.
+ */
+export function patchPlaythroughImageBlock(
+  playthroughId: string,
+  patch: Partial<ImageGenerationSettings>
+): Promise<PlaythroughPromptSettings> {
+  return request<PlaythroughPromptSettings>(
+    `/api/playthroughs/${playthroughId}/prompt-settings/image-block`,
+    { method: "PATCH", body: JSON.stringify(patch) }
+  );
+}
