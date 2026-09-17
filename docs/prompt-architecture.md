@@ -184,9 +184,10 @@ turn (`src/server/provider/imagePrompt.ts`):
 (`modules.turn`) stays turn-only: the image instruction and its mode, the
 positive/negative prefixes, the character limit, the history count and the
 `includeState` / `includeCast` / `includePreviousAnswer` flags live in a separate
-`imageGeneration` block on the preset, snapshotted onto the playthrough alongside the
-modules and the character format when the preset is applied. Fields, resolution order and
-the shipped values: [`image-generation.md`](image-generation.md).
+`imageGeneration` block on the preset. Unlike the modules and the character format, the
+block is read from the **global prompt config** at call time (not snapshotted per
+playthrough), so an edit reaches every playthrough's next image. Fields, resolution order
+and the shipped values: [`image-generation.md`](image-generation.md).
 
 ---
 

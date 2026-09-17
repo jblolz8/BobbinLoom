@@ -227,7 +227,7 @@ Defaults are **180000 ms** and **1** retry — except on `a1111`, where the time
 | `GET /api/images/progress?connectionId=…` | The live readout for a generation in flight. `{ active: true, progress?, step?, steps?, etaSeconds? }`, or `{ active: false }` when nothing is running; `400 {"error":"connectionId is required"}` without the parameter. In-memory and keyed by image connection; only the `a1111` adapter publishes to it (see *The live progress readout*). |
 | `DELETE /api/playthroughs/:id/messages/:messageId/images/:file` | Drop one image ref, then sweep. Idempotent. |
 | `POST /api/settings/images/sweep` | Manual orphan sweep. |
-| `POST /api/playthroughs/:id/prompt-settings/refresh-image-prompt` | Copy the image block alone from the playthrough's own preset. Not an image route: it lives in `src/server/routes/playthroughs.ts` and exists because a snapshot is deliberate — see [*Snapshot semantics*](#snapshot-semantics). |
+| `GET /api/prompt-config` · `PATCH /api/prompt-config` · `PUT /api/prompt-config/active` | The one **global prompt config** every playthrough generates from. Not image routes: they live in `src/server/routes/promptConfig.ts` — see [*Resolution order*](#resolution-order). |
 
 The generate body is `z.object({ imageProviderId?, promptOverride?, negativeOverride?, seed?, promptDurationMs?, writerPrompt?, writerNegative? })` — all optional. The last three are the review path's echo: the dry run measured the text call and holds the writer's answer, and this request makes no text call of its own, so the client hands them back for the ref to store (see [*The previous-answer reference*](#the-previous-answer-reference)). A request `seed` wins over the connection's `seed`; with neither, the provider picks at random and the ref stores nothing. The response is:
 
@@ -475,24 +475,25 @@ The image-prompt config is **not a prompt module** — the module set stays turn
 | `includeState` | `true` | Send `CURRENT STATE` to the prompt writer. |
 | `includeCast` | `true` | Send `PRESENT CHARACTERS` to the prompt writer. |
 | `instructionMode` | `"pov"` | Which perspective the instruction is read in. `pov` is the shipped document unchanged; `scene` swaps four perspective passages for their third-person counterparts **and** makes the player a character in the cast block, with an instance line and an identity line of their own. See [*Instruction modes*](#instruction-modes-pov--scene). |
-| `historyMessages` | `6` (`IMAGE_HISTORY_MESSAGES`; max `12`) | How many messages behind the frame the writer sees. `0` = off. The **read-time** default is the shipped value, like the two flags above — so a snapshot written before this field existed gains history on its next image, with no other change. |
+| `historyMessages` | `6` (`IMAGE_HISTORY_MESSAGES`; max `12`) | How many messages behind the frame the writer sees. `0` = off. The **read-time** default is the shipped value, like the two flags above — so a config written before this field existed gains history on its next image, with no other change. |
 | `includePreviousAnswer` | `false` | Give the writer ONE earlier answer as a shape reference. Off by default: an in-context example anchors a tag model. See [*The previous-answer reference*](#the-previous-answer-reference). |
 
 ### Resolution order
 
 ```
-playthrough.promptSettings.imageGeneration   (the snapshot — wins)
-  → preset.imageGeneration                    (the preset currently selected)
-    → DEFAULT_IMAGE_GENERATION_SETTINGS       (src/engine/imageDefaults.ts)
+global promptConfig.imageGeneration   (the live global config — wins)
+  → DEFAULT_IMAGE_GENERATION_SETTINGS  (src/engine/imageDefaults.ts)
 ```
 
-Each step is parsed through `ImageGenerationSettingsSchema`, so a partial block always resolves to a complete one.
+The block is parsed through `ImageGenerationSettingsSchema`, so a partial block always resolves to a complete one. `resolveImageSettings` in `src/server/routes/images.ts` is the only read site.
 
-### Snapshot semantics
+### The global config
 
-A playthrough **snapshots** the block when its preset is applied — the same way it snapshots the prompt modules and the character format. Editing a preset's instruction therefore affects **new** playthroughs only; an existing playthrough must have its preset re-selected to pick up the new text. (The preset editor says so on the Image Generation tab.)
+There is **one** prompt configuration — `promptConfig` (+ `activePresetId`) in `data/user-settings.json` — and every playthrough generates from it. Editing the block in Settings → Prompt Configuration → Image Generation applies to the next generation **everywhere, immediately**: there is no per-playthrough snapshot and nothing to refresh.
 
-**Reaching an existing playthrough: the refresh action, not a preset re-select.** Re-selecting the preset would rewrite the turn modules and the sheet format as well, which is a far bigger change than "pick up the new text". So the preset editor's Image Generation tab shows a marker naming the preset whenever the playthrough's block differs from it — the comparison covers **all nine fields**, hand-listed in `imageBlockDiffers`, and a field missing from that list would make the marker lie — with a **Refresh image prompt from preset** button beside it. The button posts `POST /api/playthroughs/:id/prompt-settings/refresh-image-prompt`, which copies `imageGeneration` and **nothing else**, and clears it entirely when the preset ships no block (so the read sites fall back to the shipped defaults).
+- `PUT /api/prompt-config/active` copies a preset's config over the global one and points `activePresetId` at it (404s an unknown preset). The preset editor calls it for both **switching** and **Load/Reload** — the two are the same operation, and both discard unsaved edits.
+- `PATCH /api/prompt-config` merges one or more sections, leaving the others untouched (400s an invalid block with the reason, and writes nothing).
+- **Save** writes the working config back to the backing preset through `PUT /api/prompt-presets/:id` (a read-only preset 403s — use "Save as New…").
 
 ### Instruction modes (POV / Scene)
 

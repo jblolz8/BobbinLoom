@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import type { PlaythroughPromptSettings } from "../../api";
 import type { ProviderKind } from "../../../schemas";
 import { PresetEditor } from "./PresetEditor";
 import { ProviderConnections } from "./ProviderConnections";
@@ -27,9 +26,6 @@ const PROVIDER_KIND_TABS: TabItem<ProviderKind>[] = [
 export type SettingsModalProps = {
   open: boolean;
   onClose: () => void;
-  playthroughId: string | null;
-  playthroughPromptSettings: PlaythroughPromptSettings | null;
-  onPlaythroughPromptSettings: (updated: PlaythroughPromptSettings) => void;
   choicesEnabled: boolean;
   setChoicesEnabled: (enabled: boolean) => void;
   showDebug: boolean;
@@ -56,9 +52,6 @@ export function SettingsModal(props: SettingsModalProps) {
   const {
     open,
     onClose,
-    playthroughId,
-    playthroughPromptSettings,
-    onPlaythroughPromptSettings,
     choicesEnabled,
     setChoicesEnabled,
     showDebug,
@@ -123,11 +116,7 @@ export function SettingsModal(props: SettingsModalProps) {
               <ProviderConnections key={providerKind} kind={providerKind} />
             </div>
           ) : settingsTab === "prompts" ? (
-            <PresetEditor
-              playthroughId={playthroughId}
-              playthroughPromptSettings={playthroughPromptSettings}
-              onPlaythroughPromptSettings={onPlaythroughPromptSettings}
-            />
+            <PresetEditor />
           ) : settingsTab === "tags" ? (
             <TagTaxonomyPanel />
           ) : settingsTab === "appearance" ? (

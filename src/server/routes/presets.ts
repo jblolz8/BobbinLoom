@@ -27,10 +27,6 @@ const UpdatePresetBody = z.object({
   imageGeneration: ImageGenerationSettingsSchema.optional()
 });
 
-const DefaultPresetBody = z.object({
-  defaultPresetId: z.string().min(1)
-});
-
 export async function presetRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/prompt-presets", async () => {
     const presets = loadPresets();
@@ -106,16 +102,6 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
     presets.splice(index, 1);
     savePresets(presets);
     return { ok: true };
-  });
-
-  app.get("/api/settings/default-preset", async () => {
-    return { defaultPresetId: loadAppSettings(settingsDir).defaultPresetId ?? DEFAULT_APP_SETTINGS.defaultPresetId };
-  });
-
-  app.put("/api/settings/default-preset", async (request) => {
-    const body = DefaultPresetBody.parse(request.body ?? {});
-    saveAppSettings(settingsDir, { defaultPresetId: body.defaultPresetId });
-    return { defaultPresetId: body.defaultPresetId };
   });
 
   app.get("/api/settings/tag-taxonomy", async () => {

@@ -5,6 +5,7 @@ import {
   CharacterFormat,
   ParsedUserInput,
   Playthrough,
+  PromptConfig,
   ScenarioPreferences,
   ScenarioSeed,
   ScenarioSeedSchema
@@ -50,6 +51,7 @@ export class OpenAICompatibleProvider {
     input: ParsedUserInput,
     state: Playthrough,
     choicesEnabled: boolean,
+    promptConfig: PromptConfig,
     signal?: AbortSignal
   ): Promise<ProviderTurn> {
     const queryMessages = state.messages.filter(m => !m.hidden).slice(-4);
@@ -65,7 +67,7 @@ export class OpenAICompatibleProvider {
       reserveOutputTokens: this.config.maxTokens,
       // Feed back the last measured/estimated ratio so the estimate self-corrects.
       calibration: state.tokenCalibration
-    });
+    }, promptConfig);
 
     const body: Record<string, unknown> = {
       model: this.config.model,

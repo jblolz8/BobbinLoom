@@ -81,6 +81,7 @@ describe("executeTurn", () => {
         _input: Parameters<MockProvider["generateTurn"]>[0],
         _state: Parameters<MockProvider["generateTurn"]>[1],
         _choicesEnabled: Parameters<MockProvider["generateTurn"]>[2],
+        _promptConfig: Parameters<MockProvider["generateTurn"]>[3],
         signal?: AbortSignal
       ): Promise<ProviderTurn> {
         receivedSignal = signal;

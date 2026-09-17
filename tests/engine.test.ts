@@ -339,7 +339,7 @@ describe("createPlaythroughFromSeed — cast reuse", () => {
       character: { name: "Mira", content: "[Species]: Fox\n\n[Personality]\n- AI-paraphrased clone sheet" },
       quest: { id: "q", name: "Q", summary: "s" }, items: [], npcs: [], startingFlags: [], openingText: "",
     } as ScenarioSeed;
-    const pt = createPlaythroughFromSeed("T", seed, EMPTY_MODULE_SET, "default", "Default", undefined, cast);
+    const pt = createPlaythroughFromSeed("T", seed, undefined, cast);
     expect(pt.characters).toHaveLength(1);
     expect(pt.characters[0].name).toBe("Mira");
     expect(pt.characterTemplates).toHaveLength(1);
@@ -350,13 +350,13 @@ describe("createPlaythroughFromSeed — cast reuse", () => {
   it("includeOpening=false does not seed the opening message even when openingText is set", () => {
     const cast = [{ id: "tmpl_x", name: "X", version: 1, content: "[Species]: Human", summary: "", startingClothing: [] }];
     const seed = { locations: [{ id: "loc_a", name: "A", description: "", state: "", icon: "", connections: [] }], character: { name: "X", content: "c" }, quest: { id: "q", name: "Q", summary: "s" }, items: [], npcs: [], startingFlags: [], openingText: "A seeded opening." } as ScenarioSeed;
-    const pt = createPlaythroughFromSeed("T", seed, EMPTY_MODULE_SET, "default", "Default", undefined, cast, false);
+    const pt = createPlaythroughFromSeed("T", seed, undefined, cast, false);
     expect(pt.messages).toHaveLength(0);
   });
 
   it("no cast => still seeds the AI lead and uses the seed opening text by default", () => {
     const seed = { locations: [{ id: "loc_a", name: "A", description: "", state: "", icon: "", connections: [] }], character: { name: "Mira", content: "c" }, quest: { id: "q", name: "Q", summary: "s" }, items: [], npcs: [], startingFlags: [], openingText: "Open." } as ScenarioSeed;
-    const pt = createPlaythroughFromSeed("T", seed, EMPTY_MODULE_SET, "default", "Default", undefined, undefined);
+    const pt = createPlaythroughFromSeed("T", seed, undefined, undefined);
     expect(pt.characters).toHaveLength(1);
     expect(pt.characters[0].name).toBe("Mira");
     expect(pt.messages.map((m) => m.content)).toContain("Open.");

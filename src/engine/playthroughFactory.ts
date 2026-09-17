@@ -82,13 +82,8 @@ export function instantiateTemplate(
 
 export function createInitialPlaythrough(
   name: string,
-  modules: PromptModuleSet = EMPTY_MODULE_SET,
-  presetId = "default",
-  presetName = "Default",
   persona?: PlayerPersona,
-  cast?: CharacterTemplate[],
-  characterFormat?: CharacterFormat,
-  imageGeneration?: ImageGenerationSettings
+  cast?: CharacterTemplate[]
 ): Playthrough {
   const createdAt = nowIso();
   const playthroughId = newId("play");
@@ -130,7 +125,6 @@ export function createInitialPlaythrough(
     inventory: clone(STARTER_INVENTORY),
     quests: clone(STARTER_QUESTS),
     memoryLayers: { recent: [], compressed: [] },
-    promptSettings: { presetId, presetName, modules, characterFormat, imageGeneration },
     memoryEvents: [],
     messages: [],
     snapshots: {},
@@ -148,14 +142,9 @@ export function createInitialPlaythrough(
 export function createPlaythroughFromSeed(
   name: string,
   seed: ScenarioSeed,
-  modules: PromptModuleSet = EMPTY_MODULE_SET,
-  presetId = "default",
-  presetName = "Default",
   persona?: PlayerPersona,
   cast?: CharacterTemplate[],
-  includeOpening = true,
-  characterFormat?: CharacterFormat,
-  imageGeneration?: ImageGenerationSettings
+  includeOpening = true
 ): Playthrough {
   const createdAt = nowIso();
   const playthroughId = newId("play");
@@ -254,7 +243,6 @@ export function createPlaythroughFromSeed(
     ],
     locationCatalog,
     itemCatalog: items,
-    promptSettings: { presetId, presetName, modules, characterFormat, imageGeneration },
     memoryEvents: [],
     messages: includeOpening && seed.openingText?.trim()
       ? [{ id: newId("msg"), role: "assistant", content: seed.openingText.trim(), createdAt, turn: 0 }]
@@ -271,13 +259,8 @@ export function createPlaythroughFromSeed(
 
 export function createBlankPlaythrough(
   name: string,
-  modules: PromptModuleSet = EMPTY_MODULE_SET,
-  presetId = "default",
-  presetName = "Default",
   persona?: PlayerPersona,
-  cast: CharacterTemplate[] = [],
-  characterFormat?: CharacterFormat,
-  imageGeneration?: ImageGenerationSettings
+  cast: CharacterTemplate[] = []
 ): Playthrough {
   const createdAt = nowIso();
   const playthroughId = newId("play");
@@ -318,7 +301,6 @@ export function createBlankPlaythrough(
     inventory: [],
     quests: [],
     memoryLayers: { recent: [], compressed: [] },
-    promptSettings: { presetId, presetName, modules, characterFormat, imageGeneration },
     memoryEvents: [],
     messages: [],
     snapshots: {},

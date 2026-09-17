@@ -1,5 +1,5 @@
 import { buildMockAssistantTurn } from "../engine/engine";
-import type { AssistantTurn, CharacterFormat, ParsedUserInput, Playthrough, ScenarioPreferences, ScenarioSeed } from "../schemas";
+import type { AssistantTurn, CharacterFormat, ParsedUserInput, Playthrough, PromptConfig, ScenarioPreferences, ScenarioSeed } from "../schemas";
 
 /** Per-segment token estimates (chars/4) of the prompt actually sent to the model. */
 export type PromptUsageBreakdown = {
@@ -66,6 +66,7 @@ export interface TurnProvider {
     input: ParsedUserInput,
     state: Playthrough,
     choicesEnabled: boolean,
+    promptConfig: PromptConfig,
     signal?: AbortSignal
   ): Promise<ProviderTurn>;
 
@@ -176,6 +177,7 @@ export class MockProvider implements TurnProvider {
     input: ParsedUserInput,
     state: Playthrough,
     choicesEnabled: boolean,
+    _promptConfig: PromptConfig,
     _signal?: AbortSignal
   ): Promise<ProviderTurn> {
     return { turn: buildMockAssistantTurn(input, state, choicesEnabled) };

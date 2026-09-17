@@ -283,18 +283,6 @@ export type ThemeMode = z.infer<typeof ThemeModeSchema>;
 export const CustomThemeColorsSchema = z.record(z.string());
 export type CustomThemeColors = z.infer<typeof CustomThemeColorsSchema>;
 
-export const AppSettingsSchema = z.object({
-  schemaVersion: z.number().int().min(1).default(1),
-  defaultPresetId: z.string().optional(),
-  tagTaxonomy: TagTaxonomyConfigSchema.optional(),
-  avatarShape: AvatarShapeSchema.optional(),
-  themeMode: ThemeModeSchema.optional(),
-  themePreset: z.string().optional(),
-  customThemeColors: CustomThemeColorsSchema.optional(),
-  updatedAt: z.string().optional()
-});
-export type AppSettings = z.infer<typeof AppSettingsSchema>;
-
 export const SimpleNPCSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -413,14 +401,35 @@ export const PromptPresetSchema = z.object({
 });
 export type PromptPreset = z.infer<typeof PromptPresetSchema>;
 
-export const PlaythroughPromptSettingsSchema = z.object({
-  presetId: z.string(),
-  presetName: z.string(),
+// ── Global prompt config (the single, always-applied working copy) ──
+// The live configuration every playthrough reads at generation time. It is a
+// full copy of a preset's `modules` / `characterFormat` / `imageGeneration`,
+// persisted in app settings, and it may carry UNSAVED edits (it is the draft —
+// there is no separate dirty object). "Saved" means the copy has been pushed
+// back into a named preset; "dirty" is computed by comparing this to its
+// backing preset (`activePresetId`), never stored.
+export const PromptConfigSchema = z.object({
   modules: PromptModuleSetSchema,
   characterFormat: CharacterFormatSchema.optional(),
   imageGeneration: ImageGenerationSettingsSchema.optional()
 });
-export type PlaythroughPromptSettings = z.infer<typeof PlaythroughPromptSettingsSchema>;
+export type PromptConfig = z.infer<typeof PromptConfigSchema>;
+
+export const AppSettingsSchema = z.object({
+  schemaVersion: z.number().int().min(1).default(1),
+  // The preset backing the global prompt config (renamed from defaultPresetId:
+  // it no longer means "default for new playthroughs" — there is one active
+  // config for everything).
+  activePresetId: z.string().optional(),
+  promptConfig: PromptConfigSchema.optional(),
+  tagTaxonomy: TagTaxonomyConfigSchema.optional(),
+  avatarShape: AvatarShapeSchema.optional(),
+  themeMode: ThemeModeSchema.optional(),
+  themePreset: z.string().optional(),
+  customThemeColors: CustomThemeColorsSchema.optional(),
+  updatedAt: z.string().optional()
+});
+export type AppSettings = z.infer<typeof AppSettingsSchema>;
 
 
 export const MemoryEventSchema = z.object({
@@ -597,7 +606,6 @@ export const PlaythroughSchema = z.object({
   quests: z.array(QuestSchema),
   locationCatalog: z.array(LocationEntrySchema).optional(),
   itemCatalog: z.array(ItemSchema).optional(),
-  promptSettings: PlaythroughPromptSettingsSchema.optional(),
   memoryEvents: z.array(MemoryEventSchema),
   memoryLayers: MemoryLayersSchema.optional(),
   messages: z.array(ChatMessageSchema),

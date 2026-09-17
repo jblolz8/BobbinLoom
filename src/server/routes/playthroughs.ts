@@ -1,9 +1,7 @@
 import type { FastifyPluginAsync, FastifyPluginOptions } from "fastify";
 import { z } from "zod";
-import type { PromptPreset, ScenarioPreferences } from "../../schemas";
-import { ImageGenerationSettingsSchema } from "../../schemas";
+import type { ScenarioPreferences } from "../../schemas";
 import { parseUserInput } from "../../engine/engine";
-import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../../engine/imageDefaults";
 import { assembleTurnPrompt } from "../openAiCompatibleProvider";
 import {
   createBlankPlaythroughRecord,
@@ -30,7 +28,8 @@ import {
 } from "../stateActions";
 import { buildOpeningPrompt, executeTurn } from "../turnActions";
 import { sweepOrphansInDataDir } from "../imageStore";
-import { abortOnClientDisconnect, dataDir as defaultDataDir, imagesDir as defaultImagesDir, loadPresets, providerManager } from "./helpers";
+import { loadPromptConfig } from "../promptConfigStore";
+import { abortOnClientDisconnect, dataDir as defaultDataDir, imagesDir as defaultImagesDir, providerManager, settingsDir } from "./helpers";
 
 const CreatePlaythroughBody = z.object({
   name: z.string().min(1).default("New Playthrough"),
@@ -55,10 +54,6 @@ const GenerateBody = z.object({
   openingMode: z.enum(["quick", "fleshedOut"]).default("fleshedOut"),
   lorebookIds: z.array(z.string()).optional(),
   presetId: z.string().optional(),
-});
-
-const PromptSettingsBody = z.object({
-  presetId: z.string()
 });
 
 const QuestActionBody = z.object({
@@ -92,14 +87,11 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
 
   app.post("/api/playthroughs", async (request, reply) => {
     const body = CreatePlaythroughBody.parse(request.body ?? {});
-    let preset: PromptPreset | undefined;
-    if (body.presetId) {
-      preset = loadPresets().find((p) => p.id === body.presetId);
-      if (!preset) return reply.code(404).send({ error: "Preset not found" });
-    }
+    // No preset is bound at creation: the prompt configuration is global and
+    // read at generation time, so a playthrough carries none of its own.
     const playthrough = body.blank
-      ? createBlankPlaythroughRecord(dataDir, body.name, body.personaId, body.castIds ?? [], body.lorebookIds, body.setting, preset)
-      : createPlaythroughRecord(dataDir, body.name, body.personaId, body.castIds, body.lorebookIds, body.setting, preset);
+      ? createBlankPlaythroughRecord(dataDir, body.name, body.personaId, body.castIds ?? [], body.lorebookIds, body.setting)
+      : createPlaythroughRecord(dataDir, body.name, body.personaId, body.castIds, body.lorebookIds, body.setting);
     return reply.code(201).send(playthrough);
   });
 
@@ -197,7 +189,7 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
 
       if (openingMode === "quick") {
         // Single first message = seed.openingText (createPlaythroughFromSeedRecord seeds it by default).
-        const playthrough = createPlaythroughFromSeedRecord(dataDir, body.name, seed, body.personaId, body.castIds, body.lorebookIds, body.setting, preset ?? undefined);
+        const playthrough = createPlaythroughFromSeedRecord(dataDir, body.name, seed, body.personaId, body.castIds, body.lorebookIds, body.setting);
         updatePlaythroughRecord(dataDir, playthrough);
         return reply.code(201).send({
           state: playthrough, tokenUsage: null, rawInput: null, rawOutput: null, finishReason: null,
@@ -205,7 +197,7 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
       }
 
       // fleshedOut: create WITHOUT seeding the opening text, then run a setting-aware opening turn.
-      const fleshed = createPlaythroughFromSeedRecord(dataDir, body.name, seed, body.personaId, body.castIds, body.lorebookIds, body.setting, preset ?? undefined, /* includeOpening */ false);
+      const fleshed = createPlaythroughFromSeedRecord(dataDir, body.name, seed, body.personaId, body.castIds, body.lorebookIds, body.setting, /* includeOpening */ false);
       const openingChoices = body.generateOpeningChoices ?? false;
       const result = await executeTurn(
         fleshed,
@@ -213,7 +205,8 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
         providerManager.getProvider(),
         openingChoices,
         providerManager.getContextWindow(),
-        { signal: controller.signal }
+        { signal: controller.signal },
+        loadPromptConfig(settingsDir).promptConfig
       );
 
       if (controller.signal.aborted) return;
@@ -262,7 +255,7 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
       contextWindow: providerManager.getContextWindow(),
       reserveOutputTokens: providerManager.getMaxTokens(),
       calibration: playthrough.tokenCalibration
-    });
+    }, loadPromptConfig(settingsDir).promptConfig);
     return {
       estimated: promptUsage.estimated,
       contextWindow: providerManager.getContextWindow(),
@@ -272,115 +265,6 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
         absent: playthrough.characters.filter((c) => c.currentLocationId !== playthrough.locationId).length,
       }
     };
-  });
-
-  app.put("/api/playthroughs/:id/prompt-settings", async (request, reply) => {
-    const params = z.object({ id: z.string() }).parse(request.params);
-    const playthrough = getPlaythroughRecord(dataDir, params.id);
-
-    if (!playthrough) return reply.code(404).send({ error: "Playthrough not found" });
-
-    const body = PromptSettingsBody.parse(request.body);
-    const preset = loadPresets().find((p) => p.id === body.presetId);
-    if (!preset) return reply.code(404).send({ error: "Preset not found" });
-
-    playthrough.promptSettings = {
-      presetId: preset.id,
-      presetName: preset.name,
-      modules: {
-        turn: preset.modules.turn.map((m) => ({ ...m }))
-      },
-      characterFormat: preset.characterFormat ? JSON.parse(JSON.stringify(preset.characterFormat)) : undefined,
-      // Snapshot the image prompt config too: a playthrough keeps using the
-      // settings it was applied with, exactly like modules and characterFormat.
-      // Presets without a block stay undefined here; read sites fall back to
-      // DEFAULT_IMAGE_GENERATION_SETTINGS explicitly.
-      imageGeneration: preset.imageGeneration ? JSON.parse(JSON.stringify(preset.imageGeneration)) : undefined,
-    };
-    updatePlaythroughRecord(dataDir, playthrough);
-
-    return playthrough.promptSettings;
-  });
-
-  /**
-   * Refresh the image prompt block alone, from the preset this playthrough was
-   * created with.
-   *
-   * The snapshot is deliberate: a playthrough keeps the settings it was applied
-   * with, so an edited instruction reaches no existing playthrough until its
-   * preset is re-selected. Re-selecting is not a substitute here — it rewrites
-   * the turn modules and the sheet format too, which is a far bigger change than
-   * "pick up the new instruction". This route touches `imageGeneration` and
-   * nothing else.
-   *
-   * A preset that ships no block CLEARS the snapshot rather than copying nothing:
-   * the read sites then fall back to DEFAULT_IMAGE_GENERATION_SETTINGS, which is
-   * the current shipped text.
-   */
-  app.post("/api/playthroughs/:id/prompt-settings/refresh-image-prompt", async (request, reply) => {
-    const params = z.object({ id: z.string() }).parse(request.params);
-    const playthrough = getPlaythroughRecord(dataDir, params.id);
-    if (!playthrough) return reply.code(404).send({ error: "Playthrough not found" });
-
-    const current = playthrough.promptSettings;
-    if (!current) return reply.code(400).send({ error: "This playthrough has no prompt settings to refresh." });
-
-    const preset = loadPresets().find((p) => p.id === current.presetId);
-    if (!preset) {
-      return reply.code(404).send({
-        error: `The preset "${current.presetName}" this playthrough was created with no longer exists, so there is nothing to refresh from.`
-      });
-    }
-
-    playthrough.promptSettings = {
-      ...current,
-      imageGeneration: preset.imageGeneration ? JSON.parse(JSON.stringify(preset.imageGeneration)) : undefined
-    };
-    updatePlaythroughRecord(dataDir, playthrough);
-    return playthrough.promptSettings;
-  });
-
-  /**
-   * Merge a PARTIAL image block into this playthrough's own snapshot.
-   *
-   * Deliberately not a preset write. The shipped presets are read-only, and the
-   * Instruction Mode is a property of THIS story's frame — the field has to be
-   * reachable without cloning the preset first. Everything the block needs already
-   * lives on the playthrough, and `refresh-image-prompt` above is the way back to
-   * the preset it came from.
-   */
-  app.patch("/api/playthroughs/:id/prompt-settings/image-block", async (request, reply) => {
-    const params = z.object({ id: z.string() }).parse(request.params);
-    const playthrough = getPlaythroughRecord(dataDir, params.id);
-    if (!playthrough) return reply.code(404).send({ error: "Playthrough not found" });
-
-    const current = playthrough.promptSettings;
-    if (!current) return reply.code(400).send({ error: "This playthrough has no prompt settings." });
-
-    // Parsed against the FULL schema so an unknown mode or an out-of-range count is
-    // a 400 with the reason, not a half-written block (and not the 500 a thrown
-    // ZodError would produce). Fields absent from the body keep their snapshot
-    // value; a snapshot with no block starts from the shipped defaults, which is
-    // exactly what the read sites would have resolved.
-    const parsed = ImageGenerationSettingsSchema.partial().safeParse(request.body ?? {});
-    if (!parsed.success) {
-      const reason = parsed.error.issues.map((issue) => `${issue.path.join(".") || "body"} ${issue.message}`).join("; ");
-      return reply.code(400).send({ error: `Invalid image block patch: ${reason}` });
-    }
-
-    // The BASE is exactly what the read sites resolve for this playthrough —
-    // snapshot, else its preset, else the shipped defaults — so a partial write
-    // changes the field asked for and nothing else. Merging from an empty object
-    // would silently drop the preset's `anime style` positive prefix and the whole
-    // shipped negative list on a playthrough whose preset ships no block.
-    const presetBlock = loadPresets().find((p) => p.id === current.presetId)?.imageGeneration;
-    const base = current.imageGeneration ?? presetBlock ?? DEFAULT_IMAGE_GENERATION_SETTINGS;
-    playthrough.promptSettings = {
-      ...current,
-      imageGeneration: ImageGenerationSettingsSchema.parse({ ...base, ...parsed.data })
-    };
-    updatePlaythroughRecord(dataDir, playthrough);
-    return playthrough.promptSettings;
   });
 
   app.post("/api/playthroughs/:id/quest-action", async (request, reply) => {
@@ -396,7 +280,7 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
     const body = z.object({ content: z.string().optional() }).parse(request.body ?? {});
 
     const controller = abortOnClientDisconnect(reply);
-    const result = await promoteNpcAction(dataDir, id, npcId, providerManager.getProvider(), body.content, providerManager.getMaxTokens(), controller.signal);
+    const result = await promoteNpcAction(dataDir, id, npcId, providerManager.getProvider(), body.content, providerManager.getMaxTokens(), controller.signal, loadPromptConfig(settingsDir).promptConfig);
     if (controller.signal.aborted) return;
     if (!result.ok) return reply.code(result.status).send({ error: result.error });
     return result.state;
@@ -406,7 +290,7 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
     const { id, npcId } = z.object({ id: z.string(), npcId: z.string() }).parse(request.params);
 
     const controller = abortOnClientDisconnect(reply);
-    const result = await promoteNpcDraftAction(dataDir, id, npcId, providerManager.getProvider(), providerManager.getMaxTokens(), controller.signal);
+    const result = await promoteNpcDraftAction(dataDir, id, npcId, providerManager.getProvider(), providerManager.getMaxTokens(), controller.signal, loadPromptConfig(settingsDir).promptConfig);
     if (controller.signal.aborted) return;
     if (!result.ok) return reply.code(result.status).send({ error: result.error });
     return { npc: result.npc, content: result.content, storyContext: result.storyContext };
@@ -443,7 +327,7 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
 
     if (controller.signal.aborted) return;
 
-    const result = await closeChapterAction(dataDir, params.id, summary, provider, true, providerManager.getContextWindow(), controller.signal, summaryDurationMs);
+    const result = await closeChapterAction(dataDir, params.id, summary, provider, true, providerManager.getContextWindow(), controller.signal, summaryDurationMs, loadPromptConfig(settingsDir).promptConfig);
 
     if (controller.signal.aborted) return;
 
@@ -459,7 +343,7 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
       contextWindow: providerManager.getContextWindow(),
       reserveOutputTokens: providerManager.getMaxTokens(),
       calibration: result.state.tokenCalibration
-    });
+    }, loadPromptConfig(settingsDir).promptConfig);
     return {
       state: result.state,
       tokenUsage: {

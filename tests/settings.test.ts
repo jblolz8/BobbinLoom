@@ -31,7 +31,7 @@ describe("app settings store", () => {
   it("returns shipped defaults when user-settings.json is missing", () => {
     const dir = tempDir();
     const settings = loadAppSettings(dir);
-    expect(settings.defaultPresetId).toBe("default");
+    expect(settings.activePresetId).toBe("default");
     expect(settings.themePreset).toBe("default-dark");
     expect(settings.themeMode).toBe("dark");
     expect(settings.avatarShape).toBe("rounded");
@@ -61,7 +61,7 @@ describe("app settings store", () => {
     const settings = loadAppSettings(dir);
 
     // Runtime now lives in user-settings.json; a bare settings.json template is ignored.
-    expect(settings.defaultPresetId).toBe("default");
+    expect(settings.activePresetId).toBe("default");
     expect(settings.themePreset).toBe("default-dark");
     expect(settings.themeMode).toBe("dark");
     expect(settings.avatarShape).toBe("rounded");
@@ -76,16 +76,42 @@ describe("app settings store", () => {
 
     const settings = loadAppSettings(dir);
 
-    expect(settings.defaultPresetId).toBe("default");
+    expect(settings.activePresetId).toBe("default");
     expect(settings.themePreset).toBe("default-dark");
     expect(existsSync(join(dir, "user-settings.json.bak"))).toBe(true);
   });
 
+  it("adopts a legacy defaultPresetId as activePresetId", () => {
+    const dir = tempDir();
+    // Pre-global-config files stored the chosen preset as `defaultPresetId`. The
+    // schema no longer has that field, so without an explicit adoption a user whose
+    // preset was Default (NSFW) would silently revert to the vanilla Default.
+    writeFileSync(
+      join(dir, "user-settings.json"),
+      JSON.stringify({ schemaVersion: 1, defaultPresetId: "default-nsfw", themeMode: "dark" }),
+      "utf8"
+    );
+
+    const settings = loadAppSettings(dir);
+    expect(settings.activePresetId).toBe("default-nsfw");
+    // Everything else still merges over the shipped defaults.
+    expect(settings.themeMode).toBe("dark");
+    expect(settings.avatarShape).toBe("rounded");
+
+    // A file that ALREADY carries the new field wins — the legacy one never overrides it.
+    writeFileSync(
+      join(dir, "user-settings.json"),
+      JSON.stringify({ schemaVersion: 1, defaultPresetId: "default-nsfw", activePresetId: "user-preset" }),
+      "utf8"
+    );
+    expect(loadAppSettings(dir).activePresetId).toBe("user-preset");
+  });
+
   it("saveAppSettings persists runtime overrides to user-settings.json and merges with defaults", () => {
     const dir = tempDir();
-    const saved = saveAppSettings(dir, { defaultPresetId: "default-nsfw" });
+    const saved = saveAppSettings(dir, { activePresetId: "default-nsfw" });
 
-    expect(saved.defaultPresetId).toBe("default-nsfw");
+    expect(saved.activePresetId).toBe("default-nsfw");
     expect(saved.schemaVersion).toBe(1);
     expect(typeof saved.updatedAt).toBe("string");
     // Untouched defaults survive the merge.
@@ -93,13 +119,13 @@ describe("app settings store", () => {
     expect(saved.avatarShape).toBe("rounded");
 
     // Persisted to the runtime file, not the template.
-    expect(loadAppSettings(dir).defaultPresetId).toBe("default-nsfw");
+    expect(loadAppSettings(dir).activePresetId).toBe("default-nsfw");
     expect(existsSync(join(dir, "user-settings.json"))).toBe(true);
     const onDisk = JSON.parse(readFileSync(join(dir, "user-settings.json"), "utf8"));
-    expect(onDisk.defaultPresetId).toBe("default-nsfw");
+    expect(onDisk.activePresetId).toBe("default-nsfw");
 
-    const updated = saveAppSettings(dir, { defaultPresetId: "default" });
-    expect(updated.defaultPresetId).toBe("default");
+    const updated = saveAppSettings(dir, { activePresetId: "default" });
+    expect(updated.activePresetId).toBe("default");
   });
 
   it("saveAppSettings persists avatarShape and persists updates", () => {
@@ -649,7 +675,7 @@ const IMAGE_BLOCK = {
 /** The preset routes resolve `data/` from the process cwd, so this block swaps
  *  the cwd for a hermetic temp dir before importing them (once: the module
  *  graph captures the temp data dirs at import time). */
-describe("image generation: preset routes and the playthrough snapshot", () => {
+describe("image generation: preset routes and the global prompt config", () => {
   let app: ReturnType<typeof Fastify>;
   let dir: string;
   let playthroughsDir: string;
@@ -679,13 +705,15 @@ describe("image generation: preset routes and the playthrough snapshot", () => {
 
     startedIn = process.cwd();
     process.chdir(dir);
-    const [{ presetRoutes }, { playthroughRoutes }] = await Promise.all([
+    const [{ presetRoutes }, { playthroughRoutes }, { promptConfigRoutes }] = await Promise.all([
       import("../src/server/routes/presets"),
-      import("../src/server/routes/playthroughs")
+      import("../src/server/routes/playthroughs"),
+      import("../src/server/routes/promptConfig")
     ]);
     app = Fastify();
     await app.register(presetRoutes);
     await app.register(playthroughRoutes);
+    await app.register(promptConfigRoutes);
     await app.ready();
   });
 
@@ -719,21 +747,77 @@ describe("image generation: preset routes and the playthrough snapshot", () => {
     expect(res.json().imageGeneration).toEqual(IMAGE_BLOCK);
   });
 
-  it("snapshots the block at CREATION, not only when a preset is applied", async () => {
-    // The app creates playthroughs from a preset, so the record must carry that
-    // preset's block from the start. Without it the Image Generation tab's "still
-    // using the block it was created with" marker compares against nothing, and
-    // the read sites fall back to the shipped defaults on a preset that never
-    // shipped them.
-    const created = await app.inject({
-      method: "POST",
-      url: "/api/playthroughs",
-      payload: { name: "Created with a block", blank: true, presetId: "user-with-image" }
+  it("copies a preset's image block into the global config and persists it", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/prompt-config/active",
+      payload: { presetId: "user-with-image" }
     });
-    expect(created.statusCode).toBe(201);
-    expect(created.json().promptSettings.imageGeneration).toEqual(IMAGE_BLOCK);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().activePresetId).toBe("user-with-image");
+    expect(res.json().promptConfig.imageGeneration).toEqual(IMAGE_BLOCK);
+    expect(res.json().promptConfig.modules).toEqual({ turn: [] });
+
+    // Persisted to the runtime settings file, not merely echoed.
+    const onDisk = JSON.parse(readFileSync(join(dir, "data", "user-settings.json"), "utf8"));
+    expect(onDisk.activePresetId).toBe("user-with-image");
+    expect(onDisk.promptConfig.imageGeneration).toEqual(IMAGE_BLOCK);
   });
 
+  it("omits the block when the preset ships none (read-time fallback)", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/prompt-config/active",
+      payload: { presetId: "user-plain" }
+    });
+    expect(res.statusCode).toBe(200);
+    // Undefined, not a copy of nothing: the read sites then fall back to
+    // DEFAULT_IMAGE_GENERATION_SETTINGS, which is the current shipped text.
+    expect(res.json().promptConfig.imageGeneration).toBeUndefined();
+  });
+
+  it("404s a switch to a preset that does not exist", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/prompt-config/active",
+      payload: { presetId: "nope" }
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("patches ONE field of the image block, leaving the rest", async () => {
+    const before = (await app.inject({
+      method: "PUT",
+      url: "/api/prompt-config/active",
+      payload: { presetId: "user-with-image" }
+    })).json().promptConfig.imageGeneration;
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/prompt-config",
+      payload: { imageGeneration: { ...before, instructionMode: "pov" } }
+    });
+    expect(res.statusCode).toBe(200);
+    // One field changed, every other one survived the merge…
+    expect(res.json().promptConfig.imageGeneration).toEqual({ ...before, instructionMode: "pov" });
+    // …and the turn modules are untouched by an image-only patch.
+    expect(res.json().promptConfig.modules).toEqual({ turn: [] });
+  });
+
+  it("400s an invalid image block, with the reason, and writes nothing", async () => {
+    const file = join(dir, "data", "user-settings.json");
+    const before = existsSync(file) ? readFileSync(file, "utf8") : null;
+
+    for (const payload of [{ imageGeneration: { instructionMode: "third" } }, { imageGeneration: { historyMessages: 99 } }]) {
+      const res = await app.inject({ method: "PATCH", url: "/api/prompt-config", payload });
+      expect(res.statusCode, JSON.stringify(payload)).toBe(400);
+      expect(res.json().error).toContain("Invalid prompt config patch");
+    }
+    // A 400 with the reason, rather than the 500 a thrown ZodError would produce —
+    // and no half-written config behind it.
+    const after = existsSync(file) ? readFileSync(file, "utf8") : null;
+    expect(after).toBe(before);
+  });
 
   it("rejects a write to a read-only preset and leaves the file untouched", async () => {
     const before = readFileSync(presetsFile(), "utf8");
@@ -773,52 +857,6 @@ describe("image generation: preset routes and the playthrough snapshot", () => {
     });
   });
 
-  it("snapshots imageGeneration into a playthrough's prompt settings", async () => {
-    const created = await app.inject({
-      method: "POST",
-      url: "/api/playthroughs",
-      payload: { name: "Snapshot", blank: true, presetId: "user-with-image" }
-    });
-    expect(created.statusCode).toBe(201);
-    const id = created.json().id as string;
-
-    const snap = await app.inject({
-      method: "PUT",
-      url: `/api/playthroughs/${id}/prompt-settings`,
-      payload: { presetId: "user-with-image" }
-    });
-    expect(snap.statusCode).toBe(200);
-    expect(snap.json().imageGeneration).toEqual(IMAGE_BLOCK);
-
-    const onDisk = JSON.parse(readFileSync(join(playthroughsDir, `${id}.json`), "utf8"));
-    expect(onDisk.promptSettings.imageGeneration).toEqual(IMAGE_BLOCK);
-
-    // A snapshot is a deep copy: editing the preset afterwards cannot reach it.
-    await app.inject({
-      method: "PUT",
-      url: "/api/prompt-presets/user-with-image",
-      payload: { imageGeneration: { ...IMAGE_BLOCK, positivePrefix: "edited after the snapshot" } }
-    });
-    const after = JSON.parse(readFileSync(join(playthroughsDir, `${id}.json`), "utf8"));
-    expect(after.promptSettings.imageGeneration.positivePrefix).toBe("test prefix");
-  });
-
-  it("omits the snapshot block when the preset has none (read-time fallback)", async () => {
-    const created = await app.inject({
-      method: "POST",
-      url: "/api/playthroughs",
-      payload: { name: "No image block", blank: true, presetId: "user-plain" }
-    });
-    expect(created.statusCode).toBe(201);
-    const snap = await app.inject({
-      method: "PUT",
-      url: `/api/playthroughs/${created.json().id}/prompt-settings`,
-      payload: { presetId: "user-plain" }
-    });
-    expect(snap.statusCode).toBe(200);
-    expect(snap.json().imageGeneration).toBeUndefined();
-  });
-
   it("parses a preset with no imageGeneration block and falls back to the shipped defaults", () => {
     const parsed = PromptPresetSchema.parse({ id: "legacy", name: "Legacy", readonly: false, modules: { turn: [] } });
     expect(parsed.imageGeneration).toBeUndefined();
@@ -827,218 +865,46 @@ describe("image generation: preset routes and the playthrough snapshot", () => {
     expect(resolved.promptCharacterLimit).toBe(1200);
   });
 
-  it("refreshes ONLY the image prompt block, leaving modules and format alone", async () => {
-    const created = await app.inject({
-      method: "POST",
-      url: "/api/playthroughs",
-      payload: { name: "Refreshable", blank: true, presetId: "user-with-image" }
-    });
-    const id = created.json().id as string;
+});
 
-    // Read the preset rather than assuming the shared fixture's state: sibling
-    // tests in this describe edit it too, and only one of them restores it.
-    const originalPreset = (await app.inject({ method: "GET", url: "/api/prompt-presets/user-with-image" })).json().imageGeneration;
-    const before = (await app.inject({
-      method: "PUT",
-      url: `/api/playthroughs/${id}/prompt-settings`,
-      payload: { presetId: "user-with-image" }
-    })).json();
-    expect(before.imageGeneration).toEqual(originalPreset);
-
-    // The preset's instruction moves on (this is what editing a preset does) and
-    // the playthrough keeps running the block it was created with — the whole
-    // reason the refresh action exists.
-    const edited = await app.inject({
-      method: "PUT",
-      url: "/api/prompt-presets/user-with-image",
-      payload: { imageGeneration: { ...originalPreset, instruction: "REWRITTEN INSTRUCTION" } }
-    });
-    expect(edited.statusCode).toBe(200);
-
-    const res = await app.inject({
-      method: "POST",
-      url: `/api/playthroughs/${id}/prompt-settings/refresh-image-prompt`
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().imageGeneration.instruction).toBe("REWRITTEN INSTRUCTION");
-    // The whole block travels, not just the instruction: a mode or a count the
-    // playthrough never picked up would be a refresh that half-worked.
-    expect(res.json().imageGeneration.instructionMode).toBe("scene");
-    expect(res.json().imageGeneration.historyMessages).toBe(3);
-    expect(res.json().imageGeneration.includePreviousAnswer).toBe(true);
-    // Surgical: the rest of the prompt settings are untouched. Re-selecting the
-    // preset instead would have rewritten these too.
-    expect(res.json().modules).toEqual(before.modules);
-    expect(res.json().characterFormat).toEqual(before.characterFormat);
-    expect(res.json().presetName).toBe(before.presetName);
-    // …and it is on disk, not merely echoed.
-    const stored = JSON.parse(readFileSync(join(playthroughsDir, `${id}.json`), "utf8"));
-    expect(stored.promptSettings.imageGeneration.instruction).toBe("REWRITTEN INSTRUCTION");
-    expect(stored.promptSettings.modules).toEqual(before.modules);
-
-    // Restore the shared fixture for the tests after this one.
-    await app.inject({
-      method: "PUT",
-      url: "/api/prompt-presets/user-with-image",
-      payload: { imageGeneration: originalPreset }
-    });
-  });
-
-  it("leaves the snapshot cleared when the preset ships no block", async () => {
-    const created = await app.inject({
-      method: "POST",
-      url: "/api/playthroughs",
-      // `user-plain` is the fixture with no block: `user-no-image` gets one
-      // written to it by a sibling test earlier in this describe.
-      payload: { name: "Blockless", blank: true, presetId: "user-plain" }
-    });
-    const id = created.json().id as string;
-    const seeded = await app.inject({
-      method: "PUT",
-      url: `/api/playthroughs/${id}/prompt-settings`,
-      payload: { presetId: "user-plain" }
-    });
-    expect(seeded.json().imageGeneration).toBeUndefined();
-
-    const res = await app.inject({
-      method: "POST",
-      url: `/api/playthroughs/${id}/prompt-settings/refresh-image-prompt`
-    });
-    expect(res.statusCode).toBe(200);
-    // Undefined, not a copy of nothing: the read sites then fall back to
-    // DEFAULT_IMAGE_GENERATION_SETTINGS, which is the current shipped text.
-    expect(res.json().imageGeneration).toBeUndefined();
-  });
-
-  it("patches ONE field of the playthrough's image block, leaving the rest", async () => {
-    // What a read-only preset needs: the shipped block cannot be edited, so the
-    // Instruction Mode is written to THIS playthrough's snapshot instead.
-    const created = await app.inject({
-      method: "POST",
-      url: "/api/playthroughs",
-      payload: { name: "Patchable", blank: true, presetId: "user-with-image" }
-    });
-    const id = created.json().id as string;
-    // Taken from the record itself, not from IMAGE_BLOCK: sibling tests in this
-    // describe edit the shared `user-with-image` fixture, so the only honest
-    // baseline is this playthrough's own snapshot.
-    const preState = created.json().promptSettings.imageGeneration;
-    const beforePreset = readFileSync(presetsFile(), "utf8");
-
-    const res = await app.inject({
-      method: "PATCH",
-      url: `/api/playthroughs/${id}/prompt-settings/image-block`,
-      payload: { instructionMode: "pov" }
-    });
-    expect(res.statusCode).toBe(200);
-    // One field changed, every other one survived the merge…
-    expect(res.json().imageGeneration).toEqual({ ...preState, instructionMode: "pov" });
-    // …on disk, not merely echoed…
-    const stored = JSON.parse(readFileSync(join(playthroughsDir, `${id}.json`), "utf8"));
-    expect(stored.promptSettings.imageGeneration.instructionMode).toBe("pov");
-    // …and the preset it came from is untouched.
-    expect(readFileSync(presetsFile(), "utf8")).toBe(beforePreset);
-  });
-
-  it("400s an invalid patch, with the reason, and writes nothing", async () => {
-    const created = await app.inject({
-      method: "POST",
-      url: "/api/playthroughs",
-      payload: { name: "Unpatched", blank: true, presetId: "user-with-image" }
-    });
-    const id = created.json().id as string;
-    const file = join(playthroughsDir, `${id}.json`);
-    const before = readFileSync(file, "utf8");
-
-    for (const payload of [{ instructionMode: "third" }, { historyMessages: 99 }]) {
-      const res = await app.inject({ method: "PATCH", url: `/api/playthroughs/${id}/prompt-settings/image-block`, payload });
-      expect(res.statusCode, JSON.stringify(payload)).toBe(400);
-      expect(res.json().error).toContain("Invalid image block patch");
+/** The global config's bootstrap path: a fresh install (or a pre-change
+ *  user-settings.json) has no promptConfig, so the first read seeds it from the
+ *  active preset and persists it. Without this a fresh install would generate
+ *  with an empty module set. */
+describe("global prompt config seeding", () => {
+  it("seeds and persists from the active preset when nothing is stored yet", async () => {
+    const root = mkdtempSync(join(tmpdir(), "bobbinloom-seed-"));
+    const startedIn = process.cwd();
+    try {
+      mkdirSync(join(root, "data"), { recursive: true });
+      writeFileSync(
+        join(root, "data", "prompt-presets.json"),
+        JSON.stringify([
+          {
+            id: "default",
+            name: "Default",
+            readonly: true,
+            modules: {
+              turn: [{ id: "mod_seed", name: "Seed module", description: "d", content: "SEEDED", order: 1, enabled: true }]
+            },
+            imageGeneration: { ...IMAGE_BLOCK }
+          }
+        ]),
+        "utf8"
+      );
+      process.chdir(root);
+      const { loadPromptConfig } = await import("../src/server/promptConfigStore");
+      const state = loadPromptConfig(join(root, "data"));
+      expect(state.activePresetId).toBe("default");
+      expect(state.promptConfig.modules.turn).toHaveLength(1);
+      expect(state.promptConfig.modules.turn[0].content).toBe("SEEDED");
+      expect(state.promptConfig.imageGeneration).toEqual(IMAGE_BLOCK);
+      // Persisted, so the next read returns the same thing rather than re-seeding.
+      expect(existsSync(join(root, "data", "user-settings.json"))).toBe(true);
+    } finally {
+      process.chdir(startedIn);
+      rmSync(root, { recursive: true, force: true });
     }
-    // A 400 with the reason, rather than the 500 a thrown ZodError would produce —
-    // and no half-written block behind it.
-    expect(readFileSync(file, "utf8")).toBe(before);
-  });
-
-  it("400s a playthrough with no prompt settings at all", async () => {
-    const created = await app.inject({
-      method: "POST",
-      url: "/api/playthroughs",
-      payload: { name: "Settingsless", blank: true, presetId: "user-with-image" }
-    });
-    const id = created.json().id as string;
-    const file = join(playthroughsDir, `${id}.json`);
-    const record = JSON.parse(readFileSync(file, "utf8"));
-    delete record.promptSettings;
-    writeFileSync(file, JSON.stringify(record));
-
-    const res = await app.inject({
-      method: "PATCH",
-      url: `/api/playthroughs/${id}/prompt-settings/image-block`,
-      payload: { instructionMode: "scene" }
-    });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error).toContain("no prompt settings");
-  });
-
-  it("completes a snapshot that never carried a block, from the shipped defaults", async () => {
-    const created = await app.inject({
-      method: "POST",
-      url: "/api/playthroughs",
-      payload: { name: "Blockless patch", blank: true, presetId: "user-plain" }
-    });
-    const id = created.json().id as string;
-    // Seeded through the preset apply, exactly like the sibling "clears" test, so
-    // the snapshot is known to carry no block before the patch.
-    const seeded = await app.inject({
-      method: "PUT",
-      url: `/api/playthroughs/${id}/prompt-settings`,
-      payload: { presetId: "user-plain" }
-    });
-    expect(seeded.json().imageGeneration).toBeUndefined();
-
-    const res = await app.inject({
-      method: "PATCH",
-      url: `/api/playthroughs/${id}/prompt-settings/image-block`,
-      payload: { instructionMode: "scene" }
-    });
-    expect(res.statusCode).toBe(200);
-    // The read sites would have resolved DEFAULT_IMAGE_GENERATION_SETTINGS for this
-    // playthrough, so the merge starts from there — not from an empty block.
-    expect(res.json().imageGeneration).toEqual({ ...DEFAULT_IMAGE_GENERATION_SETTINGS, instructionMode: "scene" });
-  });
-
-  it("404s a refresh whose preset is gone, and names it", async () => {
-    const created = await app.inject({
-      method: "POST",
-      url: "/api/prompt-presets",
-      payload: { name: "Doomed", cloneFromId: "user-with-image" }
-    });
-    const presetId = created.json().id as string;
-    const pt = await app.inject({
-      method: "POST",
-      url: "/api/playthroughs",
-      payload: { name: "Orphan", blank: true, presetId }
-    });
-    const id = pt.json().id as string;
-    await app.inject({ method: "PUT", url: `/api/playthroughs/${id}/prompt-settings`, payload: { presetId } });
-    await app.inject({ method: "DELETE", url: `/api/prompt-presets/${presetId}` });
-
-    const res = await app.inject({
-      method: "POST",
-      url: `/api/playthroughs/${id}/prompt-settings/refresh-image-prompt`
-    });
-    expect(res.statusCode).toBe(404);
-    expect(res.json().error).toContain("Doomed");
-  });
-
-  it("404s a refresh for an unknown playthrough", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/playthroughs/nope/prompt-settings/refresh-image-prompt"
-    });
-    expect(res.statusCode).toBe(404);
-    expect(res.json().error).toBe("Playthrough not found");
   });
 });
 

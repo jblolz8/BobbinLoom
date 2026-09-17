@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ChatMessageSchema,
   ImageGenerationSettingsSchema,
-  PlaythroughPromptSettingsSchema,
+  PromptConfigSchema,
   PromptPresetSchema,
   ProviderConnectionSchema
 } from "../src/schemas";
@@ -1089,7 +1089,7 @@ describe("shared schema additions (message images + image generation settings)",
     const preset = PromptPresetSchema.parse({ id: "p", name: "P", readonly: false, modules: { turn: [] } });
     expect(preset.imageGeneration).toBeUndefined();
 
-    const snapshot = PlaythroughPromptSettingsSchema.parse({ presetId: "p", presetName: "P", modules: { turn: [] } });
+    const snapshot = PromptConfigSchema.parse({ modules: { turn: [] } });
     expect(snapshot.imageGeneration).toBeUndefined();
   });
 

@@ -2,7 +2,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { atomicWriteJson, quarantineFile, readJsonFile } from "./persistence";
 import { AppSettingsSchema } from "../schemas";
-import type { AppSettings, AvatarShape, CustomThemeColors, TagTaxonomyConfig, ThemeMode } from "../schemas";
+import type { AppSettings, AvatarShape, CustomThemeColors, PromptConfig, TagTaxonomyConfig, ThemeMode } from "../schemas";
 
 /**
  * Shipped product defaults — the single source of truth for a fresh install
@@ -12,7 +12,7 @@ import type { AppSettings, AvatarShape, CustomThemeColors, TagTaxonomyConfig, Th
  */
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   schemaVersion: 1,
-  defaultPresetId: "default",
+  activePresetId: "default",
   avatarShape: "rounded",
   themeMode: "dark",
   themePreset: "default-dark",
@@ -51,13 +51,23 @@ export function loadAppSettings(dataDir: string): AppSettings {
     console.warn(`[settings] user-settings.json invalid — quarantined to ${backup ?? "?"}; using defaults.`);
     return { ...DEFAULT_APP_SETTINGS };
   }
-  return { ...DEFAULT_APP_SETTINGS, ...parsed.data };
+  const merged: AppSettings = { ...DEFAULT_APP_SETTINGS, ...parsed.data };
+  // Legacy migration: before the global prompt config, the chosen preset lived in
+  // `defaultPresetId`. Zod strips that unknown key, so read it off the RAW object.
+  // Adopting it once keeps a user whose preset was e.g. Default (NSFW) from
+  // silently reverting to the vanilla Default on the first read after the change.
+  const legacy = result.data as { defaultPresetId?: unknown };
+  if (parsed.data.activePresetId === undefined && typeof legacy.defaultPresetId === "string" && legacy.defaultPresetId) {
+    merged.activePresetId = legacy.defaultPresetId;
+  }
+  return merged;
 }
 
 export function saveAppSettings(
   dataDir: string,
   input: {
-    defaultPresetId?: string;
+    activePresetId?: string;
+    promptConfig?: PromptConfig;
     tagTaxonomy?: TagTaxonomyConfig;
     avatarShape?: AvatarShape;
     themeMode?: ThemeMode;

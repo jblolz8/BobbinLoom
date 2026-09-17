@@ -221,4 +221,4 @@ user applies changes.
 ## Data files
 
 - `data/characters/<slug>/` — library records, avatars, versioned templates.
-- `data/user-settings.json` — runtime overrides: `tagTaxonomy` (custom categories + tag overrides), `defaultPresetId`, theme/avatar shape. Gitignored; `data/settings.json` is the shipped-default template only.
+- `data/user-settings.json` — runtime overrides: the **global prompt config** (`activePresetId` + `promptConfig`), `tagTaxonomy` (custom categories + tag overrides), theme/avatar shape. Gitignored; `data/settings.json` is the shipped-default template only.

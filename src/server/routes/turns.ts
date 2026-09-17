@@ -2,7 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { getPlaythroughRecord, updatePlaythroughRecord } from "../store";
 import { editChatMessage, executeTurn, retryAssistantTurn, truncateChat, type TurnExecution } from "../turnActions";
-import { abortOnClientDisconnect, dataDir, providerManager } from "./helpers";
+import { loadPromptConfig } from "../promptConfigStore";
+import { abortOnClientDisconnect, dataDir, providerManager, settingsDir } from "./helpers";
 
 const TurnBody = z.object({
   playthroughId: z.string(),
@@ -44,7 +45,8 @@ export async function turnRoutes(app: FastifyInstance): Promise<void> {
         providerManager.getProvider(),
         body.suggestedChoicesEnabled,
         providerManager.getContextWindow(),
-        { signal: controller.signal, hideUserMessage: body.hideUserMessage }
+        { signal: controller.signal, hideUserMessage: body.hideUserMessage },
+        loadPromptConfig(settingsDir).promptConfig
       );
     } catch (error) {
       if (controller.signal.aborted) return;
@@ -81,7 +83,8 @@ export async function turnRoutes(app: FastifyInstance): Promise<void> {
       providerManager.getProvider(),
       body.suggestedChoicesEnabled,
       providerManager.getContextWindow(),
-      controller.signal
+      controller.signal,
+      loadPromptConfig(settingsDir).promptConfig
     );
 
     if (controller.signal.aborted) return;

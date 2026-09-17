@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { applyStatePatch } from "../engine/engine";
 import { seedMemorySummary, summaryFromContent } from "../engine/characterSections";
 import { ensureAllSections, resolveCharacterFormat } from "../engine/characterFormat";
-import type { Chapter, ChapterMetaSummary, CharacterTemplate, Playthrough, SimpleNPC } from "../schemas";
+import type { Chapter, ChapterMetaSummary, CharacterTemplate, Playthrough, PromptConfig, SimpleNPC } from "../schemas";
 import { getCharacterTemplate, getPlaythroughRecord, listCharacterTemplates, saveCharacterTemplateRecord, updatePlaythroughRecord } from "./store";
 import { buildLorebookContext, lorebookBudgetChars } from "./lorebookContext";
 import { executeTurn } from "./turnActions";
@@ -104,7 +104,8 @@ export async function promoteNpcAction(
   provider: TurnProvider,
   acceptedContent?: string,
   maxTokens = 4000,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  promptConfig?: PromptConfig
 ): Promise<StateActionOutcome> {
   const loaded = load(dataDir, playthroughId);
   if (isFailure(loaded)) return loaded;
@@ -113,7 +114,7 @@ export async function promoteNpcAction(
   if (!npc) return { ok: false, status: 404, error: "NPC not found" };
 
   const storyContext = buildPromoteStoryContext(loaded, npc, maxTokens);
-  const format = resolveCharacterFormat(loaded.promptSettings?.characterFormat);
+  const format = resolveCharacterFormat(promptConfig?.characterFormat);
 
   // 1) Generate (only when no approved draft content was supplied)
   let content = acceptedContent;
@@ -141,7 +142,7 @@ export async function promoteNpcAction(
   const memorySummary = seedMemorySummary(npc.name, content);
 
   // 3) Apply (single commit — no partial state)
-  const result = applyStatePatch(loaded, { npcPromote: { npcId, content, memorySummary } });
+  const result = applyStatePatch(loaded, { npcPromote: { npcId, content, memorySummary } }, promptConfig?.characterFormat);
   result.state.updatedAt = new Date().toISOString();
   updatePlaythroughRecord(dataDir, result.state);
   return { ok: true, state: result.state, applied: result.applied, rejected: result.rejected, warnings: result.warnings };
@@ -157,7 +158,8 @@ export async function promoteNpcDraftAction(
   npcId: string,
   provider: TurnProvider,
   maxTokens = 4000,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  promptConfig?: PromptConfig
 ): Promise<PromoteDraftOutcome> {
   const loaded = load(dataDir, playthroughId);
   if (isFailure(loaded)) return loaded;
@@ -165,7 +167,7 @@ export async function promoteNpcDraftAction(
   if (!npc) return { ok: false, status: 404, error: "NPC not found" };
 
   const storyContext = buildPromoteStoryContext(loaded, npc, maxTokens);
-  const format = resolveCharacterFormat(loaded.promptSettings?.characterFormat);
+  const format = resolveCharacterFormat(promptConfig?.characterFormat);
   let content: string;
   try {
     content = await provider.generateCharacterSheet(
@@ -386,7 +388,8 @@ export async function closeChapterAction(
   suggestedChoicesEnabled: boolean,
   contextWindow: number = 65536,
   signal?: AbortSignal,
-  summaryDurationMs?: number
+  summaryDurationMs?: number,
+  promptConfig?: PromptConfig
 ): Promise<CloseChapterResult> {
   const loaded = load(dataDir, playthroughId);
   if (isFailure(loaded)) return loaded;
@@ -508,7 +511,8 @@ export async function closeChapterAction(
       provider,
       suggestedChoicesEnabled,
       contextWindow,
-      { hideUserMessage: true, chapterOpening: true, ...(signal ? { signal } : {}) }
+      { hideUserMessage: true, chapterOpening: true, ...(signal ? { signal } : {}) },
+      promptConfig
     );
     updatePlaythroughRecord(dataDir, openingResult.state);
     return { ok: true, state: openingResult.state };

@@ -13,7 +13,7 @@ import {
   deleteCharacterProfileAvatar,
   getCharacterAvatarUrl,
 } from "../../api";
-import { convertCharacterApply, convertCharacterGenerate, reformatCharacterApply, reformatCharacterGenerate, suggestCharacterTags, brainstormCharacter, getDefaultPresetId, listPresets, getPreset } from "../../api";
+import { convertCharacterApply, convertCharacterGenerate, reformatCharacterApply, reformatCharacterGenerate, suggestCharacterTags, brainstormCharacter, getPromptConfig, listPresets, getPreset } from "../../api";
 import type { CharacterTemplateUpdate, ProposedSectionChange, CharacterBrainstormResult, Preset } from "../../api";
 import { CHARACTER_SHEET_EXAMPLE, applySectionChanges } from "../../../engine/characterSections";
 import { isFormatAligned, resolveCharacterFormat } from "../../../engine/characterFormat";
@@ -538,12 +538,12 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     let cancelled = false;
     (async () => {
       try {
-        const [summaries, def] = await Promise.all([listPresets(), getDefaultPresetId()]);
+        const [summaries, def] = await Promise.all([listPresets(), getPromptConfig()]);
         const full = await Promise.all(summaries.map((s) => getPreset(s.id)));
         if (cancelled) return;
         setPresetOptions(full);
-        // Default the picker to the active preset (global default when no playthrough).
-        setTargetFormatId((cur) => cur ?? def.defaultPresetId);
+        // Default the picker to the active preset (the one backing the global config).
+        setTargetFormatId((cur) => cur ?? def.activePresetId);
       } catch {
         // Ignore preset-load failures — the format falls back to Default.
       }

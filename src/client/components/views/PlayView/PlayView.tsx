@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   buildImageUrl,
+  getPromptConfig,
   listProviderConnections,
   type ImageGenerationProgress,
-  type PlaythroughPromptSettings,
   type TokenUsage,
   type Persona,
   type QuestAction
@@ -82,7 +82,6 @@ export type PlayViewProps = {
   handleDismissFailedNotice?: () => void;
   openPersonaManager: () => void;
   handlePersonasChanged: (refreshed: Persona[]) => void;
-  handlePlaythroughPromptSettings: (updated: PlaythroughPromptSettings) => void;
   handleStartNewWithSameScenario: (
     scenarioDescription: string,
     personaId: string | undefined,
@@ -192,7 +191,6 @@ export function PlayView(props: PlayViewProps) {
     handleDismissNotice,
     handleDismissFailedNotice,
     handlePersonasChanged,
-    handlePlaythroughPromptSettings,
     handleStartNewWithSameScenario,
     isMobile,
     mobileTab,
@@ -260,9 +258,16 @@ export function PlayView(props: PlayViewProps) {
     void refreshImageProvider();
   }, [refreshImageProvider]);
 
-  // The preset's soft prompt limit, when this playthrough's snapshot carries one
-  // (the prompt modal then shows a real `n / limit` counter).
-  const imageCharacterLimit = playthrough.promptSettings?.imageGeneration?.promptCharacterLimit;
+  // The global config's soft prompt limit (the prompt modal then shows a real
+  // `n / limit` counter). Re-read when Settings closes, since the limit is edited
+  // there — and it now lives in the one global config, not a playthrough snapshot.
+  const [imageCharacterLimit, setImageCharacterLimit] = useState<number | undefined>(undefined);
+  const refreshImageCharacterLimit = useCallback(() => {
+    void getPromptConfig()
+      .then((state) => setImageCharacterLimit(state.promptConfig.imageGeneration?.promptCharacterLimit))
+      .catch(() => setImageCharacterLimit(undefined));
+  }, []);
+  useEffect(() => { refreshImageCharacterLimit(); }, [refreshImageCharacterLimit]);
 
   function handleCurrentDeleted(remaining: Playthrough[]) {
     if (remaining.length > 0) {
@@ -525,12 +530,11 @@ export function PlayView(props: PlayViewProps) {
         onClose={() => {
           setSettingsOpen(false);
           // The image provider is configured in this modal, so re-derive
-          // availability (and the caption) on the way out.
+          // availability (and the caption) on the way out. The prompt character
+          // limit is edited there too, so pick that up as well.
           void refreshImageProvider();
+          refreshImageCharacterLimit();
         }}
-        playthroughId={playthrough?.id ?? null}
-        playthroughPromptSettings={playthrough?.promptSettings ?? null}
-        onPlaythroughPromptSettings={handlePlaythroughPromptSettings}
         choicesEnabled={choicesEnabled}
         setChoicesEnabled={setChoicesEnabled}
         showDebug={showDebug}

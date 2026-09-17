@@ -9,7 +9,7 @@ import {
   restoreSnapshotState,
   updateTimingStates
 } from "../engine/engine";
-import type { Playthrough, ScenarioSeed } from "../schemas";
+import type { Playthrough, PromptConfig, ScenarioSeed } from "../schemas";
 import type { EntryTimingState, LorebookEntry, TurnSnapshot } from "../schemas";
 import type { TurnProvider } from "./provider";
 import type { PromptUsageBreakdown } from "./provider";
@@ -86,16 +86,17 @@ export async function executeTurn(
   provider: TurnProvider,
   suggestedChoicesEnabled: boolean,
   contextWindow: number = 65536,
-  options?: TurnOptions
+  options?: TurnOptions,
+  promptConfig?: PromptConfig
 ): Promise<TurnExecution> {
   const snapshot = takeTurnSnapshot(playthrough);
   const parsedInput = parseUserInput(input);
   const startTime = performance.now();
-  const { turn: assistantTurn, promptUsage, measuredUsage, model, rawInput, rawOutput, finishReason } = await provider.generateTurn(parsedInput, playthrough, suggestedChoicesEnabled, options?.signal);
+  const { turn: assistantTurn, promptUsage, measuredUsage, model, rawInput, rawOutput, finishReason } = await provider.generateTurn(parsedInput, playthrough, suggestedChoicesEnabled, promptConfig ?? { modules: { turn: [] } }, options?.signal);
   const durationMs = Math.round(performance.now() - startTime);
 
   const patchResult = assistantTurn.statePatch
-    ? applyStatePatch(playthrough, assistantTurn.statePatch)
+    ? applyStatePatch(playthrough, assistantTurn.statePatch, promptConfig?.characterFormat)
     : { state: playthrough, applied: [], rejected: [], warnings: [] };
 
   const next = patchResult.state;
@@ -209,7 +210,7 @@ export async function executeTurn(
         castPresence,
         ...(measuredUsage ? { measured: measuredUsage } : {})
       }
-    : estimateTokenUsageFallback(next, input, contextWindow);
+    : estimateTokenUsageFallback(next, input, contextWindow, promptConfig);
 
   // Self-calibrate: remember this turn's measured/estimated ratio so the NEXT
   // turn's budget maths self-corrects. Only a real measurement updates it —
@@ -238,10 +239,10 @@ export async function executeTurn(
  * Rough chars/4 estimate used only when the provider doesn't supply a real
  * measurement (e.g. MockProvider, which assembles no prompt).
  */
-function estimateTokenUsageFallback(state: Playthrough, input: string, contextWindow: number): TokenUsage {
+function estimateTokenUsageFallback(state: Playthrough, input: string, contextWindow: number, promptConfig?: PromptConfig): TokenUsage {
   const est = (text: string) => Math.ceil(text.length / 4);
 
-  const moduleContent = Object.values(state.promptSettings?.modules ?? {})
+  const moduleContent = Object.values(promptConfig?.modules ?? {})
     .flat()
     .filter((m) => m.enabled)
     .sort((a, b) => a.order - b.order)
@@ -310,7 +311,8 @@ export async function retryAssistantTurn(
   provider: TurnProvider,
   suggestedChoicesEnabled: boolean,
   contextWindow: number = 65536,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  promptConfig?: PromptConfig
 ): Promise<RetryOutcome> {
   const playthrough = getPlaythroughRecord(dataDir, playthroughId);
   if (!playthrough) {
@@ -365,7 +367,8 @@ export async function retryAssistantTurn(
     provider,
     suggestedChoicesEnabled,
     contextWindow,
-    retryOptions ? { ...retryOptions, ...(signal ? { signal } : {}) } : signal ? { signal } : undefined
+    retryOptions ? { ...retryOptions, ...(signal ? { signal } : {}) } : signal ? { signal } : undefined,
+    promptConfig
   );
 
   // Client cancelled — drop the regenerated turn without persisting it.

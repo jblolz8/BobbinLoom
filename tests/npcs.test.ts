@@ -15,7 +15,7 @@ const SECOND_TEMPLATE: CharacterTemplate = {
 };
 
 function twoCastPlaythrough() {
-  return createInitialPlaythrough("Two Cast", undefined, "default", "Default", undefined, [
+  return createInitialPlaythrough("Two Cast", undefined, [
     structuredClone(DEMO_TEMPLATE),
     structuredClone(SECOND_TEMPLATE)
   ]);
@@ -48,7 +48,7 @@ function makeSeed(): ScenarioSeed {
 
 describe("basic NPC lifecycle", () => {
   it("instantiates Mira from the demo template", () => {
-    const pt = createInitialPlaythrough("Test", undefined, "default", "Default", undefined, undefined);
+    const pt = createInitialPlaythrough("Test");
     expect(pt.characters.length).toBe(1);
     const mira = pt.characters[0];
     expect(mira.name).toBe("Mira");
@@ -75,7 +75,7 @@ describe("basic NPC lifecycle", () => {
   });
 
   it("applies characterMood patch", () => {
-    const pt = createInitialPlaythrough("Test", undefined, "default", "Default", undefined, undefined);
+    const pt = createInitialPlaythrough("Test");
     const result = applyStatePatch(pt, {
       characterMood: [{ characterId: pt.characters[0].id, mood: "furious" }]
     });
@@ -84,7 +84,7 @@ describe("basic NPC lifecycle", () => {
   });
 
   it("applies characterTowardPlayer patch", () => {
-    const pt = createInitialPlaythrough("Test", undefined, "default", "Default", undefined, undefined);
+    const pt = createInitialPlaythrough("Test");
     const result = applyStatePatch(pt, {
       characterTowardPlayer: [{ characterId: pt.characters[0].id, towardPlayer: "suspicious" }]
     });
@@ -92,7 +92,7 @@ describe("basic NPC lifecycle", () => {
   });
 
   it("applies characterSectionUpdate patch", () => {
-    const pt = createInitialPlaythrough("Test", undefined, "default", "Default", undefined, undefined);
+    const pt = createInitialPlaythrough("Test");
     const charId = pt.characters[0].id;
 
     const result = applyStatePatch(pt, {
@@ -104,7 +104,7 @@ describe("basic NPC lifecycle", () => {
   });
 
   it("characterSectionUpdate accepts any header and inserts a missing section", () => {
-    const pt = createInitialPlaythrough("Test", undefined, "default", "Default", undefined, undefined);
+    const pt = createInitialPlaythrough("Test");
     const charId = pt.characters[0].id;
 
     const result = applyStatePatch(pt, {
@@ -116,7 +116,7 @@ describe("basic NPC lifecycle", () => {
   });
 
   it("characterSectionRemove deletes a whole section (and clears structured clothing)", () => {
-    const pt = createInitialPlaythrough("Test", undefined, "default", "Default", undefined, undefined);
+    const pt = createInitialPlaythrough("Test");
     const charId = pt.characters[0].id;
     const tplId = pt.characters[0].templateId;
 
@@ -133,7 +133,7 @@ describe("basic NPC lifecycle", () => {
   });
 
   it("characterSectionRename renames a header and preserves its body", () => {
-    const pt = createInitialPlaythrough("Test", undefined, "default", "Default", undefined, undefined);
+    const pt = createInitialPlaythrough("Test");
     const charId = pt.characters[0].id;
     const tplId = pt.characters[0].templateId;
 
@@ -147,7 +147,7 @@ describe("basic NPC lifecycle", () => {
   });
 
   it("rejects characterSectionUpdate for unknown character", () => {
-    const pt = createInitialPlaythrough("Test", undefined, "default", "Default", undefined, undefined);
+    const pt = createInitialPlaythrough("Test");
 
     const result = applyStatePatch(pt, {
       characterSectionUpdate: [{ characterId: "nonexistent", section: "Appearance", content: "Whatever" }]
@@ -156,7 +156,7 @@ describe("basic NPC lifecycle", () => {
   });
 
   it("applies characterConditionsAdd/Remove patches", () => {
-    const pt = createInitialPlaythrough("Test", undefined, "default", "Default", undefined, undefined);
+    const pt = createInitialPlaythrough("Test");
     const charId = pt.characters[0].id;
     
     const addResult = applyStatePatch(pt, {
@@ -171,7 +171,7 @@ describe("basic NPC lifecycle", () => {
   });
 
   it("applies characterFlagsAdd/Remove patches", () => {
-    const pt = createInitialPlaythrough("Test", undefined, "default", "Default", undefined, undefined);
+    const pt = createInitialPlaythrough("Test");
     const charId = pt.characters[0].id;
     
     const addResult = applyStatePatch(pt, {
@@ -186,7 +186,7 @@ describe("basic NPC lifecycle", () => {
   });
 
   it("applies characterMemory patch", () => {
-    const pt = createInitialPlaythrough("Test", undefined, "default", "default", undefined, undefined);
+    const pt = createInitialPlaythrough("Test");
     const charId = pt.characters[0].id;
     const result = applyStatePatch(pt, {
       characterMemory: [{ characterId: charId, memorySummary: "Mira now distrusts the player." }]
@@ -195,7 +195,7 @@ describe("basic NPC lifecycle", () => {
   });
 
   it("resolves characterId by name (case-insensitive)", () => {
-    const pt = createInitialPlaythrough("Test", undefined, "default", "Default", undefined, undefined);
+    const pt = createInitialPlaythrough("Test");
     const result = applyStatePatch(pt, {
       characterMood: [{ characterId: "mira", mood: "elated" }]
     });
@@ -203,7 +203,7 @@ describe("basic NPC lifecycle", () => {
   });
 
   it("promotes a background NPC to main cast", () => {
-    const pt = createInitialPlaythrough("Test", undefined, "default", "Default", undefined, undefined);
+    const pt = createInitialPlaythrough("Test");
     // First add an NPC
     const withNpc = applyStatePatch(pt, {
       npcAdd: [{ name: "Shopkeep", description: "A friendly shopkeeper.", disposition: "friendly" }]
@@ -224,7 +224,7 @@ describe("basic NPC lifecycle", () => {
   });
 
   it("promotes with a custom memorySummary", () => {
-    const pt = createInitialPlaythrough("Test", undefined, "default", "Default", undefined, undefined);
+    const pt = createInitialPlaythrough("Test");
     const withNpc = applyStatePatch(pt, { npcAdd: [{ name: "Shopkeep", description: "A friendly shopkeeper.", disposition: "friendly" }] });
     const npcId = withNpc.state.npcs[0].id;
     const result = applyStatePatch(withNpc.state, { npcPromote: { npcId, memorySummary: "Shopkeep — Cheerful" } });
@@ -233,7 +233,7 @@ describe("basic NPC lifecycle", () => {
   });
 
   it("promotes without content into a starter sheet preserving the NPC info", () => {
-    const pt = createInitialPlaythrough("Test", undefined, "default", "Default", undefined, undefined);
+    const pt = createInitialPlaythrough("Test");
     const withNpc = applyStatePatch(pt, {
       npcAdd: [{ name: "Shopkeep", description: "A friendly shopkeeper.", disposition: "friendly" }]
     });
@@ -248,7 +248,7 @@ describe("basic NPC lifecycle", () => {
   });
 
   it("promote with content stores the sheet verbatim on the promoted template", () => {
-    const pt = createInitialPlaythrough("Test", undefined, "default", "Default", undefined, undefined);
+    const pt = createInitialPlaythrough("Test");
     const withNpc = applyStatePatch(pt, { npcAdd: [{ name: "Borg", description: "Gruff blacksmith" }] });
     const npcId = withNpc.state.npcs[0].id;
     const sheet = "[Species]: Dwarf\n\n[Body]\n- Height: short\n\n[Personality]\n- Sturdy and quiet";
@@ -260,7 +260,7 @@ describe("basic NPC lifecycle", () => {
   });
 
   it("snapshot includes characters and characterTemplates", () => {
-    const pt = createInitialPlaythrough("Test", undefined, "default", "Default", undefined, undefined);
+    const pt = createInitialPlaythrough("Test");
     const snap = takeTurnSnapshot(pt);
     expect(snap.characters.length).toBe(1);
     expect(snap.characterTemplates.length).toBe(1);

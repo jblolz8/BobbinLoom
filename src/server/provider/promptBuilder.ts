@@ -4,7 +4,7 @@ import { ITEMS } from "../../engine/demoData";
 import { retrieveMemoriesVector, scanLorebooks } from "../../engine/engine";
 import { expandMacros } from "../../engine/macros";
 import type { EntryTimingState, LorebookEntry } from "../../schemas";
-import type { CharacterFormat, CharacterInstance, CharacterTemplate, ParsedUserInput, Playthrough, PromptPresetModule } from "../../schemas";
+import type { CharacterFormat, CharacterInstance, CharacterTemplate, ParsedUserInput, Playthrough, PromptConfig, PromptPresetModule } from "../../schemas";
 import type { PromptUsage, PromptUsageBreakdown } from "../provider";
 import { VERBATIM_CHAPTER_LIMIT } from "../provider";
 import { getLorebook } from "../store";
@@ -492,10 +492,11 @@ export function assembleTurnPrompt(
   state: Playthrough,
   choicesEnabled: boolean,
   queryEmbedding: number[] = [],
-  budget: PromptBudget = { contextWindow: 65536, reserveOutputTokens: 1200 }
+  budget: PromptBudget = { contextWindow: 65536, reserveOutputTokens: 1200 },
+  promptConfig: PromptConfig
 ): AssembledTurnPrompt {
-  const modules = state.promptSettings?.modules.turn ?? [];
-  const format = state.promptSettings?.characterFormat;
+  const modules = promptConfig.modules.turn ?? [];
+  const format = promptConfig.characterFormat;
 
   const { before: lorebookBefore, after: lorebookAfter, depth: lorebookDepth } = collectLorebookSegments(state);
 

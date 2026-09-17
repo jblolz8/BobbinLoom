@@ -5,10 +5,17 @@ import { OpenAICompatibleProvider, assembleTurnPrompt, extractJsonPayload, repai
 import { A1111_DEFAULT_IMAGE_TIMEOUT_MS, normalizeBaseUrl, normalizeImageBaseUrl, resolveConnectionConfig, resolveImageConfig } from "../src/server/providerConfig";
 import { authHeaders } from "../src/server/httpAuth";
 import type { ResolvedProviderConfig } from "../src/server/providerConfig";
-import { EMPTY_MODULE_SET, PlaythroughPromptSettingsSchema, ScenarioSeedSchema } from "../src/schemas";
+import { EMPTY_MODULE_SET, PromptConfigSchema, ScenarioSeedSchema } from "../src/schemas";
 import type { ProviderConnection } from "../src/schemas";
 import type { CharacterTemplate } from "../src/schemas";
 import type { PromptPresetModule } from "../src/schemas";
+
+/** The global prompt config the builder/provider now read. An empty module set is
+ *  the neutral default for tests that do not exercise modules. */
+const CFG = { modules: { turn: [] } };
+/** assembleTurnPrompt's shipped budget, passed explicitly so the config can ride
+ *  in the trailing slot without changing any test's budgeting. */
+const DEFAULT_BUDGET = { contextWindow: 65536, reserveOutputTokens: 1200 };
 
 function testConfig(overrides: Partial<ResolvedProviderConfig>): ResolvedProviderConfig {
   return {
@@ -257,7 +264,7 @@ describe("OpenAICompatibleProvider", () => {
 
     const state = createInitialPlaythrough("Provider Test");
     const parsed = parseUserInput('I say, "Hello."');
-    const { turn } = await provider.generateTurn(parsed, state, true);
+    const { turn } = await provider.generateTurn(parsed, state, true, CFG);
 
     expect(fetchImpl).toHaveBeenCalledTimes(1);
 
@@ -297,7 +304,7 @@ describe("OpenAICompatibleProvider", () => {
       parseUserInput("Look around"),
       createInitialPlaythrough("Fence Test"),
       false
-    );
+    , CFG);
 
     expect(turn.narrative).toBe("Fenced narrative");
     expect(turn.choices).toBeUndefined();
@@ -320,7 +327,7 @@ describe("OpenAICompatibleProvider", () => {
       parseUserInput("Say nothing"),
       createInitialPlaythrough("Fallback Test"),
       true
-    );
+    , CFG);
 
     expect(turn.narrative).toBe("This is not JSON.");
     expect(turn.statePatch).toBeUndefined();
@@ -345,7 +352,7 @@ describe("OpenAICompatibleProvider", () => {
       parseUserInput("Test retry"),
       createInitialPlaythrough("Retry Test"),
       false
-    );
+    , CFG);
 
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     expect(turn.narrative).toBe("Recovered");
@@ -370,7 +377,7 @@ describe("OpenAICompatibleProvider", () => {
       parseUserInput("hi"),
       createInitialPlaythrough("Fallback Test"),
       true
-    );
+    , CFG);
 
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     const firstInit = (fetchImpl.mock.calls[0] as unknown[])[1] as RequestInit;
@@ -394,7 +401,7 @@ describe("OpenAICompatibleProvider", () => {
     );
 
     await expect(
-      provider.generateTurn(parseUserInput("hi"), createInitialPlaythrough("Fallback Test"), false)
+      provider.generateTurn(parseUserInput("hi"), createInitialPlaythrough("Fallback Test"), false, CFG)
     ).rejects.toThrow(/still broken/);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
@@ -415,9 +422,7 @@ describe("OpenAICompatibleProvider", () => {
     );
 
     const state = createInitialPlaythrough("Usage Test");
-    state.promptSettings = {
-      presetId: "test",
-      presetName: "Test",
+    const config = {
       modules: {
         turn: [{
           id: "mod_test",
@@ -432,7 +437,8 @@ describe("OpenAICompatibleProvider", () => {
     const { turn, promptUsage } = await provider.generateTurn(
       parseUserInput("Check the meter"),
       state,
-      false
+      false,
+      config
     );
 
     expect(turn.narrative).toBe("Usage probe");
@@ -588,7 +594,7 @@ describe("OpenAICompatibleProvider", () => {
       updatedAt: "2026-01-02T00:00:00.000Z"
     }];
 
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
+    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
     const user = promptText(assembled);
 
     expect(user).toContain("STORY SO FAR:");
@@ -606,14 +612,14 @@ describe("OpenAICompatibleProvider", () => {
 
   it("STORY SO FAR is omitted entirely when there are no chapters or meta summaries", () => {
     const pt = createInitialPlaythrough("No Chapters Test");
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
+    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
     expect(promptText(assembled)).not.toContain("STORY SO FAR:");
     expect(assembled.promptUsage.breakdown.storySoFar).toBe(0);
   });
 
   it("npcPromote guidance is honest about the starter sheet (no overpromising)", () => {
     const pt = createInitialPlaythrough("Guidance Test");
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
+    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
     expect(promptText(assembled)).toContain("npcPromote");
     // The model-initiated path creates a starter sheet from the NPC's info —
     // the guidance must not claim the character gains full tracked state.
@@ -709,7 +715,7 @@ describe("OpenAICompatibleProvider", () => {
       parseUserInput("Look around."),
       createInitialPlaythrough("Retry Turn Test"),
       true
-    );
+    , CFG);
 
     expect(calls).toBe(2);
     expect(turn.narrative).toBe("The mist clears.");
@@ -728,7 +734,7 @@ describe("OpenAICompatibleProvider", () => {
       parseUserInput("Look around."),
       createInitialPlaythrough("Degrade Turn Test"),
       true
-    );
+    , CFG);
 
     expect(fetchImpl).toHaveBeenCalledTimes(2); // initial + one retry (maxRetries=1)
     expect(turn.narrative).toBe("The provider returned an empty response.");
@@ -749,7 +755,7 @@ describe("OpenAICompatibleProvider", () => {
       parseUserInput("hi"),
       createInitialPlaythrough("FR Test"),
       true
-    );
+    , CFG);
 
     expect(result.finishReason).toBe("stop");
   });
@@ -767,7 +773,7 @@ describe("OpenAICompatibleProvider", () => {
       parseUserInput("go"),
       createInitialPlaythrough("Usage Test"),
       true
-    );
+    , CFG);
 
     expect(result.measuredUsage).toEqual({ promptTokens: 1234, completionTokens: 210 });
   });
@@ -784,7 +790,7 @@ describe("OpenAICompatibleProvider", () => {
       parseUserInput("go"),
       createInitialPlaythrough("No Usage Test"),
       true
-    );
+    , CFG);
 
     expect(result.measuredUsage).toBeUndefined();
   });
@@ -804,7 +810,7 @@ describe("OpenAICompatibleProvider", () => {
       parseUserInput("go"),
       createInitialPlaythrough("Fallback Usage Test"),
       true
-    );
+    , CFG);
 
     // The malformed choices are dropped, which only happens on the fallback branch.
     expect(result.turn.narrative).toBe("Fallback narrative");
@@ -835,7 +841,7 @@ describe("OpenAICompatibleProvider", () => {
         });
       });
       const provider = new OpenAICompatibleProvider(config, fetchImpl as unknown as typeof fetch);
-      await provider.generateTurn(parseUserInput("I look around."), seedTranscript(), true);
+      await provider.generateTurn(parseUserInput("I look around."), seedTranscript(), true, CFG);
       return sent;
     };
 
@@ -895,7 +901,7 @@ describe("OpenAICompatibleProvider", () => {
       parseUserInput("hi"),
       createInitialPlaythrough("Blank Narrative Test"),
       true
-    );
+    , CFG);
 
     expect(turn.narrative).toBe("The provider returned an empty response.");
     expect(turn.statePatch?.flagsAdd).toContain("met_mira");
@@ -916,7 +922,7 @@ describe("OpenAICompatibleProvider", () => {
       parseUserInput("hi"),
       createInitialPlaythrough("Whitespace Test"),
       true
-    );
+    , CFG);
 
     expect(turn.narrative).toBe("The provider returned an empty response.");
   });
@@ -941,7 +947,7 @@ describe("OpenAICompatibleProvider", () => {
     const promise = provider.generateTurn(
       parseUserInput("hi"),
       createInitialPlaythrough("Abort Test"),
-      true,
+      true,CFG, 
       controller.signal
     );
 
@@ -964,7 +970,7 @@ describe("OpenAICompatibleProvider", () => {
       fetchImpl as unknown as typeof fetch
     );
     await expect(
-      provider.generateTurn(parseUserInput("hi"), createInitialPlaythrough("PreAbort Test"), true, controller.signal)
+      provider.generateTurn(parseUserInput("hi"), createInitialPlaythrough("PreAbort Test"), true,CFG,  controller.signal)
     ).rejects.toThrow("Request aborted by the client");
 
     expect(fetchImpl).not.toHaveBeenCalled();
@@ -1089,7 +1095,7 @@ describe("presence-gated character injection", () => {
 
   it("renders same-location characters with their full sheet and no ABSENT block", () => {
     const pt = createInitialPlaythrough("Presence Present Test");
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
+    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
     expect(promptText(assembled)).toContain("CHARACTER: Mira");
     expect(promptText(assembled)).toContain("- Values competence, honesty, and self-control.");
     expect(promptText(assembled)).not.toContain("ABSENT CHARACTERS");
@@ -1099,7 +1105,7 @@ describe("presence-gated character injection", () => {
     const pt = createInitialPlaythrough("Presence Absent Test");
     const miraId = pt.characters[0].id;
     pt.characters[0].currentLocationId = "loc_other";
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
+    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
     expect(promptText(assembled)).toContain("ABSENT CHARACTERS");
     expect(promptText(assembled)).toContain(`- Mira (${miraId}) — `);
     expect(promptText(assembled)).toContain("at loc_other (loc_other)");
@@ -1113,10 +1119,10 @@ describe("presence-gated character injection", () => {
     const miraId = pt.characters[0].id;
     pt.characters[0].currentLocationId = "loc_other";
     pt.characters[0].towardPlayer = "wary";
-    const wary = assembleTurnPrompt(parseUserInput("go"), pt, true);
+    const wary = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
     expect(promptText(wary)).toContain(`- Mira (${miraId}) [wary] — `);
     pt.characters[0].towardPlayer = "neutral";
-    const neutral = assembleTurnPrompt(parseUserInput("go"), pt, true);
+    const neutral = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
     expect(promptText(neutral)).toContain(`- Mira (${miraId}) — `);
     expect(promptText(neutral)).not.toContain("[neutral]");
   });
@@ -1125,33 +1131,33 @@ describe("presence-gated character injection", () => {
     const pt = createInitialPlaythrough("Presence Conditions Test");
     pt.characters[0].currentLocationId = "loc_other";
     pt.characters[0].conditions = ["🤕 wounded"];
-    const wounded = assembleTurnPrompt(parseUserInput("go"), pt, true);
+    const wounded = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
     // The OUTPUT FORMAT contract's own guidance quotes "(e.g. \"🤕 wounded\")",
     // so the character's condition line must be checked in CURRENT STATE only.
     expect(currentStateText(wounded)).toContain("🤕 wounded");
     pt.characters[0].conditions = [];
-    const clean = assembleTurnPrompt(parseUserInput("go"), pt, true);
+    const clean = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
     expect(currentStateText(clean)).not.toContain("🤕 wounded");
   });
 
   it("treats a blank playthrough (all at 'unknown') as fully present", () => {
-    const pt = createBlankPlaythrough("Presence Blank Test", EMPTY_MODULE_SET, "default", "Default", undefined, [DEMO_TEMPLATE]);
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
+    const pt = createBlankPlaythrough("Presence Blank Test", undefined, [DEMO_TEMPLATE]);
+    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
     expect(promptText(assembled)).toContain("CHARACTER: Mira");
     expect(promptText(assembled)).not.toContain("ABSENT CHARACTERS");
   });
 
   it("keeps all instance ids in the Allowed IDs line regardless of presence", () => {
-    const pt = createInitialPlaythrough("Presence AllowedIds Test", EMPTY_MODULE_SET, "default", "Default", undefined, [DEMO_TEMPLATE, CLOTHED_TEMPLATE]);
+    const pt = createInitialPlaythrough("Presence AllowedIds Test", undefined, [DEMO_TEMPLATE, CLOTHED_TEMPLATE]);
     pt.characters[1].currentLocationId = "loc_other";
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
+    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
     expect(promptText(assembled)).toContain(`Characters: ${pt.characters[0].id}, ${pt.characters[1].id}`);
     expect(promptText(assembled)).toContain("ABSENT CHARACTERS");
   });
 
   it("omits the raw [Clothing] section and renders a derived line when structured clothing exists", () => {
-    const pt = createInitialPlaythrough("Presence Clothing Test", EMPTY_MODULE_SET, "default", "Default", undefined, [CLOTHED_TEMPLATE]);
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
+    const pt = createInitialPlaythrough("Presence Clothing Test", undefined, [CLOTHED_TEMPLATE]);
+    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
     expect(promptText(assembled)).toContain("CHARACTER: Aya");
     // Sheet-level assertions target the CURRENT STATE region: the OUTPUT FORMAT
     // contract also lists "[Clothing]"/"[Personality]" as canonical section names.
@@ -1164,7 +1170,7 @@ describe("presence-gated character injection", () => {
 
   it("injects the blob unchanged when the character wears no structured clothing", () => {
     const pt = createInitialPlaythrough("Presence NoClothing Test");
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
+    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
     expect(promptText(assembled)).toContain("CHARACTER: Mira");
     expect(promptText(assembled)).toContain("[Species]: Human");
     expect(currentStateText(assembled)).toContain("[Personality]");
@@ -1173,7 +1179,7 @@ describe("presence-gated character injection", () => {
 
   it("documents the absent-character rules and characterClothing* patches in the system prompt", () => {
     const pt = createInitialPlaythrough("Presence System Test");
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
+    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
     expect(promptText(assembled)).toContain("characterClothingAdd/Remove/SetState/Set: manage a character's worn clothing.");
     expect(promptText(assembled)).toContain('The "Clothing" section is managed via characterClothing* patches');
     expect(promptText(assembled)).toContain("A character is present at the scene only when their location matches the current location.");
@@ -1203,9 +1209,9 @@ describe("CCv2 runtime macros (D10)", () => {
   };
 
   it("expands {{char}}/{{user}} for a CCv2-backed sheet at prompt build time", () => {
-    const pt = createInitialPlaythrough("CCv2 Macro Test", EMPTY_MODULE_SET, "default", "Default", undefined, [CCV2_TEMPLATE]);
+    const pt = createInitialPlaythrough("CCv2 Macro Test", undefined, [CCV2_TEMPLATE]);
     pt.playerCharacter.name = "Anon";
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
+    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
     // Sheet is rendered verbatim + macros expanded (D6/D10).
     expect(promptText(assembled)).toContain("CHARACTER: Mira");
     expect(promptText(assembled)).toContain("Mira loves Anon");
@@ -1215,18 +1221,18 @@ describe("CCv2 runtime macros (D10)", () => {
   });
 
   it("expands macros in BL sheets too (shared path, case-insensitive)", () => {
-    const pt = createInitialPlaythrough("BL Macro Test", EMPTY_MODULE_SET, "default", "Default", undefined, [BL_MACRO_TEMPLATE]);
+    const pt = createInitialPlaythrough("BL Macro Test", undefined, [BL_MACRO_TEMPLATE]);
     pt.playerCharacter.name = "Anon";
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
+    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
     expect(promptText(assembled)).toContain("Mira greets Anon warmly.");
     expect(promptText(assembled)).not.toContain("{{Char}}");
   });
 
   it("expands macros in the absent-character one-liner summary", () => {
-    const pt = createInitialPlaythrough("CCv2 Absent Macro Test", EMPTY_MODULE_SET, "default", "Default", undefined, [CCV2_TEMPLATE]);
+    const pt = createInitialPlaythrough("CCv2 Absent Macro Test", undefined, [CCV2_TEMPLATE]);
     pt.playerCharacter.name = "Anon";
     pt.characters[0].currentLocationId = "loc_other";
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true);
+    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
     expect(promptText(assembled)).toContain("ABSENT CHARACTERS");
     expect(promptText(assembled)).not.toContain("{{char}}");
   });
@@ -1258,12 +1264,8 @@ describe("turn prompt modules + hardcoded tone", () => {
     expect(sentPrompt).not.toContain("TURN MARKER");
 
     const state = createInitialPlaythrough("Context Isolation");
-    state.promptSettings = {
-      presetId: "test",
-      presetName: "Test",
-      modules: { turn: [turnModule] }
-    };
-    const assembled = assembleTurnPrompt(parseUserInput("go"), state, true);
+    const config = { modules: { turn: [turnModule] } };
+    const assembled = assembleTurnPrompt(parseUserInput("go"), state, true, [], DEFAULT_BUDGET, config);
     expect(promptText(assembled)).toContain("TURN MARKER");
   });
 
@@ -1324,10 +1326,8 @@ describe("turn prompt modules + hardcoded tone", () => {
     expect(sentPrompt).toContain("[Sexual Capabilities]");
   });
 
-  it("migrates legacy flat-array promptSettings snapshots to turn modules", () => {
-    const parsed = PlaythroughPromptSettingsSchema.parse({
-      presetId: "default",
-      presetName: "Default",
+  it("normalizes a legacy flat-array module set into turn modules", () => {
+    const parsed = PromptConfigSchema.parse({
       modules: [
         { id: "mod_legacy", name: "Legacy module", description: "test", content: "content", order: 1, enabled: true }
       ]

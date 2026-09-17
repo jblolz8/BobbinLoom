@@ -9,7 +9,6 @@ import {
   listLorebooks,
   listPersonas,
   type Persona,
-  type PlaythroughPromptSettings,
   type ScenarioPreferences
 } from "./api";
 import type { CharacterTemplate, LorebookSummary } from "../schemas";
@@ -241,10 +240,6 @@ export default function App() {
     });
   }
 
-  function handlePlaythroughPromptSettings(updated: PlaythroughPromptSettings) {
-    playthroughHook.setPlaythrough((prev) => (prev ? { ...prev, promptSettings: updated } : prev));
-  }
-
   function handlePersonasChanged(refreshed: Persona[]) {
     setPersonas(refreshed);
     if (selectedPersonaId && !refreshed.some((p) => p.id === selectedPersonaId)) {
@@ -382,7 +377,6 @@ export default function App() {
           handleDismissFailedNotice={() => playthroughHook.setFailedNotice(null)}
           openPersonaManager={modalHook.openPersona}
           handlePersonasChanged={handlePersonasChanged}
-          handlePlaythroughPromptSettings={handlePlaythroughPromptSettings}
           handleStartNewWithSameScenario={handleStartNewWithSameScenario}
           isMobile={responsiveHook.isMobile}
           mobileTab={responsiveHook.mobileTab}
@@ -438,9 +432,6 @@ export default function App() {
           <SettingsModal
             open={modalHook.settingsOpen}
             onClose={modalHook.closeModal}
-            playthroughId={null}
-            playthroughPromptSettings={null}
-            onPlaythroughPromptSettings={handlePlaythroughPromptSettings}
             choicesEnabled={playthroughHook.choicesEnabled}
             setChoicesEnabled={playthroughHook.setChoicesEnabled}
             showDebug={playthroughHook.showDebug}

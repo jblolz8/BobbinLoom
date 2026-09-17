@@ -12,6 +12,7 @@ import { lorebookRoutes } from "./routes/lorebooks";
 import { personaRoutes } from "./routes/personas";
 import { playthroughRoutes } from "./routes/playthroughs";
 import { presetRoutes } from "./routes/presets";
+import { promptConfigRoutes } from "./routes/promptConfig";
 import { providerRoutes } from "./routes/providers";
 import { turnRoutes } from "./routes/turns";
 
@@ -24,6 +25,7 @@ async function main(): Promise<void> {
 
   // Register domain route plugins
   await app.register(presetRoutes);
+  await app.register(promptConfigRoutes);
   await app.register(personaRoutes);
   await app.register(characterRoutes);
   await app.register(providerRoutes);

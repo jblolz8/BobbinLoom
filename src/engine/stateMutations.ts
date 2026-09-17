@@ -1,4 +1,5 @@
 import {
+  CharacterFormat,
   CharacterInstance,
   CharacterTemplate,
   InventoryRef,
@@ -22,10 +23,11 @@ import { formatSections, resolveCharacterFormat } from "./characterFormat";
 import { ITEMS, LOCATIONS } from "./demoData";
 import { instantiateTemplate } from "./playthroughFactory";
 
-/** The active preset's section order + inline set, threaded into section
- *  patches so new sections land where the user's format expects them. */
-function formatPatchOpts(next: Playthrough): { order: string[]; inlineHeaders: string[] } {
-  const sections = formatSections(next.promptSettings?.characterFormat);
+/** The active prompt config's section order + inline set, threaded into section
+ *  patches so new sections land where the user's format expects them. Falls back
+ *  to the shipped Default format when no config is supplied. */
+function formatPatchOpts(characterFormat?: CharacterFormat): { order: string[]; inlineHeaders: string[] } {
+  const sections = formatSections(characterFormat);
   return {
     order: sections.map((s) => s.name),
     inlineHeaders: sections.filter((s) => s.inline).map((s) => s.name),
@@ -93,7 +95,7 @@ function buildPromotionStubContent(npc: SimpleNPC): string {
   ].join("\n");
 }
 
-export function applyStatePatch(state: Playthrough, patchInput: unknown): ApplyPatchResult {
+export function applyStatePatch(state: Playthrough, patchInput: unknown, characterFormat?: CharacterFormat): ApplyPatchResult {
   const parsed = StatePatchSchema.safeParse(patchInput);
   const next = clone(state);
   const applied: string[] = [];
@@ -246,7 +248,7 @@ export function applyStatePatch(state: Playthrough, patchInput: unknown): ApplyP
       );
       continue;
     }
-    const fmt = formatPatchOpts(next);
+    const fmt = formatPatchOpts(characterFormat);
     const r = applySectionChanges(
       next.characterTemplates[tplIdx].content,
       [{ header: entry.section, body: entry.content }],

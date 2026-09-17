@@ -2,7 +2,7 @@ import { createReadStream } from "node:fs";
 import type { FastifyPluginAsync, FastifyPluginOptions } from "fastify";
 import { z } from "zod";
 import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../../engine/imageDefaults";
-import type { ChatMessage, ImageGenerationSettings, MessageImage, Playthrough, PromptPreset, ProviderConnection } from "../../schemas";
+import type { ChatMessage, ImageGenerationSettings, MessageImage, Playthrough, ProviderConnection } from "../../schemas";
 import { ImageGenerationSettingsSchema } from "../../schemas";
 import { A1111_IMAGE_PROMPT_CAP, OPENAI_IMAGE_PROMPT_CAP, VENICE_IMAGE_PROMPT_CAP } from "../imageProvider";
 import { clampChars } from "../imageProvider/shared";
@@ -13,16 +13,17 @@ import { buildImageCastBlock, buildImageHistoryBlock, buildImageStateBlock, prev
 import type { ImagePromptInput } from "../provider/imagePrompt";
 import { generateImagePrompt } from "../provider/imagePrompt";
 import { getPlaythroughRecord, updatePlaythroughRecord } from "../store";
-import { abortOnClientDisconnect, dataDir as defaultDataDir, loadPresets as defaultLoadPresets, providerManager } from "./helpers";
+import { loadPromptConfig } from "../promptConfigStore";
+import { abortOnClientDisconnect, dataDir as defaultDataDir, settingsDir as defaultSettingsDir, providerManager } from "./helpers";
 
 /** Injectable seams (all defaulted) so the routes can be exercised against a
  *  temp data directory with a stub fetch — no test may touch the real store. */
 export type ImageRoutesOptions = FastifyPluginOptions & {
   dataDir?: string;
   imagesDir?: string;
+  settingsDir?: string;
   manager?: ProviderManager;
   fetchImpl?: typeof fetch;
-  loadPresets?: () => PromptPreset[];
 };
 
 const GenerateImageBody = z.object({
@@ -86,15 +87,12 @@ function clampComposed(
   return { text: clamped, truncated: clamped.length < text.length };
 }
 
-/** Preset-owned prompt settings, resolved exactly like the rest of the
- *  playthrough snapshot: playthrough copy → preset → shipped defaults. Parsed
- *  (not just copied) so a partial block always comes back complete. */
-function resolveImageSettings(playthrough: Playthrough, presets: PromptPreset[]): ImageGenerationSettings {
-  const snapshot = playthrough.promptSettings?.imageGeneration;
-  if (snapshot) return ImageGenerationSettingsSchema.parse(snapshot);
-  const presetId = playthrough.promptSettings?.presetId;
-  const preset = presetId ? presets.find((p) => p.id === presetId) : undefined;
-  if (preset?.imageGeneration) return ImageGenerationSettingsSchema.parse(preset.imageGeneration);
+/** The global image prompt settings. Sourced from the single global prompt
+ *  config (there is no per-playthrough snapshot anymore); a config that carries
+ *  no block falls back to the shipped defaults. Parsed (not just copied) so a
+ *  partial block always comes back complete. */
+function resolveImageSettings(imageGeneration: ImageGenerationSettings | undefined): ImageGenerationSettings {
+  if (imageGeneration) return ImageGenerationSettingsSchema.parse(imageGeneration);
   return { ...DEFAULT_IMAGE_GENERATION_SETTINGS };
 }
 
@@ -159,8 +157,8 @@ function buildImagePromptInput(
 export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, options = {}) => {
   const dataDir = options.dataDir ?? defaultDataDir;
   const imagesDir = options.imagesDir ?? IMAGES_DIR;
+  const settingsDir = options.settingsDir ?? defaultSettingsDir;
   const manager = options.manager ?? providerManager;
-  const loadPresets = options.loadPresets ?? defaultLoadPresets;
   const fetchImpl = options.fetchImpl ?? fetch;
 
   // Live progress for a generation in flight — the client polls this (every
@@ -206,7 +204,7 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     const promptConfig = manager.resolveImagePromptConfig(imageConn);
     if (!promptConfig) return reply.code(400).send({ error: "No text provider available to write the image prompt." });
 
-    const settings = resolveImageSettings(playthrough, loadPresets());
+    const settings = resolveImageSettings(loadPromptConfig(settingsDir).promptConfig.imageGeneration);
     const controller = abortOnClientDisconnect(reply);
 
     let prompt: string;
@@ -331,7 +329,7 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     const promptConfig = manager.resolveImagePromptConfig(imageConn);
     if (!promptConfig) return reply.code(400).send({ error: "No text provider available to write the image prompt." });
 
-    const settings = resolveImageSettings(playthrough, loadPresets());
+    const settings = resolveImageSettings(loadPromptConfig(settingsDir).promptConfig.imageGeneration);
     const controller = abortOnClientDisconnect(reply);
     const imageProvider = manager.getImageProvider(body.imageProviderId);
 

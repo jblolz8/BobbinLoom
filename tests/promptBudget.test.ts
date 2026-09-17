@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { createInitialPlaythrough, parseUserInput } from "../src/engine/engine";
 import { assembleTurnPrompt, selectHistory, clampCalibration, estimateTokens, PROMPT_MESSAGE_OVERHEAD_TOKENS, MIN_HISTORY_MESSAGES } from "../src/server/provider/promptBuilder";
 
+/** The global prompt config the builder now reads. An empty module set is the
+ *  neutral default for tests that do not exercise modules. */
+const CFG = { modules: { turn: [] } };
+
 /** Builds a playthrough with N user/assistant pairs of `chars` characters each. */
 function withHistory(pairs: number, chars = 100) {
   const pt = createInitialPlaythrough("History Test");
@@ -63,7 +67,7 @@ describe("assembleTurnPrompt message array", () => {
 
   it("emits a real transcript with alternating roles and ends on the user turn", () => {
     const pt = withHistory(4, 200);
-    const { messages } = assembleTurnPrompt(parseUserInput("I look around."), pt, true, [], budget);
+    const { messages } = assembleTurnPrompt(parseUserInput("I look around."), pt, true, [], budget, CFG);
     expect(messages[0].role).toBe("system");
     expect(messages[1].role).toBe("user");
     expect(messages[2].role).toBe("assistant");
@@ -75,7 +79,7 @@ describe("assembleTurnPrompt message array", () => {
 
   it("puts the volatile block in a tail system message before the final user turn", () => {
     const pt = withHistory(2, 200);
-    const { messages } = assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget);
+    const { messages } = assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget, CFG);
     const tail = messages[messages.length - 2];
     expect(tail.role).toBe("system");
     expect(tail.content).toContain("CURRENT STATE");
@@ -86,7 +90,7 @@ describe("assembleTurnPrompt message array", () => {
   it("merges the tail block into the leading system message when there is no history", () => {
     const pt = createInitialPlaythrough("Empty");
     pt.messages = [];
-    const { messages } = assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget);
+    const { messages } = assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget, CFG);
     expect(messages).toHaveLength(2);
     expect(messages[0].role).toBe("system");
     expect(messages[0].content).toContain("OUTPUT FORMAT");
@@ -99,7 +103,7 @@ describe("assembleTurnPrompt message array", () => {
       { id: "m1", role: "user", content: "old", createdAt: "2026-01-01T00:00:00.000Z", hidden: true, chapterId: "ch_1" },
       { id: "m2", role: "assistant", content: "old reply", createdAt: "2026-01-01T00:00:00.000Z", hidden: true, chapterId: "ch_1" }
     ];
-    const { messages } = assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget);
+    const { messages } = assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget, CFG);
     expect(messages[0].role).toBe("system");
     expect(messages[1].role).toBe("user");
   });
@@ -108,7 +112,7 @@ describe("assembleTurnPrompt message array", () => {
     const pt = withHistory(30, 8000);
     const { messages, promptUsage } = assembleTurnPrompt(
       parseUserInput("go"), pt, true, [],
-      { contextWindow: 4096, reserveOutputTokens: 1200 }
+      { contextWindow: 4096, reserveOutputTokens: 1200 }, CFG
     );
     expect(promptUsage.breakdown.chatHistory).toBeGreaterThan(0);
     expect(messages.length).toBeLessThan(30);
@@ -118,7 +122,7 @@ describe("assembleTurnPrompt message array", () => {
     const pt = withHistory(4, 400);
     const { messages, droppedHistoryChars } = assembleTurnPrompt(
       parseUserInput("go"), pt, true, [],
-      { contextWindow: 3000, reserveOutputTokens: 1200 }
+      { contextWindow: 3000, reserveOutputTokens: 1200 }, CFG
     );
     // History is truncated, so some visible characters never reach the wire.
     expect(droppedHistoryChars).toBeGreaterThan(0);
@@ -131,10 +135,8 @@ describe("assembleTurnPrompt message array", () => {
 
   it("charges the stable block at index 0 and the transcript between it and the tail", () => {
     const pt = withHistory(2, 200);
-    // A preset module proves the stable prefix is its own leading message.
-    pt.promptSettings = {
-      presetId: "test",
-      presetName: "Test",
+    // A module proves the stable prefix is its own leading message.
+    const config = {
       modules: {
         turn: [{
           id: "mod_stable",
@@ -146,7 +148,7 @@ describe("assembleTurnPrompt message array", () => {
         }]
       }
     };
-    const { messages } = assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget);
+    const { messages } = assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget, config);
     expect(messages[0].role).toBe("system");
     expect(messages[0].content).toContain("STABLE PREFIX MARKER");
     expect(messages[0].content).not.toContain("CURRENT STATE");
@@ -193,8 +195,8 @@ describe("token calibration", () => {
     // so any difference in `promptUsage` would come purely from scaling.
     const pt = withHistory(3, 100);
     const budget = { contextWindow: 65536, reserveOutputTokens: 1200 };
-    const plain = assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget);
-    const scaled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], { ...budget, calibration: 4 });
+    const plain = assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget, CFG);
+    const scaled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], { ...budget, calibration: 4 }, CFG);
 
     expect(scaled.promptUsage).toEqual(plain.promptUsage);
     expect(scaled.promptUsage.estimated).toBe(plain.promptUsage.estimated);
@@ -202,8 +204,8 @@ describe("token calibration", () => {
     // Even when the calibration changes what is sent, history-independent
     // segments stay on the unscaled chars/4 basis.
     const tight = { contextWindow: 3000, reserveOutputTokens: 1200 };
-    const plainTight = assembleTurnPrompt(parseUserInput("go"), pt, true, [], tight);
-    const scaledTight = assembleTurnPrompt(parseUserInput("go"), pt, true, [], { ...tight, calibration: 4 });
+    const plainTight = assembleTurnPrompt(parseUserInput("go"), pt, true, [], tight, CFG);
+    const scaledTight = assembleTurnPrompt(parseUserInput("go"), pt, true, [], { ...tight, calibration: 4 }, CFG);
     expect(scaledTight.promptUsage.breakdown.outputFormat).toBe(
       plainTight.promptUsage.breakdown.outputFormat
     );

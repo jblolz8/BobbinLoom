@@ -23,6 +23,7 @@ import { ProviderManager } from "../src/server/providerManager";
 import { createConnection } from "../src/server/providerRegistry";
 import { imageRoutes } from "../src/server/routes/images";
 import { getPlaythroughRecord } from "../src/server/store";
+import { saveAppSettings } from "../src/server/appSettingsStore";
 import { cleanupTempDirs, pngBytes, tempDir, writePlaythroughWithImages } from "./helpers/imageFixtures";
 
 afterEach(cleanupTempDirs);
@@ -293,9 +294,16 @@ function routeHarness(options: RouteOptions = {}) {
     apiKey: "test-key"
   });
 
+  // The image prompt config is global now; seed THIS harness's settings dir with
+  // the shipped defaults so no real data/user-settings.json is consulted.
+  saveAppSettings(settingsDir, {
+    activePresetId: "default",
+    promptConfig: { modules: { turn: [] }, imageGeneration: DEFAULT_IMAGE_GENERATION_SETTINGS }
+  });
+
   const manager = new ProviderManager(settingsDir, {}, fetchImpl);
   const app = Fastify();
-  app.register(imageRoutes, { dataDir, imagesDir, manager, fetchImpl, loadPresets: () => [] });
+  app.register(imageRoutes, { dataDir, imagesDir, settingsDir, manager, fetchImpl });
 
   const playthrough = writePlaythroughWithImages(dataDir, "Run", [[], [], []]);
   return { app, dataDir, calls, playthroughId: playthrough.id, messageId: playthrough.messages[2].id };

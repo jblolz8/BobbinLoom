@@ -18,6 +18,7 @@ import { ProviderManager } from "../src/server/providerManager";
 import { imageRoutes } from "../src/server/routes/images";
 import { providerRoutes } from "../src/server/routes/providers";
 import { getPlaythroughRecord, updatePlaythroughRecord } from "../src/server/store";
+import { saveAppSettings } from "../src/server/appSettingsStore";
 import { cleanupTempDirs, pngBytes, tempDir, writePlaythroughWithImages } from "./helpers/imageFixtures";
 
 afterEach(cleanupTempDirs);
@@ -127,25 +128,24 @@ function harness(options: HarnessOptions = {}) {
   if (options.withText !== false) createConnection(settingsDir, textConn);
   if (options.withImage !== false) createConnection(settingsDir, imageConn);
 
+  // The image prompt config is GLOBAL now, so it is seeded into THIS harness's
+  // settings dir — never the real data/user-settings.json.
+  saveAppSettings(settingsDir, {
+    activePresetId: "default",
+    promptConfig: {
+      modules: { turn: [] },
+      imageGeneration: { ...DEFAULT_IMAGE_GENERATION_SETTINGS, ...(options.imageSettings ?? {}) }
+    }
+  });
+
   const manager = new ProviderManager(settingsDir, {}, fetchImpl);
   const app = Fastify();
-  app.register(imageRoutes, { dataDir, imagesDir, manager, fetchImpl, loadPresets: () => [] });
+  app.register(imageRoutes, { dataDir, imagesDir, settingsDir, manager, fetchImpl });
   app.register(providerRoutes, { manager });
 
   const playthrough = writePlaythroughWithImages(dataDir, "Run", [[], [], []]);
   const assistantMessageId = playthrough.messages[2].id;
   const userMessageId = playthrough.messages[1].id;
-
-  if (options.imageSettings) {
-    const record = getPlaythroughRecord(dataDir, playthrough.id)!;
-    record.promptSettings = {
-      presetId: record.promptSettings?.presetId ?? "default",
-      presetName: record.promptSettings?.presetName ?? "Default",
-      modules: record.promptSettings?.modules ?? { turn: [] },
-      imageGeneration: { ...DEFAULT_IMAGE_GENERATION_SETTINGS, ...options.imageSettings }
-    };
-    updatePlaythroughRecord(dataDir, record);
-  }
 
   return { app, dataDir, settingsDir, imagesDir, calls, manager, playthroughId: playthrough.id, assistantMessageId, userMessageId };
 }

@@ -34,7 +34,7 @@ function harness() {
     dataDir,
     imagesDir,
     manager: new ProviderManager(settingsDir),
-    loadPresets: () => []
+    settingsDir
   });
   return { app, root, settingsDir, dataDir, imagesDir };
 }
@@ -249,7 +249,7 @@ describe("POST /api/settings/images/sweep", () => {
       dataDir: h.dataDir,
       imagesDir: brokenImagesDir(h.root),
       manager: new ProviderManager(h.settingsDir),
-      loadPresets: () => []
+      settingsDir: h.settingsDir
     });
 
     const res = await sweep(app);
@@ -275,7 +275,7 @@ describe("DELETE /api/playthroughs/:id/messages/:messageId/images/:file", () => 
       dataDir,
       imagesDir: brokenImagesDir(root),
       manager: new ProviderManager(settingsDir),
-      loadPresets: () => []
+      settingsDir
     });
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 

@@ -3,6 +3,7 @@ import type {
   CharacterFormat,
   ImageApiStyle,
   ImageGenerationSettings,
+  PromptConfig,
   ProviderConnection as ProviderConnectionRow,
   ProviderKind,
   RegionDirection
@@ -158,12 +159,12 @@ export type Preset = {
   imageGeneration?: ImageGenerationSettings;
 };
 
-export type PlaythroughPromptSettings = {
-  presetId: string;
-  presetName: string;
-  modules: PromptModuleSet;
-  characterFormat?: CharacterFormat;
-  imageGeneration?: ImageGenerationSettings;
+/** The single global prompt config plus the preset it is backing. `promptConfig`
+ *  may carry unsaved edits; "dirty" is computed by comparing it to the backing
+ *  preset, never stored. */
+export type PromptConfigState = {
+  activePresetId: string;
+  promptConfig: PromptConfig;
 };
 
 export function listProviderConnections(): Promise<ProviderRegistry> {
@@ -250,13 +251,23 @@ export function getProviderApiKey(id: string): Promise<{ apiKey: string }> {
   return request<{ apiKey: string }>(`/api/settings/providers/${id}/key`);
 }
 
-export function getDefaultPresetId(): Promise<{ defaultPresetId: string }> {
-  return request<{ defaultPresetId: string }>("/api/settings/default-preset");
+export function getPromptConfig(): Promise<PromptConfigState> {
+  return request<PromptConfigState>("/api/prompt-config");
 }
-export function setDefaultPresetId(defaultPresetId: string): Promise<{ defaultPresetId: string }> {
-  return request<{ defaultPresetId: string }>("/api/settings/default-preset", {
+/** Merge one or more sections into the global config — the other sections are
+ *  left untouched. */
+export function patchPromptConfig(patch: Partial<PromptConfig>): Promise<PromptConfigState> {
+  return request<PromptConfigState>("/api/prompt-config", {
+    method: "PATCH",
+    body: JSON.stringify(patch)
+  });
+}
+/** Switch to a preset — or reload the CURRENT one — by copying its config over
+ *  the global config. The two are one operation: both discard unsaved edits. */
+export function setActivePreset(presetId: string): Promise<PromptConfigState> {
+  return request<PromptConfigState>("/api/prompt-config/active", {
     method: "PUT",
-    body: JSON.stringify({ defaultPresetId })
+    body: JSON.stringify({ presetId })
   });
 }
 
@@ -293,47 +304,4 @@ export function updatePreset(id: string, payload: PresetUpdatePayload): Promise<
 
 export function deletePreset(id: string): Promise<void> {
   return request<void>(`/api/prompt-presets/${id}`, { method: "DELETE" });
-}
-
-/**
- * Refresh ONLY the playthrough's image prompt block from its own preset.
- * Surgical on purpose: re-selecting the preset would rewrite the turn modules and
- * the sheet format as well, which is a far bigger change than "pick up the new
- * instruction". Answers the updated prompt settings, exactly like the full preset
- * switch, so the caller updates the playthrough the same way.
- */
-export function refreshImagePromptBlock(playthroughId: string): Promise<PlaythroughPromptSettings> {
-  return request<PlaythroughPromptSettings>(
-    `/api/playthroughs/${playthroughId}/prompt-settings/refresh-image-prompt`,
-    { method: "POST" }
-  );
-}
-
-export function updatePlaythroughPromptSettings(
-  playthroughId: string,
-  presetId: string
-): Promise<PlaythroughPromptSettings> {
-  return request<PlaythroughPromptSettings>(`/api/playthroughs/${playthroughId}/prompt-settings`, {
-    method: "PUT",
-    body: JSON.stringify({ presetId })
-  });
-}
-
-/**
- * Merge a PARTIAL image block into the playthrough's own snapshot.
- *
- * The one write that does not go through a preset: a read-only preset cannot be
- * edited, and the Instruction Mode is a property of this story's frame, so the
- * fields have to be reachable without cloning the preset first. The read sites
- * resolve snapshot → preset → shipped defaults, so a snapshot that never carried a
- * block is completed by this route rather than half-written.
- */
-export function patchPlaythroughImageBlock(
-  playthroughId: string,
-  patch: Partial<ImageGenerationSettings>
-): Promise<PlaythroughPromptSettings> {
-  return request<PlaythroughPromptSettings>(
-    `/api/playthroughs/${playthroughId}/prompt-settings/image-block`,
-    { method: "PATCH", body: JSON.stringify(patch) }
-  );
 }

@@ -35,7 +35,7 @@ LM Studio/Ollama server) and switch which one is **active** at any time.
   Settings.
 - **App settings:** `DEFAULT_APP_SETTINGS` (`src/server/appSettingsStore.ts`) is the
   fresh-install source of truth; the committed `data/settings.json` is only a matching
-  template, and user changes (`defaultPresetId`, theme, avatar shape, `tagTaxonomy`)
+  template, and user changes (`activePresetId`, `promptConfig`, theme, avatar shape, `tagTaxonomy`)
   are written to the gitignored `data/user-settings.json` and merged over the defaults
   on read. Legacy provider fields were removed; a bare legacy settings file is ignored
   rather than migrated.
