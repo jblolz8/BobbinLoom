@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ProviderKind } from "../../../schemas";
 import { PresetEditor } from "./PresetEditor";
 import { ProviderConnections } from "./ProviderConnections";
 import { TagTaxonomyPanel } from "../library/TagTaxonomyModal";
 import { AppearanceSettingsPanel } from "./AppearanceSettingsPanel";
+import { ConfirmModal } from "../common/ConfirmModal";
 import { Icon, SwitchRow, Tabs, type TabItem } from "../base";
 
 type SettingsTab = "provider" | "prompts" | "tags" | "chat" | "appearance";
@@ -22,6 +23,31 @@ const PROVIDER_KIND_TABS: TabItem<ProviderKind>[] = [
   { id: "text", label: "Text Providers", icon: "MessageSquare" },
   { id: "image", label: "Image Providers", icon: "Image" },
 ];
+
+/** Which tab the user last had open. Same pattern as ProviderConnections' sort
+ *  preferences: a UI tab choice is a client preference, kept out of the server's
+ *  app settings. It has to outlive component state because the modal unmounts
+ *  when the view leaves Home. */
+const SETTINGS_TAB_KEY = "bobbinloom_settings_tab";
+const PROVIDER_KIND_KEY = "bobbinloom_settings_provider_kind";
+const SETTINGS_TAB_IDS: readonly SettingsTab[] = ["provider", "prompts", "tags", "chat", "appearance"];
+const PROVIDER_KIND_IDS: readonly ProviderKind[] = ["text", "image"];
+
+function readStoredTab<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  if (typeof window !== "undefined" && window.localStorage) {
+    const saved = window.localStorage.getItem(key);
+    if (saved && (allowed as readonly string[]).includes(saved)) {
+      return saved as T;
+    }
+  }
+  return fallback;
+}
+
+function storeTab(key: string, value: string): void {
+  if (typeof window !== "undefined" && window.localStorage) {
+    window.localStorage.setItem(key, value);
+  }
+}
 
 export type SettingsModalProps = {
   open: boolean;
@@ -69,14 +95,54 @@ export function SettingsModal(props: SettingsModalProps) {
     setAutoImageAfterTurn,
     setImagePromptPreview,
   } = props;
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>("provider");
-  const [providerKind, setProviderKind] = useState<ProviderKind>("text");
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>(() =>
+    readStoredTab(SETTINGS_TAB_KEY, SETTINGS_TAB_IDS, "provider")
+  );
+  const [providerKind, setProviderKind] = useState<ProviderKind>(() =>
+    readStoredTab(PROVIDER_KIND_KEY, PROVIDER_KIND_IDS, "text")
+  );
 
-  // The modal keeps its state while closed (`if (!open) return null` below), so
-  // the Provider tab is reset to the usual Text list on every open.
+  /**
+   * Panels are mounted on FIRST VISIT and then KEPT mounted — hidden rather than
+   * unmounted — so switching tabs can no longer throw away an in-progress
+   * provider draft. Lazily mounting on first visit preserves the previous
+   * behaviour of not fetching a panel the user never opened.
+   *
+   * Seeded from the stored tab so the initial paint has content to show.
+   */
+  const [visitedTabs, setVisitedTabs] = useState<Set<SettingsTab>>(
+    () => new Set<SettingsTab>([readStoredTab(SETTINGS_TAB_KEY, SETTINGS_TAB_IDS, "provider")])
+  );
+  const [visitedKinds, setVisitedKinds] = useState<Set<ProviderKind>>(
+    () => new Set<ProviderKind>([readStoredTab(PROVIDER_KIND_KEY, PROVIDER_KIND_IDS, "text")])
+  );
+
+  /** Reported up from ProviderConnections, which owns the form. Keyed by kind
+   *  because both provider instances are mounted at once. */
+  const [dirtyKinds, setDirtyKinds] = useState<Record<ProviderKind, boolean>>({ text: false, image: false });
+  const [confirmClose, setConfirmClose] = useState(false);
+
+  const dirty = dirtyKinds.text || dirtyKinds.image;
+
+  useEffect(() => { storeTab(SETTINGS_TAB_KEY, settingsTab); }, [settingsTab]);
+  useEffect(() => { storeTab(PROVIDER_KIND_KEY, providerKind); }, [providerKind]);
   useEffect(() => {
-    if (open) setProviderKind("text");
-  }, [open]);
+    setVisitedTabs((prev) => (prev.has(settingsTab) ? prev : new Set(prev).add(settingsTab)));
+  }, [settingsTab]);
+  useEffect(() => {
+    setVisitedKinds((prev) => (prev.has(providerKind) ? prev : new Set(prev).add(providerKind)));
+  }, [providerKind]);
+
+  // Stable identity: ProviderConnections calls this from an effect, so a new
+  // function every render would re-run that effect on every render.
+  const handleDirtyChange = useCallback((kind: ProviderKind, isDirty: boolean) => {
+    setDirtyKinds((prev) => (prev[kind] === isDirty ? prev : { ...prev, [kind]: isDirty }));
+  }, []);
+
+  function requestClose() {
+    if (dirty) setConfirmClose(true);
+    else onClose();
+  }
 
   if (!open) return null;
 
@@ -87,7 +153,7 @@ export function SettingsModal(props: SettingsModalProps) {
           <div>
             <h2>Settings</h2>
           </div>
-          <button className="flex items-center gap-1 modal-close-btn" onClick={onClose} aria-label="Close Settings"><Icon name="X" size={14} /> Close</button>
+          <button className="flex items-center gap-1 modal-close-btn" onClick={requestClose} aria-label="Close Settings"><Icon name="X" size={14} /> Close</button>
         </header>
         <div className="settings-tabs-wrapper">
           <Tabs<SettingsTab>
@@ -100,108 +166,157 @@ export function SettingsModal(props: SettingsModalProps) {
           />
         </div>
         <div className="settings-tab-content">
-          {settingsTab === "provider" ? (
-            <div className="settings-subtabs">
-              <Tabs<ProviderKind>
-                tabs={PROVIDER_KIND_TABS}
-                activeTab={providerKind}
-                onChange={setProviderKind}
-                variant="pill"
-                size="sm"
-                className="settings-provider-tabs"
-                ariaLabel="Provider kind"
-              />
-              {/* key: switching kind remounts the list so the per-kind sort
-                  preference and the editor state start clean. */}
-              <ProviderConnections key={providerKind} kind={providerKind} />
-            </div>
-          ) : settingsTab === "prompts" ? (
-            <PresetEditor />
-          ) : settingsTab === "tags" ? (
-            <TagTaxonomyPanel />
-          ) : settingsTab === "appearance" ? (
-            <AppearanceSettingsPanel />
-          ) : (
-            <div className="chat-settings-group">
-            <p className="chat-settings-intro">
-              Customize which components and visual indicators appear in the Chat panel.
-            </p>
-
-            <h4 className="chat-settings-section-title">Chat Message</h4>
-            <div className="chat-settings-section">
-              <SwitchRow
-                icon="MessageSquare"
-                title="Show Choices"
-                description="Display suggested action choice buttons below turn responses"
-                checked={choicesEnabled}
-                onChange={(e) => setChoicesEnabled(e.target.checked)}
-              />
-
-              <SwitchRow
-                icon="Clock"
-                title="Display Response Generation Time"
-                description="Show generation duration badge on AI responses"
-                checked={showGenerationTime}
-                onChange={(e) => setShowGenerationTime?.(e.target.checked)}
-              />
-
-              <SwitchRow
-                iconNode={<Icon name="Calendar" size={15} className="ds-icon-accent" />}
-                title="Display Chat Message Timestamps"
-                description="Show timestamps on chat messages"
-                checked={showMessageTimestamps}
-                onChange={(e) => setShowMessageTimestamps?.(e.target.checked)}
-              />
-
-              <SwitchRow
-                iconNode={<Icon name="Bot" size={15} className="ds-icon-accent" />}
-                title="Display AI Model Name"
-                description="Show model name and provider icon badge on AI responses"
-                checked={showModelName}
-                onChange={(e) => setShowModelName?.(e.target.checked)}
-              />
-
-              <SwitchRow
-                icon="BarChart2"
-                title="Show Context Usage"
-                description="Display the Context Meter token and memory usage indicator"
-                checked={showContextUsage}
-                onChange={(e) => setShowContextUsage(e.target.checked)}
-              />
-            </div>
-
-            <h4 className="chat-settings-section-title">Image Generation</h4>
-            <div className="chat-settings-section">
-              <SwitchRow
-                icon="Image"
-                title="Review Image Prompt Before Generating"
-                description="Show the prompt the text model wrote before it is sent to the image provider. Off sends it straight through."
-                checked={imagePromptPreview}
-                onChange={(e) => setImagePromptPreview?.(e.target.checked)}
-              />
-
-              <SwitchRow
-                icon="Sparkles"
-                title="Generate Image right after AI Response"
-                description="Write and render an image for every completed turn. Costs one text call plus a render per turn — a local render takes minutes. With review on, the prompt modal still appears first."
-                checked={autoImageAfterTurn}
-                onChange={(e) => setAutoImageAfterTurn?.(e.target.checked)}
-              />
-            </div>
-
-            <h4 className="chat-settings-section-title">Debugging</h4>
-            <div className="chat-settings-section">
-              <SwitchRow
-                icon="Wrench"
-                title="Show Debug Accordion"
-                description="Display the expandable raw prompt, response, and patch inspector"
-                checked={showDebug}
-                onChange={(e) => setShowDebug(e.target.checked)}
-              />
-            </div>
+          <div hidden={settingsTab !== "provider"}>
+            {visitedTabs.has("provider") && (
+              <div className="settings-subtabs">
+                <Tabs<ProviderKind>
+                  tabs={PROVIDER_KIND_TABS}
+                  activeTab={providerKind}
+                  onChange={setProviderKind}
+                  variant="pill"
+                  size="sm"
+                  fullWidth
+                  className="settings-provider-tabs"
+                  ariaLabel="Provider kind"
+                />
+                {/* Two instances, each pinned to ONE kind. This replaces the old
+                    `key={providerKind}` remount that discarded a half-filled
+                    draft on every kind switch: each editor here only ever holds
+                    its own kind's fields, so the problem that remount guarded
+                    against (a text draft rendered into the image form) cannot
+                    arise. */}
+                <div hidden={providerKind !== "text"}>
+                  {visitedKinds.has("text") && (
+                    <ProviderConnections
+                      kind="text"
+                      active={providerKind === "text"}
+                      onDirtyChange={handleDirtyChange}
+                    />
+                  )}
+                </div>
+                <div hidden={providerKind !== "image"}>
+                  {visitedKinds.has("image") && (
+                    <ProviderConnections
+                      kind="image"
+                      active={providerKind === "image"}
+                      onDirtyChange={handleDirtyChange}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-        )}
+
+          <div hidden={settingsTab !== "prompts"}>
+            {visitedTabs.has("prompts") && <PresetEditor />}
+          </div>
+
+          <div hidden={settingsTab !== "tags"}>
+            {visitedTabs.has("tags") && <TagTaxonomyPanel />}
+          </div>
+
+          <div hidden={settingsTab !== "chat"}>
+            {visitedTabs.has("chat") && (
+              <div className="chat-settings-group">
+                <p className="chat-settings-intro">
+                  Customize which components and visual indicators appear in the Chat panel.
+                </p>
+
+                <h4 className="chat-settings-section-title">Chat Message</h4>
+                <div className="chat-settings-section">
+                  <SwitchRow
+                    icon="MessageSquare"
+                    title="Show Choices"
+                    description="Display suggested action choice buttons below turn responses"
+                    checked={choicesEnabled}
+                    onChange={(e) => setChoicesEnabled(e.target.checked)}
+                  />
+
+                  <SwitchRow
+                    icon="Clock"
+                    title="Display Response Generation Time"
+                    description="Show generation duration badge on AI responses"
+                    checked={showGenerationTime}
+                    onChange={(e) => setShowGenerationTime?.(e.target.checked)}
+                  />
+
+                  <SwitchRow
+                    iconNode={<Icon name="Calendar" size={15} className="ds-icon-accent" />}
+                    title="Display Chat Message Timestamps"
+                    description="Show timestamps on chat messages"
+                    checked={showMessageTimestamps}
+                    onChange={(e) => setShowMessageTimestamps?.(e.target.checked)}
+                  />
+
+                  <SwitchRow
+                    iconNode={<Icon name="Bot" size={15} className="ds-icon-accent" />}
+                    title="Display AI Model Name"
+                    description="Show model name and provider icon badge on AI responses"
+                    checked={showModelName}
+                    onChange={(e) => setShowModelName?.(e.target.checked)}
+                  />
+
+                  <SwitchRow
+                    icon="BarChart2"
+                    title="Show Context Usage"
+                    description="Display the Context Meter token and memory usage indicator"
+                    checked={showContextUsage}
+                    onChange={(e) => setShowContextUsage(e.target.checked)}
+                  />
+                </div>
+
+                <h4 className="chat-settings-section-title">Image Generation</h4>
+                <div className="chat-settings-section">
+                  <SwitchRow
+                    icon="Image"
+                    title="Review Image Prompt Before Generating"
+                    description="Show the prompt the text model wrote before it is sent to the image provider. Off sends it straight through."
+                    checked={imagePromptPreview}
+                    onChange={(e) => setImagePromptPreview?.(e.target.checked)}
+                  />
+
+                  <SwitchRow
+                    icon="Sparkles"
+                    title="Generate Image right after AI Response"
+                    description="Write and render an image for every completed turn. Costs one text call plus a render per turn — a local render takes minutes. With review on, the prompt modal still appears first."
+                    checked={autoImageAfterTurn}
+                    onChange={(e) => setAutoImageAfterTurn?.(e.target.checked)}
+                  />
+                </div>
+
+                <h4 className="chat-settings-section-title">Debugging</h4>
+                <div className="chat-settings-section">
+                  <SwitchRow
+                    icon="Wrench"
+                    title="Show Debug Accordion"
+                    description="Display the expandable raw prompt, response, and patch inspector"
+                    checked={showDebug}
+                    onChange={(e) => setShowDebug(e.target.checked)}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div hidden={settingsTab !== "appearance"}>
+            {visitedTabs.has("appearance") && <AppearanceSettingsPanel />}
+          </div>
         </div>
+
+        {/* The only way to leave a dirty draft. ConfirmModal renders its own
+            backdrop and this modal has no Escape handler, so the confirm cannot
+            close the Settings modal underneath it. */}
+        {confirmClose && (
+          <ConfirmModal
+            title="Discard unsaved changes?"
+            message="Your edits to this provider connection have not been saved."
+            confirmLabel="Discard changes"
+            cancelLabel="Keep editing"
+            danger
+            onConfirm={() => { setConfirmClose(false); onClose(); }}
+            onCancel={() => setConfirmClose(false)}
+          />
+        )}
       </section>
     </div>
   );

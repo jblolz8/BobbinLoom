@@ -91,6 +91,14 @@
   padding-right: 4px;
 }
 
+/* Tab panels are hidden, not unmounted, so an in-progress provider draft
+   survives a tab or kind switch. Stated explicitly because the UA's own
+   `[hidden]` rule is a weak selector: any class rule setting `display` on the
+   same element would silently win and the hidden panel would stack below. */
+.settings-tab-content > [hidden] {
+  display: none;
+}
+
 /* Prompt Configuration: the preset row and its section tabs stay reachable at
    any scroll depth. ONE sticky block rather than two stacked sticky elements —
    the preset row wraps at narrow widths (five buttons in .preset-actions), so a
