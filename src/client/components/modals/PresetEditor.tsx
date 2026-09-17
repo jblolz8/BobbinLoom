@@ -647,48 +647,51 @@ export function PresetEditor() {
   return (
     <>
       <section className="prompt-config">
-        <div className="preset-bar">
-          <div className="preset-bar-field">
-            <span className="field-label-text">Preset</span>
-            <SimpleSelect
-              value={activePresetId}
-              onChange={(id) => switchPreset(id)}
-              options={presets.map((p) => ({ value: p.id, label: p.readonly ? `${p.name} (read-only)` : p.name }))}
-              disabled={saving}
-              size="sm"
-              fullWidth
-              aria-label="Prompt preset"
-            />
+        <div className="prompt-config-sticky">
+          <div className="preset-bar">
+            <div className="preset-bar-field">
+              <span className="field-label-text">Preset</span>
+              <SimpleSelect
+                value={activePresetId}
+                onChange={(id) => switchPreset(id)}
+                options={presets.map((p) => ({ value: p.id, label: p.readonly ? `${p.name} (read-only)` : p.name }))}
+                disabled={saving}
+                size="sm"
+                fullWidth
+                aria-label="Prompt preset"
+              />
+            </div>
+            <div className="preset-actions">
+              <Button size="sm" variant="secondary" onClick={reloadPreset} disabled={saving} title="Discard unsaved changes and reload the saved preset">Load/Reload</Button>
+              <Button size="sm" variant="primary" onClick={() => void savePreset()} disabled={activePresetReadonly || !dirty || saving}>Save</Button>
+              <Button size="sm" variant="secondary" onClick={savePresetAs} disabled={saving}>Save as New…</Button>
+              <Button size="sm" variant="secondary" onClick={renamePreset} disabled={activePresetReadonly || saving}>Rename</Button>
+              <Button size="sm" variant="danger" onClick={removePreset} disabled={activePresetReadonly || saving}>Delete</Button>
+            </div>
           </div>
-          <div className="preset-actions">
-            <Button size="sm" variant="secondary" onClick={reloadPreset} disabled={saving} title="Discard unsaved changes and reload the saved preset">Load/Reload</Button>
-            <Button size="sm" variant="primary" onClick={() => void savePreset()} disabled={activePresetReadonly || !dirty || saving}>Save</Button>
-            <Button size="sm" variant="secondary" onClick={savePresetAs} disabled={saving}>Save as New…</Button>
-            <Button size="sm" variant="secondary" onClick={renamePreset} disabled={activePresetReadonly || saving}>Rename</Button>
-            <Button size="sm" variant="danger" onClick={removePreset} disabled={activePresetReadonly || saving}>Delete</Button>
-          </div>
+
+          <Tabs
+            tabs={CONTEXT_TABS.map((tab) => ({
+              id: tab.value,
+              label: tab.label,
+              // The image tab holds one settings block, not a list, so it has no count.
+              badge:
+                tab.value === "sheet" ? format.sections.length
+                : tab.value === "turn" ? config.modules.turn.length
+                : undefined
+            }))}
+            activeTab={activeContextTab}
+            onChange={setActiveContextTab}
+            variant="underline"
+            size="sm"
+            ariaLabel="Prompt configuration sections"
+          />
         </div>
+
         <p className="module-hint">
           {`One global prompt configuration for every playthrough — edits apply immediately, even unsaved. Save or "Save as New…" keeps them under a name; Load/Reload discards them.`}
         </p>
         {activePresetReadonly ? <p className="module-hint">Read-only. Use "Save as New…" to keep your changes under an editable copy.</p> : null}
-
-        <Tabs
-          tabs={CONTEXT_TABS.map((tab) => ({
-            id: tab.value,
-            label: tab.label,
-            // The image tab holds one settings block, not a list, so it has no count.
-            badge:
-              tab.value === "sheet" ? format.sections.length
-              : tab.value === "turn" ? config.modules.turn.length
-              : undefined
-          }))}
-          activeTab={activeContextTab}
-          onChange={setActiveContextTab}
-          variant="underline"
-          size="sm"
-          ariaLabel="Prompt configuration sections"
-        />
 
         {activeContextTab === "sheet" ? (
           <div className="format-editor">
