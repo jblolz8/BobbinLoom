@@ -180,13 +180,13 @@ const THEME_SHOWCASE_GROUPS: ThemeShowcaseGroup[] = [
         },
       },
       {
-        name: "Thoughts & Actions",
-        variable: "--story-thought",
-        desc: "Narrative actions and internal thoughts (*...*)",
+        name: "Italics & Actions",
+        variable: "--story-italic",
+        desc: "Italic prose: narrative actions and internal thoughts (*...*)",
         preview: "text",
         badgeText: "*whispers quietly*",
         style: {
-          color: "var(--story-thought)",
+          color: "var(--story-italic)",
           fontStyle: "italic",
         },
       },
@@ -199,6 +199,102 @@ const THEME_SHOWCASE_GROUPS: ThemeShowcaseGroup[] = [
         style: {
           color: "var(--story-emphasis)",
           fontWeight: 700,
+        },
+      },
+    ],
+  },
+  {
+    id: "docs",
+    title: "Search Highlights",
+    icon: "Highlighter",
+    items: [
+      {
+        name: "Highlighted Term",
+        variable: "--doc-hit-text",
+        desc: "The searched word inside a documentation page",
+        preview: "text",
+        badgeText: "highlighted",
+        style: {
+          color: "var(--doc-hit-text)",
+          background: "var(--doc-hit-bg)",
+        },
+      },
+      {
+        name: "Highlight Surface",
+        variable: "--doc-hit-bg",
+        desc: "The wash behind a highlighted term, in prose and in code",
+        preview: "swatch",
+        style: {
+          background: "var(--doc-hit-bg)",
+        },
+      },
+    ],
+  },
+  {
+    id: "code",
+    title: "Code & Technical Blocks",
+    icon: "Code",
+    items: [
+      {
+        name: "Inline Code Text",
+        variable: "--code-inline-text",
+        desc: "Backticked spans in prose, chat messages and documentation",
+        preview: "text",
+        badgeText: "inline code",
+        style: {
+          color: "var(--code-inline-text)",
+        },
+      },
+      {
+        name: "Inline Code Surface",
+        variable: "--code-inline-bg",
+        desc: "The chip behind inline code",
+        preview: "swatch",
+        style: {
+          background: "var(--code-inline-bg)",
+          borderColor: "var(--code-inline-border)",
+        },
+      },
+      {
+        name: "Code Block Surface",
+        variable: "--code-block-bg",
+        desc: "Fenced blocks and raw payloads — chat, debug panel and the docs viewer",
+        preview: "swatch",
+        style: {
+          background: "var(--code-block-bg)",
+          borderColor: "var(--code-block-border)",
+        },
+      },
+      {
+        name: "Code Block Header",
+        variable: "--code-block-header",
+        desc: "The strip carrying the language label and the copy button",
+        preview: "swatch",
+        style: {
+          background: "var(--code-block-header)",
+          borderColor: "var(--code-block-border)",
+        },
+      },
+      {
+        name: "Code Block Border",
+        variable: "--code-block-border",
+        desc: "Outlines every code block",
+        preview: "swatch",
+        style: {
+          background: "transparent",
+          borderColor: "var(--code-block-border)",
+        },
+      },
+      {
+        name: "Language Label",
+        variable: "--code-lang-label",
+        desc: "The small uppercase language tag in a block's header",
+        preview: "text",
+        badgeText: "TYPESCRIPT",
+        style: {
+          color: "var(--code-lang-label)",
+          fontWeight: 600,
+          letterSpacing: "0.05em",
         },
       },
     ],

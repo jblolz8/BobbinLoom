@@ -8,7 +8,9 @@ export type ButtonVariant =
   | "danger"
   | "warning"
   | "ai"
-  | "outline";
+  | "outline"
+  /** Floats over media the app does not control — paints its own scrim. */
+  | "overlay";
 
 export type ButtonSize = "xs" | "sm" | "md" | "lg";
 
@@ -16,6 +18,8 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
   iconOnly?: boolean;
+  /** Round instead of the default rounded square (media/overlay controls). */
+  round?: boolean;
   fullWidth?: boolean;
   isLoading?: boolean;
   leftIcon?: ReactNode;
@@ -36,6 +40,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     variant = "secondary",
     size = "md",
     iconOnly = false,
+    round = false,
     fullWidth = false,
     isLoading = false,
     leftIcon,
@@ -54,6 +59,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     `base-btn--${variant}`,
     `base-btn--${size}`,
     iconOnly ? "base-btn--icon" : "",
+    round ? "base-btn--round" : "",
     fullWidth ? "base-btn--full-width" : "",
     isLoading ? "is-loading" : "",
     className,

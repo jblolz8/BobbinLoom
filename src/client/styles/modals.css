@@ -688,7 +688,7 @@
 
 .save-badge {
   font-size: 0.7rem;
-  color: var(--accent-base);
+  color: var(--accent-highlight, var(--accent-base));
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -2568,7 +2568,7 @@
 .link {
   background: none;
   border: none;
-  color: var(--accent-base);
+  color: var(--accent-highlight, var(--accent-base));
   cursor: pointer;
   padding: 0;
   text-align: left;
@@ -3558,7 +3558,7 @@
 }
 
 .tag-char-name-badge {
-  color: var(--accent-base);
+  color: var(--accent-highlight, var(--accent-base));
   background: var(--accent-translucent);
   padding: 2px 6px;
   border-radius: 5px;
@@ -4301,7 +4301,7 @@
 }
 .tag-source-badge.current {
   background: var(--accent-translucent);
-  color: var(--accent-base);
+  color: var(--accent-highlight, var(--accent-base));
   border: 1px solid var(--accent-base);
 }
 .tag-source-badge.custom {
@@ -6380,7 +6380,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--accent-base);
+  color: var(--accent-highlight, var(--accent-base));
   background: var(--accent-translucent);
   border: 1px solid var(--accent-translucent);
   width: 26px;
@@ -6415,7 +6415,7 @@
 
 .visuals-pill.custom {
   background: var(--accent-translucent);
-  color: var(--accent-base);
+  color: var(--accent-highlight, var(--accent-base));
   border: 1px solid var(--accent-base);
 }
 
@@ -6469,7 +6469,7 @@
   background: var(--accent-translucent);
   border: 1px solid var(--accent-translucent);
   border-radius: 8px;
-  color: var(--accent-base);
+  color: var(--accent-highlight, var(--accent-base));
   font-size: 0.82rem;
 }
 
@@ -6521,7 +6521,7 @@
 
 .slot-badge.custom {
   background: var(--accent-translucent);
-  color: var(--accent-base);
+  color: var(--accent-highlight, var(--accent-base));
   border: 1px solid var(--accent-base);
 }
 
@@ -6709,7 +6709,7 @@ button.visual-action-btn.auto-detect-action:hover:not(:disabled),
   align-items: center;
   justify-content: center;
   background: var(--accent-translucent);
-  color: var(--accent-base);
+  color: var(--accent-highlight, var(--accent-base));
   border: 1px solid var(--accent-translucent);
   width: 32px;
   height: 32px;
@@ -7344,24 +7344,7 @@ button.crop-auto-detect-btn:hover:not(:disabled),
   cursor: pointer;
 }
 
-.timeline-close-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 1px solid #334155;
-  border-radius: 6px;
-  color: #94a3b8;
-  padding: 0.35rem;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
 
-.timeline-close-btn:hover {
-  background: rgba(239, 68, 68, 0.15);
-  border-color: #ef4444;
-  color: #fca5a5;
-}
 
 .timeline-error-banner {
   display: flex;
@@ -7856,35 +7839,37 @@ button.crop-auto-detect-btn:hover:not(:disabled),
   box-shadow: var(--shadow-card);
 }
 
-.image-viewer-close {
+/* Two classes, for the same reason as .base-btn.message-image-remove: the
+   primitive's own `position: relative` is declared in a later-loaded file. */
+.base-btn.image-viewer-close {
   position: absolute;
   top: -0.75rem;
   right: -0.75rem;
   z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid var(--border-main);
-  border-radius: 999px;
-  background: var(--bg-panel);
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 }
 
-.image-viewer-close:hover,
-.image-viewer-close:focus-visible {
-  background: var(--status-danger-bg);
-  border-color: var(--status-danger-border);
-  color: var(--status-danger);
-}
 
 .image-viewer-caption {
   margin: 0;
   font-size: 0.75rem;
   color: var(--text-muted);
   text-align: center;
+}
+
+/* ── Icon controls ────────────────────────────────────────────────────────────
+   `base-btn--round` makes an icon-only control circular. `base-btn--overlay` is
+   for controls that float over media the app does not control: it paints its own
+   scrim and picks its icon against that scrim, so it stays legible on any
+   artwork in any theme. Hover keeps the app's danger tokens. */
+.base-btn--overlay {
+  background: var(--media-scrim);
+  border-color: var(--media-border);
+  color: var(--media-icon);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+}
+
+.base-btn--overlay:hover:not(:disabled) {
+  background: var(--media-scrim-hover);
+  border-color: var(--media-border);
+  color: var(--media-icon);
 }

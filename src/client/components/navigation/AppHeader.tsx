@@ -11,6 +11,9 @@ export type AppHeaderProps = {
   onGoHome: () => void;
   onNewPlaythrough: () => void;
   onOpenSettings: () => void;
+  /** Docs open as a dialog while a playthrough is on screen, where the other
+   *  nav tabs open their managers; on Home they are a workspace tab. */
+  onOpenDocs: () => void;
   isMobile?: boolean;
 };
 
@@ -25,6 +28,7 @@ export function AppHeader({
   onGoHome,
   onNewPlaythrough,
   onOpenSettings,
+  onOpenDocs,
   isMobile = false,
 }: AppHeaderProps) {
   const [showPlayNavTabs, setShowPlayNavTabs] = useState<boolean>(() => {
@@ -126,6 +130,21 @@ export function AppHeader({
           >
             <span className="tab-icon"><Icon name="User" size={15} /></span>
             <span className="tab-label">Personas</span>
+          </button>
+
+          <button
+            className={`nav-tab-btn ${view === "home" && activeHomeTab === "docs" ? "active" : ""}`}
+            onClick={() => {
+              if (view === "play") {
+                onOpenDocs();
+              } else {
+                onSelectHomeTab("docs");
+                if (view !== "home") onGoHome();
+              }
+            }}
+          >
+            <span className="tab-icon"><Icon name="BookText" size={15} /></span>
+            <span className="tab-label">Docs</span>
           </button>
         </nav>
       )}

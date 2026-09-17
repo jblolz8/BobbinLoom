@@ -17,6 +17,7 @@ import { usePlaythrough } from "./hooks/usePlaythrough";
 import { useResponsive } from "./hooks/useResponsive";
 import { useModalState } from "./hooks/useModalState";
 import { HomeView, type HomeTab } from "./components/views/HomeView";
+import { DocsView } from "./components/views/DocsView";
 import { defaultSetupForm, SetupView, type SetupFormState } from "./components/views/SetupView";
 import { PlayView } from "./components/views/PlayView/PlayView";
 import { SettingsModal } from "./components/modals/SettingsModal";
@@ -30,6 +31,8 @@ type AppView = "play" | "setup" | "home";
 export default function App() {
   const [view, setView] = useState<AppView>("home");
   const [homeTab, setHomeTab] = useState<HomeTab>("playthroughs");
+  /** Docs as a dialog, so they are reachable from inside a playthrough too. */
+  const [docsOpen, setDocsOpen] = useState(false);
   const [saveLoadOpen, setSaveLoadOpen] = useState(false);
 
   // Custom Hooks
@@ -283,6 +286,7 @@ export default function App() {
         onGoHome={() => setView("home")}
         onNewPlaythrough={openSetup}
         onOpenSettings={modalHook.openSettings}
+        onOpenDocs={() => setDocsOpen(true)}
         isMobile={responsiveHook.isMobile}
       />
 
@@ -463,6 +467,17 @@ export default function App() {
             onClose={modalHook.closeModal}
           />
         </>
+      ) : null}
+
+      {/* Docs are reachable in every view: a workspace tab on Home, this dialog
+          from inside a playthrough (mirroring how the nav tabs open their
+          managers there). */}
+      {docsOpen ? (
+        <div className="modal-backdrop docs-backdrop" onClick={() => setDocsOpen(false)}>
+          <section className="modal docs-overlay" onClick={(e) => e.stopPropagation()}>
+            <DocsView variant="overlay" onClose={() => setDocsOpen(false)} />
+          </section>
+        </div>
       ) : null}
     </div>
   );

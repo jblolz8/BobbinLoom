@@ -5,10 +5,11 @@ import { PlaythroughActionsMenu } from "../common/PlaythroughActionsMenu";
 import { CharacterLibrary } from "../library/CharacterLibrary";
 import { LorebookLibrary } from "../library/LorebookLibrary";
 import { PersonaLibrary } from "../library/PersonaLibrary";
+import { DocsView } from "./DocsView";
 import { Icon, Pagination } from "../base";
 import { usePagination } from "../../hooks/usePagination";
 
-export type HomeTab = "playthroughs" | "characters" | "lorebooks" | "personas";
+export type HomeTab = "playthroughs" | "characters" | "lorebooks" | "personas" | "docs";
 
 export type HomeViewProps = {
   activeTab: HomeTab;
@@ -115,6 +116,10 @@ export function HomeView({
             <p>Manage World Info lorebooks for prompt context injection.</p>
           </div>
           <LorebookLibrary />
+        </section>
+      ) : activeTab === "docs" ? (
+        <section className="home-workspace-page docs-workspace-page">
+          <DocsView />
         </section>
       ) : activeTab === "personas" ? (
         <section className="home-workspace-page">

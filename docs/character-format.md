@@ -1,4 +1,10 @@
-# BobbinLoom — Character Format
+---
+title: Character format
+section: Characters
+order: 70
+---
+
+# Character format
 
 ---
 
@@ -40,6 +46,14 @@ type CharacterTemplate = {
   ccv2Content?: string;        // original card content (kept after conversion)
   ccv2CreatorNotes?: string;
   ccv2Tags?: string[];
+  // — record / avatar bookkeeping (all optional) —
+  specVersion?: string;
+  title?: string;
+  customPortrait?: string;     // uploaded portrait filename
+  profileImage?: string;       // uploaded profile-crop filename
+  avatarUpdatedAt?: number;    // bumped on every avatar change, drives client cache-busting
+  createdAt?: string;
+  updatedAt?: string;
 };
 ```
 

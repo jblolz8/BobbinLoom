@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Icon } from "../base";
+import { Icon, IconButton } from "../base";
 
 export type ImageViewerImage = {
   /** Whatever the message's own `<img src>` uses — the store's streaming route. */
@@ -50,16 +50,17 @@ export function ImageViewer({ image, onClose }: ImageViewerProps) {
   return (
     <div className="modal-backdrop image-viewer-backdrop" onMouseDown={handleBackdropMouseDown}>
       <section className="image-viewer" role="dialog" aria-modal="true" aria-label="Image viewer">
-        <button
+        <IconButton
           ref={closeRef}
-          type="button"
           className="image-viewer-close"
-          onClick={onClose}
+          variant="overlay"
+          size="md"
+          round
+          icon="X"
+          label="Close the image viewer"
           title="Close (Esc)"
-          aria-label="Close the image viewer"
-        >
-          <Icon name="X" size={16} />
-        </button>
+          onClick={onClose}
+        />
         <img className="image-viewer-image" src={image.src} alt={image.alt} title={image.title} />
         {image.caption ? <p className="image-viewer-caption">{image.caption}</p> : null}
       </section>

@@ -1,0 +1,516 @@
+/* ── Documentation viewer ────────────────────────────────────────────────────
+   Two panes: the page nav on the left, the rendered page on the right. Both
+   scroll independently, so the nav stays put while a long page scrolls. */
+
+.docs-workspace-page {
+  /* The other workspace pages cap at 1100px and scroll as a whole; docs read
+     better wide, and the panes own their own scrolling. */
+  max-width: none;
+  overflow: hidden;
+  padding: 0;
+}
+
+.docs-view {
+  flex: 1;
+  /* The overlay's sheet is a flex container, so this is a flex ITEM: without an
+     explicit 0 its automatic minimum size is its min-content width (measured 705px
+     on a page with a long code line), which a 375px sheet then clips — content
+     laid out past the viewport with no scrollbar. Zero here hands the overflow back
+     to the code fence, which already scrolls. */
+  min-width: 0;
+  display: flex;
+  min-height: 0;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+}
+
+/* ── Nav ── */
+
+.docs-nav {
+  flex: 0 0 236px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-height: 0;
+  padding-right: 0.9rem;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.docs-nav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.docs-nav-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.docs-nav-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.docs-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.docs-nav-group-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 0 0.35rem 0.25rem;
+}
+
+.docs-nav-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.32rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.docs-nav-item:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+
+.docs-nav-item.active {
+  background: var(--accent-translucent);
+  border-color: var(--accent-highlight, var(--accent-base));
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.docs-nav-empty {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  padding: 0 0.35rem;
+}
+
+/* ── Content ── */
+
+.docs-content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.docs-page-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.docs-page-header h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  color: var(--text-primary);
+}
+
+.docs-page-section {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.docs-loading {
+  color: var(--text-muted);
+}
+
+/* ── Rendered page ── */
+
+.doc-markdown {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  padding-bottom: 3rem;
+}
+
+.doc-markdown > *:first-child {
+  margin-top: 0;
+}
+
+.doc-markdown h1,
+.doc-markdown h2,
+.doc-markdown h3,
+.doc-markdown h4 {
+  color: var(--text-primary);
+  line-height: 1.3;
+  margin: 1.5rem 0 0.6rem;
+}
+
+.doc-markdown h1 {
+  font-size: 1.3rem;
+}
+
+.doc-markdown h2 {
+  font-size: 1.1rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.doc-markdown h3 {
+  font-size: 0.98rem;
+}
+
+.doc-markdown h4 {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.doc-markdown p,
+.doc-markdown li {
+  margin: 0.55rem 0;
+}
+
+.doc-markdown ul,
+.doc-markdown ol {
+  padding-left: 1.35rem;
+}
+
+.doc-markdown li > ul,
+.doc-markdown li > ol {
+  margin: 0.25rem 0;
+}
+
+.doc-markdown a {
+  color: var(--accent-highlight, var(--accent-base));
+  text-decoration: none;
+}
+
+.doc-markdown a:hover {
+  text-decoration: underline;
+}
+
+.doc-markdown .doc-link-inert {
+  color: var(--text-muted);
+}
+
+/* Code is NOT styled here. Docs render through the same `.code-block` /
+   `.inline-code` contract as every other surface (base/CodeBlock.tsx +
+   views.css), so the theme's --code-* tokens reach them all at once and a docs
+   page cannot drift into its own palette. */
+
+/* The docs copy button's two states, swapped by the attribute the viewer sets
+   on click — the same markup the React primitive renders. */
+.code-copy-btn [data-state="copied"] {
+  display: none;
+}
+
+.code-copy-btn[data-copied="true"] [data-state="idle"] {
+  display: none;
+}
+
+.code-copy-btn[data-copied="true"] [data-state="copied"] {
+  display: inline-flex;
+}
+
+.code-copy-btn svg {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.doc-markdown blockquote {
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.9rem;
+  border-left: 3px solid var(--accent-highlight, var(--accent-base));
+  background: var(--bg-surface);
+  border-radius: 0 6px 6px 0;
+  color: var(--text-muted);
+}
+
+.doc-markdown blockquote p {
+  margin: 0.25rem 0;
+}
+
+.doc-markdown hr {
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  margin: 1.35rem 0;
+}
+
+/* A table is NOT a scroll container: `overflow` on a table box is ignored, and
+   `display: block` (the old workaround) cost it column distribution and the
+   ability to fill a narrow pane. The scroll affordance lives on the wrapper the
+   renderer emits instead, so the table below keeps real table layout. */
+.doc-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0.9rem 0;
+}
+
+.doc-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+/* Prose carries file paths and identifiers with no break opportunity in them;
+   they used to push the reading pane sideways instead of wrapping. */
+.doc-markdown {
+  overflow-wrap: break-word;
+}
+
+.doc-markdown th,
+.doc-markdown td {
+  border: 1px solid var(--border-subtle);
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+  /* `break-word`, NOT `anywhere`: a long token still breaks rather than being
+     clipped, but the cell keeps its min-content width, so a table carrying
+     unbreakable paths genuinely cannot fit and its wrapper scrolls for it.
+     `anywhere` would let every table squeeze to any width, which makes the
+     scroll fallback unreachable and a phone-width 6-column table unreadable. */
+  overflow-wrap: break-word;
+}
+
+.doc-markdown th {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ── Overlay variant (docs from inside a playthrough) ── */
+
+.docs-overlay {
+  width: min(1200px, 94vw);
+  height: 88vh;
+  padding: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ── Narrow screens ── */
+
+/* Full-bleed at every width up to 1100px — the viewer owns the pane instead of
+   floating as a card inside it. Kept in its own query rather than folded into a
+   width band: scoping this to 768+ once left every narrower width with the card. */
+@media (max-width: 1100px) {
+  .docs-overlay {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
+}
+
+/* ── Phone: the dialog takes the VISIBLE viewport ──
+   Mirrors the New Playthrough / Settings mobile sheet. A plain `100vh` matches the
+   LARGE viewport, so with a mobile URL bar on screen the sheet's lower edge — the
+   sticky toolbar's controls — sat below the fold; `100dvh` (declared after the vh
+   fallback) is the visible one. The backdrop goes flush because a 100dvh sheet
+   inside the shared 1rem padding would overflow and clip. */
+@media (max-width: 680px) {
+  .modal.docs-overlay {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    min-height: 0;
+    border-radius: 0;
+    border: none;
+  }
+
+  .docs-backdrop {
+    padding: 0;
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
+  /* The same tighter gutter the tablet tier uses. */
+  .docs-view {
+    padding: 0.75rem;
+  }
+}
+
+/* ── Search hits ──
+   The mark is a themed surface: prose takes the hit text colour, code keeps
+   its own palette and is marked by the wash alone. */
+.doc-markdown mark.doc-search-hit {
+  background: var(--doc-hit-bg);
+  color: var(--doc-hit-text);
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+.inline-code .doc-search-hit,
+.code-block-pre .doc-search-hit {
+  color: inherit;
+}
+
+/* ── Show/hide the page list ──
+   Above 767px the toggle collapses the column; below it the nav becomes a
+   drawer over the content, closed until asked for. */
+.docs-view {
+  position: relative;
+}
+
+.docs-view.nav-collapsed .docs-nav {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .docs-view .docs-nav {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: min(300px, 86vw);
+    z-index: 3;
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border-subtle);
+    border-bottom: none;
+    transform: translateX(-102%);
+    /* visibility, not only a transform: the drawer is positioned inside the
+       overlay dialog, whose own left offset left a sliver of the closed drawer
+       visible at the dialog's edge. */
+    visibility: hidden;
+    transition: transform 0.18s ease, visibility 0.18s;
+  }
+
+  .docs-view.nav-open .docs-nav {
+    transform: none;
+    visibility: visible;
+  }
+
+  .docs-view.nav-open .docs-nav-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    background: var(--modal-backdrop);
+  }
+}
+/* ── Search results in the nav ──
+   Rows are raw buttons (not base-btn) on purpose: they are list items, and
+   this file's nav styling owns their layout. */
+.docs-search-results {
+  gap: 0.35rem;
+}
+
+.docs-search-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding-bottom: 0.35rem;
+}
+
+.docs-search-page-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.docs-search-count {
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--accent-translucent);
+  border-radius: 999px;
+  padding: 0 0.4rem;
+}
+
+.docs-search-hit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-left: 2px solid var(--border-subtle);
+  border-radius: 0;
+  padding: 0.2rem 0 0.2rem 0.5rem;
+  cursor: pointer;
+  font: inherit;
+}
+
+.docs-search-hit-heading {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.docs-search-hit-snippet {
+  font-size: 0.74rem;
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+
+/* ── Page header: the section label ── */
+
+.docs-hit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.7rem;
+  color: var(--doc-hit-text);
+  background: var(--doc-hit-bg);
+  border-radius: 999px;
+  padding: 0.1rem 0.15rem 0.1rem 0.5rem;
+}
+
+/* ── Toolbar (content side: never hidden with the nav) ──
+   It sticks to the top of the reading pane, so the page list stays one tap away
+   while a long page scrolls. Each variant names the surface it is painted over
+   (the workspace behind the page variant, the dialog behind the overlay) — a
+   sticky bar over scrolling prose needs an opaque match, not `transparent`.
+   z-index 1 keeps it under the drawer (3) and the drawer's scrim (2), so an open
+   drawer covers the bar rather than sliding beneath it. */
+.docs-view {
+  --docs-surface: var(--bg-app);
+}
+
+.docs-view-overlay {
+  --docs-surface: var(--bg-panel);
+}
+
+.docs-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+  background: var(--docs-surface);
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.docs-toolbar-spacer {
+  flex: 1;
+}
+
+/* Between 768px and 1100px the page list is a horizontal strip; the search
+   results must stay a readable column inside it. */

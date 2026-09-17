@@ -1,31 +1,37 @@
-# BobbinLoom — Prompt Modules
-
+---
+title: Prompt modules
+section: Prompting
+order: 100
 ---
 
-## Core idea
+# Prompt modules
 
-Prompt behavior is configured through **presets** — named collections of prompt modules that can be toggled, reordered, and edited — but what generation actually reads is one **global prompt configuration**: a working copy of a preset's modules, character format, and image block that lives in `data/user-settings.json` and applies to **every** playthrough. Editing the config in Settings applies immediately, saved or not; a preset is a named save/load point for it, not a per-playthrough binding.
+Prompt behaviour is configured through **presets**: named collections of modules that can be
+toggled, reordered and edited. What generation actually reads is the **global prompt
+configuration** — a working copy of a preset's modules, character format and image block that
+lives in your settings and applies to every playthrough. Editing the configuration in Settings
+applies immediately, saved or not; a preset is a named save/load point for it.
 
-Modules are **scoped to the turn context** — the only module surface. The seed, sheet, and summary module contexts were **removed (Aug 2026)**: scenario generation, character-sheet generation, and chapter summarization now use hardcoded prompts (with a fixed neutral tone) rather than user-editable modules. The PresetEditor shows three tabs: **Turn** (modules), **Character Sheet** (the format), and **Image Generation** (the image prompt block).
+One thing is not configurable: scenario generation, character-sheet generation and chapter
+summarization run on fixed prompts, so the only module surface is the turn.
 
----
-
-## Preset model
+## The preset model
 
 ```ts
-type Preset = {
+type PromptPreset = {
   id: string;
   name: string;
   readonly: boolean;
   modules: PromptModuleSet;
-  characterFormat: CharacterFormat;  // the character sheet structure (see character-format.md)
+  characterFormat: CharacterFormat;      // the sheet structure
+  imageGeneration: ImageGenerationSettings;
 };
 
 type PromptModuleSet = {
-  turn: PresetModule[];     // the main turn system prompt
+  turn: PromptPresetModule[];            // the turn system prompt
 };
 
-type PresetModule = {
+type PromptPresetModule = {
   id: string;
   name: string;
   description: string;
@@ -35,67 +41,77 @@ type PresetModule = {
 };
 ```
 
-**Context is structural, not a per-module field.** Modules belong to the Turn context — the only context. (The earlier per-module `contexts` array, the decorative `tags` field, and the seed/sheet/summary contexts were removed Aug 2026.) Legacy presets/snapshots that stored modules as a flat array load with the whole array treated as `turn` modules.
+Modules belong to the turn — the context is structural, not a per-module field. Enabled
+modules are sorted by `order` and joined into the leading system block, ahead of everything
+else in the prompt. Module content is plain text.
 
-**The Character Sheet tab is a sections editor, not a module list.** Sheet structure — which sections exist, their order, their inline vs. block layout, and the instruction/examples the model gets — is owned by `characterFormat`, edited row-by-row in the Character Sheet tab. The former `sheet` module context was removed (Aug 2026); the format is the sheet's authoritative contract.
+## The shipped presets
 
----
+Two readonly presets ship with the app:
 
-## Default presets
-
-`data/prompt-presets.json` ships with **two** readonly presets — **Default** and **Default (NSFW)** — whose turn modules mirror each other. Default has the content modules off; Default (NSFW) has them on. Both are `readonly: true` and cannot be overwritten via the UI; use "Save as New…" to customize. Their image-generation blocks DO differ: Default (NSFW) adds an explicit-content section to the prompt instruction and extra tokens to its negative prefix — see [`image-generation.md`](image-generation.md).
-
-### Turn modules (Default)
-
-| Module | Status | Purpose |
+| Preset | Turn modules | Character format |
 |---|---|---|
-| Core GM | On | Establish GM role, don't speak for user |
-| Response Format | On | Quotes for speech, backticks for thoughts, bold for emphasis |
-| User Input Format | On | How to interpret user messages |
-| RPG State Awareness | On | Respect current state, don't invent |
-| Campaign Logic | On | Consequences, pacing, NPC agency |
-| Conflict Narration | On | Narrate conflict and uncertain outcomes through prose (no dice/stats) |
-| Relationship Dynamics | On | Relationships evolve through actions |
-| Grounded Style | On | Vivid but controlled prose |
+| **Default** | Seven modules, content modules off | Ten sections |
+| **Default (NSFW)** | The same seven, content modules on | The same ten plus `[Sexual Capabilities]` |
 
-### Hardcoded seed & summary tone (removed Aug 2026)
+Read-only means they can't be *overwritten* — every field is editable as your working
+configuration, and **Save as New…** keeps your version under its own name. The preset you use
+is the content control: its turn modules and sheet format decide what every playthrough is
+asked to write. Their image blocks differ too; see [Image generation](image-generation.md).
 
-The former **Seed Tone** and **Summary Tone** modules were removed along with the `seed`/`summary` module contexts. Scenario generation and chapter summarization now use a fixed **neutral tone** inlined into their prompts — no longer user-configurable. This is intended to be revisited when scenario/summary prompting is redesigned.
+### Default's turn modules
 
-> **Character sheet guidance lives in the format.** The former `sheet` module "Sheet Content Boundaries" was removed: the sections themselves — including whether `[Sexual Capabilities]` exists — are now defined by the preset's `characterFormat`, and the per-section instructions/examples carry the guidance. Default's format is the 10-section set (no `[Sexual Capabilities]`); Default (NSFW)'s format adds it as the 11th section.
+| Module | Purpose |
+|---|---|
+| Core GM | Establishes the narrator/GM role, that the model never speaks for you, and that it works from the state it is given |
+| Response Format | Quotes for speech, backticks for thoughts, bold for emphasis |
+| User Input Format | How to read what you send |
+| Campaign Logic | Consequences, pacing, NPC agency |
+| Conflict Narration | Resolve conflict through prose |
+| Relationship Dynamics | Relationships move through actions |
+| Grounded Style | Vivid but controlled prose |
 
-The Default/NSFW difference is the content lever: **the preset you use IS the content control** (per-playthrough `contentRating` was removed Aug 2026). The global prompt config decides the turn-module guidance and sheet format every playthrough gets — switching presets (Settings → Prompt Configuration) or editing the config re-scopes future generations everywhere at once.
+## The character sheet format
 
----
+The **Character Sheet** tab is a sections editor, not a module list. Sheet structure — which
+sections exist, their order, whether each is inline or block, and the instruction and examples
+the model gets — belongs to the preset's `characterFormat`, and that format is the sheet's
+authoritative contract. Whether `[Sexual Capabilities]` exists is a property of the format.
 
-## How to configure
+See [Character format](character-format.md) for what the sections themselves mean.
 
-1. Open **Settings** → **Prompt Configuration** tab
-2. Select a preset from the dropdown, or create a new one via "Save as New…"
-3. Pick a tab — **Turn** (modules) or **Character Sheet** (sections)
-4. Toggle Turn modules on/off with checkboxes
-5. Reorder modules with ↑↓ arrows
-6. Edit module name, content, and metadata (✎ button)
-7. Add new modules with "+ Add Module" — they land in the Turn context
-8. On the **Character Sheet** tab: edit the section list — name, `inline` checkbox (renders `[Name]: value` on one line vs. block form), model instruction, and optional example body. **Reorder sections by dragging the ⋮⋮ grip** — the pointer-based drag works on both mouse and touch. The order shown IS the order generated sheets must follow. The Examples field is freeform while typing and normalizes (trim + collapse blank lines, one example per line) on blur.
-9. Click **Save** to write the config back to the preset (read-only presets cannot be saved — use "Save as New…" instead). Every edit already applies to generation immediately, saved or not; **Load/Reload** discards the unsaved edits and re-copies the preset.
-10. Switching presets copies that preset's config over the global one (with a confirm when there are unsaved edits)
+## Configuring
 
-> Read-only presets (Default, Default NSFW) are fully editable as a working config; they just cannot be overwritten. Use "Save as New…" to keep your changes under a name.
+1. Open **Settings → Prompt Configuration**
+2. Pick a preset from the dropdown, or create one with **Save as New…**
+3. On **Turn**: toggle modules, reorder them with the arrows, edit a module's name and content,
+   or add a new one
+4. On **Character Sheet**: edit the section list — name, `inline`, the model instruction and an
+   optional example body — and reorder sections by dragging the grip
+5. On **Image Generation**: edit the image instruction and its mode, the prefixes, the
+   character limit, the history count and the inclusion flags
+6. **Save** writes the configuration back to the preset; **Load/Reload** discards unsaved edits
+   and re-copies the preset
 
----
+Switching presets copies the chosen preset over the global configuration, and asks first if you
+have unsaved edits.
 
-## Data files
+## Where it is stored
 
-- `data/prompt-presets.json` — the named presets (create/edit via UI; git-tracked)
-- `data/user-settings.json` — the **global prompt config** (`activePresetId` + `promptConfig`) plus the other runtime overrides; gitignored
-
----
+```
+data/prompt-presets.json    the named presets — tracked in the repo
+data/user-settings.json     the global configuration: active preset id, prompt config,
+                            and the rest of your runtime overrides
+```
 
 ## Design principles
 
-- **Presets own their modules and their format.** Each preset has its own copy of every module's content, order, and enabled state, plus its own `characterFormat` defining the sheet structure.
-- **The global config is the source of truth.** Generation reads `promptConfig` from app settings, never the playthrough. There is exactly one prompt configuration for every playthrough, and any edit in Settings reaches all of them on the next generation — that is the point: no per-playthrough variance to hunt down.
-- **Default is immutable.** The shipped presets cannot be overwritten. Users create copies to customize.
-- **Modules are passive text.** No variables, conditionals, or logic — just text blocks the model interprets.
-- **Output format is driven by the format, not modules.** The sheet contract (sections, order, inline layout) comes from `characterFormat`; turn/seed/summary JSON contracts are always appended after the enabled modules. Modules tune rules and prose — they never redefine the sheet structure.
+- **Presets own their modules and their format.** Each preset carries its own copy of every
+  module's content, order and enabled state, plus its own sheet format and image block.
+- **The global configuration is the source of truth.** Generation reads it, never the
+  playthrough — one configuration for every story, and an edit reaches all of them on the next
+  turn.
+- **Shipped presets are immutable.** You copy them to customize.
+- **Modules are passive text.** No variables beyond the two macros, no conditionals, no logic.
+- **Format drives structure, modules drive tone.** The sheet contract comes from
+  `characterFormat`; the output contract is always appended after the enabled modules.

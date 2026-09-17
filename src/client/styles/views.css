@@ -235,7 +235,7 @@
 
 .message em {
   font-style: italic;
-  color: var(--story-thought);
+  color: var(--story-italic);
 }
 
 .quote-text {
@@ -253,7 +253,7 @@
   color: var(--code-inline-text);
 }
 
-.message-code-block {
+.code-block {
   margin: 0.6rem 0;
   border-radius: 6px;
   overflow: hidden;
@@ -261,18 +261,11 @@
   border: 1px solid var(--code-block-border);
 }
 
-.message-code-block:last-child {
-  margin-bottom: 0;
-}
-
-.message-code-block:first-child {
-  margin-top: 0;
-}
-
 .code-block-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.5rem;
   padding: 0.3rem 0.65rem;
   background: var(--code-block-header);
   border-bottom: 1px solid var(--border-subtle);
@@ -285,6 +278,12 @@
   font-weight: 600;
   letter-spacing: 0.05em;
   color: var(--code-lang-label);
+}
+
+.code-block-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .code-copy-btn {
@@ -307,15 +306,66 @@
   border-color: var(--border-light);
 }
 
-.message-code-pre {
+.code-block-pre {
   margin: 0;
   padding: 0.65rem 0.8rem;
   overflow-x: auto;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 0.85rem;
   line-height: 1.45;
-  color: var(--story-thought);
+  color: var(--code-inline-text);
   background: transparent;
+}
+
+.code-block code {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: transparent;
+  padding: 0;
+  border: none;
+}
+
+.code-block-pre.wrap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Tones: colour and scale only — never structure. */
+.code-block.tone-panel .code-block-pre {
+  font-size: 0.8rem;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.code-block.tone-error .code-lang-label {
+  color: var(--status-danger);
+}
+
+.code-block.tone-error .code-block-pre {
+  font-size: 0.8rem;
+  color: var(--error-box-code-text);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.code-block.tone-muted .code-block-pre {
+  font-size: 0.68rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+/* Prose keeps its breathing room: a block at the edge of a message loses its
+   outer margin (this used to be .message-code-block:first/:last-child). */
+.message-markdown > .code-block:first-child {
+  margin-top: 0;
+}
+
+.message-markdown > .code-block:last-child {
+  margin-bottom: 0;
 }
 
 .message-blockquote {
@@ -428,73 +478,6 @@
   font-size: 0.75rem;
   color: var(--text-muted);
   margin-left: 0.25rem;
-}
-
-.error-code-wrapper {
-  background: var(--code-block-bg, #0d1117);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.error-code-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.3rem 0.6rem;
-  background: var(--code-block-header, #161b22);
-  border-bottom: 1px solid var(--border-subtle);
-  font-size: 0.72rem;
-}
-
-.error-code-label {
-  text-transform: uppercase;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  color: var(--status-danger);
-}
-
-.error-copy-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  background: transparent;
-  border: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
-  border-radius: 4px;
-  padding: 0.15rem 0.45rem;
-  font-size: 0.72rem;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.error-copy-btn:hover {
-  background: var(--bg-surface-hover);
-  color: var(--text-primary);
-  border-color: var(--border-light);
-}
-
-.error-code-block {
-  margin: 0;
-  padding: 0.6rem 0.75rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 0.8rem;
-  line-height: 1.45;
-  color: var(--error-box-code-text);
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-  max-height: 220px;
-  overflow-y: auto;
-}
-
-.error-code-block code {
-  font-family: inherit;
-  font-size: inherit;
-  color: inherit;
-  background: transparent;
-  padding: 0;
-  border: none;
 }
 
 .error-notice-actions {
@@ -730,14 +713,6 @@
   color: var(--text-primary);
 }
 
-.debug-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
 .debug-tabs {
   display: flex;
   gap: 0.25rem;
@@ -766,21 +741,6 @@
   border-bottom-color: var(--bg-surface-elevated);
   border-top: 2px solid var(--accent-base);
   font-weight: 500;
-}
-
-.debug-pre {
-  margin: 0;
-  padding: 0.6rem 0.75rem;
-  background: var(--code-block-bg);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  color: var(--story-thought);
-  font-size: 0.8rem;
-  line-height: 1.45;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-  max-height: 280px;
-  overflow-y: auto;
 }
 
 .message-header {
@@ -987,31 +947,6 @@
 
 /* Copy button row above the request body — the disclosure has one affordance
    that ErrorNotice already had: copy the JSON to paste it into a report. */
-.message-image-request-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin-top: 0.35rem;
-}
-
-.message-image-request-label {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.66rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-  opacity: 0.7;
-}
-
-.message-image-request-copy {
-  opacity: 0.65;
-}
-
-.message-image-request-copy:hover:not(:disabled) {
-  opacity: 1;
-}
-
 .message-image-request-summary {
   display: inline-block;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -1023,23 +958,6 @@
 .message-image-request-summary:hover,
 .message-image-request-summary:focus-visible {
   opacity: 1;
-}
-
-.message-image-request-pre {
-  margin: 0.3rem 0 0;
-  padding: 0.4rem 0.5rem;
-  max-height: 180px;
-  max-width: 100%;
-  overflow-y: auto;
-  background: var(--code-block-bg);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.68rem;
-  line-height: 1.4;
-  color: var(--text-muted);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 
 /* The prompt-writing side call, disclosed under the image-request disclosure.
@@ -1059,42 +977,40 @@
   opacity: 0.7;
 }
 
-.message-image-prompt-call .message-image-request-pre {
-  margin-top: 0.2rem;
-  max-height: 150px;
-}
-
 /* Remove control: revealed on hover/focus like the message actions, and always
    visible while its own delete is in flight. */
-.message-image-remove {
+/* Two classes: `.base-btn` declares `position: relative` in components.css,
+   which loads after this file, so a single-class rule loses on load order. */
+.base-btn.message-image-remove {
   position: absolute;
   top: 6px;
   right: 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid var(--border-main);
-  border-radius: 999px;
-  background: var(--modal-backdrop);
-  color: var(--text-primary);
-  cursor: pointer;
   opacity: 0;
-  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+  transition: opacity 0.15s ease;
 }
 
+/* Touch devices have no hover, so the affordance must simply be there. */
+@media (hover: none) {
+  /* Also two classes, or it would lose to the rule above. */
+  .base-btn.message-image-remove {
+    opacity: 1;
+  }
+}
 .message-image:hover .message-image-remove,
 .message-image-remove:focus-visible,
 .message-image-remove:disabled {
   opacity: 1;
 }
 
-.message-image-remove:hover:not(:disabled) {
-  background: var(--status-danger-bg);
-  border-color: var(--status-danger-border);
-  color: var(--status-danger);
+/* Destructive state of an overlay control. Four classes so it out-specifies
+   `.base-btn--overlay:hover`, which is declared in a later-loaded file — and
+   OPAQUE, because a translucent tint leaves the glyph's contrast at the mercy
+   of whatever artwork is behind it (the app's danger tint measures 2:1 over a
+   dark image). Semantic red, white glyph, readable over anything. */
+.base-btn--overlay.message-image-remove:hover:not(:disabled) {
+  background: var(--status-danger);
+  border-color: var(--status-danger);
+  color: var(--media-icon);
 }
 
 .message-image-remove:disabled {
@@ -3946,7 +3862,7 @@
 .sidebar-tag-item.active {
   background: var(--accent-translucent);
   border-color: var(--accent-base);
-  color: var(--accent-base);
+  color: var(--accent-highlight, var(--accent-base));
   font-weight: 600;
 }
 
@@ -4030,7 +3946,7 @@
 }
 
 .base-search-bar:focus-within .base-search-icon {
-  color: var(--accent-base);
+  color: var(--accent-highlight, var(--accent-base));
 }
 
 .base-search-input {
@@ -4214,7 +4130,7 @@
 }
 
 .library-sort-select:focus {
-  color: var(--accent-base);
+  color: var(--accent-highlight, var(--accent-base));
   background: var(--accent-translucent);
 }
 
@@ -4374,7 +4290,7 @@
   background: var(--accent-translucent);
   border: 1px solid var(--accent-base);
   border-radius: 999px;
-  color: var(--accent-base);
+  color: var(--accent-highlight, var(--accent-base));
   font-size: 0.76rem;
   cursor: pointer;
   transition: all 0.12s;
@@ -5492,7 +5408,7 @@ button.import-btn:hover:not(:disabled),
 .import-btn:hover:not(:disabled) {
   background: var(--bg-surface-hover);
   border-color: var(--accent-base);
-  color: var(--accent-base);
+  color: var(--accent-highlight, var(--accent-base));
   box-shadow: 0 2px 8px var(--accent-translucent);
   transform: translateY(-1px);
 }
@@ -6635,7 +6551,7 @@ button.suggest-tags-ai-btn:hover:not(:disabled),
   gap: 5px;
   background: var(--accent-translucent);
   border: 1px solid var(--accent-translucent);
-  color: var(--accent-base);
+  color: var(--accent-highlight, var(--accent-base));
   padding: 3px 8px;
   border-radius: 6px;
   font-size: 0.8rem;
@@ -6648,7 +6564,7 @@ button.suggest-tags-ai-btn:hover:not(:disabled),
   justify-content: center;
   background: transparent;
   border: none;
-  color: var(--accent-base);
+  color: var(--accent-highlight, var(--accent-base));
   font-size: 0.75rem;
   cursor: pointer;
   padding: 0 2px;
@@ -6723,7 +6639,7 @@ button.suggest-tags-ai-btn:hover:not(:disabled),
 .autocomplete-item.focused,
 .autocomplete-item:focus-visible {
   background: var(--accent-translucent);
-  color: var(--accent-base);
+  color: var(--accent-highlight, var(--accent-base));
   outline: 1px solid var(--accent-translucent);
 }
 
@@ -7297,7 +7213,7 @@ button.ai-brainstorm-toggle-btn.active,
 .proposal-section-tag {
   font-size: 0.78rem;
   font-weight: 700;
-  color: var(--accent-base);
+  color: var(--accent-highlight, var(--accent-base));
 }
 
 .proposal-apply-btn {
@@ -7306,7 +7222,7 @@ button.ai-brainstorm-toggle-btn.active,
   gap: 4px;
   background: var(--accent-translucent);
   border: 1px solid var(--accent-base);
-  color: var(--accent-base);
+  color: var(--accent-highlight, var(--accent-base));
   font-size: 0.74rem;
   font-weight: 600;
   padding: 3px 8px;
@@ -8117,7 +8033,7 @@ button.ai-brainstorm-toggle-btn.active,
   padding: 1px 5px;
   border-radius: 4px;
   background: var(--accent-translucent);
-  color: var(--accent-base);
+  color: var(--accent-highlight, var(--accent-base));
 }
 
 .preview-msg-body {

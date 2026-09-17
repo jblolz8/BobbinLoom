@@ -24,20 +24,44 @@
   /* ── 4. Story & Roleplay Markdown ── */
   --story-text: #eceff4;
   --story-quote: #e2b86b;             /* Spoken dialogue ("...") */
-  --story-thought: #d8dee9;           /* Italics / internal thought (*...*) */
+  --story-italic: #d8dee9;            /* Italic prose: actions and internal thoughts (*...*) */
   --story-emphasis: #60a5fa;          /* Bold / action (**...**) */
   --story-blockquote-border: #e2b86b;
   --story-blockquote-bg: rgba(226, 184, 107, 0.06);
   --story-blockquote-text: #cbd5e1;
 
-  /* ── 5. Code & Technical Blocks ── */
-  --code-inline-bg: rgba(15, 23, 42, 0.65);
-  --code-inline-border: rgba(255, 255, 255, 0.08);
-  --code-inline-text: #8be9fd;
-  --code-block-bg: #0d1117;
-  --code-block-border: #2d3748;
-  --code-block-header: #161b22;
-  --code-lang-label: #899bb0;
+  /* ── 5. Code & Technical Blocks ──
+     Every code token DERIVES from this theme's own surfaces, so a theme that
+     says nothing about code still gets code that belongs to it. A palette that
+     wants a specific slab (or a dark block on a light page) overrides these in
+     its own preset. */
+  --code-block-bg: color-mix(in srgb, var(--bg-app) 82%, #000);
+  /* ── 5c. Documentation search hits ──
+     A highlighted term is a surface that lands on prose AND on code slabs, so
+     it gets a pair of its own instead of borrowing either. Derived from the
+     theme's own accent (light presets resolve --accent-highlight to
+     --accent-base), so every preset and every user palette is on-theme
+     without per-theme work. Tunable in Appearance → Search Highlights. */
+  --doc-hit-bg: color-mix(in srgb, var(--accent-highlight) 32%, transparent);
+  --doc-hit-text: var(--text-primary);
+
+  --code-block-header: var(--bg-panel);
+  --code-block-border: var(--border-subtle);
+  --code-lang-label: var(--text-muted);
+  --code-inline-bg: color-mix(in srgb, var(--bg-surface-elevated) 78%, transparent);
+  --code-inline-border: var(--border-main);
+  --code-inline-text: var(--accent-highlight);
+
+  /* ── 5b. Controls over media ──
+     A control floating over a generated image cannot be themed by surface
+     tokens: nothing knows what is behind it. Its icon is therefore chosen
+     against its OWN scrim, and the scrim stays dark in both modes — a light
+     pill on a bright image is the same failure mirrored. Declared per block so
+     a theme can tune it in either mode. */
+  --media-scrim: rgba(12, 14, 18, 0.72);
+  --media-scrim-hover: rgba(12, 14, 18, 0.88);
+  --media-icon: #f4f6f9;
+  --media-border: rgba(255, 255, 255, 0.22);
 
   /* ── 6. Chat Bubbles & Roles ── */
   --chat-bg: var(--bg-app);
@@ -171,19 +195,42 @@
 
   --story-text: #0f172a;
   --story-quote: #b45309;             /* Inverted warm amber/gold for high contrast */
-  --story-thought: #475569;           /* Slate for readable thoughts */
+  --story-italic: #475569;            /* Slate for readable italic prose */
   --story-emphasis: #1d4ed8;
   --story-blockquote-border: #d97706;
   --story-blockquote-bg: rgba(245, 158, 11, 0.08);
   --story-blockquote-text: #334155;
 
-  --code-inline-bg: #e2e8f0;
-  --code-inline-border: #cbd5e1;
-  --code-inline-text: #0284c7;
-  --code-block-bg: #1e293b;
-  --code-block-border: #334155;
-  --code-block-header: #0f172a;
-  --code-lang-label: #94a3b8;
+  /* Code derives from the light surfaces (see the :root block). Light themes
+     get a LIGHT code slab: a dark slab on a cream page is the drift this
+     replaced. */
+  --code-block-bg: var(--bg-panel);
+  /* ── 5c. Documentation search hits ──
+     A highlighted term is a surface that lands on prose AND on code slabs, so
+     it gets a pair of its own instead of borrowing either. Derived from the
+     theme's own accent (light presets resolve --accent-highlight to
+     --accent-base), so every preset and every user palette is on-theme
+     without per-theme work. Tunable in Appearance → Search Highlights. */
+  --doc-hit-bg: color-mix(in srgb, var(--accent-highlight) 32%, transparent);
+  --doc-hit-text: var(--text-primary);
+
+  --code-block-header: var(--bg-surface-elevated);
+  --code-block-border: var(--border-main);
+  --code-lang-label: var(--text-muted);
+  --code-inline-bg: var(--bg-surface-elevated);
+  --code-inline-border: var(--border-main);
+  --code-inline-text: var(--accent-base);
+
+  /* ── 5b. Controls over media ──
+     A control floating over a generated image cannot be themed by surface
+     tokens: nothing knows what is behind it. Its icon is therefore chosen
+     against its OWN scrim, and the scrim stays dark in both modes — a light
+     pill on a bright image is the same failure mirrored. Declared per block so
+     a theme can tune it in either mode. */
+  --media-scrim: rgba(12, 14, 18, 0.72);
+  --media-scrim-hover: rgba(12, 14, 18, 0.88);
+  --media-icon: #f4f6f9;
+  --media-border: rgba(255, 255, 255, 0.22);
 
   --chat-bg: var(--bg-app);
   --chat-user-bg: #e0e7ff;
@@ -306,7 +353,12 @@ button {
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-button:hover:not(:disabled):not(.primary-btn):not(.danger):not(.ai-brainstorm-toggle-btn):not(.suggest-tags-ai-btn):not(.auto-detect-action):not(.crop-auto-detect-btn):not(.tag-regenerate-btn):not(.danger-action):not(.warning-action):not(.import-btn):not(.active) {
+/* The pre-`.base-btn` raw-button theme. Its specificity (one element, one
+   pseudo-class and eleven :not() arguments) outranks any single-class variant,
+   so every base button must be excluded here or its own hover is silently
+   overridden — which is what painted the overlay controls a theme surface
+   colour under a white glyph. Each `.base-btn--*` declares its own hover. */
+button:hover:not(:disabled):not(.base-btn):not(.primary-btn):not(.danger):not(.ai-brainstorm-toggle-btn):not(.suggest-tags-ai-btn):not(.auto-detect-action):not(.crop-auto-detect-btn):not(.tag-regenerate-btn):not(.danger-action):not(.warning-action):not(.import-btn):not(.active) {
   background: var(--bg-surface-hover);
   border-color: var(--border-focus);
 }

@@ -1,4 +1,10 @@
-# BobbinLoom — Character Library, Tags & AI Assist
+---
+title: Character library
+section: Characters
+order: 80
+---
+
+# Character library
 
 ---
 
@@ -174,7 +180,8 @@ An **interactive, chat-style** refinement session for a character card. Request:
   character: { name; content; creatorNotes?; tags?; ccv2Content? },
   chatHistory: [{ role: "user"|"assistant"; content }],  // for multi-turn context
   userMessage: string,
-  includeOriginalCard?: boolean   // attach the raw CCv2 content for reference
+  includeOriginalCard?: boolean,  // attach the raw CCv2 content for reference
+  format?: CharacterFormat        // the section guidance the assistant should follow
 }
 ```
 

@@ -9,6 +9,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* Kept for buttons that hang their own children off themselves. NOTE: this
+     file loads after views.css and modals.css, so a surface that absolutely
+     positions a base button must out-specify it — `.base-btn.<surface-class>`
+     — or the button silently becomes a flow item instead. */
   position: relative;
   font-family: inherit;
   font-weight: 500;
@@ -1481,4 +1485,11 @@ textarea.base-form-input--lg,
 .pagination-custom-input {
   width: 68px !important;
   text-align: center;
+}
+
+/* Round Icon-Only Buttons.
+   Declared AFTER the square size rules below/above, with two classes, so it wins
+   on both specificity and order. */
+.base-btn--icon.base-btn--round {
+  border-radius: 999px;
 }

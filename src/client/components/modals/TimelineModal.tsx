@@ -14,7 +14,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import type { Playthrough } from "../../../schemas";
 import { listPlaythroughTimelines, deletePlaythrough, renamePlaythrough, promotePlaythroughBranch } from "../../api";
-import { Icon } from "../base";
+import { Icon, IconButton } from "../base";
 
 export type TimelineModalProps = {
   open: boolean;
@@ -378,9 +378,7 @@ export function TimelineModal({
           </div>
 
           <div className="timeline-header-controls">
-            <button className="timeline-close-btn" onClick={onClose} title="Close modal">
-              <Icon name="X" size={16} />
-            </button>
+            <IconButton icon="X" label="Close timeline" title="Close modal" size="md" onClick={onClose} />
           </div>
         </header>
 

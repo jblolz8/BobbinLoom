@@ -1,4 +1,10 @@
-# BobbinLoom — Provider Connections
+---
+title: Provider connections
+section: Providers
+order: 110
+---
+
+# Provider connections
 
 ---
 
@@ -37,8 +43,8 @@ LM Studio/Ollama server) and switch which one is **active** at any time.
   fresh-install source of truth; the committed `data/settings.json` is only a matching
   template, and user changes (`activePresetId`, `promptConfig`, theme, avatar shape, `tagTaxonomy`)
   are written to the gitignored `data/user-settings.json` and merged over the defaults
-  on read. Legacy provider fields were removed; a bare legacy settings file is ignored
-  rather than migrated.
+  on read. Provider configuration lives in `data/providers.json`; a settings file that
+  carries provider fields is ignored.
 
 ---
 
@@ -137,12 +143,12 @@ accessor).
 | **Sampler** | Automatic1111 only. Sent as `sampler_name`. Free text, with the names the WebUI itself listed offered as suggestions — a fork's own names may be typed. |
 | **Scheduler** | Automatic1111 only. Sent as `scheduler`. Free text, same rule as Sampler. |
 | **Timeout (seconds)** | Automatic1111 only. How long one image may take, stored in milliseconds. Empty uses the dialect default — **10 minutes** — because a local render easily outlasts the global 180 s. |
+| **Prompt writer** | Which **text** connection writes the image prompt. Defaults to the current active text provider (stored as `null`); a dangling id also falls back to the active text provider. A prompt writer is required — with no text connection at all, image generation answers 400. |
 
 **Aspect Ratio, Style Preset, Hide Watermark and Safe Mode are hidden** on an
 `Automatic1111 / Forge` connection: the WebUI has no `aspect_ratio`, `style_preset`,
 `hide_watermark` or `safe_mode` parameter, so the editor does not show a control that would
 send nothing.
-| **Prompt writer** | Which **text** connection writes the image prompt. Defaults to the current active text provider (stored as `null`); a dangling id also falls back to the active text provider. A prompt writer is required — with no text connection at all, image generation answers 400. |
 
 **Model listing.** **Fetch models** works on an image connection too, and asks for the
 *image* model family (`GET <baseUrl>/models?type=image`) — that is how image checkpoints
@@ -157,8 +163,8 @@ is available — so the list loads when the connection is opened, before anythin
 
 The values are the provider's own, in the provider's order, and they are **case-sensitive
 and title-cased** (`Anime`, not `anime`). **None** sends no `style_preset` at all (an empty
-value is omitted from the request body, never sent as `""`), and **Custom…** falls back to
-the old free-text field for an endpoint that does not implement the listing. A connection
+value is omitted from the request body, never sent as `""`), and **Custom…** opens a free-text
+field for an endpoint that does not implement the listing. A connection
 whose stored value is not in the fetched list is warned about in the editor, because that
 value is a 400 waiting to happen — and by then the text call that wrote the prompt has
 already run.
@@ -266,13 +272,12 @@ setting** — install it in the WebUI, or not at all.
    `GET /sdapi/v1/script-info`; the extension's own accordion in `txt2img` can stay
    untouched, because the request carries its settings explicitly.
 
-**It is NOT installed on this instance yet, so nothing has changed.** Regions are
-currently disabled in practice: on every render the adapter checks the extension first
-(the image connection's **Regions** setting is on by default, but that switch alone engages
-nothing), finds no listing, and sends exactly the body it sent before the feature existed
-— same fields, no error, no failed or slower generation, and a one-character scene takes
-that same path even with the extension installed. BobbinLoom re-checks a given WebUI at
-most every **~5 minutes**, so a freshly installed extension may take that long to be
+**Regions engage only when the WebUI reports the extension.** On every render the adapter
+checks `GET /sdapi/v1/script-info` first. The image connection's **Regions** switch is on by
+default, but that switch alone engages nothing: without a listing, the request goes out with
+the same fields as any other render — no error, no failed or slower generation — and a
+one-character scene takes that path even with the extension installed. The check is cached per
+base URL for **~5 minutes**, so a freshly installed extension can take that long to be
 noticed; restarting BobbinLoom's server makes it immediate.
 
 **Builds it is known to target.** The extension's own README covers the Forge WebUI (Forge
@@ -298,11 +303,10 @@ BOBBINLOOM_IMAGE_TIMEOUT_MS=180000
 **text** connection — including the image-prompt side call, which is a text call.
 `BOBBINLOOM_IMAGE_MAX_RETRIES` (default 1) and `BOBBINLOOM_IMAGE_TIMEOUT_MS` (default
 180000) tune the **image** render calls only, which get their own budget because a local
-diffusion queue or an image lane routinely blows past the 120 s text default. The image timeout default is **dialect-aware**: 180000 ms normally, **600000 ms (10 minutes) for an `Automatic1111 / Forge` connection**, whose editor also carries a per-connection **Timeout** field. Precedence is connection → env var → dialect default. All other
-provider configuration (base URL, model, API key, params)
-lives in the connection itself — the legacy env-var path (`BOBBINLOOM_PROVIDER`,
-`DEEPSEEK_API_KEY`, `KIMI_API_KEY`, `CUSTOM_OPENAI_API_KEY`, `BOBBINLOOM_MODEL`,
-`BOBBINLOOM_BASE_URL`, etc.) was removed Aug 2026.
+diffusion queue or an image lane routinely blows past the 120 s text default. The image timeout default is **dialect-aware**: 180000 ms normally, **600000 ms (10 minutes) for an `Automatic1111 / Forge` connection**, whose editor also carries a per-connection **Timeout** field. Precedence is connection → env var → dialect default.
+
+The environment variables are the only configuration outside the app. Everything else —
+base URL, model, API key, parameters — lives in the connection itself.
 
 ---
 

@@ -1,41 +1,10 @@
-import React, { useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import { parseMarkdown, renderInlineNodes, type BlockNode } from "../../utils/markdown";
-import { Icon } from "../base";
+import { CodeBlock } from "../base";
 
 export interface MarkdownViewProps {
   content: string;
   className?: string;
-}
-
-function CodeBlock({ code, language }: { code: string; language?: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div className="message-code-block">
-      <div className="code-block-header">
-        <span className="code-lang-label">{language || "text"}</span>
-        <button
-          type="button"
-          className="code-copy-btn"
-          onClick={handleCopy}
-          title="Copy code"
-          aria-label="Copy code to clipboard"
-        >
-          <Icon name={copied ? "Check" : "Copy"} size={13} />
-          <span>{copied ? "Copied" : "Copy"}</span>
-        </button>
-      </div>
-      <pre className="message-code-pre">
-        <code>{code}</code>
-      </pre>
-    </div>
-  );
 }
 
 export const MarkdownView = React.memo(function MarkdownView({

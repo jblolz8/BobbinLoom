@@ -1,5 +1,6 @@
 export * from "./AvatarBadge";
 export * from "./Icon";
+export * from "./IconButton";
 export * from "./SearchBar";
 export * from "./TagChip";
 export * from "./TagInput";
@@ -7,6 +8,7 @@ export * from "./TextInput";
 export * from "./CharacterAvatar";
 export * from "./ModelIcon";
 export * from "./Button";
+export * from "./CodeBlock";
 export * from "./Tooltip";
 export * from "./DropdownMenu";
 export * from "./Select";

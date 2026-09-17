@@ -7,7 +7,7 @@ import type { FailedResponseNotice, ImagePromptRequest } from "../../../hooks/us
 import { ContextMeter } from "../../common/ContextMeter";
 import { MarkdownView } from "../../common/MarkdownView";
 import { ImageViewer, type ImageViewerImage } from "../../common/ImageViewer";
-import { Badge, Button, Icon, ModelBadge, TextArea } from "../../base";
+import { Badge, Button, CodeBlock, Icon, IconButton, ModelBadge, TextArea } from "../../base";
 import { ImagePromptModal } from "./ImagePromptModal";
 
 export type ChatPanelProps = {
@@ -143,8 +143,6 @@ function DebugBox(props: {
 }) {
   const { lastPatchInfo, tokenUsage, playthrough, rawInput, rawOutput } = props;
   const [debugTab, setDebugTab] = useState<"patch" | "output" | "input">("patch");
-  const [copied, setCopied] = useState(false);
-
   const tabContent = (() => {
     if (debugTab === "input") {
       return rawInput ? prettyJson(rawInput) : "No turn data yet.";
@@ -166,33 +164,22 @@ function DebugBox(props: {
     }, null, 2);
   })();
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(tabContent);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
-
   return (
     <details className="debug-box">
       <summary className="debug-summary">Debug</summary>
-      <div className="debug-header-row">
-        <div className="debug-tabs">
+      <CodeBlock
+        code={tabContent}
+        tone="panel"
+        wrap
+        copyTitle="Copy debug output to clipboard"
+        headerExtra={
+          <div className="debug-tabs">
           <button type="button" className={`debug-tab ${debugTab === "patch" ? "active" : ""}`} onClick={() => setDebugTab("patch")}>Patch</button>
           <button type="button" className={`debug-tab ${debugTab === "output" ? "active" : ""}`} onClick={() => setDebugTab("output")}>Output</button>
           <button type="button" className={`debug-tab ${debugTab === "input" ? "active" : ""}`} onClick={() => setDebugTab("input")}>Input</button>
         </div>
-        <Button
-          size="xs"
-          variant="ghost"
-          className="debug-copy-btn"
-          onClick={handleCopy}
-          leftIcon={<Icon name={copied ? "Check" : "Copy"} size={12} />}
-          title="Copy to clipboard"
-        >
-          {copied ? "Copied" : "Copy"}
-        </Button>
-      </div>
-      <pre className="debug-pre">{tabContent}</pre>
+        }
+      />
     </details>
   );
 }
@@ -204,8 +191,6 @@ function ErrorNotice({
   notice: FailedResponseNotice;
   onDismiss: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
-
   const formattedError = useMemo(() => {
     if (!notice.rawError) return "";
     try {
@@ -215,14 +200,6 @@ function ErrorNotice({
       return notice.rawError;
     }
   }, [notice.rawError]);
-
-  const handleCopy = () => {
-    if (formattedError) {
-      navigator.clipboard.writeText(formattedError);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
 
   return (
     <article className="message system error-notice">
@@ -247,24 +224,14 @@ function ErrorNotice({
       </div>
 
       {formattedError ? (
-        <div className="error-code-wrapper">
-          <div className="error-code-header">
-            <span className="error-code-label">Error Details</span>
-            <Button
-              size="xs"
-              variant="ghost"
-              className="error-copy-btn"
-              onClick={handleCopy}
-              leftIcon={<Icon name={copied ? "Check" : "Copy"} size={12} />}
-              title="Copy error details"
-            >
-              {copied ? "Copied" : "Copy"}
-            </Button>
-          </div>
-          <pre className="error-code-block">
-            <code>{formattedError}</code>
-          </pre>
-        </div>
+        <CodeBlock
+          code={formattedError}
+          label="Error Details"
+          tone="error"
+          wrap
+          maxHeight={220}
+          copyTitle="Copy error details"
+        />
       ) : null}
     </article>
   );
@@ -313,13 +280,6 @@ function ImageRequestDisclosure({ request }: { request: string }) {
     }
   }, [request]);
 
-  const [copied, setCopied] = useState(false);
-  const handleCopy = () => {
-    navigator.clipboard.writeText(formatted);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
-
   return (
     <details className="message-image-request">
       <summary
@@ -328,20 +288,14 @@ function ImageRequestDisclosure({ request }: { request: string }) {
       >
         request
       </summary>
-      <div className="message-image-request-head">
-        <span className="message-image-request-label">Request body</span>
-        <Button
-          size="xs"
-          variant="ghost"
-          iconOnly
-          className="message-image-request-copy"
-          onClick={handleCopy}
-          leftIcon={<Icon name={copied ? "Check" : "Copy"} size={11} />}
-          title="Copy request body"
-          aria-label="Copy request body"
-        />
-      </div>
-      <pre className="message-image-request-pre">{formatted}</pre>
+      <CodeBlock
+        code={formatted}
+        label="Request body"
+        tone="muted"
+        wrap
+        maxHeight={180}
+        copyTitle="Copy request body"
+      />
     </details>
   );
 }
@@ -361,12 +315,6 @@ function ImagePromptCallDisclosure({
   /** How long the text provider took, when the call was measured. */
   promptDurationMs?: number;
 }) {
-  const [copied, setCopied] = useState<"request" | "response" | null>(null);
-  const copy = (which: "request" | "response", text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(which);
-    setTimeout(() => setCopied(null), 1500);
-  };
   const [requestText, responseText] = useMemo(() => {
     const pretty = (raw: string | undefined) => {
       if (!raw) return "";
@@ -387,36 +335,24 @@ function ImagePromptCallDisclosure({
       >
         prompt call{promptDurationMs ? ` · ${formatDuration(promptDurationMs)}` : ""}
       </summary>
-      <div className="message-image-request-head">
-        <span className="message-image-request-label">Request</span>
-        <Button
-          size="xs"
-          variant="ghost"
-          iconOnly
-          className="message-image-request-copy"
-          onClick={() => copy("request", requestText)}
-          leftIcon={<Icon name={copied === "request" ? "Check" : "Copy"} size={11} />}
-          title="Copy prompt call request"
-          aria-label="Copy prompt call request"
-        />
-      </div>
-      <pre className="message-image-request-pre">{requestText}</pre>
+      <CodeBlock
+        code={requestText}
+        label="Request"
+        tone="muted"
+        wrap
+        maxHeight={150}
+        copyTitle="Copy prompt call request"
+      />
       {responseText ? (
         <>
-          <div className="message-image-request-head">
-            <span className="message-image-request-label">Response</span>
-            <Button
-              size="xs"
-              variant="ghost"
-              iconOnly
-              className="message-image-request-copy"
-              onClick={() => copy("response", responseText)}
-              leftIcon={<Icon name={copied === "response" ? "Check" : "Copy"} size={11} />}
-              title="Copy prompt call response"
-              aria-label="Copy prompt call response"
-            />
-          </div>
-          <pre className="message-image-request-pre">{responseText}</pre>
+          <CodeBlock
+            code={responseText}
+            label="Response"
+            tone="muted"
+            wrap
+            maxHeight={150}
+            copyTitle="Copy prompt call response"
+          />
         </>
       ) : null}
     </details>
@@ -684,16 +620,18 @@ export function ChatPanel(props: ChatPanelProps) {
                               loading="lazy"
                             />
                           </button>
-                          <button
-                            type="button"
+                          <IconButton
                             className="message-image-remove"
+                            variant="overlay"
+                            size="xs"
+                            round
+                            icon="X"
+                            busy={imageDeletingId === msg.id}
+                            label="Remove this image"
                             title="Remove this image? The file is deleted if nothing else uses it."
-                            aria-label="Remove this image"
                             onClick={() => onDeleteImage?.(msg, img.file)}
                             disabled={imageDeletingId === msg.id || imageGeneratingId === msg.id}
-                          >
-                            <Icon name={imageDeletingId === msg.id ? "Loader" : "X"} size={11} className={imageDeletingId === msg.id ? "animate-spin" : ""} />
-                          </button>
+                          />
                           <figcaption title={img.prompt}>{imageCaption(img)}</figcaption>
                         </figure>
 

@@ -8,3 +8,4 @@ export * from "./lorebooks";
 export * from "./providers";
 export * from "./images";
 export * from "./settings";
+export * from "./docs";

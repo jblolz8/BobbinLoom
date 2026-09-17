@@ -1,4 +1,10 @@
-# Prompt Architecture
+---
+title: Prompt architecture
+section: Prompting
+order: 90
+---
+
+# Prompt architecture
 
 How a single game turn becomes a request to the text provider: the message layout, what goes in each slot, and how the token budget decides how much chat history is sent.
 
@@ -38,7 +44,7 @@ When there is no transcript to send — a fresh playthrough, or immediately afte
 
 | Segment | Source | Position |
 |---|---|---|
-| Preset modules | `state.promptSettings.modules.turn`, enabled + sorted by `order` | leading `system` |
+| Preset modules | the global prompt config's `modules.turn` (passed in as an argument), enabled + sorted by `order` | leading `system` |
 | Lorebook position 0 | `scanLorebooks()`, entries with `position === 0` | leading `system` |
 | Chat transcript | `state.messages.filter(m => !m.hidden)` | middle, as real turns |
 | Relevant memories | `retrieveMemoriesVector(state, queryEmbedding)` | tail `system` |
@@ -150,7 +156,7 @@ The highest-scoring events win until the budget is exhausted. The query embeddin
 Consequences:
 
 - Selection changes every turn. It is keyword-heavy against *current* state, so the memory block is volatile by construction and belongs in the tail.
-- Only a few events fit. `MEMORY_RETRIEVAL_BUDGET = 800` is charged as `wordCount * 4 + 10` per event — an estimate in *characters* compared against a number named "budget", so the effective ceiling is roughly a third of what it reads as: measured, **4 events out of 40 stored** (~270 real tokens). See the open item in the reshape plan about rescaling this.
+- Only a few events fit. `MEMORY_RETRIEVAL_BUDGET = 800` is charged as `wordCount * 4 + 10` per event — an estimate in *characters* compared against a number named "budget", so the effective ceiling is roughly a third of what it reads as: measured, **4 events out of 40 stored** (~270 real tokens).
 - Older chapters reach the model mainly through STORY SO FAR, not through this list. If a beat must survive, it belongs in a chapter summary.
 - The candidate pool is bounded by `rotateMemoryEvents` (`MEMORY_ROTATION_THRESHOLD = 60` live events, compressed layer capped at 50), so the oldest events are eventually dropped from retrieval.
 
@@ -197,13 +203,12 @@ The **Debug** panel in the chat view:
 
 - **Input** — the raw request body. This is the authoritative view of what was sent: check the role sequence, that the tail `system` message is second-to-last, and that the final message is the player's input.
 - **Output** — the raw response body, including `finish_reason` and `usage`.
-- **Info** — `tokenUsage` (estimate, measured, per-segment breakdown), cast presence, memory layer counts, and message counts.
-- **Patch** — which `statePatch` operations were applied or rejected.
+- **Patch** — which `statePatch` operations were applied, which were rejected, and any warnings.
 
 ---
 
 ## Invariants to preserve
 
-- **`hidden` gates the prompt, not just the UI.** Anything newly hidden disappears from the transcript *and* from chapter archiving (`stateActions.ts` archives `!m.hidden && !m.chapterId`). Hiding a message without a `chapterId` makes it unarchivable and invisible to the player — that is exactly the bug count-based ghosting caused, and why it was removed.
-- **The 12-message history cap is gone.** History size is a token budget now; any code, comment, or doc still claiming a 12-message transcript limit is stale (the old key was `recentMessages`, renamed to `chatHistory`).
+- **`hidden` gates the prompt, not just the UI.** Anything newly hidden disappears from the transcript *and* from chapter archiving (`stateActions.ts` archives `!m.hidden && !m.chapterId`). A message hidden without a `chapterId` is therefore unarchivable and invisible to the player, so hidden messages carry their chapter with them.
+- **History size is a token budget, not a message count.** Nothing in the pipeline caps the transcript at a fixed number of messages — the budget decides what is sent. The state field is `chatHistory`.
 - **A bigger window must not resurrect ghosting.** Retaining messages in `state.messages` is cheap; what gets *sent* is the budget's job.
