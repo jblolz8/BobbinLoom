@@ -310,7 +310,7 @@
   margin: 0;
   padding: 0.65rem 0.8rem;
   overflow-x: auto;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family: var(--font-mono);
   font-size: 0.85rem;
   line-height: 1.45;
   color: var(--code-inline-text);
@@ -1200,6 +1200,72 @@
 }
 
 .image-prompt-rerun {
+  margin-left: auto;
+  color: var(--text-secondary);
+}
+
+/* ── Image request re-send ── */
+
+/* Retry / Edit request, in the image's own block rather than overlaid on the
+   artwork: these read in the theme's own tokens, where a control floating over
+   an image the app did not draw would need the scrim trio. */
+.message-image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.message-image-actions .base-btn {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.message-image-actions .base-btn:hover:not(:disabled),
+.message-image-actions .base-btn:focus-visible {
+  color: var(--text-primary);
+}
+
+/* The body editor's field. A real textarea (selection, IME, undo) carrying the
+   code surface's own tokens, so it matches the read-only `request` disclosure it
+   edits. Two classes on purpose: the base form rules live in components.css,
+   which loads AFTER this file, so a single-class rule loses at equal
+   specificity. */
+.image-request-modal {
+  width: min(760px, 100%);
+}
+
+.image-request-modal .base-form-textarea {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--code-inline-text);
+  background: var(--code-block-bg);
+  border-color: var(--code-block-border);
+  tab-size: 2;
+}
+
+/* The connection this body belongs to has been deleted, so the re-send cannot be
+   aimed anywhere. Same warn treatment as the review modal's advisory notes: the
+   body stays readable and copyable, only Send is unavailable. */
+.image-request-missing-connection {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: var(--status-warning, var(--accent-highlight));
+  background: var(--status-warning-bg, var(--accent-translucent));
+  border: 1px solid var(--status-warning-border, var(--border-subtle));
+  border-radius: 8px;
+}
+
+/* Copy sits at the far end of the editor's action row, like Re-run text call
+   does in the review modal — editing actions on the left, utilities on the
+   right. */
+.image-request-copy {
   margin-left: auto;
   color: var(--text-secondary);
 }

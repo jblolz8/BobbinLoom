@@ -30,6 +30,15 @@ export type ImageGenerationRequest = {
    *  report progress simply never calls it, and a throw here must never fail
    *  the generation. */
   onProgress?: (progress: ImageProgress) => void;
+  /** The body to send INSTEAD of the one this dialect would build — the
+   *  re-send path: the user re-issues a stored (or hand-edited) request body
+   *  without a text call and without the connection's current settings being
+   *  re-applied. Fields this dialect owns only on the way IN (prompt, size,
+   *  seed, negative, checkpoint, style preset, regions, …) are then the BODY's
+   *  business, not the connection's; everything on the way OUT — response
+   *  parsing, the mime sniff, the a1111 seed read-back, progress and cancel —
+   *  is unchanged, because none of it reads the request body. */
+  rawBody?: Record<string, unknown>;
 };
 
 export type ImageGenerationResult = {

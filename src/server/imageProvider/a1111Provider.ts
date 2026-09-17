@@ -3,7 +3,7 @@ import { authHeaders } from "../httpAuth";
 import type { ResolvedProviderConfig } from "../providerConfig";
 import { linkExternalAbort } from "../provider/openaiClient";
 import { A1111_API_MISSING_HINT } from "../providerRegistry";
-import { clampChars, detectForgeCouple, parseSize, sniffMime } from "./shared";
+import { clampChars, detectForgeCouple, modelFromRawBody, parseSize, sniffMime } from "./shared";
 import type { ImageGenerationRequest, ImageGenerationResult, ImageProvider } from "./types";
 
 /** A1111 publishes NO prompt cap — a prompt is chunked at 75 CLIP tokens and
@@ -123,8 +123,14 @@ export class A1111Provider implements ImageProvider {
 
   async generateImage(req: ImageGenerationRequest): Promise<ImageGenerationResult> {
     const start = Date.now();
-    const plan = await this.regionPlan(req);
-    const body = buildTxt2ImgBody(req, this.connection, plan);
+    // The re-send path skips region planning entirely: `regionPlan` exists to
+    // decide whether to ADD the extension's `alwayson_scripts` entry, and a body
+    // the user re-issued already carries it — or deliberately does not. Probing
+    // `/script-info` for that would be a round trip whose answer cannot change
+    // the body. (An extension uninstalled since the original render is then the
+    // WebUI's own 422, reported verbatim.)
+    const plan = req.rawBody ? null : await this.regionPlan(req);
+    const body = req.rawBody ?? buildTxt2ImgBody(req, this.connection, plan);
 
     // Cancellation is a POST. `once` keeps it to exactly one interrupt per
     // signal, and the listener is removed on every exit path.
@@ -199,7 +205,7 @@ export class A1111Provider implements ImageProvider {
           const bytes = Buffer.from(b64, "base64");
           return { bytes, mime: sniffMime(bytes) };
         }),
-        model: this.config.model,
+        model: modelFromRawBody(req.rawBody) ?? this.config.model,
         providerId: this.config.providerId,
         // The seed the WebUI used, read back out of `info` — absent when it did
         // not say, which is honest, unlike reporting the -1 we sent.

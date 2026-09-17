@@ -52,6 +52,15 @@ export type GenerateMessageImageOptions = {
    *  reason — this request runs no text call, so the ref would otherwise lose it. */
   writerPrompt?: string;
   writerNegative?: string;
+  /** The RE-SEND path: a request body (from an existing image's `request`, or a
+   *  hand-edited version of it) to send verbatim. The server then makes no text
+   *  call and applies no clamping. Mutually exclusive with the overrides above —
+   *  sending both is a 400. */
+  rawRequest?: string;
+  /** The image this generation replaces. The server drops that ref from the
+   *  message in the same write that appends the new one, so a failed render
+   *  changes nothing. */
+  replaceFile?: string;
   signal?: AbortSignal;
 };
 
@@ -136,6 +145,8 @@ export function generateMessageImage(
   if (opts.promptDurationMs !== undefined) body.promptDurationMs = opts.promptDurationMs;
   if (opts.writerPrompt !== undefined) body.writerPrompt = opts.writerPrompt;
   if (opts.writerNegative !== undefined) body.writerNegative = opts.writerNegative;
+  if (opts.rawRequest !== undefined) body.rawRequest = opts.rawRequest;
+  if (opts.replaceFile !== undefined) body.replaceFile = opts.replaceFile;
 
   return request<GenerateMessageImageResult>(
     `/api/playthroughs/${playthroughId}/messages/${messageId}/image`,
@@ -145,6 +156,21 @@ export function generateMessageImage(
       // Passed through as `init.signal`, exactly like `sendTurn`.
       signal: opts.signal
     }
+  );
+}
+
+/** Replace one image's stored request body — the editor's Save. Nothing is
+ *  rendered: the bytes, the image and the message are untouched, and the body is
+ *  what a later re-send will post. */
+export function saveMessageImageRequest(
+  playthroughId: string,
+  messageId: string,
+  file: string,
+  requestBody: string
+): Promise<{ playthrough: Playthrough }> {
+  return request<{ playthrough: Playthrough }>(
+    `/api/playthroughs/${playthroughId}/messages/${messageId}/images/${encodeURIComponent(file)}`,
+    { method: "PATCH", body: JSON.stringify({ request: requestBody }) }
   );
 }
 

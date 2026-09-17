@@ -28,10 +28,18 @@ playthrough alike. It has five tabs.
 | Show Context Usage | The context meter below the input |
 | Review Image Prompt Before Generating | Whether the image prompt opens for review before the image call |
 | Generate Image right after AI Response | Chains an image generation onto each response |
+| Always Discard Old Image on Re-send | Whether re-sending an image's request body asks before replacing it |
 | Show Debug Accordion | The per-turn debug panel in the chat |
 
 Letting the image prompt be reviewed is the default; turning the review off lets the call run
 straight through.
+
+**Always Discard Old Image on Re-send** is off by default, and it is the one image switch that
+skips a confirmation rather than changing what is generated. Re-sending an image's request body
+replaces the image it came from, so it asks first — switching this on stops the asking, and the
+confirmation's own *Always discard old image* checkbox turns it on for you. Editing a request body
+does not ask and does not replace anything: that is a save, and it leaves the image alone. See
+[Image generation](image-generation.md) → *Editing and re-sending a stored request body*.
 
 ## Theme & Appearance
 

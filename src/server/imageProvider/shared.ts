@@ -51,6 +51,25 @@ export function composePrompt(prefix: string, body: string): string {
   return `${p} ${b}`;
 }
 
+/** The model a re-sent body names, or nothing. Only the re-send path has a body
+ *  to ask: there the BODY is the authority for what the provider was asked to
+ *  render with, because no connection setting is re-applied on top of it. A
+ *  connection whose model has changed since the original render must not
+ *  relabel the image with a model it never used — the caption reads this.
+ *
+ *  Two shapes, because the dialects disagree: `model` on the OpenAI-compatible
+ *  and Venice bodies, `override_settings.sd_model_checkpoint` on a1111's (which
+ *  pins the checkpoint for ONE request and carries no `model` field at all). */
+export function modelFromRawBody(rawBody: Record<string, unknown> | undefined): string | undefined {
+  if (!rawBody) return undefined;
+  const direct = rawBody.model;
+  if (typeof direct === "string" && direct.trim()) return direct.trim();
+  const settings = rawBody.override_settings;
+  if (!settings || typeof settings !== "object") return undefined;
+  const checkpoint = (settings as { sd_model_checkpoint?: unknown }).sd_model_checkpoint;
+  return typeof checkpoint === "string" && checkpoint.trim() ? checkpoint.trim() : undefined;
+}
+
 // ── Forge Couple detection ──────────────────────────────────────────────────
 
 /** The Forge Couple script's TITLE, as its wiki spells it in the

@@ -9,9 +9,10 @@ import {
   type QuestAction
 } from "../../../api";
 import type { ChatMessage, Playthrough } from "../../../../schemas";
-import type { DeleteImageTarget, FailedResponseNotice, ImageGenerationOverrides, ImagePromptRequest } from "../../../hooks/usePlaythrough";
+import type { DeleteImageTarget, FailedResponseNotice, ImageGenerationOverrides, ImagePromptRequest, ImageRequestEditorState, RetryImageTarget } from "../../../hooks/usePlaythrough";
 import { ScenePanel } from "./ScenePanel";
 import { ChatPanel } from "./ChatPanel";
+import { ImageRequestBodyModal } from "./ImageRequestBodyModal";
 import { InfoPanel } from "./InfoPanel/InfoPanel";
 import { SaveLoadModal } from "../../modals/SaveLoadModal";
 import { SettingsModal } from "../../modals/SettingsModal";
@@ -130,6 +131,22 @@ export type PlayViewProps = {
   setDeleteImageTarget: (target: DeleteImageTarget | null) => void;
   requestDeleteImage?: (msg: ChatMessage, file: string) => void;
   confirmDeleteImage?: () => Promise<void>;
+  /** Re-sending an image's stored request body. The confirmation (and its
+   *  "always" tick) belongs to this view; the render itself belongs to the hook. */
+  retryImageTarget?: RetryImageTarget | null;
+  requestImageRetry?: (msg: ChatMessage, file: string) => void;
+  confirmImageRetry?: (discardAlways: boolean) => Promise<void>;
+  cancelImageRetry?: () => void;
+  /** The request-body editor: open state, and the actions the modal calls. Saving
+   *  renders nothing — the render is `Retry`'s, behind the confirmation above. */
+  imageRequestEditor?: ImageRequestEditorState | null;
+  openImageRequestEditor?: (msg: ChatMessage, file: string) => void;
+  closeImageRequestEditor?: () => void;
+  saveImageRequestBody?: (body: string) => Promise<string | null>;
+  imageSaving?: boolean;
+  /** Skip the retry confirmation entirely (Settings → Chat → Image Generation). */
+  alwaysDiscardOldImage?: boolean;
+  setAlwaysDiscardOldImage?: (always: boolean) => void;
 };
 
 export function PlayView(props: PlayViewProps) {
@@ -223,8 +240,24 @@ export function PlayView(props: PlayViewProps) {
     requestDeleteImage,
     confirmDeleteImage,
     deleteImageTarget,
-    setDeleteImageTarget
+    setDeleteImageTarget,
+    retryImageTarget = null,
+    requestImageRetry,
+    confirmImageRetry,
+    cancelImageRetry,
+    imageRequestEditor = null,
+    openImageRequestEditor,
+    closeImageRequestEditor,
+    saveImageRequestBody,
+    imageSaving = false,
+    alwaysDiscardOldImage = false,
+    setAlwaysDiscardOldImage
   } = props;
+
+  // The retry confirmation's own "always" tick. Deliberately NOT seeded from the
+  // setting: this modal only appears while the setting is OFF, and a tick here is
+  // a one-way promise to stop asking.
+  const [retryDiscardAlways, setRetryDiscardAlways] = useState(false);
 
   const [timelinesOpen, setTimelinesOpen] = useState(false);
   const [branchNameInput, setBranchNameInput] = useState("");
@@ -353,6 +386,8 @@ export function PlayView(props: PlayViewProps) {
           onGenerateImage={(msg) => { void handleGenerateImage?.(msg); }}
           onCancelImage={handleCancelImage}
           onDeleteImage={(msg, file) => requestDeleteImage?.(msg, file)}
+          onRetryImage={(msg, file) => requestImageRetry?.(msg, file)}
+          onEditImageRequest={(msg, file) => { void openImageRequestEditor?.(msg, file); }}
           onImagePromptGenerate={(prompt, negativePrompt) => {
             const request = imagePromptRequest;
             if (!request) return;
@@ -445,6 +480,58 @@ export function PlayView(props: PlayViewProps) {
               src={buildImageUrl(deleteImageTarget.file)}
               alt={deleteImageTarget.prompt.slice(0, 120)}
               title={deleteImageTarget.prompt}
+            />
+          </div>
+        </ConfirmModal>
+      ) : null}
+
+      {/* The request-body editor. Saving closes it (the reason to be there is
+          spent); a save that FAILS keeps it open with the text intact and the
+          reason under the field, which is where the user is looking. */}
+      {imageRequestEditor ? (
+        <ImageRequestBodyModal
+          body={imageRequestEditor.body}
+          connection={imageRequestEditor.connection}
+          saving={imageSaving}
+          onSave={async (body) => (saveImageRequestBody ? await saveImageRequestBody(body) : null)}
+          onClose={() => closeImageRequestEditor?.()}
+        />
+      ) : null}
+
+      {/* Re-sending a request body REPLACES the image it came from, so it asks
+          first — with the image in question shown, like Remove. The body may be
+          the one this image rendered with or one saved since; either way, a
+          re-send is the only thing here that renders. The tick is a one-way
+          "stop asking me": it turns the same switch the Settings panel owns,
+          which is then the way back. */}
+      {retryImageTarget ? (
+        <ConfirmModal
+          title="Re-send this request body?"
+          message="The image provider receives this body — the text model is not called, and the seed, size and checkpoint it names are sent as they stand. The image above is replaced once the new one arrives, so nothing is lost if the render fails."
+          confirmLabel={imageGeneratingId === retryImageTarget.message.id ? "Generating…" : "Replace image"}
+          danger
+          maxWidth={460}
+          isLoading={imageGeneratingId === retryImageTarget.message.id}
+          onConfirm={() => { void confirmImageRetry?.(retryDiscardAlways); }}
+          onCancel={() => {
+            setRetryDiscardAlways(false);
+            cancelImageRetry?.();
+          }}
+        >
+          <div className="delete-image-preview">
+            <img
+              src={buildImageUrl(retryImageTarget.file)}
+              alt={retryImageTarget.prompt.slice(0, 120)}
+              title={retryImageTarget.prompt}
+            />
+          </div>
+          <div className="modal-form-fields">
+            <Checkbox
+              checked={retryDiscardAlways}
+              onChange={(e) => setRetryDiscardAlways(e.target.checked)}
+              disabled={imageGeneratingId === retryImageTarget.message.id}
+              label="Always discard old image"
+              containerClassName="modal-checkbox-label"
             />
           </div>
         </ConfirmModal>
@@ -551,6 +638,8 @@ export function PlayView(props: PlayViewProps) {
         setImagePromptPreview={setImagePromptPreview}
         autoImageAfterTurn={autoImageAfterTurn}
         setAutoImageAfterTurn={setAutoImageAfterTurn}
+        alwaysDiscardOldImage={alwaysDiscardOldImage}
+        setAlwaysDiscardOldImage={setAlwaysDiscardOldImage}
       />
 
       <PersonaManager

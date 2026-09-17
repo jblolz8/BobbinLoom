@@ -232,10 +232,11 @@ Defaults are **180000 ms** and **1** retry — except on `a1111`, where the time
 | `POST /api/playthroughs/:id/messages/:messageId/image` | Compose (or take) the prompt, render the image, store it, append the ref. |
 | `GET /api/images/progress?connectionId=…` | The live readout for a generation in flight. `{ active: true, progress?, step?, steps?, etaSeconds? }`, or `{ active: false }` when nothing is running; `400 {"error":"connectionId is required"}` without the parameter. In-memory and keyed by image connection; only the `a1111` adapter publishes to it (see *The live progress readout*). |
 | `DELETE /api/playthroughs/:id/messages/:messageId/images/:file` | Drop one image ref, then sweep. Idempotent. |
+| `PATCH /api/playthroughs/:id/messages/:messageId/images/:file` | Replace one image's stored request body — the editor's **Save**. Generates nothing: the image, its bytes and the message are untouched, and the body becomes what the next re-send posts. |
 | `POST /api/settings/images/sweep` | Manual orphan sweep. |
 | `GET /api/prompt-config` · `PATCH /api/prompt-config` · `PUT /api/prompt-config/active` | The one **global prompt config** every playthrough generates from. Not image routes: they live in `src/server/routes/promptConfig.ts` — see [*Resolution order*](#resolution-order). |
 
-The generate body is `z.object({ imageProviderId?, promptOverride?, negativeOverride?, seed?, promptDurationMs?, writerPrompt?, writerNegative? })` — all optional. The last three are the review path's echo: the dry run measured the text call and holds the writer's answer, and this request makes no text call of its own, so the client hands them back for the ref to store (see [*The previous-answer reference*](#the-previous-answer-reference)). A request `seed` wins over the connection's `seed`; with neither, the provider picks at random and the ref stores nothing. The response is:
+The generate body is `z.object({ imageProviderId?, promptOverride?, negativeOverride?, seed?, promptDurationMs?, writerPrompt?, writerNegative?, rawRequest?, replaceFile? })` — all optional. The last three are the review path's echo: the dry run measured the text call and holds the writer's answer, and this request makes no text call of its own, so the client hands them back for the ref to store (see [*The previous-answer reference*](#the-previous-answer-reference)). A request `seed` wins over the connection's `seed`; with neither, the provider picks at random and the ref stores nothing. `rawRequest` and `replaceFile` are the re-send path — see [*Editing and re-sending a stored request body*](#editing-and-re-sending-a-stored-request-body). The response is:
 
 ```json
 {
@@ -274,6 +275,87 @@ One request: `POST …/image` with no overrides. The server runs the prompt call
 | absent | absent | Both sides come from the text model. |
 
 "Present" means the field is a **string** — an empty string counts as present. The server sniffs `typeof body.promptOverride === "string"`.
+
+### Editing and re-sending a stored request body
+
+Every image's ref carries the exact JSON body that rendered it (`request`), and two controls under the
+image work with it: **Edit request** opens it as JSON and **saves** it (nothing is generated), and
+**Retry** sends it to the image provider **without a text call** and replaces the image it came from.
+Together they are the fourth path through the generate endpoint — the one that composes nothing:
+`rawRequest` is the body, `replaceFile` names the image it replaces.
+
+#### Editing a stored request body
+
+**Save is a write, not a render.** It replaces `request` on the ref — stored the way every other request
+on a record is, as one line serialized from the parsed object — and touches nothing else. The image, its
+bytes and the message are all left alone; the old image stays on screen, and its file is still referenced
+by the same ref. No provider call of any kind happens, which is why saving works with **no image
+connection at all** and why an unavailable connection does not disable it.
+
+**What deliberately does not change.** `prompt`, `negativePrompt`, `seed`, `model`, `durationMs` and the
+provenance fields keep describing the image that is actually there. Only `request` becomes the recipe —
+what the next Retry will post. A saved-then-not-yet-sent body therefore means the ref's `request` and its
+`prompt` disagree, on purpose: the caption, the alt text and the full-screen viewer describe what was
+rendered, and the body describes what will be. That disagreement lasts until the retry lands, at which
+point the new ref carries both from the same render.
+
+**Errors.** The FIFTH row of the table below: a body that is not a JSON object, and a missing `request`
+field, are both 400s; a ref, message or playthrough that does not resolve is a 404 (a ref that is gone
+means the client is looking at a stale record — a branch, a replay, another window — so nothing is
+silently created).
+
+**Closing with unsaved edits asks first.** Cancel, the X and Escape all route through the same check, and
+a dirty editor asks *Discard your edits?* — naming what is NOT lost, because "discard" otherwise reads like
+it might throw the stored body away too. Saving closes the editor; a FAILED save keeps it open with the
+text intact, with the reason under the field.
+
+**The body is sent as it stands.** No clamping, no field added or removed, and — for the fields the
+connection would otherwise supply — the body wins: `model`, `seed`, `size`, `style_preset`, `variants`,
+`safe_mode` and (a1111) `override_settings.sd_model_checkpoint` are whatever the body says. That is what
+makes a re-send worth having: the stored body carries the seed, checkpoint and size that were **actually
+used**, so a fixed seed plus one changed tag nudges the same frame instead of rolling a new one. The
+practical consequence to know: the body is **frozen in time**, so a retry renders with the checkpoint and
+settings the body names — the original render's, or whatever an edit since replaced them with — and never
+with the connection's current ones.
+
+**The prompt side of the body is read back onto the ref.** `prompt` and `negative_prompt` are parsed out
+of the sent body so the caption, the full-screen viewer, alt text and the previous-answer reference all
+describe the render that actually exists. For the same reason the body's own model is what the ref
+reports: a connection whose checkpoint has changed since must not relabel the image.
+
+**What the re-send does not carry.** No text call runs, so the ref has no `promptRequest` / `promptResponse`
+(the `prompt call` disclosure stays absent), no `promptDurationMs`, and no `writerPrompt` /
+`writerNegative` — those fields mean "the prompt call's own answer", and a re-issued body has none. A later
+image's previous-answer reference skips such a ref silently, exactly as it skips any answerless ref.
+
+**It needs no text connection at all.** The image connection is the only requirement; a body can be
+re-sent with no text provider configured.
+
+**Where the body goes.** The re-send targets the connection the image was **made with** (`providerId` on the
+ref), never the active one — a body was composed for one dialect and one endpoint. If that connection has
+since been deleted the request is refused (`The image connection this request body belongs to no longer
+exists.`) rather than aimed at whatever is active now, and the editor says so before you send. Note the
+dialect of the CURRENT connection decides how the body is sent and how the response is parsed, so changing
+a connection's `apiStyle` after the fact makes an old body a mismatch: the provider's own error is the
+answer.
+
+**The replacement is atomic, and only on success.** The new ref(s) are appended and the replaced ref is
+dropped in the **same write**, so a failed, refused or cancelled render leaves the message exactly as it
+was. The old bytes are swept afterwards only if nothing else references them. A `replaceFile` that no
+longer matches anything still appends (a branch or a replay can have moved the ref).
+
+**Every returned variant is kept.** The body decides how many images one call renders (Venice `variants`,
+a1111 `batch_size`), so a re-sent body asking for four appends four and drops the one it replaced.
+
+**Errors, in place of the composed path's vocabulary:**
+
+| Status | Body | Cause |
+|---|---|---|
+| 400 | `{"error":"Send either a raw request body or prompt overrides, not both."}` | A request carrying both `rawRequest` and a prompt override: both are authoritative, so one of them has to be the source |
+| 400 | `{"error":"The request body must be a JSON object."}` | `rawRequest` (or a save's `request`) was not JSON, or parsed to an array, string, number or `null`. The FIELDS are the provider's business; the SHAPE is this route's |
+| 400 | `{"error":"The image connection this request body belongs to no longer exists."}` | `imageProviderId` named a connection that is gone (the ordinary path falls back to the active connection; a re-sent body cannot) |
+| 400 | `{"error":"A request body string is required."}` | A **save** with no `request` field, or one that is not a string |
+| 404 | `{"error":"Image not found"}` | A **save** naming a ref that is not on that message — a stale client, never a new ref |
 
 ### What the text call receives
 
@@ -436,7 +518,7 @@ A message reference is a `MessageImage`:
 | `promptDurationMs` | optional — the **text provider's** measured time for the prompt that produced this image: the other half of the same story, and measured on whichever request ran the call (the dry run's, echoed back on the review path). |
 | `writerPrompt` | optional — the prompt call's **own answer**, before `positivePrefix` and clamping were composed onto it. The composed text stays on `prompt`. Stored at write time so a later image can be handed one earlier answer as a shape reference, and so the raw answer is readable without re-parsing the fenced JSON inside `promptResponse`. Absent when no text call ran and the client echoed nothing. |
 | `writerNegative` | optional — the same, for the model's own negative tags. |
-| `request` | optional — the **JSON body that was sent to the image provider** for this image (diagnostic provenance) |
+| `request` | optional — the **JSON body that was sent to the image provider** for this image (diagnostic provenance), and the body **Retry** re-sends / **Edit request** rewrites (see [*Editing and re-sending a stored request body*](#editing-and-re-sending-a-stored-request-body)). An image generated before the field existed has no such controls — there is nothing to re-send. A body saved since the render is a *recipe*: `prompt` and the rest still describe the image that is there |
 | `promptRequest` | optional — the **JSON body that was sent to the TEXT provider** that wrote this prompt (diagnostic provenance) |
 | `promptResponse` | optional — the text provider's **response** to that call, body only, truncated (see below) |
 | `createdAt` | ISO timestamp |
@@ -580,9 +662,10 @@ The Image Generation tab in the preset editor exposes **nine** fields in this or
 - Every **assistant** message gets a footer button: **Generate Image**, or **Generate another** once it has images. It is disabled when there is no image connection, with a tooltip explaining why (`No image provider configured — add one in Settings → Provider → Images`), and while another action is in progress.
 - Generated images stack **inside the same message container, newest last**. Each is a figure with the image, a remove control (`Remove this image` — the tooltip and the confirm dialog both say *the file is deleted if nothing else uses it*), and a caption of `model · prompt 3.4s · render 25.9s · seed N`. Every part is omitted when absent: a Venice random seed (`0`) shows no seed, and a ref written before `promptDurationMs` existed keeps the unlabelled caption it had. The two times are labelled **only when both exist**, so the label never lies about which half a single number is. `shortModelName` drops the extension and hash tag (`waiANINSFWPONYXL_v140`), and the caption **wraps**: it carries the model, both times and the seed, which does not fit one line in a phone-width panel, and an ellipsis was hiding the seed. The formatter and the caption itself live in `src/client/engine/displayFormat.ts` — pure functions, unit-tested without a React renderer, and shared with the full-screen viewer so the two can never disagree. Clicking the image opens it full screen (`common/ImageViewer` — a shared component, not chat-specific): Escape, a backdrop click or its close button dismiss it, and it carries the same caption the thumbnail does.
 - Every generated image carries a compact collapsed **`request`** disclosure under it (inside the same message container and the same figure) revealing the pretty-printed JSON body that went to the image provider — diagnostic provenance, not content, so it is small, muted, monospace, height-capped and horizontally scrollable, with a **Copy** button. A ref stored before the field existed shows no disclosure at all (no empty box).
+- Above that disclosure, the same ref gets **Retry** and **Edit request** — the body's own two controls, and they exist only where a stored body does. **Retry** re-sends it (it asks first: the image it replaces goes away when the new one arrives); **Edit request** opens it as editable JSON with **Save**, **Reset** (back to the stored body) and **Copy**. Saving renders nothing — the image stays, and the editor closes; a failed save keeps it open with the text intact and the reason under the field. Cancel, the X and Escape all ask *Discard your edits?* when there are unsaved changes, so no close path can drop a hand-edit silently. They sit in the block under the artwork rather than floating on it, and they go quiet while anything else is in flight for the message.
 - Next to it, a second collapsed **`prompt call`** disclosure shows the *prompt-writing* side call: its request body and the text provider's response, labelled `Request` / `Response`, same quiet treatment and also collapsed by default, each block with its **own** Copy button (independent copied state — one affordance per block, not one per panel). It is absent when the prompt came from the user's own edits (both overrides), because no text call ran for that image.
 - In-flight states are per message, each with a **live elapsed counter** beside it and a **Cancel** button: `Writing image prompt… 4.2s` (the dry run) then `Generating image… 1m 03s` (the render). The counters are driven by phase stamps the HOOK sets once (`imagePromptStartedAt` / `imageGeneratingStartedAt`) and tick from `performance.now()` at both ends — deriving them from a message id or a progress payload would restart the clock every 700 ms, and `Date.now()` minus a `performance.now()` stamp is the machine's uptime. `formatDuration` is minute-aware (`1m 23s`), because a local render is minutes and `110.0s` is not a number anyone reads at a glance. Cancelling reports `Image prompt cancelled.` or `Image generation cancelled.`; a failure reports `Image generation failed — nothing was changed.`
-- `Settings → Chat` is grouped into **Chat Message / Image Generation / Debugging**. The Image Generation group holds `Review Image Prompt Before Generating` (default **on**) — which decides whether the modal appears at all: on, dry run first, then the reviewed prompt posted back as both overrides; off, one request and no modal — and `Generate Image right after AI Response` (per-device, default **off**). The latter fires from the two places a turn's state lands (`handleSend`, which covers Continue, and `confirmRetry`), and skips **silently** whatever it cannot do: chapter openings, a message that already has images, another phase in flight, and — resolved before any state is touched — a user with no image connection, who would otherwise get a failure notice after every turn. Review still wins, so the modal appears for confirmation. It costs one text call plus a render per turn, which is why it is opt-in and why the toggle's own description says so.
+- `Settings → Chat` is grouped into **Chat Message / Image Generation / Debugging**. The Image Generation group holds `Review Image Prompt Before Generating` (default **on**) — which decides whether the modal appears at all: on, dry run first, then the reviewed prompt posted back as both overrides; off, one request and no modal — `Generate Image right after AI Response` (per-device, default **off**), and `Always Discard Old Image on Re-send` (per-device, default **off**). The second fires from the two places a turn's state lands (`handleSend`, which covers Continue, and `confirmRetry`), and skips **silently** whatever it cannot do: chapter openings, a message that already has images, another phase in flight, and — resolved before any state is touched — a user with no image connection, who would otherwise get a failure notice after every turn. Review still wins, so the modal appears for confirmation. It costs one text call plus a render per turn, which is why it is opt-in and why the toggle's own description says so. The third is the only image switch that skips a confirmation instead of changing what is generated: with it off, a re-send asks before replacing the image (and the confirmation's own *Always discard old image* checkbox turns it on for you); with it on, re-sending goes straight through.
 - The image provider caption in the modal is `<label> · <model>` of the image connection the request will use, and beneath it sits the **context line** the dry run reports: `Context: 6 previous messages · POV instruction` (or `Context: this message only`, or `· Scene instruction (third-person)`). It names what the writer was actually given, because a prompt that looks wrong for a reason that has nothing to do with the model — an empty window on a first message, a scene instruction in force — is otherwise indistinguishable from a bad answer, and the alternative is paying for a render to find out.
 
 ---
@@ -618,6 +701,13 @@ This whole section is about the **prompt**. The negative has its own ceiling —
 **The `a1111` ceiling is a sanity cap, not a trim.** The WebUI publishes no prompt cap at all — it chunks the prompt at **75 CLIP tokens** and simply weights everything past the first chunk less — so cutting at the ceiling would silently delete the tail tags the user was explicitly warned about in the review modal instead. `A1111_IMAGE_PROMPT_CAP` is **10000** characters, sized so a runaway string cannot be posted; a 2000-character prompt is sent unchanged. The signal moves to the modal instead: on an `a1111` connection the review modal shows a chunk estimate (`About N tokens — M CLIP chunks of 75`) and, past the first chunk, that the tail tags are weighted less and that **the text is sent unchanged**. The preset's `promptCharacterLimit` still applies to the composed prompt — the server clamps to `min(preset limit, 10000)` — and it is the only thing that can cut an `a1111` prompt below the ceiling. See *The prompt is chunked, never trimmed*.
 
 Soft-limit cuts are reported: the dry run adds a **truncation warning** to its `warnings` array (shown in the review modal) whenever the composed prompt was cut, at either ceiling. That matters here — a tag list puts its most disposable tags last and its action/physical-state tags at the end, so a cut removes exactly the part the instruction insists on. The reviewed generate call still sends the identical clamped text; only the dry run reports. The negative is deliberately not part of this warning: it is a curated list, not a model answer, and its only ceiling is the dialect cap.
+
+### Re-sending: four ways a body surprises you
+
+- **An identical body and seed can produce identical bytes** — the same hash, so the same stored file, and the message then looks unchanged. Nothing is broken (the file is still referenced and the sweep keeps it); a re-send is only worth pressing when something about the request differs, or the dialect has no deterministic seed to pin.
+- **A body that names a script the WebUI no longer has is a 422.** An a1111 body carries the Forge Couple entry only when regions engaged at the time, and a re-send does not re-detect the extension — uninstalling it turns that one retry into A1111's own `always on script <name> not found`, reported verbatim.
+- **An over-long prompt is now the provider's error, not a clamp.** The re-send path sends the body as it stands, so an edited body over the OpenAI-compatible dialect's 1500-character cap comes back as the provider's 400 instead of being quietly cut. That is the point — the review modal's counter and the truncation warning belong to the composed path, where BobbinLoom owns the text.
+- **The connection's `apiStyle` decides how the body is sent**, and the body's dialect is not recorded on the ref. Editing a connection from `venice` to `a1111` (or the reverse) after an image was rendered leaves that image's body aimed at an endpoint that never composed it; the provider's rejection is the answer.
 
 ### Safe mode and the adult-content blur
 

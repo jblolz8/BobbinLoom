@@ -369,6 +369,17 @@ export default function App() {
           confirmDeleteImage={playthroughHook.confirmDeleteImage}
           deleteImageTarget={playthroughHook.deleteImageTarget}
           setDeleteImageTarget={playthroughHook.setDeleteImageTarget}
+          retryImageTarget={playthroughHook.retryImageTarget}
+          requestImageRetry={playthroughHook.requestImageRetry}
+          confirmImageRetry={playthroughHook.confirmImageRetry}
+          cancelImageRetry={playthroughHook.cancelImageRetry}
+          imageRequestEditor={playthroughHook.imageRequestEditor}
+          openImageRequestEditor={playthroughHook.openImageRequestEditor}
+          closeImageRequestEditor={playthroughHook.closeImageRequestEditor}
+          saveImageRequestBody={playthroughHook.saveImageRequestBody}
+          imageSaving={playthroughHook.imageSaving}
+          alwaysDiscardOldImage={playthroughHook.alwaysDiscardOldImage}
+          setAlwaysDiscardOldImage={playthroughHook.setAlwaysDiscardOldImage}
           startEdit={playthroughHook.startEdit}
           cancelEdit={playthroughHook.cancelEdit}
           saveEdit={playthroughHook.saveEdit}
@@ -451,6 +462,8 @@ export default function App() {
             imagePromptPreview={playthroughHook.imagePromptPreview}
             autoImageAfterTurn={playthroughHook.autoImageAfterTurn}
             setAutoImageAfterTurn={playthroughHook.setAutoImageAfterTurn}
+            alwaysDiscardOldImage={playthroughHook.alwaysDiscardOldImage}
+            setAlwaysDiscardOldImage={playthroughHook.setAlwaysDiscardOldImage}
             setImagePromptPreview={playthroughHook.setImagePromptPreview}
           />
           <PersonaManager

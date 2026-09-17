@@ -39,7 +39,16 @@ const GenerateImageBody = z.object({
    *  path no text call runs here, so the only way the ref can carry what the writer
    *  wrote is for the client to hand it over. */
   writerPrompt: z.string().optional(),
-  writerNegative: z.string().optional()
+  writerNegative: z.string().optional(),
+  /** The RE-SEND path: a request body to send verbatim instead of composing one.
+   *  The client hands back a body it stored on an image (or a hand-edited version
+   *  of it), and this request makes no text call and applies no clamping — what
+   *  is sent is what the user saw. Sending this AND a prompt override is a 400:
+   *  both are authoritative, so one of them has to be the source. */
+  rawRequest: z.string().optional(),
+  /** The image this generation REPLACES, dropped from the message in the same
+   *  write that appends the new one (see the handler). */
+  replaceFile: z.string().optional()
 });
 
 const MessageParams = z.object({ id: z.string(), messageId: z.string() });
@@ -119,6 +128,37 @@ function previousUserMessage(playthrough: { messages: ChatMessage[] }, message: 
     if (candidate.role === "user" && !candidate.hidden) return candidate;
   }
   return undefined;
+}
+
+/** A re-sent body as an object, or null when it is not a JSON object.
+ *
+ *  Strict about the SHAPE, deliberately lenient about the FIELDS: which keys a
+ *  dialect accepts is the provider's business, but a body that is not an object
+ *  cannot be sent at all (an array or a bare string would be a payload the
+ *  provider never asked for), and that is the one thing worth refusing here. */
+function parseRawRequestBody(text: string): Record<string, unknown> | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  return parsed as Record<string, unknown>;
+}
+
+/** The prompt side of a re-sent body, read for the stored ref's own metadata:
+ *  everything downstream (the caption, the full-screen viewer, the alt text, the
+ *  previous-answer reference) reads `image.prompt`, so it has to describe the text
+ *  the provider was actually given. No clamping — this path sends the body as it
+ *  stands. */
+function promptFromRawBody(rawBody: Record<string, unknown>): { prompt: string; negativePrompt: string } {
+  const prompt = rawBody.prompt;
+  const negative = rawBody.negative_prompt;
+  return {
+    prompt: typeof prompt === "string" ? prompt : "",
+    negativePrompt: typeof negative === "string" ? negative : ""
+  };
 }
 
 /** Everything the text → image-prompt call is given, built in ONE place: the dry
@@ -282,6 +322,45 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     }
   });
 
+  // Replace one image's stored request body — the request editor's Save.
+  // Deliberately generates NOTHING: the bytes, the image and the message are all
+  // untouched, so a body can be prepared or corrected without spending a render,
+  // and the old image stays on screen. The next re-send is what puts it on the
+  // wire. `prompt` / `negativePrompt` are left alone on purpose — they describe
+  // the image that is actually there, and saving renders nothing.
+  app.patch("/api/playthroughs/:id/messages/:messageId/images/:file", async (request, reply) => {
+    const params = z.object({ id: z.string(), messageId: z.string(), file: z.string() }).parse(request.params);
+    // `safeParse` for the BODY where the rest of this file parses directly: there
+    // is no zod error handler on this server (a `.parse()` throw is Fastify's
+    // generic 500), and this body is the user's own editing surface — a missing
+    // or non-string field is a caller mistake worth a 400 and a sentence, not an
+    // internal error. The URL shape above is ours and stays as it is.
+    const body = z.object({ request: z.string() }).safeParse(request.body ?? {});
+    if (!body.success) {
+      return reply.code(400).send({ error: "A request body string is required." });
+    }
+    // The same shape rule the re-send enforces, for the same reason: the FIELDS
+    // are the provider's business, but a body that is not a JSON object cannot be
+    // sent later either, and finding that out at Save time is the point.
+    const parsed = parseRawRequestBody(body.data.request);
+    if (!parsed) return reply.code(400).send({ error: "The request body must be a JSON object." });
+
+    const playthrough = getPlaythroughRecord(dataDir, params.id);
+    if (!playthrough) return reply.code(404).send({ error: "Playthrough not found" });
+    const message = playthrough.messages.find((m) => m.id === params.messageId);
+    if (!message) return reply.code(404).send({ error: "Message not found" });
+    // A ref that is not on the message means the client is looking at a stale
+    // record (a branch, a replay, another window): reported rather than created.
+    const image = (message.images ?? []).find((candidate) => candidate.file === params.file);
+    if (!image) return reply.code(404).send({ error: "Image not found" });
+
+    // Stored the way every other request on the record is: one line, serialized
+    // from the parsed object.
+    image.request = JSON.stringify(parsed);
+    updatePlaythroughRecord(dataDir, playthrough);
+    return reply.send({ playthrough });
+  });
+
   // Drop one image ref from a message, then sweep the now-unreferenced file.
   // Idempotent: removing a ref that is already gone still returns the record.
   app.delete("/api/playthroughs/:id/messages/:messageId/images/:file", async (request, reply) => {
@@ -326,8 +405,31 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     const imageConn = manager.imageConnection(body.imageProviderId);
     if (!imageConn) return reply.code(400).send({ error: "No image provider configured — add one in Settings → Provider → Images." });
 
+    // The re-send path: the body came from the client, so nothing is composed
+    // and no text provider is called. It therefore needs no prompt writer at all
+    // — an image connection alone can re-issue a stored request.
+    const hasRaw = typeof body.rawRequest === "string";
+    if (hasRaw && (typeof body.promptOverride === "string" || typeof body.negativeOverride === "string")) {
+      return reply.code(400).send({ error: "Send either a raw request body or prompt overrides, not both." });
+    }
+    let rawBody: Record<string, unknown> | null = null;
+    if (hasRaw) {
+      rawBody = parseRawRequestBody(body.rawRequest!);
+      if (!rawBody) return reply.code(400).send({ error: "The request body must be a JSON object." });
+      // …and it must still have a HOME. A body carries a dialect's fields (and,
+      // on a1111, the checkpoint it pinned), so a body whose connection has been
+      // deleted is reported rather than aimed at whatever is active now: the
+      // fallback above exists for the ordinary path, where the connection knows
+      // what to send.
+      if (body.imageProviderId && !manager.imageConnectionById(body.imageProviderId)) {
+        return reply.code(400).send({
+          error: "The image connection this request body belongs to no longer exists."
+        });
+      }
+    }
+
     const promptConfig = manager.resolveImagePromptConfig(imageConn);
-    if (!promptConfig) return reply.code(400).send({ error: "No text provider available to write the image prompt." });
+    if (!hasRaw && !promptConfig) return reply.code(400).send({ error: "No text provider available to write the image prompt." });
 
     const settings = resolveImageSettings(loadPromptConfig(settingsDir).promptConfig.imageGeneration);
     const controller = abortOnClientDisconnect(reply);
@@ -362,12 +464,25 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     // time above); otherwise the call below replaces both with what it just got.
     let writerPrompt: string | undefined = body.writerPrompt ? clampStoredPromptResponse(body.writerPrompt) : undefined;
     let writerNegative: string | undefined = body.writerNegative ? clampStoredPromptResponse(body.writerNegative) : undefined;
-    if (hasPrompt && hasNegative) {
+    if (rawBody) {
+      // The re-send path: the body IS the request. No text call, no clamping,
+      // and nothing to echo — a re-issued body has no writer's answer behind it,
+      // so the ref carries none of the prompt-call provenance below (and the
+      // chat's `prompt call` disclosure stays absent, exactly as on the
+      // reviewed-prompt path).
+      const parsedPrompt = promptFromRawBody(rawBody);
+      promptUsed = parsedPrompt.prompt;
+      negativeUsed = parsedPrompt.negativePrompt;
+      promptDurationMs = undefined;
+      writerPrompt = undefined;
+      writerNegative = undefined;
+    } else if (hasPrompt && hasNegative) {
       promptUsed = clampComposed(body.promptOverride!, settings, imageConn).text;
       negativeUsed = clampNegative(body.negativeOverride!, imageConn);
     } else {
       try {
-        const written = await generateImagePrompt(promptConfig, settings,
+        const written = await generateImagePrompt(promptConfig!,
+          settings,
           buildImagePromptInput(playthrough, message, settings).input,
           fetchImpl, controller.signal);
         promptUsed = clampComposed(hasPrompt ? body.promptOverride! : written.prompt, settings, imageConn).text;
@@ -405,6 +520,11 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
         safeMode: imageConn.safeMode,
         stylePreset: imageConn.stylePreset,
         hideWatermark: imageConn.hideWatermark,
+        // The re-send path. When this is set the adapter builds no body at all
+        // and ignores every field above that only feeds its own body
+        // construction (size, seed, variants, style preset, safe mode, the
+        // checkpoint) — the body carries them itself.
+        rawBody: rawBody ?? undefined,
         signal: controller.signal,
         onProgress: (progress) => publishImageProgress(imageConn.id, progress)
       });
@@ -458,8 +578,33 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
         createdAt
       };
     });
-    message.images = [...(message.images ?? []), ...refs];
+    const existing = message.images ?? [];
+    // The re-send path REPLACES the image it came from. The drop happens here,
+    // in the same write as the append, and never on the client: a render that
+    // fails, is cancelled, or comes back a 400 must leave the message exactly as
+    // it was, and a two-step delete-then-generate would leave it with no image at
+    // all. Note the filter runs over the refs that were ALREADY there — an
+    // identical body and seed produce identical bytes, hence the same file name,
+    // and filtering the appended refs too would delete the image that just
+    // arrived.
+    const kept = body.replaceFile ? existing.filter((image) => image.file !== body.replaceFile) : existing;
+    const next = [...kept, ...refs];
+    if (next.length) message.images = next;
+    else delete message.images;
     updatePlaythroughRecord(dataDir, playthrough);
+
+    // Best-effort, like the other record-driven sweeps: the original reference is
+    // already off the message, so a failed sweep must not report the generation
+    // as failed (the bytes are collected by the next sweep or the manual
+    // endpoint). Bytes the new ref still points at — the identical-render case
+    // above — are referenced and stay.
+    if (body.replaceFile) {
+      try {
+        sweepOrphansInDataDir(dataDir, imagesDir);
+      } catch (error) {
+        console.warn(`[images] orphan sweep after replacing an image on ${params.messageId} failed:`, error);
+      }
+    }
 
     return reply.send({ playthrough, image: refs[0], promptUsed, negativeUsed, promptDurationMs });
   });

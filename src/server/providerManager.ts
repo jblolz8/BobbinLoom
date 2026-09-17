@@ -59,11 +59,24 @@ export class ProviderManager {
    *  it really is an image connection), else the active image connection. */
   imageConnection(id?: string): ProviderConnection | null {
     if (id) {
-      const reg = getRegistry(this.dataDir);
-      const explicit = reg.connections.find((c) => c.id === id && c.kind === "image");
+      const explicit = this.imageConnectionById(id);
       if (explicit) return explicit;
     }
     return this.activeImageConnection();
+  }
+
+  /** The image connection an id names EXACTLY, without `imageConnection`'s
+   *  active-connection fallback. Null when the id is unknown or names a text
+   *  connection.
+   *
+   *  The re-send path needs this: a stored request body was composed for ONE
+   *  dialect and ONE endpoint (and, on a1111, names the checkpoint it pinned), so
+   *  a body whose connection has been deleted must be REPORTED — falling back to
+   *  whatever is active now would post a body nothing ever composed to an
+   *  endpoint that never asked for it, usually without an error. */
+  imageConnectionById(id: string): ProviderConnection | null {
+    const explicit = getRegistry(this.dataDir).connections.find((c) => c.id === id && c.kind === "image");
+    return explicit ?? null;
   }
 
   /** The image provider for a request: the explicit connection when it resolves

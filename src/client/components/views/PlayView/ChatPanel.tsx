@@ -75,6 +75,10 @@ export type ChatPanelProps = {
   onGenerateImage?: (msg: ChatMessage) => void;
   onCancelImage?: () => void;
   onDeleteImage?: (msg: ChatMessage, file: string) => void;
+  /** Re-send one image's stored request body (after the confirmation). */
+  onRetryImage?: (msg: ChatMessage, file: string) => void;
+  /** Open the JSON request-body editor for one image. */
+  onEditImageRequest?: (msg: ChatMessage, file: string) => void;
   onImagePromptGenerate?: (prompt: string, negativePrompt: string) => void;
   onImagePromptRerun?: () => void;
   onImagePromptClose?: () => void;
@@ -415,6 +419,8 @@ export function ChatPanel(props: ChatPanelProps) {
     onGenerateImage,
     onCancelImage,
     onDeleteImage,
+    onRetryImage,
+    onEditImageRequest,
     onImagePromptGenerate,
     onImagePromptRerun,
     onImagePromptClose
@@ -596,7 +602,16 @@ export function ChatPanel(props: ChatPanelProps) {
               <>
                 {msg.images && msg.images.length > 0 ? (
                   <div className="message-images">
-                    {msg.images.map((img, index) => (
+                    {msg.images.map((img, index) => {
+                      // One image action at a time: while ANYTHING is in flight for
+                      // this message (a render, a prompt call, a removal), both
+                      // controls go quiet — the footer already shows the status
+                      // and the Cancel button.
+                      const imageActionBusy =
+                        imageDeletingId === msg.id ||
+                        imageGeneratingId === msg.id ||
+                        imagePreviewMessageId === msg.id;
+                      return (
                       <div className="message-image-block">
                         <figure className="message-image">
                           <button
@@ -635,6 +650,40 @@ export function ChatPanel(props: ChatPanelProps) {
                           <figcaption title={img.prompt}>{imageCaption(img)}</figcaption>
                         </figure>
 
+                        {/* Re-send this image's own request body, with or without
+                            editing it. Rendered only when the ref CARRIES a body:
+                            an image generated before the field existed has nothing
+                            to re-send, and the same absence rule already hides its
+                            `request` disclosure below. These sit in the block, not
+                            overlaid on the artwork, so they read in the theme's own
+                            tokens instead of needing a scrim. */}
+                        {img.request ? (
+                          <div className="message-image-actions">
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              className="message-image-retry"
+                              disabled={imageActionBusy}
+                              onClick={() => onRetryImage?.(msg, img.file)}
+                              leftIcon={<Icon name="RefreshCw" size={11} />}
+                              title="Send this image's request body again — no text model, and the same seed, size and checkpoint it used. It replaces this image."
+                            >
+                              Retry
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              className="message-image-edit-request"
+                              disabled={imageActionBusy}
+                              onClick={() => onEditImageRequest?.(msg, img.file)}
+                              leftIcon={<Icon name="Pencil" size={11} />}
+                              title="Edit the JSON body that went to the image provider, then send it again"
+                            >
+                              Edit request
+                            </Button>
+                          </div>
+                        ) : null}
+
                         {/* What we actually sent upstream. Absent on refs
                             stored before the field existed → no empty box. */}
                         {img.request ? <ImageRequestDisclosure request={img.request} /> : null}
@@ -649,7 +698,8 @@ export function ChatPanel(props: ChatPanelProps) {
                         ) : null}
                       </div>
 
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : null}
                 <div className="message-footer">

@@ -2,7 +2,7 @@ import type { ProviderConnection } from "../../schemas";
 import type { ResolvedProviderConfig } from "../providerConfig";
 import { requestWithRetry } from "../provider/openaiClient";
 import type { ImageGenerationRequest, ImageGenerationResult, ImageProvider } from "./types";
-import { clampChars, dataUrlPayload, sniffMime } from "./shared";
+import { clampChars, dataUrlPayload, modelFromRawBody, sniffMime } from "./shared";
 
 /** POST /images/generations has a hard 1500-character prompt cap. Applied to
  *  the COMPOSED prompt (prefix + body), so a long prefix can never 400. */
@@ -20,7 +20,10 @@ export class OpenAIImagesProvider implements ImageProvider {
 
   async generateImage(req: ImageGenerationRequest): Promise<ImageGenerationResult> {
     const start = Date.now();
-    const body: Record<string, unknown> = {
+    // The re-send path: a body the user re-issued is sent as given — no clamp,
+    // no connection settings re-applied — and the provider's own limit error
+    // (this dialect's 1500-character 400 included) is reported verbatim.
+    const body: Record<string, unknown> = req.rawBody ?? {
       model: this.config.model,
       prompt: clampChars(req.prompt, OPENAI_IMAGE_PROMPT_CAP),
       size: req.size ?? this.connection.size ?? "auto",
@@ -45,7 +48,8 @@ export class OpenAIImagesProvider implements ImageProvider {
 
     return {
       images: [{ bytes, mime: sniffMime(bytes) }],
-      model: this.config.model,
+      // A re-sent body names its own model; the connection's is the fallback.
+      model: modelFromRawBody(req.rawBody) ?? this.config.model,
       providerId: this.config.providerId,
       durationMs: Date.now() - start,
       rawRequest: JSON.stringify(body),

@@ -217,6 +217,33 @@ describe("stored image request — the route", () => {
     expect(stored.map((ref) => ref.request)).toEqual(refs.map((ref: { request?: string }) => ref.request));
   });
 
+  it("stores a RE-SENT body verbatim, with no credential and no text call", async () => {
+    const h = routeHarness();
+    // The re-send path puts a client-supplied body on the wire. It still leaves
+    // through the same adapter, so it is held to the same rule: what is stored is
+    // the body, and the key travels in the header only.
+    const raw = JSON.stringify({ model: "flux-dev", prompt: "tags", seed: 12 });
+    const res = await h.app.inject({
+      method: "POST",
+      url: `/api/playthroughs/${h.playthroughId}/messages/${h.messageId}/image`,
+      payload: { rawRequest: raw, imageProviderId: "venice_images" }
+    });
+    expect(res.statusCode).toBe(200);
+
+    const imageCall = h.calls.find((call) => call.url.includes("/image/generate"))!;
+    expect(imageCall.headers.Authorization).toBe(`Bearer ${API_KEY}`);
+    // No text call ran: this path never asks the model for a prompt.
+    expect(h.calls.some((call) => call.url.includes("/chat/completions"))).toBe(false);
+
+    const refs = res.json().playthrough.messages[2].images;
+    expect(refs).toHaveLength(2);
+    for (const ref of refs) {
+      expectBodyOnly(ref.request);
+      expect(JSON.parse(ref.request)).toEqual(JSON.parse(raw));
+      expect(ref.request).not.toContain(API_KEY);
+    }
+  });
+
   it("stores the PROMPT call's request and response with no credential in either", async () => {
     const h = routeHarness();
     const res = await h.app.inject({

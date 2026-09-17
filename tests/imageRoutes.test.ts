@@ -5,7 +5,7 @@ import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../src/engine/imageDefaults";
-import type { ImageGenerationSettings } from "../src/schemas";
+import type { ImageGenerationSettings, MessageImage, Playthrough } from "../src/schemas";
 import type { ProviderConnectionDraft } from "../src/server/providerRegistry";
 import { createConnection } from "../src/server/providerRegistry";
 import { A1111_IMAGE_PROMPT_CAP } from "../src/server/imageProvider/a1111Provider";
@@ -19,7 +19,7 @@ import { imageRoutes } from "../src/server/routes/images";
 import { providerRoutes } from "../src/server/routes/providers";
 import { getPlaythroughRecord, updatePlaythroughRecord } from "../src/server/store";
 import { saveAppSettings } from "../src/server/appSettingsStore";
-import { cleanupTempDirs, pngBytes, tempDir, writePlaythroughWithImages } from "./helpers/imageFixtures";
+import { cleanupTempDirs, imageRef, pngBytes, tempDir, writePlaythroughWithImages } from "./helpers/imageFixtures";
 
 afterEach(cleanupTempDirs);
 
@@ -1264,5 +1264,369 @@ describe("image prompt context: the writer's answer and the reference", () => {
 
     await post(h.app, imageUrl(h, record.messages[0].id), {});
     expect(h.calls[0].body.messages[1].content).not.toContain("LATER ANSWER");
+  });
+});
+
+/** Store real bytes and attach a ref to them, exactly like a finished render
+ *  would have. Returns the file name, which IS the hash of those bytes — so a
+ *  test can force the "the re-send reproduced the same bytes" case by seeding
+ *  the same seed the harness answers with. */
+function seedImageRef(
+  h: ReturnType<typeof harness>,
+  messageId: string,
+  seed: string,
+  overrides: Partial<MessageImage> = {}
+): string {
+  const bytes = pngBytes(seed);
+  const file = `${createHash("sha256").update(bytes).digest("hex")}.png`;
+  saveImageBytes(bytes, "image/png", h.imagesDir);
+  const record = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
+  const message = record.messages.find((m) => m.id === messageId)!;
+  message.images = [...(message.images ?? []), imageRef(file, overrides)];
+  updatePlaythroughRecord(h.dataDir, record);
+  return file;
+}
+
+/** Pull every image ref off a message of the returned record. */
+function imagesOf(playthrough: Playthrough, messageId: string): MessageImage[] {
+  return playthrough.messages.find((m) => m.id === messageId)?.images ?? [];
+}
+
+describe("re-sending a stored request body", () => {
+  const BODY = {
+    model: "flux-dev",
+    prompt: "same frame, one tag changed",
+    negative_prompt: "blurry",
+    variants: 1,
+    seed: 777,
+    safe_mode: false
+  };
+
+  it("sends the body verbatim and makes no text call at all", async () => {
+    const h = harness();
+    const file = seedImageRef(h, h.assistantMessageId, "resend");
+    const connectionId = h.manager.imageConnection()!.id;
+
+    const res = await post(h.app, imageUrl(h), {
+      rawRequest: JSON.stringify(BODY),
+      replaceFile: file,
+      imageProviderId: connectionId
+    });
+
+    // ONE call, and it is the image one: the whole point of the path is that the
+    // text provider is never asked again.
+    expect(res.statusCode).toBe(200);
+    expect(h.calls).toHaveLength(1);
+    expect(h.calls[0].url).toContain("/image/generate");
+    expect(h.calls[0].body).toEqual(BODY);
+  });
+
+  it("stores provenance that describes what the provider was actually given", async () => {
+    const h = harness();
+    const file = seedImageRef(h, h.assistantMessageId, "resend");
+    const res = await post(h.app, imageUrl(h), {
+      rawRequest: JSON.stringify(BODY),
+      replaceFile: file,
+      imageProviderId: h.manager.imageConnection()!.id
+    });
+    const image = res.json().image;
+
+    // The body we sent is the body the ref reports.
+    expect(JSON.parse(image.request)).toEqual(BODY);
+    // …and the prompt/negative come OUT of it, unclamped: every surface that
+    // reads `image.prompt` (caption, viewer, alt text) describes this render.
+    expect(image.prompt).toBe(BODY.prompt);
+    expect(image.negativePrompt).toBe(BODY.negative_prompt);
+    // No text call ran, so there is no prompt-call provenance and no writer's
+    // answer to carry — exactly like the reviewed-prompt path.
+    expect("promptRequest" in image).toBe(false);
+    expect("promptResponse" in image).toBe(false);
+    expect("writerPrompt" in image).toBe(false);
+    expect("promptDurationMs" in image).toBe(false);
+    // The provider's own report still lands: seed straight from the body.
+    expect(image.seed).toBe(777);
+  });
+
+  it("replaces the image it came from, in one write, and sweeps the old bytes", async () => {
+    const h = harness();
+    const file = seedImageRef(h, h.assistantMessageId, "old");
+    expect(storedFiles(h.imagesDir)).toEqual([file]);
+
+    const res = await post(h.app, imageUrl(h), {
+      rawRequest: JSON.stringify(BODY),
+      replaceFile: file,
+      imageProviderId: h.manager.imageConnection()!.id
+    });
+    const images = imagesOf(res.json().playthrough, h.assistantMessageId);
+
+    // Appended and dropped together: one image in, one image out.
+    expect(images).toHaveLength(1);
+    expect(images[0].file).not.toBe(file);
+    // Nothing references the old bytes anymore, so the sweep took them.
+    expect(storedFiles(h.imagesDir)).toEqual([images[0].file]);
+  });
+
+  it("keeps the new image when the re-send reproduces the same bytes", async () => {
+    const h = harness();
+    // The harness answers every render with the same PNG, so re-sending a body
+    // that reproduces the stored image yields the SAME file name. The drop must
+    // therefore only touch the refs that were already there — filtering the
+    // appended ones too would leave the message with no image at all, and then
+    // the sweep would take the file with it.
+    const body = JSON.stringify({ model: "flux-dev", prompt: "identical", seed: 5 });
+    const file = seedImageRef(h, h.assistantMessageId, "routes", { request: body });
+
+    const res = await post(h.app, imageUrl(h), {
+      rawRequest: body,
+      replaceFile: file,
+      imageProviderId: h.manager.imageConnection()!.id
+    });
+    const images = imagesOf(res.json().playthrough, h.assistantMessageId);
+
+    expect(images).toHaveLength(1);
+    expect(images[0].file).toBe(file);
+    expect(storedFiles(h.imagesDir)).toEqual([file]);
+  });
+
+  it("leaves the old image in place when the render fails", async () => {
+    // A provider that answers with no image data: the route 502s, and because the
+    // drop happens in the SAME write as the append, nothing was written at all.
+    const h = harness({ imagePayload: { id: "gen_1", images: [] } });
+    const file = seedImageRef(h, h.assistantMessageId, "survivor");
+
+    const res = await post(h.app, imageUrl(h), {
+      rawRequest: JSON.stringify(BODY),
+      replaceFile: file,
+      imageProviderId: h.manager.imageConnection()!.id
+    });
+
+    expect(res.statusCode).toBe(502);
+    const record = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
+    expect(imagesOf(record, h.assistantMessageId)).toHaveLength(1);
+    expect(imagesOf(record, h.assistantMessageId)[0].file).toBe(file);
+    expect(storedFiles(h.imagesDir)).toEqual([file]);
+  });
+
+  it("still appends when the file it would replace is already gone", async () => {
+    const h = harness();
+    const res = await post(h.app, imageUrl(h), {
+      rawRequest: JSON.stringify(BODY),
+      replaceFile: `${"c".repeat(64)}.png`,
+      imageProviderId: h.manager.imageConnection()!.id
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(imagesOf(res.json().playthrough, h.assistantMessageId)).toHaveLength(1);
+  });
+
+  it("refuses a raw body and prompt overrides together", async () => {
+    const h = harness();
+    const res = await post(h.app, imageUrl(h), {
+      rawRequest: JSON.stringify(BODY),
+      promptOverride: "reviewed",
+      negativeOverride: "neg"
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("Send either a raw request body or prompt overrides, not both.");
+    expect(h.calls).toHaveLength(0);
+  });
+
+  it("refuses a body that is not a JSON object", async () => {
+    const h = harness();
+    for (const bad of ["not json at all", "[]", "\"a string\"", "42"]) {
+      const res = await post(h.app, imageUrl(h), { rawRequest: bad });
+      expect(res.statusCode, bad).toBe(400);
+      expect(res.json().error).toBe("The request body must be a JSON object.");
+    }
+    expect(h.calls).toHaveLength(0);
+  });
+
+  it("refuses a body whose connection has been deleted, where the ordinary path falls back", async () => {
+    const h = harness();
+    // The fallback exists for requests that still have something to compose from
+    // (the ordinary path resolves the active connection and builds its own body).
+    const fallback = await post(h.app, imageUrl(h), {
+      promptOverride: "reviewed",
+      negativeOverride: "neg",
+      imageProviderId: "no_such_connection"
+    });
+    expect(fallback.statusCode).toBe(200);
+
+    // A re-sent body cannot: it was composed for ONE dialect and endpoint, so it
+    // is reported rather than aimed at whatever is active now.
+    const res = await post(h.app, imageUrl(h), {
+      rawRequest: JSON.stringify(BODY),
+      imageProviderId: "no_such_connection"
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("The image connection this request body belongs to no longer exists.");
+  });
+
+  it("needs no text connection to re-send a body", async () => {
+    // The only requirement is the image connection: nothing is written and no
+    // text provider is called, so having none configured is not a reason to fail.
+    const h = harness({ withText: false });
+    const res = await post(h.app, imageUrl(h), {
+      rawRequest: JSON.stringify(BODY),
+      imageProviderId: h.manager.imageConnection()!.id
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(h.calls).toHaveLength(1);
+  });
+
+  it("does not clamp a long prompt in a re-sent body", async () => {
+    // The re-send path has no ceiling of its own: the body is what the user
+    // wrote, and the provider's own limit error (this dialect's 7500) is the
+    // honest answer. A composed render at the same length WOULD be cut.
+    const h = harness();
+    const long = "x".repeat(VENICE_IMAGE_PROMPT_CAP + 500);
+    const res = await post(h.app, imageUrl(h), {
+      rawRequest: JSON.stringify({ ...BODY, prompt: long }),
+      imageProviderId: h.manager.imageConnection()!.id
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect((h.calls[0].body as { prompt: string }).prompt).toHaveLength(long.length);
+  });
+
+  it("carries the body's own model onto the ref, not the connection's", async () => {
+    // A body can name a checkpoint the connection has since changed away from,
+    // and the caption must not relabel the image with a model it never used.
+    const h = harness({ imageApiStyle: "a1111", imageBaseUrl: "http://127.0.0.1:7860" });
+    const res = await post(h.app, imageUrl(h), {
+      rawRequest: JSON.stringify({
+        prompt: "tag list",
+        seed: 3,
+        override_settings: { sd_model_checkpoint: "waiANINSFWPONYXL_v140.safetensors" }
+      }),
+      imageProviderId: h.manager.imageConnection()!.id
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().image.model).toBe("waiANINSFWPONYXL_v140.safetensors");
+  });
+});
+
+/** The editor's Save: replace one image's stored body, rendering nothing. */
+describe("saving an edited request body", () => {
+  function patchRequest(h: ReturnType<typeof harness>, file: string, payload: unknown, messageId?: string) {
+    return h.app.inject({
+      method: "PATCH",
+      url: deleteUrl(h, file, messageId),
+      payload: payload as Record<string, unknown>
+    });
+  }
+
+  it("replaces the stored body and renders absolutely nothing", async () => {
+    const h = harness();
+    const file = seedImageRef(h, h.assistantMessageId, "save", {
+      request: JSON.stringify({ prompt: "the original body", seed: 1 })
+    });
+    const edited = { prompt: "the edited body", seed: 4242, steps: 30 };
+
+    const res = await patchRequest(h, file, { request: JSON.stringify(edited, null, 2) });
+
+    expect(res.statusCode).toBe(200);
+    const ref = imagesOf(res.json().playthrough, h.assistantMessageId).find((i) => i.file === file)!;
+    // Stored in the one shape every other request on a record has: a single line.
+    expect(ref.request).toBe(JSON.stringify(edited));
+    // NOTHING was called: no image provider, no text provider. This button is a
+    // write, not a render.
+    expect(h.calls).toHaveLength(0);
+    // …and it survives to disk.
+    const stored = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
+    expect(imagesOf(stored, h.assistantMessageId)[0].request).toBe(JSON.stringify(edited));
+  });
+
+  it("keeps the image, its bytes and the fields that describe it", async () => {
+    const h = harness();
+    const file = seedImageRef(h, h.assistantMessageId, "keep", {
+      request: JSON.stringify({ prompt: "original", seed: 1 }),
+      prompt: "the prompt that rendered this image",
+      negativePrompt: "the negative that rendered it",
+      seed: 99
+    });
+
+    const res = await patchRequest(h, file, { request: JSON.stringify({ prompt: "different", seed: 7 }) });
+    const ref = imagesOf(res.json().playthrough, h.assistantMessageId)[0];
+
+    // The image on screen did not change, so what describes it must not either:
+    // `prompt` / `negativePrompt` / `seed` are the RENDER's, the body is the
+    // recipe for the next one.
+    expect(ref.file).toBe(file);
+    expect(ref.prompt).toBe("the prompt that rendered this image");
+    expect(ref.negativePrompt).toBe("the negative that rendered it");
+    expect(ref.seed).toBe(99);
+    expect(storedFiles(h.imagesDir)).toEqual([file]);
+  });
+
+  it("saves the body a later re-send actually posts", async () => {
+    const h = harness();
+    const file = seedImageRef(h, h.assistantMessageId, "roundtrip", {
+      request: JSON.stringify({ prompt: "before", seed: 1 })
+    });
+    const edited = { model: "flux-dev", prompt: "after", seed: 31337 };
+
+    await patchRequest(h, file, { request: JSON.stringify(edited) });
+    const res = await post(h.app, imageUrl(h), {
+      rawRequest: JSON.stringify(edited),
+      replaceFile: file,
+      imageProviderId: h.manager.imageConnection()!.id
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(h.calls[0].body).toEqual(edited);
+    expect(imagesOf(res.json().playthrough, h.assistantMessageId)).toHaveLength(1);
+  });
+
+  it("refuses a body that is not a JSON object, and writes nothing", async () => {
+    const h = harness();
+    const file = seedImageRef(h, h.assistantMessageId, "bad", {
+      request: JSON.stringify({ prompt: "untouched" })
+    });
+
+    for (const bad of ["not json", "[]", "null", "7"]) {
+      const res = await patchRequest(h, file, { request: bad });
+      expect(res.statusCode, bad).toBe(400);
+      expect(res.json().error).toBe("The request body must be a JSON object.");
+    }
+    const stored = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
+    expect(imagesOf(stored, h.assistantMessageId)[0].request).toBe(JSON.stringify({ prompt: "untouched" }));
+  });
+
+  it("404s an unknown ref, message or playthrough instead of creating one", async () => {
+    const h = harness();
+    seedImageRef(h, h.assistantMessageId, "known");
+
+    const gone = await patchRequest(h, `${"d".repeat(64)}.png`, { request: "{}" });
+    expect(gone.statusCode).toBe(404);
+    expect(gone.json().error).toBe("Image not found");
+
+    const noMessage = await patchRequest(h, `${"d".repeat(64)}.png`, { request: "{}" }, "msg_nope");
+    expect(noMessage.statusCode).toBe(404);
+    expect(noMessage.json().error).toBe("Message not found");
+
+    const noPlaythrough = await h.app.inject({
+      method: "PATCH",
+      url: `/api/playthroughs/nope/messages/${h.assistantMessageId}/images/${"d".repeat(64)}.png`,
+      payload: { request: "{}" }
+    });
+    expect(noPlaythrough.statusCode).toBe(404);
+    expect(noPlaythrough.json().error).toBe("Playthrough not found");
+  });
+
+  it("requires a request field", async () => {
+    const h = harness();
+    const file = seedImageRef(h, h.assistantMessageId, "missing");
+
+    const res = await patchRequest(h, file, {});
+    // 400, not the 500 a bare `.parse()` throw would produce: this server has no
+    // zod error handler, and a caller's malformed body is not an internal error.
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("A request body string is required.");
+    const stored = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
+    expect(imagesOf(stored, h.assistantMessageId)[0].request).toBeUndefined();
   });
 });

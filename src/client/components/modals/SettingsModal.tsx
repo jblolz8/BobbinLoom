@@ -71,6 +71,11 @@ export type SettingsModalProps = {
   /** Generate an image for every completed turn, without pressing the button. */
   autoImageAfterTurn?: boolean;
   setAutoImageAfterTurn?: (auto: boolean) => void;
+  /** Skip the confirmation when an image's request body is re-sent. Ticked from
+   *  that confirmation's own checkbox as well, which is why the switch has to
+   *  live somewhere the user can find it again. */
+  alwaysDiscardOldImage?: boolean;
+  setAlwaysDiscardOldImage?: (always: boolean) => void;
   setImagePromptPreview?: (show: boolean) => void;
 };
 
@@ -93,6 +98,8 @@ export function SettingsModal(props: SettingsModalProps) {
     imagePromptPreview = true,
     autoImageAfterTurn = false,
     setAutoImageAfterTurn,
+    alwaysDiscardOldImage = false,
+    setAlwaysDiscardOldImage,
     setImagePromptPreview,
   } = props;
   const [settingsTab, setSettingsTab] = useState<SettingsTab>(() =>
@@ -281,6 +288,14 @@ export function SettingsModal(props: SettingsModalProps) {
                     description="Write and render an image for every completed turn. Costs one text call plus a render per turn — a local render takes minutes. With review on, the prompt modal still appears first."
                     checked={autoImageAfterTurn}
                     onChange={(e) => setAutoImageAfterTurn?.(e.target.checked)}
+                  />
+
+                  <SwitchRow
+                    icon="RefreshCw"
+                    title="Always Discard Old Image on Re-send"
+                    description="Skip the confirmation when an image's request body is sent again. The new render replaces the image it came from either way; with this off, that replacement is confirmed first."
+                    checked={alwaysDiscardOldImage}
+                    onChange={(e) => setAlwaysDiscardOldImage?.(e.target.checked)}
                   />
                 </div>
 

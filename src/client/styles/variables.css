@@ -1,6 +1,10 @@
 :root {
   color-scheme: dark;
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* The mono stack for code surfaces, so a NEW one reads a token instead of
+     re-spelling a family list. (Older rules still carry their own stack inline;
+     folding them in would change their fallback order, so that is its own pass.) */
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
   /* ── 1. App Canvas & Panels ── */
   --bg-app: #101216;

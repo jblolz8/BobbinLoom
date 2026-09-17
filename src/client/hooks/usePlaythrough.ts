@@ -14,6 +14,7 @@ import {
   resummarizeChapter,
   retryTurn,
   saveDraft,
+  saveMessageImageRequest,
   sendTurn,
   truncatePlaythrough,
   branchPlaythrough,
@@ -21,6 +22,7 @@ import {
   type QuestAction,
   type TokenUsage
 } from "../api";
+import { checkImageRequestBody, formatImageRequestBody } from "../utils/imageRequestBody";
 
 const CHAT_SETTINGS_KEY = "bobbinloom_chat_settings";
 
@@ -63,6 +65,10 @@ type ChatSettings = {
    *  OFF by default: it costs a text call plus a render per turn, and a local
    *  render runs for minutes. */
   autoImageAfterTurn: boolean;
+  /** Skip the confirmation when re-sending an image's request body. OFF by
+   *  default: a re-send is the one image action that destroys the image it came
+   *  from, so it asks first until the user says otherwise. */
+  alwaysDiscardOldImage: boolean;
 };
 
 /** Overrides the preview modal posts back. When BOTH prompt fields are present
@@ -72,6 +78,43 @@ export type ImageGenerationOverrides = {
   promptOverride?: string;
   negativeOverride?: string;
   imageProviderId?: string;
+  /** The RE-SEND path: a request body to send verbatim. The server runs no text
+   *  call and applies no clamping, and the body's own fields (model, seed, size,
+   *  the checkpoint) are what the provider gets — the connection supplies only
+   *  where and how to send it. Mutually exclusive with the overrides above.
+   *  See `routes/images.ts` and the adapters' `rawBody`. */
+  rawRequest?: string;
+  /** The image this generation replaces: dropped from the message in the same
+   *  write that appends the new one, so a failed render changes nothing. */
+  replaceFile?: string;
+};
+
+/** One generated image queued for a re-send: the Retry control sets it, PlayView's
+ *  ConfirmModal asks the question, `confirmImageRetry` consumes it. The body is
+ *  the stored `request` — the Retry button never edits, which is the whole
+ *  difference between it and the editor. */
+export type RetryImageTarget = {
+  message: ChatMessage;
+  file: string;
+  body: string;
+  /** The image's own prompt, for the confirmation's alt text. */
+  prompt: string;
+};
+
+/** The request-body editor's open state: WHICH image, and the stored body to
+ *  seed it with. The editable draft itself lives in the modal (exactly like the
+ *  review modal's prompt text), and the modal stays mounted behind the
+ *  confirmation that follows a Send — so cancelling a re-send returns to the
+ *  edited text rather than re-seeding it from the stored body. */
+export type ImageRequestEditorState = {
+  message: ChatMessage;
+  file: string;
+  /** The stored `request`, pretty-printed — the seed, and what Reset restores. */
+  body: string;
+  /** The connection the re-send will use — the one this image was made with, not
+   *  the active one — reduced to what the editor's caption needs. Null when that
+   *  connection no longer exists. */
+  connection: { label: string; model: string; apiStyle: ImageApiStyle } | null;
 };
 
 /** The generated prompt awaiting review in the modal. The message is carried
@@ -102,9 +145,14 @@ export type ImagePromptRequest = {
 };
 
 /** The connection an image request will actually use, reduced to what the
- *  client needs to know about it: which id to poll for progress, and whether
- *  the dialect reports progress at all. */
-export type ResolvedImageConnection = { id: string; apiStyle: ImageApiStyle };
+ *  client needs to know about it: which id to poll for progress, whether the
+ *  dialect reports progress at all, and how to label it in the re-send editor. */
+export type ResolvedImageConnection = {
+  id: string;
+  label: string;
+  model: string;
+  apiStyle: ImageApiStyle;
+};
 
 /** Milliseconds between progress reads while an a1111 generation renders. */
 const IMAGE_PROGRESS_POLL_MS = 700;
@@ -127,7 +175,47 @@ async function resolveImageConnection(overrideId?: string): Promise<ResolvedImag
       imageConnections.find((c) => c.id === registry.activeImageProviderId) ??
       imageConnections[0] ??
       null;
-    return active ? { id: active.id, apiStyle: active.apiStyle ?? "openai" } : null;
+    return active ? toResolvedImageConnection(active) : null;
+  } catch {
+    return null;
+  }
+}
+
+function toResolvedImageConnection(connection: {
+  id: string;
+  label: string;
+  model: string;
+  apiStyle?: ImageApiStyle;
+}): ResolvedImageConnection {
+  return {
+    id: connection.id,
+    label: connection.label,
+    model: connection.model,
+    apiStyle: connection.apiStyle ?? "openai"
+  };
+}
+
+/**
+ * The connection one GENERATED image's stored body belongs to — deliberately
+ * WITHOUT the active-connection fallback `resolveImageConnection` has.
+ *
+ * A stored body was composed for one dialect and one endpoint, so "the
+ * connection this image was made with is gone" is a fact the user needs to see;
+ * answering with whichever connection happens to be active now would aim an
+ * a1111 body at a Venice endpoint (or the reverse) and quietly render something
+ * nobody composed. The server refuses that case too — this is the pre-check that
+ * lets the editor say so before a request is made.
+ *
+ * A ref that recorded no `providerId` at all is the one exception: there is no
+ * owner to miss, and the active connection is the only reading the server has
+ * either.
+ */
+async function resolveImageOwner(providerId: string | undefined): Promise<ResolvedImageConnection | null> {
+  if (!providerId) return resolveImageConnection();
+  try {
+    const registry = await listProviderConnections();
+    const owner = registry.connections.find((c) => c.id === providerId && c.kind === "image");
+    return owner ? toResolvedImageConnection(owner) : null;
   } catch {
     return null;
   }
@@ -147,6 +235,8 @@ function loadChatSettings(): ChatSettings {
         showModelName: typeof parsed.showModelName === "boolean" ? parsed.showModelName : true,
         imagePromptPreview: typeof parsed.imagePromptPreview === "boolean" ? parsed.imagePromptPreview : true,
         autoImageAfterTurn: typeof parsed.autoImageAfterTurn === "boolean" ? parsed.autoImageAfterTurn : false,
+        alwaysDiscardOldImage:
+          typeof parsed.alwaysDiscardOldImage === "boolean" ? parsed.alwaysDiscardOldImage : false,
       };
     }
   } catch {}
@@ -159,6 +249,7 @@ function loadChatSettings(): ChatSettings {
     showModelName: true,
     imagePromptPreview: true,
     autoImageAfterTurn: false,
+    alwaysDiscardOldImage: false,
   };
 }
 
@@ -224,6 +315,7 @@ export function usePlaythrough() {
   const showModelName = chatSettings.showModelName;
   const imagePromptPreview = chatSettings.imagePromptPreview;
   const autoImageAfterTurn = chatSettings.autoImageAfterTurn;
+  const alwaysDiscardOldImage = chatSettings.alwaysDiscardOldImage;
 
   const setChoicesEnabled = (val: boolean) => {
     setChatSettingsState((prev) => {
@@ -288,6 +380,14 @@ export function usePlaythrough() {
       return next;
     });
   };
+
+  const setAlwaysDiscardOldImage = (val: boolean) => {
+    setChatSettingsState((prev) => {
+      const next = { ...prev, alwaysDiscardOldImage: val };
+      saveChatSettings(next);
+      return next;
+    });
+  };
   const [choices, setChoices] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -330,6 +430,15 @@ export function usePlaythrough() {
   const [truncateTarget, setTruncateTarget] = useState<ChatMessage | null>(null);
   const [branchTarget, setBranchTarget] = useState<ChatMessage | null>(null);
   const [deleteImageTarget, setDeleteImageTarget] = useState<DeleteImageTarget | null>(null);
+  // The re-send path: the image queued for replacement, and the body editor when
+  // it is open. Both live here rather than in the components for the same reason
+  // the review modal's text lives in the hook — so a re-render, or a confirmation
+  // opening on top, never loses what the user typed.
+  const [retryImageTarget, setRetryImageTarget] = useState<RetryImageTarget | null>(null);
+  const [imageRequestEditor, setImageRequestEditor] = useState<ImageRequestEditorState | null>(null);
+  /** The editor's Save is in flight. Its own flag, not the generation one: a save
+   *  renders nothing, so there is no message phase to hang it off. */
+  const [imageSaving, setImageSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [resummarizingChapterId, setResummarizingChapterId] = useState<string | null>(null);
   const [viewingChapterId, setViewingChapterId] = useState<string | null>(null);
@@ -468,27 +577,40 @@ export function usePlaythrough() {
     return overrides?.promptOverride !== undefined && overrides?.negativeOverride !== undefined;
   }
 
+  /** True when the request re-sends a stored body. Not a review caller either —
+   *  the body was written (and reviewed) when the image was made, so neither the
+   *  text model nor the review modal has anything to add. */
+  function hasRawRequest(overrides?: ImageGenerationOverrides): boolean {
+    return overrides?.rawRequest !== undefined;
+  }
+
   /**
-   * Generate one image for an assistant message — one entry point, three paths:
+   * Generate one image for an assistant message — one entry point, four paths:
    *  - preview ON (the default) with no overrides: run the text call only and
    *    hand the composed prompt to the modal. Nothing is generated yet.
    *  - preview ON with BOTH overrides (the modal's Generate button): the server
    *    skips the text call, so no second token spend and the user's edits are
    *    what reaches the image provider.
    *  - preview OFF: a single request, no modal, no overrides.
+   *  - a RE-SEND (`rawRequest`, with or without preview): a stored body goes
+   *    straight to the image provider, and `replaceFile` drops the image it
+   *    replaces in the same write. Free of the review modal on purpose — the
+   *    body IS the reviewed text, and the editor that can change it is its own
+   *    surface (see `openImageRequestEditor`).
    */
   async function handleGenerateImage(message: ChatMessage, overrides?: ImageGenerationOverrides) {
     // The abort ref is part of the guard, not just the state: the registry read
     // below happens BEFORE either in-flight marker is set, so state alone would
     // let a double-click start two generations.
     if (!playthrough || imageGeneratingId || imagePreviewMessageId || imageAbortRef.current) return;
-    const reviewing = imagePromptPreview && !hasPromptOverrides(overrides);
+    const reviewing = imagePromptPreview && !hasPromptOverrides(overrides) && !hasRawRequest(overrides);
     // Accepting the review modal hands the prompt straight to the renderer, and
     // the message itself already shows the progress bar and the Cancel control —
     // so the modal has nothing left to say and closes now, rather than sitting
     // there until the render finishes. (The modal's own close ABORTS a preview;
-    // this path must not touch the abort ref: the render is the point.)
-    if (hasPromptOverrides(overrides)) setImagePromptRequest(null);
+    // this path must not touch the abort ref: the render is the point. Same for
+    // a re-send, which can only start from behind the editor.)
+    if (hasPromptOverrides(overrides) || hasRawRequest(overrides)) setImagePromptRequest(null);
     setCancelledNotice(null);
     setFailedNotice(null);
 
@@ -732,6 +854,136 @@ export function usePlaythrough() {
     }
   }
 
+  /** True while ANY image request is in flight for this playthrough — one
+   *  generation at a time, and a re-send also waits for a removal in flight. */
+  function imageActionBusy(): boolean {
+    return Boolean(imageGeneratingId || imagePreviewMessageId || imageDeletingId || imageAbortRef.current);
+  }
+
+  /**
+   * Re-send one image's own request body, unchanged. Nothing is sent yet: this
+   * queues the target and PlayView's ConfirmModal asks the question, because the
+   * render REPLACES the image it came from. With "Always discard old image"
+   * on (Settings → Chat → Image Generation) the question is skipped — that is
+   * the whole point of the setting.
+   */
+  function requestImageRetry(message: ChatMessage, file: string) {
+    if (!playthrough || imageActionBusy()) return;
+    const image = (message.images ?? []).find((i) => i.file === file);
+    // No stored body: an image generated before the field existed has nothing to
+    // re-send (and the chat renders no Retry control for it either).
+    if (!image?.request) return;
+    if (alwaysDiscardOldImage) {
+      void runImageRetry(message, image.file, image.request);
+      return;
+    }
+    setRetryImageTarget({ message, file: image.file, body: image.request, prompt: image.prompt ?? "" });
+  }
+
+  /** The confirmed half of `requestImageRetry`. `discardAlways` is the
+   *  confirmation's own checkbox: ticking it turns the setting on for good,
+   *  leaving it unticked leaves the setting exactly as it was. */
+  async function confirmImageRetry(discardAlways: boolean) {
+    const target = retryImageTarget;
+    setRetryImageTarget(null);
+    if (!target) return;
+    if (discardAlways) setAlwaysDiscardOldImage(true);
+    await runImageRetry(target.message, target.file, target.body);
+  }
+
+  /** Drop the queued re-send without rendering anything. */
+  function cancelImageRetry() {
+    setRetryImageTarget(null);
+  }
+
+  /**
+   * Show the editor for one image's request body. The draft is the stored
+   * `request`, pretty-printed (via `formatImageRequestBody`, which hands an
+   * unparseable body back untouched rather than reformatting it away).
+   *
+   * The connection resolved here is the one the image was MADE with, not the
+   * active one: the body was composed for that dialect and endpoint. It comes
+   * back null when that connection has since been deleted, and the editor says
+   * so — the server refuses that re-send rather than aiming the body at whatever
+   * connection is active now.
+   */
+  async function openImageRequestEditor(message: ChatMessage, file: string) {
+    if (!playthrough || imageActionBusy()) return;
+    const image = (message.images ?? []).find((i) => i.file === file);
+    if (!image?.request) return;
+    const connection = await resolveImageOwner(image.providerId);
+    setImageRequestEditor({
+      message,
+      file: image.file,
+      body: formatImageRequestBody(image.request),
+      connection: connection
+        ? { label: connection.label, model: connection.model, apiStyle: connection.apiStyle }
+        : null
+    });
+  }
+
+  function closeImageRequestEditor() {
+    setImageRequestEditor(null);
+  }
+
+  /**
+   * Send a body to the image provider, replacing the image it came from. The
+   * render itself is the ORDINARY generate path (`handleGenerateImage` with the
+   * raw override), so the in-flight status, the elapsed clock, the a1111
+   * progress readout, Cancel and the failure notice all come from the code that
+   * already owns them.
+   */
+  async function runImageRetry(message: ChatMessage, file: string, body: string) {
+    const image = (message.images ?? []).find((i) => i.file === file);
+    await handleGenerateImage(message, {
+      rawRequest: body,
+      replaceFile: file,
+      // The image's OWN connection. A body carries a dialect's fields, so the
+      // server reports a missing owner instead of re-aiming it.
+      imageProviderId: image?.providerId || undefined
+    });
+  }
+
+  /**
+   * The editor's Save. The body is checked HERE, with the same rule the server
+   * enforces, so a hand-edit that breaks the JSON is caught without a round trip
+   * — and the editor keeps the text either way.
+   *
+   * Nothing is rendered and nothing is replaced: the image, its bytes and the
+   * message are all untouched, and `prompt` / `negativePrompt` keep describing
+   * the image that is on screen. The saved body becomes what the next Retry
+   * sends. On success the editor closes (the reason to be there is spent); on
+   * failure it stays open with the text intact and the reason returned to it,
+   * because the in-chat notice sits behind the modal where the user cannot see
+   * it.
+   */
+  async function saveImageRequestBody(body: string): Promise<string | null> {
+    const editor = imageRequestEditor;
+    if (!editor || !playthrough || imageActionBusy()) return null;
+    const check = checkImageRequestBody(body);
+    if (!check.ok) return check.error;
+    setImageSaving(true);
+    setCancelledNotice(null);
+    setFailedNotice(null);
+    try {
+      // Serialized from the parsed object, exactly like every other request
+      // stored on a ref, so the saved value has ONE shape on disk.
+      const res = await saveMessageImageRequest(
+        playthrough.id,
+        editor.message.id,
+        editor.file,
+        JSON.stringify(check.value)
+      );
+      setPlaythrough(res.playthrough);
+      setImageRequestEditor(null);
+      return null;
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    } finally {
+      setImageSaving(false);
+    }
+  }
+
   function startEdit(message: ChatMessage) {
     setEditingMessageId(message.id);
     setEditDraft(message.content);
@@ -952,6 +1204,8 @@ export function usePlaythrough() {
     imageGeneratingStartedAt,
     autoImageAfterTurn,
     setAutoImageAfterTurn,
+    alwaysDiscardOldImage,
+    setAlwaysDiscardOldImage,
     imagePromptRequest,
     imageProgress,
     handleGenerateImage,
@@ -962,6 +1216,15 @@ export function usePlaythrough() {
     confirmDeleteImage,
     deleteImageTarget,
     setDeleteImageTarget,
+    requestImageRetry,
+    confirmImageRetry,
+    cancelImageRetry,
+    retryImageTarget,
+    openImageRequestEditor,
+    closeImageRequestEditor,
+    saveImageRequestBody,
+    imageRequestEditor,
+    imageSaving,
     startEdit,
     cancelEdit,
     saveEdit,

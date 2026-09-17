@@ -17,6 +17,7 @@ import {
   dataUrlPayload,
   detectForgeCouple,
   FORGE_COUPLE_TTL_MS,
+  modelFromRawBody,
   parseSize,
   sniffMime
 } from "../src/server/imageProvider/shared";
@@ -1136,6 +1137,110 @@ describe("A1111Provider — Forge Couple regions", () => {
 
     expect(calls.filter((call) => call.url === SCRIPT_INFO_URL)).toHaveLength(1);
     expect(calls.filter((call) => call.url === A1111_TXT2IMG_URL)).toHaveLength(2);
+  });
+});
+
+describe("modelFromRawBody", () => {
+  it("reads the model an OpenAI-compatible or Venice body names", () => {
+    expect(modelFromRawBody({ model: "flux-dev" })).toBe("flux-dev");
+    expect(modelFromRawBody({ model: "  flux-dev  " })).toBe("flux-dev");
+    expect(modelFromRawBody({ model: "" })).toBeUndefined();
+    expect(modelFromRawBody({})).toBeUndefined();
+    expect(modelFromRawBody(undefined)).toBeUndefined();
+  });
+
+  it("reads the checkpoint an a1111 body pins, which lives under override_settings", () => {
+    expect(modelFromRawBody({ override_settings: { sd_model_checkpoint: "wai_v140.safetensors" } })).toBe(
+      "wai_v140.safetensors"
+    );
+    // A body that sends neither, and one whose override_settings is not an object
+    // (a hand-edit), both say nothing rather than throwing.
+    expect(modelFromRawBody({ prompt: "tags" })).toBeUndefined();
+    expect(modelFromRawBody({ override_settings: "oops" })).toBeUndefined();
+  });
+});
+
+describe("the re-send path (rawBody)", () => {
+  const SCRIPT_INFO_URL = `${A1111_BASE}/sdapi/v1/script-info`;
+
+  it("OpenAIImagesProvider sends the given body instead of building one", async () => {
+    const { fetchImpl, calls } = stubFetch(() => jsonResponse({ data: [{ b64_json: PNG_B64 }] }));
+    const provider = new OpenAIImagesProvider(testConfig(), imageConn({ size: "1024x1024", safeMode: true }), fetchImpl);
+
+    // A 2000-character prompt is clamped on the ordinary path. Here the body IS
+    // the request: nothing is added (no size, no moderation, no n) and nothing is
+    // removed — the provider's own limit error is the honest answer.
+    const raw = { model: "flux-dev", prompt: "x".repeat(2000), response_format: "b64_json" };
+    const result = await provider.generateImage({ prompt: "ignored", rawBody: raw });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("https://api.venice.ai/api/v1/images/generations");
+    expect(calls[0].body).toEqual(raw);
+    expect(JSON.parse(result.rawRequest)).toEqual(raw);
+    // The body's own model, not the connection's.
+    expect(result.model).toBe("flux-dev");
+    // …and the response side is untouched: the bytes still decode, mime sniffed.
+    expect(result.images[0].mime).toBe("image/png");
+  });
+
+  it("VeniceImageProvider sends the given body instead of building one", async () => {
+    const { fetchImpl, calls } = stubFetch(() => jsonResponse({ images: [PNG_B64], timing: { total: 10 } }));
+    // The connection asks for four variants and a style preset; the body asks for
+    // neither, and the body wins — that is what makes a re-send reproducible.
+    const provider = new VeniceImageProvider(testConfig(), imageConn({ stylePreset: "Anime", variants: 4 }), fetchImpl);
+    const raw = { prompt: "tags", seed: 1234, negative_prompt: "bad" };
+    const result = await provider.generateImage({ prompt: "ignored", rawBody: raw });
+
+    expect(calls[0].url).toBe("https://api.venice.ai/api/v1/image/generate");
+    expect(calls[0].body).toEqual(raw);
+    expect(result.seed).toBe(1234);
+    expect(result.durationMs).toBe(10);
+  });
+
+  it("VeniceImageProvider reports no seed when the re-sent body asks for a random one", async () => {
+    const { fetchImpl } = stubFetch(() => jsonResponse({ images: [PNG_B64] }));
+    const provider = new VeniceImageProvider(testConfig(), imageConn({ seed: 999 }), fetchImpl);
+
+    const result = await provider.generateImage({ prompt: "ignored", rawBody: { prompt: "tags", seed: 0 } });
+
+    // 0 is Venice's documented "pick one at random": the store must claim no seed
+    // — and the connection's own 999 was never sent, so it cannot be reported.
+    expect(result.seed).toBeUndefined();
+  });
+
+  it("A1111Provider sends the given body and does not probe for Forge Couple", async () => {
+    const { fetchImpl, calls } = stubA1111(a1111Happy());
+    const provider = new A1111Provider(a1111Config(), a1111Conn(), fetchImpl);
+
+    const raw = {
+      prompt: "scene | 1girl | 1boy",
+      seed: 42,
+      batch_size: 1,
+      alwayson_scripts: { "Forge Couple": { args: [true] } }
+    };
+    const result = await provider.generateImage({ prompt: "ignored", rawBody: raw });
+
+    // ONE call: the body already carries (or deliberately omits) its scripts, so
+    // the script-info probe's answer could not change anything it sends.
+    expect(calls.map((call) => call.url)).toEqual([A1111_TXT2IMG_URL]);
+    expect(calls[0].body).toEqual(raw);
+    // The seed still comes from the WebUI's own `info`, the only place the value
+    // that was really used appears.
+    expect(result.seed).toBe(12345);
+    // No override_settings in the body → the connection's checkpoint is reported.
+    expect(result.model).toBe("sd_xl_base_1.0.safetensors");
+  });
+
+  it("A1111Provider reports the checkpoint the re-sent body pins", async () => {
+    const { fetchImpl } = stubA1111(a1111Happy());
+    const provider = new A1111Provider(a1111Config(), a1111Conn(), fetchImpl);
+
+    const result = await provider.generateImage({
+      prompt: "ignored",
+      rawBody: { prompt: "tags", override_settings: { sd_model_checkpoint: "wai_v140.safetensors" } }
+    });
+
+    expect(result.model).toBe("wai_v140.safetensors");
   });
 });
 
