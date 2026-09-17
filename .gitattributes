@@ -1,0 +1,5 @@
+# Shell scripts must stay LF. With core.autocrlf=true on Windows, git would
+# otherwise check out CRLF and `./start.sh` / `./update.sh` break with
+# "bad interpreter: /usr/bin/env" — the failure only shows up on the machine
+# that did the checkout, which is exactly the cross-device trap this pins shut.
+*.sh text eol=lf
