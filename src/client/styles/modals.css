@@ -73,8 +73,11 @@
 }
 
 .settings-modal-wide .settings-provider-tabs {
-  flex: 0 0 auto;
-  align-self: flex-start;
+  flex: 1 1 auto;
+  /* Was `flex-start`, which is exactly what stopped the pill strip filling its
+     row. `stretch` fills the column width, and `fullWidth` on <Tabs> makes the
+     two pills split it evenly. */
+  align-self: stretch;
   max-width: 100%;
   margin-top: 0.15rem;
 }
@@ -86,6 +89,27 @@
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   padding-right: 4px;
+}
+
+/* Prompt Configuration: the preset row and its section tabs stay reachable at
+   any scroll depth. ONE sticky block rather than two stacked sticky elements —
+   the preset row wraps at narrow widths (five buttons in .preset-actions), so a
+   second element with a hard-coded `top` offset drifts out of alignment. */
+.prompt-config-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  /* Cancel .settings-tab-content's 4px right gutter so nothing shows past the
+     block's edge while content scrolls under it. */
+  margin-right: -4px;
+  padding: 0.15rem 4px 0.6rem 0;
+  /* Must be OPAQUE or the fields scroll visibly beneath it. Same token .modal
+     itself uses. */
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-main);
 }
 
 .modal-header {
@@ -2265,6 +2289,25 @@
   border-radius: 12px;
   padding: 0.95rem 1.1rem;
   box-shadow: var(--shadow-card);
+}
+
+/* The provider editors' action bar. Sticky inside .settings-tab-content so
+   Save / Test connection / Cancel / Delete stay reachable on the long image
+   form (five sections, plus three conditional a1111 blocks).
+   .conn-editor-card has no `overflow`, which is what lets this work — adding
+   one there would silently break the bar. */
+.conn-actions-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  /* Bleed into .conn-editor-card's 0.95rem / 1.1rem padding so the bar meets the
+     card's own edges instead of floating 0.95rem above them. */
+  margin: 0 -1.1rem -0.95rem;
+  padding: 0.6rem 1.1rem;
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 0 0 12px 12px; /* matches .conn-editor-card's radius */
+  /* Opaque: the fields must not show through the bar. */
+  background: var(--bg-surface-elevated);
 }
 
 .conn-editor-header {
