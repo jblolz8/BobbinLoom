@@ -172,6 +172,10 @@ export type ImageConnectionEditorProps = {
   onFetchModels: () => void;
   testStatus: EditorStatus;
   busy: boolean;
+  /** The form differs from what was loaded/saved. Gates Save in EDIT mode: a
+   *  create form is seeded from its own baseline, so gating that too would make a
+   *  new connection unsaveable. */
+  dirty: boolean;
   onSubmit: (e: FormEvent) => void;
   onTest: (e: MouseEvent) => void;
   onCancel: () => void;
@@ -203,6 +207,7 @@ export function ImageConnectionEditor({
   onFetchModels,
   testStatus,
   busy,
+  dirty,
   onSubmit,
   onTest,
   onCancel,
@@ -898,7 +903,7 @@ export function ImageConnectionEditor({
       {testStatus && <p className={`conn-status ${testStatus.kind}`}>{testStatus.text}</p>}
       <div className="settings-actions conn-actions-bar">
         <div className="actions-left">
-          <Button type="submit" variant="primary" size="sm" disabled={busy} isLoading={busy} leftIcon={<Icon name="Save" size={14} />}>
+          <Button type="submit" variant="primary" size="sm" disabled={busy || (mode === "edit" && !dirty)} isLoading={busy} leftIcon={<Icon name="Save" size={14} />}>
             Save
           </Button>
           <Button type="button" variant="secondary" size="sm" onClick={onTest} disabled={busy} leftIcon={<Icon name="Activity" size={14} />}>

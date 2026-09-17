@@ -103,7 +103,12 @@ The editor holds a **draft** — nothing is written until you press **Save**.
 - **Closing Settings, or pressing Cancel, asks first.** When the form differs
   from the saved connection you get *"Discard unsaved changes?"* — **Keep
   editing** returns with the draft intact, **Discard changes** throws it away. A
-  form you have not touched closes without asking.
+  form you have not touched closes without asking, and **saving makes the form
+  clean again**: closing straight after a Save asks nothing at all.
+- **Save is greyed while there is nothing to save.** On an existing connection the
+  button stays disabled until a field actually differs from what is stored (and
+  while the stored API key is still being loaded). Adding a **new** connection is
+  never gated that way — a fresh form has nothing to differ from.
 - **Delete** uses the same in-app dialog instead of a browser popup.
 - **Not protected:** leaving the Home screen, or reloading the page, loses a
   draft. It lives in the open page rather than on disk, so unsaved edits do not

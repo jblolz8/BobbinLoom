@@ -29,7 +29,7 @@ import {
 } from "./providers/ProviderConnectionList";
 import { TextConnectionEditor } from "./providers/TextConnectionEditor";
 import { ConfirmModal } from "../common/ConfirmModal";
-import { isConnectionDirty } from "../../utils/connectionDraft";
+import { cleanStateAfterSave, isConnectionDirty } from "../../utils/connectionDraft";
 
 type EditorState =
   | { mode: "closed" }
@@ -409,7 +409,16 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
       const r = await reload();
       if (editor.mode === "edit" && r.connections.length) {
         const fresh = r.connections.find((c) => c.id === editor.connection.id);
-        if (fresh) setEditor({ mode: "edit", connection: fresh });
+        if (fresh) {
+          // The clean state moves WITH the save. Without this the form stays
+          // unequal to the baseline captured when the editor opened, and every
+          // later close — Cancel, the X, and Settings' own Close — keeps offering
+          // to discard work that is already stored.
+          const clean = cleanStateAfterSave(formFromConnection(fresh), form, fresh.hasApiKey);
+          setForm(clean);
+          setBaseline(clean);
+          setEditor({ mode: "edit", connection: fresh });
+        }
       } else {
         closeEditor();
       }
@@ -621,6 +630,7 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
           onFetchModels={() => void loadModels(probeTarget())}
           testStatus={test}
           busy={busy}
+          dirty={dirty}
           onSubmit={save}
           onTest={(e) => void testCurrent(e)}
           onCancel={requestCloseEditor}
@@ -640,6 +650,7 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
           onFetchModels={() => void loadModels(probeTarget())}
           testStatus={test}
           busy={busy}
+          dirty={dirty}
           onSubmit={save}
           onTest={(e) => void testCurrent(e)}
           onCancel={requestCloseEditor}

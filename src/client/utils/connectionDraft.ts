@@ -41,3 +41,28 @@ export function isConnectionDirty(
   }
   return false;
 }
+
+/**
+ * The form's clean state after a successful save: the stored row mapped into form
+ * space, with the one field the row CANNOT carry — the API key — taken from the
+ * form that was just saved.
+ *
+ * This is what stops a save from leaving the form permanently dirty. `form` is
+ * compared against a baseline captured when the editor opened, so unless the
+ * baseline moves with the save, every later close (Cancel, the X, and Settings'
+ * own Close) keeps offering to discard work that is already stored.
+ *
+ * `storedHasApiKey` is the row's own answer, and it is what makes a CLEAR settle:
+ * `current.apiKey === null` means "clear the stored key on the next Save", so once
+ * that save has happened the intent is spent and this state holds no key at all —
+ * which is also what stops the field advertising a removal that already happened.
+ * A row that still has a key (including one whose clear the server ignored) keeps
+ * whatever the form holds, because the form is then the only copy of the secret.
+ */
+export function cleanStateAfterSave(
+  storedForm: ProviderConnectionPayload,
+  current: ProviderConnectionPayload,
+  storedHasApiKey: boolean
+): ProviderConnectionPayload {
+  return { ...storedForm, apiKey: storedHasApiKey ? current.apiKey : "" };
+}
