@@ -11,7 +11,7 @@ import {
   duplicatePlaythroughRecord,
   branchPlaythroughRecord,
   getPlaythroughRecord,
-  listPlaythroughRecords,
+  listPlaythroughSummaries,
   listPlaythroughTimelines,
   promotePlaythroughBranchRecord,
   renamePlaythroughRecord,
@@ -82,7 +82,11 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
   app.get("/api/playthroughs", async (request) => {
     const query = z.object({ includeBranches: z.string().optional() }).parse(request.query ?? {});
     const includeTimelineBranches = query.includeBranches === "true";
-    return listPlaythroughRecords(dataDir, { includeTimelineBranches });
+    // Summaries, not whole documents: the list only renders cards, and a document carries
+    // messages, snapshots and catalogs the cards never read (measured at ~750 KB for five
+    // playthroughs). Full documents stay behind listPlaythroughRecords for the sweep and the
+    // timeline listing, which really do walk the state.
+    return listPlaythroughSummaries(dataDir, { includeTimelineBranches });
   });
 
   app.post("/api/playthroughs", async (request, reply) => {

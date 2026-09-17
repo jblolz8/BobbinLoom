@@ -10,7 +10,7 @@ import type { ParsedCard } from "./characterCards/parseCard";
 import { createBlankPlaythrough, createInitialPlaythrough, createPlaythroughFromSeed, ensureMessageTurns, restoreSnapshotState } from "../engine/engine";
 import { loadAppSettings } from "./appSettingsStore";
 import { DEMO_TEMPLATE } from "../engine/demoData";
-import type { CharacterFormat, CharacterTemplate, ImageGenerationSettings, LoadFailure, LorebookFile, LorebookSummary, PlayerPersona, Playthrough, PlaythroughListResponse, PromptModuleSet, PromptPreset, ScenarioSeed, TurnSnapshot } from "../schemas";
+import type { CharacterFormat, CharacterTemplate, ImageGenerationSettings, LoadFailure, LorebookFile, LorebookSummary, PlayerPersona, Playthrough, PlaythroughListResponse, PlaythroughSummary, PromptModuleSet, PromptPreset, ScenarioSeed, TurnSnapshot } from "../schemas";
 import { CharacterTemplateSchema, EMPTY_MODULE_SET, PlayerPersonaSchema, PlaythroughSchema } from "../schemas";
 
 function ensureStoreDir(dir: string): void {
@@ -970,14 +970,24 @@ export function promotePlaythroughBranchRecord(dir: string, id: string): Playthr
   return playthrough;
 }
 
-export function listPlaythroughRecords(
-  dir: string,
-  options?: { includeTimelineBranches?: boolean }
-): PlaythroughListResponse {
+/** Full-document read result. Server-internal by design: it has no schema in `schemas/index.ts`
+ *  because it never crosses the wire — the list route ships `listPlaythroughSummaries`. */
+export type PlaythroughRecordList = {
+  playthroughs: Playthrough[];
+  failures: LoadFailure[];
+};
+
+/** Reads EVERY playthrough file, migrating each one, sorted newest-first.
+ *
+ *  Every reader below goes through here, so the per-file try/catch, the quarantine of an
+ *  unreadable file and the best-effort failure naming exist once: one corrupt file must NOT brick
+ *  the whole list. Synchronous by design (all callers are route handlers); it costs ~50 ms for
+ *  eight real documents, which is why the LIST route ships a projection rather than whole
+ *  documents — parses stay, bytes on the wire do not. */
+function readAllPlaythroughRecords(dir: string): PlaythroughRecordList {
   ensureStoreDir(dir);
   const playthroughs: Playthrough[] = [];
   const failures: LoadFailure[] = [];
-  // Per-file try/catch — one corrupt file must NOT brick the whole list.
   for (const file of readdirSync(dir).filter((f) => f.endsWith(".json"))) {
     const id = file.replace(/\.json$/, "");
     const path = join(dir, file);
@@ -1003,12 +1013,56 @@ export function listPlaythroughRecords(
     }
   }
   playthroughs.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  const filtered = options?.includeTimelineBranches
-    ? playthroughs
-    : playthroughs.filter((p) => !p.isTimelineBranch);
-
-  return { playthroughs: filtered, failures };
+  return { playthroughs, failures };
 }
+
+function filterBranches(playthroughs: Playthrough[], includeTimelineBranches: boolean): Playthrough[] {
+  return includeTimelineBranches ? playthroughs : playthroughs.filter((p) => !p.isTimelineBranch);
+}
+
+/** One card's worth of a playthrough — the unit the list route and the save/load list render.
+ *
+ *  The catalogs, messages, snapshots and cast sheets stay on the server: they are ~90% of a
+ *  document's bytes and no card reads them. Kept as an explicit projection rather than a
+ *  `Partial<Playthrough>` so adding a field to the card without adding it here fails to compile.
+ *  `locationName` resolves here, which is why the client no longer needs `locationCatalog`. */
+export function toPlaythroughSummary(p: Playthrough): PlaythroughSummary {
+  const visible = p.messages.filter((m) => !m.hidden);
+  return {
+    id: p.id,
+    name: p.name,
+    turn: p.turn,
+    locationName: p.locationCatalog?.find((l) => l.id === p.locationId)?.name ?? p.locationId,
+    castCount: p.characters.length,
+    visibleMessageCount: visible.length,
+    lastMessagePreview: visible.slice(-1)[0]?.content.slice(0, 120) ?? "",
+    isTimelineBranch: p.isTimelineBranch === true,
+    updatedAt: p.updatedAt
+  };
+}
+
+/** The playthrough LIST: one projection per playthrough, newest first. This is what the list route
+ *  serves, and `total` is authoritative so the client's pager never has to infer it. */
+export function listPlaythroughSummaries(
+  dir: string,
+  options?: { includeTimelineBranches?: boolean }
+): PlaythroughListResponse {
+  const { playthroughs, failures } = readAllPlaythroughRecords(dir);
+  const summaries = filterBranches(playthroughs, options?.includeTimelineBranches === true).map(toPlaythroughSummary);
+  return { playthroughs: summaries, failures, total: summaries.length };
+}
+
+/** FULL documents — for readers that genuinely walk the state: the image-orphan sweep (which needs
+ *  every message's image references) and the timeline listing. A route handler that only renders
+ *  cards must use `listPlaythroughSummaries` instead. */
+export function listPlaythroughRecords(
+  dir: string,
+  options?: { includeTimelineBranches?: boolean }
+): PlaythroughRecordList {
+  const { playthroughs, failures } = readAllPlaythroughRecords(dir);
+  return { playthroughs: filterBranches(playthroughs, options?.includeTimelineBranches === true), failures };
+}
+
 
 // ── Lorebook store ──
 

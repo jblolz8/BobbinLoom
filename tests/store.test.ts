@@ -18,6 +18,7 @@ import {
   listCharacterTemplates,
   listPersonas,
   listPlaythroughRecords,
+  listPlaythroughSummaries,
   removeCharacterImportRecord,
   resolveCast,
   resolvePresetForGeneration,
@@ -160,6 +161,31 @@ describe("playthrough store — load hardening", () => {
     expect(failures[0].name).toBe("Junk File");
     expect(failures[0].reason).toMatch(/invalid playthrough/);
     expect(failures[0].backupPath).toBe(join(dir, "junk.json.bak"));
+  });
+});
+
+describe("playthrough list projection", () => {
+  it("derives summaries and full records from the same read — same ids in the same order", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bobbinloom-summary-"));
+    tempDirs.push(dir);
+
+    const older = createPlaythroughRecord(dir, "Older");
+    older.updatedAt = "2026-01-01T00:00:00.000Z";
+    updatePlaythroughRecord(dir, older);
+    const newer = createPlaythroughRecord(dir, "Newer");
+    newer.updatedAt = "2026-06-01T00:00:00.000Z";
+    updatePlaythroughRecord(dir, newer);
+
+    const summaries = listPlaythroughSummaries(dir);
+    const records = listPlaythroughRecords(dir);
+
+    // One reader, two views: the projection must not reorder or drop anything the full read keeps.
+    expect(summaries.playthroughs.map((p) => p.id)).toEqual(records.playthroughs.map((p) => p.id));
+    expect(summaries.playthroughs.map((p) => p.id)).toEqual([newer.id, older.id]);
+    expect(summaries.total).toBe(summaries.playthroughs.length);
+    // The full-document reader is the one that still walks state; the projection never does.
+    expect(records.playthroughs[0].messages).toBeDefined();
+    expect(summaries.playthroughs[0]).not.toHaveProperty("messages");
   });
 });
 

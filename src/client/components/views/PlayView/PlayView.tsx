@@ -302,9 +302,11 @@ export function PlayView(props: PlayViewProps) {
   }, []);
   useEffect(() => { refreshImageCharacterLimit(); }, [refreshImageCharacterLimit]);
 
-  function handleCurrentDeleted(remaining: Playthrough[]) {
-    if (remaining.length > 0) {
-      setPlaythrough(remaining[0]);
+  // The modal reports ids, not documents: this list is a summary projection, so the
+  // replacement playthrough is loaded by id through the same loader the Load button uses.
+  function handleCurrentDeleted(remainingIds: string[]) {
+    if (remainingIds.length > 0) {
+      void loadPlaythrough(remainingIds[0]);
     } else {
       setPlaythrough(null);
       onGoHome();

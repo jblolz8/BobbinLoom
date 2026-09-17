@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { LoadFailure, Playthrough } from "../../../schemas";
-import { listPlaythroughs, renamePlaythrough, type Persona } from "../../api";
+import { getPlaythrough, listPlaythroughs, renamePlaythrough, type Persona, type PlaythroughSummary } from "../../api";
 import { PlaythroughActionsMenu } from "../common/PlaythroughActionsMenu";
 import { CharacterLibrary } from "../library/CharacterLibrary";
 import { LorebookLibrary } from "../library/LorebookLibrary";
@@ -42,7 +42,7 @@ export function HomeView({
   onNewPlaythrough,
   onPersonasChanged,
 }: HomeViewProps) {
-  const [playthroughs, setPlaythroughs] = useState<Playthrough[]>([]);
+  const [playthroughs, setPlaythroughs] = useState<PlaythroughSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -73,6 +73,16 @@ export function HomeView({
     void refresh();
   }, []);
 
+  // Opening a card installs the live playthrough, so the full document is read here: the list
+  // only carries the projection.
+  async function openPlaythrough(id: string) {
+    try {
+      onOpenPlaythrough(await getPlaythrough(id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   function handleRenameRequest(id: string, name: string) {
     setRenamingId(id);
     setRenameDraft(name);
@@ -81,16 +91,20 @@ export function HomeView({
   async function confirmRename(id: string) {
     if (!renameDraft.trim()) return;
     try {
-      const updated = await renamePlaythrough(id, renameDraft.trim());
-      setPlaythroughs((prev) => prev.map((p) => (p.id === id ? updated : p)));
+      await renamePlaythrough(id, renameDraft.trim());
       setRenamingId(null);
+      // The rename route answers with the whole document; the list is a projection, so re-read
+      // it rather than splicing that document into an array of summaries.
+      await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
   }
 
-  function handleDuplicated(clone: Playthrough) {
-    setPlaythroughs((prev) => [clone, ...prev]);
+  // The list arrives server-sorted by `updatedAt` desc, so the clone's position (and its
+  // projected card) comes from the server — a locally prepended entry is the duplicate.
+  function handleDuplicated() {
+    void refresh();
   }
 
   function handleDeleted() {
@@ -176,14 +190,11 @@ export function HomeView({
             <>
             <div className="playthrough-grid">
               {homePager.pageItems.map((p) => {
-                const locationName =
-                  p.locationCatalog?.find((l) => l.id === p.locationId)?.name ??
-                  p.locationId;
                 return (
                   <article
                     key={p.id}
                     className="playthrough-card"
-                    onClick={() => onOpenPlaythrough(p)}
+                    onClick={() => { void openPlaythrough(p.id); }}
                   >
                     <div className="playthrough-card-header">
                       {renamingId === p.id ? (
@@ -250,24 +261,18 @@ export function HomeView({
                       )}
                     </div>
                     <div className="playthrough-card-meta">
-                      <span className="inline-flex items-center gap-1"><Icon name="MapPin" size={14} className="text-slate-400" /> {locationName}</span>
+                      <span className="inline-flex items-center gap-1"><Icon name="MapPin" size={14} className="text-slate-400" /> {p.locationName}</span>
                       <span>Turn {p.turn}</span>
                       <span className="inline-flex items-center gap-1">
-                        <Icon name="User" size={14} className="text-slate-400" /> {p.characters.length}{" "}
-                        {p.characters.length === 1 ? "character" : "characters"}
+                        <Icon name="User" size={14} className="text-slate-400" /> {p.castCount}{" "}
+                        {p.castCount === 1 ? "character" : "characters"}
                       </span>
                     </div>
                     <p className="playthrough-card-updated">
                       Updated {formatDate(p.updatedAt)}
                     </p>
-                    {p.messages.length > 0 ? (
-                      <p className="playthrough-card-preview">
-                        {p.messages
-                          .filter((m) => !m.hidden)
-                          .slice(-1)[0]
-                          ?.content.slice(0, 120) ?? ""}
-                        …
-                      </p>
+                    {p.visibleMessageCount > 0 ? (
+                      <p className="playthrough-card-preview">{p.lastMessagePreview}…</p>
                     ) : (
                       <p className="playthrough-card-preview">No messages yet.</p>
                     )}

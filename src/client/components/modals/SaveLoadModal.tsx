@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Playthrough } from "../../../schemas";
-import { listPlaythroughs, renamePlaythrough } from "../../api";
+import { listPlaythroughs, renamePlaythrough, type PlaythroughSummary } from "../../api";
 import { PlaythroughActionsMenu } from "../common/PlaythroughActionsMenu";
 
 export type SaveLoadModalProps = {
@@ -8,23 +8,29 @@ export type SaveLoadModalProps = {
   onClose: () => void;
   currentPlaythroughId: string;
   onLoad: (id: string) => void;
-  onCurrentDeleted: (remaining: Playthrough[]) => void;
+  /** Ids of the playthroughs still present, in list order — the caller loads the first one.
+   *  Ids and not documents: this list is a projection, not full playthroughs. */
+  onCurrentDeleted: (remainingIds: string[]) => void;
   onCurrentRenamed: (updated: Playthrough) => void;
   onError: (message: string) => void;
 };
 
 export function SaveLoadModal(props: SaveLoadModalProps) {
   const { open, onClose, currentPlaythroughId, onLoad, onCurrentDeleted, onCurrentRenamed, onError } = props;
-  const [allPlaythroughs, setAllPlaythroughs] = useState<Playthrough[]>([]);
+  const [allPlaythroughs, setAllPlaythroughs] = useState<PlaythroughSummary[]>([]);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
+
+  function loadList() {
+    listPlaythroughs()
+      .then((res) => setAllPlaythroughs(res.playthroughs))
+      .catch((e) => onError(e instanceof Error ? e.message : String(e)));
+  }
 
   useEffect(() => {
     if (!open) return;
     setRenamingId(null);
-    listPlaythroughs()
-      .then((res) => setAllPlaythroughs(res.playthroughs))
-      .catch((e) => onError(e instanceof Error ? e.message : String(e)));
+    loadList();
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleRenameRequest(id: string, name: string) {
@@ -36,7 +42,10 @@ export function SaveLoadModal(props: SaveLoadModalProps) {
     if (!renameDraft.trim()) return;
     try {
       const updated = await renamePlaythrough(id, renameDraft.trim());
-      setAllPlaythroughs((prev) => prev.map((p) => (p.id === id ? updated : p)));
+      // The route answers with the whole document; keep only what the projection holds.
+      setAllPlaythroughs((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, name: updated.name, updatedAt: updated.updatedAt } : p))
+      );
       if (currentPlaythroughId === id) onCurrentRenamed(updated);
       setRenamingId(null);
     } catch (e) {
@@ -44,15 +53,16 @@ export function SaveLoadModal(props: SaveLoadModalProps) {
     }
   }
 
-  function handleDuplicated(clone: Playthrough) {
-    setAllPlaythroughs((prev) => [clone, ...prev]);
+  // The clone is not a summary, so re-read the list instead of inventing an entry for it.
+  function handleDuplicated() {
+    loadList();
   }
 
   function handleDeleted(id: string) {
     const remaining = allPlaythroughs.filter((p) => p.id !== id);
     setAllPlaythroughs(remaining);
     if (currentPlaythroughId === id) {
-      onCurrentDeleted(remaining);
+      onCurrentDeleted(remaining.map((p) => p.id));
     }
   }
 

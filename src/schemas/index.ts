@@ -640,11 +640,35 @@ export const LoadFailureSchema = z.object({
 });
 export type LoadFailure = z.infer<typeof LoadFailureSchema>;
 
+/** Per-card projection for the playthrough list.
+ *
+ *  Deliberately NOT a `Partial<Playthrough>`: the list response must never carry messages,
+ *  snapshots or the catalogs (they are ~90% of a document's bytes and no card reads them), and
+ *  every field a card renders belongs here so a missing one is a compile error rather than a
+ *  blank card. `locationName` is resolved server-side so the client needs no `locationCatalog`. */
+export const PlaythroughSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  turn: z.number(),
+  locationName: z.string(),
+  castCount: z.number(),
+  /** Count of non-hidden messages; the card shows "No messages yet" at 0. */
+  visibleMessageCount: z.number(),
+  /** Last non-hidden message, truncated to 120 chars. Empty when there is none. */
+  lastMessagePreview: z.string(),
+  isTimelineBranch: z.boolean(),
+  updatedAt: z.string(),
+});
+export type PlaythroughSummary = z.infer<typeof PlaythroughSummarySchema>;
+
 export const PlaythroughListResponseSchema = z.object({
-  playthroughs: z.array(PlaythroughSchema),
+  playthroughs: z.array(PlaythroughSummarySchema),
   failures: z.array(LoadFailureSchema),
+  /** Size of the filtered list. The pager's total: the client must not infer it from the array. */
+  total: z.number(),
 });
 export type PlaythroughListResponse = z.infer<typeof PlaythroughListResponseSchema>;
+
 
 export const ParsedUserInputSchema = z.object({
   raw: z.string(),
