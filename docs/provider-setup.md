@@ -86,6 +86,23 @@ URL, model, and stored API key), or **Delete** any connection — including the
 active one and the last remaining one (deleting just drops the app back to the
 Mock provider until you add another).
 
+### Editing safely
+
+The editor holds a **draft** — nothing is written until you press **Save**.
+
+- **Switching tabs, or switching between Text and Image Providers, keeps the
+  draft.** Each list keeps its own in-progress form, so moving away and coming
+  back does not discard work. The last tab you had open, and the Text/Image
+  choice, are remembered the next time you open Settings.
+- **Closing Settings, or pressing Cancel, asks first.** When the form differs
+  from the saved connection you get *"Discard unsaved changes?"* — **Keep
+  editing** returns with the draft intact, **Discard changes** throws it away. A
+  form you have not touched closes without asking.
+- **Delete** uses the same in-app dialog instead of a browser popup.
+- **Not protected:** leaving the Home screen, or reloading the page, loses a
+  draft. It lives in the open page rather than on disk, so unsaved edits do not
+  survive a reload.
+
 ### API key storage
 
 Stored API keys are **encrypted at rest** (AES-256-GCM) inside `data/providers.json`,
