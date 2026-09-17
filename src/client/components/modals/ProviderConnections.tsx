@@ -28,6 +28,8 @@ import {
   type SortDirection
 } from "./providers/ProviderConnectionList";
 import { TextConnectionEditor } from "./providers/TextConnectionEditor";
+import { ConfirmModal } from "../common/ConfirmModal";
+import { isConnectionDirty } from "../../utils/connectionDraft";
 
 type EditorState =
   | { mode: "closed" }
@@ -138,12 +140,30 @@ const formFromConnection = (c: ProviderConnection): ProviderConnectionPayload =>
  * lazily-read sort preference is then the new kind's, and a half-filled editor
  * from the other kind cannot linger.
  */
-export type ProviderConnectionsProps = { kind: ProviderKind };
+export type ProviderConnectionsProps = {
+  kind: ProviderKind;
+  /** True when this kind's list is the visible one. Gates the fetch so the two
+   *  mounted instances do not both load on open, and refreshes this list after
+   *  a save made in the other kind. */
+  active?: boolean;
+  /** Reports whether the currently open editor holds unsaved edits. */
+  onDirtyChange?: (kind: ProviderKind, dirty: boolean) => void;
+};
 
-export function ProviderConnections({ kind }: ProviderConnectionsProps) {
+export function ProviderConnections({ kind, active = true, onDirtyChange }: ProviderConnectionsProps) {
   const [registry, setRegistry] = useState<ProviderRegistry | null>(null);
   const [editor, setEditor] = useState<EditorState>({ mode: "closed" });
   const [form, setForm] = useState<ProviderConnectionPayload>(() => emptyForm(kind));
+  /**
+   * The form's CLEAN state, captured when an editor opens rather than derived on
+   * the fly. `openEdit` fills the API key asynchronously afterwards, so a
+   * baseline taken before it lands would report the form dirty the instant the
+   * key arrived — merely opening a connection would look like an edit.
+   */
+  const [baseline, setBaseline] = useState<ProviderConnectionPayload>(() => emptyForm(kind));
+  /** Which confirm dialog is open, if any. */
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<ProviderConnection | null>(null);
   const [showKey, setShowKey] = useState(false);
   const [keyBusy, setKeyBusy] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -234,10 +254,15 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
     });
   }, [connections, activeId, sortBy, sortDir]);
 
+  // Fetches when this kind becomes the VISIBLE one. A mount-only effect would
+  // load the list for a tab the user is not looking at (both kinds stay mounted
+  // now), and would leave this list stale after a save in the other kind — each
+  // instance holds its own registry snapshot.
   useEffect(() => {
+    if (!active) return;
     listProviderConnections().then(setRegistry).catch((e) =>
       setStatus({ kind: "err", text: e instanceof Error ? e.message : String(e) }));
-  }, []);
+  }, [active]);
 
   async function reload() {
     const r = await listProviderConnections();
@@ -246,7 +271,9 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
   }
 
   function openCreate() {
-    setForm(emptyForm(kind));
+    const fresh = emptyForm(kind);
+    setForm(fresh);
+    setBaseline(fresh);
     setModels([]); setModelSpecs({}); setDialectOptions({}); setModelsStatus(null);
     setShowKey(false);
     setStatus(null); setTest(null);
@@ -254,7 +281,9 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
   }
 
   function openEdit(c: ProviderConnection) {
-    setForm(formFromConnection(c));
+    const seeded = formFromConnection(c);
+    setForm(seeded);
+    setBaseline(seeded);
     setModels([]); setModelSpecs({}); setDialectOptions({}); setModelsStatus(null);
     setShowKey(false); setStatus(null); setTest(null);
     setEditor({ mode: "edit", connection: c });
@@ -264,7 +293,12 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
       setKeyBusy(true);
       getProviderApiKey(c.id)
         .then(({ apiKey }) => {
-          setForm((f) => ({ ...f, apiKey }));
+          // The baseline moves WITH the key. The loaded secret is part of the
+          // form's clean state, so capturing it here (rather than before the
+          // fetch) is what stops a freshly opened connection reading as dirty.
+          const withKey = { ...seeded, apiKey };
+          setForm(withKey);
+          setBaseline(withKey);
         })
         .catch((err) => {
           setStatus({ kind: "err", text: err instanceof Error ? err.message : String(err) });
@@ -276,6 +310,13 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
   }
 
   function closeEditor() { setEditor({ mode: "closed" }); }
+
+  /** Cancel discards the draft just as surely as Close discards the modal, so it
+   *  goes through the same confirm instead of throwing the work away silently. */
+  function requestCloseEditor() {
+    if (dirty) setConfirmDiscard(true);
+    else closeEditor();
+  }
 
   /** The dialect travels with EVERY probe. Without it the server falls back to
    *  the OpenAI-compatible path (`<base>/v1/models`) and an a1111 WebUI answers
@@ -417,8 +458,9 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
     } catch (err) { setStatus({ kind: "err", text: err instanceof Error ? err.message : String(err) }); }
   }
 
-  async function confirmRemove(c: ProviderConnection) {
-    if (!window.confirm(`Delete connection "${c.label}"? This cannot be undone.`)) return;
+  /** Runs only once the ConfirmModal is accepted. The app's own dialog replaces
+   *  the native window.confirm this used to open. */
+  async function performRemove(c: ProviderConnection) {
     setStatus(null);
     try {
       const r = await deleteProviderConnection(c.id);
@@ -438,7 +480,10 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
     setKeyBusy(true);
     getProviderApiKey(editor.connection.id)
       .then(({ apiKey }) => {
+        // Re-loading the stored key returns the form to its clean state, so the
+        // baseline has to move with it or the form stays "dirty" forever.
         setForm((f) => ({ ...f, apiKey }));
+        setBaseline((b) => ({ ...b, apiKey }));
       })
       .catch((err) => {
         setStatus({ kind: "err", text: err instanceof Error ? err.message : String(err) });
@@ -468,6 +513,21 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
     onClearKey: clearKey,
     onRestoreKey: restoreKey
   };
+
+  /**
+   * Dirtiness, suppressed while the stored key is still in flight — the form is
+   * mid-seed then and any verdict would be wrong.
+   */
+  const dirty = !keyBusy && isConnectionDirty(form, baseline);
+
+  useEffect(() => {
+    onDirtyChange?.(kind, dirty);
+  }, [dirty, kind, onDirtyChange]);
+
+  // Never leave a stale "dirty" behind for this kind once its editor closes.
+  useEffect(() => {
+    if (editor.mode === "closed") onDirtyChange?.(kind, false);
+  }, [editor.mode, kind, onDirtyChange]);
 
   /** Image rows carry their endpoint dialect, its safety setting, and a warning
    *  when the connection's prompt writer no longer exists. */
@@ -539,7 +599,7 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
           onActivate={(id) => void activate(id)}
           onEdit={openEdit}
           onDuplicate={(id) => void duplicate(id)}
-          onRemove={(c) => void confirmRemove(c)}
+          onRemove={(c) => setPendingDelete(c)}
           onAdd={openCreate}
           emptyLabel={emptyLabel}
           renderTags={renderKindTags}
@@ -563,8 +623,8 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
           busy={busy}
           onSubmit={save}
           onTest={(e) => void testCurrent(e)}
-          onCancel={closeEditor}
-          onDelete={() => { if (editor.mode === "edit") void confirmRemove(editor.connection); }}
+          onCancel={requestCloseEditor}
+          onDelete={() => { if (editor.mode === "edit") setPendingDelete(editor.connection); }}
           textConnections={textConnections}
         />
       ) : (
@@ -582,10 +642,36 @@ export function ProviderConnections({ kind }: ProviderConnectionsProps) {
           busy={busy}
           onSubmit={save}
           onTest={(e) => void testCurrent(e)}
-          onCancel={closeEditor}
-          onDelete={() => { if (editor.mode === "edit") void confirmRemove(editor.connection); }}
+          onCancel={requestCloseEditor}
+          onDelete={() => { if (editor.mode === "edit") setPendingDelete(editor.connection); }}
         />
       ))}
+
+      {/* Cancel on an editor and Close on the modal are the same act — discarding
+          the draft — so they share one dialog and one wording. */}
+      {confirmDiscard && (
+        <ConfirmModal
+          title="Discard unsaved changes?"
+          message="Your edits to this provider connection have not been saved."
+          confirmLabel="Discard changes"
+          cancelLabel="Keep editing"
+          danger
+          onConfirm={() => { setConfirmDiscard(false); closeEditor(); }}
+          onCancel={() => setConfirmDiscard(false)}
+        />
+      )}
+
+      {pendingDelete && (
+        <ConfirmModal
+          title="Delete connection?"
+          message={`"${pendingDelete.label}" will be removed. This cannot be undone.`}
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          danger
+          onConfirm={() => { const target = pendingDelete; setPendingDelete(null); void performRemove(target); }}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
     </div>
   );
 }
