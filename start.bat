@@ -1,60 +1,40 @@
 @echo off
-setlocal enabledelayedexpansion
+setlocal
 title BobbinLoom Server
-REM BobbinLoom — production start (build + serve)
+REM BobbinLoom — production start (verify deps + client build, then serve)
 REM Serves UI + API on 127.0.0.1:8787 (localhost only by default; set HOST=0.0.0.0 in .env to expose to LAN/VPN)
+REM
+REM Usage: start.bat [--force|-f] [--rebuild|-r] [--reinstall] [--no-install] [--no-build] [--check]
+REM   Dependencies and the client bundle are checked first and only rebuilt when
+REM   something actually changed. Use update.bat to force the whole refresh.
 
 cd /d "%~dp0"
 
 REM ------------------------------------------------------------------
-REM 1. Clean previous build
+REM 0. Node.js check
 REM ------------------------------------------------------------------
-echo Cleaning previous build...
-if exist dist rmdir /s /q dist 2>nul
-
-REM ------------------------------------------------------------------
-REM 2. Build the client bundle
-REM ------------------------------------------------------------------
-echo.
-echo Building production bundle...
-call npm run build
+where node >nul 2>nul
 if %ERRORLEVEL% neq 0 (
-    echo.
-    echo [FAIL] Build step failed with exit code %ERRORLEVEL%.
-    echo Check the Vite output above for errors.
+    echo [FAIL] Node.js not found in PATH.
+    echo        Install it from https://nodejs.org/ and re-open this window.
     pause
     goto :eof
 )
 
 REM ------------------------------------------------------------------
-REM 3. Verify dist\index.html exists (retry for AV / explorer races)
+REM 1. --check is a dry run: report the decisions and stop. Nothing is
+REM    touched — no port kill, no build, no server.
 REM ------------------------------------------------------------------
-set RETRIES=0
-:checkDist
-if exist dist\index.html goto distOk
-set /a RETRIES+=1
-if %RETRIES% geq 5 (
-    echo.
-    echo [FAIL] dist\index.html was not produced after %RETRIES% attempts.
-    echo.
-    echo Possible causes:
-    echo   - A file explorer is open in the dist\ folder
-    echo   - Antivirus is scanning the build output
-    echo   - Disk is full or write-protected
-    echo.
-    echo Try closing any explorer windows in this project and re-running.
-    pause
+echo %* | findstr /c:"--check" >nul
+if %ERRORLEVEL% equ 0 (
+    call node scripts\ensure-ready.mjs %*
     goto :eof
 )
-echo Waiting for dist\index.html ... (attempt %RETRIES%/5^)
-timeout /t 1 /nobreak >nul
-goto checkDist
-:distOk
 
 REM ------------------------------------------------------------------
-REM 4. Kill anything already on port 8787
+REM 2. Stop anything already on port 8787 BEFORE rebuilding: on Windows a
+REM    running server can hold dist\ open, which fails the bundle swap.
 REM ------------------------------------------------------------------
-echo.
 echo Checking port 8787 ...
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8787 " ^| findstr "LISTENING" 2^>nul') do (
     echo Killing process %%a already listening on port 8787 ...
@@ -62,7 +42,21 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8787 " ^| findstr "LISTENIN
 )
 
 REM ------------------------------------------------------------------
-REM 5. Verify critical runtime files exist
+REM 3. Install dependencies / build the client, but only if stale
+REM ------------------------------------------------------------------
+echo.
+echo Checking dependencies and the client build...
+call node scripts\ensure-ready.mjs %*
+if %ERRORLEVEL% neq 0 (
+    echo.
+    echo [FAIL] The project could not be prepared — see the message above.
+    echo        Nothing was started.
+    pause
+    goto :eof
+)
+
+REM ------------------------------------------------------------------
+REM 3. Verify critical runtime files exist
 REM ------------------------------------------------------------------
 if not exist data\settings.json (
     echo [WARN] data\settings.json not found — API calls may fail.
@@ -72,7 +66,7 @@ if not exist data\prompt-presets.json (
 )
 
 REM ------------------------------------------------------------------
-REM 6. Start the server
+REM 4. Start the server
 REM ------------------------------------------------------------------
 echo.
 echo ============================================
