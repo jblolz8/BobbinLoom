@@ -1090,35 +1090,6 @@ export function SetupView(props: SetupViewProps) {
                     </p>
                   </div>
 
-                  {/* Text Provider Section */}
-                  <div className="setup-setting-block">
-                    <div className="setup-block-header">
-                      <div>
-                        <h4>Text Provider</h4>
-                        <span className="field-hint">
-                          The connection that writes the world and the opening scene for this playthrough. Turns
-                          after that follow whichever text connection is active.
-                        </span>
-                      </div>
-                    </div>
-
-                    <SimpleSelect
-                      size="sm"
-                      variant="filled"
-                      fullWidth
-                      value={setupForm.providerId}
-                      onChange={handleProviderChange}
-                      options={textProviderOptions}
-                      placeholder="Current active text provider"
-                      aria-label="Text provider"
-                    />
-                    <p className="field-hint">
-                      "Current active text provider" follows whichever text connection is active, and falls back to
-                      it if the chosen one is deleted.
-                    </p>
-                    {providerChoiceError && <p className="error-box setup-error">{providerChoiceError}</p>}
-                  </div>
-
                   {/* Lorebooks Section */}
                   <div className="setup-setting-block">
                     <div className="setup-block-header">
@@ -1254,6 +1225,35 @@ export function SetupView(props: SetupViewProps) {
                       checked={setupForm.generateOpeningChoices}
                       onChange={() => onSetupFormChange((f) => ({ ...f, generateOpeningChoices: !f.generateOpeningChoices }))}
                     />
+                  </div>
+
+                  {/* Text Provider Section */}
+                  <div className="setup-setting-block">
+                    <div className="setup-block-header">
+                      <div>
+                        <h4>Text Provider</h4>
+                        <span className="field-hint">
+                          The connection that writes the world and the opening scene for this playthrough. Turns
+                          after that follow whichever text connection is active.
+                        </span>
+                      </div>
+                    </div>
+
+                    <SimpleSelect
+                      size="sm"
+                      variant="filled"
+                      fullWidth
+                      value={setupForm.providerId}
+                      onChange={handleProviderChange}
+                      options={textProviderOptions}
+                      placeholder="Current active text provider"
+                      aria-label="Text provider"
+                    />
+                    <p className="field-hint">
+                      "Current active text provider" follows whichever text connection is active, and falls back to
+                      it if the chosen one is deleted.
+                    </p>
+                    {providerChoiceError && <p className="error-box setup-error">{providerChoiceError}</p>}
                   </div>
 
                   {/* Error Box if previous attempt failed */}

@@ -71,18 +71,18 @@ tabs open the matching manager as a dialog.
 
 A few other things live on the setting step:
 
-- **Text Provider** — which text connection writes this playthrough's world and opening
-  scene. It lists your connections, with **Current active text provider** as the default:
-  that slot *follows* whichever connection is active rather than pinning today's. The choice
-  is remembered for the next New Playthrough. This is a creation-time choice, not a
-  per-playthrough setting — turns after the opening go back to the active connection. A
-  choice whose connection has been deleted falls back to the active one instead of failing
-  the generation.
 - **Opening mode** — *Quick start* uses the generated scenario's opening text as the first
   message and spends no extra call; *Fleshed-out opening* generates a written scene grounded
   in the setting and the cast.
 - **Generate opening choices** (off by default) — also produce the first set of suggested
   choices alongside the opening.
+- **Text Provider** (last block on the step) — which text connection writes this playthrough's
+  world and opening scene. It lists your connections, with **Current active text provider** as
+  the default: that slot *follows* whichever connection is active rather than pinning today's.
+  The choice is remembered for the next New Playthrough. This is a creation-time choice, not a
+  per-playthrough setting — turns after the opening go back to the active connection. A choice
+  whose connection has been deleted falls back to the active one instead of failing the
+  generation.
 
 **Start Blank** skips generation entirely. You get a minimal playthrough — no scenario, no
 starter data, one unknown location — and your first message is the world-building.
