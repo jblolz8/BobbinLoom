@@ -185,13 +185,13 @@ describe("GET /api/playthroughs ships summaries, not documents", () => {
     withImage.messages.push({ ...message("m1", "art below"), images: [imageRef(latest)] });
     updatePlaythroughRecord(dataDir, withImage);
     const picked = createPlaythroughRecord(dataDir, "Picked");
-    picked.cover = { file: manual, fit: "cover", updatedAt: "2026-02-01T00:00:00.000Z" };
+    picked.cover = { file: manual, updatedAt: "2026-02-01T00:00:00.000Z" };
     updatePlaythroughRecord(dataDir, picked);
 
     const body = (await list(app)).json() as { playthroughs: { id: string; cover: unknown }[] };
     const coverOf = (id: string) => body.playthroughs.find((p) => p.id === id)?.cover;
 
-    expect(coverOf(picked.id)).toEqual({ source: "manual", file: manual, fit: "cover" });
+    expect(coverOf(picked.id)).toEqual({ source: "manual", file: manual });
     expect(coverOf(withImage.id)).toEqual({ source: "latest", file: latest });
     expect(coverOf(bare.id)).toBeNull();
   });

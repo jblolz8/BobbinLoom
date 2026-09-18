@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import type { AvatarShape, CustomThemeColors, ThemeMode } from "../../../schemas";
+import type { AvatarShape, CoverAspect, CustomThemeColors, ThemeMode } from "../../../schemas";
 import {
   applyAvatarShapeTheme,
+  applyCoverAspect,
   applyTheme,
+  cachedCoverAspect,
   getAppearanceSettings,
   THEME_PRESETS,
   updateAppearanceSettings,
@@ -33,6 +35,30 @@ const SHAPE_OPTIONS: Array<{
     title: "Circle",
     desc: "Smooth classic circular avatar badges",
     badgePreviewShape: "circle",
+  },
+];
+
+/** The three cover frame shapes, in the order they are offered. Each previews its own ratio so
+ *  the choice reads without knowing what "2:3" looks like. */
+const ASPECT_OPTIONS: Array<{
+  id: CoverAspect;
+  title: string;
+  desc: string;
+}> = [
+  {
+    id: "landscape",
+    title: "Landscape",
+    desc: "16:9 — the widest banner; suits wide renders and keeps a long shelf compact (Default)",
+  },
+  {
+    id: "square",
+    title: "1:1 Square",
+    desc: "Square — the shape most image models return, so nothing is cropped",
+  },
+  {
+    id: "portrait",
+    title: "Portrait",
+    desc: "2:3 — tallest frame; suits character art",
   },
 ];
 
@@ -432,6 +458,8 @@ export function AppearanceSettingsPanel() {
     return "rounded";
   });
 
+  const [coverAspect, setCoverAspect] = useState<CoverAspect>(() => cachedCoverAspect() ?? "landscape");
+
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     if (typeof window !== "undefined" && window.localStorage) {
       const saved = localStorage.getItem("bobbinloom_theme_mode") as ThemeMode | null;
@@ -469,6 +497,10 @@ export function AppearanceSettingsPanel() {
           setAvatarShape(res.avatarShape);
           applyAvatarShapeTheme(res.avatarShape);
         }
+        if (res.coverAspect) {
+          setCoverAspect(res.coverAspect);
+          applyCoverAspect(res.coverAspect);
+        }
         if (res.themeMode) setThemeMode(res.themeMode);
         if (res.themePreset) setThemePreset(res.themePreset);
         if (res.customThemeColors) setCustomColors(res.customThemeColors);
@@ -486,6 +518,7 @@ export function AppearanceSettingsPanel() {
 
   async function persistAppearance(updates: {
     avatarShape?: AvatarShape;
+    coverAspect?: CoverAspect;
     themeMode?: ThemeMode;
     themePreset?: string;
     customThemeColors?: CustomThemeColors;
@@ -508,6 +541,12 @@ export function AppearanceSettingsPanel() {
     setAvatarShape(shape);
     applyAvatarShapeTheme(shape);
     void persistAppearance({ avatarShape: shape });
+  }
+
+  function handleSelectAspect(aspect: CoverAspect) {
+    setCoverAspect(aspect);
+    applyCoverAspect(aspect);
+    void persistAppearance({ coverAspect: aspect });
   }
 
   function handleSelectMode(mode: ThemeMode) {
@@ -715,6 +754,49 @@ export function AppearanceSettingsPanel() {
                     shape={opt.badgePreviewShape}
                     className="shape-demo-avatar"
                   />
+                </div>
+                <div className="shape-radio-indicator">
+                  <span className={`radio-dot ${isSelected ? "checked" : ""}`} />
+                </div>
+              </div>
+
+              <div className="shape-card-body">
+                <strong className="shape-title">{opt.title}</strong>
+                <p className="shape-desc">{opt.desc}</p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Cover Art Section ── */}
+      <div className="appearance-section-header" style={{ marginTop: "1.75rem" }}>
+        <div>
+          <h3 className="appearance-section-title flex items-center gap-2">
+            <Icon name="Image" size={17} />
+            <span>Cover Art</span>
+          </h3>
+          <p className="appearance-section-desc">
+            Choose the shape of every cover on the playthrough shelf. A cover fills its frame, so
+            picking the shape that matches the images your stories produce crops the least.
+          </p>
+        </div>
+      </div>
+
+      <div className="avatar-shape-selector-grid">
+        {ASPECT_OPTIONS.map((opt) => {
+          const isSelected = coverAspect === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              className={`shape-option-card ${isSelected ? "is-selected" : ""}`}
+              onClick={() => handleSelectAspect(opt.id)}
+              disabled={saving}
+            >
+              <div className="shape-card-top">
+                <div className="shape-card-preview">
+                  <span className="cover-aspect-preview" data-aspect={opt.id} />
                 </div>
                 <div className="shape-radio-indicator">
                   <span className={`radio-dot ${isSelected ? "checked" : ""}`} />

@@ -14,6 +14,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   schemaVersion: 1,
   activePresetId: "default",
   avatarShape: "rounded",
+  coverAspect: "landscape",
   themeMode: "dark",
   themePreset: "default-dark",
   customThemeColors: {},

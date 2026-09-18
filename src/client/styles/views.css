@@ -2,6 +2,22 @@
 :root {
   --avatar-badge-radius: 8px;
 }
+/* ── Cover frame shape (Settings → Theme & Appearance → Cover Art) ──
+   One value, read by every cover frame on every surface. The fallback in each consuming rule is
+   the shipped default (landscape), so a page that has not applied the attribute yet still paints
+   a sane frame. */
+:root[data-cover-aspect="portrait"] {
+  --cover-art-aspect: 2 / 3;
+}
+
+:root[data-cover-aspect="square"] {
+  --cover-art-aspect: 1 / 1;
+}
+
+:root[data-cover-aspect="landscape"] {
+  --cover-art-aspect: 16 / 9;
+}
+
 :root[data-avatar-shape="square"] {
   --avatar-badge-radius: 2px;
 }
@@ -8165,7 +8181,7 @@ button.ai-brainstorm-toggle-btn.active,
 .cover-art {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: var(--cover-art-aspect, 16 / 9);
   border-radius: 8px;
   overflow: hidden;
   background: var(--bg-app);
@@ -8176,8 +8192,12 @@ button.ai-brainstorm-toggle-btn.active,
   isolation: isolate;
 }
 
+/* In the list the ROW is the height authority: the thumbnail stretches to it and derives its
+   width from the chosen shape, so a row of text always gets a cover as tall as itself. */
 .cover-art-thumb {
-  width: 96px;
+  height: 100%;
+  width: auto;
+  max-height: 96px;
   flex-shrink: 0;
   border-radius: 7px;
 }
@@ -8186,30 +8206,17 @@ button.ai-brainstorm-toggle-btn.active,
   border-radius: 10px;
 }
 
-.cover-art-blur {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  filter: blur(14px) saturate(1.15);
-  transform: scale(1.25);
-  opacity: 0.55;
-  z-index: 0;
-}
-
+/* A single-image cover FILLS its frame: the frame's shape is chosen to suit the images
+   (Settings → Theme & Appearance → Cover Art), so there is nothing to letterbox and no second
+   copy of the image to blur behind it. Cropping is anchored at the centre. */
 .cover-art-main {
   position: relative;
   z-index: 1;
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  display: block;
-}
-
-/* Fill mode: the image covers the frame and its edges fall off, no blurred fill behind it. */
-.cover-art-main.is-fill {
   object-fit: cover;
+  object-position: center;
+  display: block;
 }
 
 .cover-art-empty {
@@ -8232,6 +8239,39 @@ button.ai-brainstorm-toggle-btn.active,
 .cover-art-collage-2 { grid-template-columns: repeat(2, 1fr); }
 .cover-art-collage-3 { grid-template-columns: repeat(3, 1fr); }
 .cover-art-collage-4 { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); }
+
+/* A collage cell is the one place where cropping would cost something: these are portrait
+   character portraits, and cutting a character out of their own art (or cropping their head off)
+   is worse than a soft edge. So each tile shows the whole portrait over a blurred copy of itself
+   — the same URL as the foreground, so it is one request, and the copy is aria-hidden because it
+   carries no meaning. */
+.cover-art-tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+
+.cover-art-tile-blur {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(10px) saturate(1.15);
+  transform: scale(1.2);
+  opacity: 0.6;
+  z-index: 0;
+}
+
+.cover-art-tile .cover-art-tile-img {
+  position: relative;
+  z-index: 1;
+  object-fit: contain !important;
+}
 
 .cover-art-tile-img {
   width: 100% !important;
@@ -8283,7 +8323,7 @@ button.ai-brainstorm-toggle-btn.active,
 
 .playthrough-row {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 14px;
   background: var(--bg-panel);
   border: 1px solid var(--border-main);
@@ -8308,6 +8348,9 @@ button.ai-brainstorm-toggle-btn.active,
 
 .playthrough-row-cover {
   flex-shrink: 0;
+  align-self: stretch;
+  display: flex;
+  min-height: 0;
 }
 
 .playthrough-row-content {
@@ -8350,8 +8393,40 @@ button.ai-brainstorm-toggle-btn.active,
   }
 
   .cover-art-thumb {
-    width: 72px;
+    max-height: 72px;
   }
+}
+
+/* ── Appearance panel: the Cover Art choice previews its own ratio ── */
+.cover-aspect-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 48px;
+}
+
+.cover-aspect-preview::before {
+  content: "";
+  display: block;
+  border: 1px solid var(--border-main);
+  border-radius: 4px;
+  background: linear-gradient(160deg, var(--bg-surface-elevated), var(--bg-app));
+}
+
+.cover-aspect-preview[data-aspect="landscape"]::before {
+  width: 64px;
+  height: 36px;
+}
+
+.cover-aspect-preview[data-aspect="square"]::before {
+  width: 48px;
+  height: 48px;
+}
+
+.cover-aspect-preview[data-aspect="portrait"]::before {
+  width: 32px;
+  height: 48px;
 }
 
 /* ── Gallery modal ── */

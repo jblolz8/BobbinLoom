@@ -275,6 +275,12 @@ export const TagTaxonomyConfigSchema = z.object({
 export type TagTaxonomyConfig = z.infer<typeof TagTaxonomyConfigSchema>;
 
 export const AvatarShapeSchema = z.enum(["square", "rounded", "circle"]);
+
+/** The shape of every cover frame on the playthrough shelf. A display preference, chosen to
+ *  suit the images a story actually produced: generated renders are usually square while
+ *  character art is portrait, so the frame follows whichever the user is looking at. */
+export const CoverAspectSchema = z.enum(["portrait", "square", "landscape"]);
+export type CoverAspect = z.infer<typeof CoverAspectSchema>;
 export type AvatarShape = z.infer<typeof AvatarShapeSchema>;
 
 export const ThemeModeSchema = z.enum(["dark", "light", "system"]);
@@ -430,6 +436,7 @@ export const AppSettingsSchema = z.object({
   promptConfig: PromptConfigSchema.optional(),
   tagTaxonomy: TagTaxonomyConfigSchema.optional(),
   avatarShape: AvatarShapeSchema.optional(),
+  coverAspect: CoverAspectSchema.optional(),
   themeMode: ThemeModeSchema.optional(),
   themePreset: z.string().optional(),
   customThemeColors: CustomThemeColorsSchema.optional(),
@@ -612,12 +619,6 @@ export type TurnSnapshot = z.infer<typeof TurnSnapshotSchema>;
 export const PlaythroughCoverSchema = z.object({
   /** "<sha256>.<ext>" — content-addressed file under data/images/. */
   file: z.string(),
-  /** How the cover frame is filled. Absent = "contain": the whole image, fitted,
-   *  over a blurred fill of itself. "cover" fills the frame and lets the edges fall
-   *  off. A MANUAL choice only — an auto-resolved cover always contains, because it
-   *  changes as the story progresses and a stored preference for a moving target
-   *  would be confusing. */
-  fit: z.enum(["contain", "cover"]).optional(),
   updatedAt: z.string()
 });
 export type PlaythroughCover = z.infer<typeof PlaythroughCoverSchema>;
@@ -696,8 +697,6 @@ export const PlaythroughCoverViewSchema = z.object({
   source: z.enum(["manual", "latest", "cast"]),
   /** `manual` and `latest`: one content-addressed file under data/images/. */
   file: z.string().optional(),
-  /** `manual` only: how the frame is filled. Absent = "contain". */
-  fit: z.enum(["contain", "cover"]).optional(),
   /** How many present cast have art, BEFORE the cap — a collage shows at most
    *  `COVER_COLLAGE_LIMIT` tiles, and the card says "+N" for the rest rather than
    *  pretending they are not there. */

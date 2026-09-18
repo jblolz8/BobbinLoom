@@ -865,6 +865,33 @@ describe("image generation: preset routes and the global prompt config", () => {
     expect(resolved.promptCharacterLimit).toBe(1200);
   });
 
+  it("round-trips the cover art shape, defaulting to landscape and rejecting an unknown value", async () => {
+    // The shape is a display preference, but it lives in the appearance settings beside the
+    // avatar shape (which is why this rides in the preset-routes harness).
+    const initial = await app.inject({ method: "GET", url: "/api/settings/appearance" });
+    expect(initial.statusCode).toBe(200);
+    // A fresh install must not need a write to get a sane frame.
+    expect((initial.json() as { coverAspect?: string }).coverAspect).toBe("landscape");
+
+    const saved = await app.inject({
+      method: "PUT",
+      url: "/api/settings/appearance",
+      payload: { coverAspect: "square" }
+    });
+    expect(saved.statusCode).toBe(200);
+    expect((saved.json() as { coverAspect?: string }).coverAspect).toBe("square");
+
+    const reread = await app.inject({ method: "GET", url: "/api/settings/appearance" });
+    expect((reread.json() as { coverAspect?: string }).coverAspect).toBe("square");
+
+    const rejected = await app.inject({
+      method: "PUT",
+      url: "/api/settings/appearance",
+      payload: { coverAspect: "cinema" }
+    });
+    expect(rejected.statusCode).toBe(400);
+  });
+
 });
 
 /** The global config's bootstrap path: a fresh install (or a pre-change

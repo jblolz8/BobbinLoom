@@ -47,6 +47,7 @@ does not ask and does not replace anything: that is a save, and it leaves the im
 - **Preset** — the theme family, with a live swatch preview of each one
 - **Custom colours** — per-variable overrides on top of the preset
 - **Avatar shape** — how portraits are framed throughout the app
+- **Cover art** — the shape of every cover on the playthrough shelf: Portrait (2:3), 1:1 Square, or Landscape (16:9)
 
 Appearance applies immediately and is stored with your other runtime settings.
 

@@ -195,9 +195,9 @@ export function duplicatePlaythrough(id: string): Promise<Playthrough> {
   });
 }
 
-/** The manual cover choice: which stored image, and how the frame is filled. `fit` is absent
- *  for the default — the whole image, fitted over a blurred fill of itself. */
-export type PlaythroughCoverChoice = Pick<PlaythroughCover, "file" | "fit">;
+/** The manual cover choice: which stored image. How the frame is shaped and filled is a display
+ *  setting (Settings → Theme & Appearance → Cover Art), not a property of the choice. */
+export type PlaythroughCoverChoice = Pick<PlaythroughCover, "file">;
 
 export function setPlaythroughCover(id: string, cover: PlaythroughCoverChoice): Promise<Playthrough> {
   return request<Playthrough>(`/api/playthroughs/${id}/cover`, {

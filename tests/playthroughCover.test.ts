@@ -95,25 +95,15 @@ function coverOf(playthrough: Playthrough, opts: { imagesDir: string; characters
 }
 
 describe("resolvePlaythroughCover", () => {
-  it("prefers a manual pick over the story's own images, and carries its fit", () => {
+  it("prefers a manual pick over the story's own images", () => {
     const { dataDir, imagesDir } = harness();
     const latest = storeImage(imagesDir, "latest");
     const manual = storeImage(imagesDir, "manual");
     const pt = writePlaythroughWithImages(dataDir, "Picked", [[latest]], {
-      cover: { file: manual, fit: "cover", updatedAt: "2026-02-01T00:00:00.000Z" }
-    });
-
-    expect(coverOf(pt, { imagesDir })).toEqual({ source: "manual", file: manual, fit: "cover" });
-  });
-
-  it("defaults a manual pick to contain when no fit was chosen", () => {
-    const { dataDir, imagesDir } = harness();
-    const manual = storeImage(imagesDir, "manual");
-    const pt = writePlaythroughWithImages(dataDir, "NoFit", [], {
       cover: { file: manual, updatedAt: "2026-02-01T00:00:00.000Z" }
     });
 
-    expect(coverOf(pt, { imagesDir })).toEqual({ source: "manual", file: manual, fit: "contain" });
+    expect(coverOf(pt, { imagesDir })).toEqual({ source: "manual", file: manual });
   });
 
   it("falls through when the manual pick's file is gone", () => {
@@ -228,9 +218,8 @@ describe("setPlaythroughCoverRecord", () => {
     const pt = writePlaythroughWithImages(dataDir, "Keep", []);
     const before = pt.updatedAt;
 
-    const set = setPlaythroughCoverRecord(dataDir, pt.id, { file, fit: "cover" });
+    const set = setPlaythroughCoverRecord(dataDir, pt.id, { file });
     expect(set?.cover?.file).toBe(file);
-    expect(set?.cover?.fit).toBe("cover");
     // Art is not story activity: the library is sorted by updatedAt desc, so bumping it here
     // would reorder the shelf every time a cover was changed.
     expect(set?.updatedAt).toBe(before);
@@ -256,7 +245,7 @@ describe("the cover routes", () => {
     const res = await h.app.inject({
       method: "POST",
       url: `/api/playthroughs/${pt.id}/cover`,
-      payload: { file, fit: "contain" }
+      payload: { file }
     });
 
     expect(res.statusCode).toBe(200);
@@ -268,7 +257,7 @@ describe("the cover routes", () => {
     const listed = (list.json() as { playthroughs: { id: string; cover: unknown }[] }).playthroughs.find(
       (p) => p.id === pt.id
     );
-    expect(listed?.cover).toEqual({ source: "manual", file, fit: "contain" });
+    expect(listed?.cover).toEqual({ source: "manual", file });
   });
 
   it("refuses a file that is not in the store, and leaves the record alone", async () => {

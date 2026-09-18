@@ -18,8 +18,9 @@ export type GalleryModalProps = {
   /** Why the last write failed, shown in place — this modal is the only error surface the
    *  journal has. */
   errorMessage?: string;
-  /** `fit` is omitted for the default (the whole image, fitted over a blurred fill of itself). */
-  onPick: (file: string, fit?: "contain" | "cover") => void;
+  /** `fit` is gone: how a cover is shaped and filled is a display setting, not a property of a
+   *  choice, so the choice is only ever which file. */
+  onPick: (file: string) => void;
   onClear: () => void;
   onClose: () => void;
 };
@@ -124,15 +125,6 @@ export function GalleryModal({
                       onClick={() => onPick(item.file)}
                     >
                       Use as cover
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={saving}
-                      title="Fill the frame and let the image's edges fall off"
-                      onClick={() => onPick(item.file, "cover")}
-                    >
-                      Fill
                     </Button>
                   </div>
                 </figure>

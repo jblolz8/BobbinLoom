@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import {
   applyAvatarShapeTheme,
+  applyCoverAspect,
   applyTheme,
+  cachedCoverAspect,
   createPlaythrough,
   generatePlaythrough,
   getAppearanceSettings,
@@ -68,6 +70,10 @@ export default function App() {
       applyAvatarShapeTheme("rounded");
     }
 
+    // The cover frame shape is cached locally so the shelf paints correctly on the very first
+    // render, then re-applied from the server below; landscape is the shipped default.
+    applyCoverAspect(cachedCoverAspect() ?? "landscape");
+
     const cachedMode = typeof window !== "undefined" ? (localStorage.getItem("bobbinloom_theme_mode") as any) : null;
     const cachedPreset = typeof window !== "undefined" ? (localStorage.getItem("bobbinloom_theme_preset") ?? undefined) : undefined;
     let cachedCustom = undefined;
@@ -87,6 +93,7 @@ export default function App() {
     getAppearanceSettings()
       .then((res) => {
         if (res.avatarShape) applyAvatarShapeTheme(res.avatarShape);
+        if (res.coverAspect) applyCoverAspect(res.coverAspect);
         applyTheme({
           themeMode: res.themeMode,
           themePreset: res.themePreset,

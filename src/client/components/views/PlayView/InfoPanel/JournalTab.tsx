@@ -48,11 +48,11 @@ export function JournalTab({
   // Both writes answer with the whole document, which the play view already owns: handing it
   // back through the existing change channel is what keeps the card, the gallery badge and the
   // journal strip agreeing with the server without a second read.
-  async function handlePickCover(file: string, fit?: "contain" | "cover") {
+  async function handlePickCover(file: string) {
     setCoverSaving(true);
     setCoverError(null);
     try {
-      onPlaythroughChange(await setPlaythroughCover(playthrough.id, fit ? { file, fit } : { file }));
+      onPlaythroughChange(await setPlaythroughCover(playthrough.id, { file }));
     } catch (e) {
       setCoverError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -456,7 +456,7 @@ export function JournalTab({
           hasManualCover={Boolean(playthrough.cover)}
           saving={coverSaving}
           errorMessage={coverError ?? undefined}
-          onPick={(file, fit) => { void handlePickCover(file, fit); }}
+          onPick={(file) => { void handlePickCover(file); }}
           onClear={() => { void handleClearCover(); }}
           onClose={() => setGalleryOpen(false)}
         />

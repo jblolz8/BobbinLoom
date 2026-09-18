@@ -679,11 +679,14 @@ for a card to have art — the latest image is the cover until you say otherwise
 
 The pick is made in **Gallery Media** (the play view's Journal tab, under **Media**), which
 lists every image the story has produced, newest first, with the chapter and turn each one came
-from — the same set the automatic cover draws from. **Use as cover** fits the whole image over a
-blurred fill of itself; **Fill** instead lets the image's edges fall off the frame. Either way
-the choice is stored on the playthrough as a reference to the image's content-addressed file, so
-it costs no extra bytes and survives a duplicate or a timeline branch. **Clear custom cover**
-returns the card to the automatic chain.
+from — the same set the automatic cover draws from. **Use as cover** sets the pick, stored on the
+playthrough as a reference to the image's content-addressed file, so it costs no extra bytes and
+survives a duplicate or a timeline branch. **Clear custom cover** returns the card to the
+automatic chain.
+
+A cover fills its frame; the frame's shape is the **Cover Art** display setting (Portrait, 1:1
+Square or Landscape). Collage tiles are the one exception — each shows the whole portrait over a
+blurred copy of itself.
 
 Deleting an image that is the current cover removes the choice with it; that confirm says so
 before it acts, and the card falls back to the latest remaining image.

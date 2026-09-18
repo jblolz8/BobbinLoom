@@ -870,18 +870,14 @@ export function renamePlaythroughRecord(dir: string, id: string, name: string): 
 export function setPlaythroughCoverRecord(
   dir: string,
   id: string,
-  cover: { file: string; fit?: "contain" | "cover" } | null
+  cover: { file: string } | null
 ): Playthrough | null {
   const playthrough = getPlaythroughRecord(dir, id);
   if (!playthrough) return null;
   if (cover === null) {
     delete playthrough.cover;
   } else {
-    playthrough.cover = {
-      file: cover.file,
-      ...(cover.fit === undefined ? {} : { fit: cover.fit }),
-      updatedAt: new Date().toISOString()
-    };
+    playthrough.cover = { file: cover.file, updatedAt: new Date().toISOString() };
   }
   updatePlaythroughRecord(dir, playthrough);
   return playthrough;

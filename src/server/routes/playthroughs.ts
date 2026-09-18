@@ -48,11 +48,10 @@ const RenameBody = z.object({ name: z.string().min(1) });
 
 const DraftBody = z.object({ content: z.string() });
 
-/** A manual cover: the image's content-addressed file name, plus how the frame is filled.
- *  Absent `fit` = "contain" (the whole image, fitted, over a blurred fill of itself). */
+/** A manual cover: the image's content-addressed file name. How the frame is shaped and
+ *  filled is a display setting, not a property of the choice. */
 const CoverBody = z.object({
-  file: z.string(),
-  fit: z.enum(["contain", "cover"]).optional()
+  file: z.string()
 });
 
 const GenerateBody = z.object({
@@ -152,7 +151,7 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
     if (!imageFilePath(body.file, imagesDir)) {
       return reply.code(400).send({ error: "Unknown image file" });
     }
-    const updated = setPlaythroughCoverRecord(dataDir, params.id, { file: body.file, fit: body.fit });
+    const updated = setPlaythroughCoverRecord(dataDir, params.id, { file: body.file });
     if (!updated) return reply.code(404).send({ error: "Playthrough not found" });
     // The whole document, like the rename route: the client already treats that response as
     // the authoritative record.

@@ -1,10 +1,12 @@
-import type { AvatarShape, CustomThemeColors, TagTaxonomyConfig, ThemeMode } from "../../schemas";
+import type { AvatarShape, CoverAspect, CustomThemeColors, TagTaxonomyConfig, ThemeMode } from "../../schemas";
 import { request } from "./client";
 
 export type { ThemeMode, CustomThemeColors };
 
 export interface AppearanceSettings {
   avatarShape: AvatarShape;
+  /** The shape of every cover frame on the playthrough shelf. */
+  coverAspect: CoverAspect;
   themeMode: ThemeMode;
   themePreset: string;
   customThemeColors: CustomThemeColors;
@@ -531,6 +533,42 @@ export function applyAvatarShapeTheme(shape: AvatarShape) {
   } catch {
     /* silent */
   }
+}
+
+/** The frame shape each setting means, in CSS `aspect-ratio` terms. */
+const COVER_ASPECT_VALUES: Record<CoverAspect, string> = {
+  portrait: "2 / 3",
+  square: "1 / 1",
+  landscape: "16 / 9"
+};
+
+/**
+ * Applies the cover frame shape globally: a `data-cover-aspect` attribute on the root (the same
+ * shape `applyAvatarShapeTheme` uses, and what a probe can read back), the value itself as
+ * `--cover-art-aspect` for the stylesheet, and a localStorage cache so a reload paints the right
+ * shape before the server answers.
+ *
+ * One global look, deliberately: the shape belongs to the display, not to an individual cover, so
+ * no per-playthrough field carries it.
+ */
+export function applyCoverAspect(aspect: CoverAspect) {
+  if (typeof document === "undefined") return;
+  document.documentElement.setAttribute("data-cover-aspect", aspect);
+  document.documentElement.style.setProperty("--cover-art-aspect", COVER_ASPECT_VALUES[aspect]);
+  try {
+    localStorage.setItem("bobbinloom_cover_aspect", aspect);
+  } catch {
+    /* silent */
+  }
+}
+
+/** The cached shape, or null when nothing usable is stored. Validated here so both callers
+ *  (the app's boot effect and the Appearance panel) agree on what counts as a good value. */
+export function cachedCoverAspect(): CoverAspect | null {
+  if (typeof window === "undefined" || !window.localStorage) return null;
+  const saved = localStorage.getItem("bobbinloom_cover_aspect");
+  if (saved === "portrait" || saved === "square" || saved === "landscape") return saved;
+  return null;
 }
 
 /** Applies CSS variables, data-theme attribute, and custom colors globally */

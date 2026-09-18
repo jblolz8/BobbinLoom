@@ -35,15 +35,19 @@ A playthrough wears the first of these that exists:
 | 3 | **The present cast** | No images yet: a collage of the characters at your current location, in cast order — up to four, with a **+N** count for the rest |
 | 4 | **The placeholder** | Nothing to show — the monochrome BobbinLoom mark |
 
-An image is fitted whole over a blurred fill of itself, so a portrait or a square render never
-sits on black bars. A picture you picked can instead **Fill** the frame and let the edges fall
-off it.
+A cover **fills** its frame, and the frame's shape comes from **Cover Art** in
+[Settings → Theme & Appearance](settings-and-interface.md): **Portrait** (2:3), **1:1 Square**, or
+**Landscape** (16:9), Landscape by default. Pick the shape that matches the images you actually
+generate and nothing gets cropped.
+
+Collage tiles are the exception: each one shows the whole portrait over a **blurred copy of
+itself**, because cutting a character out of their own art is worse than a soft edge.
 
 **Gallery Media** — in the play view's Journal tab, under **Media** — lists every image the
 story has produced, newest first, each with the chapter and turn it came from. **Use as cover**
-sets the pick, **Fill** sets it in fill mode, and **Clear custom cover** hands the item back to
-the automatic chain. Removing an image that happens to be the cover asks first and says so, and
-the cover then falls back to the next source.
+sets the pick and **Clear custom cover** hands the item back to the automatic chain. Removing an
+image that happens to be the cover asks first and says so, and the cover then falls back to the
+next source.
 
 Covers are library metadata, not story state: changing one is never recorded as play, and it is
 not part of a snapshot. A duplicated playthrough or a timeline branch starts with the same

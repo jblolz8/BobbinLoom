@@ -40,7 +40,7 @@ export function resolvePlaythroughCover(
 ): PlaythroughCoverView | null {
   const manualFile = p.cover?.file;
   if (manualFile && imageFilePath(manualFile, options.imagesDir)) {
-    return { source: "manual", file: manualFile, fit: p.cover?.fit ?? "contain" };
+    return { source: "manual", file: manualFile };
   }
 
   // Newest non-hidden message that carries an image, taking its LAST image: variants are

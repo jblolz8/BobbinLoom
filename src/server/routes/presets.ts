@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   AvatarShapeSchema,
+  CoverAspectSchema,
   CharacterFormatSchema,
   CustomThemeColorsSchema,
   EMPTY_MODULE_SET,
@@ -25,6 +26,16 @@ const UpdatePresetBody = z.object({
   modules: PromptModuleSetSchema.optional(),
   characterFormat: CharacterFormatSchema.optional(),
   imageGeneration: ImageGenerationSettingsSchema.optional()
+});
+
+/** The appearance panel's writable fields. Declared once so the route can `safeParse` it and
+ *  answer 400 with the reason, instead of letting a thrown ZodError become a 500. */
+const AppearanceBody = z.object({
+  avatarShape: AvatarShapeSchema.optional(),
+  coverAspect: CoverAspectSchema.optional(),
+  themeMode: ThemeModeSchema.optional(),
+  themePreset: z.string().optional(),
+  customThemeColors: CustomThemeColorsSchema.optional()
 });
 
 export async function presetRoutes(app: FastifyInstance): Promise<void> {
@@ -121,22 +132,27 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
     const settings = loadAppSettings(settingsDir);
     return {
       avatarShape: settings.avatarShape ?? DEFAULT_APP_SETTINGS.avatarShape,
+      coverAspect: settings.coverAspect ?? DEFAULT_APP_SETTINGS.coverAspect,
       themeMode: settings.themeMode ?? DEFAULT_APP_SETTINGS.themeMode,
       themePreset: settings.themePreset ?? DEFAULT_APP_SETTINGS.themePreset,
       customThemeColors: settings.customThemeColors ?? {},
     };
   });
 
-  app.put("/api/settings/appearance", async (request) => {
-    const body = z.object({
-      avatarShape: AvatarShapeSchema.optional(),
-      themeMode: ThemeModeSchema.optional(),
-      themePreset: z.string().optional(),
-      customThemeColors: CustomThemeColorsSchema.optional(),
-    }).parse(request.body ?? {});
-    const updated = saveAppSettings(settingsDir, body);
+  app.put("/api/settings/appearance", async (request, reply) => {
+    // safeParse, not parse: an invalid value must be a 400 WITH the reason rather than the 500 a
+    // thrown ZodError would produce — and nothing may be written (same rule as promptConfig.ts).
+    const parsed = AppearanceBody.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      const reason = parsed.error.issues
+        .map((issue) => `${issue.path.join(".") || "body"} ${issue.message}`)
+        .join("; ");
+      return reply.code(400).send({ error: `Invalid appearance settings: ${reason}` });
+    }
+    const updated = saveAppSettings(settingsDir, parsed.data);
     return {
       avatarShape: updated.avatarShape ?? DEFAULT_APP_SETTINGS.avatarShape,
+      coverAspect: updated.coverAspect ?? DEFAULT_APP_SETTINGS.coverAspect,
       themeMode: updated.themeMode ?? DEFAULT_APP_SETTINGS.themeMode,
       themePreset: updated.themePreset ?? DEFAULT_APP_SETTINGS.themePreset,
       customThemeColors: updated.customThemeColors ?? {},
