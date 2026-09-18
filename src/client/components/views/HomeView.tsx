@@ -1,13 +1,11 @@
-import { useEffect, useState } from "react";
-import type { LoadFailure, Playthrough } from "../../../schemas";
-import { getPlaythrough, listPlaythroughs, renamePlaythrough, type Persona, type PlaythroughSummary } from "../../api";
-import { PlaythroughActionsMenu } from "../common/PlaythroughActionsMenu";
+import { useState } from "react";
+import type { Playthrough } from "../../../schemas";
+import { getPlaythrough, type Persona } from "../../api";
+import { PlaythroughLibrary } from "../library/PlaythroughLibrary";
 import { CharacterLibrary } from "../library/CharacterLibrary";
 import { LorebookLibrary } from "../library/LorebookLibrary";
 import { PersonaLibrary } from "../library/PersonaLibrary";
 import { DocsView } from "./DocsView";
-import { Icon, Pagination } from "../base";
-import { usePagination } from "../../hooks/usePagination";
 
 export type HomeTab = "playthroughs" | "characters" | "lorebooks" | "personas" | "docs";
 
@@ -19,96 +17,24 @@ export type HomeViewProps = {
   onPersonasChanged: (personas: Persona[]) => void;
 };
 
-function formatDate(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return (
-      d.toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }) +
-      " " +
-      d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
-    );
-  } catch {
-    return iso;
-  }
-}
-
 export function HomeView({
   activeTab,
   onOpenPlaythrough,
   onNewPlaythrough,
   onPersonasChanged,
 }: HomeViewProps) {
-  const [playthroughs, setPlaythroughs] = useState<PlaythroughSummary[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [renameDraft, setRenameDraft] = useState("");
-  const [loadFailures, setLoadFailures] = useState<LoadFailure[]>([]);
-  const [failuresDismissed, setFailuresDismissed] = useState(false);
-
-  // Pagination for the playthrough list (shared: engine/pagination.ts + hooks/usePagination.ts).
-  const homePager = usePagination({
-    items: playthroughs,
-    storageKey: "bobbinloom_home_page_size"
-  });
-
-  async function refresh() {
-    try {
-      const { playthroughs, failures } = await listPlaythroughs();
-      setPlaythroughs(playthroughs);
-      setLoadFailures(failures);
-      setFailuresDismissed(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void refresh();
-  }, []);
 
   // Opening a card installs the live playthrough, so the full document is read here: the list
-  // only carries the projection.
+  // only carries the projection. The shelf itself owns everything else about the list — the
+  // read, the view modes, the search and the pager — because the play view mounts the same
+  // component as a dialog.
   async function openPlaythrough(id: string) {
     try {
       onOpenPlaythrough(await getPlaythrough(id));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }
-
-  function handleRenameRequest(id: string, name: string) {
-    setRenamingId(id);
-    setRenameDraft(name);
-  }
-
-  async function confirmRename(id: string) {
-    if (!renameDraft.trim()) return;
-    try {
-      await renamePlaythrough(id, renameDraft.trim());
-      setRenamingId(null);
-      // The rename route answers with the whole document; the list is a projection, so re-read
-      // it rather than splicing that document into an array of summaries.
-      await refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  // The list arrives server-sorted by `updatedAt` desc, so the clone's position (and its
-  // projected card) comes from the server — a locally prepended entry is the duplicate.
-  function handleDuplicated() {
-    void refresh();
-  }
-
-  function handleDeleted() {
-    void refresh();
   }
 
   return (
@@ -145,154 +71,14 @@ export function HomeView({
         </section>
       ) : (
         <section className="home-page">
-          {loadFailures.length > 0 && !failuresDismissed ? (
-            <div className="load-failure-banner">
-              <div className="load-failure-banner-header">
-                <span>
-                  {loadFailures.length} playthrough(s) couldn't be loaded
-                </span>
-                <button
-                  className="load-failure-dismiss"
-                  onClick={() => setFailuresDismissed(true)}
-                  aria-label="Dismiss load warnings"
-                >
-                  <Icon name="X" size={16} />
-                </button>
-              </div>
-              <details className="load-failure-details">
-                <summary>Details</summary>
-                <ul>
-                  {loadFailures.map((f) => (
-                    <li key={f.id}>
-                      <strong>{f.name}</strong> — {f.reason}
-                      {f.backupPath ? (
-                        <span className="load-failure-backup">
-                          {" "}
-                          (backup: {f.backupPath})
-                        </span>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            </div>
-          ) : null}
-          {loading ? (
-            <p className="home-loading">Loading playthroughs…</p>
-          ) : playthroughs.length === 0 ? (
-            <div className="home-empty">
-              <p>No playthroughs yet. Create one to get started.</p>
-              <button className="primary-btn flex items-center gap-1.5 justify-center mx-auto" onClick={onNewPlaythrough}>
-                <Icon name="Plus" size={16} /> New Playthrough
-              </button>
-            </div>
-          ) : (
-            <>
-            <div className="playthrough-grid">
-              {homePager.pageItems.map((p) => {
-                return (
-                  <article
-                    key={p.id}
-                    className="playthrough-card"
-                    onClick={() => { void openPlaythrough(p.id); }}
-                  >
-                    <div className="playthrough-card-header">
-                      {renamingId === p.id ? (
-                        <>
-                          <input
-                            className="rename-input"
-                            value={renameDraft}
-                            onChange={(e) => setRenameDraft(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") void confirmRename(p.id);
-                              if (e.key === "Escape") setRenamingId(null);
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            autoFocus
-                          />
-                          <span
-                            className="rename-actions flex items-center gap-1"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <span
-                              role="button"
-                              tabIndex={0}
-                              className="rename-action save"
-                              title="Save"
-                              onClick={() => void confirmRename(p.id)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                  e.preventDefault();
-                                  void confirmRename(p.id);
-                                }
-                              }}
-                            >
-                              <Icon name="Check" size={14} />
-                            </span>
-                            <span
-                              role="button"
-                              tabIndex={0}
-                              className="rename-action cancel"
-                              title="Cancel"
-                              onClick={() => setRenamingId(null)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                  e.preventDefault();
-                                  setRenamingId(null);
-                                }
-                              }}
-                            >
-                              <Icon name="X" size={14} />
-                            </span>
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <h3>{p.name}</h3>
-                          <PlaythroughActionsMenu
-                            playthroughId={p.id}
-                            playthroughName={p.name}
-                            onRenameRequest={handleRenameRequest}
-                            onDuplicated={handleDuplicated}
-                            onDeleted={handleDeleted}
-                            onError={setError}
-                          />
-                        </>
-                      )}
-                    </div>
-                    <div className="playthrough-card-meta">
-                      <span className="inline-flex items-center gap-1"><Icon name="MapPin" size={14} className="text-slate-400" /> {p.locationName}</span>
-                      <span>Turn {p.turn}</span>
-                      <span className="inline-flex items-center gap-1">
-                        <Icon name="User" size={14} className="text-slate-400" /> {p.castCount}{" "}
-                        {p.castCount === 1 ? "character" : "characters"}
-                      </span>
-                    </div>
-                    <p className="playthrough-card-updated">
-                      Updated {formatDate(p.updatedAt)}
-                    </p>
-                    {p.visibleMessageCount > 0 ? (
-                      <p className="playthrough-card-preview">{p.lastMessagePreview}…</p>
-                    ) : (
-                      <p className="playthrough-card-preview">No messages yet.</p>
-                    )}
-                  </article>
-                );
-              })}
-            </div>
-
-            <Pagination
-              className="home-page-pagination"
-              page={homePager.page}
-              pageSize={homePager.pageSize}
-              total={homePager.totalItems}
-              onPageChange={homePager.setPage}
-              onPageSizeChange={homePager.setPageSize}
-              onCommitCustomPageSize={homePager.commitCustomPageSize}
-              itemLabel="playthroughs"
-            />
-            </>
-          )}
+          <PlaythroughLibrary
+            variant="page"
+            onOpen={(id) => {
+              void openPlaythrough(id);
+            }}
+            onNewPlaythrough={onNewPlaythrough}
+            onError={setError}
+          />
         </section>
       )}
     </main>

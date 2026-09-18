@@ -4,6 +4,7 @@ import type { ScenarioPreferences } from "../../schemas";
 import { parseUserInput } from "../../engine/engine";
 import { assembleTurnPrompt } from "../openAiCompatibleProvider";
 import {
+  CHARACTERS_DIR,
   createBlankPlaythroughRecord,
   createPlaythroughFromSeedRecord,
   createPlaythroughRecord,
@@ -17,6 +18,7 @@ import {
   renamePlaythroughRecord,
   resolveCast,
   resolvePresetForGeneration,
+  setPlaythroughCoverRecord,
   updatePlaythroughRecord
 } from "../store";
 import {
@@ -27,7 +29,8 @@ import {
   resummarizeChapterAction
 } from "../stateActions";
 import { buildOpeningPrompt, executeTurn } from "../turnActions";
-import { sweepOrphansInDataDir } from "../imageStore";
+import { imageFilePath, sweepOrphansInDataDir } from "../imageStore";
+import { resolvePlaythroughCover } from "../coverResolver";
 import { loadPromptConfig } from "../promptConfigStore";
 import { abortOnClientDisconnect, dataDir as defaultDataDir, imagesDir as defaultImagesDir, providerManager, settingsDir } from "./helpers";
 
@@ -44,6 +47,13 @@ const CreatePlaythroughBody = z.object({
 const RenameBody = z.object({ name: z.string().min(1) });
 
 const DraftBody = z.object({ content: z.string() });
+
+/** A manual cover: the image's content-addressed file name, plus how the frame is filled.
+ *  Absent `fit` = "contain" (the whole image, fitted, over a blurred fill of itself). */
+const CoverBody = z.object({
+  file: z.string(),
+  fit: z.enum(["contain", "cover"]).optional()
+});
 
 const GenerateBody = z.object({
   name: z.string().min(1).default("New Adventure"),
@@ -73,11 +83,14 @@ const CloseChapterBody = z.object({
 export type PlaythroughRoutesOptions = FastifyPluginOptions & {
   dataDir?: string;
   imagesDir?: string;
+  /** The character library, read for a cast-collage cover. Same seam idea as `dataDir`. */
+  charactersDir?: string;
 };
 
 export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = async (app, options = {}) => {
   const dataDir = options.dataDir ?? defaultDataDir;
   const imagesDir = options.imagesDir ?? defaultImagesDir;
+  const charactersDir = options.charactersDir ?? CHARACTERS_DIR;
 
   app.get("/api/playthroughs", async (request) => {
     const query = z.object({ includeBranches: z.string().optional() }).parse(request.query ?? {});
@@ -86,7 +99,12 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
     // messages, snapshots and catalogs the cards never read (measured at ~750 KB for five
     // playthroughs). Full documents stay behind listPlaythroughRecords for the sweep and the
     // timeline listing, which really do walk the state.
-    return listPlaythroughSummaries(dataDir, { includeTimelineBranches });
+    // The cover resolver is injected (see `PlaythroughSummaryOptions`): it needs the image
+    // store, which imports the store back, so the wiring lives here rather than in the store.
+    return listPlaythroughSummaries(dataDir, {
+      includeTimelineBranches,
+      resolveCover: (p) => resolvePlaythroughCover(p, { imagesDir, charactersDir })
+    });
   });
 
   app.post("/api/playthroughs", async (request, reply) => {
@@ -120,6 +138,32 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
     const params = z.object({ id: z.string() }).parse(request.params);
     const body = RenameBody.parse(request.body ?? {});
     const updated = renamePlaythroughRecord(dataDir, params.id, body.name);
+    if (!updated) return reply.code(404).send({ error: "Playthrough not found" });
+    return updated;
+  });
+
+  // The manual cover: a pointer at an image that already lives in the content-addressed
+  // store. Validated HERE rather than in the store — the check needs the image module, which
+  // imports the store back (cycle), and `imageFilePath` also guarantees the name is hash-shaped
+  // before anything touches the disk.
+  app.post("/api/playthroughs/:id/cover", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const body = CoverBody.parse(request.body ?? {});
+    if (!imageFilePath(body.file, imagesDir)) {
+      return reply.code(400).send({ error: "Unknown image file" });
+    }
+    const updated = setPlaythroughCoverRecord(dataDir, params.id, { file: body.file, fit: body.fit });
+    if (!updated) return reply.code(404).send({ error: "Playthrough not found" });
+    // The whole document, like the rename route: the client already treats that response as
+    // the authoritative record.
+    return updated;
+  });
+
+  // Clearing hands the card back to the automatic chain (latest image → present cast →
+  // placeholder). Idempotent: clearing a cover that is already absent still returns the record.
+  app.delete("/api/playthroughs/:id/cover", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const updated = setPlaythroughCoverRecord(dataDir, params.id, null);
     if (!updated) return reply.code(404).send({ error: "Playthrough not found" });
     return updated;
   });

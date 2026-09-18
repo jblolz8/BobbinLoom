@@ -14,7 +14,9 @@ import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 import { afterEach, describe, expect, it } from "vitest";
 import { playthroughRoutes } from "../src/server/routes/playthroughs";
+import { saveImageBytes } from "../src/server/imageStore";
 import { createPlaythroughRecord, updatePlaythroughRecord } from "../src/server/store";
+import { imageRef, pngBytes } from "./helpers/imageFixtures";
 import { LocationEntrySchema } from "../src/schemas";
 import type { ChatMessage, Playthrough } from "../src/schemas";
 
@@ -25,15 +27,16 @@ afterEach(() => {
   tempDirs = [];
 });
 
-function harness(): { app: FastifyInstance; dataDir: string } {
+function harness(): { app: FastifyInstance; dataDir: string; imagesDir: string } {
   const root = mkdtempSync(join(tmpdir(), "bobbinloom-list-"));
   tempDirs.push(root);
   const dataDir = join(root, "playthroughs");
+  const imagesDir = join(root, "images");
   const app = Fastify();
-  // imagesDir is only reached by the delete route's sweep; pointed at a temp dir so no test can
-  // ever touch the real image store.
-  app.register(playthroughRoutes, { dataDir, imagesDir: join(root, "images") });
-  return { app, dataDir };
+  // Temp dirs for both stores the route reaches: imagesDir is the delete route's sweep AND the
+  // cover resolver's existence check, charactersDir is where a cast collage's portraits live.
+  app.register(playthroughRoutes, { dataDir, imagesDir, charactersDir: join(root, "characters") });
+  return { app, dataDir, imagesDir };
 }
 
 function message(id: string, content: string, hidden = false): ChatMessage {
@@ -52,6 +55,7 @@ function location(id: string, name: string) {
  *  smuggled in from the document — or a document field renamed into the summary — fails here. */
 const SUMMARY_KEYS = [
   "castCount",
+  "cover",
   "id",
   "isTimelineBranch",
   "lastMessagePreview",
@@ -169,6 +173,27 @@ describe("GET /api/playthroughs ships summaries, not documents", () => {
     expect(defaults.total).toBe(1);
     expect(withBranches.playthroughs.map((p) => p.id).sort()).toEqual([branch.id, parent.id].sort());
     expect(withBranches.total).toBe(2);
+  });
+
+  it("resolves a cover per card: the manual pick, the story's own image, or nothing", async () => {
+    const { app, dataDir, imagesDir } = harness();
+    const latest = saveImageBytes(pngBytes("latest"), "image/png", imagesDir).file;
+    const manual = saveImageBytes(pngBytes("manual"), "image/png", imagesDir).file;
+
+    const bare = createPlaythroughRecord(dataDir, "Bare");
+    const withImage = createPlaythroughRecord(dataDir, "With Image");
+    withImage.messages.push({ ...message("m1", "art below"), images: [imageRef(latest)] });
+    updatePlaythroughRecord(dataDir, withImage);
+    const picked = createPlaythroughRecord(dataDir, "Picked");
+    picked.cover = { file: manual, fit: "cover", updatedAt: "2026-02-01T00:00:00.000Z" };
+    updatePlaythroughRecord(dataDir, picked);
+
+    const body = (await list(app)).json() as { playthroughs: { id: string; cover: unknown }[] };
+    const coverOf = (id: string) => body.playthroughs.find((p) => p.id === id)?.cover;
+
+    expect(coverOf(picked.id)).toEqual({ source: "manual", file: manual, fit: "cover" });
+    expect(coverOf(withImage.id)).toEqual({ source: "latest", file: latest });
+    expect(coverOf(bare.id)).toBeNull();
   });
 
   it("still reports an unreadable file in failures without losing the list", async () => {

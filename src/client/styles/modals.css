@@ -649,64 +649,12 @@
   line-height: 1.45;
 }
 
-/* Save/Load modal */
-.save-load-modal {
-  max-width: 520px;
+.modal.playthrough-library-modal {
+  width: min(880px, 100%);
 }
 
-.save-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.save-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.65rem 0;
-  border-bottom: 1px solid #1c2230;
-}
-
-.save-item:last-child { border-bottom: none; }
-
-.save-item.current {
-  background: #1a2235;
-  margin: 0 -0.5rem;
-  padding-left: 0.5rem;
-  padding-right: 0.5rem;
-  border-radius: 8px;
-}
-
-.save-item-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  min-width: 0;
-}
-
-.save-item-info strong {
-  font-size: 0.9rem;
-}
-
-.save-meta {
-  font-size: 0.75rem;
-  color: #7a8494;
-}
-
-.save-badge {
-  font-size: 0.7rem;
-  color: var(--accent-highlight, var(--accent-base));
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.save-item-actions {
-  display: flex;
-  gap: 0.35rem;
-  flex-shrink: 0;
+.modal.gallery-modal {
+  width: min(760px, 100%);
 }
 
 .rename-input {

@@ -602,6 +602,26 @@ export const TurnSnapshotSchema = z.object({
 });
 export type TurnSnapshot = z.infer<typeof TurnSnapshotSchema>;
 
+/** The player's manual cover choice for a playthrough: a reference to an image that
+ *  already lives in the content-addressed store (`data/images/`). ABSENCE means "no
+ *  manual choice" — `resolvePlaythroughCover` then falls back to the story's own
+ *  images, then the present cast's portraits, then the placeholder mark.
+ *
+ *  Deliberately NOT a `TurnSnapshotSchema` field: cover art is presentation, not
+ *  world state, so a Retry must not rewind it. */
+export const PlaythroughCoverSchema = z.object({
+  /** "<sha256>.<ext>" — content-addressed file under data/images/. */
+  file: z.string(),
+  /** How the cover frame is filled. Absent = "contain": the whole image, fitted,
+   *  over a blurred fill of itself. "cover" fills the frame and lets the edges fall
+   *  off. A MANUAL choice only — an auto-resolved cover always contains, because it
+   *  changes as the story progresses and a stored preference for a moving target
+   *  would be confusing. */
+  fit: z.enum(["contain", "cover"]).optional(),
+  updatedAt: z.string()
+});
+export type PlaythroughCover = z.infer<typeof PlaythroughCoverSchema>;
+
 export const PlaythroughSchema = z.object({
   schemaVersion: z.number().int().min(1).default(1),
   id: z.string(),
@@ -639,6 +659,11 @@ export const PlaythroughSchema = z.object({
   // localStorage). Optional so pre-draft records parse untouched.
   draft: z.string().optional(),
   draftUpdatedAt: z.string().optional(),
+  /** The player's manual cover choice; absence falls back to the resolver chain
+   *  (latest image → present cast → placeholder). OPTIONAL, and deliberately no
+   *  `.default()`: an additive optional field needs no `dataMigrations` entry and
+   *  every record written before covers existed parses untouched. */
+  cover: PlaythroughCoverSchema.optional(),
   // Measured/estimated prompt-token ratio from the last turn, fed back into the
   // next turn's budget. Deliberately NOT snapshotted (see TurnSnapshotSchema):
   // it measures the tokenizer, not world state, so a retry must not rewind it.
@@ -662,6 +687,33 @@ export type LoadFailure = z.infer<typeof LoadFailureSchema>;
  *  snapshots or the catalogs (they are ~90% of a document's bytes and no card reads them), and
  *  every field a card renders belongs here so a missing one is a compile error rather than a
  *  blank card. `locationName` is resolved server-side so the client needs no `locationCatalog`. */
+/** A card's RESOLVED cover — what to render, and why that source won.
+ *
+ *  The stored `cover` is only ever the manual choice; the other sources are derived
+ *  at read time. `source` travels on the wire so the UI can offer "Clear custom
+ *  cover" for a manual one only. */
+export const PlaythroughCoverViewSchema = z.object({
+  source: z.enum(["manual", "latest", "cast"]),
+  /** `manual` and `latest`: one content-addressed file under data/images/. */
+  file: z.string().optional(),
+  /** `manual` only: how the frame is filled. Absent = "contain". */
+  fit: z.enum(["contain", "cover"]).optional(),
+  /** How many present cast have art, BEFORE the cap — a collage shows at most
+   *  `COVER_COLLAGE_LIMIT` tiles, and the card says "+N" for the rest rather than
+   *  pretending they are not there. */
+  characterCount: z.number().optional(),
+  /** `cast`: the present cast, in cast order, capped. The client builds each tile's
+   *  URL from the character library's avatar route, which is why the id is what travels
+   *  rather than a file name; `name` rides along for the tile's letter fallback, for the
+   *  case where a character left the library after casting and its art 404s. */
+  characters: z.array(z.object({
+    id: z.string(),
+    name: z.string().default(""),
+    avatarUpdatedAt: z.number().optional()
+  })).optional()
+});
+export type PlaythroughCoverView = z.infer<typeof PlaythroughCoverViewSchema>;
+
 export const PlaythroughSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -673,6 +725,9 @@ export const PlaythroughSummarySchema = z.object({
   /** Last non-hidden message, truncated to 120 chars. Empty when there is none. */
   lastMessagePreview: z.string(),
   isTimelineBranch: z.boolean(),
+  /** The resolved cover, or null to render the placeholder. Never null-of-error:
+   *  a cover whose file is gone falls through to the next source instead. */
+  cover: PlaythroughCoverViewSchema.nullable(),
   updatedAt: z.string(),
 });
 export type PlaythroughSummary = z.infer<typeof PlaythroughSummarySchema>;

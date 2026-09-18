@@ -9,12 +9,45 @@ order: 10
 A playthrough is one story: its world, its cast, its chat history and its save points. The app
 opens on the home screen, which lists every playthrough you have.
 
-## The home screen
+## The playthrough shelf
 
-Each card shows the playthrough's name, its current location, turn count, cast size, when it
-was last touched, and a two-line preview of the most recent message. The **⋮** menu in the
-card header offers **Rename**, **Duplicate** and **Delete**, and the same menu is reused in
-the save/load list inside the play view.
+Each item shows a cover image, the playthrough's name, its current location, turn count, cast
+size, when it was last touched, and a two-line preview of the most recent message. The **⋮**
+menu offers **Rename**, **Duplicate** and **Delete**.
+
+Two view modes, switched by the toolbar's **Grid** / **List** buttons and remembered per device:
+**Grid** shows the cover as a wide banner above the text, **List** shows it as a small thumbnail
+beside the title. **Search** matches the name and the location, the sort control orders by
+updated date, name or turn, and the pager keeps a page size of its own.
+
+The whole shelf — search, sort, view modes, pager, the **⋮** menu — is also inside the play view,
+behind **Save / Load** in its header, where picking an item switches to that story. It is the
+same shelf in both places, so an item behaves identically wherever it is rendered.
+
+## Cover art
+
+A playthrough wears the first of these that exists:
+
+| Priority | Source | When it applies |
+|---|---|---|
+| 1 | **A picture you picked** | Chosen by hand in **Gallery Media** |
+| 2 | **The latest image** | The newest image generated anywhere in the story so far |
+| 3 | **The present cast** | No images yet: a collage of the characters at your current location, in cast order — up to four, with a **+N** count for the rest |
+| 4 | **The placeholder** | Nothing to show — the monochrome BobbinLoom mark |
+
+An image is fitted whole over a blurred fill of itself, so a portrait or a square render never
+sits on black bars. A picture you picked can instead **Fill** the frame and let the edges fall
+off it.
+
+**Gallery Media** — in the play view's Journal tab, under **Media** — lists every image the
+story has produced, newest first, each with the chapter and turn it came from. **Use as cover**
+sets the pick, **Fill** sets it in fill mode, and **Clear custom cover** hands the item back to
+the automatic chain. Removing an image that happens to be the cover asks first and says so, and
+the cover then falls back to the next source.
+
+Covers are library metadata, not story state: changing one is never recorded as play, and it is
+not part of a snapshot. A duplicated playthrough or a timeline branch starts with the same
+cover, because the field travels with the document.
 
 The header's four tabs — Playthroughs, Characters, Lorebooks, Personas — switch the home
 screen between the playthrough list and the three libraries. Inside a playthrough those same

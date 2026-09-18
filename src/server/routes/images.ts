@@ -377,6 +377,10 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     if (remaining.length !== (message.images ?? []).length) {
       if (remaining.length) message.images = remaining;
       else delete message.images;
+      // A cover is a SECOND kind of reference to these bytes. When this is the image the card
+      // wears, the pointer goes in the same write that drops the ref, so the card falls back
+      // down the chain instead of holding a pointer at a file that is about to be swept.
+      if (playthrough.cover?.file === params.file) delete playthrough.cover;
       updatePlaythroughRecord(dataDir, playthrough);
       // Best-effort, like the playthrough-delete and truncate sites: the
       // reference is ALREADY gone from the persisted record, so a failed sweep

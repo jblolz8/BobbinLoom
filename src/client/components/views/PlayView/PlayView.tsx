@@ -14,7 +14,7 @@ import { ScenePanel } from "./ScenePanel";
 import { ChatPanel } from "./ChatPanel";
 import { ImageRequestBodyModal } from "./ImageRequestBodyModal";
 import { InfoPanel } from "./InfoPanel/InfoPanel";
-import { SaveLoadModal } from "../../modals/SaveLoadModal";
+import { PlaythroughLibrary } from "../../library/PlaythroughLibrary";
 import { SettingsModal } from "../../modals/SettingsModal";
 import { PersonaManager } from "../../modals/PersonaManager";
 import { CharacterManager } from "../../modals/CharacterManager";
@@ -317,15 +317,23 @@ export function PlayView(props: PlayViewProps) {
     <main className="app-shell play-view-shell">
       {error ? <pre className="error-box">{error}</pre> : null}
 
-      <SaveLoadModal
-        open={saveLoadOpen}
-        onClose={() => setSaveLoadOpen(false)}
-        currentPlaythroughId={playthrough.id}
-        onLoad={(id) => { void loadPlaythrough(id); }}
-        onCurrentDeleted={handleCurrentDeleted}
-        onCurrentRenamed={setPlaythrough}
-        onError={setError}
-      />
+      {/* The play view mounts the SAME shelf the home screen renders, as a dialog: one card
+          contract, two surfaces. Picking a card loads it and closes — the shelf's own list is a
+          projection, so the document is read by id through the same loader. */}
+      {saveLoadOpen ? (
+        <PlaythroughLibrary
+          variant="dialog"
+          currentPlaythroughId={playthrough.id}
+          onOpen={(id) => {
+            void loadPlaythrough(id);
+            setSaveLoadOpen(false);
+          }}
+          onClose={() => setSaveLoadOpen(false)}
+          onCurrentDeleted={handleCurrentDeleted}
+          onCurrentRenamed={setPlaythrough}
+          onError={setError}
+        />
+      ) : null}
 
       <section className="layout">
         <ScenePanel
@@ -465,11 +473,17 @@ export function PlayView(props: PlayViewProps) {
       {/* Removing a generated image is destructive (the file is swept once nothing
           else references it), so it asks through the shared ConfirmModal like
           retry/truncate instead of a native window.confirm. A message can hold
-          several images, so the modal previews exactly which one is going. */}
+          several images, so the modal previews exactly which one is going. An image
+          that is also the playthrough's cover says so: deleting it loses the cover
+          choice with it. */}
       {deleteImageTarget ? (
         <ConfirmModal
           title="Remove this image?"
-          message="It is removed from this message. The file is deleted if nothing else uses it."
+          message={
+            playthrough.cover?.file === deleteImageTarget.file
+              ? "It is removed from this message. The file is deleted if nothing else uses it — and this image is your playthrough's cover, so the cover falls back to the latest remaining image."
+              : "It is removed from this message. The file is deleted if nothing else uses it."
+          }
           confirmLabel={imageDeletingId === deleteImageTarget.messageId ? "Removing…" : "Yes, remove"}
           danger
           maxWidth={420}

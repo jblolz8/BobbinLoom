@@ -3,7 +3,7 @@ import type { CharacterTemplate } from "../../../schemas";
 import { getCharacterAvatarUrl } from "../../api";
 import { displayTitle } from "../../../engine/characterCards";
 
-export type CharacterAvatarVariant = "portrait" | "list" | "grid" | "chip" | "custom";
+export type CharacterAvatarVariant = "portrait" | "list" | "grid" | "chip" | "cover-tile" | "custom";
 
 export type CharacterAvatarProps = {
   template: CharacterTemplate | (Pick<CharacterTemplate, "id"> & {
@@ -27,6 +27,7 @@ export type CharacterAvatarProps = {
  * - "list": 72x108 2:3 framed 1:1 profile thumbnail
  * - "grid": 1:1 square profile thumbnail
  * - "chip": 24x24 compact round avatar
+ * - "cover-tile": one tile of a cast collage cover — fills its cell, no frame of its own
  * - "custom": Custom user-styled container
  */
 export function CharacterAvatar({
@@ -51,6 +52,8 @@ export function CharacterAvatar({
     variantClass = "card-list-avatar";
   } else if (variant === "grid") {
     variantClass = "card-grid-thumb";
+  } else if (variant === "cover-tile") {
+    variantClass = "cover-art-tile-img";
   } else if (variant === "chip") {
     variantClass = "selected-cast-avatar";
   }

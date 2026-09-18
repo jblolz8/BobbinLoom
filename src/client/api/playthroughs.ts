@@ -1,4 +1,4 @@
-import type { Playthrough, PlaythroughListResponse, SimpleNPC } from "../../schemas";
+import type { Playthrough, PlaythroughCover, PlaythroughListResponse, SimpleNPC } from "../../schemas";
 import { request } from "./client";
 
 export type TokenBreakdown = {
@@ -193,6 +193,23 @@ export function duplicatePlaythrough(id: string): Promise<Playthrough> {
   return request<Playthrough>(`/api/playthroughs/${id}/duplicate`, {
     method: "POST"
   });
+}
+
+/** The manual cover choice: which stored image, and how the frame is filled. `fit` is absent
+ *  for the default — the whole image, fitted over a blurred fill of itself. */
+export type PlaythroughCoverChoice = Pick<PlaythroughCover, "file" | "fit">;
+
+export function setPlaythroughCover(id: string, cover: PlaythroughCoverChoice): Promise<Playthrough> {
+  return request<Playthrough>(`/api/playthroughs/${id}/cover`, {
+    method: "POST",
+    body: JSON.stringify(cover)
+  });
+}
+
+/** Clears the manual choice, handing the card back to the automatic chain (latest image →
+ *  present cast → placeholder). */
+export function clearPlaythroughCover(id: string): Promise<Playthrough> {
+  return request<Playthrough>(`/api/playthroughs/${id}/cover`, { method: "DELETE" });
 }
 
 export function branchPlaythrough(

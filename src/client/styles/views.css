@@ -8140,3 +8140,333 @@ button.ai-brainstorm-toggle-btn.active,
   outline-offset: 2px;
   border-radius: 10px;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PLAYTHROUGH LIBRARY — covers, view modes, gallery
+   The shelf renders from the list projection; every card shape lives here so
+   the home page and the play view's dialog cannot drift apart.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.playthrough-library,
+.playthrough-library-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.playthrough-library-toolbar {
+  margin-bottom: 0.25rem;
+}
+
+/* ── Cover art ──
+   One frame per size, and the image inside it is FITTED over a blurred copy of itself: a 2:3
+   portrait or a square render then fills the frame instead of sitting on letterbox bars. */
+.cover-art {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-app);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  isolation: isolate;
+}
+
+.cover-art-thumb {
+  width: 96px;
+  flex-shrink: 0;
+  border-radius: 7px;
+}
+
+.cover-art-hero {
+  border-radius: 10px;
+}
+
+.cover-art-blur {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(14px) saturate(1.15);
+  transform: scale(1.25);
+  opacity: 0.55;
+  z-index: 0;
+}
+
+.cover-art-main {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* Fill mode: the image covers the frame and its edges fall off, no blurred fill behind it. */
+.cover-art-main.is-fill {
+  object-fit: cover;
+}
+
+.cover-art-empty {
+  background: var(--bg-surface-elevated);
+  color: var(--text-muted);
+}
+
+.cover-art-empty svg {
+  opacity: 0.55;
+}
+
+/* ── Cast collage ── */
+.cover-art-collage {
+  display: grid;
+  gap: 1px;
+  background: var(--border-subtle);
+}
+
+.cover-art-collage-1 { grid-template-columns: 1fr; }
+.cover-art-collage-2 { grid-template-columns: repeat(2, 1fr); }
+.cover-art-collage-3 { grid-template-columns: repeat(3, 1fr); }
+.cover-art-collage-4 { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); }
+
+.cover-art-tile-img {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  aspect-ratio: auto !important;
+  border: none !important;
+  border-radius: 0 !important;
+  object-fit: cover !important;
+  object-position: center top !important;
+  display: block;
+}
+
+/* The count chip floats on unknown artwork, so it takes the media tokens: its scrim is dark in
+   BOTH modes, which is the only thing that reads over a bright image and a dark one alike. */
+.cover-art-more {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 2;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--media-scrim);
+  border: 1px solid var(--media-border);
+  color: var(--media-icon);
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.playthrough-card-cover {
+  margin-bottom: 0.6rem;
+}
+
+.playthrough-card-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+/* ── List view ── */
+.playthrough-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.playthrough-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-main);
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  box-shadow: var(--shadow-card);
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+@media (hover: hover) {
+  .playthrough-row:hover {
+    border-color: var(--border-focus);
+    background: var(--bg-surface-hover);
+    transform: translateY(-1px);
+  }
+}
+
+.playthrough-row.current {
+  border-color: var(--accent-highlight, var(--accent-base));
+}
+
+.playthrough-row-cover {
+  flex-shrink: 0;
+}
+
+.playthrough-row-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.playthrough-row-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.playthrough-row-title {
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.playthrough-row-updated {
+  color: var(--text-muted);
+}
+
+.playthrough-row-actions {
+  flex-shrink: 0;
+}
+
+@media (max-width: 560px) {
+  .playthrough-row {
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .playthrough-row .playthrough-card-preview {
+    display: none;
+  }
+
+  .cover-art-thumb {
+    width: 72px;
+  }
+}
+
+/* ── Gallery modal ── */
+.gallery-modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.gallery-modal-error {
+  color: var(--status-danger);
+  font-size: 0.8rem;
+  margin: 0.35rem 0 0;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.gallery-item {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 0.5rem;
+}
+
+.gallery-item.current {
+  border-color: var(--accent-highlight, var(--accent-base));
+}
+
+.gallery-item-thumb {
+  padding: 0;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-app);
+  cursor: zoom-in;
+}
+
+.gallery-item-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.gallery-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.gallery-item-when {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.gallery-item-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+/* ── Journal media card ── */
+.journal-media-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.journal-media-strip {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.journal-media-thumb {
+  padding: 0;
+  width: 88px;
+  height: 56px;
+  border-radius: 7px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-app);
+  cursor: pointer;
+}
+
+.journal-media-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.journal-media-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.journal-media-count {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}

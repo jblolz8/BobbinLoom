@@ -51,7 +51,10 @@ export function mimeForFile(file: string): string {
   return MIME_BY_EXT[ext] ?? "application/octet-stream";
 }
 
-/** Every file name referenced by any message of any of the given playthroughs. */
+/** Every file name referenced by any message — or by a manual cover — of any of the given
+ *  playthroughs. A cover reference is easy to forget and invisible when it regresses: the
+ *  sweep then deletes the bytes behind a deliberate user choice, and the card quietly falls
+ *  back to its next source. Any new kind of stored reference to `data/images/` belongs here. */
 export function collectReferencedImages(playthroughs: Playthrough[]): Set<string> {
   const refs = new Set<string>();
   for (const playthrough of playthroughs) {
@@ -60,6 +63,10 @@ export function collectReferencedImages(playthroughs: Playthrough[]): Set<string
         if (image?.file) refs.add(image.file);
       }
     }
+    // An auto-resolved cover is always a message reference (already collected above); only the
+    // manual pointer can exist outside the messages, and it is collected unconditionally so a
+    // future cover source cannot forget to.
+    if (playthrough.cover?.file) refs.add(playthrough.cover.file);
   }
   return refs;
 }

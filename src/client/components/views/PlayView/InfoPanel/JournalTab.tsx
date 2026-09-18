@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import type { LorebookSummary, MemoryEvent, Playthrough } from "../../../../../schemas";
 import { closeChapter, listLorebooks, type CloseChapterBody, type TokenUsage } from "../../../../api";
 import { AvatarBadge, Badge, Button, Checkbox, Icon, TextArea, TextInput } from "../../../base";
+import { buildImageUrl, clearPlaythroughCover, setPlaythroughCover } from "../../../../api";
+import { buildCoverMedia } from "../../../../engine/coverMedia";
+import { GalleryModal } from "../../../modals/GalleryModal";
 
 export function JournalTab({
   playthrough,
@@ -24,6 +27,9 @@ export function JournalTab({
   const [closing, setClosing] = useState(false);
   const [lorebookSummaries, setLorebookSummaries] = useState<LorebookSummary[]>([]);
   const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set());
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [coverSaving, setCoverSaving] = useState(false);
+  const [coverError, setCoverError] = useState<string | null>(null);
 
   // Filter state for timeline events
   const [eventSearch, setEventSearch] = useState("");
@@ -35,6 +41,36 @@ export function JournalTab({
   }, [playthrough.id]);
 
   const attachedLorebooks = lorebookSummaries.filter(lb => playthrough.lorebookIds?.includes(lb.id));
+
+  // Newest first, hidden messages skipped, one entry per file — see buildCoverMedia.
+  const media = useMemo(() => buildCoverMedia(playthrough), [playthrough]);
+
+  // Both writes answer with the whole document, which the play view already owns: handing it
+  // back through the existing change channel is what keeps the card, the gallery badge and the
+  // journal strip agreeing with the server without a second read.
+  async function handlePickCover(file: string, fit?: "contain" | "cover") {
+    setCoverSaving(true);
+    setCoverError(null);
+    try {
+      onPlaythroughChange(await setPlaythroughCover(playthrough.id, fit ? { file, fit } : { file }));
+    } catch (e) {
+      setCoverError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCoverSaving(false);
+    }
+  }
+
+  async function handleClearCover() {
+    setCoverSaving(true);
+    setCoverError(null);
+    try {
+      onPlaythroughChange(await clearPlaythroughCover(playthrough.id));
+    } catch (e) {
+      setCoverError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCoverSaving(false);
+    }
+  }
 
   const events = useMemo(() => {
     const all = new Map<string, MemoryEvent>();
@@ -370,6 +406,61 @@ export function JournalTab({
           )}
         </div>
       </section>
+
+      <section className="journal-card">
+        <div className="journal-card-header">
+          <h3 className="journal-section-title">
+            <Icon name="Image" size={15} /> Media
+          </h3>
+        </div>
+        {media.length === 0 ? (
+          <div className="info-empty-state">
+            <Icon name="Image" size={15} />
+            <span>
+              No generated images yet. An image on an assistant message becomes this playthrough's
+              cover, and any of them can be chosen by hand here.
+            </span>
+          </div>
+        ) : (
+          <div className="journal-media-body">
+            <div className="journal-media-strip">
+              {media.slice(0, 6).map(item => (
+                <button
+                  key={item.file}
+                  type="button"
+                  className="journal-media-thumb"
+                  onClick={() => setGalleryOpen(true)}
+                  title={item.prompt || "Open the gallery"}
+                >
+                  <img src={buildImageUrl(item.file)} alt="" loading="lazy" decoding="async" />
+                </button>
+              ))}
+            </div>
+            <div className="journal-media-actions">
+              <span className="journal-media-count">
+                {media.length} {media.length === 1 ? "image" : "images"}
+              </span>
+              <Button variant="secondary" size="sm" onClick={() => setGalleryOpen(true)}>
+                Open Gallery Media
+              </Button>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {galleryOpen ? (
+        <GalleryModal
+          playthroughName={playthrough.name}
+          media={media}
+          currentFile={playthrough.cover?.file}
+          hasManualCover={Boolean(playthrough.cover)}
+          saving={coverSaving}
+          errorMessage={coverError ?? undefined}
+          onPick={(file, fit) => { void handlePickCover(file, fit); }}
+          onClear={() => { void handleClearCover(); }}
+          onClose={() => setGalleryOpen(false)}
+        />
+      ) : null}
 
       {/* Close Chapter Modal */}
       {closeModalOpen ? (

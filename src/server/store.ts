@@ -10,7 +10,7 @@ import type { ParsedCard } from "./characterCards/parseCard";
 import { createBlankPlaythrough, createInitialPlaythrough, createPlaythroughFromSeed, ensureMessageTurns, restoreSnapshotState } from "../engine/engine";
 import { loadAppSettings } from "./appSettingsStore";
 import { DEMO_TEMPLATE } from "../engine/demoData";
-import type { CharacterFormat, CharacterTemplate, ImageGenerationSettings, LoadFailure, LorebookFile, LorebookSummary, PlayerPersona, Playthrough, PlaythroughListResponse, PlaythroughSummary, PromptModuleSet, PromptPreset, ScenarioSeed, TurnSnapshot } from "../schemas";
+import type { CharacterFormat, CharacterTemplate, ImageGenerationSettings, LoadFailure, LorebookFile, LorebookSummary, PlayerPersona, Playthrough, PlaythroughCoverView, PlaythroughListResponse, PlaythroughSummary, PromptModuleSet, PromptPreset, ScenarioSeed, TurnSnapshot } from "../schemas";
 import { CharacterTemplateSchema, EMPTY_MODULE_SET, PlayerPersonaSchema, PlaythroughSchema } from "../schemas";
 
 function ensureStoreDir(dir: string): void {
@@ -265,7 +265,10 @@ export function setDefaultPersonaRecord(id: string, dir: string = PERSONAS_DIR):
 }
 
 // --- Character template CRUD (folder-per-entity: data/characters/<slug>/<slug>.json, older versions <slug>.v<N>.json) ---
-const CHARACTERS_DIR = join(process.cwd(), "data", "characters");
+/** The character library's directory. Exported so a route can take it as an injectable
+ *  seam (`charactersDir`), the same way it already takes `dataDir` / `imagesDir`: the
+ *  playthrough list resolves a cast collage out of this library. */
+export const CHARACTERS_DIR = join(process.cwd(), "data", "characters");
 
 function characterFolderPath(dir: string, slug: string): string {
   return join(dir, slug);
@@ -423,6 +426,26 @@ export function getCharacterTemplate(id: string, dir: string = CHARACTERS_DIR): 
   return listCharacterTemplates(dir).find((t) => t.id === id) ?? null;
 }
 
+/** The portrait file for a record inside its own folder, or null when there is none:
+ *  custom portrait → `portrait.<ext>` → the CCv2 card PNG. ONE owner for that chain —
+ *  the avatar route and the present-cast cover resolver both go through it, so "does
+ *  this character have art" can never mean two different things. */
+function portraitFileFor(record: CharacterTemplate, folder: string): string | null {
+  if (record.customPortrait) {
+    const file = join(folder, record.customPortrait);
+    if (existsSync(file)) return file;
+  }
+  for (const ext of ["png", "jpg", "jpeg", "webp"]) {
+    const candidate = join(folder, `portrait.${ext}`);
+    if (existsSync(candidate)) return candidate;
+  }
+
+  const ref = record.cardRef;
+  if (!ref || ref.kind !== "png") return null;
+  const file = join(folder, ref.file);
+  return existsSync(file) ? file : null;
+}
+
 export function getCharacterAvatarPath(
   id: string,
   typeOrDir?: "portrait" | "profile" | "original" | string,
@@ -456,19 +479,36 @@ export function getCharacterAvatarPath(
   }
 
   // Portrait (default or fallback from profile)
-  if (record.customPortrait) {
-    const file = join(folder, record.customPortrait);
-    if (existsSync(file)) return file;
-  }
-  for (const ext of ["png", "jpg", "jpeg", "webp"]) {
-    const candidate = join(folder, `portrait.${ext}`);
-    if (existsSync(candidate)) return candidate;
-  }
+  return portraitFileFor(record, folder);
+}
 
-  const ref = record.cardRef;
-  if (!ref || ref.kind !== "png") return null;
-  const file = join(folder, ref.file);
-  return existsSync(file) ? file : null;
+/** Which of the given character ids have portrait art in the library, in the order
+ *  given. The library is read ONCE (not once per id), which is the whole reason this
+ *  is not just `getCharacterAvatarPath` in a loop — that would re-list every character
+ *  folder per lookup.
+ *
+ *  Ids with no art are dropped rather than special-cased: a character deleted from the
+ *  library after being cast still has a template copy inside the playthrough, but the
+ *  bytes live in the library folder, so there is nothing left to render. */
+export function resolveCharacterPortraits(
+  ids: string[],
+  dir: string = CHARACTERS_DIR
+): { id: string; avatarUpdatedAt?: number }[] {
+  if (ids.length === 0) return [];
+  const byId = new Map(listCharacterTemplates(dir).map((template) => [template.id, template]));
+  const found: { id: string; avatarUpdatedAt?: number }[] = [];
+  for (const id of ids) {
+    const record = byId.get(id);
+    if (!record) continue;
+    // The normal case is the slug folder; a folder renamed by hand is the fallback, and
+    // only then do we pay for a scan.
+    const slugged = characterFolderPath(dir, slugify(record.name));
+    const folder = existsSync(slugged) ? slugged : findFolderContainingId(dir, id);
+    if (!folder) continue;
+    if (!portraitFileFor(record, folder)) continue;
+    found.push(record.avatarUpdatedAt === undefined ? { id } : { id, avatarUpdatedAt: record.avatarUpdatedAt });
+  }
+  return found;
 }
 
 export function saveCharacterAvatar(
@@ -818,6 +858,35 @@ export function renamePlaythroughRecord(dir: string, id: string, name: string): 
   return playthrough;
 }
 
+/** Set or clear a playthrough's manual cover. `null` clears it, which hands the card back
+ *  to the automatic chain (latest image → present cast → placeholder).
+ *
+ *  Deliberately does NOT touch `updatedAt`, unlike `renamePlaythroughRecord`: art is not
+ *  story activity, and the library is sorted by `updatedAt` desc — bumping it would
+ *  reorder the shelf and claim the story moved when nothing happened.
+ *
+ *  The `file` is not validated here; the route checks it against the image store before
+ *  calling, because that check needs the image store this module is on the far side of. */
+export function setPlaythroughCoverRecord(
+  dir: string,
+  id: string,
+  cover: { file: string; fit?: "contain" | "cover" } | null
+): Playthrough | null {
+  const playthrough = getPlaythroughRecord(dir, id);
+  if (!playthrough) return null;
+  if (cover === null) {
+    delete playthrough.cover;
+  } else {
+    playthrough.cover = {
+      file: cover.file,
+      ...(cover.fit === undefined ? {} : { fit: cover.fit }),
+      updatedAt: new Date().toISOString()
+    };
+  }
+  updatePlaythroughRecord(dir, playthrough);
+  return playthrough;
+}
+
 /**
  * Deep-clone an existing playthrough into a new file with a fresh id.
  * Everything is copied — messages, snapshots, chapters, world state — so the
@@ -1020,13 +1089,27 @@ function filterBranches(playthroughs: Playthrough[], includeTimelineBranches: bo
   return includeTimelineBranches ? playthroughs : playthroughs.filter((p) => !p.isTimelineBranch);
 }
 
-/** One card's worth of a playthrough — the unit the list route and the save/load list render.
+export type PlaythroughSummaryOptions = {
+  /** Resolves a card's cover art from the whole document (which this projection has in
+   *  hand anyway — `readAllPlaythroughRecords` parsed it), or null for the placeholder.
+   *
+   *  INJECTED rather than imported: the real resolver needs the image store for its
+   *  file-existence check, and `imageStore` already imports this module for the sweep —
+   *  a direct import here would close that cycle. The route supplies it. Absent = every
+   *  card reports no cover. */
+  resolveCover?: (p: Playthrough) => PlaythroughCoverView | null;
+};
+
+/** One card's worth of a playthrough — the unit the playthrough library renders.
  *
  *  The catalogs, messages, snapshots and cast sheets stay on the server: they are ~90% of a
  *  document's bytes and no card reads them. Kept as an explicit projection rather than a
  *  `Partial<Playthrough>` so adding a field to the card without adding it here fails to compile.
  *  `locationName` resolves here, which is why the client no longer needs `locationCatalog`. */
-export function toPlaythroughSummary(p: Playthrough): PlaythroughSummary {
+export function toPlaythroughSummary(
+  p: Playthrough,
+  options: PlaythroughSummaryOptions = {}
+): PlaythroughSummary {
   const visible = p.messages.filter((m) => !m.hidden);
   return {
     id: p.id,
@@ -1037,6 +1120,7 @@ export function toPlaythroughSummary(p: Playthrough): PlaythroughSummary {
     visibleMessageCount: visible.length,
     lastMessagePreview: visible.slice(-1)[0]?.content.slice(0, 120) ?? "",
     isTimelineBranch: p.isTimelineBranch === true,
+    cover: options.resolveCover?.(p) ?? null,
     updatedAt: p.updatedAt
   };
 }
@@ -1045,10 +1129,12 @@ export function toPlaythroughSummary(p: Playthrough): PlaythroughSummary {
  *  serves, and `total` is authoritative so the client's pager never has to infer it. */
 export function listPlaythroughSummaries(
   dir: string,
-  options?: { includeTimelineBranches?: boolean }
+  options?: { includeTimelineBranches?: boolean } & PlaythroughSummaryOptions
 ): PlaythroughListResponse {
   const { playthroughs, failures } = readAllPlaythroughRecords(dir);
-  const summaries = filterBranches(playthroughs, options?.includeTimelineBranches === true).map(toPlaythroughSummary);
+  const summaries = filterBranches(playthroughs, options?.includeTimelineBranches === true).map((p) =>
+    toPlaythroughSummary(p, options)
+  );
   return { playthroughs: summaries, failures, total: summaries.length };
 }
 

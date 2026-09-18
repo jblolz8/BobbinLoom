@@ -8,7 +8,7 @@ order: 120
 
 How an assistant message becomes a stored image file: the three image-provider dialects, the text → image-prompt call, the review modal, and the content-addressed store that holds the bytes.
 
-Source of truth: `src/server/routes/images.ts` (the endpoints), `src/server/imageProvider/` (`index.ts`, `types.ts`, `shared.ts`, `openaiImagesProvider.ts`, `veniceImageProvider.ts`, `a1111Provider.ts`), `src/server/httpAuth.ts` (the key→header rule), `src/server/imageProgress.ts` (the live progress registry), `src/server/provider/imagePrompt.ts` (the prompt side call), `src/server/imageStore.ts` (content-addressed storage + orphan sweep), `src/server/provider/imageContext.ts` (the context blocks: state, cast, history, the reference answer), `src/engine/imageDefaults.ts` and `data/prompt-presets.json` (preset prompt config, and the POV/Scene instruction swap), `src/client/components/views/PlayView/` (the chat surface), `src/client/components/modals/PresetEditor.tsx` (the Image Generation tab), `src/client/engine/displayFormat.ts` (the image caption, shared with the full-screen viewer). Related: [`provider-setup.md`](provider-setup.md) (connection registry v2), [`prompt-architecture.md`](prompt-architecture.md) (why the prompt call is a side call).
+Source of truth: `src/server/routes/images.ts` (the endpoints), `src/server/imageProvider/` (`index.ts`, `types.ts`, `shared.ts`, `openaiImagesProvider.ts`, `veniceImageProvider.ts`, `a1111Provider.ts`), `src/server/httpAuth.ts` (the key→header rule), `src/server/imageProgress.ts` (the live progress registry), `src/server/provider/imagePrompt.ts` (the prompt side call), `src/server/imageStore.ts` (content-addressed storage + orphan sweep), `src/server/provider/imageContext.ts` (the context blocks: state, cast, history, the reference answer), `src/engine/imageDefaults.ts` and `data/prompt-presets.json` (preset prompt config, and the POV/Scene instruction swap), `src/client/components/views/PlayView/` (the chat surface), `src/client/components/modals/PresetEditor.tsx` (the Image Generation tab), `src/client/engine/displayFormat.ts` (the image caption, shared with the full-screen viewer). Cover art — which image a playthrough card wears — lives in `src/server/coverResolver.ts`, `src/client/components/base/CoverArt.tsx` and `src/client/components/modals/GalleryModal.tsx`; see [`playthroughs.md`](playthroughs.md). Related: [`provider-setup.md`](provider-setup.md) (connection registry v2), [`prompt-architecture.md`](prompt-architecture.md) (why the prompt call is a side call).
 
 ---
 
@@ -669,6 +669,26 @@ The Image Generation tab in the preset editor exposes **nine** fields in this or
 - The image provider caption in the modal is `<label> · <model>` of the image connection the request will use, and beneath it sits the **context line** the dry run reports: `Context: 6 previous messages · POV instruction` (or `Context: this message only`, or `· Scene instruction (third-person)`). It names what the writer was actually given, because a prompt that looks wrong for a reason that has nothing to do with the model — an empty window on a first message, a scene instruction in force — is otherwise indistinguishable from a bad answer, and the alternative is paying for a render to find out.
 
 ---
+
+## Using an image as a playthrough cover
+
+Every image the story generates is also a candidate cover for its card on the playthrough shelf,
+and the shelf picks one by itself: your own pick first, then the newest image in the story, then
+a collage of the present cast, then the placeholder mark. Nothing has to be generated or chosen
+for a card to have art — the latest image is the cover until you say otherwise.
+
+The pick is made in **Gallery Media** (the play view's Journal tab, under **Media**), which
+lists every image the story has produced, newest first, with the chapter and turn each one came
+from — the same set the automatic cover draws from. **Use as cover** fits the whole image over a
+blurred fill of itself; **Fill** instead lets the image's edges fall off the frame. Either way
+the choice is stored on the playthrough as a reference to the image's content-addressed file, so
+it costs no extra bytes and survives a duplicate or a timeline branch. **Clear custom cover**
+returns the card to the automatic chain.
+
+Deleting an image that is the current cover removes the choice with it; that confirm says so
+before it acts, and the card falls back to the latest remaining image.
+
+[`playthroughs.md`](playthroughs.md) owns the shelf and the priority order.
 
 ## Troubleshooting
 
