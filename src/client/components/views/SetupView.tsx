@@ -1233,8 +1233,7 @@ export function SetupView(props: SetupViewProps) {
                       <div>
                         <h4>Text Provider</h4>
                         <span className="field-hint">
-                          The connection that writes the world and the opening scene for this playthrough. Turns
-                          after that follow whichever text connection is active.
+                          Writes the world and the opening scene. Later turns follow the active connection.
                         </span>
                       </div>
                     </div>
@@ -1249,10 +1248,7 @@ export function SetupView(props: SetupViewProps) {
                       placeholder="Current active text provider"
                       aria-label="Text provider"
                     />
-                    <p className="field-hint">
-                      "Current active text provider" follows whichever text connection is active, and falls back to
-                      it if the chosen one is deleted.
-                    </p>
+                    <p className="field-hint">Falls back to the active connection if the chosen one is deleted.</p>
                     {providerChoiceError && <p className="error-box setup-error">{providerChoiceError}</p>}
                   </div>
 

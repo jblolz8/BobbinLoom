@@ -5286,8 +5286,9 @@
   width: min(880px, 95vw);
   max-width: 880px;
   min-height: 580px;
-  height: 85vh;
-  max-height: 92vh;
+  /* 90vh (was 85vh) to match every other modal; still a FIXED height, not max-, so the
+     sticky footer cannot jump between steps. */
+  height: 90vh;  max-height: 92vh;
   display: flex;
   flex-direction: column;
   padding: 1.25rem 1.5rem 1rem 1.5rem;
