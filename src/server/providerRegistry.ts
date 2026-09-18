@@ -12,6 +12,9 @@ import { decryptApiKey, encryptApiKey, loadOrCreateVaultKey } from "./keyVault";
 export type ProviderRegistry = {
   activeTextProviderId: string;
   activeImageProviderId: string;
+  /** The text connection new playthroughs are generated with; null/absent = follow the
+   *  active text connection. */
+  generationTextProviderId?: string | null;
   connections: ProviderConnection[];
 };
 
@@ -83,6 +86,11 @@ function migrateToV2(raw: Record<string, unknown>): Record<string, unknown> {
       typeof raw.activeTextProviderId === "string" ? raw.activeTextProviderId
       : typeof raw.activeProviderId === "string" ? raw.activeProviderId : "",
     activeImageProviderId: typeof raw.activeImageProviderId === "string" ? raw.activeImageProviderId : "",
+    // A v1 file cannot carry this preference, but a hand-edited or downgraded file might:
+    // pass it through rather than silently dropping the user's choice.
+    ...(typeof raw.generationTextProviderId === "string" || raw.generationTextProviderId === null
+      ? { generationTextProviderId: raw.generationTextProviderId }
+      : {}),
     connections: connections.map((c) =>
       c && typeof c === "object" && !Array.isArray(c)
         ? { kind: "text", ...(c as Record<string, unknown>) }
@@ -136,6 +144,7 @@ function readRegistry(dir: string): ReadResult {
         registry: {
           activeTextProviderId: parsed.activeTextProviderId,
           activeImageProviderId: parsed.activeImageProviderId,
+          generationTextProviderId: parsed.generationTextProviderId ?? null,
           connections: decryptConnections(parsed.connections, vaultKey),
         },
         warnings,
@@ -146,6 +155,7 @@ function readRegistry(dir: string): ReadResult {
       registry: {
         activeTextProviderId: file.data.activeTextProviderId,
         activeImageProviderId: file.data.activeImageProviderId,
+        generationTextProviderId: file.data.generationTextProviderId ?? null,
         connections: decryptConnections(file.data.connections, vaultKey),
       },
       warnings,
@@ -169,6 +179,12 @@ function readRegistry(dir: string): ReadResult {
   const salvaged: ProviderRegistry = {
     activeTextProviderId: keptText.some((c) => c.id === rawActive) ? rawActive : (keptText[0]?.id ?? ""),
     activeImageProviderId: "",
+    // The file failed validation, so the parse output is not trustworthy here — read the
+    // preference off the raw object, like the active id above.
+    generationTextProviderId:
+      typeof rawObj.generationTextProviderId === "string" || rawObj.generationTextProviderId === null
+        ? rawObj.generationTextProviderId
+        : null,
     connections: kept,   // ProviderConnectionSchema now defaults every kept row to kind: "text"
   };
   const backup = backupFile(path);
@@ -185,6 +201,7 @@ function readRegistry(dir: string): ReadResult {
     registry: {
       activeTextProviderId: salvaged.activeTextProviderId,
       activeImageProviderId: salvaged.activeImageProviderId,
+      generationTextProviderId: salvaged.generationTextProviderId ?? null,
       connections: decryptConnections(salvaged.connections, vaultKey),
     },
     warnings,
@@ -198,6 +215,7 @@ function writeRegistry(dir: string, reg: ProviderRegistry): void {
     schemaVersion: 2,
     activeTextProviderId: reg.activeTextProviderId,
     activeImageProviderId: reg.activeImageProviderId,
+    generationTextProviderId: reg.generationTextProviderId ?? null,
     connections: reg.connections.map((c) =>
       c.apiKey ? { ...c, apiKey: encryptApiKey(c.apiKey, vaultKey) } : c
     ),
@@ -209,7 +227,12 @@ function writeRegistry(dir: string, reg: ProviderRegistry): void {
  *  auto-seeded. Users add their own via the UI. (Only called when no
  *  providers.json exists yet, or after a quarantine.) */
 export function seedRegistry(dir: string): ProviderRegistry {
-  const reg: ProviderRegistry = { activeTextProviderId: "", activeImageProviderId: "", connections: [] };
+  const reg: ProviderRegistry = {
+    activeTextProviderId: "",
+    activeImageProviderId: "",
+    generationTextProviderId: null,
+    connections: []
+  };
   writeRegistry(dir, reg);
   return reg;
 }
@@ -230,6 +253,7 @@ export function listConnections(dir: string): PublicProviderRegistry {
   return {
     activeTextProviderId: reg.activeTextProviderId,
     activeImageProviderId: reg.activeImageProviderId,
+    generationTextProviderId: reg.generationTextProviderId ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings,
   };
@@ -365,6 +389,7 @@ export function deleteConnection(dir: string, id: string): PublicProviderRegistr
   return {
     activeTextProviderId: reg.activeTextProviderId,
     activeImageProviderId: reg.activeImageProviderId,
+    generationTextProviderId: reg.generationTextProviderId ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings: [],
   };
@@ -387,6 +412,27 @@ export function setActiveConnection(dir: string, id: string): PublicProviderRegi
   return {
     activeTextProviderId: reg.activeTextProviderId,
     activeImageProviderId: reg.activeImageProviderId,
+    generationTextProviderId: reg.generationTextProviderId ?? null,
+    connections: reg.connections.map(toPublicConnection),
+    warnings: [],
+  };
+}
+
+/** Remember which text connection NEW playthroughs are generated with. `null` means
+ *  "follow whichever connection is active".
+ *
+ *  Deliberately accepts an id that no longer names a connection: the value is a
+ *  preference, and resolution already falls back to the active connection, so a
+ *  deleted connection must not make the field unsaveable (the dropdown shows it as
+ *  "(not found)" so it can be re-pointed). */
+export function setGenerationTextProvider(dir: string, id: string | null): PublicProviderRegistry {
+  const reg = getRegistry(dir);
+  reg.generationTextProviderId = id;
+  writeRegistry(dir, reg);
+  return {
+    activeTextProviderId: reg.activeTextProviderId,
+    activeImageProviderId: reg.activeImageProviderId,
+    generationTextProviderId: reg.generationTextProviderId ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings: [],
   };

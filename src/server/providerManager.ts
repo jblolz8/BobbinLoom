@@ -14,6 +14,7 @@ import {
   getRegistry,
   listConnections,
   setActiveConnection as setActiveRegistryConnection,
+  setGenerationTextProvider as setGenerationRegistryTextProvider,
   testProviderConnection,
   updateConnection
 } from "./providerRegistry";
@@ -41,18 +42,41 @@ export class ProviderManager {
     return activeConnectionOfKind(getRegistry(this.dataDir), "image");
   }
 
-  getProvider(): TurnProvider {
-    const conn = this.activeTextConnection();
+  /** The text connection a request should use: an explicit id when given (and it
+   *  really is a text connection), else the active text connection. Same rule as
+   *  `imageConnection`, and the reason a deleted choice degrades instead of failing. */
+  textConnection(id?: string): ProviderConnection | null {
+    if (id) {
+      const explicit = getRegistry(this.dataDir).connections.find((c) => c.id === id && c.kind === "text");
+      if (explicit) return explicit;
+    }
+    return this.activeTextConnection();
+  }
+
+  /** The stored "which connection creates new playthroughs" preference, or null when
+   *  unset — null means the caller should follow the active connection. */
+  generationTextProviderId(): string | null {
+    return getRegistry(this.dataDir).generationTextProviderId ?? null;
+  }
+
+  setGenerationTextProvider(id: string | null): PublicProviderRegistry {
+    return setGenerationRegistryTextProvider(this.dataDir, id);
+  }
+
+  getProvider(id?: string): TurnProvider {
+    const conn = this.textConnection(id);
     if (!conn) return new MockProvider(); // no text connection configured yet
     return new OpenAICompatibleProvider(resolveConnectionConfig(conn, this.env));
   }
 
-  getContextWindow(): number {
-    return this.activeTextConnection()?.contextWindow ?? 32768;
+  /** The chosen connection's budget. Must take the same id as `getProvider`: budgeting
+   *  the opening turn for a different model than the one writing it is silent. */
+  getContextWindow(id?: string): number {
+    return this.textConnection(id)?.contextWindow ?? 32768;
   }
 
-  getMaxTokens(): number {
-    return this.activeTextConnection()?.maxTokens ?? 1200;
+  getMaxTokens(id?: string): number {
+    return this.textConnection(id)?.maxTokens ?? 1200;
   }
 
   /** The image connection a request should use: an explicit id when given (and

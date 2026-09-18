@@ -254,6 +254,11 @@ export const ProviderRegistryFileSchema = z.object({
   schemaVersion: z.number().int().min(1).default(2),
   activeTextProviderId: z.string().default(""),
   activeImageProviderId: z.string().default(""),
+  /** The text connection that CREATES new playthroughs — the scenario seed and the
+   *  opening turn. Absent or null follows whichever text connection is active, the
+   *  same rule a connection's `promptProviderId` uses. Optional, so a registry
+   *  written before this preference parses untouched. */
+  generationTextProviderId: z.string().nullable().optional(),
   connections: z.array(ProviderConnectionSchema)
 });
 export type ProviderRegistryFile = z.infer<typeof ProviderRegistryFileSchema>;

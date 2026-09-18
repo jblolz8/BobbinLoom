@@ -33,6 +33,7 @@ import { imageFilePath, sweepOrphansInDataDir } from "../imageStore";
 import { resolvePlaythroughCover } from "../coverResolver";
 import { loadPromptConfig } from "../promptConfigStore";
 import { abortOnClientDisconnect, dataDir as defaultDataDir, imagesDir as defaultImagesDir, providerManager, settingsDir } from "./helpers";
+import type { ProviderManager } from "../providerManager";
 
 const CreatePlaythroughBody = z.object({
   name: z.string().min(1).default("New Playthrough"),
@@ -56,6 +57,9 @@ const CoverBody = z.object({
 
 const GenerateBody = z.object({
   name: z.string().min(1).default("New Adventure"),
+  /** The text connection to generate with. Absent = the stored preference, then the
+   *  active connection; an id that no longer resolves falls back the same way. */
+  providerId: z.string().optional(),
   setting: z.string().optional(),
   personaId: z.string().optional(),
   castIds: z.array(z.string()).optional(),
@@ -84,12 +88,16 @@ export type PlaythroughRoutesOptions = FastifyPluginOptions & {
   imagesDir?: string;
   /** The character library, read for a cast-collage cover. Same seam idea as `dataDir`. */
   charactersDir?: string;
+  /** Injectable so a test can hand this plugin connections of its own (as the image and
+   *  provider route plugins already allow). Falls back to the shared singleton. */
+  manager?: ProviderManager;
 };
 
 export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = async (app, options = {}) => {
   const dataDir = options.dataDir ?? defaultDataDir;
   const imagesDir = options.imagesDir ?? defaultImagesDir;
   const charactersDir = options.charactersDir ?? CHARACTERS_DIR;
+  const manager = options.manager ?? providerManager;
 
   app.get("/api/playthroughs", async (request) => {
     const query = z.object({ includeBranches: z.string().optional() }).parse(request.query ?? {});
@@ -228,8 +236,15 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
 
     const controller = abortOnClientDisconnect(reply);
 
+    // ONE resolution for the whole request. The seed, the opening turn and the token budget
+    // must all come from the same connection: resolving per call site is how a chosen provider
+    // ends up writing only part of the story, with the budget computed for a different model.
+    const providerId = body.providerId ?? manager.generationTextProviderId() ?? undefined;
+    const provider = manager.getProvider(providerId);
+    const contextWindow = manager.getContextWindow(providerId);
+
     try {
-      const seed = await providerManager.getProvider().generateScenarioSeed(preferences, body.lorebookIds, controller.signal, preset?.characterFormat);
+      const seed = await provider.generateScenarioSeed(preferences, body.lorebookIds, controller.signal, preset?.characterFormat);
       if (controller.signal.aborted) return;
 
       const openingMode = body.openingMode ?? "fleshedOut";
@@ -249,9 +264,9 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
       const result = await executeTurn(
         fleshed,
         buildOpeningPrompt(body.setting, seed),
-        providerManager.getProvider(),
+        provider,
         openingChoices,
-        providerManager.getContextWindow(),
+        contextWindow,
         { signal: controller.signal },
         loadPromptConfig(settingsDir).promptConfig
       );
@@ -296,16 +311,16 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
     // keyword-only scoring — a failed embedding must never fail this read-only route.
     const queryMessages = playthrough.messages.filter((m) => !m.hidden).slice(-4);
     const queryText = queryMessages.map((m) => m.content).join("\n");
-    const [queryEmbedding = []] = queryText ? await providerManager.getProvider().embedTexts([queryText]) : [[]];
+    const [queryEmbedding = []] = queryText ? await manager.getProvider().embedTexts([queryText]) : [[]];
 
     const { promptUsage } = assembleTurnPrompt(parseUserInput(""), playthrough, query.choices !== "false", queryEmbedding, {
-      contextWindow: providerManager.getContextWindow(),
-      reserveOutputTokens: providerManager.getMaxTokens(),
+      contextWindow: manager.getContextWindow(),
+      reserveOutputTokens: manager.getMaxTokens(),
       calibration: playthrough.tokenCalibration
     }, loadPromptConfig(settingsDir).promptConfig);
     return {
       estimated: promptUsage.estimated,
-      contextWindow: providerManager.getContextWindow(),
+      contextWindow: manager.getContextWindow(),
       breakdown: promptUsage.breakdown,
       castPresence: {
         present: playthrough.characters.filter((c) => c.currentLocationId === playthrough.locationId).length,
@@ -327,7 +342,7 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
     const body = z.object({ content: z.string().optional() }).parse(request.body ?? {});
 
     const controller = abortOnClientDisconnect(reply);
-    const result = await promoteNpcAction(dataDir, id, npcId, providerManager.getProvider(), body.content, providerManager.getMaxTokens(), controller.signal, loadPromptConfig(settingsDir).promptConfig);
+    const result = await promoteNpcAction(dataDir, id, npcId, manager.getProvider(), body.content, manager.getMaxTokens(), controller.signal, loadPromptConfig(settingsDir).promptConfig);
     if (controller.signal.aborted) return;
     if (!result.ok) return reply.code(result.status).send({ error: result.error });
     return result.state;
@@ -337,7 +352,7 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
     const { id, npcId } = z.object({ id: z.string(), npcId: z.string() }).parse(request.params);
 
     const controller = abortOnClientDisconnect(reply);
-    const result = await promoteNpcDraftAction(dataDir, id, npcId, providerManager.getProvider(), providerManager.getMaxTokens(), controller.signal, loadPromptConfig(settingsDir).promptConfig);
+    const result = await promoteNpcDraftAction(dataDir, id, npcId, manager.getProvider(), manager.getMaxTokens(), controller.signal, loadPromptConfig(settingsDir).promptConfig);
     if (controller.signal.aborted) return;
     if (!result.ok) return reply.code(result.status).send({ error: result.error });
     return { npc: result.npc, content: result.content, storyContext: result.storyContext };
@@ -357,7 +372,7 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
       transcript += "\nUSER: " + body.closingMessage;
     }
 
-    const provider = providerManager.getProvider();
+    const provider = manager.getProvider();
     const controller = abortOnClientDisconnect(reply);
 
     let summary: { name: string; shortDescription: string; fullSummary: string };
@@ -374,7 +389,7 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
 
     if (controller.signal.aborted) return;
 
-    const result = await closeChapterAction(dataDir, params.id, summary, provider, true, providerManager.getContextWindow(), controller.signal, summaryDurationMs, loadPromptConfig(settingsDir).promptConfig);
+    const result = await closeChapterAction(dataDir, params.id, summary, provider, true, manager.getContextWindow(), controller.signal, summaryDurationMs, loadPromptConfig(settingsDir).promptConfig);
 
     if (controller.signal.aborted) return;
 
@@ -384,18 +399,18 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
     // embedding so the reported memory selection matches the real turn.
     const queryMessages = result.state.messages.filter((m) => !m.hidden).slice(-4);
     const queryText = queryMessages.map((m) => m.content).join("\n");
-    const [queryEmbedding = []] = queryText ? await providerManager.getProvider().embedTexts([queryText]) : [[]];
+    const [queryEmbedding = []] = queryText ? await manager.getProvider().embedTexts([queryText]) : [[]];
 
     const { promptUsage } = assembleTurnPrompt(parseUserInput(""), result.state, true, queryEmbedding, {
-      contextWindow: providerManager.getContextWindow(),
-      reserveOutputTokens: providerManager.getMaxTokens(),
+      contextWindow: manager.getContextWindow(),
+      reserveOutputTokens: manager.getMaxTokens(),
       calibration: result.state.tokenCalibration
     }, loadPromptConfig(settingsDir).promptConfig);
     return {
       state: result.state,
       tokenUsage: {
         estimated: promptUsage.estimated,
-        contextWindow: providerManager.getContextWindow(),
+        contextWindow: manager.getContextWindow(),
         breakdown: promptUsage.breakdown,
         castPresence: {
           present: result.state.characters.filter((c) => c.currentLocationId === result.state.locationId).length,
@@ -409,7 +424,7 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
     const params = z.object({ id: z.string(), chapterId: z.string() }).parse(request.params);
     const controller = abortOnClientDisconnect(reply);
 
-    const result = await resummarizeChapterAction(dataDir, params.id, params.chapterId, providerManager.getProvider(), controller.signal);
+    const result = await resummarizeChapterAction(dataDir, params.id, params.chapterId, manager.getProvider(), controller.signal);
     if (controller.signal.aborted) return;
 
     if (!result.ok) return reply.code(result.status).send({ error: result.error });

@@ -33,7 +33,9 @@ LM Studio/Ollama server) and switch which one is **active** at any time.
 - **Connections + active selection:** `data/providers.json` (created empty on first
   run; gitignored — never commit it). The file is at **`schemaVersion: 2`**: two
   independent active slots (`activeTextProviderId`, `activeImageProviderId`) and a
-  `kind` (`text` / `image`) on every connection. A v0/v1 file is migrated on read — the
+  `kind` (`text` / `image`) on every connection. It also carries
+  `generationTextProviderId` — the text connection **New Playthrough** generates with
+  (`null` follows the active one). A v0/v1 file is migrated on read — the
   original is archived to `.bak`, the old single `activeProviderId` becomes
   `activeTextProviderId`, `activeImageProviderId` starts empty, and every connection is
   stamped `kind: "text"`. An unreadable file is quarantined to `.bak`; a schema-invalid
@@ -54,6 +56,13 @@ Fresh installs start with an **empty registry** — no connections are pre-seede
 Open **Settings → Provider** and click **+ Add connection** to create your first
 one, then **Activate** it. Until a connection exists, the engine falls back to the
 built-in **Mock provider** (no API key, no network).
+
+**New Playthrough** can generate with any text connection, not only the active one. The
+setup modal's **Text Provider** field remembers your choice in `generationTextProviderId`,
+and generation resolves it as *request → remembered choice → active connection*: an unset
+choice, or one whose connection was deleted, lands on the active connection rather than
+failing. The choice covers the scenario seed and the opening scene — later turns of the
+story always use the active connection.
 
 Every connection — including any you create — can be edited, **duplicated**
 (an editable copy with the same base URL, model, and stored API key), or

@@ -12,6 +12,7 @@ import {
 import { DEFAULT_IMAGE_GENERATION_SETTINGS, DEFAULT_IMAGE_PROMPT_INSTRUCTION } from "../src/engine/imageDefaults";
 import { ProviderManager } from "../src/server/providerManager";
 import { MockProvider } from "../src/server/provider";
+import { OpenAICompatibleProvider } from "../src/server/openAiCompatibleProvider";
 import { clearForgeCoupleCache } from "../src/server/imageProvider/shared";
 import {
   activeConnectionOfKind,
@@ -23,6 +24,7 @@ import {
   listConnections,
   seedRegistry,
   setActiveConnection,
+  setGenerationTextProvider,
   testProviderConnection,
   updateConnection
 } from "../src/server/providerRegistry";
@@ -1161,5 +1163,84 @@ describe("shared schema additions (message images + image generation settings)",
     ).toBeUndefined();
     // The shipped fallback is itself a complete, parseable settings object.
     expect(ImageGenerationSettingsSchema.parse(DEFAULT_IMAGE_GENERATION_SETTINGS)).toEqual(DEFAULT_IMAGE_GENERATION_SETTINGS);
+  });
+});
+
+describe("generation text provider (which connection creates new playthroughs)", () => {
+  it("is absent until set, persists, clears back to null, and keeps a dangling id", () => {
+    const dir = tempDir();
+    createConnection(dir, connInput({ label: "Writer", baseUrl: "http://w:1" }));
+    createConnection(dir, connInput({ label: "Heavy", baseUrl: "http://h:1", contextWindow: 131072, maxTokens: 4000 }));
+
+    // Unset on a registry that predates the field: absent from the store, null in public.
+    expect(getRegistry(dir).generationTextProviderId ?? null).toBeNull();
+    expect(listConnections(dir).generationTextProviderId ?? null).toBeNull();
+
+    setGenerationTextProvider(dir, "heavy");
+    expect(getRegistry(dir).generationTextProviderId).toBe("heavy");
+    expect(listConnections(dir).generationTextProviderId).toBe("heavy");
+    expect((readRegistryFile(dir) as { generationTextProviderId?: string | null }).generationTextProviderId).toBe("heavy");
+
+    // null is a VALUE ("follow the active connection"), so it must survive a round trip.
+    setGenerationTextProvider(dir, null);
+    expect(getRegistry(dir).generationTextProviderId).toBeNull();
+    expect((readRegistryFile(dir) as { generationTextProviderId?: string | null }).generationTextProviderId).toBeNull();
+
+    // An id whose connection is gone stays saveable — resolution falls back, so refusing the
+    // write would only leave a stale choice the user cannot clear.
+    setGenerationTextProvider(dir, "gone");
+    expect(getRegistry(dir).generationTextProviderId).toBe("gone");
+  });
+
+  it("survives a v1 → v2 migration instead of being dropped with the old shape", () => {
+    const dir = tempDir();
+    writeFileSync(
+      join(dir, "providers.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        activeProviderId: "legacy",
+        generationTextProviderId: "legacy",
+        connections: [
+          { id: "legacy", label: "Legacy", baseUrl: "http://l:1", model: "m", temperature: 0.8, maxTokens: 1200, contextWindow: 32768 }
+        ]
+      }),
+      "utf8"
+    );
+
+    const reg = getRegistry(dir);
+    expect(reg.activeTextProviderId).toBe("legacy");
+    expect(reg.generationTextProviderId).toBe("legacy");
+  });
+
+  it("resolves the text connection for a request: explicit id, else active, never an image one", () => {
+    const dir = tempDir();
+    createConnection(dir, connInput({ label: "Alpha", baseUrl: "http://a:1", model: "model-a", contextWindow: 32000, maxTokens: 800 }));
+    createConnection(dir, connInput({ label: "Beta", baseUrl: "http://b:1", model: "model-b", contextWindow: 200000, maxTokens: 9000 }));
+    createConnection(dir, connInput({ label: "Painter", baseUrl: "http://p:1", kind: "image" }));
+    setActiveConnection(dir, "alpha");
+    const manager = new ProviderManager(dir);
+
+    expect(manager.textConnection("beta")?.id).toBe("beta");
+    expect(manager.textConnection()?.id).toBe("alpha");
+    // A deleted/unknown id degrades to the active connection rather than throwing.
+    expect(manager.textConnection("ghost")?.id).toBe("alpha");
+    // An IMAGE connection is never accepted as the text choice (the kind filter is the point).
+    expect(manager.textConnection("painter")?.id).toBe("alpha");
+
+    // The budget follows the chosen connection, not the active one — a mismatch here is silent.
+    expect(manager.getContextWindow("beta")).toBe(200000);
+    expect(manager.getMaxTokens("beta")).toBe(9000);
+    expect(manager.getContextWindow()).toBe(32000);
+    expect(manager.getMaxTokens()).toBe(800);
+
+    expect(manager.getProvider("beta")).not.toBeInstanceOf(MockProvider);
+    expect(manager.getProvider("ghost")).toBeInstanceOf(OpenAICompatibleProvider);
+
+    // The manager is only a reader of the stored preference; writing it goes through the registry.
+    expect(manager.generationTextProviderId()).toBeNull();
+    setGenerationTextProvider(dir, "beta");
+    expect(manager.generationTextProviderId()).toBe("beta");
+    setGenerationTextProvider(dir, null);
+    expect(manager.generationTextProviderId()).toBeNull();
   });
 });

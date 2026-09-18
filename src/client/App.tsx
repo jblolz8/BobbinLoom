@@ -191,6 +191,7 @@ export default function App() {
         setupForm.openingMode,
         selectedLorebookIds,
         undefined,
+        setupForm.providerId || undefined,
         controller.signal
       );
       playthroughHook.resetTurnState(response.state);

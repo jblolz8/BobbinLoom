@@ -242,11 +242,23 @@ export function generatePlaythrough(
   openingMode?: "quick" | "fleshedOut",
   lorebookIds?: string[],
   presetId?: string,
+  /** The text connection to generate with; absent = the server's stored preference,
+   *  then the active connection. */
+  providerId?: string,
   signal?: AbortSignal
 ): Promise<GeneratePlaythroughResponse> {
   return request<GeneratePlaythroughResponse>("/api/playthroughs/generate", {
     method: "POST",
-    body: JSON.stringify({ ...preferences, personaId, castIds, generateOpeningChoices, openingMode, lorebookIds, ...(presetId ? { presetId } : {}) }),
+    body: JSON.stringify({
+      ...preferences,
+      personaId,
+      castIds,
+      generateOpeningChoices,
+      openingMode,
+      lorebookIds,
+      ...(presetId ? { presetId } : {}),
+      ...(providerId ? { providerId } : {})
+    }),
     signal
   });
 }

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { CharacterTemplate, LorebookSummary } from "../../../schemas";
 import type { Persona } from "../../api";
 import { getTagTaxonomy } from "../../api";
+import { listProviderConnections, setGenerationTextProvider, type ProviderConnection } from "../../api/providers";
 import { AvatarBadge, Button, CharacterAvatar, Icon, Pagination, SearchBar, SimpleSelect, SwitchRow, TagChip, TextArea, TextInput } from "../base";
 import { usePagination } from "../../hooks/usePagination";
 import type { ViewMode } from "../library/CharacterLibrary";
@@ -13,6 +14,10 @@ export type SetupFormState = {
   setting: string;
   generateOpeningChoices: boolean;
   openingMode: "quick" | "fleshedOut";
+  /** The text connection this playthrough is generated with; "" follows whichever
+   *  connection is active. Persisted in the provider registry, not here — the modal
+   *  reads it back on open. */
+  providerId: string;
 };
 
 export const defaultSetupForm: SetupFormState = {
@@ -20,6 +25,7 @@ export const defaultSetupForm: SetupFormState = {
   setting: "",
   generateOpeningChoices: false,
   openingMode: "fleshedOut",
+  providerId: "",
 };
 
 export type SetupStepTab = "persona" | "cast" | "setting";
@@ -91,6 +97,70 @@ export function SetupView(props: SetupViewProps) {
     onCancelGenerate,
     onStartBlank,
   } = props;
+
+  // Which text connection new playthroughs are generated with. The registry holds both the
+  // connection list and the remembered choice, so the modal reads it on open: a fresh session
+  // must open on the saved choice rather than on the default slot. Mirrors the Image Provider
+  // editor's "Prompt Writer" control, down to the dangling-id row.
+  const [textConnections, setTextConnections] = useState<ProviderConnection[]>([]);
+  const [activeTextProviderId, setActiveTextProviderId] = useState("");
+  const [providerChoiceError, setProviderChoiceError] = useState<string | null>(null);
+  // Held in a ref so the registry read depends on `open` ALONE: the parent passes a fresh
+  // callback every render, and re-running the effect would refetch on every keystroke.
+  const onSetupFormChangeRef = useRef(onSetupFormChange);
+  onSetupFormChangeRef.current = onSetupFormChange;
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    listProviderConnections()
+      .then((registry) => {
+        if (cancelled) return;
+        setTextConnections(registry.connections.filter((c) => c.kind === "text"));
+        setActiveTextProviderId(registry.activeTextProviderId);
+        const stored = registry.generationTextProviderId ?? "";
+        // Adopt the remembered choice into the form so the generate request carries the
+        // connection the user actually sees selected.
+        if (stored) onSetupFormChangeRef.current((f) => (f.providerId === "" ? { ...f, providerId: stored } : f));
+      })
+      .catch(() => {
+        /* the list degrades to the default slot; generation still falls back server-side */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const textProviderOptions = useMemo(() => {
+    const options = [
+      { value: "", label: "Current active text provider" },
+      ...textConnections.map((c) => ({
+        value: c.id,
+        label: `${c.label}${c.model ? ` — ${c.model}` : ""}${c.id === activeTextProviderId ? " (active)" : ""}`
+      }))
+    ];
+    // A saved choice whose connection no longer exists stays visible and re-selectable; the
+    // server falls back to the active connection for it (never a failed generation).
+    if (setupForm.providerId && !textConnections.some((c) => c.id === setupForm.providerId)) {
+      options.push({ value: setupForm.providerId, label: `${setupForm.providerId} (not found)` });
+    }
+    return options;
+  }, [textConnections, activeTextProviderId, setupForm.providerId]);
+
+  const textProviderLabel = useMemo(() => {
+    if (!setupForm.providerId) return "Active connection";
+    return textConnections.find((c) => c.id === setupForm.providerId)?.label ?? `${setupForm.providerId} (not found)`;
+  }, [setupForm.providerId, textConnections]);
+
+  const handleProviderChange = (id: string) => {
+    onSetupFormChange((f) => ({ ...f, providerId: id }));
+    setProviderChoiceError(null);
+    // Persist immediately: the choice has to survive closing the modal, and it is what the
+    // NEXT New Playthrough opens on.
+    setGenerationTextProvider(id === "" ? null : id).catch(() =>
+      setProviderChoiceError("Could not remember that choice — it will still be used for this generation.")
+    );
+  };
 
   const [activeTab, setActiveTab] = useState<SetupStepTab>("persona");
   const [castSearch, setCastSearchState] = useState(() => {
@@ -386,6 +456,10 @@ export function SetupView(props: SetupViewProps) {
                     ? "None"
                     : `${selectedLorebookCount} selected`}
                 </strong>
+              </div>
+              <div className="generating-summary-row">
+                <span className="summary-label">Text Provider:</span>
+                <strong className="summary-val">{textProviderLabel}</strong>
               </div>
               <div className="generating-summary-row">
                 <span className="summary-label">Opening Mode:</span>
@@ -1014,6 +1088,35 @@ export function SetupView(props: SetupViewProps) {
                     <p className="setup-section-hint">
                       Describe your world, select lorebooks, and choose how the opening scene should be written.
                     </p>
+                  </div>
+
+                  {/* Text Provider Section */}
+                  <div className="setup-setting-block">
+                    <div className="setup-block-header">
+                      <div>
+                        <h4>Text Provider</h4>
+                        <span className="field-hint">
+                          The connection that writes the world and the opening scene for this playthrough. Turns
+                          after that follow whichever text connection is active.
+                        </span>
+                      </div>
+                    </div>
+
+                    <SimpleSelect
+                      size="sm"
+                      variant="filled"
+                      fullWidth
+                      value={setupForm.providerId}
+                      onChange={handleProviderChange}
+                      options={textProviderOptions}
+                      placeholder="Current active text provider"
+                      aria-label="Text provider"
+                    />
+                    <p className="field-hint">
+                      "Current active text provider" follows whichever text connection is active, and falls back to
+                      it if the chosen one is deleted.
+                    </p>
+                    {providerChoiceError && <p className="error-box setup-error">{providerChoiceError}</p>}
                   </div>
 
                   {/* Lorebooks Section */}

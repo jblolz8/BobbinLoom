@@ -92,6 +92,8 @@ export type ProviderConnectionPayload = {
 export type ProviderRegistry = {
   activeTextProviderId: string;
   activeImageProviderId: string;
+  /** The connection new playthroughs are generated with; null = follow the active one. */
+  generationTextProviderId?: string | null;
   connections: ProviderConnection[];
   warnings: string[];
 };
@@ -187,6 +189,15 @@ export function duplicateProviderConnection(id: string): Promise<ProviderConnect
 export function setActiveProviderConnection(id: string): Promise<ProviderRegistry> {
   return request<ProviderRegistry>(`/api/settings/providers/${id}/active`, { method: "PUT", body: JSON.stringify({}) });
 }
+/** Remember the text connection new playthroughs are generated with. `null` = follow
+ *  whichever connection is active. */
+export function setGenerationTextProvider(providerId: string | null): Promise<ProviderRegistry> {
+  return request<ProviderRegistry>("/api/settings/providers/generation-provider", {
+    method: "PUT",
+    body: JSON.stringify({ providerId })
+  });
+}
+
 export function testProviderConnection(p: {
   id?: string;
   baseUrl?: string;

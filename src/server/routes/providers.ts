@@ -105,6 +105,10 @@ const ModelsBody = z.object({
   apiStyle: ImageApiStyleSchema.optional()
 });
 
+const GenerationProviderBody = z.object({
+  providerId: z.string().nullable()
+});
+
 export const providerRoutes: FastifyPluginAsync<ProviderRoutesOptions> = async (app, options = {}) => {
   const manager = options.manager ?? providerManager;
 
@@ -135,6 +139,17 @@ export const providerRoutes: FastifyPluginAsync<ProviderRoutesOptions> = async (
   app.put("/api/settings/providers/:id/active", async (request) => {
     const { id } = ProviderIdParam.parse(request.params);
     return manager.setActiveConnection(id);
+  });
+
+  /** Which text connection CREATES new playthroughs (the scenario seed and the opening
+   *  turn). A preference rather than a route, so `{ providerId: null }` means "follow the
+   *  active connection" and an id that no longer exists is still accepted — resolution
+   *  falls back at generation time, and refusing the write would leave a stale choice
+   *  unsaveable. */
+  app.put("/api/settings/providers/generation-provider", async (request, reply) => {
+    const parsedBody = GenerationProviderBody.safeParse(request.body ?? {});
+    if (!parsedBody.success) return reply.code(400).send({ error: "providerId must be a string or null" });
+    return manager.setGenerationTextProvider(parsedBody.data.providerId);
   });
 
   app.post("/api/settings/providers/test", async (request) => {
