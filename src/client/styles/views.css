@@ -8,14 +8,20 @@
    a sane frame. */
 :root[data-cover-aspect="portrait"] {
   --cover-art-aspect: 2 / 3;
+  --cover-art-w: 2;
+  --cover-art-h: 3;
 }
 
 :root[data-cover-aspect="square"] {
   --cover-art-aspect: 1 / 1;
+  --cover-art-w: 1;
+  --cover-art-h: 1;
 }
 
 :root[data-cover-aspect="landscape"] {
   --cover-art-aspect: 16 / 9;
+  --cover-art-w: 16;
+  --cover-art-h: 9;
 }
 
 :root[data-avatar-shape="square"] {
@@ -8195,9 +8201,9 @@ button.ai-brainstorm-toggle-btn.active,
 /* In the list the ROW is the height authority: the thumbnail stretches to it and derives its
    width from the chosen shape, so a row of text always gets a cover as tall as itself. */
 .cover-art-thumb {
-  height: 100%;
-  width: auto;
-  max-height: 96px;
+  height: var(--cover-row-thumb, 96px);
+  width: 100%;
+  max-height: var(--cover-row-thumb, 96px);
   flex-shrink: 0;
   border-radius: 7px;
 }
@@ -8308,9 +8314,13 @@ button.ai-brainstorm-toggle-btn.active,
   height: 100%;
   object-fit: cover;
   object-position: center;
-  filter: blur(12px) saturate(1.2);
-  transform: scale(1.22);
-  opacity: 0.7;
+  /* Deliberately weak: a soft wash behind the portrait rather than a smear. It is visible only
+     where the artwork letterboxes inside its cell, so how much shows depends on the shape —
+     roughly a third of a Square or Portrait tile, a thin band in a 3-up Landscape. The knob is
+     opacity. */
+  filter: blur(8px) saturate(1.1);
+  transform: scale(1.12);
+  opacity: 0.5;
   z-index: 0;
 }
 
@@ -8318,6 +8328,13 @@ button.ai-brainstorm-toggle-btn.active,
   position: relative;
   z-index: 1;
   object-fit: contain !important;
+  /* Centred, not top-aligned: the portrait is the subject and the blurred copy behind it is the
+     backdrop, so the artwork sits in the middle of its cell either way. */
+  object-position: center !important;
+  /* MANDATORY: `.library-avatar` (which every avatar image carries) paints #1a1e2b, and this
+     element's box is the WHOLE tile — with `contain` the letterbox area where the blurred copy is
+     supposed to show is exactly that slab. Any new avatar variant must reset this too. */
+  background: transparent !important;
 }
 
 .cover-art-tile-img {
@@ -8372,6 +8389,10 @@ button.ai-brainstorm-toggle-btn.active,
   display: flex;
   align-items: stretch;
   gap: 14px;
+  /* The thumb's height IS the row's, so a row whose text is shorter (a story with no cast to list)
+     would wear a visibly smaller cover than its neighbours. The minimum is measured from the
+     tallest row (title + meta + two-line preview), and every thumb then reaches the 96px cap. */
+  min-height: var(--cover-row-height, 118px);
   background: var(--bg-panel);
   border: 1px solid var(--border-main);
   border-radius: 10px;
@@ -8396,8 +8417,17 @@ button.ai-brainstorm-toggle-btn.active,
 .playthrough-row-cover {
   flex-shrink: 0;
   align-self: stretch;
+  align-items: center;
   display: flex;
   min-height: 0;
+  flex: 0 0 auto;
+  /* The column's width is DERIVED, not content-based. The thumb's height is a constant in this
+     list (the row's minimum, capped at `--cover-row-thumb`), so the width is arithmetic on that
+     constant — the only form that works for a child with no content of its own (the placeholder
+     icon). `aspect-ratio` cannot be used here: a stretched cross size does not feed the main size,
+     which is exactly how an empty cover's column came out 20px wide with the artwork painting
+     underneath the row's text. */
+  width: calc(var(--cover-row-thumb, 96px) * var(--cover-art-w, 16) / var(--cover-art-h, 9));
 }
 
 .playthrough-row-content {
@@ -8433,6 +8463,9 @@ button.ai-brainstorm-toggle-btn.active,
     align-items: flex-start;
     gap: 10px;
     padding: 10px;
+    /* The preview line is hidden here and the thumb capped at 72px, so the desk minimum would
+       leave a phone with a row sized for text it no longer shows. */
+    min-height: 0;
   }
 
   .playthrough-row .playthrough-card-preview {
@@ -8441,6 +8474,11 @@ button.ai-brainstorm-toggle-btn.active,
 
   .cover-art-thumb {
     max-height: 72px;
+  }
+
+  /* The phone cap drives the column width too — the same token, one value. */
+  .playthrough-row-cover {
+    --cover-row-thumb: 72px;
   }
 }
 
