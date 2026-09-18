@@ -8229,16 +8229,56 @@ button.ai-brainstorm-toggle-btn.active,
 }
 
 /* ── Cast collage ── */
+/* The collage takes the frame's own box with `position: absolute`, which is the load-bearing
+   part: as a centred flex child it was content-sized, so `1fr` rows resolved against the
+   portraits' intrinsic height instead of the frame — the tiles grew taller than the card, the
+   frame clipped them, and the blurred backing behind each portrait fell outside the visible box
+   (the whole collage read as one cropped portrait, with no blur in sight). */
 .cover-art-collage {
+  position: absolute;
+  inset: 0;
   display: grid;
   gap: 1px;
   background: var(--border-subtle);
+  grid-auto-rows: 1fr;
+  grid-auto-columns: 1fr;
+  /* MANDATORY here: the frame's own rule sets `align-items: center` (for the single-image and
+     placeholder cases), and as a grid that centres the TILES in their cells at their content
+     height — a 2:3 portrait then stands taller than its cell, the frame clips it, and the blurred
+     backing behind it falls outside the visible box. Stretch is what makes a tile exactly a
+     cell. */
+  align-items: stretch;
+  justify-items: stretch;
 }
 
-.cover-art-collage-1 { grid-template-columns: 1fr; }
+.cover-art-collage-1 { grid-template-columns: 1fr; grid-template-rows: 1fr; }
 .cover-art-collage-2 { grid-template-columns: repeat(2, 1fr); }
 .cover-art-collage-3 { grid-template-columns: repeat(3, 1fr); }
 .cover-art-collage-4 { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); }
+
+/* Landscape: one row, so four characters stand side by side rather than in a block. */
+:root[data-cover-aspect="landscape"] .cover-art-collage-4 {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: 1fr;
+}
+
+/* Portrait: the frame is tall, so the tiles STACK instead of being squeezed into slivers. */
+:root[data-cover-aspect="portrait"] .cover-art-collage-2 {
+  grid-template-columns: 1fr;
+  grid-template-rows: repeat(2, 1fr);
+}
+
+:root[data-cover-aspect="portrait"] .cover-art-collage-3 {
+  grid-template-columns: 1fr;
+  grid-template-rows: repeat(3, 1fr);
+}
+
+:root[data-cover-aspect="portrait"] .cover-art-collage-4 {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+}
+
+/* Square keeps the natural block: 2 and 3 in a row, 4 as a 2x2. */
 
 /* A collage cell is the one place where cropping would cost something: these are portrait
    character portraits, and cutting a character out of their own art (or cropping their head off)
@@ -8261,9 +8301,10 @@ button.ai-brainstorm-toggle-btn.active,
   width: 100%;
   height: 100%;
   object-fit: cover;
-  filter: blur(10px) saturate(1.15);
-  transform: scale(1.2);
-  opacity: 0.6;
+  object-position: center;
+  filter: blur(12px) saturate(1.2);
+  transform: scale(1.22);
+  opacity: 0.7;
   z-index: 0;
 }
 

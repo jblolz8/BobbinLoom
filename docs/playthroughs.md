@@ -40,8 +40,10 @@ A cover **fills** its frame, and the frame's shape comes from **Cover Art** in
 **Landscape** (16:9), Landscape by default. Pick the shape that matches the images you actually
 generate and nothing gets cropped.
 
-Collage tiles are the exception: each one shows the whole portrait over a **blurred copy of
-itself**, because cutting a character out of their own art is worse than a soft edge.
+Collage tiles are the exception: each one shows the whole portrait centred over a **blurred copy
+of itself**, because cutting a character out of their own art is worse than a soft edge. The
+tiles divide the frame the way the frame has room for: a row in Landscape and Square, a **stacked
+column in Portrait**, and quadrants once there are four characters.
 
 **Gallery Media** — in the play view's Journal tab, under **Media** — lists every image the
 story has produced, newest first, each with the chapter and turn it came from. **Use as cover**
