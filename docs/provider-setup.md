@@ -351,7 +351,10 @@ raw text as narrative and ignores the state patch for that turn.
 Beyond turn generation, the active provider implements a **broader interface**
 (`src/server/provider.ts`, `TurnProvider`). All of these are routed through the
 active connection (or the built-in Mock provider, which throws "not available"
-for the AI-only ones):
+for the AI-only ones) — with one exception: generating a **new playthrough** uses the
+connection chosen in its setup modal, so `generateScenarioSeed` and that playthrough's
+opening `generateTurn` run on the Text Provider field's choice (see
+[Starting a new playthrough](playthroughs.md)):
 
 | Method | Used by |
 |---|---|
@@ -383,6 +386,11 @@ adding it never forces a stub into every turn mock. See
   setting-aware opening turn (`buildOpeningPrompt(setting, seed)` + `executeTurn`)
   writes a richer first scene. Both modes produce exactly **one** first message.
 
+Whichever connection the setup modal's **Text Provider** field names makes **both** calls —
+the seed and, in fleshed-out mode, the opening turn — so a story's world and its first scene
+can never come from different models. Turns after the opening go back to the active
+connection.
+
 When a cast is selected, the seed generation receives the chosen characters
 (`preferences.cast`) so it doesn't invent a conflicting lead, and the selected
 library card is reused as the lead rather than cloned.
@@ -396,5 +404,6 @@ library card is reused as the lead rather than cloned.
 - no provider-specific tool calling
 - no image inputs (vision input; image *generation* is an output feature — see
   [`image-generation.md`](image-generation.md))
-- one active connection per kind — one text, one image (per-playthrough selection is a
-  future feature)
+- one active connection per kind — one text, one image. A **new playthrough** can be
+  generated with any text connection; choosing a connection per *playthrough*, for the turns
+  after its opening, is still a future feature
