@@ -350,3 +350,41 @@ describe("closeChapterAction — NPC staleness pruning (Phase E)", () => {
     expect(fades[0].content).toBe("Some background characters faded from the story: Zelda.");
   });
 });
+
+describe("promotion story context macro expansion", () => {
+  it("expands {{user}} and leaves {{char}} ownerless in the cast lines", async () => {
+    const dir = tempDir();
+    const pt = createPlaythroughRecord(dir, "Macro Promote Test");
+    let captured = "";
+
+    class CapturingProvider extends MockProviderShim {
+      async generateCharacterSheet(
+        _npc: { name: string; description: string; disposition?: string },
+        storyContext: string
+      ): Promise<string> {
+        captured = storyContext;
+        return "[Species]: Human\n\n[Personality]\n- Cheerful shopkeeper";
+      }
+    }
+
+    pt.playerCharacter.name = "Anon";
+    pt.playerCharacter.description = "{{user}} wanders the district.";
+    if (pt.characters.length > 0) {
+      pt.characters[0].memorySummary = "{{char}} remembers {{user}}.";
+    }
+    updatePlaythroughRecord(dir, pt);
+
+    const withNpc = applyStatePatch(pt, {
+      npcAdd: [{ name: "Shopkeep", description: "A friendly shopkeeper." }]
+    });
+    updatePlaythroughRecord(dir, withNpc.state);
+    const npcId = withNpc.state.npcs[0].id;
+
+    const out = await promoteNpcDraftAction(dir, withNpc.state.id, npcId, new CapturingProvider(), 4000);
+    expect(out.ok).toBe(true);
+    expect(captured).toContain("Anon wanders the district.");
+    expect(captured).not.toContain("{{user}}");
+    // A cast line belongs to another character, so {{char}} there has no owner to name.
+    expect(captured).toContain("{{char}} remembers Anon");
+  });
+});

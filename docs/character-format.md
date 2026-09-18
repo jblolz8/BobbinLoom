@@ -149,3 +149,21 @@ A cast character is **present** iff `instance.currentLocationId === playthrough.
 ## 6. Prompting model
 
 Injection order per character: template sheet (present only) → runtime state → memory anchor → (absent: one-liner). The full template, full memory log, and relationship history are never injected every turn. The state summary is built by `summarizePlaythrough`; the estimator prices present characters at full-sheet cost and absent characters as a capped one-liner, with `castPresence {present, absent}` exposed on `TokenUsage` for the Debug tab.
+
+## Macros
+
+A sheet may contain two macros. They are expanded **at prompt-build time only** — stored
+sheets, imported cards and library records keep the macros verbatim.
+
+| Macro | Resolves to | Where it resolves |
+|---|---|---|
+| `{{char}}` | the name of the character whose sheet this is | a character's sheet, that character's memory line, their absent one-liner |
+| `{{user}}` | the playthrough's player name | everything in the row above, plus lorebook entries, the player's own fields, and the image cast block |
+
+`{{char}}` is deliberately left **literal** wherever no single character owns the text — a
+lorebook entry, the player's block, an image frame, the NPC-promotion context. Guessing an
+owner there would substitute a wrong name, so those surfaces resolve `{{user}}` only.
+
+Expansion is case-insensitive and tolerates spaces inside the braces (`{{ user }}`). The sheet
+format's own rules tell the model to keep both macros exactly as written rather than resolving
+them into a literal name, so a sheet stays portable between players.

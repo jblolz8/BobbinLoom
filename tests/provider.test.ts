@@ -44,6 +44,24 @@ function jsonResponse(body: unknown, status = 200): Response {
  *  character sheets only. Excludes the OUTPUT FORMAT contract, which legitimately
  *  names "[Clothing]"/"[Personality]" as canonical section names and would
  *  otherwise satisfy sheet-level assertions by accident. */
+/** The JSON example the model is told to return: from the first "{" after `marker`
+ *  to its MATCHING "}". A `lastIndexOf("}")` heuristic breaks the moment any prompt
+ *  text after the example carries a brace — the macro convention ({{char}}/{{user}})
+ *  does exactly that, and would silently over-slice into invalid JSON. */
+function jsonExampleAfter(prompt: string, marker: string): string {
+  const start = prompt.indexOf("{", prompt.indexOf(marker));
+  expect(start).toBeGreaterThan(-1);
+  let depth = 0;
+  for (let i = start; i < prompt.length; i++) {
+    if (prompt[i] === "{") depth++;
+    else if (prompt[i] === "}") {
+      depth--;
+      if (depth === 0) return prompt.slice(start, i + 1);
+    }
+  }
+  throw new Error("unbalanced braces: the JSON example in this prompt never closes");
+}
+
 function currentStateText(assembled: ReturnType<typeof assembleTurnPrompt>): string {
   const joined = promptText(assembled);
   const start = joined.indexOf("CURRENT STATE\n");
@@ -498,13 +516,7 @@ describe("OpenAICompatibleProvider", () => {
       setting: "A quiet starting village."
     });
 
-    // Extract the JSON example block between the shape marker and the last '}'.
-    const shapeMarker = "Return ONLY a JSON object with this exact shape:";
-    const markerAt = sentPrompt.indexOf(shapeMarker);
-    expect(markerAt).toBeGreaterThan(-1);
-    const jsonStart = sentPrompt.indexOf("{", markerAt);
-    const jsonEnd = sentPrompt.lastIndexOf("}");
-    const example = sentPrompt.slice(jsonStart, jsonEnd + 1);
+    const example = jsonExampleAfter(sentPrompt, "Return ONLY a JSON object with this exact shape:");
 
     expect(() => JSON.parse(example)).not.toThrow();
   });
@@ -523,12 +535,9 @@ describe("OpenAICompatibleProvider", () => {
       undefined,
       NSFW_CHARACTER_FORMAT
     );
-    const marker = "Return ONLY a JSON object with this exact shape:";
-    const start = sentPrompt.indexOf(marker);
-    expect(start).toBeGreaterThan(-1);
-    const jsonStart = sentPrompt.indexOf("{", start);
-    const jsonEnd = sentPrompt.lastIndexOf("}");
-    expect(() => JSON.parse(sentPrompt.slice(jsonStart, jsonEnd + 1))).not.toThrow();
+    expect(() => JSON.parse(
+      jsonExampleAfter(sentPrompt, "Return ONLY a JSON object with this exact shape:")
+    )).not.toThrow();
     expect(sentPrompt).toContain("[Species]");
     expect(sentPrompt).toContain("[Sexual Capabilities]");
     expect(sentPrompt).toContain("in this order: [Species]");
@@ -1349,11 +1358,17 @@ describe("turn prompt modules + hardcoded tone", () => {
     // The multi-bullet sample body is what the model imitates. This phrase exists only
     // in the Clothing exampleBody, never in its one-line examples.
     expect(sentPrompt).toContain("Two dot stud earrings");
+    // And the macro convention ships with the same rules, so a sheet written by this
+    // path keeps {{char}}/{{user}} instead of hardcoding names.
+    expect(sentPrompt).toContain("{{char}}");
+    expect(sentPrompt).toContain("{{user}}");
+    expect(sentPrompt).toContain("Never resolve or rewrite");
 
-    // And the embedded JSON example is still valid JSON.
-    const marker = "Return ONLY a JSON object with this exact shape:";
-    const start = sentPrompt.indexOf("{", sentPrompt.indexOf(marker));
-    expect(() => JSON.parse(sentPrompt.slice(start, sentPrompt.lastIndexOf("}") + 1))).not.toThrow();
+    // And the embedded JSON example is still valid JSON, despite the braces the
+    // macro line adds after it.
+    expect(() => JSON.parse(
+      jsonExampleAfter(sentPrompt, "Return ONLY a JSON object with this exact shape:")
+    )).not.toThrow();
   });
 
   it("normalizes a legacy flat-array module set into turn modules", () => {

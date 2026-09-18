@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createInitialPlaythrough, parseUserInput } from "../src/engine/engine";
-import { assembleTurnPrompt, selectHistory, clampCalibration, estimateTokens, PROMPT_MESSAGE_OVERHEAD_TOKENS, MIN_HISTORY_MESSAGES } from "../src/server/provider/promptBuilder";
+import { createInitialPlaythrough, parseUserInput, type ActivatedEntry } from "../src/engine/engine";
+import { assembleTurnPrompt, selectHistory, clampCalibration, estimateTokens, PROMPT_MESSAGE_OVERHEAD_TOKENS, MIN_HISTORY_MESSAGES, renderLorebookSegments } from "../src/server/provider/promptBuilder";
 
 /** The global prompt config the builder now reads. An empty module set is the
  *  neutral default for tests that do not exercise modules. */
@@ -253,5 +253,67 @@ describe("token calibration", () => {
     expect(estimateTokens(400)).toBe(100);
     expect(estimateTokens(400, 2.5)).toBe(250);
     expect(estimateTokens(400, 1)).toBe(100);
+  });
+});
+
+describe("macro expansion coverage", () => {
+  const budget = { contextWindow: 65536, reserveOutputTokens: 1200 };
+  const promptOf = (pt: ReturnType<typeof createInitialPlaythrough>) =>
+    assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget, CFG).messages
+      .map((m) => m.content).join("\n");
+
+  /** renderLorebookSegments reads only content/position/depth/order, so the cast keeps
+   *  this fixture honest about the fields under test (tests/lorebook.test.ts has the
+   *  full-shape builder). */
+  const activated = (content: string, position: number, depth = 4, order = 100) =>
+    ({ entry: { content, position, depth, order } }) as unknown as ActivatedEntry;
+
+  it("expands {{user}} in lorebook entries and leaves {{char}} literal", () => {
+    const { before, after, depth } = renderLorebookSegments([
+      activated("{{char}} follows {{user}} through the gate.", 0),
+      activated("{{user}}'s satchel holds {{char}}'s letter.", 1),
+      activated("Deeper lore for {{user}}.", 2, 6),
+      activated("Shallower lore for {{ user }}.", 2, 2),
+    ], "Anon");
+
+    // {{user}} resolves everywhere...
+    expect(before).toBe("{{char}} follows Anon through the gate.");
+    expect(after).toBe("Anon's satchel holds {{char}}'s letter.");
+    // ...and {{char}} is deliberately preserved: an entry belongs to no single character.
+    expect(before).toContain("{{char}}");
+    expect(after).toContain("{{char}}");
+    // Depth entries stay sorted by depth (shallower first), and whitespace-tolerant.
+    expect(depth.indexOf("Shallower")).toBeLessThan(depth.indexOf("Deeper"));
+    expect(depth).not.toContain("{{ user }}");
+  });
+
+  it("returns empty segments for no activated entries", () => {
+    expect(renderLorebookSegments([], "Anon")).toEqual({ before: "", after: "", depth: "" });
+  });
+
+  it("expands {{user}} in the player character's own fields and leaves {{char}}", () => {
+    const pt = createInitialPlaythrough("Player Macro Test");
+    pt.playerCharacter.name = "Anon";
+    pt.playerCharacter.description = "{{user}} is a drifter; {{char}} means nothing here.";
+    pt.playerCharacter.appearance = "{{ user }} wears a worn coat.";
+    const all = promptOf(pt);
+    expect(all).toContain("Anon is a drifter; {{char}} means nothing here.");
+    expect(all).toContain("Anon wears a worn coat.");
+  });
+
+  it("expands the present character's memory line with that character as {{char}}", () => {
+    const pt = createInitialPlaythrough("Memory Macro Test");
+    pt.playerCharacter.name = "Anon";
+    pt.characters[0].memorySummary = "{{char}} trusts {{user}} now.";
+    expect(promptOf(pt)).toContain(`${pt.characters[0].name} trusts Anon now.`);
+  });
+
+  it("leaks no unresolved {{user}} anywhere in an assembled prompt", () => {
+    const pt = createInitialPlaythrough("No Leak Test");
+    pt.playerCharacter.name = "Anon";
+    pt.playerCharacter.description = "{{user}} again.";
+    pt.characters[0].memorySummary = "{{user}} and {{char}}.";
+    const all = promptOf(pt);
+    expect(all.match(/\{\{\s*user\s*\}\}/gi) ?? []).toHaveLength(0);
   });
 });

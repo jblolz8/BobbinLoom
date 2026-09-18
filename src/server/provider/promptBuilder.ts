@@ -1,8 +1,8 @@
 import { joinContentSections, splitContentSections, summaryFromContent } from "../../engine/characterSections";
 import { formatSectionHeaders, formatSections } from "../../engine/characterFormat";
 import { ITEMS } from "../../engine/demoData";
-import { retrieveMemoriesVector, scanLorebooks } from "../../engine/engine";
-import { expandMacros } from "../../engine/macros";
+import { retrieveMemoriesVector, scanLorebooks, type ActivatedEntry } from "../../engine/engine";
+import { expandMacros, expandUserMacro } from "../../engine/macros";
 import type { EntryTimingState, LorebookEntry } from "../../schemas";
 import type { CharacterFormat, CharacterInstance, CharacterTemplate, ParsedUserInput, Playthrough, PromptConfig, PromptPresetModule } from "../../schemas";
 import type { PromptUsage, PromptUsageBreakdown } from "../provider";
@@ -39,6 +39,13 @@ export function summarizePlaythrough(state: Playthrough): string {
   const present = state.characters.filter((c) => c.currentLocationId === state.locationId);
   const absent = state.characters.filter((c) => c.currentLocationId !== state.locationId);
 
+  // Player-owned text can carry {{user}} — a persona description is the usual place —
+  // and has no {{char}} owner, so that macro stays literal. The derived Clothing /
+  // Conditions / Flags lines below are engine state rather than prose, and are
+  // deliberately NOT expanded: a literal "{{" there is user data being displayed.
+  const playerName = state.playerCharacter.name;
+  const expandPlayer = (text: string) => expandUserMacro(text, playerName);
+
   const catalog = state.locationCatalog ?? [];
 
   const characterLines = present.map((character) => {
@@ -60,7 +67,11 @@ export function summarizePlaythrough(state: Playthrough): string {
       clothingLine,
       character.conditions.length > 0 ? `Conditions: ${character.conditions.join(", ")}` : "",
       character.flags.length > 0 ? `Flags: ${character.flags.join(", ")}` : "",
-      `Memory: ${character.memorySummary}`,
+      // The memory anchor is model-written, so it is the one runtime field that can
+      // plausibly carry a macro, and it belongs to THIS character — so both macros
+      // resolve. mood / towardPlayer / conditions / flags are engine labels, and are
+      // deliberately left alone.
+      `Memory: ${expandMacros(character.memorySummary, character.name, state.playerCharacter.name)}`,
     ].filter(Boolean).join("\n");
 
     return [
@@ -163,9 +174,9 @@ export function summarizePlaythrough(state: Playthrough): string {
     `Flags: ${state.flags.length ? state.flags.join(", ") : "none"}`,
     "",
     "PLAYER CHARACTER:",
-    `${state.playerCharacter.name} — ${state.playerCharacter.description}`,
-    `Body: ${state.playerCharacter.bodyType}`,
-    `Appearance: ${state.playerCharacter.appearance}`,
+    `${state.playerCharacter.name} — ${expandPlayer(state.playerCharacter.description)}`,
+    `Body: ${expandPlayer(state.playerCharacter.bodyType)}`,
+    `Appearance: ${expandPlayer(state.playerCharacter.appearance)}`,
     `Clothing: ${state.playerCharacter.clothing.length ? state.playerCharacter.clothing.map((c) => `${c.slot}: ${c.name}${c.state ? ` (${c.state})` : ""}`).join("; ") : "none"}`,
     `Conditions: ${state.playerCharacter.conditions.length ? state.playerCharacter.conditions.join(", ") : "none"}`,
     `Player Flags: ${state.playerCharacter.flags.length ? state.playerCharacter.flags.join(", ") : "none"}`,
@@ -439,11 +450,29 @@ type LorebookSegments = { before: string; after: string; depth: string };
  * SillyTavern-compatible; where each segment is *placed* in the outgoing
  * message array is assembleTurnPrompt's decision, not this helper's.
  */
-function collectLorebookSegments(state: Playthrough): LorebookSegments {
-  let lorebookBefore = "";
-  let lorebookAfter = "";
-  let lorebookDepth = "";
+/** Split scanned entries into the three prompt positions and join them, resolving
+ *  {{user}} per entry and deliberately leaving {{char}} literal: an entry belongs to
+ *  no single character, so there is no owner to name.
+ *
+ *  Exported for tests — the collector around it reads lorebooks from the real data
+ *  dir, which is not a seam a test may use. */
+export function renderLorebookSegments(
+  activated: Array<{ entry: Pick<LorebookEntry, "content" | "position" | "depth" | "order"> }>,
+  playerName: string
+): LorebookSegments {
+  const expand = (a: (typeof activated)[number]) => expandUserMacro(a.entry.content, playerName);
+  return {
+    before: activated.filter((a) => a.entry.position === 0).map(expand).join("\n\n"),
+    after: activated.filter((a) => a.entry.position === 1).map(expand).join("\n\n"),
+    depth: activated
+      .filter((a) => a.entry.position >= 2)
+      .sort((a, b) => a.entry.depth - b.entry.depth || a.entry.order - b.entry.order)
+      .map(expand)
+      .join("\n\n"),
+  };
+}
 
+function collectLorebookSegments(state: Playthrough): LorebookSegments {
   if (state.lorebookIds && state.lorebookIds.length > 0) {
     const allEntries: LorebookEntry[] = [];
     const lorebookDefaults = { scanDepth: 2, caseSensitive: false, matchWholeWords: false };
@@ -479,18 +508,10 @@ function collectLorebookSegments(state: Playthrough): LorebookSegments {
         currentMessageIndex: scanMessages.length,
       });
 
-      const pos0 = scanned.filter(a => a.entry.position === 0);
-      const pos1 = scanned.filter(a => a.entry.position === 1);
-      const pos2 = scanned.filter(a => a.entry.position >= 2);
-
-      lorebookBefore = pos0.map(a => a.entry.content).join("\n\n");
-      lorebookAfter = pos1.map(a => a.entry.content).join("\n\n");
-      lorebookDepth = pos2
-        .sort((a, b) => a.entry.depth - b.entry.depth || a.entry.order - b.entry.order)
-        .map(a => a.entry.content).join("\n\n");
+      return renderLorebookSegments(scanned, state.playerCharacter.name);
     }
   }
-  return { before: lorebookBefore, after: lorebookAfter, depth: lorebookDepth };
+  return { before: "", after: "", depth: "" };
 }
 
 export function assembleTurnPrompt(

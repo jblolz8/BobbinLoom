@@ -86,3 +86,9 @@ says about it.
 Import a SillyTavern World Info JSON file and it becomes a lorebook you can attach to any
 playthrough. The library's lorebook surface handles creating, editing, importing and deleting
 them, and shows each book's entry count.
+
+## Macros in entries
+
+Entry content may use `{{user}}`, which resolves to the playthrough's player name when the entry
+is injected into the prompt. `{{char}}` is left exactly as written: an entry belongs to no single
+character, so there is no name to substitute. Put `{{char}}` in a character's own sheet instead.

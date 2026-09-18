@@ -216,6 +216,7 @@ export function buildFormatRules(format?: CharacterFormat): string {
   const lines = [
     `- Use the standard section headers, in this order: ${sections.map((s) => `[${s.name}]`).join(", ")}.`,
     "- Additional custom sections are allowed when they add real information.",
+    "- Two macros are available inside a sheet and must be kept exactly as written: {{char}} resolves to the character's own name at play time, and {{user}} to the player's. Never resolve or rewrite them into a literal name — a sheet that hardcodes a name stops working the moment the same character is played by someone else.",
   ];
   for (const s of sections) {
     const guidance = s.instruction || "no special guidance.";

@@ -212,3 +212,10 @@ The **Debug** panel in the chat view:
 - **`hidden` gates the prompt, not just the UI.** Anything newly hidden disappears from the transcript *and* from chapter archiving (`stateActions.ts` archives `!m.hidden && !m.chapterId`). A message hidden without a `chapterId` is therefore unarchivable and invisible to the player, so hidden messages carry their chapter with them.
 - **History size is a token budget, not a message count.** Nothing in the pipeline caps the transcript at a fixed number of messages — the budget decides what is sent. The state field is `chatHistory`.
 - **A bigger window must not resurrect ghosting.** Retaining messages in `state.messages` is cheap; what gets *sent* is the budget's job.
+
+## Macro expansion is a render-time step
+
+`{{char}}` and `{{user}}` are resolved while the prompt is assembled and never in stored data.
+The surfaces covered are a character's sheet and memory line, the player's own fields, lorebook
+segments, and the image cast block; text with no single character owner resolves `{{user}}` only.
+The per-surface table is in [`character-format.md`](character-format.md#macros).

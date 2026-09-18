@@ -60,3 +60,10 @@ that point the two are independent:
 
 That is why the player character's clothing list is its own: what you're wearing three chapters
 in is story state, and the persona's starting clothing is only where it began.
+
+## Macros
+
+A persona's description, body type and appearance may use `{{user}}`, which resolves to the player
+name the playthrough was created with. Because a persona is copied into a playthrough at creation,
+editing the persona later does not rename the player mid-story. `{{char}}` has no meaning in player
+text and is left as written — name a specific character instead.

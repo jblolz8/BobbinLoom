@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { expandMacros } from "../src/engine/macros";
+import { expandMacros, expandUserMacro } from "../src/engine/macros";
 
 describe("expandMacros", () => {
   it("expands {{char}} and {{user}}", () => {
@@ -31,5 +31,35 @@ describe("expandMacros", () => {
     const out = expandMacros(source, "Mira", "Anon");
     expect(out).toBe("Mira eyes Anon.");
     expect(source).toBe("{{char}} eyes {{user}}.");
+  });
+
+  it("tolerates internal whitespace inside the braces", () => {
+    expect(expandMacros("{{ char }} meets {{ user }}", "Mira", "Anon")).toBe("Mira meets Anon");
+  });
+
+  it("expands both macros on every occurrence, not just the first", () => {
+    expect(expandMacros("{{user}} {{user}} {{char}} {{char}}", "Mira", "Anon")).toBe("Anon Anon Mira Mira");
+  });
+
+  it("leaves lookalike brace text alone", () => {
+    const text = "{not a macro} {{chars}} {{character}} {{user-name}}";
+    expect(expandMacros(text, "Mira", "Anon")).toBe(text);
+  });
+});
+
+describe("expandUserMacro", () => {
+  it("substitutes {{user}} and leaves {{char}} literal", () => {
+    // A shared/ownerless surface has no character to name: guessing one would
+    // substitute a wrong name, so {{char}} is deliberately preserved.
+    expect(expandUserMacro("{{char}} guards {{user}}", "Anon")).toBe("{{char}} guards Anon");
+  });
+
+  it("is case-insensitive and tolerates internal whitespace", () => {
+    expect(expandUserMacro("{{USER}} and {{ user }}", "Anon")).toBe("Anon and Anon");
+  });
+
+  it("leaves lookalike brace text alone (no {{char}} name match)", () => {
+    const text = "{{chars}} {{character}} {char}";
+    expect(expandUserMacro(text, "Anon")).toBe(text);
   });
 });

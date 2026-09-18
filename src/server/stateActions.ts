@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { applyStatePatch } from "../engine/engine";
 import { seedMemorySummary, summaryFromContent } from "../engine/characterSections";
 import { ensureAllSections, resolveCharacterFormat } from "../engine/characterFormat";
+import { expandUserMacro } from "../engine/macros";
 import type { Chapter, ChapterMetaSummary, CharacterTemplate, Playthrough, PromptConfig, SimpleNPC } from "../schemas";
 import { getCharacterTemplate, getPlaythroughRecord, listCharacterTemplates, saveCharacterTemplateRecord, updatePlaythroughRecord } from "./store";
 import { buildLorebookContext, lorebookBudgetChars } from "./lorebookContext";
@@ -72,14 +73,23 @@ function buildPromoteStoryContext(loaded: Playthrough, npc: SimpleNPC, maxTokens
   const playerLoc = (loaded.locationCatalog ?? []).find((l) => l.id === loaded.locationId);
   if (playerLoc) parts.push(`Player Location: ${playerLoc.name} — ${playerLoc.description}`);
 
+  // Every player-visible string here may carry {{user}}. {{char}} has no owner — the
+  // cast lines belong to several different characters, and the promotion target is a
+  // background NPC — so it is left literal rather than guessed.
+  const playerName = loaded.playerCharacter.name;
+
   const pc = loaded.playerCharacter;
-  parts.push(`Player Character: ${pc.name} (${pc.bodyType}) — ${pc.description}`);
+  parts.push(
+    `Player Character: ${pc.name} (${expandUserMacro(pc.bodyType, playerName)}) — ` +
+      expandUserMacro(pc.description, playerName)
+  );
 
   if (loaded.characters.length > 0) {
     const cast = loaded.characters.map((c) => {
       const tpl = loaded.characterTemplates.find((t) => t.id === c.templateId);
       const species = tpl?.content.match(/\[Species\]:\s*(.+)/)?.[1] ?? "unknown";
-      return `- ${c.name} (${species}): ${c.memorySummary || "no details yet"}`;
+      const memory = expandUserMacro(c.memorySummary || "no details yet", playerName);
+      return `- ${c.name} (${species}): ${memory}`;
     });
     parts.push(`Other Main Cast:\n${cast.join("\n")}`);
   }
@@ -92,7 +102,7 @@ function buildPromoteStoryContext(loaded: Playthrough, npc: SimpleNPC, maxTokens
 
   const haystack = [npc.description, npc.disposition ?? "", loaded.scenarioDescription ?? ""].join(" ");
   const lore = buildLorebookContext(loaded.lorebookIds, haystack, lorebookBudgetChars(maxTokens));
-  if (lore) parts.push(lore);
+  if (lore) parts.push(expandUserMacro(lore, playerName));
 
   return parts.join("\n\n");
 }

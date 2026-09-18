@@ -170,6 +170,15 @@ describe("characterFormat builders", () => {
     expect(rules.match(/    - $/g)?.length ?? 0).toBe(0);
   });
 
+  it("buildFormatRules states the two macros and tells the model to preserve them", () => {
+    const rules = buildFormatRules(DEFAULT_CHARACTER_FORMAT);
+    expect(rules).toContain("{{char}}");
+    expect(rules).toContain("{{user}}");
+    // It must instruct preservation, not resolution: a sheet that hardcodes a name
+    // stops working the moment the same character is played by someone else.
+    expect(rules).toMatch(/never resolve or rewrite/i);
+  });
+
   it("buildFormatExample prefers exampleBody, falls back to examples[0], then '...'", () => {
     const fmt: CharacterFormat = {
       sections: [

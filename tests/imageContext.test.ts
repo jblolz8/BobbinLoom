@@ -377,3 +377,35 @@ describe("the shipped rating bullet", () => {
     expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("1. Rating: one word from safe, sensitive, nsfw, explicit");
   });
 });
+
+describe("macro expansion in the image cast block", () => {
+  it("expands {{user}} in the player's identity text", () => {
+    const pt = fixture() as unknown as Playthrough;
+    pt.playerCharacter.description = "{{user}} is a drifter. {{char}} is meaningless here.";
+    pt.playerCharacter.appearance = "{{ user }} wears a worn coat.";
+
+    const scene = buildImageCastBlock(pt, "scene");
+    expect(scene).toContain("Anon is a drifter");
+    expect(scene).toContain("Anon wears a worn coat");
+    expect(scene).not.toContain("{{user}}");
+    expect(scene).not.toContain("{{ user }}");
+
+    // The POV camera note takes the same first sentence.
+    const pov = buildImageCastBlock(pt, "pov");
+    expect(pov).toContain("Anon is a drifter");
+    expect(pov).not.toContain("{{user}}");
+  });
+
+  it("expands both macros in a character's sheet line, where there is exactly one owner", () => {
+    const pt = fixture() as unknown as Playthrough;
+    pt.playerCharacter.name = "Anon";
+    const tpl = pt.characterTemplates.find((t) => t.id === "tpl_j")!;
+    tpl.content = tpl.content.replace(
+      "- Eyes: tired blue eyes",
+      "- Eyes: {{char}}'s tired blue eyes that {{user}} knows"
+    );
+    const block = buildImageCastBlock(pt, "scene");
+    expect(block).toContain("Jeneine's tired blue eyes that Anon knows");
+    expect(block).not.toContain("{{char}}");
+  });
+});

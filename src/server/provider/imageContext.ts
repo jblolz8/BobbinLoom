@@ -1,5 +1,6 @@
 import type { ChatMessage, ImageInstructionMode, Playthrough, PlayerCharacter } from "../../schemas";
 import { isStubSection, pickSections } from "../../engine/characterSections";
+import { expandMacros, expandUserMacro } from "../../engine/macros";
 import { clampChars } from "../imageProvider/shared";
 
 /**
@@ -124,10 +125,19 @@ export function buildImageStateBlock(playthrough: Playthrough): string {
  *  while the rest of a persona's prose is wardrobe and appearance material the
  *  writer must not turn into tags. `bodyType` and `appearance` are the fields the
  *  Character Sheet editor writes for exactly this purpose. */
+/** Player prose can carry {{user}}; {{char}} has no owner in an image frame (a frame
+ *  may hold several characters), so only the user macro resolves. */
+function expandPlayerText(player: PlayerCharacter, text: string): string {
+  return expandUserMacro(text, player.name);
+}
+
 function playerIdentity(player: PlayerCharacter): string {
-  const firstSentence = player.description.trim().split(". ")[0] ?? "";
+  // Expand BEFORE splitting: a macro inside the first sentence has to resolve rather
+  // than be carried into the tag line as braces.
+  const description = expandPlayerText(player, player.description);
+  const firstSentence = description.trim().split(". ")[0] ?? "";
   const parts = [firstSentence, player.bodyType, player.appearance]
-    .map((part) => (part ?? "").trim())
+    .map((part) => expandPlayerText(player, part ?? "").trim())
     .filter(Boolean);
   return clampChars(parts.join(" | "), CAST_IDENTITY_CHARS);
 }
@@ -178,8 +188,9 @@ export function buildImageCastBlock(
       "THE CAMERA (the player — the scene is seen through this person; never tag their stored " +
       "appearance or clothing, and never give them a \" | \" group):"
     );
-    const firstSentence = player.description.trim().split(". ")[0] ?? "";
-    const cameraNote = clampChars(firstSentence || player.description.trim(), CAMERA_DESCRIPTION_CHARS);
+    const description = expandPlayerText(player, player.description);
+    const firstSentence = description.trim().split(". ")[0] ?? "";
+    const cameraNote = clampChars(firstSentence || description.trim(), CAMERA_DESCRIPTION_CHARS);
     lines.push(`${player.name}${cameraNote ? ` — ${cameraNote}` : ""}`);
   }
 
@@ -199,10 +210,13 @@ export function buildImageCastBlock(
       ?? playthrough.characterTemplates.find((t) => t.name === character.name);
     // Hair headline first, then the full identity line: the identity budget can
     // trim the sheet line, it cannot touch this one.
+    // Sheet-derived: exactly ONE owner, so both macros resolve here — the same rule
+    // the turn prompt's sheet renderer uses.
+    const playerName = playthrough.playerCharacter.name;
     const hair = template ? castHair(template.content) : "";
-    if (hair) lines.push(`${character.name}'s hair — ${hair}`);
+    if (hair) lines.push(`${character.name}'s hair — ${expandMacros(hair, character.name, playerName)}`);
     const identity = template ? castIdentity(template.content) : "";
-    if (identity) lines.push(`${character.name}'s sheet — ${identity}`);
+    if (identity) lines.push(`${character.name}'s sheet — ${expandMacros(identity, character.name, playerName)}`);
   }
 
   return lines.join("\n");
