@@ -8229,14 +8229,20 @@ button.ai-brainstorm-toggle-btn.active,
 }
 
 /* ── Cast collage ── */
-/* The collage takes the frame's own box with `position: absolute`, which is the load-bearing
-   part: as a centred flex child it was content-sized, so `1fr` rows resolved against the
-   portraits' intrinsic height instead of the frame — the tiles grew taller than the card, the
-   frame clipped them, and the blurred backing behind each portrait fell outside the visible box
-   (the whole collage read as one cropped portrait, with no blur in sight). */
+/* The collage IS the frame element (`cover-art cover-art-collage`), and two things about this
+   rule are load-bearing:
+
+   - It must stay AFTER `.cover-art` in this file (equal specificity: file order decides), and it
+     must NOT take the element out of flow. The frame is what gives the grid a definite box
+     (`width: 100%` + `aspect-ratio`) and what anchors the `+N` chip; an absolutely positioned
+     frame resolves against the nearest positioned ancestor instead, and there is none anywhere in
+     the playthrough shelf, so the cover would size itself to the viewport, paint over the whole
+     app, and leave its card reserving no space at all.
+   - `align-items: stretch` cancels the frame's own `align-items: center` (there for the
+     single-image and placeholder cases). Under `center` a grid centres each TILE at its content
+     height, so a 2:3 portrait stands taller than its cell and the blurred backing behind it falls
+     outside the visible box. */
 .cover-art-collage {
-  position: absolute;
-  inset: 0;
   display: grid;
   gap: 1px;
   background: var(--border-subtle);
