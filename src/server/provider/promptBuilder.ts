@@ -11,7 +11,7 @@ import { getLorebook } from "../store";
 
 /**
  * Render one character's sheet blob for the prompt (D6/D9/D10).
- * BL sheets with structured clothing drop the [Clothing] section (rendered as a
+ * Every BL sheet's [Clothing] section is dropped (the outfit is rendered as a
  * derived line outside this helper); CCv2 sheets are verbatim raw blobs (no
  * structured clothing). Macros are expanded at prompt-build time only — source
  * and stored data are never modified.
@@ -19,7 +19,13 @@ import { getLorebook } from "../store";
 function renderCharacterSheet(tpl: CharacterTemplate | undefined, instance: CharacterInstance, playerName: string): string {
   if (!tpl) return "(no character data)";
   let blob = tpl.content ?? "(no character data)";
-  if (tpl.format !== "ccv2" && instance.clothing.length > 0) {
+  // Structured clothing is the single source of truth, so the [Clothing] section
+  // is ALWAYS a generation scaffold and never reaches the prompt. The condition
+  // deliberately does not test `instance.clothing.length`: a character wearing
+  // nothing is a legitimate state, and gating on it leaked the raw section (and
+  // its "(not established)" stub) into the context exactly when the outfit was
+  // empty — the case that made a slime girl's own body read as garments.
+  if (tpl.format !== "ccv2") {
     const { preamble, sections } = splitContentSections(blob);
     blob = joinContentSections(
       sections.filter((s) => s.header.toLowerCase() !== "clothing"),

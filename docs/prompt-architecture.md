@@ -203,7 +203,7 @@ The **Debug** panel in the chat view:
 
 - **Input** — the raw request body. This is the authoritative view of what was sent: check the role sequence, that the tail `system` message is second-to-last, and that the final message is the player's input.
 - **Output** — the raw response body, including `finish_reason` and `usage`.
-- **Patch** — which `statePatch` operations were applied, which were rejected, and any warnings.
+- **Patch** — which `statePatch` operations were applied, which were rejected, and any warnings. The same record is persisted on the assistant message (`patchInfo`), so the panel still shows the last turn's result after a reload. This is a **record, not an input**: patch feedback remains non-injected by design.
 
 ---
 

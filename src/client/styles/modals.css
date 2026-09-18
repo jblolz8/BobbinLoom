@@ -405,9 +405,8 @@
   flex-wrap: wrap;
 }
 
-/* The field is a base SimpleSelect now. The legacy `.preset-bar label` /
-   `.preset-bar select` rules below styled raw controls with hardcoded slate — they
-   are gone with the raw controls, not kept beside them. */
+/* A labelled wrapper for a base SimpleSelect, which has no label prop: the
+   .field-label-text span above it is the same one TextInput/TextArea render. */
 .preset-bar-field {
   display: flex;
   flex-direction: column;
@@ -442,26 +441,35 @@
     align-items: stretch;
     gap: 0.6rem;
   }
-  .preset-bar label {
-    width: 100%;
-  }
-  .preset-bar select {
-    width: 100%;
+  /* The bar stacks in this query, so the field's row-axis `flex: 1 1 220px` (authored
+     as a WIDTH floor, beside `min-width: 220px`) is applied as a HEIGHT in the column
+     direction: a 32px control wrapped in a 220px box, measured at 164.3px of dead
+     space sitting directly between the dropdown and its buttons. `flex: 0 0 auto`
+     restores content height here. min-width becomes the cross axis and must not
+     re-apply the same floor. */
+  .preset-bar-field {
+    flex: 0 0 auto;
     min-width: 0;
   }
+  /* Five buttons as a 2-column grid occupy three rows (~121px at 375px). Wrapping
+     keeps their natural widths and lands on one or two rows instead. */
   .preset-actions {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    display: flex;
+    flex-wrap: wrap;
     gap: 0.4rem;
     width: 100%;
   }
   .preset-actions button {
-    width: 100%;
+    width: auto;
+    flex: 1 1 auto;
     min-height: 36px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
   }
+  /* The `.preset-bar label` / `.preset-bar select` rules that lived here styled raw
+     controls the migrated SimpleSelect replaced. Deleted with the markup they owned:
+     an orphan rule is what the next surface copies. */
 }
 
 .module-hint {
@@ -578,10 +586,11 @@
   }
 }
 
-/* The examples field keeps its distinct green — it is example CONTENT, not an
-   instruction — but as a token, so a custom theme can move it. The border/background/
+/* The two example fields keep their distinct green — they are example CONTENT, not
+   an instruction — but as a token, so a custom theme can move it. The border/background/
    padding the legacy pair hardcoded are gone: the base TextArea owns those now. */
-.format-examples-input {
+.format-examples-input,
+.format-example-body-input {
   color: var(--status-success);
 }
 

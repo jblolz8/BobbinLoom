@@ -347,6 +347,12 @@ export const CharacterFormatSectionSchema = z.object({
   order: z.number(),
   instruction: z.string().default(""),
   examples: z.array(z.string()).default([]),
+  /** Multi-line sample BODY for this section, as it should appear in a finished
+   *  sheet. Unlike `examples` (one entry per line, rendered by buildFormatRules
+   *  as the bullet list of expected content), this field may contain real
+   *  newlines and is what the sample sheet in generation prompts shows. Empty
+   *  falls back to examples[0]. */
+  exampleBody: z.string().default(""),
   inline: z.boolean().default(false),
 });
 export type CharacterFormatSection = z.infer<typeof CharacterFormatSectionSchema>;
@@ -519,7 +525,17 @@ export const ChatMessageSchema = z.object({
   chapterOpening: z.boolean().optional(),
   /** Generated images attached to this message (assistant messages only).
    *  OPTIONAL so every record written before this feature parses untouched. */
-  images: z.array(MessageImageSchema).optional()
+  images: z.array(MessageImageSchema).optional(),
+  /** What this turn's statePatch actually did, recorded by executeTurn.
+   *  OPTIONAL so every message written before this feature parses untouched.
+   *  Powers a Debug-panel view that survives a reload, and makes an
+   *  emitted-but-rejected patch visible after the fact — patch feedback is
+   *  deliberately never re-injected into the prompt. */
+  patchInfo: z.object({
+    applied: z.array(z.string()).default([]),
+    rejected: z.array(z.string()).default([]),
+    warnings: z.array(z.string()).default([])
+  }).optional()
 });
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 

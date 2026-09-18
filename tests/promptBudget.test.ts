@@ -158,6 +158,43 @@ describe("assembleTurnPrompt message array", () => {
     expect(firstAssistant).toBeGreaterThan(0);
     expect(firstAssistant).toBeLessThan(lastSystem);
   });
+
+  // Structured clothing is the single source of truth: a BL sheet's [Clothing]
+  // section is a generation scaffold and must never reach the prompt — including
+  // when the character is wearing nothing, which is a legitimate state and must
+  // not leak the raw section (or its "(not established)" stub) into the context.
+  it("never injects the raw [Clothing] section for a BL sheet, even with an empty outfit", () => {
+    const tpl = {
+      id: "tpl_bl", name: "Test Subject", version: 1,
+      summary: "A test character.",
+      content: "[Species]: Human\n[Gender]: Female\n\n[Clothing]\n(not established) NOISE_CLOTHING_SECTION\n\n[Personality]\n- Watchful.",
+      startingClothing: [],
+    };
+    const pt = createInitialPlaythrough("Clothing Test", undefined, [tpl]);
+    expect(pt.characters[0].clothing).toEqual([]); // no slot bullets -> nothing worn
+    const built = assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget, CFG);
+    const all = built.messages.map((m) => m.content).join("\n");
+    expect(all).toContain("[Personality]"); // the sheet itself DID reach the prompt
+    // The whole section is gone, not just its header. Assert on a marker inside its
+    // BODY: the bare token "[Clothing]" is unusable here because the output contract
+    // lists every canonical section name.
+    expect(all).not.toContain("NOISE_CLOTHING_SECTION");
+    expect(all).not.toContain("(not established)");
+  });
+
+  it("renders a worn outfit as a derived line and still never the raw section", () => {
+    const tpl = {
+      id: "tpl_dressed", name: "Dressed Subject", version: 1,
+      summary: "A test character.",
+      content: "[Species]: Human\n\n[Clothing]\n- Top: Linen tunic\n- Feet: Sandals\n\n[Personality]\n- Watchful.",
+      startingClothing: [{ slot: "Top", name: "Linen tunic" }, { slot: "Feet", name: "Sandals" }],
+    };
+    const pt = createInitialPlaythrough("Clothing Test 2", undefined, [tpl]);
+    const built = assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget, CFG);
+    const all = built.messages.map((m) => m.content).join("\n");
+    expect(all).toContain("Clothing: Top: Linen tunic; Feet: Sandals");
+    expect(all).not.toContain("- Top: Linen tunic");
+  });
 });
 
 describe("token calibration", () => {

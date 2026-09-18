@@ -1318,12 +1318,42 @@ describe("turn prompt modules + hardcoded tone", () => {
 
     // Default format (10 sections, no Sexual Capabilities).
     await provider.generateScenarioSeed({ name: "World", setting: "A quiet village." }, undefined, undefined, DEFAULT_CHARACTER_FORMAT);
-    expect(sentPrompt).toContain("using the standard section headers: [Species], [Gender], [Body]");
+    expect(sentPrompt).toContain("Use the standard section headers, in this order: [Species], [Gender], [Body]");
     expect(sentPrompt).not.toContain("Sexual Capabilities");
 
     // NSFW format (11 sections).
     await provider.generateScenarioSeed({ name: "World", setting: "A quiet village." }, undefined, undefined, NSFW_CHARACTER_FORMAT);
     expect(sentPrompt).toContain("[Sexual Capabilities]");
+  });
+
+  it("scenario-seed prompt carries the format rules, so new-playthrough sheets get the same guidance as the other paths", async () => {
+    let sentPrompt = "";
+    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const b = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
+      sentPrompt = b.messages[0]?.content ?? "";
+      return jsonResponse({ choices: [{ message: { content: JSON.stringify(VALID_SEED) } }] });
+    });
+    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+
+    await provider.generateScenarioSeed({ name: "World", setting: "A quiet village." }, undefined, undefined, DEFAULT_CHARACTER_FORMAT);
+
+    // The per-section guidance, not just the sample sheet blob. This path used to be
+    // the only creation path without buildFormatRules, and its sheets came out at one
+    // bullet for Personality / Communication / Sexual Capabilities.
+    expect(sentPrompt).toContain("Use the standard section headers, in this order:");
+    expect(sentPrompt).toContain("4-6 bullets");
+    // The Clothing convention rides along once, and the old three-slot line is gone.
+    expect(sentPrompt).toContain("one garment per bullet");
+    expect(sentPrompt).toContain("never invent a catch-all slot");
+    expect(sentPrompt).not.toContain("(- Top: ..., - Bottom: ..., - Feet: ...)");
+    // The multi-bullet sample body is what the model imitates. This phrase exists only
+    // in the Clothing exampleBody, never in its one-line examples.
+    expect(sentPrompt).toContain("Two dot stud earrings");
+
+    // And the embedded JSON example is still valid JSON.
+    const marker = "Return ONLY a JSON object with this exact shape:";
+    const start = sentPrompt.indexOf("{", sentPrompt.indexOf(marker));
+    expect(() => JSON.parse(sentPrompt.slice(start, sentPrompt.lastIndexOf("}") + 1))).not.toThrow();
   });
 
   it("normalizes a legacy flat-array module set into turn modules", () => {

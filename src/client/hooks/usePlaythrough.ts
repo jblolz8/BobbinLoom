@@ -483,7 +483,13 @@ export function usePlaythrough() {
         if (oldId && oldId !== found.id) void persistDraft(oldId, input);
         setPlaythrough(found);
         setChoices([]);
-        setLastPatchInfo({ applied: [], rejected: [], warnings: [] });
+        // Patch feedback is never re-injected into the prompt (stateless by design),
+        // so the Debug panel is the only view of it. Seeding from the newest message
+        // that recorded one keeps the last turn's applied/rejected lists visible
+        // across a reload instead of silently showing an empty panel.
+        const lastPatched = [...(found.messages ?? [])].reverse()
+          .find((m) => m.role === "assistant" && m.patchInfo);
+        setLastPatchInfo(lastPatched?.patchInfo ?? { applied: [], rejected: [], warnings: [] });
         setRawInput(null);
         setRawOutput(null);
         setCancelledNotice(null);

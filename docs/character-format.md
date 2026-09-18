@@ -59,6 +59,9 @@ type CharacterTemplate = {
 
 - `content` is a **text blob** with `[Section]` headers. The canonical sections are defined by the active preset's **character format** (see §1a below) — the shipped Default is `Species, Gender, Body, Appearance, Clothing, Personality, Communication - Public, Communication - Private, Likes, Dislikes` (10 sections); Default (NSFW) adds `Sexual Capabilities`. **Any additional headers are allowed** — models invent `[Voice]`/`[Quirks]` and that richness is a feature. `splitContentSections`/`joinContentSections` are exact inverses.
 - `summary` is a real field because the absent one-liner needs a stable line; fallback for old templates is the first non-stub `[Personality]` bullet (`summaryFromContent`).
+- `Playthrough.characterFormat` exists on the playthrough schema but is not read: the format
+  always resolves from the **global prompt config**, so one edit reaches every playthrough's next
+  turn. The field is kept for shape stability, not consulted.
 - Templates are **never mutated during play**. Each playthrough keeps a private clone in `characterTemplates[]`; in-play sheet edits touch the clone, and the library copy only changes on explicit **Save to Library** (`saveToLibraryAction`, update = upsert by id in `data/characters/<slug>/<slug>.json`, newVersion = new id + `version = max + 1` saved as `<slug>.v<N>.json` under the same `lineageId`).
 - **Library storage is folder-per-entity** — `data/characters/<slug>/<slug>.json` plus optional avatar, versioned siblings, and a transient `<slug>.bl.json` sidecar for imported-but-unconverted CCv2 cards. See `character-library.md`.
 - **Seed sync:** the committed library seed `data/characters/mira/mira.json` and the code-level `DEMO_TEMPLATE` (`src/engine/demoData.ts`, used as the default cast for fresh playthroughs) must be kept identical — update both when changing Mira's sheet.
@@ -73,7 +76,11 @@ type CharacterFormatSection = {
   name: string;             // the [Header] text
   order: number;            // display order (1-based); generated sheets follow it
   instruction: string;      // guidance to the model for this section's content
-  examples: string[];       // optional example bodies (first one is used in prompts)
+  examples: string[];       // expected content, ONE ENTRY PER LINE. buildFormatRules
+                            // renders these as the bullet list under this section
+  exampleBody: string;      // the sample sheet BODY for this section — multi-line is
+                            // expected. buildFormatExample embeds it in the sample sheet
+                            // every generation prompt carries; empty → examples[0]
   inline: boolean;          // true → rendered `[Name]: value` on one line; false → block form
 };
 ```
@@ -82,7 +89,7 @@ type CharacterFormatSection = {
 - **Generation is format-driven.** `generateCharacterSheet`/`refineCharacterSheet`/`reformatCharacterSheet` build their example blob and section rules from the resolved format (`buildFormatExample`/`buildFormatRules`) instead of a static example.
 - **Stubbing follows the format.** `ensureAllSections(content, format)` guarantees every format section exists in format order, stubbing absent ones as `(not established)` using the section's `inline` flag, preserving extra sections at the end. Used after NPC promotion and library conversion so drafts always match the target format.
 - **Fallback.** A preset or the global config without a `characterFormat` resolves to the shipped 10-section `DEFAULT_CHARACTER_FORMAT` (so old data keeps working; no migration needed). The format is read from the **global prompt config**, not snapshotted per playthrough.
-- **Editing the format** happens in Settings → Prompt Configuration → Character Sheet tab (add/remove/rename/reorder sections, toggle `inline`, set instruction + example). Reorder by dragging the ⋮⋮ grip — the pointer-based drag works on both mouse and touch. The Examples field types freely and normalizes (trim + collapse blank lines, one example per line) on blur. A read-only preset's format is still fully editable as the working config; use "Save as New…" to keep it under a name.
+- **Editing the format** happens in Settings → Prompt Configuration → Character Sheet tab (add/remove/rename/reorder sections, toggle `inline`, set instruction + example). Reorder by dragging the ⋮⋮ grip — the pointer-based drag works on both mouse and touch. The Examples field types freely and normalizes (trim + collapse blank lines, one example per line) on blur, and the **Sample sheet body** field beside it is committed verbatim — it holds real newlines, which is how a four-bullet section is *shown* to the model rather than only described to it. A read-only preset's format is still fully editable as the working config; use "Save as New…" to keep it under a name.
 - **Migrating existing sheets.** The library's **"Update into Newer Format with AI"** button (visible in a card's edit view when its sheet doesn't match the selected format) restructures a stored BL sheet into the target format with a preview/accept diff — it never overwrites blindly. "Convert to BL" for CCv2 cards also targets the selected format (defaults to the active preset).
 
 ## 2. Character Instance — the runtime state
@@ -112,7 +119,9 @@ Instantiation (`instantiateTemplate`) seeds `clothing` from `template.startingCl
 
 `ClothingItem = { slot: string; name: string; state?: string }` (same shape as the player's).
 
-- **Structured clothing is authoritative.** The `[Clothing]` section in `content` is only a *generation scaffold*: the sheet generator writes slot bullets, the engine parses them into data on ingest, and the **prompt never injects the raw section** when structured clothing exists — it renders a derived `Clothing: Top: torn blouse (wet); …` line instead (same format as the player).
+- **Structured clothing is authoritative.** The `[Clothing]` section in `content` is only a *generation scaffold*: the sheet generator writes slot bullets, the engine parses them into data on ingest, and for every BL sheet the **prompt never injects the raw section** — it renders a derived `Clothing: Top: torn blouse (wet); …` line instead (same format as the player). The section is dropped **whether or not** anything parsed, so a character wearing nothing cannot leak the section body or a `(not established)` stub into the context. Such a character simply has no `Clothing:` line.
+- **`Clothing` means garments.** Bullets are `- Slot: garment`, one garment per bullet, drawn from the format's slot vocabulary (Head, Ears, Neck, Top, Top Underwear, Arms, Hands, Hips, Bottom, Pelvis, Legs, Feet). The character's own surface — skin, fur, scales, slime membrane, a ghost's translucency — belongs in `[Body]`/`[Appearance]`, never as a garment. A character who wears nothing has no bullets here: there is no "None" convention, because there is nothing to declare.
+- **No catch-all slots.** Every `- X: Y` bullet becomes its own structured item and the patch ops address items by slot, so several garments merged into one `- Additional: …` bullet are a single item that can never be updated individually. The section keeps its header with an empty body so the sheet still conforms to the format; an empty body is a legitimate state, not an unfilled one.
 - **In-play editing is a plain content field.** The Info Panel character editor treats the whole sheet as one content blob — no per-section widgets. On save the engine re-parses `[Clothing]` slot bullets back into structured clothing, so editing the sheet is always the honest way to change the outfit.
 - Model patches: `characterClothingAdd` (one item per slot), `characterClothingRemove` (by slot), `characterClothingSetState`, `characterClothingSet` (whole outfit). `characterSectionUpdate` with section `"Clothing"` is **redirected** into a full structured replace.
 - Save to Library stores the current outfit as `startingClothing` with transient `state` cleared.

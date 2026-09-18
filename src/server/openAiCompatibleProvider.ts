@@ -1,5 +1,5 @@
 import { toJsonExampleContent } from "../engine/characterSections";
-import { buildFormatExample, buildFormatRules, formatSectionHeaders, resolveCharacterFormat } from "../engine/characterFormat";
+import { buildFormatExample, buildFormatRules, resolveCharacterFormat } from "../engine/characterFormat";
 import {
   AssistantTurnSchema,
   CharacterFormat,
@@ -157,7 +157,11 @@ export class OpenAICompatibleProvider {
 
   async generateScenarioSeed(preferences: ScenarioPreferences, lorebookIds?: string[], signal?: AbortSignal, format?: CharacterFormat): Promise<ScenarioSeed> {
     const lorebookContext = buildLorebookContext(lorebookIds, preferences.setting ?? "", lorebookBudgetChars(this.config.maxTokens));
-    const sheetExample = toJsonExampleContent(buildFormatExample(format));
+    // The same resolved-format guidance the sheet/refine/reformat prompts already get:
+    // without it this path saw only the sample sheet blob and wrote one-bullet sections.
+    const fmt = resolveCharacterFormat(format);
+    const sheetExample = toJsonExampleContent(buildFormatExample(fmt));
+    const rules = buildFormatRules(fmt);
 
     const prompt = [
       "You are a scenario generator for a local RPG chat engine called BobbinLoom.",
@@ -205,8 +209,8 @@ export class OpenAICompatibleProvider {
       "- Provide 2 to 4 distinct connected locations (the first location is where the player starts).",
       "- Give locations realistic snake_case IDs with loc_ prefix (e.g. loc_tavern, loc_square).",
       "- Ensure connections form a valid graph using the loc_ IDs defined in the list.",
-      "- Provide 1 starting companion character template with a complete character sheet in the content field. Write a compelling, detailed character sheet using the standard section headers: " + formatSectionHeaders(format).join(", ") + ".",
-      "- The companion's [Clothing] section should describe what they wear using slot-style bullets (- Top: ..., - Bottom: ..., - Feet: ...).",
+      "- Provide 1 starting companion character template with a complete character sheet in the content field. Write a compelling, detailed character sheet; these rules define its shape:",
+      rules,
       "- Provide 1 clear starting quest with a snake_case id (quest_ prefix).",
       "- Provide 2 to 4 starting items with snake_case IDs (item_ prefix), unique names, type words, descriptions, and quantities (1-5).",
       "- Provide 0 to 2 simple background NPCs with names, one-line descriptions, and optional dispositions.",
@@ -278,7 +282,6 @@ export class OpenAICompatibleProvider {
       "Rules:",
       `- The NPC is named "${npc.name}". Their current description is: "${npc.description}"${npc.disposition ? ` and their disposition is "${npc.disposition}".` : "."}`,
       "- Expand this into a full character sheet. Invent reasonable details that fit the story context.",
-      "- The [Clothing] section, if present, should be a bulleted list describing what the character wears (- Top: ..., - Bottom: ..., - Feet: ...).",
       "- Match the tone and detail level of the story context.",
       "- The character should feel like they belong in this world.",
       rules,
@@ -317,8 +320,7 @@ export class OpenAICompatibleProvider {
       "2. PRESERVE all parts, sections, and details of the CURRENT DRAFT that were not criticized or targeted by the feedback verbatim. Do NOT unnecessarily rewrite, shuffle, or delete good existing sections.",
       "3. Keep the sheet conforming to the target format below.",
       rules,
-      "4. The [Clothing] section, if present, should be a bulleted list describing what the character wears (- Top: ..., - Bottom: ..., - Feet: ...).",
-      "5. Reference the ORIGINAL SOURCE CARD if additional source lore is needed.",
+      "4. Reference the ORIGINAL SOURCE CARD if additional source lore is needed.",
       "",
       "--- CURRENT DRAFT SHEET ---",
       currentContent,

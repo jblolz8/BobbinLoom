@@ -143,6 +143,14 @@ export async function executeTurn(
       createdAt: now,
       durationMs,
       turn: currentTurn,
+      // What the patch actually did. Recorded whenever the model sent one, even when
+      // nothing was refused — "a patch was sent and none of it was rejected" is the
+      // fact a drift investigation needs. Patch feedback is never re-injected into the
+      // prompt (stateless by design), so without this the only view of it is the
+      // transient Debug panel.
+      ...(assistantTurn.statePatch
+        ? { patchInfo: { applied: patchResult.applied, rejected: patchResult.rejected, warnings: patchResult.warnings } }
+        : {}),
       ...(model ? { model } : {}),
       ...(options?.chapterOpening ? { chapterOpening: true } : {})
     }

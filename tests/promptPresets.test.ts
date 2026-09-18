@@ -70,6 +70,17 @@ describe("shipped prompt presets", () => {
     });
   }
 
+  it("relationship-dynamics tells the model that a character's details change and must be recorded", () => {
+    for (const preset of presets) {
+      const rel = preset.modules.turn.find((m) => m.id === "relationship-dynamics");
+      expect(rel, preset.id).toBeDefined();
+      expect(rel!.content, preset.id).toContain("Record those changes in the character themselves");
+      // The clause must not trip the product/mechanics guards.
+      expect(rel!.content, preset.id).not.toMatch(/\bRPG\b/i);
+      expect(rel!.content, preset.id).not.toContain("BobbinLoom");
+    }
+  });
+
   it("Core GM carries the grounding sentence and never names the product", () => {
     for (const preset of presets) {
       const core = preset.modules.turn.find((m) => m.id === "core-gm");

@@ -152,6 +152,16 @@ function CharacterFormatRow({ section, index, isDragging, isDropTarget, rowRef, 
     setDraft(examplesToText(section.examples));
   }, [section.examples]);
 
+  // The sample sheet body is raw multi-line text and must NOT go through
+  // textToExamples: that splitter is one-example-per-line, so committing a
+  // four-bullet body through it would silently turn it into four one-line
+  // examples and collapse the sample sheet the model imitates.
+  const [bodyDraft, setBodyDraft] = useState(section.exampleBody ?? "");
+
+  useEffect(() => {
+    setBodyDraft(section.exampleBody ?? "");
+  }, [section.exampleBody]);
+
   return (
     <div
       ref={rowRef}
@@ -214,8 +224,18 @@ function CharacterFormatRow({ section, index, isDragging, isDropTarget, rowRef, 
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => onChange(index, { examples: textToExamples(draft) })}
-        placeholder="Optional example content — shown to the model. One line per bullet; write freely, no formatting needed."
+        placeholder="Expected content — one line per bullet. Shown to the model as what this section should contain."
         aria-label={`Section ${index + 1} examples`}
+      />
+      <TextArea
+        size="sm"
+        rows={5}
+        className="format-example-body-input"
+        value={bodyDraft}
+        onChange={(e) => setBodyDraft(e.target.value)}
+        onBlur={() => onChange(index, { exampleBody: bodyDraft })}
+        placeholder="Sample sheet body — how this section looks in a finished sheet. Multi-line is expected; this is the shape the model imitates."
+        aria-label={`Section ${index + 1} sample body`}
       />
     </div>
   );
@@ -481,7 +501,7 @@ export function PresetEditor() {
   }
 
   function addFormatSection() {
-    persistFormat({ ...format, sections: reindex([...format.sections, { name: "New Section", order: format.sections.length + 1, instruction: "", examples: [], inline: false }]) });
+    persistFormat({ ...format, sections: reindex([...format.sections, { name: "New Section", order: format.sections.length + 1, instruction: "", examples: [], exampleBody: "", inline: false }]) });
   }
 
   function removeFormatSection(index: number) {

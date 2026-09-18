@@ -53,6 +53,54 @@ describe("executeTurn", () => {
     expect(snapshot?.memoryEvents).toHaveLength(0);
   });
 
+  it("records the turn's patch result on the assistant message", async () => {
+    const dir = tempDir();
+    const playthrough = createPlaythroughRecord(dir, "Patch Info Test");
+    const characterId = playthrough.characters[0].id;
+    type TurnArgs = Parameters<MockProvider["generateTurn"]>;
+
+    // One op that applies and one that is refused, so both lists are non-empty.
+    class PatchProvider extends MockProvider {
+      async generateTurn(...args: TurnArgs): Promise<ProviderTurn> {
+        const out = await super.generateTurn(...args);
+        return {
+          ...out,
+          turn: {
+            ...out.turn,
+            statePatch: {
+              characterMood: [{ characterId, mood: "amused" }],
+              characterTowardPlayer: [{ characterId: "no_such_character", towardPlayer: "wary" }]
+            }
+          }
+        };
+      }
+    }
+
+    const result = await executeTurn(playthrough, "I look around.", new PatchProvider(), false);
+    const assistant = result.state.messages[1];
+    expect(assistant.patchInfo?.applied.length).toBeGreaterThan(0);
+    expect(assistant.patchInfo?.rejected.length).toBeGreaterThan(0);
+    expect(assistant.patchInfo?.rejected[0]).toContain("no_such_character");
+  });
+
+  it("records no patch result when the model sent no statePatch", async () => {
+    const dir = tempDir();
+    const playthrough = createPlaythroughRecord(dir, "No Patch Test");
+    type TurnArgs = Parameters<MockProvider["generateTurn"]>;
+
+    class NoPatchProvider extends MockProvider {
+      async generateTurn(...args: TurnArgs): Promise<ProviderTurn> {
+        const out = await super.generateTurn(...args);
+        const turn = { ...out.turn };
+        delete (turn as { statePatch?: unknown }).statePatch;
+        return { ...out, turn };
+      }
+    }
+
+    const result = await executeTurn(playthrough, "I look around.", new NoPatchProvider(), false);
+    expect(result.state.messages[1].patchInfo).toBeUndefined();
+  });
+
   it("substitutes the placeholder when a provider returns an empty narrative", async () => {
     const dir = tempDir();
     const playthrough = createPlaythroughRecord(dir, "Empty Narrative Test");

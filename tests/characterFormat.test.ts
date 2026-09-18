@@ -15,13 +15,13 @@ import {
 } from "../src/engine/characterFormat";
 import { CHARACTER_SECTION_HEADERS, applySectionChanges } from "../src/engine/characterSections";
 import type { CharacterFormat } from "../src/schemas";
-import { CharacterFormatSchema } from "../src/schemas";
+import { CharacterFormatSchema, CharacterFormatSectionSchema } from "../src/schemas";
 
 const CUSTOM: CharacterFormat = {
   sections: [
-    { name: "Name", order: 1, inline: true, instruction: "The character's name.", examples: ["Mira"] },
-    { name: "Occupation", order: 2, instruction: "What they do for a living.", examples: [], inline: false },
-    { name: "Loves", order: 3, instruction: "Things they adore.", examples: [], inline: false },
+    { name: "Name", order: 1, inline: true, instruction: "The character's name.", examples: ["Mira"], exampleBody: "" },
+    { name: "Occupation", order: 2, instruction: "What they do for a living.", examples: [], exampleBody: "", inline: false },
+    { name: "Loves", order: 3, instruction: "Things they adore.", examples: [], exampleBody: "", inline: false },
   ],
 };
 
@@ -49,6 +49,58 @@ describe("characterFormat shipped defaults", () => {
     const sc = NSFW_CHARACTER_FORMAT.sections.find((s) => s.name === "Sexual Capabilities");
     expect(sc?.order).toBe(11);
     expect(sc?.instruction.length).toBeGreaterThan(0);
+  });
+
+  it("exampleBody is optional and defaults to empty", () => {
+    const parsed = CharacterFormatSectionSchema.parse({
+      name: "Body", order: 1, instruction: "x", examples: [], inline: false,
+    });
+    expect(parsed.exampleBody).toBe("");
+    const withBody = CharacterFormatSectionSchema.parse({
+      name: "Body", order: 1, exampleBody: "- Height: 5'7\"\n- Build: Athletic",
+    });
+    expect(withBody.exampleBody).toContain("\n");
+  });
+
+  it("every multi-value shipped section asks for a bullet count and shows a multi-bullet body", () => {
+    const multi = ["Body", "Appearance", "Personality", "Communication - Public",
+                   "Communication - Private", "Likes", "Dislikes"];
+    for (const name of multi) {
+      const s = DEFAULT_CHARACTER_FORMAT.sections.find((x) => x.name === name)!;
+      // A floor AND a ceiling: models default to minimum effort, and a bare
+      // adjective list is exactly that default.
+      expect(s.instruction, name).toMatch(/\d+\s*[-–]\s*\d+ bullets/);
+      expect((s.exampleBody.match(/^- /gm) ?? []).length, name).toBeGreaterThanOrEqual(3);
+    }
+    // Single-value sections stay free-form: several one-line examples for freedom
+    // of expression, no count, no sample body (the example IS the value).
+    for (const name of ["Species", "Gender"]) {
+      const s = DEFAULT_CHARACTER_FORMAT.sections.find((x) => x.name === name)!;
+      expect(s.examples.length, name).toBeGreaterThanOrEqual(3);
+      expect(s.exampleBody, name).toBe("");
+      expect(s.instruction, name).not.toMatch(/bullets/);
+    }
+    // Clothing states the slot vocabulary, forbids consolidation, and keeps body
+    // surface out of the garment list.
+    const clothing = DEFAULT_CHARACTER_FORMAT.sections.find((s) => s.name === "Clothing")!;
+    expect(clothing.instruction).toContain("one garment per bullet");
+    expect(clothing.instruction).toContain("never invent a catch-all slot");
+    expect(clothing.instruction).toContain("[Body]/[Appearance]");
+    expect(clothing.instruction).toContain('do not write "None"');
+    expect(clothing.exampleBody).not.toMatch(/^- None/m);
+    // Likes/Dislikes carry a reason after the colon, not a bare list.
+    for (const name of ["Likes", "Dislikes"]) {
+      const s = DEFAULT_CHARACTER_FORMAT.sections.find((x) => x.name === name)!;
+      expect(s.instruction, name).toContain("`- Thing:");
+    }
+  });
+
+  it("Sexual Capabilities carries a count, a form, and a multi-bullet body", () => {
+    const sc = NSFW_CHARACTER_FORMAT.sections.find((s) => s.name === "Sexual Capabilities")!;
+    expect(sc.instruction).toMatch(/\d+\s*[-–]\s*\d+ bullets/);
+    expect(sc.instruction).toContain("giving/receiving");
+    expect((sc.exampleBody.match(/^- /gm) ?? []).length).toBeGreaterThanOrEqual(3);
+    expect(sc.exampleBody).toContain("(giving)");
   });
 
   it("shipped Default preset in data/prompt-presets.json matches DEFAULT_CHARACTER_FORMAT", () => {
@@ -101,8 +153,8 @@ describe("characterFormat builders", () => {
   it("buildFormatRules lists examples as bullets, never doubling the dash", () => {
     const fmt: CharacterFormat = {
       sections: [
-        { name: "Kinks", order: 1, instruction: "Intimacy preferences.", examples: ["- Femdom (giving): She loves manhandling.", "- Impact Play (giving): Pushing to the edge.", "- Fear Play (giving): Weight behind every word."], inline: false },
-        { name: "Notes", order: 2, instruction: "Freeform.", examples: ["", "only second kept", ""], inline: false },
+        { name: "Kinks", order: 1, instruction: "Intimacy preferences.", examples: ["- Femdom (giving): She loves manhandling.", "- Impact Play (giving): Pushing to the edge.", "- Fear Play (giving): Weight behind every word."], exampleBody: "", inline: false },
+        { name: "Notes", order: 2, instruction: "Freeform.", examples: ["", "only second kept", ""], exampleBody: "", inline: false },
       ],
     };
     const rules = buildFormatRules(fmt);
@@ -118,11 +170,28 @@ describe("characterFormat builders", () => {
     expect(rules.match(/    - $/g)?.length ?? 0).toBe(0);
   });
 
+  it("buildFormatExample prefers exampleBody, falls back to examples[0], then '...'", () => {
+    const fmt: CharacterFormat = {
+      sections: [
+        { name: "Species", order: 1, instruction: "s", examples: ["Human"], exampleBody: "", inline: true },
+        { name: "Body", order: 2, instruction: "b", examples: ["- Height: 5'7\""], exampleBody: "- Height: 5'7\"\n- Build: Athletic\n- Breasts: B-Cup", inline: false },
+        { name: "Personality", order: 3, instruction: "p", examples: [], exampleBody: "", inline: false },
+      ],
+    };
+    const out = buildFormatExample(fmt);
+    // Inline section: no body, so the first example is the value on one line.
+    expect(out).toContain("[Species]: Human");
+    // Block section: the WHOLE multi-line body, not just its first line.
+    expect(out).toContain("[Body]\n- Height: 5'7\"\n- Build: Athletic\n- Breasts: B-Cup");
+    // Neither body nor examples -> the fill-me-in marker survives.
+    expect(out).toContain("[Personality]\n...");
+  });
+
   it("buildFormatExample ignores empty examples and falls back to first non-empty", () => {
     const fmt: CharacterFormat = {
       sections: [
-        { name: "Kinks", order: 1, instruction: "x", examples: ["", "- Femdom (giving): ..."], inline: false },
-        { name: "Empty", order: 2, instruction: "y", examples: ["", "", ""], inline: false },
+        { name: "Kinks", order: 1, instruction: "x", examples: ["", "- Femdom (giving): ..."], exampleBody: "", inline: false },
+        { name: "Empty", order: 2, instruction: "y", examples: ["", "", ""], exampleBody: "", inline: false },
       ],
     };
     const example = buildFormatExample(fmt);

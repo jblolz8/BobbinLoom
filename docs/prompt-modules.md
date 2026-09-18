@@ -68,7 +68,7 @@ asked to write. Their image blocks differ too; see [Image generation](image-gene
 | User Input Format | How to read what you send |
 | Campaign Logic | Consequences, pacing, NPC agency |
 | Conflict Narration | Resolve conflict through prose |
-| Relationship Dynamics | Relationships move through actions |
+| Relationship Dynamics | Relationships move through actions, and a character's own details (wardrobe, likes, dislikes, appetites) change with the story and are recorded |
 | Grounded Style | Vivid but controlled prose |
 
 ## The character sheet format
