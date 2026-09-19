@@ -434,6 +434,7 @@ export function ChatPanel(props: ChatPanelProps) {
   const [viewerImage, setViewerImage] = useState<ImageViewerImage | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesStartRef = useRef<HTMLDivElement>(null);
 
   // Live readout for the message whose image is being generated — and only that
   // message, in the branch that draws its Cancel button. The hook clears the
@@ -447,6 +448,15 @@ export function ChatPanel(props: ChatPanelProps) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [playthrough.messages.length, loading, sendingMessage, cancelledNotice, failedNotice]);
+
+  // Opening an archived chapter is a jump rather than an append: land on its banner and its first
+  // message. Without this the list is swapped underneath a scroll position held over from the live
+  // chat, which puts the reader at the END of the chapter they just asked to read. Not animated —
+  // it is the starting point, not a scroll the user asked for.
+  useEffect(() => {
+    if (viewingChapterId === null) return;
+    messagesStartRef.current?.scrollIntoView({ block: "start" });
+  }, [viewingChapterId]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -469,6 +479,7 @@ export function ChatPanel(props: ChatPanelProps) {
   return (
     <section className={`chat-panel${className ? ` ${className}` : ""}`}>
       <div className="messages">
+        {isViewingArchive ? <div ref={messagesStartRef} /> : null}
         {isViewingArchive ? (
           <div className="chapter-view-banner">
             <span>

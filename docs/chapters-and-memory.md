@@ -16,6 +16,12 @@ A chapter is a save point. When you close one, the messages since the last chapt
 archived: they stay in the playthrough — you can still open the transcript — but they stop
 being sent as chat history and are represented by a summary instead.
 
+**View Transcript** (the button in a chapter's action bar) shows those messages in the chat
+panel under a banner naming the chapter, with the composer replaced by **Return to current
+chapter**; the transcript opens at the chapter's first message, not at wherever the running
+story was scrolled. On a phone the chat panel comes forward, and the Journal is one tap away
+with its chapter still open.
+
 **Close Chapter** lives in the play view's Journal tab, and asks three things:
 
 - **How the next chapter opens** — `Continuation` (resumes where things left off), `Short time jump`

@@ -422,7 +422,13 @@ export function PlayView(props: PlayViewProps) {
         <InfoPanel
           playthrough={playthrough}
           onPlaythroughChange={setPlaythrough}
-          onViewChapter={setViewingChapterId}
+          onViewChapter={(chapterId) => {
+            setViewingChapterId(chapterId);
+            // The transcript renders in the chat panel. On a phone only one panel is on screen, so
+            // opening it from the Journal would look like the button did nothing. Desktop has both
+            // panels visible and never reaches this branch.
+            if (isMobile && mobileTab !== "chat") setMobileTab("chat");
+          }}
           onCloseChapterComplete={(tu) => setTokenUsage(tu)}
           onRevertToChapter={(chapterId, name) => setRevertTarget({ kind: "chapter", id: chapterId, label: name })}
           onResummarizeChapter={(chapterId) => { void handleResummarizeChapter(chapterId); }}

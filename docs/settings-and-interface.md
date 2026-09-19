@@ -73,6 +73,9 @@ Everything is designed to collapse at one breakpoint, **1100px**:
   screen
 - panels that are not selected are hidden rather than unmounted, so scroll position and
   in-progress edits survive a tab switch
+- an action whose result lives in another panel brings that panel forward: **View Transcript**
+  in the Journal opens the chat panel, because on a phone the transcript would otherwise be
+  written into a panel that is not on screen
 
 Full-screen dialogs on small screens use the dynamic viewport height so the browser's own
 chrome can't crop them, and the scrollable region inside a dialog is the only thing that
