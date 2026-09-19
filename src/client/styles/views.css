@@ -2025,32 +2025,6 @@
   color: var(--text-muted);
 }
 
-.close-chapter-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.35rem 0.8rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  border-radius: 6px;
-  background: var(--accent-base);
-  border: 1px solid var(--accent-hover);
-  color: var(--accent-text, #fff);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.close-chapter-btn:hover:not(:disabled) {
-  background: var(--accent-hover);
-  border-color: var(--accent-active);
-  box-shadow: 0 0 8px var(--accent-translucent);
-}
-
-.close-chapter-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 /* Archived Volumes */
 .archived-volumes-list {
   display: flex;
@@ -2175,71 +2149,6 @@
   background: var(--accent-base);
   border-color: var(--accent-hover);
   color: var(--accent-text, #fff);
-}
-
-/* Close Chapter Modal */
-.close-chapter-modal-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.close-chapter-modal-header h3 {
-  margin: 0;
-  color: var(--text-primary);
-}
-
-.close-chapter-modal-icon {
-  color: var(--accent-highlight, var(--accent-base));
-}
-
-.close-chapter-modal-desc {
-  color: var(--text-muted);
-  font-size: 0.86rem;
-  line-height: 1.5;
-  margin: 0 0 1rem 0;
-}
-
-.close-chapter-checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  cursor: pointer;
-  margin-bottom: 0.75rem;
-  color: var(--text-primary);
-}
-
-.close-chapter-checkbox-label input[type="checkbox"] {
-  accent-color: var(--accent-base);
-  cursor: pointer;
-}
-
-.close-chapter-textarea {
-  width: 100%;
-  min-height: 5rem;
-  background: var(--input-bg);
-  border: 1px solid var(--input-border);
-  border-radius: 8px;
-  padding: 0.6rem;
-  color: var(--input-text);
-  font-size: 0.85rem;
-  margin-bottom: 1rem;
-  resize: vertical;
-}
-
-.close-chapter-textarea:focus {
-  border-color: var(--input-focus-border);
-  box-shadow: 0 0 0 2px var(--input-focus-ring);
-}
-
-.close-chapter-modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  margin-top: 1rem;
-  flex-wrap: wrap;
 }
 
 /* Dramatis Personae */

@@ -216,6 +216,69 @@
   line-height: 1.45;
 }
 
+/* The revert dialog's facts: what actually goes, in numbers, from the same plan the server
+   executes. Declared beside .confirm-modal because that is the primitive it belongs to, and
+   load order (variables → views → modals → components → docs) means a rule in an earlier file
+   would lose to the primitive's own. */
+.revert-facts {
+  list-style: none;
+  margin: 0 0 0.85rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+}
+
+.revert-facts strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.revert-facts li::before {
+  content: "—";
+  margin-right: 0.45rem;
+  color: var(--text-tertiary, var(--text-secondary));
+}
+
+.revert-approximate {
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border-main);
+  border-radius: 8px;
+  background: var(--bg-surface-elevated, rgba(255, 255, 255, 0.03));
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.revert-noway-back {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+/* The only recovery path, and deliberately not part of the destructive action: it runs on its
+   own and reports itself, so a failed copy can never ride along with the revert. */
+.revert-backup-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.revert-backup-note {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.revert-backup-note.error {
+  color: var(--danger-text, var(--text-secondary));
+}
+
 /* Thumbnail of the exact generated image being deleted, inside the confirm modal —
    a message can hold several images, so the question shows which one is going. */
 .delete-image-preview {
@@ -653,8 +716,93 @@
   width: min(880px, 100%);
 }
 
+/* Gallery Media: two panes — the chapter nav and the grid. The modal is a flex column that
+   owns no scrolling of its own (`overflow: hidden`), so the grid scrolls and the header stays
+   put; `min-height: 0` at every level is what lets the panes shrink inside a sheet. */
 .modal.gallery-modal {
-  width: min(760px, 100%);
+  width: min(980px, 100%);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal.gallery-modal .modal-header {
+  flex-shrink: 0;
+}
+
+.gallery-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.gallery-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+}
+
+.gallery-toolbar-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.gallery-toolbar-count {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* The flex ROW the nav's drawer positions itself against — `position: relative` here is
+   load-bearing, and `min-width: 0` is what stops the grid's min-content from flooring the row
+   (a grid inside a flex item takes the item's automatic minimum size, and the sheet's
+   `overflow: hidden` would then clip it with no scrollbar). */
+.gallery-panes {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  gap: 0.9rem;
+}
+
+.gallery-panes .gallery-grid {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+}
+
+@media (max-width: 680px) {
+  /* The house phone sheet, matching `.modal.setup-wizard-modal`: full screen, `dvh` AFTER `vh`
+     (vh matches the large viewport, so with a mobile URL bar showing the sheet's footer sits
+     below the fold), and `min-height: 0` because the base `.modal` max-height/height rules
+     would otherwise beat it. */
+  .modal.gallery-modal {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    min-height: 0;
+    border-radius: 0;
+    border: none;
+  }
+
+  /* The shared backdrop keeps 1rem of padding; a full-height sheet inside it would overflow and
+     clip its own footer, so the gallery's backdrop goes flush — its own rule, deliberately not
+     folded into the 680px block that owns the sheet. */
+  .gallery-backdrop {
+    padding: 0;
+    align-items: stretch;
+    justify-content: stretch;
+  }
 }
 
 .rename-input {
@@ -841,35 +989,25 @@
   font-style: italic;
 }
 
-.close-chapter-modal { max-width: 440px; }
-
-.close-chapter-modal .checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 1rem 0 0.5rem;
-  font-size: 0.9rem;
-  cursor: pointer;
+/* Close Chapter: the shared dialog with the provider choice, the closing note and the actions.
+   Nothing here restyles a primitive — the fields are `.form-field`, the actions `.settings-actions`. */
+.modal.close-chapter-modal {
+  width: min(520px, 100%);
 }
 
-.close-chapter-modal .checkbox-label input[type="checkbox"] {
-  accent-color: var(--accent-base);
-  cursor: pointer;
+.close-chapter-modal .modal-header p {
+  color: var(--text-muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
 }
 
-.close-chapter-modal textarea {
-  width: 100%;
-  min-height: 60px;
-  margin-top: 6px;
-  background: var(--input-bg);
-  color: var(--input-text);
-  border: 1px solid var(--input-border);
-  border-radius: 6px;
-  padding: 8px;
-  font-family: inherit;
-  font-size: 0.88rem;
-  resize: vertical;
-  box-sizing: border-box;
+.close-chapter-modal .form-field {
+  margin-bottom: 0.9rem;
+}
+
+.close-chapter-modal .settings-actions {
+  margin-top: 0.25rem;
+  justify-content: flex-end;
 }
 
 /* Character Manager modal */

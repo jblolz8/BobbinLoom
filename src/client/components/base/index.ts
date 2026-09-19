@@ -13,6 +13,7 @@ export * from "./CodeBlock";
 export * from "./Tooltip";
 export * from "./DropdownMenu";
 export * from "./Select";
+export * from "./SideNav";
 export * from "./TextArea";
 export * from "./Badge";
 export * from "./Tabs";

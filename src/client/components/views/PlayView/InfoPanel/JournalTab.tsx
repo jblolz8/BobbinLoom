@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import type { LorebookSummary, MemoryEvent, Playthrough } from "../../../../../schemas";
 import { closeChapter, listLorebooks, type CloseChapterBody, type TokenUsage } from "../../../../api";
-import { AvatarBadge, Badge, Button, Checkbox, Icon, TextArea, TextInput } from "../../../base";
+import { AvatarBadge, Badge, Button, Icon, TextInput } from "../../../base";
 import { buildImageUrl, clearPlaythroughCover, setPlaythroughCover } from "../../../../api";
 import { buildCoverMedia } from "../../../../engine/coverMedia";
 import { GalleryModal } from "../../../modals/GalleryModal";
+import { CloseChapterModal } from "../../../modals/CloseChapterModal";
 
 export function JournalTab({
   playthrough,
   onPlaythroughChange,
   onViewChapter,
   onCloseChapterComplete,
+  onRevertToChapter,
   onStartNewWithSameScenario,
   onOpenTimelines
 }: {
@@ -18,13 +20,15 @@ export function JournalTab({
   onPlaythroughChange: (updated: Playthrough) => void;
   onViewChapter: (chapterId: string) => void;
   onCloseChapterComplete: (tokenUsage: TokenUsage) => void;
+  /** Ask to revert to this chapter: everything after it is discarded and it becomes the running
+   *  chapter again. The confirm dialog (with the counts and the backup button) lives in PlayView. */
+  onRevertToChapter: (chapterId: string, chapterName: string) => void;
   onStartNewWithSameScenario: (scenarioDescription: string, personaId: string | undefined, initialCastIds: string[] | undefined, originalName: string) => void;
   onOpenTimelines?: () => void;
 }) {
   const [closeModalOpen, setCloseModalOpen] = useState(false);
-  const [addClosingMessage, setAddClosingMessage] = useState(false);
-  const [closingMessage, setClosingMessage] = useState("");
   const [closing, setClosing] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
   const [lorebookSummaries, setLorebookSummaries] = useState<LorebookSummary[]>([]);
   const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set());
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -177,18 +181,18 @@ export function JournalTab({
   const visibleMessages = playthrough.messages.filter(m => !m.hidden && !m.chapterId);
   const canClose = visibleMessages.length >= 6;
 
-  async function handleCloseChapter() {
+  /** The dialog owns its fields (and remembers the chosen connection); the call lives here,
+   *  because the play view owns the document the close answers with. */
+  async function handleCloseChapter(body: CloseChapterBody) {
     setClosing(true);
+    setCloseError(null);
     try {
-      const body: CloseChapterBody = { addClosingMessage, closingMessage: addClosingMessage ? closingMessage : undefined };
       const { state, tokenUsage } = await closeChapter(playthrough.id, body);
       onPlaythroughChange(state);
       onCloseChapterComplete(tokenUsage);
       setCloseModalOpen(false);
-      setAddClosingMessage(false);
-      setClosingMessage("");
     } catch (e) {
-      // handled
+      setCloseError(e instanceof Error ? e.message : "Closing the chapter failed");
     } finally {
       setClosing(false);
     }
@@ -391,6 +395,18 @@ export function JournalTab({
                           >
                             View Transcript
                           </Button>
+                          <Button
+                            variant="danger"
+                            size="xs"
+                            leftIcon={<Icon name="Undo2" size={12} />}
+                            title="Discard every chapter after this one and make it the running chapter again"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRevertToChapter(ch.id, ch.name);
+                            }}
+                          >
+                            Revert to this Chapter
+                          </Button>
                         </div>
                       </div>
                     ) : null}
@@ -417,8 +433,8 @@ export function JournalTab({
           <div className="info-empty-state">
             <Icon name="Image" size={15} />
             <span>
-              No generated images yet. An image on an assistant message becomes this playthrough's
-              cover, and any of them can be chosen by hand here.
+              No generated images yet. An image on an assistant message becomes this story's cover,
+              and every image from every chapter can be chosen by hand here.
             </span>
           </div>
         ) : (
@@ -438,7 +454,7 @@ export function JournalTab({
             </div>
             <div className="journal-media-actions">
               <span className="journal-media-count">
-                {media.length} {media.length === 1 ? "image" : "images"}
+                {media.length} {media.length === 1 ? "image" : "images"} across every chapter
               </span>
               <Button variant="secondary" size="sm" onClick={() => setGalleryOpen(true)}>
                 Open Gallery Media
@@ -452,6 +468,7 @@ export function JournalTab({
         <GalleryModal
           playthroughName={playthrough.name}
           media={media}
+          chapters={playthrough.chapters ?? []}
           currentFile={playthrough.cover?.file}
           hasManualCover={Boolean(playthrough.cover)}
           saving={coverSaving}
@@ -464,50 +481,16 @@ export function JournalTab({
 
       {/* Close Chapter Modal */}
       {closeModalOpen ? (
-        <div className="modal-overlay" onClick={() => setCloseModalOpen(false)}>
-          <div className="modal close-chapter-modal" onClick={e => e.stopPropagation()}>
-            <div className="close-chapter-modal-header">
-              <Icon name="BookmarkCheck" size={20} className="close-chapter-modal-icon" />
-              <h3>Close Chapter</h3>
-            </div>
-            <p className="close-chapter-modal-desc">
-              The current ongoing chapter will be closed and summarized into an archived volume. The turn history and memories will remain preserved.
-            </p>
-            <Checkbox
-              checked={addClosingMessage}
-              onChange={e => setAddClosingMessage(e.target.checked)}
-              label="Add custom closing note or author remark"
-              containerClassName="close-chapter-checkbox-label"
-            />
-            {addClosingMessage ? (
-              <TextArea
-                value={closingMessage}
-                onChange={e => setClosingMessage(e.target.value)}
-                placeholder="Write a closing remark or scene resolution…"
-                className="close-chapter-textarea"
-                rows={3}
-              />
-            ) : null}
-            <div className="modal-actions close-chapter-modal-actions">
-              <Button
-                variant="primary"
-                size="md"
-                disabled={closing}
-                isLoading={closing}
-                onClick={handleCloseChapter}
-              >
-                {closing ? "Closing & Summarizing…" : "Confirm & Close"}
-              </Button>
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={() => setCloseModalOpen(false)}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </div>
+        <CloseChapterModal
+          visibleMessageCount={visibleMessages.length}
+          isLoading={closing}
+          errorMessage={closeError}
+          onConfirm={(body) => { void handleCloseChapter(body); }}
+          onCancel={() => {
+            setCloseModalOpen(false);
+            setCloseError(null);
+          }}
+        />
       ) : null}
 
       {/* Dramatis Personae (Cast & Acquaintances) */}

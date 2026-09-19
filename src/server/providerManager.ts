@@ -14,6 +14,7 @@ import {
   getRegistry,
   listConnections,
   setActiveConnection as setActiveRegistryConnection,
+  setChapterTextProvider as setChapterRegistryTextProvider,
   setGenerationTextProvider as setGenerationRegistryTextProvider,
   testProviderConnection,
   updateConnection
@@ -61,6 +62,16 @@ export class ProviderManager {
 
   setGenerationTextProvider(id: string | null): PublicProviderRegistry {
     return setGenerationRegistryTextProvider(this.dataDir, id);
+  }
+
+  /** The stored "which connection closes chapters" preference, or null when unset — null means
+   *  the caller should follow the active connection, exactly like the generation preference. */
+  chapterTextProviderId(): string | null {
+    return getRegistry(this.dataDir).chapterTextProviderId ?? null;
+  }
+
+  setChapterTextProvider(id: string | null): PublicProviderRegistry {
+    return setChapterRegistryTextProvider(this.dataDir, id);
   }
 
   getProvider(id?: string): TurnProvider {

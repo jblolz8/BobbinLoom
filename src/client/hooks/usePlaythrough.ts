@@ -13,6 +13,7 @@ import {
   questAction,
   resummarizeChapter,
   retryTurn,
+  revertToAnchor,
   saveDraft,
   saveMessageImageRequest,
   sendTurn,
@@ -23,6 +24,7 @@ import {
   type TokenUsage
 } from "../api";
 import { checkImageRequestBody, formatImageRequestBody } from "../utils/imageRequestBody";
+import { toRevertAnchor, type RevertTarget } from "../../engine/chapterRevert";
 
 const CHAT_SETTINGS_KEY = "bobbinloom_chat_settings";
 
@@ -428,6 +430,9 @@ export function usePlaythrough() {
   const [editDraft, setEditDraft] = useState("");
   const [retryTarget, setRetryTarget] = useState<ChatMessage | null>(null);
   const [truncateTarget, setTruncateTarget] = useState<ChatMessage | null>(null);
+  // The pending revert (a chapter, or an archived response). The dialog derives its numbers from
+  // the plan itself, so what is stored here is only the anchor and how to name it.
+  const [revertTarget, setRevertTarget] = useState<RevertTarget | null>(null);
   const [branchTarget, setBranchTarget] = useState<ChatMessage | null>(null);
   const [deleteImageTarget, setDeleteImageTarget] = useState<DeleteImageTarget | null>(null);
   // The re-send path: the image queued for replacement, and the body editor when
@@ -1077,6 +1082,45 @@ export function usePlaythrough() {
     }
   }
 
+  /**
+   * Reverts to an archived chapter or response. Nothing generates, so the only thing that can go
+   * wrong is the write itself — and then nothing changed.
+   *
+   * Leaving the transcript view is part of the operation, not a nicety: the chapter that just
+   * came back is the RUNNING chapter, so its messages no longer carry a `chapterId` and the
+   * read-only view would render an empty chat.
+   */
+  async function confirmRevert() {
+    if (!playthrough || !revertTarget || actionLoading) return;
+    setActionLoading(true);
+    setError(null);
+    setFailedNotice(null);
+    setCancelledNotice(null);
+    try {
+      const updated = await revertToAnchor(playthrough.id, toRevertAnchor(revertTarget));
+      setPlaythrough(updated);
+      setRevertTarget(null);
+      setRetryTarget(null);
+      setTruncateTarget(null);
+      setViewingChapterId(null);
+      cancelEdit();
+      setChoices([]);
+      setLastPatchInfo({ applied: [], rejected: [], warnings: [] });
+      setRawInput(null);
+      setRawOutput(null);
+      // The story is shorter now; the meter must not keep measuring the old one.
+      getContextUsage(updated.id, choicesEnabled).then(setTokenUsage).catch(() => {
+        /* the meter keeps its last value on failure */
+      });
+    } catch (e) {
+      const rawErr = e instanceof Error ? e.message : String(e);
+      setRevertTarget(null);
+      setFailedNotice({ message: "Revert failed — nothing was changed.", rawError: rawErr });
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   async function confirmBranch(branchName?: string, asStandalone?: boolean) {
     if (!playthrough || !branchTarget || actionLoading) return;
     setActionLoading(true);
@@ -1194,6 +1238,8 @@ export function usePlaythrough() {
     setRetryTarget,
     truncateTarget,
     setTruncateTarget,
+    revertTarget,
+    setRevertTarget,
     branchTarget,
     setBranchTarget,
     actionLoading,
@@ -1236,6 +1282,7 @@ export function usePlaythrough() {
     saveEdit,
     confirmRetry,
     confirmTruncate,
+    confirmRevert,
     confirmBranch,
     handleResummarizeChapter,
     handleQuestAction

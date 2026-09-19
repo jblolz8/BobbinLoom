@@ -15,6 +15,10 @@ export type ProviderRegistry = {
   /** The text connection new playthroughs are generated with; null/absent = follow the
    *  active text connection. */
   generationTextProviderId?: string | null;
+  /** The text connection that CLOSES chapters — the summary and the opening turn. Absent or
+   *  null follows whichever text connection is active, exactly like the generation preference
+   *  above, and it is remembered separately because a chapter is its own user action. */
+  chapterTextProviderId?: string | null;
   connections: ProviderConnection[];
 };
 
@@ -91,6 +95,9 @@ function migrateToV2(raw: Record<string, unknown>): Record<string, unknown> {
     ...(typeof raw.generationTextProviderId === "string" || raw.generationTextProviderId === null
       ? { generationTextProviderId: raw.generationTextProviderId }
       : {}),
+    ...(typeof raw.chapterTextProviderId === "string" || raw.chapterTextProviderId === null
+      ? { chapterTextProviderId: raw.chapterTextProviderId }
+      : {}),
     connections: connections.map((c) =>
       c && typeof c === "object" && !Array.isArray(c)
         ? { kind: "text", ...(c as Record<string, unknown>) }
@@ -145,6 +152,7 @@ function readRegistry(dir: string): ReadResult {
           activeTextProviderId: parsed.activeTextProviderId,
           activeImageProviderId: parsed.activeImageProviderId,
           generationTextProviderId: parsed.generationTextProviderId ?? null,
+          chapterTextProviderId: parsed.chapterTextProviderId ?? null,
           connections: decryptConnections(parsed.connections, vaultKey),
         },
         warnings,
@@ -156,6 +164,7 @@ function readRegistry(dir: string): ReadResult {
         activeTextProviderId: file.data.activeTextProviderId,
         activeImageProviderId: file.data.activeImageProviderId,
         generationTextProviderId: file.data.generationTextProviderId ?? null,
+        chapterTextProviderId: file.data.chapterTextProviderId ?? null,
         connections: decryptConnections(file.data.connections, vaultKey),
       },
       warnings,
@@ -185,6 +194,10 @@ function readRegistry(dir: string): ReadResult {
       typeof rawObj.generationTextProviderId === "string" || rawObj.generationTextProviderId === null
         ? rawObj.generationTextProviderId
         : null,
+    chapterTextProviderId:
+      typeof rawObj.chapterTextProviderId === "string" || rawObj.chapterTextProviderId === null
+        ? rawObj.chapterTextProviderId
+        : null,
     connections: kept,   // ProviderConnectionSchema now defaults every kept row to kind: "text"
   };
   const backup = backupFile(path);
@@ -202,6 +215,7 @@ function readRegistry(dir: string): ReadResult {
       activeTextProviderId: salvaged.activeTextProviderId,
       activeImageProviderId: salvaged.activeImageProviderId,
       generationTextProviderId: salvaged.generationTextProviderId ?? null,
+      chapterTextProviderId: salvaged.chapterTextProviderId ?? null,
       connections: decryptConnections(salvaged.connections, vaultKey),
     },
     warnings,
@@ -216,6 +230,7 @@ function writeRegistry(dir: string, reg: ProviderRegistry): void {
     activeTextProviderId: reg.activeTextProviderId,
     activeImageProviderId: reg.activeImageProviderId,
     generationTextProviderId: reg.generationTextProviderId ?? null,
+    chapterTextProviderId: reg.chapterTextProviderId ?? null,
     connections: reg.connections.map((c) =>
       c.apiKey ? { ...c, apiKey: encryptApiKey(c.apiKey, vaultKey) } : c
     ),
@@ -231,6 +246,7 @@ export function seedRegistry(dir: string): ProviderRegistry {
     activeTextProviderId: "",
     activeImageProviderId: "",
     generationTextProviderId: null,
+    chapterTextProviderId: null,
     connections: []
   };
   writeRegistry(dir, reg);
@@ -254,6 +270,7 @@ export function listConnections(dir: string): PublicProviderRegistry {
     activeTextProviderId: reg.activeTextProviderId,
     activeImageProviderId: reg.activeImageProviderId,
     generationTextProviderId: reg.generationTextProviderId ?? null,
+    chapterTextProviderId: reg.chapterTextProviderId ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings,
   };
@@ -390,6 +407,7 @@ export function deleteConnection(dir: string, id: string): PublicProviderRegistr
     activeTextProviderId: reg.activeTextProviderId,
     activeImageProviderId: reg.activeImageProviderId,
     generationTextProviderId: reg.generationTextProviderId ?? null,
+    chapterTextProviderId: reg.chapterTextProviderId ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings: [],
   };
@@ -413,6 +431,7 @@ export function setActiveConnection(dir: string, id: string): PublicProviderRegi
     activeTextProviderId: reg.activeTextProviderId,
     activeImageProviderId: reg.activeImageProviderId,
     generationTextProviderId: reg.generationTextProviderId ?? null,
+    chapterTextProviderId: reg.chapterTextProviderId ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings: [],
   };
@@ -433,6 +452,25 @@ export function setGenerationTextProvider(dir: string, id: string | null): Publi
     activeTextProviderId: reg.activeTextProviderId,
     activeImageProviderId: reg.activeImageProviderId,
     generationTextProviderId: reg.generationTextProviderId ?? null,
+    chapterTextProviderId: reg.chapterTextProviderId ?? null,
+    connections: reg.connections.map(toPublicConnection),
+    warnings: [],
+  };
+}
+
+/** Remember which text connection CLOSES chapters (the summary and the opening turn).
+ *  `null` means "follow whichever connection is active". Accepts a dangling id for the same
+ *  reason the generation preference does: it is a preference, resolution falls back at use
+ *  time, and refusing the write would leave a stale choice unsaveable. */
+export function setChapterTextProvider(dir: string, id: string | null): PublicProviderRegistry {
+  const reg = getRegistry(dir);
+  reg.chapterTextProviderId = id;
+  writeRegistry(dir, reg);
+  return {
+    activeTextProviderId: reg.activeTextProviderId,
+    activeImageProviderId: reg.activeImageProviderId,
+    generationTextProviderId: reg.generationTextProviderId ?? null,
+    chapterTextProviderId: reg.chapterTextProviderId ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings: [],
   };

@@ -9,6 +9,7 @@ import {
   type QuestAction
 } from "../../../api";
 import type { ChatMessage, Playthrough } from "../../../../schemas";
+import type { RevertTarget } from "../../../../engine/chapterRevert";
 import type { DeleteImageTarget, FailedResponseNotice, ImageGenerationOverrides, ImagePromptRequest, ImageRequestEditorState, RetryImageTarget } from "../../../hooks/usePlaythrough";
 import { ScenePanel } from "./ScenePanel";
 import { ChatPanel } from "./ChatPanel";
@@ -21,6 +22,7 @@ import { CharacterManager } from "../../modals/CharacterManager";
 import { LorebookManager } from "../../modals/LorebookManager";
 import { TimelineModal } from "../../modals/TimelineModal";
 import { ConfirmModal } from "../../common/ConfirmModal";
+import { RevertConfirmModal } from "../../common/RevertConfirmModal";
 import { Icon, TextInput, Checkbox } from "../../base";
 
 export type PlayViewProps = {
@@ -61,6 +63,8 @@ export type PlayViewProps = {
   setRetryTarget: (msg: ChatMessage | null) => void;
   truncateTarget: ChatMessage | null;
   setTruncateTarget: (msg: ChatMessage | null) => void;
+  revertTarget: RevertTarget | null;
+  setRevertTarget: (target: RevertTarget | null) => void;
   canContinue: boolean;
   actionLoading: boolean;
   resummarizingChapterId: string | null;
@@ -74,6 +78,7 @@ export type PlayViewProps = {
   saveEdit: () => Promise<void>;
   confirmRetry: () => Promise<void>;
   confirmTruncate: () => Promise<void>;
+  confirmRevert: () => Promise<void>;
   branchTarget: ChatMessage | null;
   setBranchTarget: (msg: ChatMessage | null) => void;
   confirmBranch: (branchName?: string, asStandalone?: boolean) => Promise<void>;
@@ -187,6 +192,8 @@ export function PlayView(props: PlayViewProps) {
     setRetryTarget,
     truncateTarget,
     setTruncateTarget,
+    revertTarget,
+    setRevertTarget,
     canContinue,
     actionLoading,
     resummarizingChapterId,
@@ -200,6 +207,7 @@ export function PlayView(props: PlayViewProps) {
     saveEdit,
     confirmRetry,
     confirmTruncate,
+    confirmRevert,
     branchTarget,
     setBranchTarget,
     confirmBranch,
@@ -367,6 +375,7 @@ export function PlayView(props: PlayViewProps) {
           onCancelEdit={cancelEdit}
           onRetryRequest={setRetryTarget}
           onRequestTruncate={setTruncateTarget}
+          onRevertRequest={(msg) => setRevertTarget({ kind: "message", id: msg.id, label: msg.content })}
           onBranchRequest={setBranchTarget}
           lastPatchInfo={lastPatchInfo}
           sendingMessage={sendingMessage}
@@ -415,6 +424,7 @@ export function PlayView(props: PlayViewProps) {
           onPlaythroughChange={setPlaythrough}
           onViewChapter={setViewingChapterId}
           onCloseChapterComplete={(tu) => setTokenUsage(tu)}
+          onRevertToChapter={(chapterId, name) => setRevertTarget({ kind: "chapter", id: chapterId, label: name })}
           onStartNewWithSameScenario={(sd, pid, cids, name) => handleStartNewWithSameScenario(sd, pid, cids, name)}
           onOpenLibrary={(templateId) => {
             setCharacterManagerEditingId(templateId);
@@ -567,6 +577,16 @@ export function PlayView(props: PlayViewProps) {
             {retryTarget.content.slice(0, 200)}{retryTarget.content.length > 200 ? "…" : ""}
           </blockquote>
         </ConfirmModal>
+      ) : null}
+
+      {revertTarget ? (
+        <RevertConfirmModal
+          playthrough={playthrough}
+          target={revertTarget}
+          isLoading={actionLoading}
+          onConfirm={() => { void confirmRevert(); }}
+          onCancel={() => setRevertTarget(null)}
+        />
       ) : null}
 
       {truncateTarget ? (

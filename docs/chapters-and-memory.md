@@ -16,8 +16,13 @@ A chapter is a save point. When you close one, the messages since the last chapt
 archived: they stay in the playthrough — you can still open the transcript — but they stop
 being sent as chat history and are represented by a summary instead.
 
-**Close Chapter** lives in the play view's Journal tab, and asks for one thing: an optional
-closing message to include in the transcript that gets summarized. Closing produces:
+**Close Chapter** lives in the play view's Journal tab. It asks for an optional closing message to
+include in the transcript that gets summarized, and for the **Text Provider** that writes the
+chapter: one connection for both of the two model calls a close makes (the summary, and the
+opening turn). The choice is remembered, so the next chapter offers it again; the default is
+**Active connection**, which follows whichever text connection is active.
+
+Closing produces:
 
 1. a **summary** of the chapter — a name, a one-line description, and a full summary written
    by the model
@@ -30,7 +35,31 @@ A chapter needs at least six visible messages before it can be closed.
 
 Already-closed chapters can be re-summarized from the chat: the **Re-summarize previous
 chapter** action re-runs the summary on the same archived transcript and updates the chapter's
-name, description and summary. It does not regenerate the opening — Retry does that.
+name, description and summary, using the same remembered connection. It does not regenerate the
+opening — Retry on the opening message does that.
+
+### Reverting to an earlier chapter
+
+A chapter is a save point in both directions. **Revert** turns the story back to one:
+
+- **Journal → Chapters → a volume's accordion → Revert to this Chapter** — every later chapter is
+  discarded and this one becomes the running chapter again, its messages live in the chat once
+  more.
+- **View Transcript → an assistant response → Revert** — the same operation with the cut at that
+  response: it and everything after it go, and your own message of that turn stays, so you can
+  send it again or Retry it.
+
+Either way the chapter's summary is discarded (closing it again writes a new one) and the world
+state returns to how it was when the story reached that point. Nothing is regenerated, so a revert
+is instant.
+
+What a revert does **not** undo: closing a chapter has side effects of its own, and they stay —
+background characters the story had dropped remain dropped, and folded meta-summary text keeps its
+words. There is no undo, so the confirmation offers **Duplicate as backup**, which copies the
+playthrough and leaves the revert as a separate, deliberate click.
+
+Images generated in the discarded turns are removed with them (they become unreferenced). A
+**manual cover** pointing at one survives: the choice is yours, and it is kept.
 
 ### Story So Far
 

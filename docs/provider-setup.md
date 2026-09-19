@@ -35,7 +35,10 @@ LM Studio/Ollama server) and switch which one is **active** at any time.
   independent active slots (`activeTextProviderId`, `activeImageProviderId`) and a
   `kind` (`text` / `image`) on every connection. It also carries
   `generationTextProviderId` — the text connection **New Playthrough** generates with
-  (`null` follows the active one). A v0/v1 file is migrated on read — the
+  (`null` follows the active one) — and `chapterTextProviderId`, the same thing for
+  **Close Chapter**: its summary and its opening turn. A chapter is its own action, so it
+  remembers its own choice; both preferences fall back to the active connection when unset, and
+  the request body wins over both. A v0/v1 file is migrated on read — the
   original is archived to `.bak`, the old single `activeProviderId` becomes
   `activeTextProviderId`, `activeImageProviderId` starts empty, and every connection is
   stamped `kind: "text"`. An unreadable file is quarantined to `.bak`; a schema-invalid

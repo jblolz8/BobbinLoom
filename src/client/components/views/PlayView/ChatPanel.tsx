@@ -34,6 +34,8 @@ export type ChatPanelProps = {
   onCancelEdit: () => void;
   onRetryRequest: (msg: ChatMessage) => void;
   onRequestTruncate: (msg: ChatMessage) => void;
+  /** An archived response: regenerate is not on offer — this reverts the story to it instead. */
+  onRevertRequest: (msg: ChatMessage) => void;
   onBranchRequest?: (msg: ChatMessage) => void;
   lastPatchInfo: { applied: string[]; rejected: string[]; warnings: string[] };
   sendingMessage: string | null;
@@ -400,7 +402,7 @@ export function ChatPanel(props: ChatPanelProps) {
     canContinue,
     onChoiceSelect,
     editingMessageId, editDraft, onEditDraftChange, onStartEdit, onSaveEdit, onCancelEdit,
-    onRetryRequest, onRequestTruncate, onBranchRequest, lastPatchInfo,
+    onRetryRequest, onRequestTruncate, onRevertRequest, onBranchRequest, lastPatchInfo,
     sendingMessage, cancelledNotice, failedNotice, onDismissNotice, onDismissFailedNotice, onCancel, tokenUsage,
     viewingChapterId, onReturnToCurrentChapter,
     onResummarizeChapter, resummarizingChapterId,
@@ -469,7 +471,10 @@ export function ChatPanel(props: ChatPanelProps) {
       <div className="messages">
         {isViewingArchive ? (
           <div className="chapter-view-banner">
-            <span>Viewing archived chapter: <strong>{chapterName}</strong> — read only.</span>
+            <span>
+              Viewing archived chapter: <strong>{chapterName}</strong> — history only. The running
+              story is in the current chapter.
+            </span>
             <Button size="xs" variant="secondary" onClick={onReturnToCurrentChapter}>Return to current chapter</Button>
           </div>
         ) : null}
@@ -520,16 +525,30 @@ export function ChatPanel(props: ChatPanelProps) {
                   Edit
                 </Button>
                 {msg.role === "assistant" ? (
-                  <Button
-                    size="xs"
-                    variant="ghost"
-                    className="message-action retry"
-                    onClick={() => onRetryRequest(msg)}
-                    disabled={actionLoading || loading}
-                    leftIcon={<Icon name="RefreshCw" size={11} />}
-                  >
-                    Retry
-                  </Button>
+                  isViewingArchive ? (
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      className="message-action revert"
+                      onClick={() => onRevertRequest(msg)}
+                      disabled={actionLoading || loading}
+                      leftIcon={<Icon name="Undo2" size={11} />}
+                      title="Discard this response and everything after it, and make this chapter the running one"
+                    >
+                      Revert
+                    </Button>
+                  ) : (
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      className="message-action retry"
+                      onClick={() => onRetryRequest(msg)}
+                      disabled={actionLoading || loading}
+                      leftIcon={<Icon name="RefreshCw" size={11} />}
+                    >
+                      Retry
+                    </Button>
+                  )
                 ) : null}
                 <Button
                   size="xs"

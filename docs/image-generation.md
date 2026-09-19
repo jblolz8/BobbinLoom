@@ -679,7 +679,11 @@ for a card to have art — the latest image is the cover until you say otherwise
 
 The pick is made in **Gallery Media** (the play view's Journal tab, under **Media**), which
 lists every image the story has produced, newest first, with the chapter and turn each one came
-from — the same set the automatic cover draws from. **Use as cover** sets the pick, stored on the
+from.
+
+Archived chapters are included, and the list is sectioned by chapter — the running chapter first,
+then closed chapters newest-first — so a long story stays navigable. The automatic cover draws
+from a smaller set on purpose: the newest image of the chapter you are playing. **Use as cover** sets the pick, stored on the
 playthrough as a reference to the image's content-addressed file, so it costs no extra bytes and
 survives a duplicate or a timeline branch. **Clear custom cover** returns the card to the
 automatic chain.

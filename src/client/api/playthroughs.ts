@@ -1,4 +1,5 @@
 import type { Playthrough, PlaythroughCover, PlaythroughListResponse, SimpleNPC } from "../../schemas";
+import type { RevertAnchor } from "../../engine/chapterRevert";
 import { request } from "./client";
 
 export type TokenBreakdown = {
@@ -55,6 +56,9 @@ export type GeneratePlaythroughResponse = {
 export type CloseChapterBody = {
   addClosingMessage: boolean;
   closingMessage?: string;
+  /** The text connection to close with; absent = the stored chapter preference, then the
+   *  active connection. */
+  providerId?: string;
 };
 
 export function listPlaythroughs(): Promise<PlaythroughListResponse> {
@@ -136,6 +140,19 @@ export function truncatePlaythrough(playthroughId: string, messageId: string): P
   return request<Playthrough>(`/api/playthroughs/${playthroughId}/truncate`, {
     method: "POST",
     body: JSON.stringify({ messageId })
+  });
+}
+
+/** Reverts to an archived chapter or an archived response: everything from the anchor on is
+ *  discarded, the anchor's chapter becomes the running one, and its summary is discarded.
+ *  Nothing regenerates. */
+export function revertToAnchor(
+  playthroughId: string,
+  anchor: RevertAnchor
+): Promise<Playthrough> {
+  return request<Playthrough>(`/api/playthroughs/${playthroughId}/revert`, {
+    method: "POST",
+    body: JSON.stringify({ anchor })
   });
 }
 

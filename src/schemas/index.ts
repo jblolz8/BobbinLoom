@@ -259,6 +259,11 @@ export const ProviderRegistryFileSchema = z.object({
    *  same rule a connection's `promptProviderId` uses. Optional, so a registry
    *  written before this preference parses untouched. */
   generationTextProviderId: z.string().nullable().optional(),
+  /** The text connection that CLOSES chapters — the summary call and the chapter-opening turn.
+   *  Optional and nullable for the same reason as the generation preference above: absent or
+   *  null follows whichever text connection is active, and a registry written before this
+   *  preference exists parses untouched. */
+  chapterTextProviderId: z.string().nullable().optional(),
   connections: z.array(ProviderConnectionSchema)
 });
 export type ProviderRegistryFile = z.infer<typeof ProviderRegistryFileSchema>;

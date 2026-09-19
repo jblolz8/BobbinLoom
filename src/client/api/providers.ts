@@ -94,6 +94,7 @@ export type ProviderRegistry = {
   activeImageProviderId: string;
   /** The connection new playthroughs are generated with; null = follow the active one. */
   generationTextProviderId?: string | null;
+  chapterTextProviderId?: string | null;
   connections: ProviderConnection[];
   warnings: string[];
 };
@@ -191,6 +192,14 @@ export function setActiveProviderConnection(id: string): Promise<ProviderRegistr
 }
 /** Remember the text connection new playthroughs are generated with. `null` = follow
  *  whichever connection is active. */
+/** Which text connection closes chapters. `null` follows the active connection. */
+export function setChapterTextProvider(providerId: string | null): Promise<ProviderRegistry> {
+  return request<ProviderRegistry>("/api/settings/providers/chapter-provider", {
+    method: "PUT",
+    body: JSON.stringify({ providerId })
+  });
+}
+
 export function setGenerationTextProvider(providerId: string | null): Promise<ProviderRegistry> {
   return request<ProviderRegistry>("/api/settings/providers/generation-provider", {
     method: "PUT",

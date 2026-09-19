@@ -24,88 +24,8 @@
   padding: 1rem 1.25rem;
 }
 
-/* ── Nav ── */
-
-.docs-nav {
-  flex: 0 0 236px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  min-height: 0;
-  padding-right: 0.9rem;
-  border-right: 1px solid var(--border-subtle);
-}
-
-.docs-nav-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.docs-nav-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.92rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.docs-nav-list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.docs-nav-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-
-.docs-nav-group-label {
-  font-size: 0.68rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  padding: 0 0.35rem 0.25rem;
-}
-
-.docs-nav-item {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 0.32rem 0.5rem;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  line-height: 1.3;
-  cursor: pointer;
-}
-
-.docs-nav-item:hover {
-  background: var(--bg-surface-hover);
-  color: var(--text-primary);
-}
-
-.docs-nav-item.active {
-  background: var(--accent-translucent);
-  border-color: var(--accent-highlight, var(--accent-base));
-  color: var(--text-primary);
-  font-weight: 600;
-}
-
-.docs-nav-empty {
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  padding: 0 0.35rem;
-}
+/* The page list itself is the shared `SideNav` primitive (components.css). What stays here is
+   the docs-only furniture: the body search box and its result rows. */
 
 /* ── Content ── */
 
@@ -370,42 +290,9 @@
    Above 767px the toggle collapses the column; below it the nav becomes a
    drawer over the content, closed until asked for. */
 .docs-view {
+  /* The positioning context the `SideNav` drawer measures itself against — the primitive's
+     narrow-screen rules are absolute, so this is load-bearing rather than cosmetic. */
   position: relative;
-}
-
-.docs-view.nav-collapsed .docs-nav {
-  display: none;
-}
-
-@media (max-width: 767px) {
-  .docs-view .docs-nav {
-    position: absolute;
-    inset-block: 0;
-    inset-inline-start: 0;
-    width: min(300px, 86vw);
-    z-index: 3;
-    background: var(--bg-panel);
-    border-right: 1px solid var(--border-subtle);
-    border-bottom: none;
-    transform: translateX(-102%);
-    /* visibility, not only a transform: the drawer is positioned inside the
-       overlay dialog, whose own left offset left a sliver of the closed drawer
-       visible at the dialog's edge. */
-    visibility: hidden;
-    transition: transform 0.18s ease, visibility 0.18s;
-  }
-
-  .docs-view.nav-open .docs-nav {
-    transform: none;
-    visibility: visible;
-  }
-
-  .docs-view.nav-open .docs-nav-scrim {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    background: var(--modal-backdrop);
-  }
 }
 /* ── Search results in the nav ──
    Rows are raw buttons (not base-btn) on purpose: they are list items, and

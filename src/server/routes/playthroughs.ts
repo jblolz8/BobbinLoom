@@ -78,7 +78,10 @@ const QuestActionBody = z.object({
 
 const CloseChapterBody = z.object({
   addClosingMessage: z.boolean().default(false),
-  closingMessage: z.string().optional()
+  closingMessage: z.string().optional(),
+  /** The text connection to close the chapter with (the summary AND the opening turn). Absent =
+   *  the stored chapter preference, then the active connection. */
+  providerId: z.string().optional()
 });
 
 /** Injectable seams (all defaulted) so the delete sweep can be exercised against
@@ -372,7 +375,13 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
       transcript += "\nUSER: " + body.closingMessage;
     }
 
-    const provider = manager.getProvider();
+    // ONE resolution for the whole operation. This handler touches the connection four times —
+    // the summary call, the opening turn (provider AND context window), the memory embedding, and
+    // the post-close meter's budget — and an override applied to only some of them writes the
+    // summary with one model, the opening with another, and measures with a third, silently.
+    const providerId = body.providerId ?? manager.chapterTextProviderId() ?? undefined;
+    const provider = manager.getProvider(providerId);
+    const contextWindow = manager.getContextWindow(providerId);
     const controller = abortOnClientDisconnect(reply);
 
     let summary: { name: string; shortDescription: string; fullSummary: string };
@@ -389,7 +398,7 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
 
     if (controller.signal.aborted) return;
 
-    const result = await closeChapterAction(dataDir, params.id, summary, provider, true, manager.getContextWindow(), controller.signal, summaryDurationMs, loadPromptConfig(settingsDir).promptConfig);
+    const result = await closeChapterAction(dataDir, params.id, summary, provider, true, contextWindow, controller.signal, summaryDurationMs, loadPromptConfig(settingsDir).promptConfig);
 
     if (controller.signal.aborted) return;
 
@@ -399,18 +408,18 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
     // embedding so the reported memory selection matches the real turn.
     const queryMessages = result.state.messages.filter((m) => !m.hidden).slice(-4);
     const queryText = queryMessages.map((m) => m.content).join("\n");
-    const [queryEmbedding = []] = queryText ? await manager.getProvider().embedTexts([queryText]) : [[]];
+    const [queryEmbedding = []] = queryText ? await provider.embedTexts([queryText]) : [[]];
 
     const { promptUsage } = assembleTurnPrompt(parseUserInput(""), result.state, true, queryEmbedding, {
-      contextWindow: manager.getContextWindow(),
-      reserveOutputTokens: manager.getMaxTokens(),
+      contextWindow,
+      reserveOutputTokens: manager.getMaxTokens(providerId),
       calibration: result.state.tokenCalibration
     }, loadPromptConfig(settingsDir).promptConfig);
     return {
       state: result.state,
       tokenUsage: {
         estimated: promptUsage.estimated,
-        contextWindow: manager.getContextWindow(),
+        contextWindow,
         breakdown: promptUsage.breakdown,
         castPresence: {
           present: result.state.characters.filter((c) => c.currentLocationId === result.state.locationId).length,
@@ -424,7 +433,9 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
     const params = z.object({ id: z.string(), chapterId: z.string() }).parse(request.params);
     const controller = abortOnClientDisconnect(reply);
 
-    const result = await resummarizeChapterAction(dataDir, params.id, params.chapterId, manager.getProvider(), controller.signal);
+    // The chapter preference, not the active connection: re-summarizing is the same meta call on
+    // the same surface, and it has no dialog to ask in.
+    const result = await resummarizeChapterAction(dataDir, params.id, params.chapterId, manager.getProvider(manager.chapterTextProviderId() ?? undefined), controller.signal);
     if (controller.signal.aborted) return;
 
     if (!result.ok) return reply.code(result.status).send({ error: result.error });

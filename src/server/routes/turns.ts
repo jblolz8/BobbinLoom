@@ -1,9 +1,10 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyPluginAsync, FastifyPluginOptions } from "fastify";
 import { z } from "zod";
 import { getPlaythroughRecord, updatePlaythroughRecord } from "../store";
-import { editChatMessage, executeTurn, retryAssistantTurn, truncateChat, type TurnExecution } from "../turnActions";
+import { editChatMessage, executeTurn, retryAssistantTurn, revertAction, truncateChat, type TurnExecution } from "../turnActions";
+import type { RevertAnchor } from "../../engine/chapterRevert";
 import { loadPromptConfig } from "../promptConfigStore";
-import { abortOnClientDisconnect, dataDir, providerManager, settingsDir } from "./helpers";
+import { abortOnClientDisconnect, dataDir as defaultDataDir, providerManager, settingsDir } from "./helpers";
 
 const TurnBody = z.object({
   playthroughId: z.string(),
@@ -28,7 +29,24 @@ const TruncateBody = z.object({
   messageId: z.string()
 });
 
-export async function turnRoutes(app: FastifyInstance): Promise<void> {
+/** Where a revert starts. The union is deliberate: "revert to this chapter" and "revert from this
+ *  response" are one operation, and the discriminator is the only thing that differs. */
+const RevertBody = z.object({
+  anchor: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("chapter"), id: z.string() }),
+    z.object({ kind: z.literal("message"), id: z.string() })
+  ])
+});
+
+export type TurnRoutesOptions = FastifyPluginOptions & {
+  /** Injectable seam, like every other route plugin: a test points these routes at a temp
+   *  directory so nothing it does can reach the real records. */
+  dataDir?: string;
+};
+
+export const turnRoutes: FastifyPluginAsync<TurnRoutesOptions> = async (app, options = {}) => {
+  const dataDir = options.dataDir ?? defaultDataDir;
+
   app.post("/api/turn", async (request, reply) => {
     const body = TurnBody.parse(request.body);
     const playthrough = getPlaythroughRecord(dataDir, body.playthroughId);
@@ -120,6 +138,27 @@ export async function turnRoutes(app: FastifyInstance): Promise<void> {
     const body = TruncateBody.parse(request.body);
 
     const result = truncateChat(dataDir, params.id, body.messageId);
+
+    if (!result.ok) return reply.code(result.status).send({ error: result.error });
+    return result.state;
+  });
+
+  /** Reverts to an archived chapter or an archived response. Nothing generates, so there is no
+   *  provider to resolve and no partial failure to clean up: the state comes back whole. */
+  app.post("/api/playthroughs/:id/revert", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const parsedBody = RevertBody.safeParse(request.body ?? {});
+    if (!parsedBody.success) {
+      const reasons = parsedBody.error.issues.map((issue) => issue.message).join("; ");
+      return reply.code(400).send({ error: `Invalid revert request: ${reasons}` });
+    }
+
+    const { kind, id } = parsedBody.data.anchor;
+    // The wire shape is one generic `id`; the engine's anchor is two distinct fields, so the
+    // discriminator is mapped here and nowhere else.
+    const anchor: RevertAnchor =
+      kind === "chapter" ? { kind: "chapter", chapterId: id } : { kind: "message", messageId: id };
+    const result = revertAction(dataDir, params.id, anchor);
 
     if (!result.ok) return reply.code(result.status).send({ error: result.error });
     return result.state;

@@ -9,6 +9,7 @@ import {
   restoreSnapshotState,
   updateTimingStates
 } from "../engine/engine";
+import { planRevert, type RevertAnchor } from "../engine/chapterRevert";
 import type { Playthrough, PromptConfig, ScenarioSeed } from "../schemas";
 import type { EntryTimingState, LorebookEntry, TurnSnapshot } from "../schemas";
 import type { TurnProvider } from "./provider";
@@ -432,29 +433,19 @@ function defaultImagesDir(dataDir: string): string {
 }
 
 /**
+ * The one delete-and-rewind rule both truncation and revert stand on.
+ *
  * Deletes the given message and everything after it (inclusive), restoring the
  * world state to the snapshot of the first assistant message in the deleted
  * block — that snapshot is the pre-turn state right after the new last message.
  * When the deleted block holds no assistant message (nothing happened after the
  * new last message), the live state already reflects the truncation. Permanently
- * discards the deleted messages and their snapshots; no regeneration.
+ * Permanently discards the deleted messages and their snapshots; no regeneration.
+ * The caller owns persistence, and chapter bookkeeping happens outside this helper:
+ * a revert restores a snapshot that legitimately still contains the chapter it is
+ * un-closing, so the caller filters it out afterwards.
  */
-export function truncateChat(
-  dataDir: string,
-  playthroughId: string,
-  messageId: string,
-  imagesDir: string = defaultImagesDir(dataDir)
-): EditOutcome {
-  const playthrough = getPlaythroughRecord(dataDir, playthroughId);
-  if (!playthrough) {
-    return { ok: false, status: 404, error: "Playthrough not found" };
-  }
-
-  const index = playthrough.messages.findIndex((message) => message.id === messageId);
-  if (index === -1) {
-    return { ok: false, status: 404, error: "Message not found" };
-  }
-
+function deleteFrom(playthrough: Playthrough, index: number): Playthrough {
   const deletedBlock = playthrough.messages.slice(index);
   const targetAssistant = deletedBlock.find((message) => message.role === "assistant");
   const snapshot = targetAssistant ? playthrough.snapshots?.[targetAssistant.id] : undefined;
@@ -472,7 +463,30 @@ export function truncateChat(
     Object.entries(next.snapshots ?? {}).filter(([messageId]) => liveMessageIds.has(messageId))
   );
   next.updatedAt = new Date().toISOString();
+  return next;
+}
 
+/**
+ * Deletes the given message and everything after it (inclusive). The live
+ * chat's own "delete from here".
+ */
+export function truncateChat(
+  dataDir: string,
+  playthroughId: string,
+  messageId: string,
+  imagesDir: string = defaultImagesDir(dataDir)
+): EditOutcome {
+  const playthrough = getPlaythroughRecord(dataDir, playthroughId);
+  if (!playthrough) {
+    return { ok: false, status: 404, error: "Playthrough not found" };
+  }
+
+  const index = playthrough.messages.findIndex((message) => message.id === messageId);
+  if (index === -1) {
+    return { ok: false, status: 404, error: "Message not found" };
+  }
+
+  const next = deleteFrom(playthrough, index);
   updatePlaythroughRecord(dataDir, next);
 
   // Persist FIRST, then collect. The truncated messages took their image refs
@@ -480,13 +494,112 @@ export function truncateChat(
   // a file a surviving message still references stays. Sweeping before the
   // write would delete files the on-disk record still points at. Best-effort:
   // a failed sweep must never fail the truncate that already happened.
+  sweepAfterDeleteForward(dataDir, playthroughId, imagesDir);
+
+  return { ok: true, state: next };
+}
+
+/**
+ * Reverts to a chapter or to an archived response: the plan (`planRevert`) says
+ * what goes, `deleteFrom` performs the delete-and-rewind, and this function
+ * finishes the chapter bookkeeping the restore cannot do on its own.
+ *
+ * Nothing regenerates — no provider is involved, so the revert is instant and
+ * cannot fail halfway through a model call. Re-rolling is the live chat's own
+ * Retry, one click away on the message that is now live.
+ */
+export function revertAction(
+  dataDir: string,
+  playthroughId: string,
+  anchor: RevertAnchor,
+  imagesDir: string = defaultImagesDir(dataDir)
+): EditOutcome {
+  const playthrough = getPlaythroughRecord(dataDir, playthroughId);
+  if (!playthrough) {
+    return { ok: false, status: 404, error: "Playthrough not found" };
+  }
+
+  const plan = planRevert(playthrough, anchor);
+  if (!plan) {
+    return {
+      ok: false,
+      status: 400,
+      error: "That is not an archived chapter or response, so there is nothing to revert to"
+    };
+  }
+
+  const next = deleteFrom(playthrough, plan.truncationIndex);
+
+  // The turn counter must never end up BELOW a message that survived: reverting a response leaves
+  // the player's own message of that turn in place (their input is theirs), and the restored state
+  // predates it. The counter acknowledges the surviving message so the next turn cannot reuse its
+  // number.
+  next.turn = Math.max(next.turn, plan.keptTailTurn);
+
+  // ── Un-archive the chapter the story resumes in ──
+  // The tag IS the archive marker: a message still carrying a dropped chapter's id
+  // becomes live again, while a hidden message WITHOUT one is a synthetic
+  // instruction ("Continue", a chapter opening) and stays hidden.
+  const dropped = new Set(plan.droppedChapterIds);
+  for (const message of next.messages) {
+    if (!message.chapterId || !dropped.has(message.chapterId)) continue;
+    delete message.chapterId;
+    message.hidden = false;
+  }
+
+  // ── Chapter records and the rolling meta-summary ──
+  // Runs AFTER the restore on purpose: a chapter-level revert restores the state as
+  // the chapter ENDED, which still contains the chapter record this revert is
+  // un-closing — so the record has to be filtered out here, not assumed absent.
+  next.chapters = (next.chapters ?? []).filter((chapter) => !dropped.has(chapter.id));
+  next.storyMetaSummaries = (next.storyMetaSummaries ?? [])
+    .map((meta) => ({ ...meta, chapterIds: meta.chapterIds.filter((id) => !dropped.has(id)) }))
+    // A meta left with nothing folded into it is only dead weight in the prompt.
+    .filter((meta) => meta.chapterIds.length > 0);
+  next.currentChapterStartedAtTurn = plan.currentChapterStartedAtTurn;
+
+  // ── The approximate path: no snapshot, so the restore rewound nothing ──
+  // State only changes on assistant turns, so a deleted block WITHOUT an assistant
+  // message needs no rewinding at all (that case is exact, not approximate). When
+  // there IS one and it has no snapshot, the history reverts and the world does
+  // not — so the events the deleted turns recorded are pruned by turn instead.
+  if (plan.approximate) {
+    next.turn = plan.keptTailTurn;
+    const survive = <T extends { turn: number }>(event: T) => event.turn <= plan.keptTailTurn;
+    next.memoryEvents = next.memoryEvents.filter(survive);
+    if (next.memoryLayers) {
+      next.memoryLayers = {
+        recent: next.memoryLayers.recent.filter(survive),
+        compressed: next.memoryLayers.compressed.filter(survive)
+      };
+    }
+  }
+
+  // A surviving event tagged with a dropped chapter belongs to the running chapter
+  // now. A no-op on the restored path, where those tags were never set yet.
+  const untag = <T extends { chapterId?: string }>(event: T) => {
+    if (event.chapterId && dropped.has(event.chapterId)) delete event.chapterId;
+    return event;
+  };
+  next.memoryEvents.forEach(untag);
+  next.memoryLayers?.recent.forEach(untag);
+  next.memoryLayers?.compressed.forEach(untag);
+
+  updatePlaythroughRecord(dataDir, next);
+
+  // Same ordering rule as truncateChat: record first, images second.
+  sweepAfterDeleteForward(dataDir, playthroughId, imagesDir);
+
+  return { ok: true, state: next };
+}
+
+/** Persist has already happened for both callers — this is the best-effort half. */
+function sweepAfterDeleteForward(dataDir: string, playthroughId: string, imagesDir: string): void {
   try {
     sweepOrphansInDataDir(dataDir, imagesDir);
   } catch (error) {
-    console.warn(`[images] orphan sweep after truncating playthrough ${playthroughId} failed:`, error);
+    console.warn(`[images] orphan sweep after deleting forward in playthrough ${playthroughId} failed:`, error);
   }
-
-  return { ok: true, state: next };
 }
 
 export function buildOpeningPrompt(scenarioDescription: string | undefined, seed: ScenarioSeed): string {

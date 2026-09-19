@@ -152,6 +152,15 @@ export const providerRoutes: FastifyPluginAsync<ProviderRoutesOptions> = async (
     return manager.setGenerationTextProvider(parsedBody.data.providerId);
   });
 
+  /** Which text connection CLOSES chapters (the summary and the opening turn). Same contract as
+   *  the generation preference above: `{ providerId: null }` means "follow the active connection",
+   *  and a dangling id is accepted because resolution falls back at use time. */
+  app.put("/api/settings/providers/chapter-provider", async (request, reply) => {
+    const parsedBody = GenerationProviderBody.safeParse(request.body ?? {});
+    if (!parsedBody.success) return reply.code(400).send({ error: "providerId must be a string or null" });
+    return manager.setChapterTextProvider(parsedBody.data.providerId);
+  });
+
   app.post("/api/settings/providers/test", async (request) => {
     const body = TestConnectionBody.parse(request.body ?? {});
     return manager.testConnection(body);

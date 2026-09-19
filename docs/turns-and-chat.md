@@ -29,6 +29,7 @@ messages also show how long they took to generate and which model produced them.
 |---|---|---|
 | **Edit** | any message | Opens an inline editor; saving updates the message in place |
 | **Retry** | assistant messages | Restores the snapshot taken before that turn and generates a fresh response — the same input, a new result |
+| **Revert** | assistant responses in an archived transcript | Turns the story back to that response: it and everything after it are discarded, the chapter becomes the running chapter again and its summary is discarded. Nothing is regenerated |
 | **Truncate** | any message | Confirms, then cuts the chat back to just before that message, discarding everything after it |
 | **Branch** | any message | Starts a timeline branch from that point — see [Timelines](timelines.md) |
 

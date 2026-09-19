@@ -19,16 +19,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getDoc, listDocs, searchDocs, type DocPage, type DocPageMeta, type DocSearchResult } from "../../api";
 import { MIN_QUERY_LENGTH } from "../../../engine/docsSearch";
-import { Icon, IconButton, SearchBar } from "../base";
+import { Icon, IconButton, SearchBar, SideNav } from "../base";
 import { renderDocMarkdown } from "../../utils/docsMarkdown";
+import { useSideNavMode } from "../../hooks/useSideNavMode";
 
 export type DocsViewProps = {
   variant?: "page" | "overlay";
   onClose?: () => void;
 };
-
-/** Where the nav stops being a column and becomes a drawer. */
-const DRAWER_QUERY = "(max-width: 767px)";
 
 /** Group the ordered page list by section, preserving the order sections first
  *  appear in — the nav reads top-to-bottom the same way the index does. */
@@ -77,9 +75,7 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
   const [results, setResults] = useState<DocSearchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [navCollapsed, setNavCollapsed] = useState(false);
-  const [navOpen, setNavOpen] = useState(false);
-  const [narrow, setNarrow] = useState(false);
+  const nav = useSideNavMode();
 
   const contentRef = useRef<HTMLDivElement | null>(null);
   /** An anchor requested with the page, applied once it has rendered. */
@@ -87,15 +83,6 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
 
   const needle = query.trim();
   const searching = needle.length >= MIN_QUERY_LENGTH;
-
-  // The nav's shape depends on the viewport, so it is observed rather than assumed.
-  useEffect(() => {
-    const media = window.matchMedia(DRAWER_QUERY);
-    const sync = () => setNarrow(media.matches);
-    sync();
-    media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
-  }, []);
 
   // The nav lists whatever is on disk; the landing page is index.md when it exists.
   useEffect(() => {
@@ -181,7 +168,8 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
     (slug: string, anchor?: string) => {
       // On a narrow screen the drawer is a temporary overlay: choosing a page
       // dismisses it, the way a menu does.
-      if (window.matchMedia(DRAWER_QUERY).matches) setNavOpen(false);
+      // On a narrow screen the drawer is a temporary overlay: choosing a page dismisses it.
+      if (nav.narrow) nav.closeDrawer();
       if (slug === activeSlug) {
         const container = contentRef.current;
         const target = anchor ? container?.querySelector(`[id="${CSS.escape(anchor)}"]`) : null;
@@ -230,15 +218,15 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
     function onDocumentKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       event.stopPropagation();
-      if (navOpen) {
-        setNavOpen(false);
+      if (nav.drawerOpen) {
+        nav.closeDrawer();
         return;
       }
       onClose?.();
     }
     document.addEventListener("keydown", onDocumentKeyDown);
     return () => document.removeEventListener("keydown", onDocumentKeyDown);
-  }, [navOpen, onClose, variant]);
+  }, [nav.drawerOpen, nav.closeDrawer, onClose, variant]);
 
   const renderedMarkdown = useMemo(
     () => (page ? renderDocMarkdown(page.markdown, searching ? { highlight: needle } : {}) : ""),
@@ -251,84 +239,74 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
   const hitCount = useMemo(() => (renderedMarkdown.match(/class="doc-search-hit"/g) ?? []).length, [renderedMarkdown]);
 
   const groups = useMemo(() => groupBySection(pages), [pages]);
-  const navShown = narrow ? navOpen : !navCollapsed;
-  const viewClass = [
-    "docs-view",
-    `docs-view-${variant}`,
-    narrow ? (navOpen ? "nav-open" : "") : navCollapsed ? "nav-collapsed" : ""
-  ]
-    .filter(Boolean)
-    .join(" ");
+  const viewClass = `docs-view docs-view-${variant}`;
 
   return (
     <div className={viewClass}>
-      <nav className="docs-nav" id="docs-nav" aria-label="Documentation" aria-hidden={!navShown}>
-        <div className="docs-nav-header">
-          <span className="docs-nav-title">
+      <SideNav
+        id="docs-nav"
+        ariaLabel="Documentation"
+        title={
+          <>
             <Icon name="BookText" size={16} /> Documentation
-          </span>
-        </div>
-
-        <SearchBar
-          value={query}
-          onChange={setQuery}
-          placeholder="Search the documentation…"
-          size="sm"
-          containerClassName="docs-search"
-        />
-
-        {searching ? (
-          <div className="docs-nav-list docs-search-results" aria-live="polite">
-            <span className="docs-nav-group-label">
-              {results ? `${results.total} ${results.total === 1 ? "match" : "matches"} in ${results.pages.length} ${results.pages.length === 1 ? "page" : "pages"}` : "Searching…"}
-            </span>
-            {results?.pages.map((entry) => (
-              <div className="docs-search-page" key={entry.slug}>
-                <button
-                  className={`docs-nav-item docs-search-page-title ${entry.slug === activeSlug ? "active" : ""}`}
-                  onClick={() => openDoc(entry.slug, entry.hits[0]?.anchor ?? undefined)}
-                >
-                  <span>{entry.title}</span>
-                  <span className="docs-search-count">{entry.count}</span>
-                </button>
-                {entry.hits.slice(0, 2).map((hit, index) => (
+          </>
+        }
+        sections={groups.map((group) => ({
+          label: group.section,
+          items: group.pages.map((page) => ({ id: page.slug, label: page.title }))
+        }))}
+        activeId={activeSlug ?? undefined}
+        onSelect={openDoc}
+        headerExtra={
+          <SearchBar
+            value={query}
+            onChange={setQuery}
+            placeholder="Search the documentation…"
+            size="sm"
+            containerClassName="docs-search"
+          />
+        }
+        listOverride={
+          searching ? (
+            <div className="side-nav-list docs-search-results" aria-live="polite">
+              <span className="side-nav-group-label">
+                {results ? `${results.total} ${results.total === 1 ? "match" : "matches"} in ${results.pages.length} ${results.pages.length === 1 ? "page" : "pages"}` : "Searching…"}
+              </span>
+              {results?.pages.map((entry) => (
+                <div className="docs-search-page" key={entry.slug}>
                   <button
-                    className="docs-search-hit"
-                    key={`${entry.slug}-${index}`}
-                    onClick={() => openDoc(entry.slug, hit.anchor ?? undefined)}
+                    className={`side-nav-item docs-search-page-title ${entry.slug === activeSlug ? "active" : ""}`}
+                    onClick={() => openDoc(entry.slug, entry.hits[0]?.anchor ?? undefined)}
                   >
-                    {hit.heading ? <span className="docs-search-hit-heading">{hit.heading}</span> : null}
-                    <span className="docs-search-hit-snippet">{splitSnippet(hit.snippet, needle)}</span>
+                    <span>{entry.title}</span>
+                    <span className="docs-search-count">{entry.count}</span>
                   </button>
-                ))}
-              </div>
-            ))}
-            {results && results.pages.length === 0 ? (
-              <p className="docs-nav-empty">No page or paragraph matches “{needle}”.</p>
-            ) : null}
-          </div>
-        ) : (
-          <div className="docs-nav-list">
-            {groups.map((group) => (
-              <div className="docs-nav-group" key={group.section}>
-                <span className="docs-nav-group-label">{group.section}</span>
-                {group.pages.map((entry) => (
-                  <button
-                    key={entry.slug}
-                    className={`docs-nav-item ${entry.slug === activeSlug ? "active" : ""}`}
-                    onClick={() => openDoc(entry.slug)}
-                    aria-current={entry.slug === activeSlug ? "page" : undefined}
-                  >
-                    {entry.title}
-                  </button>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
-      </nav>
-
-      {narrow && navOpen ? <div className="docs-nav-scrim" onClick={() => setNavOpen(false)} /> : null}
+                  {entry.hits.slice(0, 2).map((hit, index) => (
+                    <button
+                      className="docs-search-hit"
+                      key={`${entry.slug}-${index}`}
+                      onClick={() => openDoc(entry.slug, hit.anchor ?? undefined)}
+                    >
+                      {hit.heading ? <span className="docs-search-hit-heading">{hit.heading}</span> : null}
+                      <span className="docs-search-hit-snippet">{splitSnippet(hit.snippet, needle)}</span>
+                    </button>
+                  ))}
+                </div>
+              ))}
+              {results && results.pages.length === 0 ? (
+                <p className="side-nav-empty">No page or paragraph matches “{needle}”.</p>
+              ) : null}
+            </div>
+          ) : undefined
+        }
+        /* The drawer choice is per-viewport: wide screens collapse the column, narrow screens
+           swing the drawer. The primitive is told which, and owns neither decision. */
+        hidden={!nav.narrow && nav.collapsed}
+        open={nav.narrow && nav.drawerOpen}
+        showScrim={nav.narrow && nav.drawerOpen}
+        onScrimClick={nav.closeDrawer}
+        emptyLabel="No documentation pages found."
+      />
 
       <section className="docs-content" ref={contentRef}>
         {/* This toolbar sits OUTSIDE the nav on purpose: a collapse or a closed
@@ -336,12 +314,12 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
             back, and a phone has no Escape key for the dialog's close. */}
         <div className="docs-toolbar">
           <IconButton
-            icon={navShown ? "PanelLeftClose" : "PanelLeft"}
+            icon={nav.shown ? "PanelLeftClose" : "PanelLeft"}
             size="md"
-            label={navShown ? "Hide the page list" : "Show the page list"}
-            aria-expanded={navShown}
+            label={nav.shown ? "Hide the page list" : "Show the page list"}
+            aria-expanded={nav.shown}
             aria-controls="docs-nav"
-            onClick={() => (narrow ? setNavOpen((open) => !open) : setNavCollapsed((collapsed) => !collapsed))}
+            onClick={nav.toggle}
           />
           {searching ? (
             <span className="docs-hit-chip">
