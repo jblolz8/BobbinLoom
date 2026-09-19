@@ -69,13 +69,18 @@ Everything is designed to collapse at one breakpoint, **1100px**:
 
 - the header's navigation tabs collapse to a row below the brand
 - panel labels become icons
-- the play view switches to one panel at a time, chosen by a tab bar at the bottom of the
-  screen
+- the play view switches to one panel at a time, chosen by a compact tab bar at the bottom of the
+  screen (icon beside the panel name, 44px plus the safe area)
 - panels that are not selected are hidden rather than unmounted, so scroll position and
   in-progress edits survive a tab switch
 - an action whose result lives in another panel brings that panel forward: **View Transcript**
   in the Journal opens the chat panel, because on a phone the transcript would otherwise be
   written into a panel that is not on screen
+- **Panels can be swiped** — left for the next one (Scene → Chat → Info), right for the previous,
+  stopping at the ends rather than wrapping. The arriving panel slides in over 150ms. A panel's own
+  horizontal controls keep the gesture: a swipe that starts on a code block, on the info panel's tab
+  strip, or on the screen's left edge does what it would normally do, and a mostly-vertical drag
+  scrolls instead
 
 Full-screen dialogs on small screens use the dynamic viewport height so the browser's own
 chrome can't crop them, and the scrollable region inside a dialog is the only thing that

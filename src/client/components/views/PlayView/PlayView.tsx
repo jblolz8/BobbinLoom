@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   buildImageUrl,
   getPromptConfig,
@@ -15,6 +15,8 @@ import { ScenePanel } from "./ScenePanel";
 import { ChatPanel } from "./ChatPanel";
 import { ImageRequestBodyModal } from "./ImageRequestBodyModal";
 import { InfoPanel } from "./InfoPanel/InfoPanel";
+import { paneIndexOf, paneSide } from "../../../engine/paneSwipe";
+import { usePaneSwipe } from "../../../hooks/usePaneSwipe";
 import { PlaythroughLibrary } from "../../library/PlaythroughLibrary";
 import { SettingsModal } from "../../modals/SettingsModal";
 import { PersonaManager } from "../../modals/PersonaManager";
@@ -262,6 +264,25 @@ export function PlayView(props: PlayViewProps) {
     setAlwaysDiscardOldImage
   } = props;
 
+  // Which side the arriving panel slides in from. It is kept in a ref because the direction only
+  // exists as a move — and compared against the previous panel, with the ref written only when the
+  // panel actually changed, so a second render cannot flip it.
+  const paneMove = useRef<{ to: string; side: "left" | "right" }>({ to: mobileTab, side: "right" });
+  if (paneMove.current.to !== mobileTab) {
+    paneMove.current = {
+      to: mobileTab,
+      side: paneSide(paneIndexOf(paneMove.current.to), paneIndexOf(mobileTab))
+    };
+  }
+
+  // Swiping between panels, on the single-panel layout only. The handlers sit on the layout rather
+  // than the document, which keeps the header and the tab bar outside the gesture.
+  const paneSwipe = usePaneSwipe({
+    enabled: isMobile,
+    index: paneIndexOf(mobileTab),
+    onChange: setMobileTab
+  });
+
   // The retry confirmation's own "always" tick. Deliberately NOT seeded from the
   // setting: this modal only appears while the setting is OFF, and a tick here is
   // a one-way promise to stop asking.
@@ -343,12 +364,12 @@ export function PlayView(props: PlayViewProps) {
         />
       ) : null}
 
-      <section className="layout">
+      <section className="layout" {...paneSwipe}>
         <ScenePanel
           playthrough={playthrough}
           actionLoading={actionLoading}
           onQuestAction={handleQuestAction}
-          className={isMobile && mobileTab !== "scene" ? "mobile-hidden" : undefined}
+          className={isMobile ? (mobileTab === "scene" ? `pane-enter-from-${paneMove.current.side}` : "mobile-hidden") : undefined}
         />
 
         <ChatPanel
@@ -416,7 +437,7 @@ export function PlayView(props: PlayViewProps) {
           }}
           onImagePromptRerun={() => { void rerunImagePrompt?.(); }}
           onImagePromptClose={closeImagePrompt}
-          className={isMobile && mobileTab !== "chat" ? "mobile-hidden" : undefined}
+          className={isMobile ? (mobileTab === "chat" ? `pane-enter-from-${paneMove.current.side}` : "mobile-hidden") : undefined}
         />
 
         <InfoPanel
@@ -440,7 +461,7 @@ export function PlayView(props: PlayViewProps) {
           }}
           onOpenTimelines={() => setTimelinesOpen(true)}
           actionLoading={actionLoading}
-          className={isMobile && mobileTab !== "info" ? "mobile-hidden" : undefined}
+          className={isMobile ? (mobileTab === "info" ? `pane-enter-from-${paneMove.current.side}` : "mobile-hidden") : undefined}
         />
       </section>
 
@@ -455,7 +476,7 @@ export function PlayView(props: PlayViewProps) {
             aria-selected={mobileTab === "scene"}
           >
             <span className="mobile-tab-icon" aria-hidden="true">
-              <Icon name="Compass" size={20} />
+              <Icon name="Compass" size={16} />
             </span>
             <span className="mobile-tab-label">Scene</span>
           </button>
@@ -468,7 +489,7 @@ export function PlayView(props: PlayViewProps) {
             aria-selected={mobileTab === "chat"}
           >
             <span className="mobile-tab-icon" aria-hidden="true">
-              <Icon name="MessageSquare" size={20} />
+              <Icon name="MessageSquare" size={16} />
             </span>
             <span className="mobile-tab-label">Chat</span>
           </button>
@@ -481,7 +502,7 @@ export function PlayView(props: PlayViewProps) {
             aria-selected={mobileTab === "info"}
           >
             <span className="mobile-tab-icon" aria-hidden="true">
-              <Icon name="BookOpen" size={20} />
+              <Icon name="BookOpen" size={16} />
             </span>
             <span className="mobile-tab-label">Info</span>
           </button>

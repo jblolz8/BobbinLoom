@@ -863,6 +863,12 @@
   margin-left: auto;
   opacity: 0;
   transition: opacity 0.15s ease;
+  /* A full chapter opening carries several actions and its longest label — "Re-summarize previous
+     chapter" — is wider than a phone's chat column. Without a wrap and a shrinkable floor the row
+     widened the message list instead, which let the whole chat be dragged sideways. */
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .message:hover .message-actions,
@@ -2959,13 +2965,19 @@
   /* The fixed mobile tab bar is 58px tall. Zero the play view's own bottom padding and
      let the layout reserve the bar height, a 0.5rem breathing gap so the panel does not
      sit flush against the bar, and the iOS safe area. */
+  /* One number owns the fixed tab bar: the bar's own height and the space the layout reserves for
+     it. They were written separately and had to be kept in step by hand. */
+  :root {
+    --mobile-tab-bar-height: 44px;
+  }
+
   .play-view-shell {
     padding-bottom: 0;
   }
 
   .layout {
     grid-template-columns: 1fr;
-    padding-bottom: calc(58px + 0.5rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(var(--mobile-tab-bar-height) + 0.5rem + env(safe-area-inset-bottom, 0px));
   }
 
   .mobile-hidden {
@@ -2984,7 +2996,7 @@
     bottom: 0;
     left: 0;
     right: 0;
-    height: calc(58px + env(safe-area-inset-bottom, 0px));
+    height: calc(var(--mobile-tab-bar-height) + env(safe-area-inset-bottom, 0px));
     padding-bottom: env(safe-area-inset-bottom, 0px);
     background: var(--bg-panel);
     backdrop-filter: blur(16px) saturate(180%);
@@ -3215,17 +3227,17 @@
 .mobile-tab {
   flex: 1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 6px;
   border: none;
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
   border-radius: 10px;
-  padding: 6px 0;
-  margin: 5px 0;
+  padding: 0 0.6rem;
+  margin: 6px 0;
   position: relative;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   -webkit-tap-highlight-color: transparent;
@@ -3242,7 +3254,7 @@
 }
 
 .mobile-tab-label {
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 500;
   letter-spacing: 0.02em;
   line-height: 1;
@@ -3266,25 +3278,13 @@
 }
 
 .mobile-tab.active .mobile-tab-icon {
-  transform: translateY(-1px) scale(1.08);
+  transform: scale(1.08);
   color: var(--accent-highlight, var(--accent-base));
 }
 
 .mobile-tab.active .mobile-tab-label {
   font-weight: 600;
   color: var(--accent-highlight, var(--accent-base));
-}
-
-.mobile-tab.active::before {
-  content: "";
-  position: absolute;
-  top: -5px;
-  left: 20%;
-  right: 20%;
-  height: 3px;
-  background: var(--accent-highlight, var(--accent-base));
-  border-radius: 0 0 3px 3px;
-  box-shadow: 0 0 8px var(--accent-translucent);
 }
 
 /* ── Unified AppHeader & Navigation Tabs ── */
@@ -8572,4 +8572,42 @@ button.ai-brainstorm-toggle-btn.active,
 .playthrough-row:has(.playthrough-row-open:focus-visible) {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* ── A panel arriving ──────────────────────────────────────────────────────────────────────────
+   The single-panel layout swaps instantly when the tab bar is tapped or a swipe lands; this gives
+   the arriving panel a short directional slide so a swipe reads as a swipe. The animation does not
+   need to be re-triggered by hand: an animation on a `display: none` element does not run, and it
+   starts from the beginning when the element is displayed — which is exactly what a panel change
+   does. Motion is opt-out, so a reduced-motion preference gets the instant swap. */
+@media (prefers-reduced-motion: no-preference) {
+  .pane-enter-from-left {
+    animation: pane-enter-left 150ms ease-out;
+  }
+
+  .pane-enter-from-right {
+    animation: pane-enter-right 150ms ease-out;
+  }
+}
+
+@keyframes pane-enter-left {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pane-enter-right {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
