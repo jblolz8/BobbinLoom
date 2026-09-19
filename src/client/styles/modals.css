@@ -7959,21 +7959,18 @@ button.crop-auto-detect-btn:hover:not(:disabled),
 /* ── The rename dialog ─────────────────────────────────────────────────────────────────────────
    A field that is not inside a clickable card: nothing to bubble into, and the form's own Enter and
    Escape come from the dialog shell. */
-.rename-modal-input {
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--input-background, var(--card));
-  color: var(--foreground);
-  font: inherit;
+
+/* The rename dialog: the shared dialog, one field, the actions. The field skin belongs to
+   `TextInput`, so — like the close-chapter dialog — nothing here restyles a primitive except the
+   spacing, which is what made the field sit flush against the buttons. */
+.modal.rename-modal {
+  width: min(420px, 100%);
 }
 
-.rename-modal-input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+.rename-modal .form-field {
+  margin-bottom: 0.9rem;
 }
 
-.rename-form {
-  display: block;
+.rename-modal .settings-actions {
+  margin-top: 0.25rem;
 }

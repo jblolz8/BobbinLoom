@@ -1,6 +1,6 @@
 import { useId, useRef, useState, type FormEvent } from "react";
 import { isRenameable } from "../../engine/dialogFocus";
-import { Button } from "../base";
+import { Button, TextInput } from "../base";
 import { Dialog } from "../base/Dialog";
 
 export type RenameModalProps = {
@@ -52,7 +52,6 @@ export function RenameModal({
     <Dialog
       title={title}
       className="rename-modal"
-      maxWidth={420}
       onClose={onCancel}
       isBusy={isSaving}
       // Unlike a destructive dialog this one opens on the field: the reason the dialog is open at all
@@ -69,24 +68,20 @@ export function RenameModal({
         </>
       }
     >
-      <form id={formId} className="rename-form" onSubmit={submit}>
-        <div className="form-field">
-          <label className="field-label-text" htmlFor="rename-modal-input">
-            {label}
-          </label>
-          <input
-            id="rename-modal-input"
-            ref={inputRef}
-            className="rename-modal-input"
-            value={draft}
-            autoComplete="off"
-            onChange={(event) => setDraft(event.target.value)}
-            // The whole name selected on focus: typing replaces it, which is what a rename usually is.
-            onFocus={(event) => event.currentTarget.select()}
-          />
-          {errorMessage ? <span className="field-hint error">{errorMessage}</span> : null}
-        </div>
-        {/* A submit button is associated from the footer, so Enter in the field submits the form. */}
+      <form id={formId} onSubmit={submit}>
+        {/* The design system's own field. It brings the label, the skin, the height and the error
+            line, so this dialog has no field styling of its own to keep in step with the app. */}
+        <TextInput
+          id="rename-modal-input"
+          ref={inputRef}
+          label={label}
+          value={draft}
+          error={errorMessage ?? undefined}
+          autoComplete="off"
+          onChange={(event) => setDraft(event.target.value)}
+          // The whole name selected on focus: typing replaces it, which is what a rename usually is.
+          onFocus={(event) => event.currentTarget.select()}
+        />
       </form>
     </Dialog>
   );
