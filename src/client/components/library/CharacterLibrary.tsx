@@ -437,7 +437,9 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
   const [templates, setTemplates] = useState<CharacterTemplate[]>([]);
   const [form, setForm] = useState<CharacterForm>(blankForm());
   const [initialForm, setInitialForm] = useState<CharacterForm>(blankForm());
-  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  /** The action to run once the reader accepts losing their unsaved work — closing the editor or
+   *  opening a different character. Null means the confirmation is not up. */
+  const [discardConfirm, setDiscardConfirm] = useState<{ after: () => void } | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingIsCcv2, setEditingIsCcv2] = useState(false);
@@ -671,11 +673,13 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     setAiMessages(((stored ?? []).filter(isBrainstormMessage) as BrainstormChatMessage[]));
   }, [editorOpen, editingId]);
 
-  function persistBrainstormSession(messages: BrainstormChatMessage[]) {
-    if (!editingId) return;
+  function persistBrainstormSession(messages: BrainstormChatMessage[], id = editingId) {
+    // The id is a parameter because the first save of a new character sets state that this closure
+    // will not see until the next render, and those messages are exactly the ones at risk.
+    if (!id) return;
     try {
       window.localStorage.setItem(
-        brainstormStorageKey(editingId),
+        brainstormStorageKey(id),
         encodeBrainstormSession(trimBrainstormMessages(messages))
       );
     } catch {
@@ -698,7 +702,10 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     return false;
   }, [form, initialForm, editorOpen]);
 
-  const hasUnsavedSession = isFormDirty || aiMessages.length > 0;
+  // A saved character's session is restored from browser storage, so having one is not a loss and
+  // should not warn. A brand-new character has no id to key a session to, and only unsaved form
+  // edits are lost for anyone else.
+  const hasUnsavedWork = isFormDirty || (!editingId && aiMessages.length > 0);
 
   const convertingCharacter = useMemo(() => {
     if (!convertingId) return null;
@@ -768,7 +775,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     setEditorOpen(true);
     setStatus(null);
     setConvertedSuccess(null);
-    setShowDiscardConfirm(false);
+    setDiscardConfirm(null);
   }
 
   function openEdit(t: CharacterTemplate) {
@@ -787,7 +794,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     setEditorOpen(true);
     setStatus(null);
     setConvertedSuccess(null);
-    setShowDiscardConfirm(false);
+    setDiscardConfirm(null);
   }
 
   function closeEditor() {
@@ -798,7 +805,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     setEditingIsCcv2(false);
     setViewTab("bl");
     setStatus(null);
-    setShowDiscardConfirm(false);
+    setDiscardConfirm(null);
     setAiBrainstormOpen(false);
     setAiMessages([]);
     setAiError(null);
@@ -806,16 +813,26 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
   }
 
   function handleCancelClick() {
-    if (hasUnsavedSession) {
-      setShowDiscardConfirm(true);
+    if (hasUnsavedWork) {
+      setDiscardConfirm({ after: closeEditor });
     } else {
       closeEditor();
     }
   }
 
+  /** Opening another character discards the open draft exactly the way closing does. */
+  function requestOpenEdit(template: CharacterTemplate) {
+    if (hasUnsavedWork) {
+      setDiscardConfirm({ after: () => openEdit(template) });
+    } else {
+      openEdit(template);
+    }
+  }
+
   function handleConfirmDiscard() {
-    setShowDiscardConfirm(false);
-    closeEditor();
+    const after = discardConfirm?.after;
+    setDiscardConfirm(null);
+    after?.();
   }
 
   /**
@@ -1117,6 +1134,8 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
           tags: canonicalTags,
         });
         setEditingId(created.id);
+        // Now that the character has an id, the conversation it already has can be kept.
+        persistBrainstormSession(aiMessages, created.id);
         setStatus(`"${form.name}" created and saved successfully.`);
       }
       setForm((prev) => ({ ...prev, tags: canonicalTags }));
@@ -2447,11 +2466,11 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                           <div
                             key={group.key}
                             className={`card-portrait ${isConverting ? "is-converting" : ""}`}
-                            onClick={() => openEdit(latest)}
+                            onClick={() => requestOpenEdit(latest)}
                             role="button"
                             tabIndex={0}
                             onKeyDown={(e) => {
-                              if (e.key === "Enter") openEdit(latest);
+                              if (e.key === "Enter") requestOpenEdit(latest);
                             }}
                           >
                             <div className="card-portrait-image-wrap">
@@ -2518,7 +2537,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                                 </div>
                                 <MoreOptionsMenu
                                   template={latest}
-                                  onEdit={() => openEdit(latest)}
+                                  onEdit={() => requestOpenEdit(latest)}
                                   onConvert={
                                     entryKind(latest) === "ccv2"
                                       ? () => handleConvert(latest)
@@ -2546,11 +2565,11 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                           <div
                             key={group.key}
                             className={`card-list-row ${isConverting ? "is-converting" : ""}`}
-                            onClick={() => openEdit(latest)}
+                            onClick={() => requestOpenEdit(latest)}
                             role="button"
                             tabIndex={0}
                             onKeyDown={(e) => {
-                              if (e.key === "Enter") openEdit(latest);
+                              if (e.key === "Enter") requestOpenEdit(latest);
                             }}
                           >
                             <CharacterAvatar template={latest} variant="list" />
@@ -2581,7 +2600,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
 
                                 <MoreOptionsMenu
                                   template={latest}
-                                  onEdit={() => openEdit(latest)}
+                                  onEdit={() => requestOpenEdit(latest)}
                                   onConvert={
                                     entryKind(latest) === "ccv2"
                                       ? () => handleConvert(latest)
@@ -2636,11 +2655,11 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                           <div
                             key={group.key}
                             className={`card-grid-item ${isConverting ? "is-converting" : ""}`}
-                            onClick={() => openEdit(latest)}
+                            onClick={() => requestOpenEdit(latest)}
                             role="button"
                             tabIndex={0}
                             onKeyDown={(e) => {
-                              if (e.key === "Enter") openEdit(latest);
+                              if (e.key === "Enter") requestOpenEdit(latest);
                             }}
                           >
                             <div className="card-grid-thumb-wrap">
@@ -2671,7 +2690,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                                 </div>
                                 <MoreOptionsMenu
                                   template={latest}
-                                  onEdit={() => openEdit(latest)}
+                                  onEdit={() => requestOpenEdit(latest)}
                                   onConvert={
                                     entryKind(latest) === "ccv2"
                                       ? () => handleConvert(latest)
@@ -2805,11 +2824,11 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
       />
 
       {/* Discard Changes Warning Modal */}
-      {showDiscardConfirm && (
+      {discardConfirm && (
         <div
           className="modal-backdrop"
           onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setShowDiscardConfirm(false);
+            if (e.target === e.currentTarget) setDiscardConfirm(null);
           }}
         >
           <section className="modal discard-warning-modal" aria-labelledby="discard-modal-title">
@@ -2823,7 +2842,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
               <button
                 type="button"
                 className="diff-close-btn"
-                onClick={() => setShowDiscardConfirm(false)}
+                onClick={() => setDiscardConfirm(null)}
                 title="Close dialog"
                 aria-label="Close dialog"
               >
@@ -2831,24 +2850,26 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
               </button>
             </header>
             <div className="discard-warning-body">
-              {aiMessages.length > 0 && isFormDirty ? (
+              {!editingId && aiMessages.length > 0 ? (
                 <p>
-                  You have unsaved changes to <strong>&quot;{form.name || "New Character"}&quot;</strong> and an active AI brainstorming session ({aiMessages.length} message{aiMessages.length === 1 ? "" : "s"}). If you leave now your edits are discarded; the brainstorm session is kept.
-                </p>
-              ) : aiMessages.length > 0 ? (
-                <p>
-                  You have an active AI brainstorming session ({aiMessages.length} message{aiMessages.length === 1 ? "" : "s"}), which is kept when you leave. Only unsaved sheet edits are lost.
+                  <strong>&quot;{form.name || "New Character"}&quot;</strong> has not been saved yet, so its AI
+                  brainstorming session ({aiMessages.length} message{aiMessages.length === 1 ? "" : "s"}) cannot be
+                  kept{isFormDirty ? ", and your edits to the sheet go with it" : ""}.
                 </p>
               ) : (
                 <p>
-                  You have unsaved changes to <strong>&quot;{form.name || "New Character"}&quot;</strong>. If you leave now, all your temporary edits will be lost.
+                  You have unsaved changes to <strong>&quot;{form.name || "New Character"}&quot;</strong>
+                  {aiMessages.length > 0
+                    ? `, and an AI brainstorming session (${aiMessages.length} message${aiMessages.length === 1 ? "" : "s"}) which is kept`
+                    : ""}
+                  . Your unsaved edits will be discarded.
                 </p>
               )}
             </div>
             <footer className="discard-warning-footer">
               <Button
                 variant="secondary"
-                onClick={() => setShowDiscardConfirm(false)}
+                onClick={() => setDiscardConfirm(null)}
               >
                 Keep Editing
               </Button>
