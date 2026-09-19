@@ -803,6 +803,22 @@
     align-items: stretch;
     justify-content: stretch;
   }
+
+  /* The header's two blocks stop competing for one row. The actions row is shrink-proof (it holds
+     two buttons), so beside a wrapping subtitle it took the room instead: measured at 375px with a
+     custom cover, the title column was 112px wide and 23.6% of the sheet tall. Stacked, the title
+     gets the full width back and the header fits in one line. */
+  .modal.gallery-modal .modal-header {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .gallery-modal-title {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
 }
 
 .rename-input {

@@ -96,15 +96,19 @@ export function GalleryModal({
           aria-label="Gallery media"
         >
           <header className="modal-header">
-            <div>
+            {/* Two blocks, one row on a wide screen — the title block and the actions. On a phone
+                they stack instead of competing: a shrink-proof actions row beside a wrapping
+                sentence measured the subtitle column down to 112px and seven lines. */}
+            <div className="gallery-modal-title">
               <h2>Gallery Media</h2>
               <p>
                 {media.length === 0
                   ? "No images in this story yet."
-                  : `${media.length} ${media.length === 1 ? "image" : "images"} from ${playthroughName}, every chapter included. ` +
-                    (hasManualCover
-                      ? "The cover is your pick below."
-                      : "The cover follows the latest image automatically.")}
+                  : `${media.length} ${media.length === 1 ? "image" : "images"}` +
+                    (chapters.length > 0
+                      ? ` · ${chapters.length} ${chapters.length === 1 ? "chapter" : "chapters"}`
+                      : "") +
+                    (hasManualCover ? " · custom cover" : "")}
               </p>
               {errorMessage ? <p className="gallery-modal-error">{errorMessage}</p> : null}
             </div>
