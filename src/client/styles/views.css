@@ -8625,3 +8625,23 @@ button.ai-brainstorm-toggle-btn.active,
     transform: none;
   }
 }
+
+/* ── A panel under the finger ──────────────────────────────────────────────────────────────────
+   While a swipe is in progress both participants share the layout's single grid cell and are
+   positioned by transform: one follows the finger, the other trails in behind it. The layout already
+   clips horizontally, and nothing is scrolled, so the panels keep their own vertical scrolling and
+   momentum. */
+.pane-dragging {
+  grid-area: 1 / 1;
+  will-change: transform;
+}
+
+.pane-settling {
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pane-settling {
+    transition: none;
+  }
+}

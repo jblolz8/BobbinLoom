@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useElapsed } from "../../../hooks/useElapsed";
 import { formatDuration, imageCaption } from "../../../engine/displayFormat";
@@ -52,6 +53,7 @@ export type ChatPanelProps = {
   rawInput: string | null;
   rawOutput: string | null;
   className?: string;
+  style?: CSSProperties;
   // ── Generated images ──
   /** Whether ANY image connection is configured. Derived in PlayView from the
    *  provider registry so this panel stays presentational. */
@@ -477,7 +479,7 @@ export function ChatPanel(props: ChatPanelProps) {
     : playthrough.messages.filter((m) => !m.hidden);
 
   return (
-    <section className={`chat-panel${className ? ` ${className}` : ""}`}>
+    <section className={`chat-panel${className ? ` ${className}` : ""}`} style={props.style}>
       <div className="messages">
         {isViewingArchive ? <div ref={messagesStartRef} /> : null}
         {isViewingArchive ? (

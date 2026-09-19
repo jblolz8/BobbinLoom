@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   buildImageUrl,
   getPromptConfig,
@@ -15,7 +15,8 @@ import { ScenePanel } from "./ScenePanel";
 import { ChatPanel } from "./ChatPanel";
 import { ImageRequestBodyModal } from "./ImageRequestBodyModal";
 import { InfoPanel } from "./InfoPanel/InfoPanel";
-import { paneIndexOf, paneSide } from "../../../engine/paneSwipe";
+import { incomingOffset, paneIndexOf, paneSide } from "../../../engine/paneSwipe";
+import { PANE_ORDER } from "../../../engine/paneSwipe";
 import { usePaneSwipe } from "../../../hooks/usePaneSwipe";
 import { PlaythroughLibrary } from "../../library/PlaythroughLibrary";
 import { SettingsModal } from "../../modals/SettingsModal";
@@ -156,6 +157,10 @@ export type PlayViewProps = {
   setAlwaysDiscardOldImage?: (always: boolean) => void;
 };
 
+/** How long the released pair takes to reach its rest position. Mirrors the CSS transition on
+ *  `.pane-settling` — change them together. */
+const PANE_SETTLE_MS = 220;
+
 export function PlayView(props: PlayViewProps) {
   const {
     playthrough,
@@ -268,20 +273,102 @@ export function PlayView(props: PlayViewProps) {
   // exists as a move — and compared against the previous panel, with the ref written only when the
   // panel actually changed, so a second render cannot flip it.
   const paneMove = useRef<{ to: string; side: "left" | "right" }>({ to: mobileTab, side: "right" });
+  // The panel a swipe carried in. Its arrival WAS the drag, so it must not also run the entry
+  // animation — that would read as one slide too many. The marker lives until the panel changes by
+  // some other means, so an unrelated re-render cannot sneak the animation back in.
+  const draggedInto = useRef<string | null>(null);
   if (paneMove.current.to !== mobileTab) {
     paneMove.current = {
       to: mobileTab,
       side: paneSide(paneIndexOf(paneMove.current.to), paneIndexOf(mobileTab))
     };
+    if (draggedInto.current !== mobileTab) draggedInto.current = null;
   }
+
+  const layoutRef = useRef<HTMLElement | null>(null);
+  // Following the finger is motion under the finger, which is what a reduced-motion preference asks
+  // to be spared. The gesture still changes panels; it just does not drag them.
+  const [reducedMotion, setReducedMotion] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReducedMotion(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  /** A drag in progress, and the release that finishes it. */
+  const [paneDrag, setPaneDrag] = useState<{ target: string; offset: number; released: boolean } | null>(null);
+  const settleTimer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
+    },
+    []
+  );
 
   // Swiping between panels, on the single-panel layout only. The handlers sit on the layout rather
   // than the document, which keeps the header and the tab bar outside the gesture.
   const paneSwipe = usePaneSwipe({
     enabled: isMobile,
+    live: !reducedMotion,
     index: paneIndexOf(mobileTab),
-    onChange: setMobileTab
+    paneWidth: () => layoutRef.current?.clientWidth ?? 0,
+    onDrag: (drag) => {
+      if (!drag) {
+        setPaneDrag(null);
+        return;
+      }
+      const target = PANE_ORDER[drag.targetIndex];
+      if (!target) return;
+      // The incoming panel is shown from the first move, so the pair is already a pair.
+      setPaneDrag({ target, offset: drag.offset, released: false });
+    },
+    onSettle: ({ targetIndex, committed }) => {
+      const target = PANE_ORDER[targetIndex];
+      if (!target) {
+        setPaneDrag(null);
+        return;
+      }
+      const width = layoutRef.current?.clientWidth ?? 0;
+      // Where the pair comes to rest: the neighbour in, or back where it started.
+      const rest = committed ? (targetIndex > paneIndexOf(mobileTab) ? -width : width) : 0;
+      setPaneDrag({ target, offset: rest, released: true });
+      if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
+      settleTimer.current = window.setTimeout(() => {
+        settleTimer.current = null;
+        if (committed) {
+          draggedInto.current = target;
+          setMobileTab(target);
+        }
+        setPaneDrag(null);
+      }, PANE_SETTLE_MS);
+    }
   });
+
+  /**
+   * Class and transform for one panel: which one is showing, the arriving panel's slide, and both
+   * participants' live positions while a swipe is under the finger.
+   */
+  function paneLayout(pane: string): { className?: string; style?: CSSProperties } {
+    if (!isMobile) return {};
+    if (paneDrag) {
+      const settled = paneDrag.released ? " pane-settling" : "";
+      if (pane === mobileTab) {
+        return { className: `pane-dragging${settled}`, style: { transform: `translateX(${paneDrag.offset}px)` } };
+      }
+      if (pane === paneDrag.target) {
+        const width = layoutRef.current?.clientWidth ?? 0;
+        const offset = incomingOffset(paneDrag.offset, paneIndexOf(mobileTab), paneIndexOf(paneDrag.target), width);
+        return { className: `pane-dragging${settled}`, style: { transform: `translateX(${offset}px)` } };
+      }
+      return { className: "mobile-hidden" };
+    }
+    if (mobileTab !== pane) return { className: "mobile-hidden" };
+    // Arrived by drag: no entry animation, it already moved.
+    return draggedInto.current === pane ? {} : { className: `pane-enter-from-${paneMove.current.side}` };
+  }
 
   // The retry confirmation's own "always" tick. Deliberately NOT seeded from the
   // setting: this modal only appears while the setting is OFF, and a tick here is
@@ -364,12 +451,12 @@ export function PlayView(props: PlayViewProps) {
         />
       ) : null}
 
-      <section className="layout" {...paneSwipe}>
+      <section className="layout" ref={layoutRef} {...paneSwipe}>
         <ScenePanel
           playthrough={playthrough}
           actionLoading={actionLoading}
           onQuestAction={handleQuestAction}
-          className={isMobile ? (mobileTab === "scene" ? `pane-enter-from-${paneMove.current.side}` : "mobile-hidden") : undefined}
+          {...paneLayout("scene")}
         />
 
         <ChatPanel
@@ -437,7 +524,7 @@ export function PlayView(props: PlayViewProps) {
           }}
           onImagePromptRerun={() => { void rerunImagePrompt?.(); }}
           onImagePromptClose={closeImagePrompt}
-          className={isMobile ? (mobileTab === "chat" ? `pane-enter-from-${paneMove.current.side}` : "mobile-hidden") : undefined}
+          {...paneLayout("chat")}
         />
 
         <InfoPanel
@@ -461,7 +548,7 @@ export function PlayView(props: PlayViewProps) {
           }}
           onOpenTimelines={() => setTimelinesOpen(true)}
           actionLoading={actionLoading}
-          className={isMobile ? (mobileTab === "info" ? `pane-enter-from-${paneMove.current.side}` : "mobile-hidden") : undefined}
+          {...paneLayout("info")}
         />
       </section>
 

@@ -12,9 +12,62 @@ export type MobilePane = (typeof PANE_ORDER)[number];
 
 export type SwipeIntent = "next" | "previous";
 
-/** How far a drag must travel to mean a panel change, and how clearly horizontal it must be. */
+/** How far a drag must travel to mean a panel change, and how clearly horizontal it must be.
+ *  Used when the panels cannot follow the finger (a reduced-motion preference). */
 export const SWIPE_THRESHOLD_PX = 60;
 export const SWIPE_DOMINANCE = 2;
+
+/** Before this much travel, a drag has not decided which axis it belongs to. */
+export const SWIPE_AXIS_LOCK_PX = 12;
+
+/** How far a released drag must have travelled to land on the neighbour, as a share of the panel. */
+export const SWIPE_COMMIT_RATIO = 0.4;
+
+/** A throw this fast lands on the neighbour even if it did not travel far, in px per ms. */
+export const SWIPE_FLICK_VELOCITY = 0.4;
+
+export type SwipeSample = { x: number; t: number };
+
+/**
+ * How fast the end of a gesture was travelling, in px per ms, positive to the right.
+ *
+ * Measured over the tail of the samples rather than the whole gesture: a swipe usually starts slowly
+ * and is thrown at the end, and it is the throw that should decide.
+ */
+export function swipeVelocity(samples: SwipeSample[], windowSize = 3): number {
+  if (samples.length < 2) return 0;
+  const tail = samples.slice(-Math.max(2, windowSize));
+  const first = tail[0];
+  const last = tail[tail.length - 1];
+  const dt = last.t - first.t;
+  if (!first || !last || dt <= 0) return 0;
+  return (last.x - first.x) / dt;
+}
+
+/**
+ * Whether a released drag should land on the neighbouring panel.
+ *
+ * Far enough, or thrown hard enough in the direction it was travelling — whichever comes first. A
+ * short lazy drag goes back where it came from.
+ */
+export function commitSwipe(
+  { offset, velocity, width }: { offset: number; velocity: number; width: number },
+  { ratio = SWIPE_COMMIT_RATIO, flick = SWIPE_FLICK_VELOCITY } = {}
+): boolean {
+  if (width <= 0) return false;
+  if (Math.abs(offset) >= width * ratio) return true;
+  return Math.abs(velocity) >= flick && Math.sign(velocity) === Math.sign(offset);
+}
+
+/**
+ * Where the panel being pulled in sits while a drag is at `offset`.
+ *
+ * Within a panel's width of the drag, on the far side: dragging left brings the next panel in from
+ * the right, and the two arrive together.
+ */
+export function incomingOffset(offset: number, from: number, to: number, width: number): number {
+  return to > from ? offset + width : offset - width;
+}
 
 export function paneIndexOf(pane: string): number {
   return (PANE_ORDER as readonly string[]).indexOf(pane);

@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { useState } from "react";
 import type { Playthrough } from "../../../../../schemas";
 import type { TokenUsage } from "../../../../api";
@@ -29,14 +30,15 @@ export type InfoPanelProps = {
   onOpenTimelines?: () => void;
   actionLoading: boolean;
   className?: string;
+  style?: CSSProperties;
 };
 
 export function InfoPanel(props: InfoPanelProps) {
-  const { playthrough, className } = props;
+  const { playthrough, className, style } = props;
   const [activeTab, setActiveTab] = useState<TabId>("player");
 
   return (
-    <aside className={`panel info-panel${className ? ` ${className}` : ""}`}>
+    <aside className={`panel info-panel${className ? ` ${className}` : ""}`} style={style}>
       <div className="info-panel-tabs-header">
         <Tabs<TabId>
           tabs={INFO_TABS}

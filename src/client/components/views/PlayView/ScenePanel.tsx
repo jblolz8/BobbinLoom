@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { useState } from "react";
 import type { Playthrough, Quest } from "../../../../schemas";
 import type { QuestAction } from "../../../api";
@@ -10,6 +11,7 @@ export type ScenePanelProps = {
   actionLoading: boolean;
   onQuestAction: (questId: string, action: QuestAction, name?: string, summary?: string) => void;
   className?: string;
+  style?: CSSProperties;
 };
 
 type EditState = {
@@ -27,7 +29,7 @@ function visibleQuests(quests: Quest[]): Quest[] {
   return quests.filter((q) => q.tracking || q.status === "active");
 }
 
-export function ScenePanel({ playthrough, actionLoading, onQuestAction, className }: ScenePanelProps) {
+export function ScenePanel({ playthrough, actionLoading, onQuestAction, className, style }: ScenePanelProps) {
   const [editing, setEditing] = useState<EditState>(null);
   const [deleting, setDeleting] = useState<DeleteConfirm>(null);
 
@@ -51,7 +53,7 @@ export function ScenePanel({ playthrough, actionLoading, onQuestAction, classNam
   const currentLocation = playthrough.locationCatalog?.find((l) => l.id === playthrough.locationId);
 
   return (
-    <aside className={`panel left-panel${className ? ` ${className}` : ""}`}>
+    <aside className={`panel left-panel${className ? ` ${className}` : ""}`} style={style}>
       <div className="scene-panel-content">
         <article className="card scene-overview-card">
           <div className="scene-card-header">

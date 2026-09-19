@@ -77,10 +77,13 @@ Everything is designed to collapse at one breakpoint, **1100px**:
   in the Journal opens the chat panel, because on a phone the transcript would otherwise be
   written into a panel that is not on screen
 - **Panels can be swiped** — left for the next one (Scene → Chat → Info), right for the previous,
-  stopping at the ends rather than wrapping. The arriving panel slides in over 150ms. A panel's own
-  horizontal controls keep the gesture: a swipe that starts on a code block, on the info panel's tab
-  strip, or on the screen's left edge does what it would normally do, and a mostly-vertical drag
-  scrolls instead
+  stopping at the ends rather than wrapping. The panel follows your finger and the neighbour comes in
+  behind it; releasing past about 40% of the panel, or throwing it, lands on that panel, and a short
+  or slow drag springs back. Tapping a tab still swaps panels with a 150ms slide. A panel's own
+  horizontal controls keep the gesture: a swipe starting on a code block, on the info panel's tab
+  strip, or on the screen's left edge does what it would normally do, and a drag that is more
+  vertical than horizontal scrolls the panel instead. With **reduced motion** set, panels do not
+  follow the finger — a swipe still changes the panel, without the movement
 
 Full-screen dialogs on small screens use the dynamic viewport height so the browser's own
 chrome can't crop them, and the scrollable region inside a dialog is the only thing that
