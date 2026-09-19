@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { RenameModal } from "../common/RenameModal";
 import {
   ReactFlow,
   Controls,
@@ -120,8 +121,9 @@ export function TimelineModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedPlaythrough, setSelectedPlaythrough] = useState<Playthrough | null>(null);
-  const [renaming, setRenaming] = useState(false);
-  const [renameDraft, setRenameDraft] = useState("");
+  const [renameTarget, setRenameTarget] = useState<Playthrough | null>(null);
+  const [renameSaving, setRenameSaving] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -146,7 +148,7 @@ export function TimelineModal({
       void fetchPlaythroughs();
       setSelectedPlaythrough(activePlaythrough);
       setDeleteConfirmId(null);
-      setRenaming(false);
+      setRenameTarget(null);
     }
   }, [open, fetchPlaythroughs, activePlaythrough]);
 
@@ -160,7 +162,7 @@ export function TimelineModal({
 
   const handleSelect = useCallback((p: Playthrough) => {
     setSelectedPlaythrough(p);
-    setRenaming(false);
+    setRenameTarget(null);
     setDeleteConfirmId(null);
   }, []);
 
@@ -188,19 +190,25 @@ export function TimelineModal({
     [selectedPlaythrough, activePlaythrough, fetchPlaythroughs]
   );
 
+  // The name comes from the dialog; the row it belongs to is the selection.
   const handleRename = useCallback(
-    async (id: string) => {
-      if (!renameDraft.trim()) return;
+    async (name: string) => {
+      const target = renameTarget;
+      if (!target || !name.trim()) return;
+      setRenameSaving(true);
+      setRenameError(null);
       try {
-        const updated = await renamePlaythrough(id, renameDraft.trim());
-        setPlaythroughs((prev) => prev.map((p) => (p.id === id ? updated : p)));
+        const updated = await renamePlaythrough(target.id, name.trim());
+        setPlaythroughs((prev) => prev.map((p) => (p.id === target.id ? updated : p)));
         setSelectedPlaythrough(updated);
-        setRenaming(false);
+        setRenameTarget(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        setRenameError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setRenameSaving(false);
       }
     },
-    [renameDraft]
+    [renameTarget]
   );
 
   const handlePromote = useCallback(
@@ -433,41 +441,28 @@ export function TimelineModal({
             <div className="timeline-inspector-main">
               <div className="inspector-info">
                 <div className="inspector-title-row">
-                  {renaming ? (
-                    <div className="inspector-rename-box">
-                      <input
-                        type="text"
-                        value={renameDraft}
-                        onChange={(e) => setRenameDraft(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") void handleRename(selectedPlaythrough.id);
-                          if (e.key === "Escape") setRenaming(false);
-                        }}
-                        autoFocus
-                      />
-                      <button
-                        className="primary-btn"
-                        onClick={() => void handleRename(selectedPlaythrough.id)}
-                      >
-                        Save
-                      </button>
-                      <button onClick={() => setRenaming(false)}>Cancel</button>
-                    </div>
-                  ) : (
-                    <>
-                      <h3 title={selectedPlaythrough.name}>{selectedPlaythrough.name}</h3>
-                      <button
-                        className="rename-icon-btn"
-                        onClick={() => {
-                          setRenameDraft(selectedPlaythrough.name);
-                          setRenaming(true);
-                        }}
-                        title="Rename timeline"
-                      >
-                        <Icon name="Edit3" size={13} />
-                      </button>
-                    </>
-                  )}
+                  <h3 title={selectedPlaythrough.name}>{selectedPlaythrough.name}</h3>
+                  <button
+                    className="rename-icon-btn"
+                    onClick={() => {
+                      setRenameError(null);
+                      setRenameTarget(selectedPlaythrough);
+                    }}
+                    title="Rename timeline"
+                  >
+                    <Icon name="Edit3" size={13} />
+                  </button>
+                  {renameTarget ? (
+                    <RenameModal
+                      title="Rename Timeline"
+                      label="Timeline name"
+                      initialValue={renameTarget.name}
+                      isSaving={renameSaving}
+                      errorMessage={renameError}
+                      onSave={(name) => { void handleRename(name); }}
+                      onCancel={() => setRenameTarget(null)}
+                    />
+                  ) : null}
                   {selectedIsActive ? (
                     <span className="inspector-active-pill">CURRENT TIMELINE</span>
                   ) : null}

@@ -15,6 +15,13 @@ Each item shows a cover image, the playthrough's name, its current location, tur
 size, when it was last touched, and a two-line preview of the most recent message. The **⋮**
 menu offers **Rename**, **Duplicate** and **Delete**.
 
+**Rename** opens a small dialog with the current name selected, so typing replaces it: Enter saves,
+Escape or Cancel leaves it alone, and a failure is reported in the dialog that asked. The name on a
+card is also the card's navigation target — clicking anywhere on the card opens the playthrough, the
+**⋮** menu sits above that clickable area, and **Tab** reaches the name, where Enter or Space opens
+the story. Neither one can steal the other's keystrokes: an empty or blank name is refused rather
+than sent.
+
 Two view modes, switched by the toolbar's **Grid** / **List** buttons and remembered per device:
 **Grid** shows the cover as a wide banner above the text, **List** shows it as a small thumbnail
 beside the title. **Search** matches the name and the location, the sort control orders by

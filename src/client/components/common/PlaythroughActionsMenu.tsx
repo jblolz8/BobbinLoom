@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { createPortal } from "react-dom";
 import type { Playthrough } from "../../../schemas";
 import { deletePlaythrough, duplicatePlaythrough } from "../../api";
 import { ConfirmModal } from "./ConfirmModal";
@@ -92,19 +91,16 @@ export function PlaythroughActionsMenu(props: PlaythroughActionsMenuProps) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {deleteConfirm
-        ? createPortal(
-            <ConfirmModal
-              title="Delete Playthrough"
-              message={`Delete "${playthroughName}"? This cannot be undone.`}
-              confirmLabel="Delete"
-              danger
-              onConfirm={() => { void confirmDelete(); }}
-              onCancel={() => setDeleteConfirm(false)}
-            />,
-            document.body
-          )
-        : null}
+      {deleteConfirm ? (
+        <ConfirmModal
+          title="Delete Playthrough"
+          message={`Delete "${playthroughName}"? This cannot be undone.`}
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => { void confirmDelete(); }}
+          onCancel={() => setDeleteConfirm(false)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -1536,45 +1536,10 @@
   color: var(--text-primary);
 }
 
-.rename-actions {
-  display: flex;
-  gap: 0.2rem;
-  flex-shrink: 0;
-}
-
-.rename-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  user-select: none;
-  transition: background-color 0.15s ease, color 0.15s ease;
-}
-
-.rename-action.save {
-  color: var(--status-success);
-  background: rgba(74, 222, 128, 0.15);
+@media (hover: hover) {
 }
 
 @media (hover: hover) {
-  .rename-action.save:hover {
-    background: rgba(74, 222, 128, 0.25);
-  }
-}
-
-.rename-action.cancel {
-  color: var(--status-danger);
-  background: rgba(248, 113, 113, 0.15);
-}
-
-@media (hover: hover) {
-  .rename-action.cancel:hover {
-    background: rgba(248, 113, 113, 0.25);
-  }
 }
 
 .playthrough-delete-btn {
@@ -8564,4 +8529,47 @@ button.ai-brainstorm-toggle-btn.active,
 .journal-media-count {
   font-size: 0.78rem;
   color: var(--text-secondary);
+}
+
+
+/* ── Library cards: the name is the navigation target ──────────────────────────────────────────
+   The card used to BE a button (`role="button"` with a key handler), which nested a text field and a
+   menu inside it: a space in the field bubbled up and opened the playthrough, and a click-drag that
+   left the field fired its click on the card. The card is now a plain container, the name is a real
+   button, and its `::after` stretches the hit area over the whole card. The action menu keeps a
+   z-index so it stays above that overlay. */
+.playthrough-card,
+.playthrough-row {
+  position: relative;
+}
+
+.playthrough-card-open,
+.playthrough-row-open {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.playthrough-card-open::after,
+.playthrough-row-open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.playthrough-card-header-right,
+.playthrough-row-actions {
+  position: relative;
+  z-index: 1;
+}
+
+.playthrough-card:has(.playthrough-card-open:focus-visible),
+.playthrough-row:has(.playthrough-row-open:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

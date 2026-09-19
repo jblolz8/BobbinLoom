@@ -1,5 +1,6 @@
-import { useEffect, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { Button } from "../base";
+import { Dialog } from "../base/Dialog";
 
 export type ConfirmModalProps = {
   title: string;
@@ -16,6 +17,14 @@ export type ConfirmModalProps = {
   onCancel: () => void;
 };
 
+/**
+ * The app's confirm dialog: a question, a destructive or primary action, and a way out.
+ *
+ * The markup, the Escape handling and the focus rules live in `Dialog` — this keeps only what makes
+ * it a confirmation: the wording, the accent of the action, and the fact that **Cancel holds the
+ * focus when it opens**, so the safe answer is the one a stray Enter takes and the trigger behind
+ * the dialog stops being the focused element (which is what used to keep its tooltip on screen).
+ */
 export function ConfirmModal(props: ConfirmModalProps) {
   const {
     title,
@@ -31,37 +40,19 @@ export function ConfirmModal(props: ConfirmModalProps) {
     onConfirm,
     onCancel,
   } = props;
-
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !isLoading) {
-        onCancel();
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onCancel, isLoading]);
-
-  function handleBackdropMouseDown(e: React.MouseEvent) {
-    if (e.target === e.currentTarget && !isLoading) {
-      onCancel();
-    }
-  }
+  const cancelRef = useRef<HTMLButtonElement | null>(null);
 
   return (
-    <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown}>
-      <section
-        className={`modal confirm-modal${className ? ` ${className}` : ""}`.trim()}
-        style={maxWidth !== undefined ? { maxWidth } : undefined}
-      >
-        <header className="modal-header">
-          <div>
-            <h2>{title}</h2>
-            {message ? (typeof message === "string" ? <p>{message}</p> : message) : null}
-          </div>
-        </header>
-        {children}
-        <div className="settings-actions">
+    <Dialog
+      title={title}
+      description={message}
+      className={`confirm-modal${className ? ` ${className}` : ""}`.trim()}
+      maxWidth={maxWidth}
+      onClose={onCancel}
+      isBusy={isLoading}
+      initialFocusRef={cancelRef}
+      footer={
+        <>
           <Button
             variant={danger ? "danger" : "primary"}
             onClick={onConfirm}
@@ -71,14 +62,17 @@ export function ConfirmModal(props: ConfirmModalProps) {
             {confirmLabel}
           </Button>
           <Button
+            ref={cancelRef}
             variant="secondary"
             onClick={onCancel}
             disabled={isLoading}
           >
             {cancelLabel}
           </Button>
-        </div>
-      </section>
-    </div>
+        </>
+      }
+    >
+      {children}
+    </Dialog>
   );
 }

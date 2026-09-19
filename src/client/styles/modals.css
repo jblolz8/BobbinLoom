@@ -821,22 +821,6 @@
   }
 }
 
-.rename-input {
-  border: 1px solid var(--border-main);
-  background: var(--input-bg);
-  color: var(--text-primary);
-  border-radius: 6px;
-  padding: 0.3rem 0.5rem;
-  font-size: 0.85rem;
-  width: 200px;
-}
-
-.rename-input:focus {
-  outline: none;
-  border-color: var(--input-focus-border);
-  box-shadow: 0 0 0 2px var(--input-focus-ring);
-}
-
 /* Persona Manager */
 .persona-manager {
   width: min(1080px, 96vw);
@@ -7741,21 +7725,6 @@ button.crop-auto-detect-btn:hover:not(:disabled),
   background: rgba(255, 255, 255, 0.06);
 }
 
-.inspector-rename-box {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.inspector-rename-box input {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.85rem;
-  background: #090c13;
-  border: 1px solid #38bdf8;
-  color: #fff;
-  border-radius: 4px;
-}
-
 .inspector-active-pill {
   font-size: 0.65rem;
   font-weight: 700;
@@ -7984,4 +7953,27 @@ button.crop-auto-detect-btn:hover:not(:disabled),
   background: var(--media-scrim-hover);
   border-color: var(--media-border);
   color: var(--media-icon);
+}
+
+
+/* ── The rename dialog ─────────────────────────────────────────────────────────────────────────
+   A field that is not inside a clickable card: nothing to bubble into, and the form's own Enter and
+   Escape come from the dialog shell. */
+.rename-modal-input {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--input-background, var(--card));
+  color: var(--foreground);
+  font: inherit;
+}
+
+.rename-modal-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.rename-form {
+  display: block;
 }

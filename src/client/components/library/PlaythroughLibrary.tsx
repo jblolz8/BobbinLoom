@@ -4,6 +4,7 @@ import { listPlaythroughs, renamePlaythrough, type PlaythroughSummary } from "..
 import { usePagination } from "../../hooks/usePagination";
 import { Badge, Button, CoverArt, Icon, Pagination, SearchBar, SimpleSelect } from "../base";
 import { PlaythroughActionsMenu } from "../common/PlaythroughActionsMenu";
+import { RenameModal } from "../common/RenameModal";
 
 export type PlaythroughLibraryVariant = "page" | "dialog";
 export type PlaythroughViewMode = "grid" | "list";
@@ -91,8 +92,10 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
   const [loading, setLoading] = useState(true);
   const [loadFailures, setLoadFailures] = useState<LoadFailure[]>([]);
   const [failuresDismissed, setFailuresDismissed] = useState(false);
-  const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [renameDraft, setRenameDraft] = useState("");
+  // Which card is being renamed, and the dialog's own state. The draft lives in the dialog.
+  const [renameTarget, setRenameTarget] = useState<{ id: string; name: string } | null>(null);
+  const [renameSaving, setRenameSaving] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [viewMode, setViewModeState] = useState<PlaythroughViewMode>(() =>
     readStored<PlaythroughViewMode>(VIEW_MODE_KEY, ["grid", "list"], "grid")
@@ -162,22 +165,42 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
   });
 
   function handleRenameRequest(id: string, name: string) {
-    setRenamingId(id);
-    setRenameDraft(name);
+    setRenameError(null);
+    setRenameTarget({ id, name });
   }
 
-  async function confirmRename(id: string) {
-    if (!renameDraft.trim()) return;
+  async function submitRename(id: string, name: string) {
+    if (!name.trim()) return;
+    setRenameSaving(true);
+    setRenameError(null);
     try {
-      const updated = await renamePlaythrough(id, renameDraft.trim());
-      setRenamingId(null);
+      const updated = await renamePlaythrough(id, name.trim());
+      setRenameTarget(null);
       if (currentPlaythroughId === id) onCurrentRenamed?.(updated);
       // The route answers with the whole document; the list is a projection, so re-read it
       // rather than splicing a document into an array of summaries.
       await refresh();
     } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
+      // A failed rename stays in the dialog that asked for it.
+      setRenameError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRenameSaving(false);
     }
+  }
+
+  /** The rename dialog, rendered by the card it belongs to (a portal renders wherever it is declared). */
+  function renameDialog(id: string, name: string) {
+    return (
+      <RenameModal
+        title="Rename Playthrough"
+        label="Playthrough name"
+        initialValue={name}
+        isSaving={renameSaving}
+        errorMessage={renameError}
+        onSave={(next) => { void submitRename(id, next); }}
+        onCancel={() => setRenameTarget(null)}
+      />
+    );
   }
 
   // The list arrives server-sorted by `updatedAt` desc, so the clone's position (and its
@@ -195,66 +218,8 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
     }
   }
 
-  function renameField(id: string, name: string) {
-    if (renamingId !== id) return null;
-    return (
-      <>
-        <input
-          className="rename-input"
-          value={renameDraft}
-          onChange={(e) => setRenameDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void confirmRename(id);
-            if (e.key === "Escape") setRenamingId(null);
-          }}
-          onClick={(e) => e.stopPropagation()}
-          autoFocus
-        />
-        <span className="rename-actions flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <span
-            role="button"
-            tabIndex={0}
-            className="rename-action save"
-            title="Save"
-            onClick={() => void confirmRename(id)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                void confirmRename(id);
-              }
-            }}
-          >
-            <Icon name="Check" size={14} />
-          </span>
-          <span
-            role="button"
-            tabIndex={0}
-            className="rename-action cancel"
-            title="Cancel"
-            onClick={() => setRenamingId(null)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                setRenamingId(null);
-              }
-            }}
-          >
-            <Icon name="X" size={14} />
-          </span>
-        </span>
-      </>
-    );
-  }
-
   function openCard(id: string) {
     onOpen(id);
-  }
-
-  function cardKeyDown(e: React.KeyboardEvent, id: string) {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      openCard(id);
-    }
   }
 
   function actionsMenu(p: PlaythroughSummary) {
@@ -314,26 +279,28 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
                 <article
                   key={p.id}
                   className={`playthrough-card ${p.id === currentPlaythroughId ? "current" : ""}`}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => openCard(p.id)}
-                  onKeyDown={(e) => cardKeyDown(e, p.id)}
                 >
                   <div className="playthrough-card-cover">
                     <CoverArt cover={p.cover} size="card" />
                   </div>
                   <div className="playthrough-card-header">
-                    {renamingId === p.id ? (
-                      renameField(p.id, p.name)
-                    ) : (
-                      <>
-                        <h3>{p.name}</h3>
-                        <div className="playthrough-card-header-right">
-                          {p.id === currentPlaythroughId ? currentBadge : null}
-                          {actionsMenu(p)}
-                        </div>
-                      </>
-                    )}
+                    {/* The name is the navigation target: a real button, stretched over the card, so
+                        nothing interactive is nested inside a button and Enter/Space come for free. */}
+                    <h3 className="playthrough-card-title">
+                      <button
+                        type="button"
+                        className="playthrough-card-open"
+                        onClick={() => openCard(p.id)}
+                        aria-current={p.id === currentPlaythroughId ? "true" : undefined}
+                      >
+                        {p.name}
+                      </button>
+                    </h3>
+                    <div className="playthrough-card-header-right">
+                      {p.id === currentPlaythroughId ? currentBadge : null}
+                      {actionsMenu(p)}
+                    </div>
+                    {renameTarget?.id === p.id ? renameDialog(p.id, p.name) : null}
                   </div>
                   <div className="playthrough-card-meta">
                     <span className="inline-flex items-center gap-1">
@@ -360,24 +327,24 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
                 <div
                   key={p.id}
                   className={`playthrough-row ${p.id === currentPlaythroughId ? "current" : ""}`}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => openCard(p.id)}
-                  onKeyDown={(e) => cardKeyDown(e, p.id)}
                 >
                   <div className="playthrough-row-cover">
                     <CoverArt cover={p.cover} size="thumb" />
                   </div>
                   <div className="playthrough-row-content">
                     <div className="playthrough-row-title-row">
-                      {renamingId === p.id ? (
-                        renameField(p.id, p.name)
-                      ) : (
-                        <>
-                          <strong className="playthrough-row-title">{p.name}</strong>
-                          {p.id === currentPlaythroughId ? currentBadge : null}
-                        </>
-                      )}
+                      <strong className="playthrough-row-title">
+                        <button
+                          type="button"
+                          className="playthrough-row-open"
+                          onClick={() => openCard(p.id)}
+                          aria-current={p.id === currentPlaythroughId ? "true" : undefined}
+                        >
+                          {p.name}
+                        </button>
+                      </strong>
+                      {p.id === currentPlaythroughId ? currentBadge : null}
+                      {renameTarget?.id === p.id ? renameDialog(p.id, p.name) : null}
                     </div>
                     <div className="playthrough-card-meta">
                       <span className="inline-flex items-center gap-1">

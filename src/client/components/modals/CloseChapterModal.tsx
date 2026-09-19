@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getChapterOpeningMode,
   listProviderConnections,
@@ -10,6 +10,7 @@ import {
 import { CHAPTER_OPENING_MODES, chapterOpeningModeInfo, chapterOpeningModeNeedsMessage } from "../../../engine/chapterLifecycle";
 import type { ChapterOpeningMode } from "../../../schemas";
 import { Button, Icon, SimpleSelect, TextArea } from "../base";
+import { Dialog } from "../base/Dialog";
 
 export type CloseChapterModalProps = {
   /** How many visible messages the running chapter holds — the operation's own gate already ran,
@@ -45,6 +46,8 @@ export function CloseChapterModal({
   const [mode, setMode] = useState<ChapterOpeningMode>("continuation");
   const [modeError, setModeError] = useState<string | null>(null);
   const [openingMessage, setOpeningMessage] = useState("");
+  // The shell moves focus itself; for a destructive write the safe answer holds it.
+  const cancelRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -105,91 +108,28 @@ export function CloseChapterModal({
     });
   }
 
-  // Escape closes the dialog — the same contract ConfirmModal gives every other one.
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && !isLoading) onCancel();
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isLoading, onCancel]);
-
+  // Escape, the backdrop, the focus and the dialog semantics all come from the shell now.
   return (
-    <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !isLoading) onCancel(); }}>
-      <section className="modal close-chapter-modal" onMouseDown={(event) => event.stopPropagation()} aria-label="Close Chapter">
-        <header className="modal-header">
-          <div>
-            <h2>Close Chapter</h2>
-            <p>
-              {visibleMessageCount} message{visibleMessageCount === 1 ? "" : "s"} in the running chapter become
-              an archived volume: the model writes a name, a one-line description and a full summary, then
-              opens the next chapter. The transcript and the memories stay.
-            </p>
-          </div>
-          <button className="flex items-center gap-1 modal-close-btn" onClick={onCancel} aria-label="Close">
-            <Icon name="X" size={14} /> Close
-          </button>
-        </header>
-
-        <div className="form-field">
-          <span className="field-label-text">Text Provider</span>
-          <SimpleSelect
-            id="close-chapter-provider"
-            size="sm"
-            variant="filled"
-            fullWidth
-            value={providerId}
-            onChange={handleProviderChange}
-            options={options}
-            placeholder="Active connection"
-            aria-label="Text provider"
-          />
-          <span className="field-hint">
-            Writes the summary and the chapter opening. Remembered for the next chapter.
-          </span>
-          {providerError ? <span className="field-hint error">{providerError}</span> : null}
-        </div>
-
-        <div className="form-field">
-          <span className="field-label-text">How the next chapter opens</span>
-          <SimpleSelect<ChapterOpeningMode>
-            id="close-chapter-mode"
-            size="sm"
-            variant="filled"
-            fullWidth
-            value={mode}
-            onChange={handleModeChange}
-            options={CHAPTER_OPENING_MODES.map((entry) => ({ value: entry.id, label: entry.label }))}
-            aria-label="How the next chapter opens"
-          />
-          <span className="field-hint">{chapterOpeningModeInfo(mode).blurb}</span>
-          {modeError ? <span className="field-hint error">{modeError}</span> : null}
-        </div>
-
-        {/* The player's own message for the new chapter. It is a normal user message there — the
-            chapter's first — so it stays editable and re-readable like any other. */}
-        <div className="form-field">
-          <label className="field-label-text" htmlFor="close-chapter-message">
-            Opening message{chapterOpeningModeNeedsMessage(mode) ? "" : " (optional)"}
-          </label>
-          <TextArea
-            id="close-chapter-message"
-            value={openingMessage}
-            onChange={(event) => setOpeningMessage(event.target.value)}
-            placeholder="Becomes the first message of the new chapter — a transition, a time skip, a first line. Leave it empty to let the connection open the scene alone."
-            rows={3}
-            aria-describedby="close-chapter-message-hint"
-          />
-          <span className="field-hint" id="close-chapter-message-hint">
-            {chapterOpeningModeNeedsMessage(mode)
-              ? "This mode follows your message exactly, so it needs one."
-              : "The new chapter starts with it, and a Retry on the opening keeps it."}
-          </span>
-        </div>
-
-        {errorMessage ? <p className="error-box">{errorMessage}</p> : null}
-
-        <div className="settings-actions">
+    <Dialog
+      title="Close Chapter"
+      className="close-chapter-modal"
+      onClose={onCancel}
+      isBusy={isLoading}
+      initialFocusRef={cancelRef}
+      headerAction={
+        <button className="flex items-center gap-1 modal-close-btn" onClick={onCancel} aria-label="Close">
+          <Icon name="X" size={14} /> Close
+        </button>
+      }
+      description={
+        <>
+          {visibleMessageCount} message{visibleMessageCount === 1 ? "" : "s"} in the running chapter become
+          an archived volume: the model writes a name, a one-line description and a full summary, then
+          opens the next chapter. The transcript and the memories stay.
+        </>
+      }
+      footer={
+        <>
           <Button
             variant="primary"
             size="md"
@@ -205,11 +145,69 @@ export function CloseChapterModal({
           >
             {isLoading ? "Closing & Summarizing…" : "Confirm & Close"}
           </Button>
-          <Button variant="secondary" size="md" onClick={onCancel} disabled={isLoading}>
+          <Button ref={cancelRef} variant="secondary" size="md" onClick={onCancel} disabled={isLoading}>
             Cancel
           </Button>
-        </div>
-      </section>
-    </div>
+        </>
+      }
+    >
+      <div className="form-field">
+        <span className="field-label-text">Text Provider</span>
+        <SimpleSelect
+          id="close-chapter-provider"
+          size="sm"
+          variant="filled"
+          fullWidth
+          value={providerId}
+          onChange={handleProviderChange}
+          options={options}
+          placeholder="Active connection"
+          aria-label="Text provider"
+        />
+        <span className="field-hint">
+          Writes the summary and the chapter opening. Remembered for the next chapter.
+        </span>
+        {providerError ? <span className="field-hint error">{providerError}</span> : null}
+      </div>
+
+      <div className="form-field">
+        <span className="field-label-text">How the next chapter opens</span>
+        <SimpleSelect<ChapterOpeningMode>
+          id="close-chapter-mode"
+          size="sm"
+          variant="filled"
+          fullWidth
+          value={mode}
+          onChange={handleModeChange}
+          options={CHAPTER_OPENING_MODES.map((entry) => ({ value: entry.id, label: entry.label }))}
+          aria-label="How the next chapter opens"
+        />
+        <span className="field-hint">{chapterOpeningModeInfo(mode).blurb}</span>
+        {modeError ? <span className="field-hint error">{modeError}</span> : null}
+      </div>
+
+      {/* The player's own message for the new chapter. It is a normal user message there — the
+          chapter's first — so it stays editable and re-readable like any other. */}
+      <div className="form-field">
+        <label className="field-label-text" htmlFor="close-chapter-message">
+          Opening message{chapterOpeningModeNeedsMessage(mode) ? "" : " (optional)"}
+        </label>
+        <TextArea
+          id="close-chapter-message"
+          value={openingMessage}
+          onChange={(event) => setOpeningMessage(event.target.value)}
+          placeholder="Becomes the first message of the new chapter — a transition, a time skip, a first line. Leave it empty to let the connection open the scene alone."
+          rows={3}
+          aria-describedby="close-chapter-message-hint"
+        />
+        <span className="field-hint" id="close-chapter-message-hint">
+          {chapterOpeningModeNeedsMessage(mode)
+            ? "This mode follows your message exactly, so it needs one."
+            : "The new chapter starts with it, and a Retry on the opening keeps it."}
+        </span>
+      </div>
+
+      {errorMessage ? <p className="error-box">{errorMessage}</p> : null}
+    </Dialog>
   );
 }

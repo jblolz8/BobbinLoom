@@ -84,6 +84,11 @@ A few patterns are consistent across every surface:
 
 - **Destructive actions confirm** in the app's own dialog, never the browser's — deleting a
   playthrough, a character, a preset or an image all ask first
+- **Every dialog follows one contract** — a labelled `role="dialog"` with `aria-modal`, Escape and
+  the backdrop to dismiss it (the backdrop only on a press that starts there, so a drag out of a
+  field does not throw the dialog away), Tab contained inside it, and focus handed to the dialog's
+  first stop — which in a destructive dialog is the safe action, and in the rename dialog is the
+  name field. When it closes, focus goes back to whatever opened it
 - **A gesture works everywhere it appears** — the ⋮ menu on a playthrough card is the same menu
   in the save/load list; the same pager component drives every paginated list
 - **Compact controls are real controls** — inline remove buttons, tag chips and menu triggers
