@@ -324,13 +324,16 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
     ).default([]),
     userMessage: z.string().min(1),
     includeOriginalCard: z.boolean().optional(),
+    allowNewSections: z.boolean().optional(),
+    providerId: z.string().optional(),
     format: z.record(z.any()).optional(),
   });
 
   app.post("/api/characters/brainstorm", async (request, reply) => {
     const body = BrainstormCharacterBody.parse(request.body ?? {});
     const controller = abortOnClientDisconnect(reply);
-    const provider = providerManager.getProvider();
+    // The chosen connection, or the active one: `getProvider` takes the same id shape everywhere.
+    const provider = providerManager.getProvider(body.providerId);
     try {
       const result = await provider.brainstormCharacter(
         {
@@ -338,6 +341,7 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
           chatHistory: body.chatHistory,
           userMessage: body.userMessage,
           includeOriginalCard: body.includeOriginalCard,
+          allowNewSections: body.allowNewSections,
           format: body.format as CharacterFormat | undefined,
         },
         controller.signal

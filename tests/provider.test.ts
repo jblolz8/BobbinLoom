@@ -543,6 +543,98 @@ describe("OpenAICompatibleProvider", () => {
     expect(sentPrompt).toContain("in this order: [Species]");
   });
 
+  it("asks for a fenced proposal block rather than a JSON envelope", async () => {
+    let sentBody: Record<string, unknown> = {};
+    let sentPrompt = "";
+    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const b = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> } & Record<string, unknown>;
+      sentBody = b;
+      sentPrompt = b.messages[0]?.content ?? "";
+      return jsonResponse({ choices: [{ message: { content: "Just an idea." } }] });
+    });
+    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+
+    await provider.brainstormCharacter(
+      {
+        character: { name: "Mira", content: "[Species]: Human" },
+        chatHistory: [],
+        userMessage: "Any ideas?",
+        format: DEFAULT_CHARACTER_FORMAT
+      },
+      undefined
+    );
+
+    // No response_format: the envelope is gone, and with it the double request some providers cost.
+    expect(sentBody.response_format).toBeUndefined();
+    expect(sentPrompt).toContain("Markdown");
+    expect(sentPrompt).toContain("```json");
+    expect(sentPrompt).not.toContain('"reply"');
+  });
+
+  it("invites a new section only when the sheet allows one", async () => {
+    const prompts: string[] = [];
+    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const b = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
+      prompts.push(b.messages[0]?.content ?? "");
+      return jsonResponse({ choices: [{ message: { content: "Fine." } }] });
+    });
+    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+    const base = {
+      character: { name: "Mira", content: "[Species]: Human" },
+      chatHistory: [],
+      userMessage: "Anything else?"
+    };
+
+    await provider.brainstormCharacter({ ...base, format: DEFAULT_CHARACTER_FORMAT }, undefined);
+    expect(prompts[0]).toContain("[Daily Life]");
+    expect(prompts[0]).not.toContain("Never invent one");
+
+    await provider.brainstormCharacter({ ...base, format: DEFAULT_CHARACTER_FORMAT, allowNewSections: false }, undefined);
+    expect(prompts[1]).toContain("Never invent one");
+  });
+
+  it("reads a fenced proposal block, and reports a section the sheet does not have", async () => {
+    const reply = [
+      "## Two ideas",
+      "",
+      "- Give her a craft",
+      "",
+      "```json",
+      JSON.stringify({
+        proposedChanges: {
+          sections: [
+            { header: "Likes", body: "- Tea brewing" },
+            { header: "Favourite Weather", body: "- Rain" }
+          ]
+        }
+      }),
+      "```"
+    ].join(String.fromCharCode(10));
+    const fetchImpl = vi.fn(async () => jsonResponse({ choices: [{ message: { content: reply } }] }));
+    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+
+    const result = await provider.brainstormCharacter(
+      {
+        character: { name: "Mira", content: "[Species]: Human\n\n[Likes]\n- Nothing" },
+        chatHistory: [],
+        userMessage: "Give her a hobby",
+        format: DEFAULT_CHARACTER_FORMAT
+      },
+      undefined
+    );
+
+    expect(result.reply).toContain("## Two ideas");
+    expect(result.reply).not.toContain("```");
+    expect(result.proposedChanges?.sections).toEqual([
+      { header: "Likes", body: "- Tea brewing" },
+      { header: "Favourite Weather", body: "- Rain" }
+    ]);
+    // New sections are allowed by default, so nothing is dropped and the addition is named.
+    expect(result.unmappedHeaders).toEqual([]);
+    expect(result.newSections).toEqual(["Favourite Weather"]);
+    expect(typeof result.model).toBe("string");
+  });
+
   it("brainstorm prompt follows the target character format instead of a hardcoded list", async () => {
     let sentPrompt = "";
     const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {

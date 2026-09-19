@@ -371,6 +371,10 @@ opening `generateTurn` run on the Text Provider field's choice (see
 | `suggestCharacterTags` | **AI tag suggestion** in the character library (`POST /api/characters/suggest-tags`) |
 | `brainstormCharacter` | **AI brainstorming assistant** for character cards (`POST /api/characters/brainstorm`) |
 
+The brainstorm request carries its own `providerId` (from the panel's settings), so a session can
+think with a connection other than the active one; tag suggestion always follows the active
+connection.
+
 The two library features (tag suggestion and brainstorming) are documented in
 `character-library.md`.
 

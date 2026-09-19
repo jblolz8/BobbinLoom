@@ -41,8 +41,17 @@ import { TwoPaneDiff } from "./TwoPaneDiff";
 import { TagSuggestionModal } from "./TagSuggestionModal";
 import { TagTaxonomyModal } from "./TagTaxonomyModal";
 import { CharacterBrainstormPanel, type BrainstormChatMessage } from "./CharacterBrainstormPanel";
+import { BrainstormSettingsModal } from "./BrainstormSettingsModal";
+import {
+  brainstormHistoryContent,
+  brainstormStorageKey,
+  decodeBrainstormSession,
+  encodeBrainstormSession,
+  isBrainstormMessage,
+  trimBrainstormMessages
+} from "../../../engine/brainstorm";
 import { CharacterVisualsDrawer } from "./CharacterVisualsDrawer";
-import { getTagTaxonomy } from "../../api";
+import { getBrainstormSettings, getTagTaxonomy, setBrainstormSettings } from "../../api";
 import { groupTagsByCategory, sortTags, type TagTaxonomyConfig } from "../../../engine/tagTaxonomy";
 
 export type CharacterLibraryProps = {
@@ -628,7 +637,51 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [includeOriginalCcv2, setIncludeOriginalCcv2] = useState(false);
+  const [brainstormProviderId, setBrainstormProviderId] = useState<string | null>(null);
+  const [brainstormAllowNewSections, setBrainstormAllowNewSections] = useState(true);
+  const [brainstormSettingsOpen, setBrainstormSettingsOpen] = useState(false);
+  const [brainstormSettingsError, setBrainstormSettingsError] = useState<string | null>(null);
+  const [revertRetryTarget, setRevertRetryTarget] = useState<{ id: string; drops: number } | null>(null);
   const aiAbortControllerRef = useRef<AbortController | null>(null);
+
+  // The assistant's settings are global, so they are read once and written as they change.
+  useEffect(() => {
+    let cancelled = false;
+    getBrainstormSettings()
+      .then((settings) => {
+        if (cancelled) return;
+        setIncludeOriginalCcv2(settings.includeOriginalCard);
+        setBrainstormProviderId(settings.textProviderId);
+        setBrainstormAllowNewSections(settings.allowNewSections);
+      })
+      .catch(() => {
+        /* Nothing to read is not a failure: the defaults change nothing. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // A saved character's session lives in browser storage, so closing the editor no longer throws a
+  // long brainstorm away. A brand-new character has no id to key one to, and keeps the discard
+  // warning.
+  useEffect(() => {
+    if (!editorOpen || !editingId) return;
+    const stored = decodeBrainstormSession(window.localStorage.getItem(brainstormStorageKey(editingId)));
+    setAiMessages(((stored ?? []).filter(isBrainstormMessage) as BrainstormChatMessage[]));
+  }, [editorOpen, editingId]);
+
+  function persistBrainstormSession(messages: BrainstormChatMessage[]) {
+    if (!editingId) return;
+    try {
+      window.localStorage.setItem(
+        brainstormStorageKey(editingId),
+        encodeBrainstormSession(trimBrainstormMessages(messages))
+      );
+    } catch {
+      /* A full or blocked storage is not a reason to break the conversation. */
+    }
+  }
 
   // ── Deletion Confirmation Modal State ──
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
@@ -765,21 +818,22 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     closeEditor();
   }
 
-  async function handleSendBrainstormMessage(userText: string) {
+  /**
+   * One turn: the history as the model should see it, and the question being asked.
+   *
+   * Every way of asking again — sending, editing a question, reverting a reply, regenerating one —
+   * goes through here, so the history is built in exactly one place.
+   */
+  async function runBrainstormTurn(history: BrainstormChatMessage[], userMessage: BrainstormChatMessage) {
     if (aiAbortControllerRef.current) {
       aiAbortControllerRef.current.abort();
     }
     const controller = new AbortController();
     aiAbortControllerRef.current = controller;
 
-    const userMsg: BrainstormChatMessage = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      content: userText,
-    };
-
-    const nextHistory = [...aiMessages, userMsg];
+    const nextHistory = [...history, userMessage];
     setAiMessages(nextHistory);
+    persistBrainstormSession(nextHistory);
     setAiLoading(true);
     setAiError(null);
 
@@ -794,26 +848,32 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
             tags: form.tags,
             ccv2Content: activeTpl?.ccv2Content,
           },
-          chatHistory: aiMessages.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-          userMessage: userText,
+          // The proposals go back with the reply: without them a follow-up like "make the second one
+          // shorter" has nothing to refer to.
+          chatHistory: history.map((m) => ({ role: m.role, content: brainstormHistoryContent(m) })),
+          userMessage: userMessage.content,
           includeOriginalCard: includeOriginalCcv2,
+          allowNewSections: brainstormAllowNewSections,
+          ...(brainstormProviderId ? { providerId: brainstormProviderId } : {}),
           format: targetFormat,
         },
         { signal: controller.signal }
       );
 
       const assistantMsg: BrainstormChatMessage = {
-        id: `assistant-${Date.now()}`,
+        id: crypto.randomUUID(),
         role: "assistant",
         content: res.reply,
         proposedChanges: res.proposedChanges,
+        unmappedHeaders: res.unmappedHeaders,
+        newSections: res.newSections,
+        model: res.model,
         appliedChanges: {},
       };
 
-      setAiMessages([...nextHistory, assistantMsg]);
+      const settled = [...nextHistory, assistantMsg];
+      setAiMessages(settled);
+      persistBrainstormSession(settled);
     } catch (e) {
       if (
         (e instanceof Error && (e.name === "AbortError" || e.message.includes("abort") || e.message.includes("cancelled"))) ||
@@ -830,23 +890,104 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     }
   }
 
+  function handleSendBrainstormMessage(userText: string) {
+    return runBrainstormTurn(aiMessages, { id: crypto.randomUUID(), role: "user", content: userText });
+  }
+
+  /** The question an assistant reply was answering, and the history before it. */
+  function questionBefore(messageId: string) {
+    const index = aiMessages.findIndex((m) => m.id === messageId);
+    if (index <= 0) return null;
+    for (let i = index - 1; i >= 0; i -= 1) {
+      const candidate = aiMessages[i];
+      if (candidate?.role === "user") {
+        return { history: aiMessages.slice(0, i), question: candidate };
+      }
+    }
+    return null;
+  }
+
+  function performRevertRetry(messageId: string) {
+    const found = questionBefore(messageId);
+    if (!found) return;
+    void runBrainstormTurn(found.history, found.question);
+  }
+
+  function handleRegenerateBrainstorm(messageId: string) {
+    performRevertRetry(messageId);
+  }
+
+  function handleRevertAndRetryBrainstorm(messageId: string) {
+    const index = aiMessages.findIndex((m) => m.id === messageId);
+    const drops = index === -1 ? 0 : aiMessages.length - (index + 1);
+    // Dropping turns silently is the surprising part of reverting; re-asking the last question is not.
+    if (drops > 0) {
+      setRevertRetryTarget({ id: messageId, drops });
+      return;
+    }
+    performRevertRetry(messageId);
+  }
+
+  function handleEditBrainstormMessage(messageId: string, text: string) {
+    const index = aiMessages.findIndex((m) => m.id === messageId);
+    if (index === -1) return;
+    const edited: BrainstormChatMessage = { ...aiMessages[index]!, content: text };
+    // Whatever followed the edited question no longer follows from it.
+    const kept = [...aiMessages.slice(0, index), edited];
+    setAiMessages(kept);
+    persistBrainstormSession(kept);
+    if (index === aiMessages.length - 1) {
+      void runBrainstormTurn(aiMessages.slice(0, index), edited);
+    }
+  }
+
+  function handleToggleIncludeOriginalCard(include: boolean) {
+    setIncludeOriginalCcv2(include);
+    setBrainstormSettingsError(null);
+    setBrainstormSettings({ includeOriginalCard: include }).catch((error: unknown) => {
+      // The switch does not claim a preference that could not be stored.
+      setIncludeOriginalCcv2(!include);
+      setBrainstormSettingsError(error instanceof Error ? error.message : "Could not save that preference");
+    });
+  }
+
+  function handleToggleAllowNewSections(allow: boolean) {
+    setBrainstormAllowNewSections(allow);
+    setBrainstormSettingsError(null);
+    setBrainstormSettings({ allowNewSections: allow }).catch((error: unknown) => {
+      // The switch does not claim a preference that could not be stored.
+      setBrainstormAllowNewSections(!allow);
+      setBrainstormSettingsError(error instanceof Error ? error.message : "Could not save that preference");
+    });
+  }
+
+  function handleBrainstormProviderChange(id: string | null) {
+    const previous = brainstormProviderId;
+    setBrainstormProviderId(id);
+    setBrainstormSettingsError(null);
+    setBrainstormSettings({ textProviderId: id }).catch((error: unknown) => {
+      setBrainstormProviderId(previous);
+      setBrainstormSettingsError(error instanceof Error ? error.message : "Could not save that connection");
+    });
+  }
+
   function handleApplySection(section: ProposedSectionChange, messageId: string) {
     const updatedContent = applySectionChanges(form.content, [section]);
     setForm((f) => ({ ...f, content: updatedContent }));
 
-    setAiMessages((prev) =>
-      prev.map((msg) =>
-        msg.id === messageId
-          ? {
-              ...msg,
-              appliedChanges: {
-                ...msg.appliedChanges,
-                [`section:${section.header.toLowerCase()}`]: true,
-              },
-            }
-          : msg
-      )
+    const next = aiMessages.map((msg) =>
+      msg.id === messageId
+        ? {
+            ...msg,
+            appliedChanges: {
+              ...msg.appliedChanges,
+              [`section:${section.header.toLowerCase()}`]: true,
+            },
+          }
+        : msg
     );
+    setAiMessages(next);
+    persistBrainstormSession(next);
   }
 
   function handleApplyAllProposed(
@@ -885,29 +1026,35 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
       };
     });
 
-    setAiMessages((prev) =>
-      prev.map((msg) =>
-        msg.id === messageId
-          ? {
-              ...msg,
-              appliedChanges: {
-                ...msg.appliedChanges,
-                all: true,
-                ...(proposed.sections
-                  ? Object.fromEntries(
-                      proposed.sections.map((s) => [`section:${s.header.toLowerCase()}`, true])
-                    )
-                  : {}),
-              },
-            }
-          : msg
-      )
+    const next = aiMessages.map((msg) =>
+      msg.id === messageId
+        ? {
+            ...msg,
+            appliedChanges: {
+              ...msg.appliedChanges,
+              all: true,
+              ...(proposed.sections
+                ? Object.fromEntries(
+                    proposed.sections.map((s) => [`section:${s.header.toLowerCase()}`, true])
+                  )
+                : {}),
+            },
+          }
+        : msg
     );
+    setAiMessages(next);
+    persistBrainstormSession(next);
   }
 
   function handleClearBrainstormChat() {
     setAiMessages([]);
     setAiError(null);
+    if (!editingId) return;
+    try {
+      window.localStorage.removeItem(brainstormStorageKey(editingId));
+    } catch {
+      /* Nothing to clear. */
+    }
   }
 
   async function handleOpenAiTagSuggestions(guidance?: unknown) {
@@ -995,6 +1142,11 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     setConvertedSuccess(null);
     try {
       await deleteCharacter(id);
+      try {
+        window.localStorage.removeItem(brainstormStorageKey(id));
+      } catch {
+        /* Nothing to clear. */
+      }
       if (editingId === id) {
         closeEditor();
       }
@@ -1911,9 +2063,12 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                     characterName={form.name}
                     hasOriginalCcv2={!!templates.find(t => t.id === editingId)?.ccv2Content}
                     includeOriginalCcv2={includeOriginalCcv2}
-                    onToggleIncludeOriginalCcv2={setIncludeOriginalCcv2}
+                    onOpenSettings={() => setBrainstormSettingsOpen(true)}
                     messages={aiMessages}
                     onSendMessage={handleSendBrainstormMessage}
+                    onEditMessage={handleEditBrainstormMessage}
+                    onRevertAndRetry={handleRevertAndRetryBrainstorm}
+                    onRegenerate={handleRegenerateBrainstorm}
                     onApplySection={handleApplySection}
                     onApplyAll={handleApplyAllProposed}
                     onClearChat={handleClearBrainstormChat}
@@ -2678,11 +2833,11 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
             <div className="discard-warning-body">
               {aiMessages.length > 0 && isFormDirty ? (
                 <p>
-                  You have unsaved changes to <strong>&quot;{form.name || "New Character"}&quot;</strong> and an active AI brainstorming session ({aiMessages.length} message{aiMessages.length === 1 ? "" : "s"}). If you leave now, all your edits and AI chat history will be discarded.
+                  You have unsaved changes to <strong>&quot;{form.name || "New Character"}&quot;</strong> and an active AI brainstorming session ({aiMessages.length} message{aiMessages.length === 1 ? "" : "s"}). If you leave now your edits are discarded; the brainstorm session is kept.
                 </p>
               ) : aiMessages.length > 0 ? (
                 <p>
-                  You have an active AI brainstorming session ({aiMessages.length} message{aiMessages.length === 1 ? "" : "s"}). If you leave now, your chat session will be discarded.
+                  You have an active AI brainstorming session ({aiMessages.length} message{aiMessages.length === 1 ? "" : "s"}), which is kept when you leave. Only unsaved sheet edits are lost.
                 </p>
               ) : (
                 <p>
@@ -2710,6 +2865,37 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
         </div>
       )}
       {/* Confirm Delete Character Modal */}
+      {brainstormSettingsOpen ? (
+        <BrainstormSettingsModal
+          hasOriginalCcv2={!!templates.find((t) => t.id === editingId)?.ccv2Content}
+          includeOriginalCard={includeOriginalCcv2}
+          allowNewSections={brainstormAllowNewSections}
+          providerId={brainstormProviderId}
+          errorMessage={brainstormSettingsError}
+          onToggleIncludeOriginalCard={handleToggleIncludeOriginalCard}
+          onToggleAllowNewSections={handleToggleAllowNewSections}
+          onProviderChange={handleBrainstormProviderChange}
+          onClose={() => {
+            setBrainstormSettingsOpen(false);
+            setBrainstormSettingsError(null);
+          }}
+        />
+      ) : null}
+
+      {revertRetryTarget ? (
+        <ConfirmModal
+          title="Revert & Retry"
+          message={`Go back to the question this answered and ask it again? The ${revertRetryTarget.drops} message${revertRetryTarget.drops === 1 ? "" : "s"} after it will be dropped.`}
+          confirmLabel="Revert & Retry"
+          onConfirm={() => {
+            const target = revertRetryTarget;
+            setRevertRetryTarget(null);
+            if (target) performRevertRetry(target.id);
+          }}
+          onCancel={() => setRevertRetryTarget(null)}
+        />
+      ) : null}
+
       {deleteTarget ? (
         <ConfirmModal
           title="Delete Character"

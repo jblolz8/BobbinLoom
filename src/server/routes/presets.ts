@@ -151,6 +151,51 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
     return { chapterOpeningMode: updated.chapterOpeningMode ?? DEFAULT_APP_SETTINGS.chapterOpeningMode };
   });
 
+  /** The brainstorm assistant's preferences: the original-card context, and which connection it
+   *  thinks with. One endpoint with both fields optional, so each control saves as it changes. */
+  app.get("/api/settings/brainstorm", async () => {
+    const settings = loadAppSettings(settingsDir);
+    return {
+      includeOriginalCard: settings.brainstormIncludeOriginalCard ?? false,
+      textProviderId: settings.brainstormTextProviderId ?? null,
+      allowNewSections: settings.brainstormAllowNewSections ?? DEFAULT_APP_SETTINGS.brainstormAllowNewSections ?? true
+    };
+  });
+
+  app.put("/api/settings/brainstorm", async (request, reply) => {
+    // safeParse, so an invalid value is a 400 with the reason rather than a 500, and nothing is
+    // written.
+    const parsed = z
+      .object({
+        includeOriginalCard: z.boolean().optional(),
+        textProviderId: z.string().nullable().optional(),
+        allowNewSections: z.boolean().optional()
+      })
+      .safeParse(request.body ?? {});
+    if (!parsed.success) {
+      const reason = parsed.error.issues
+        .map((issue) => `${issue.path.join(".") || "body"} ${issue.message}`)
+        .join("; ");
+      return reply.code(400).send({ error: `Invalid brainstorm settings: ${reason}` });
+    }
+    const updated = saveAppSettings(settingsDir, {
+      ...(parsed.data.includeOriginalCard !== undefined
+        ? { brainstormIncludeOriginalCard: parsed.data.includeOriginalCard }
+        : {}),
+      ...(parsed.data.textProviderId !== undefined
+        ? { brainstormTextProviderId: parsed.data.textProviderId }
+        : {}),
+      ...(parsed.data.allowNewSections !== undefined
+        ? { brainstormAllowNewSections: parsed.data.allowNewSections }
+        : {})
+    });
+    return {
+      includeOriginalCard: updated.brainstormIncludeOriginalCard ?? false,
+      textProviderId: updated.brainstormTextProviderId ?? null,
+      allowNewSections: updated.brainstormAllowNewSections ?? DEFAULT_APP_SETTINGS.brainstormAllowNewSections ?? true
+    };
+  });
+
   app.get("/api/settings/appearance", async () => {
     const settings = loadAppSettings(settingsDir);
     return {

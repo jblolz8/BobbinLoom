@@ -20,6 +20,10 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   customThemeColors: {},
   // Every close starts here; the player's last choice replaces it once they make one.
   chapterOpeningMode: "continuation",
+  // Brainstorming starts without the CCv2 original in context; the reader opts in.
+  brainstormIncludeOriginalCard: false,
+  // …and a section the format does not list is a normal thing for a character to need.
+  brainstormAllowNewSections: true,
 };
 
 /**
@@ -77,6 +81,9 @@ export function saveAppSettings(
     themePreset?: string;
     customThemeColors?: CustomThemeColors;
     chapterOpeningMode?: ChapterOpeningMode;
+    brainstormIncludeOriginalCard?: boolean;
+    brainstormTextProviderId?: string | null;
+    brainstormAllowNewSections?: boolean;
   }
 ): AppSettings {
   mkdirSync(dataDir, { recursive: true });

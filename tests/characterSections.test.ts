@@ -19,8 +19,23 @@ import {
   removeContentSection,
   renameContentSection
 } from "../src/engine/characterSections";
+import { DEFAULT_CHARACTER_FORMAT, isFormatAligned } from "../src/engine/characterFormat";
 
 describe("characterSections", () => {
+  it("adds a section the format does not list without disturbing its own order", () => {
+    // The brainstorm assistant may propose a section the format has no room for. The sheet machinery
+    // appends it, and the alignment check only asks that the format's own sections are present and in
+    // order — which is why an addition is safe to offer and cannot trigger a reformat prompt.
+    expect(isFormatAligned(CHARACTER_SHEET_EXAMPLE, DEFAULT_CHARACTER_FORMAT)).toBe(true);
+    const withAddition = applySectionChanges(CHARACTER_SHEET_EXAMPLE, [
+      { header: "Cat Traits", body: "- Purrs when pleased" }
+    ]);
+    expect(isFormatAligned(withAddition, DEFAULT_CHARACTER_FORMAT)).toBe(true);
+    const names = splitContentSections(withAddition).sections.map((section) => section.header);
+    expect(names[names.length - 1]).toBe("Cat Traits");
+    expect(withAddition.trimEnd().endsWith("- Purrs when pleased")).toBe(true);
+  });
+
   it("defines the canonical section headers in display order", () => {
     expect(CHARACTER_SECTION_HEADERS).toEqual([
       "Species", "Gender", "Body", "Appearance", "Clothing", "Personality",

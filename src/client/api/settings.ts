@@ -511,6 +511,25 @@ export function updateTagTaxonomy(config: TagTaxonomyConfig): Promise<{ tagTaxon
   });
 }
 
+/** The brainstorm assistant's preferences: the original-card context, and its chosen connection. */
+export type BrainstormSettings = {
+  includeOriginalCard: boolean;
+  textProviderId: string | null;
+  /** Whether the assistant may propose a section the format does not list. */
+  allowNewSections: boolean;
+};
+
+export function getBrainstormSettings(): Promise<BrainstormSettings> {
+  return request<BrainstormSettings>("/api/settings/brainstorm");
+}
+
+export function setBrainstormSettings(patch: Partial<BrainstormSettings>): Promise<BrainstormSettings> {
+  return request<BrainstormSettings>("/api/settings/brainstorm", {
+    method: "PUT",
+    body: JSON.stringify(patch)
+  });
+}
+
 /** The remembered chapter-opening mode. */
 export function getChapterOpeningMode(): Promise<{ chapterOpeningMode: ChapterOpeningMode }> {
   return request<{ chapterOpeningMode: ChapterOpeningMode }>("/api/settings/chapter-opening-mode");

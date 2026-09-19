@@ -35,6 +35,20 @@ export const MarkdownView = React.memo(function MarkdownView({
               </blockquote>
             );
 
+          case "heading": {
+            // A reply's headings are a reader's signposts, not document structure: an h1 in a chat
+            // bubble would outrank the panel title, so they render three steps down.
+            const HeadingTag = block.level <= 2 ? "h3" : block.level <= 4 ? "h4" : "h5";
+            return (
+              <HeadingTag
+                key={`block-${index}`}
+                className={`message-heading message-heading--${block.level}`}
+              >
+                {renderInlineNodes(block.children, `h-${index}`)}
+              </HeadingTag>
+            );
+          }
+
           case "list":
             if (block.ordered) {
               return (

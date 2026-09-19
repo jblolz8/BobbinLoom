@@ -1,3 +1,4 @@
+import { parseBrainstormReply } from "../engine/brainstorm";
 import { toJsonExampleContent } from "../engine/characterSections";
 import { buildFormatExample, buildFormatRules, resolveCharacterFormat } from "../engine/characterFormat";
 import {
@@ -561,6 +562,16 @@ export class OpenAICompatibleProvider {
     throw new Error(`The model did not return any recognized tags. Raw model output: "${errSnippet}"${truncationHint}`);
   }
 
+  /**
+   * The brainstorm turn: a markdown reply, and a proposal when — and only when — edits are on the
+   * table.
+   *
+   * The proposal travels in ONE fenced json block rather than inside a JSON envelope around the whole
+   * reply. That is not a style preference: an envelope forces the markdown through JSON escaping, and
+   * every unescaped newline or quote in a long answer used to cost either the proposals or the whole
+   * reply's readability. It also lets `response_format` go, which some providers reject by re-running
+   * the request without it.
+   */
   async brainstormCharacter(
     input: CharacterBrainstormInput,
     signal?: AbortSignal
@@ -597,27 +608,25 @@ export class OpenAICompatibleProvider {
       "BOBBINLOOM CHARACTER SHEET FORMAT RULES:",
       formatRules,
       "",
-      "RESPONSE GUIDELINES:",
-      "1. Reply conversationally, constructively, and creatively to the user's questions, feedback, or brainstorming ideas in the 'reply' field. Markdown formatting is encouraged.",
-      "2. If proposing specific edits or additions to the character card, include them in 'proposedChanges':",
-      "   - 'sections': array of objects { \"header\": \"SectionName\", \"body\": \"updated section body content WITHOUT the [SectionName] header\" }.",
-      "   - 'tags': optional updated array of string tags if tag changes are suggested.",
-      "   - 'creatorNotes': optional updated creator notes.",
-      "   - 'name': optional updated character name.",
-      "3. SURGICAL EDITING: When the user asks to modify specific attributes (e.g., 'Change her personality to be sarcastic', 'Update her outfit for winter', 'Add tea brewing to Likes'), return ONLY the affected section(s) in 'proposedChanges.sections'. Do NOT duplicate or rewrite untouched sections.",
-      "4. If no direct card changes are being proposed (e.g. general brainstorming, answering lore questions, comparing ideas), set 'proposedChanges' to null or omit it.",
+      "HOW TO ANSWER:",
+      "1. Write the reply in Markdown. It is shown to the reader exactly as written, so headings, lists, bold and code are all welcome.",
+      "2. If, and only if, edits to the card are being proposed, end the reply with ONE fenced json block holding the proposal:",
+      "```json",
+      '{ "proposedChanges": { "sections": [ { "header": "Personality", "body": "- Wary of strangers, warms slowly" } ] } }',
+      "```",
+      "3. Omit that block entirely when the reply only discusses ideas, answers questions about the card, or compares options.",
+      "4. Inside the block:",
+      '   - "sections" lists the sections being changed, each as { "header": "<a section name from the list above>", "body": "<that section\'s COMPLETE new body>" }.',
+      '   - A body REPLACES its section as written. Never send a diff, a fragment, a note about what changed, or the [Header] line itself.',
+      "   - A body of several lines is normal; escape the line breaks inside the json string.",
+      input.allowNewSections === false
+        ? "   - Use section names exactly as listed above. Never invent one."
+        : "   - Prefer those names. When the character genuinely needs something the sheet has no section for, propose a new one with a clear name of its own (for example [Daily Life]) — it is added at the end of the sheet.",
+      '   - Optional keys: "tags" (the whole updated tag list), "creatorNotes" (the whole updated notes), "name", and "fullContent" (a complete rewritten sheet, only when a rewrite is asked for).',
+      "5. Edit surgically: propose only the sections a request actually touches, and leave every other section out of the block.",
+      "6. If a request cannot be expressed as an edit to this sheet, say so in the reply and propose nothing.",
       "",
-      "RESPONSE JSON FORMAT:",
-      "{",
-      '  "reply": "Conversational reply, advice, or suggestions here...",',
-      '  "proposedChanges": {',
-      '    "sections": [',
-      '      { "header": "Personality", "body": "- Sarcastic and sharp-witted\\n- Secretly protective" }',
-      "    ],",
-      '    "tags": ["elf", "mage"]',
-      "  }",
-      "}",
-      "",
+      "CONTEXT:",
       ...contextParts
     ].join("\n");
 
@@ -638,89 +647,26 @@ export class OpenAICompatibleProvider {
       model: this.config.model,
       messages,
       temperature: 0.7,
-      max_tokens: maxTokens,
-      response_format: { type: "json_object" }
+      max_tokens: maxTokens
     };
 
-    let rawContent = "";
-    try {
-      const response = await this.executeRequest(body, "/chat/completions", undefined, signal);
-      const payload = (await response.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
-      };
-      rawContent = payload.choices?.[0]?.message?.content?.trim() ?? "";
-    } catch {
-      const bodyFallback = { ...body };
-      delete bodyFallback.response_format;
-      const response = await this.executeRequest(bodyFallback, "/chat/completions", undefined, signal);
-      const payload = (await response.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
-      };
-      rawContent = payload.choices?.[0]?.message?.content?.trim() ?? "";
-    }
-
-    const extracted = extractJsonPayload(rawContent);
-
-    if (extracted && typeof extracted === "object") {
-      const extObj = extracted as Record<string, unknown>;
-      const reply = typeof extObj.reply === "string"
-        ? extObj.reply
-        : (typeof extObj.message === "string" ? extObj.message : "");
-      let proposedChanges: CharacterBrainstormOutput["proposedChanges"] = undefined;
-
-      if (extObj.proposedChanges && typeof extObj.proposedChanges === "object") {
-        const propObj = extObj.proposedChanges as Record<string, unknown>;
-        const sections: ProposedSectionChange[] = [];
-
-        if (Array.isArray(propObj.sections)) {
-          for (const s of propObj.sections) {
-            if (s && typeof s === "object" && typeof s.header === "string" && typeof s.body === "string") {
-              sections.push({
-                header: s.header.replace(/^\[|\]$/g, "").trim(),
-                body: s.body.trim()
-              });
-            }
-          }
-        }
-
-        const tags = Array.isArray(propObj.tags)
-          ? sanitizeTags(propObj.tags)
-          : undefined;
-
-        const creatorNotes = typeof propObj.creatorNotes === "string" && propObj.creatorNotes.trim()
-          ? propObj.creatorNotes.trim()
-          : undefined;
-
-        const name = typeof propObj.name === "string" && propObj.name.trim()
-          ? propObj.name.trim()
-          : undefined;
-
-        const fullContent = typeof propObj.fullContent === "string" && propObj.fullContent.trim()
-          ? propObj.fullContent.trim()
-          : undefined;
-
-        if (sections.length > 0 || (tags && tags.length > 0) || creatorNotes || name || fullContent) {
-          proposedChanges = {
-            ...(sections.length > 0 ? { sections } : {}),
-            ...(tags && tags.length > 0 ? { tags } : {}),
-            ...(creatorNotes ? { creatorNotes } : {}),
-            ...(name ? { name } : {}),
-            ...(fullContent ? { fullContent } : {})
-          };
-        }
-      }
-
-      if (reply || proposedChanges) {
-        return {
-          reply: reply || "Here are the suggested changes for the character sheet.",
-          proposedChanges
-        };
-      }
-    }
+    const response = await this.executeRequest(body, "/chat/completions", undefined, signal);
+    const payload = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    const rawContent = payload.choices?.[0]?.message?.content?.trim() ?? "";
+    const parsed = parseBrainstormReply(
+      rawContent,
+      fmt.sections.map((section) => section.name),
+      { allowNewSections: input.allowNewSections }
+    );
 
     return {
-      reply: rawContent || "No response received from the model.",
-      proposedChanges: undefined
+      reply: parsed.reply || "No response received from the model.",
+      proposedChanges: parsed.proposedChanges,
+      unmappedHeaders: parsed.unmappedHeaders,
+      newSections: parsed.newSections,
+      model: this.config.model
     };
   }
 

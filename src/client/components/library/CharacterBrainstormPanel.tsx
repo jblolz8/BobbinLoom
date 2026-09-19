@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Icon } from "../base";
+import { Icon, ModelBadge, TextArea } from "../base";
+import { MarkdownView } from "../common/MarkdownView";
 import type { ProposedSectionChange, CharacterBrainstormResult } from "../../api";
 
 export type BrainstormChatMessage = {
@@ -7,16 +8,26 @@ export type BrainstormChatMessage = {
   role: "user" | "assistant";
   content: string;
   proposedChanges?: CharacterBrainstormResult["proposedChanges"];
+  /** Headers the model proposed that this sheet has no section for; dropped from the card. */
+  unmappedHeaders?: string[];
+  /** Headers kept as additions, so the card can mark them as new sections. */
+  newSections?: string[];
+  /** Who wrote it, since the connection is now a choice. */
+  model?: string;
   appliedChanges?: Record<string, boolean>; // e.g. { "section:Personality": true, "all": true }
 };
 
 export type CharacterBrainstormPanelProps = {
   characterName: string;
+  /** Whether the card has an original CCv2 copy at all — the setting is only meaningful with one. */
   hasOriginalCcv2: boolean;
   includeOriginalCcv2: boolean;
-  onToggleIncludeOriginalCcv2: (include: boolean) => void;
+  onOpenSettings: () => void;
   messages: BrainstormChatMessage[];
   onSendMessage: (text: string) => Promise<void>;
+  onEditMessage: (messageId: string, text: string) => void;
+  onRevertAndRetry: (messageId: string) => void;
+  onRegenerate: (messageId: string) => void;
   onApplySection: (section: ProposedSectionChange, messageId: string) => void;
   onApplyAll: (proposed: CharacterBrainstormResult["proposedChanges"], messageId: string) => void;
   onClearChat: () => void;
@@ -30,9 +41,12 @@ export function CharacterBrainstormPanel({
   characterName,
   hasOriginalCcv2,
   includeOriginalCcv2,
-  onToggleIncludeOriginalCcv2,
+  onOpenSettings,
   messages,
   onSendMessage,
+  onEditMessage,
+  onRevertAndRetry,
+  onRegenerate,
   onApplySection,
   onApplyAll,
   onClearChat,
@@ -42,12 +56,23 @@ export function CharacterBrainstormPanel({
   onCancel,
 }: CharacterBrainstormPanelProps) {
   const [inputText, setInputText] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [copyState, setCopyState] = useState<{ id: string; ok: boolean } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const copyTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  useEffect(
+    () => () => {
+      if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+    },
+    []
+  );
 
   function handleSend() {
     const text = inputText.trim();
@@ -62,6 +87,34 @@ export function CharacterBrainstormPanel({
       handleSend();
     }
   }
+
+  async function handleCopy(message: BrainstormChatMessage) {
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(message.content ?? "");
+      ok = true;
+    } catch {
+      // A browser that refuses the clipboard says so rather than pretending it worked.
+      ok = false;
+    }
+    setCopyState({ id: message.id, ok });
+    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = window.setTimeout(() => setCopyState(null), 1600);
+  }
+
+  function startEdit(message: BrainstormChatMessage) {
+    setEditingId(message.id);
+    setEditDraft(message.content);
+  }
+
+  function commitEdit(messageId: string) {
+    const text = editDraft.trim();
+    setEditingId(null);
+    if (!text) return;
+    onEditMessage(messageId, text);
+  }
+
+  const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant")?.id ?? null;
 
   return (
     <div className="character-brainstorm-panel">
@@ -80,19 +133,16 @@ export function CharacterBrainstormPanel({
         </div>
 
         <div className="brainstorm-header-actions">
-          {hasOriginalCcv2 ? (
-            <label
-              className={`brainstorm-ccv2-toggle ${includeOriginalCcv2 ? "active" : ""}`}
-              title="Include original CCv2 card context in AI prompts"
-            >
-              <input
-                type="checkbox"
-                checked={includeOriginalCcv2}
-                onChange={(e) => onToggleIncludeOriginalCcv2(e.target.checked)}
-              />
-              <span>Original Card Context</span>
-            </label>
-          ) : null}
+          <button
+            type="button"
+            className={`brainstorm-settings-btn ${includeOriginalCcv2 ? "active" : ""}`}
+            onClick={onOpenSettings}
+            title="AI Brainstorm Assistant settings"
+            aria-label="AI Brainstorm Assistant settings"
+          >
+            <Icon name="Settings" size={14} />
+            {includeOriginalCcv2 ? <span className="brainstorm-settings-dot" aria-hidden="true" /> : null}
+          </button>
 
           {messages.length > 0 ? (
             <button
@@ -135,19 +185,39 @@ export function CharacterBrainstormPanel({
             </div>
           </div>
         ) : (
-          <div className="brainstorm-thread">
+          <div className="brainstorm-thread" role="log" aria-live="polite" aria-label="Brainstorm conversation">
             {messages.map((msg) => (
               <div key={msg.id} className={`brainstorm-message-row ${msg.role}`}>
                 <div className="brainstorm-avatar-icon">
                   <Icon name={msg.role === "user" ? "User" : "Sparkles"} size={14} />
                 </div>
                 <div className="brainstorm-bubble">
-                  {/* Text Content */}
-                  <div className="brainstorm-text-content">
-                    {msg.content.split("\n").map((line, idx) => (
-                      <p key={idx}>{line || "\u00A0"}</p>
-                    ))}
-                  </div>
+                  {editingId === msg.id ? (
+                    <div className="brainstorm-edit-box">
+                      <TextArea
+                        value={editDraft}
+                        onChange={(e) => setEditDraft(e.target.value)}
+                        rows={3}
+                        className="brainstorm-edit-textarea"
+                        aria-label="Edit this message"
+                      />
+                      <div className="brainstorm-edit-actions">
+                        <button
+                          type="button"
+                          className="brainstorm-edit-save"
+                          onClick={() => commitEdit(msg.id)}
+                          disabled={!editDraft.trim()}
+                        >
+                          <Icon name="Check" size={12} /> Save
+                        </button>
+                        <button type="button" className="brainstorm-edit-cancel" onClick={() => setEditingId(null)}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <MarkdownView content={msg.content} className="brainstorm-markdown" />
+                  )}
 
                   {/* Proposed Changes Card */}
                   {msg.proposedChanges && (
@@ -167,6 +237,11 @@ export function CharacterBrainstormPanel({
                               <div key={`${sec.header}-${sIdx}`} className="proposal-section-item">
                                 <div className="proposal-section-header">
                                   <span className="proposal-section-tag">[{sec.header}]</span>
+                                  {msg.newSections?.includes(sec.header) ? (
+                                    <span className="proposal-new-tag" title="This section is not part of the format — applying it adds it to the end of the sheet">
+                                      New section
+                                    </span>
+                                  ) : null}
                                   <button
                                     type="button"
                                     className={`proposal-apply-btn ${isApplied ? "applied" : ""}`}
@@ -182,6 +257,17 @@ export function CharacterBrainstormPanel({
                               </div>
                             );
                           })}
+                        </div>
+                      )}
+
+                      {/* Rename: the proposal the card used to drop on the floor */}
+                      {msg.proposedChanges.name && (
+                        <div className="proposal-field-block">
+                          <span className="proposal-field-label">Character name:</span>
+                          <div className="proposal-name-row">
+                            <span className="proposal-name-value">{msg.proposedChanges.name}</span>
+                            <span className="proposal-name-current">currently &ldquo;{characterName || "unnamed"}&rdquo;</span>
+                          </div>
                         </div>
                       )}
 
@@ -207,9 +293,38 @@ export function CharacterBrainstormPanel({
                         </div>
                       )}
 
+                      {/* A whole-sheet rewrite is the one proposal that can destroy work, so it says so
+                          and keeps its content behind a fold until asked for. */}
+                      {msg.proposedChanges.fullContent && (
+                        <div className="proposal-full-content">
+                          <div className="proposal-full-header">
+                            <Icon name="TriangleAlert" size={13} />
+                            <span>
+                              Rewrites the <strong>entire sheet</strong> — the current content is replaced
+                            </span>
+                          </div>
+                          <details className="proposal-full-details">
+                            <summary>Preview the rewritten sheet</summary>
+                            <pre className="proposal-section-preview">{msg.proposedChanges.fullContent}</pre>
+                          </details>
+                        </div>
+                      )}
+
+                      {/* What it could not place */}
+                      {msg.unmappedHeaders && msg.unmappedHeaders.length > 0 ? (
+                        <div className="proposal-unmapped">
+                          <Icon name="AlertCircle" size={12} />
+                          <span>
+                            Not on this sheet, so left out:{" "}
+                            {msg.unmappedHeaders.map((header) => `[${header}]`).join(", ")}
+                          </span>
+                        </div>
+                      ) : null}
+
                       {/* Apply All Action */}
                       {((msg.proposedChanges.sections && msg.proposedChanges.sections.length > 1) ||
-                        (msg.proposedChanges.sections && msg.proposedChanges.sections.length > 0 && (msg.proposedChanges.tags || msg.proposedChanges.creatorNotes))) && (
+                        (msg.proposedChanges.sections && msg.proposedChanges.sections.length > 0 &&
+                          (msg.proposedChanges.tags || msg.proposedChanges.creatorNotes))) && (
                         <div className="proposal-card-footer">
                           <button
                             type="button"
@@ -224,6 +339,62 @@ export function CharacterBrainstormPanel({
                       )}
                     </div>
                   )}
+
+                  {/* Message actions */}
+                  {editingId === msg.id ? null : (
+                    <div className="brainstorm-msg-actions">
+                      <button
+                        type="button"
+                        className="brainstorm-msg-action"
+                        onClick={() => { void handleCopy(msg); }}
+                        title="Copy this message"
+                      >
+                        <Icon name={copyState?.id === msg.id && copyState.ok ? "Check" : "Copy"} size={11} />
+                        {copyState?.id === msg.id ? (copyState.ok ? "Copied" : "Copy failed") : "Copy"}
+                      </button>
+
+                      {msg.role === "user" ? (
+                        <button
+                          type="button"
+                          className="brainstorm-msg-action"
+                          onClick={() => startEdit(msg)}
+                          disabled={loading}
+                          title="Edit this message — anything after it is dropped"
+                        >
+                          <Icon name="Pencil" size={11} /> Edit
+                        </button>
+                      ) : (
+                        <>
+                          {msg.id === lastAssistantId ? (
+                            <button
+                              type="button"
+                              className="brainstorm-msg-action"
+                              onClick={() => onRegenerate(msg.id)}
+                              disabled={loading}
+                              title="Ask again and replace this reply"
+                            >
+                              <Icon name="RefreshCw" size={11} /> Regenerate
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="brainstorm-msg-action"
+                            onClick={() => onRevertAndRetry(msg.id)}
+                            disabled={loading}
+                            title="Go back to the question this answered and ask it again"
+                          >
+                            <Icon name="Undo2" size={11} /> Revert &amp; Retry
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {msg.role === "assistant" && msg.model ? (
+                    <div className="brainstorm-message-meta">
+                      <ModelBadge model={msg.model} />
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))}

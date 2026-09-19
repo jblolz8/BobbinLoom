@@ -12,6 +12,7 @@ export type InlineNode =
 
 export type BlockNode =
   | { type: "paragraph"; children: InlineNode[] }
+  | { type: "heading"; level: number; children: InlineNode[] }
   | { type: "codeBlock"; code: string; language?: string }
   | { type: "blockquote"; children: InlineNode[] }
   | { type: "list"; ordered: boolean; items: InlineNode[][] };
@@ -224,7 +225,20 @@ export function parseMarkdown(raw: string): BlockNode[] {
   while (i < lines.length) {
     const line = lines[i];
 
-    // 1. Fenced Code Block: ```[lang]
+    // 1. Heading: one to six hashes and a space. The trailing space is what separates a heading
+    // from a line that merely starts with a hash.
+    const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
+    if (headingMatch) {
+      blocks.push({
+        type: "heading",
+        level: headingMatch[1]!.length,
+        children: parseInline(headingMatch[2] ?? ""),
+      });
+      i++;
+      continue;
+    }
+
+    // 2. Fenced Code Block: ```[lang]
     const codeFenceMatch = line.match(/^```(\w*)/);
     if (codeFenceMatch) {
       const language = codeFenceMatch[1] || undefined;

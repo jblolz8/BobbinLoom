@@ -865,6 +865,54 @@ describe("image generation: preset routes and the global prompt config", () => {
     expect(resolved.promptCharacterLimit).toBe(1200);
   });
 
+  it("round-trips the brainstorm settings, one field at a time", async () => {
+    const initial = await app.inject({ method: "GET", url: "/api/settings/brainstorm" });
+    expect(initial.statusCode).toBe(200);
+    // New sections are allowed out of the box; the other two default to off and to the active connection.
+    expect(initial.json()).toEqual({ includeOriginalCard: false, textProviderId: null, allowNewSections: true });
+
+    // Each control saves as it changes, so a patch carries only what moved.
+    const toggled = await app.inject({
+      method: "PUT",
+      url: "/api/settings/brainstorm",
+      payload: { includeOriginalCard: true }
+    });
+    expect(toggled.statusCode).toBe(200);
+    expect(toggled.json()).toEqual({ includeOriginalCard: true, textProviderId: null, allowNewSections: true });
+
+    const pointed = await app.inject({
+      method: "PUT",
+      url: "/api/settings/brainstorm",
+      payload: { textProviderId: "beta" }
+    });
+    expect(pointed.json()).toEqual({ includeOriginalCard: true, textProviderId: "beta", allowNewSections: true });
+
+    const restricted = await app.inject({
+      method: "PUT",
+      url: "/api/settings/brainstorm",
+      payload: { allowNewSections: false }
+    });
+    expect(restricted.json()).toEqual({ includeOriginalCard: true, textProviderId: "beta", allowNewSections: false });
+
+    // And back to following the active connection.
+    const cleared = await app.inject({
+      method: "PUT",
+      url: "/api/settings/brainstorm",
+      payload: { textProviderId: null }
+    });
+    expect(cleared.json()).toEqual({ includeOriginalCard: true, textProviderId: null, allowNewSections: false });
+
+    const reread = await app.inject({ method: "GET", url: "/api/settings/brainstorm" });
+    expect(reread.json()).toEqual({ includeOriginalCard: true, textProviderId: null, allowNewSections: false });
+
+    const rejected = await app.inject({
+      method: "PUT",
+      url: "/api/settings/brainstorm",
+      payload: { includeOriginalCard: "yes" }
+    });
+    expect(rejected.statusCode).toBe(400);
+  });
+
   it("round-trips the chapter opening mode, defaulting to continuation and rejecting an unknown value", async () => {
     // A chapter-lifecycle preference beside the appearance ones; a fresh install must not need a
     // write to get a sane default.

@@ -8645,3 +8645,241 @@ button.ai-brainstorm-toggle-btn.active,
     transition: none;
   }
 }
+
+/* ── Brainstorm assistant: settings, message actions, proposals ─────────────────────────────── */
+.brainstorm-settings-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.brainstorm-settings-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-light);
+}
+
+.brainstorm-settings-btn.active {
+  color: var(--accent-highlight, var(--accent-base));
+}
+
+/* A dot, not a label: the dialog is where the choice is read, the button only says something is on. */
+.brainstorm-settings-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-highlight, var(--accent-base));
+}
+
+.brainstorm-settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.brainstorm-settings-toggle input {
+  accent-color: var(--accent-highlight, var(--accent-base));
+}
+
+.brainstorm-settings-toggle:has(input:disabled) {
+  cursor: not-allowed;
+  color: var(--text-muted);
+}
+
+.brainstorm-msg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.35rem;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.brainstorm-message-row:hover .brainstorm-msg-actions,
+.brainstorm-msg-actions:focus-within {
+  opacity: 1;
+}
+
+.brainstorm-msg-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.brainstorm-msg-action:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--border-light);
+}
+
+.brainstorm-msg-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.brainstorm-message-meta {
+  margin-top: 0.3rem;
+}
+
+.brainstorm-edit-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.brainstorm-edit-textarea {
+  width: 100%;
+}
+
+.brainstorm-edit-actions {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+
+.brainstorm-edit-save,
+.brainstorm-edit-cancel {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-surface-elevated);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.brainstorm-edit-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* The reply is markdown now, so the bubble's own paragraph styling must not fight it. */
+.brainstorm-markdown {
+  font-size: inherit;
+  line-height: 1.55;
+}
+
+/* The one proposal that can destroy work says so before it is applied. */
+.proposal-full-content {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--status-warning-border, var(--border-light));
+  background: var(--status-warning-bg, var(--bg-surface-elevated));
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.proposal-full-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--status-warning, var(--text-primary));
+}
+
+.proposal-full-details summary {
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.proposal-unmapped {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.proposal-name-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.proposal-name-value {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.proposal-name-current {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.proposal-field-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 1100px) {
+  /* A phone has no hover: the actions would be invisible until tapped blind. */
+  .brainstorm-msg-actions {
+    opacity: 1;
+  }
+}
+
+/* Headings in a message: signposts inside a reply, so they size down from the panel titles. */
+.message-heading {
+  margin: 0.6rem 0 0.3rem;
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+
+.message-heading:first-child {
+  margin-top: 0;
+}
+
+.message-heading--1,
+.message-heading--2 {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.message-heading--3,
+.message-heading--4 {
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.message-heading--5,
+.message-heading--6 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* A section the format does not list: worth marking, because applying it adds rather than edits. */
+.proposal-new-tag {
+  font-size: 0.68rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent-translucent);
+  background: var(--accent-translucent);
+  color: var(--accent-highlight, var(--accent-base));
+  white-space: nowrap;
+}

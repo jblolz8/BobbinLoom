@@ -237,6 +237,10 @@ export type CharacterBrainstormPayload = {
     content: string;
   }>;
   userMessage: string;
+  /** The connection to think with; absent follows the active one. */
+  providerId?: string;
+  /** Whether a section the format does not list may be proposed. */
+  allowNewSections?: boolean;
   includeOriginalCard?: boolean;
   /** Target character format whose section guidance the assistant should follow. */
   format?: CharacterFormat;
@@ -244,6 +248,12 @@ export type CharacterBrainstormPayload = {
 
 export type CharacterBrainstormResult = {
   reply: string;
+  /** Headers the server refused because the sheet has no such section. */
+  unmappedHeaders?: string[];
+  /** Headers kept as additions, so the card can mark them as new sections. */
+  newSections?: string[];
+  /** The model that answered, for the badge on the reply. */
+  model?: string;
   proposedChanges?: {
     sections?: ProposedSectionChange[];
     name?: string;

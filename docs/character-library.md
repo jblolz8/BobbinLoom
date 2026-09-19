@@ -171,17 +171,21 @@ existing library vocabulary (so it doesn't invent wildly off-taxonomy tags).
 
 ## 6. AI character brainstorming assistant
 
-`POST /api/characters/brainstorm` → `provider.brainstormCharacter(...)`.
+`POST /api/characters/brainstorm` -> `provider.brainstormCharacter(...)`.
 
-An **interactive, chat-style** refinement session for a character card. Request:
+An **interactive, chat-style** refinement session for a character card, opened from the editor's
+brainstorm button. Request:
 
 ```ts
 {
   character: { name; content; creatorNotes?; tags?; ccv2Content? },
-  chatHistory: [{ role: "user"|"assistant"; content }],  // for multi-turn context
+  chatHistory: [{ role: "user"|"assistant"; content }],  // multi-turn; a reply's proposals are
+                                                         // folded back in as a fenced block
   userMessage: string,
-  includeOriginalCard?: boolean,  // attach the raw CCv2 content for reference
-  format?: CharacterFormat        // the section guidance the assistant should follow
+  includeOriginalCard?: boolean,     // attach the raw CCv2 content for reference
+  allowNewSections?: boolean,        // may a section the format does not list be proposed
+  providerId?: string,               // which connection to think with; absent = the active one
+  format?: CharacterFormat           // the section guidance the assistant should follow
 }
 ```
 
@@ -189,22 +193,67 @@ Response:
 
 ```ts
 {
-  reply: string,   // prose answer / suggestions
+  reply: string,                    // prose, rendered as markdown
   proposedChanges?: {
-    sections?: ProposedSectionChange[];  // [{ header, body }] — editable sheet sections
+    sections?: ProposedSectionChange[];  // [{ header, body }] - editable sheet sections
     name?: string;
     creatorNotes?: string;
     tags?: string[];
-    fullContent?: string;               // full-content replacement
-  }
+    fullContent?: string;                // whole-sheet replacement, shown behind a fold
+  },
+  unmappedHeaders?: string[],       // proposed sections that were dropped (see below)
+  newSections?: string[],           // proposed sections kept as additions, for the card to mark
+  model?: string                    // shown as a badge, so a reply is attributable
 }
 ```
 
-The assistant can propose **targeted section edits** (which the user can apply
-one-by-one into the editor), tag changes, a rename, or a full-content rewrite.
-When the character is CCv2-backed, `includeOriginalCard` lets the model ground
-suggestions in the original card while the live sheet stays read-only until the
-user applies changes.
+### The reply contract
+
+The model is asked for **markdown prose** followed by exactly one fenced `json` block holding
+`proposedChanges`. Every `json` fence is stripped from what the reader sees, and a model that still
+answers with the old whole-JSON envelope is read rather than shown - a wall of JSON in a chat
+bubble is never the outcome. No `response_format` is requested, so the assistant works with
+providers that reject it.
+
+### Sections outside the format
+
+`allowNewSections` (default **true**) decides what happens to a `[Cat Traits]` or `[Daily Life]`
+the sheet has no room for:
+
+- **Allowed** - the section is kept, listed by the card with a **New section** marker, and applying
+  it appends it to the end of the sheet. This is safe: `applySectionChanges` adds unknown headers
+  after the known ones, and `isFormatAligned` only asks that the format's own sections are present
+  and in order, so an addition never triggers the reformat prompt.
+- **Not allowed** - the section is dropped and reported to the reader as *"Not on this sheet, so
+  left out: ..."*, which is the behaviour before the setting existed.
+
+Either way, a proposed header that *nearly* matches a real section is applied **to that section**,
+never beside it: an exact match ignoring case and punctuation (`likes`, `[LIkes]`) or a name joined
+by a connector (`Likes & Dislikes`, `Personality and Voice`, `Personality: Voice`) resolves to the
+canonical header. A name that merely starts with one - `[House Cat]` next to a `[House]` section -
+does not, because a bare space means a different name rather than the same one with a clause. The
+prompt agrees with the setting: when additions are allowed the assistant is invited to propose a
+section of its own; when they are not, it is told never to invent one.
+
+### Settings
+
+`GET`/`PUT /api/settings/brainstorm` - stored in `AppSettings`, surfaced by the panel's settings
+button:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `includeOriginalCard` | `false` | attach the raw CCv2 content to the prompt |
+| `textProviderId` | `null` | connection to brainstorm with; `null` = the active one |
+| `allowNewSections` | `true` | see above |
+
+### The conversation
+
+Messages render as markdown (headings, lists, bold, quotes) and carry **Copy**, **Edit** (user
+messages), **Revert & Retry** and **Regenerate** (replies). Editing a user message truncates what
+follows and re-asks only when that message was the last one; Revert & Retry confirms only when
+later messages would be dropped. Sessions persist per character in localStorage for saved
+characters - an unsaved new character keeps its discard warning. Applying proposals writes into the
+editor's draft, so nothing reaches disk until the character is saved.
 
 ---
 

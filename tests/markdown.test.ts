@@ -1,6 +1,34 @@
 import { describe, it, expect } from "vitest";
 import { parseInline, parseMarkdown, type InlineNode } from "../src/client/utils/markdown";
 
+describe("parseMarkdown headings", () => {
+  it("reads a heading with its level and inline content", () => {
+    const blocks = parseMarkdown("## Two directions\n\nbody text");
+    expect(blocks[0]).toMatchObject({ type: "heading", level: 2 });
+    expect(blocks[0]?.type === "heading" ? blocks[0].children : []).toEqual([
+      { type: "text", value: "Two directions" }
+    ]);
+    expect(blocks[1]?.type).toBe("paragraph");
+  });
+
+  it("reads every level from one to six", () => {
+    for (let level = 1; level <= 6; level += 1) {
+      const blocks = parseMarkdown(`${"#".repeat(level)} Title`);
+      expect(blocks[0]).toMatchObject({ type: "heading", level });
+    }
+  });
+
+  it("leaves a hash without a space as text", () => {
+    expect(parseMarkdown("#notaheading")[0]?.type).toBe("paragraph");
+    expect(parseMarkdown("####### seven hashes")[0]?.type).toBe("paragraph");
+  });
+
+  it("reads a heading after other blocks", () => {
+    const blocks = parseMarkdown("intro\n\n### Detail\n\n- one");
+    expect(blocks.map((b) => b.type)).toEqual(["paragraph", "heading", "list"]);
+  });
+});
+
 describe("parseInline", () => {
   it("returns empty array for empty input", () => {
     expect(parseInline("")).toEqual([]);

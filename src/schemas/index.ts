@@ -462,6 +462,14 @@ export const AppSettingsSchema = z.object({
   /** The last chapter-opening mode the player chose. Optional, so a settings file written before
    *  this preference parses untouched and no `dataMigrations` entry is needed. */
   chapterOpeningMode: ChapterOpeningModeSchema.optional(),
+  /** The brainstorm assistant's preferences, optional for the same reason: an old settings file
+   *  parses untouched, and `null`/absent means "follow the active connection". */
+  brainstormIncludeOriginalCard: z.boolean().optional(),
+  brainstormTextProviderId: z.string().nullable().optional(),
+  /** Whether the assistant may propose a section the format does not list. True by default: the
+   *  sheet machinery appends unknown sections and `isFormatAligned` only checks that the format's own
+   *  sections are present and in order, so an addition costs nothing. */
+  brainstormAllowNewSections: z.boolean().optional(),
   updatedAt: z.string().optional()
 });
 export type AppSettings = z.infer<typeof AppSettingsSchema>;

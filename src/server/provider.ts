@@ -156,6 +156,8 @@ export interface CharacterBrainstormInput {
     content: string;
   }>;
   userMessage: string;
+  /** Whether the assistant may propose a section the format does not list. */
+  allowNewSections?: boolean;
   includeOriginalCard?: boolean;
   /** Target character format whose section guidance the assistant should follow. */
   format?: CharacterFormat;
@@ -163,6 +165,12 @@ export interface CharacterBrainstormInput {
 
 export interface CharacterBrainstormOutput {
   reply: string;
+  /** Headers the model proposed that this sheet does not have — dropped, and worth showing. */
+  unmappedHeaders?: string[];
+  /** Headers kept as additions to the sheet, so the card can mark them as new. */
+  newSections?: string[];
+  /** The connection's model, so a reply can say who wrote it. */
+  model?: string;
   proposedChanges?: {
     sections?: ProposedSectionChange[];
     name?: string;
