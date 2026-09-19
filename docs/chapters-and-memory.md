@@ -16,18 +16,28 @@ A chapter is a save point. When you close one, the messages since the last chapt
 archived: they stay in the playthrough — you can still open the transcript — but they stop
 being sent as chat history and are represented by a summary instead.
 
-**Close Chapter** lives in the play view's Journal tab. It asks for an optional closing message to
-include in the transcript that gets summarized, and for the **Text Provider** that writes the
-chapter: one connection for both of the two model calls a close makes (the summary, and the
-opening turn). The choice is remembered, so the next chapter offers it again; the default is
-**Active connection**, which follows whichever text connection is active.
+**Close Chapter** lives in the play view's Journal tab, and asks three things:
+
+- **How the next chapter opens** — `Continuation` (resumes where things left off), `Short time jump`
+  (moments later, close by), `Long time jump` (days, weeks or months have passed), or `Custom`,
+  where the opening follows your own message. The mode is remembered, so the next close offers it
+  again.
+- **Opening message** (optional; `Custom` requires one) — an ordinary user message that becomes the
+  **first message of the new chapter**. It is not a note about the chapter you are closing: the
+  summary describes the past, this describes what comes next. Because it is a real message you can
+  read it back, edit it like any other, and a **Retry** on the opening re-opens the chapter with it
+  still in play.
+- **Text Provider** — one connection for both of the two model calls a close makes (the summary and
+  the opening turn). Remembered like the mode; the default is **Active connection**, which follows
+  whichever text connection is active.
 
 Closing produces:
 
 1. a **summary** of the chapter — a name, a one-line description, and a full summary written
    by the model
-2. a **chapter opening** — a fresh assistant message that starts the new chapter, so the chat
-   is never left empty and the opening can be retried or edited like any other response
+2. a **chapter opening** — a fresh assistant message that opens the new chapter in the way the mode
+   asks for (and as your opening message describes, when you wrote one), so the chat is never left
+   empty and the opening can be retried or edited like any other response
 3. a **chapter tag** on the memory events in that chapter's turn range, which keeps the event
    timeline grouped by chapter
 
@@ -37,6 +47,21 @@ Already-closed chapters can be re-summarized from the chat: the **Re-summarize p
 chapter** action re-runs the summary on the same archived transcript and updates the chapter's
 name, description and summary, using the same remembered connection. It does not regenerate the
 opening — Retry on the opening message does that.
+
+### Summary freshness
+
+A summary is a snapshot of what the chapter said when it was written. Editing an archived message
+(open the transcript, **Edit**) leaves the summary describing the older text, so the chapter shows a
+note beside it: *"This summary was written before a later edit to this chapter's messages, so it may
+no longer match them."*
+
+- **Re-summarize** — the button in that chapter's action bar, beside View Transcript — rewrites the
+  summary from the archived messages and clears the note. The chat's own **Re-summarize previous
+  chapter** action does exactly the same thing.
+- The note's **✕** dismisses it for that edit, not for the chapter: a later edit brings it back,
+  because the note is about the edit.
+- Nothing is refreshed behind your back and nothing is blocked — the note is information, and the
+  transcript stays editable either way.
 
 ### Reverting to an earlier chapter
 

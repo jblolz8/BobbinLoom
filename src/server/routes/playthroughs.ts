@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync, FastifyPluginOptions } from "fastify";
 import { z } from "zod";
+import { ChapterOpeningModeSchema } from "../../schemas";
 import type { ScenarioPreferences } from "../../schemas";
 import { parseUserInput } from "../../engine/engine";
 import { assembleTurnPrompt } from "../openAiCompatibleProvider";
@@ -77,8 +78,11 @@ const QuestActionBody = z.object({
 });
 
 const CloseChapterBody = z.object({
-  addClosingMessage: z.boolean().default(false),
-  closingMessage: z.string().optional(),
+  /** How the next chapter opens. Remembered by the client; absent means `continuation`. */
+  openingMode: ChapterOpeningModeSchema.default("continuation"),
+  /** The player's own message to open the new chapter with. It becomes the first message of that
+   *  chapter — NOT part of the chapter being closed, and not part of its summary. */
+  openingMessage: z.string().optional(),
   /** The text connection to close the chapter with (the summary AND the opening turn). Absent =
    *  the stored chapter preference, then the active connection. */
   providerId: z.string().optional()
@@ -363,17 +367,28 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
 
   app.post("/api/playthroughs/:id/close-chapter", async (request, reply) => {
     const params = z.object({ id: z.string() }).parse(request.params);
-    const body = CloseChapterBody.parse(request.body ?? {});
+    const parsedBody = CloseChapterBody.safeParse(request.body ?? {});
+    if (!parsedBody.success) {
+      const reason = parsedBody.error.issues
+        .map((issue) => `${issue.path.join(".") || "body"} ${issue.message}`)
+        .join("; ");
+      return reply.code(400).send({ error: `Invalid close-chapter request: ${reason}` });
+    }
+    const body = parsedBody.data;
+    // `custom` means the player's own message IS the opening: silently downgrading it to
+    // `continuation` would throw away the only thing that mode promises.
+    if (body.openingMode === "custom" && !body.openingMessage?.trim()) {
+      return reply.code(400).send({ error: "The Custom mode needs a message to open the chapter with" });
+    }
 
     const playthrough = getPlaythroughRecord(dataDir, params.id);
     if (!playthrough) return reply.code(404).send({ error: "Playthrough not found" });
 
+    // The transcript is the messages of the chapter being closed, and nothing else. The player's
+    // opening message for the NEXT chapter is deliberately absent: the summary describes the past,
+    // and the transition is what the new chapter opens from.
     const chapterMsgs = playthrough.messages.filter(m => !m.hidden && !m.chapterId);
-    let transcript = chapterMsgs.map(m => m.role.toUpperCase() + ": " + m.content).join("\n");
-
-    if (body.addClosingMessage && body.closingMessage) {
-      transcript += "\nUSER: " + body.closingMessage;
-    }
+    const transcript = chapterMsgs.map(m => m.role.toUpperCase() + ": " + m.content).join("\n");
 
     // ONE resolution for the whole operation. This handler touches the connection four times —
     // the summary call, the opening turn (provider AND context window), the memory embedding, and
@@ -398,7 +413,21 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
 
     if (controller.signal.aborted) return;
 
-    const result = await closeChapterAction(dataDir, params.id, summary, provider, true, contextWindow, controller.signal, summaryDurationMs, loadPromptConfig(settingsDir).promptConfig);
+    const result = await closeChapterAction(
+      dataDir,
+      params.id,
+      summary,
+      provider,
+      true,
+      contextWindow,
+      controller.signal,
+      summaryDurationMs,
+      loadPromptConfig(settingsDir).promptConfig,
+      {
+        openingMode: body.openingMode,
+        ...(body.openingMessage?.trim() ? { openingMessage: body.openingMessage } : {})
+      }
+    );
 
     if (controller.signal.aborted) return;
 

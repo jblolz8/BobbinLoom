@@ -1,4 +1,4 @@
-import type { Playthrough, PlaythroughCover, PlaythroughListResponse, SimpleNPC } from "../../schemas";
+import type { ChapterOpeningMode, Playthrough, PlaythroughCover, PlaythroughListResponse, SimpleNPC } from "../../schemas";
 import type { RevertRequestAnchor } from "../../engine/chapterRevert";
 import { request } from "./client";
 
@@ -54,8 +54,11 @@ export type GeneratePlaythroughResponse = {
 };
 
 export type CloseChapterBody = {
-  addClosingMessage: boolean;
-  closingMessage?: string;
+  /** How the next chapter opens. `custom` needs `openingMessage` — the route refuses it without. */
+  openingMode: ChapterOpeningMode;
+  /** The player's own message to open the new chapter with: it becomes that chapter's first
+   *  message, not part of the chapter being closed. */
+  openingMessage?: string;
   /** The text connection to close with; absent = the stored chapter preference, then the
    *  active connection. */
   providerId?: string;

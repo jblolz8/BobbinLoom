@@ -1,7 +1,7 @@
-import type { AvatarShape, CoverAspect, CustomThemeColors, TagTaxonomyConfig, ThemeMode } from "../../schemas";
+import type { AvatarShape, ChapterOpeningMode, CoverAspect, CustomThemeColors, TagTaxonomyConfig, ThemeMode } from "../../schemas";
 import { request } from "./client";
 
-export type { ThemeMode, CustomThemeColors };
+export type { ThemeMode, CustomThemeColors, ChapterOpeningMode };
 
 export interface AppearanceSettings {
   avatarShape: AvatarShape;
@@ -508,6 +508,20 @@ export function updateTagTaxonomy(config: TagTaxonomyConfig): Promise<{ tagTaxon
   return request<{ tagTaxonomy: TagTaxonomyConfig }>("/api/settings/tag-taxonomy", {
     method: "PUT",
     body: JSON.stringify(config),
+  });
+}
+
+/** The remembered chapter-opening mode. */
+export function getChapterOpeningMode(): Promise<{ chapterOpeningMode: ChapterOpeningMode }> {
+  return request<{ chapterOpeningMode: ChapterOpeningMode }>("/api/settings/chapter-opening-mode");
+}
+
+export function setChapterOpeningMode(
+  mode: ChapterOpeningMode
+): Promise<{ chapterOpeningMode: ChapterOpeningMode }> {
+  return request<{ chapterOpeningMode: ChapterOpeningMode }>("/api/settings/chapter-opening-mode", {
+    method: "PUT",
+    body: JSON.stringify({ openingMode: mode })
   });
 }
 

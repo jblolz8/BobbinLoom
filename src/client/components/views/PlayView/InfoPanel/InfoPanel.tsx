@@ -21,6 +21,9 @@ export type InfoPanelProps = {
   onCloseChapterComplete: (tokenUsage: TokenUsage) => void;
   /** Ask to revert to an archived chapter; the confirm dialog lives one level up, in PlayView. */
   onRevertToChapter: (chapterId: string, chapterName: string) => void;
+  /** Re-runs the summarizer on an archived chapter, and which chapter is mid-summarize. */
+  onResummarizeChapter: (chapterId: string) => void;
+  resummarizingChapterId: string | null;
   onStartNewWithSameScenario: (scenarioDescription: string, personaId: string | undefined, initialCastIds: string[] | undefined, originalName: string) => void;
   onOpenLibrary?: (templateId: string) => void;
   onOpenTimelines?: () => void;
@@ -61,6 +64,8 @@ export function InfoPanel(props: InfoPanelProps) {
             onViewChapter={props.onViewChapter}
             onCloseChapterComplete={props.onCloseChapterComplete}
             onRevertToChapter={props.onRevertToChapter}
+            onResummarizeChapter={props.onResummarizeChapter}
+            resummarizingChapterId={props.resummarizingChapterId}
             onStartNewWithSameScenario={props.onStartNewWithSameScenario}
             onOpenTimelines={props.onOpenTimelines}
           />

@@ -865,6 +865,32 @@ describe("image generation: preset routes and the global prompt config", () => {
     expect(resolved.promptCharacterLimit).toBe(1200);
   });
 
+  it("round-trips the chapter opening mode, defaulting to continuation and rejecting an unknown value", async () => {
+    // A chapter-lifecycle preference beside the appearance ones; a fresh install must not need a
+    // write to get a sane default.
+    const initial = await app.inject({ method: "GET", url: "/api/settings/chapter-opening-mode" });
+    expect(initial.statusCode).toBe(200);
+    expect((initial.json() as { chapterOpeningMode?: string }).chapterOpeningMode).toBe("continuation");
+
+    const saved = await app.inject({
+      method: "PUT",
+      url: "/api/settings/chapter-opening-mode",
+      payload: { openingMode: "longJump" }
+    });
+    expect(saved.statusCode).toBe(200);
+    expect((saved.json() as { chapterOpeningMode?: string }).chapterOpeningMode).toBe("longJump");
+
+    const reread = await app.inject({ method: "GET", url: "/api/settings/chapter-opening-mode" });
+    expect((reread.json() as { chapterOpeningMode?: string }).chapterOpeningMode).toBe("longJump");
+
+    const rejected = await app.inject({
+      method: "PUT",
+      url: "/api/settings/chapter-opening-mode",
+      payload: { openingMode: "teleport" }
+    });
+    expect(rejected.statusCode).toBe(400);
+  });
+
   it("round-trips the cover art shape, defaulting to landscape and rejecting an unknown value", async () => {
     // The shape is a display preference, but it lives in the appearance settings beside the
     // avatar shape (which is why this rides in the preset-routes harness).

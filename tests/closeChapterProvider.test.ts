@@ -153,6 +153,43 @@ describe("the text connection a chapter is closed with", () => {
     await teardown(h);
   });
 
+  it("keeps the player opening message out of the summary and hands it to the opening turn", async () => {
+    const h = await harness();
+    const note = "Three days later, in the harbour town of Rime.";
+
+    const res = await closeChapter(h.app, h.playthroughId, {
+      providerId: "beta",
+      openingMode: "custom",
+      openingMessage: note
+    });
+
+    expect(res.statusCode).toBe(200);
+    // The chat calls in order: the summary first, then the opening turn. Embed requests carry the
+    // memory text and are not chat calls.
+    const chats = h.bodies.filter((body) => body.includes('"messages"') && !body.includes('"input"'));
+    expect(chats.length).toBeGreaterThanOrEqual(2);
+    // The summary describes the PAST: it must not know about the transition.
+    expect(chats[0]).not.toContain("Rime");
+    // The opening turn does: the player message is part of its history.
+    expect(chats.slice(1).some((body) => body.includes("Rime"))).toBe(true);
+
+    await teardown(h);
+  });
+
+  it("refuses an unknown mode, and a Custom close with no message", async () => {
+    const h = await harness();
+
+    const unknownMode = await closeChapter(h.app, h.playthroughId, { openingMode: "teleport" });
+    expect(unknownMode.statusCode).toBe(400);
+    expect(unknownMode.json().error).toContain("openingMode");
+
+    const noMessage = await closeChapter(h.app, h.playthroughId, { openingMode: "custom" });
+    expect(noMessage.statusCode).toBe(400);
+    expect(noMessage.json().error).toContain("Custom");
+
+    await teardown(h);
+  });
+
   it("falls back to the stored chapter preference when the request carries no id", async () => {
     const h = await harness();
     setChapterTextProvider(h.settingsDir, "beta");

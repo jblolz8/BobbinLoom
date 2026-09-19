@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { listProviderConnections, setChapterTextProvider, type CloseChapterBody, type ProviderConnection } from "../../api";
-import { Button, Checkbox, Icon, SimpleSelect, TextArea } from "../base";
+import {
+  getChapterOpeningMode,
+  listProviderConnections,
+  setChapterOpeningMode,
+  setChapterTextProvider,
+  type CloseChapterBody,
+  type ProviderConnection
+} from "../../api";
+import { CHAPTER_OPENING_MODES, chapterOpeningModeInfo, chapterOpeningModeNeedsMessage } from "../../../engine/chapterLifecycle";
+import type { ChapterOpeningMode } from "../../../schemas";
+import { Button, Icon, SimpleSelect, TextArea } from "../base";
 
 export type CloseChapterModalProps = {
   /** How many visible messages the running chapter holds — the operation's own gate already ran,
@@ -33,11 +42,21 @@ export function CloseChapterModal({
   const [activeTextProviderId, setActiveTextProviderId] = useState("");
   const [providerId, setProviderId] = useState("");
   const [providerError, setProviderError] = useState<string | null>(null);
-  const [addClosingMessage, setAddClosingMessage] = useState(false);
-  const [closingMessage, setClosingMessage] = useState("");
+  const [mode, setMode] = useState<ChapterOpeningMode>("continuation");
+  const [modeError, setModeError] = useState<string | null>(null);
+  const [openingMessage, setOpeningMessage] = useState("");
 
   useEffect(() => {
     let cancelled = false;
+    // The remembered mode, like the remembered connection below: one read on open, one write on
+    // change, and a failure to read falls back to the mode that changes nothing.
+    getChapterOpeningMode()
+      .then((preference) => {
+        if (!cancelled) setMode(preference.chapterOpeningMode);
+      })
+      .catch(() => {
+        /* Fall back to `continuation` — the mode that behaves as it did before modes existed. */
+      });
     listProviderConnections()
       .then((registry) => {
         if (cancelled) return;
@@ -68,6 +87,14 @@ export function CloseChapterModal({
     return [{ value: "", label: "Active connection" }, ...rows];
   }, [connections, activeTextProviderId, providerId]);
 
+  function handleModeChange(next: ChapterOpeningMode) {
+    setMode(next);
+    setModeError(null);
+    setChapterOpeningMode(next).catch((error: unknown) => {
+      setModeError(error instanceof Error ? error.message : "Could not remember that mode");
+    });
+  }
+
   function handleProviderChange(id: string) {
     setProviderId(id);
     setProviderError(null);
@@ -95,8 +122,8 @@ export function CloseChapterModal({
             <h2>Close Chapter</h2>
             <p>
               {visibleMessageCount} message{visibleMessageCount === 1 ? "" : "s"} in the running chapter become
-              an archived volume: the model writes a name, a one-line description and a full summary, and
-              opens the next chapter so the chat is never left empty. The transcript and the memories stay.
+              an archived volume: the model writes a name, a one-line description and a full summary, then
+              opens the next chapter. The transcript and the memories stay.
             </p>
           </div>
           <button className="flex items-center gap-1 modal-close-btn" onClick={onCancel} aria-label="Close">
@@ -124,19 +151,40 @@ export function CloseChapterModal({
         </div>
 
         <div className="form-field">
-          <Checkbox
-            checked={addClosingMessage}
-            onChange={(event) => setAddClosingMessage(event.target.checked)}
-            label="Add custom closing note or author remark"
+          <span className="field-label-text">How the next chapter opens</span>
+          <SimpleSelect<ChapterOpeningMode>
+            id="close-chapter-mode"
+            size="sm"
+            variant="filled"
+            fullWidth
+            value={mode}
+            onChange={handleModeChange}
+            options={CHAPTER_OPENING_MODES.map((entry) => ({ value: entry.id, label: entry.label }))}
+            aria-label="How the next chapter opens"
           />
-          {addClosingMessage ? (
-            <TextArea
-              value={closingMessage}
-              onChange={(event) => setClosingMessage(event.target.value)}
-              placeholder="Write a closing remark or scene resolution…"
-              rows={3}
-            />
-          ) : null}
+          <span className="field-hint">{chapterOpeningModeInfo(mode).blurb}</span>
+          {modeError ? <span className="field-hint error">{modeError}</span> : null}
+        </div>
+
+        {/* The player's own message for the new chapter. It is a normal user message there — the
+            chapter's first — so it stays editable and re-readable like any other. */}
+        <div className="form-field">
+          <label className="field-label-text" htmlFor="close-chapter-message">
+            Opening message{chapterOpeningModeNeedsMessage(mode) ? "" : " (optional)"}
+          </label>
+          <TextArea
+            id="close-chapter-message"
+            value={openingMessage}
+            onChange={(event) => setOpeningMessage(event.target.value)}
+            placeholder="Becomes the first message of the new chapter — a transition, a time skip, a first line. Leave it empty to let the connection open the scene alone."
+            rows={3}
+            aria-describedby="close-chapter-message-hint"
+          />
+          <span className="field-hint" id="close-chapter-message-hint">
+            {chapterOpeningModeNeedsMessage(mode)
+              ? "This mode follows your message exactly, so it needs one."
+              : "The new chapter starts with it, and a Retry on the opening keeps it."}
+          </span>
         </div>
 
         {errorMessage ? <p className="error-box">{errorMessage}</p> : null}
@@ -145,12 +193,12 @@ export function CloseChapterModal({
           <Button
             variant="primary"
             size="md"
-            disabled={isLoading}
+            disabled={isLoading || (chapterOpeningModeNeedsMessage(mode) && !openingMessage.trim())}
             isLoading={isLoading}
             onClick={() =>
               onConfirm({
-                addClosingMessage,
-                ...(addClosingMessage && closingMessage ? { closingMessage } : {}),
+                openingMode: mode,
+                ...(openingMessage.trim() ? { openingMessage: openingMessage.trim() } : {}),
                 ...(providerId ? { providerId } : {})
               })
             }

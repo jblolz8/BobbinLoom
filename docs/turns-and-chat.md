@@ -39,6 +39,10 @@ the inventory and the chapter data all roll back with the message, not just the 
 A retried turn keeps its character: a chapter opening stays a chapter opening, a hidden
 instruction stays hidden.
 
+The **opening message** you can write when closing a chapter (see
+[Chapters & memory](chapters-and-memory.md)) is an ordinary user message: editable like any other,
+and a **Retry** on the chapter's opening re-generates that opening with it still in play.
+
 ## Suggested choices
 
 When enabled, each response can be followed by a short row of suggested next actions. Clicking

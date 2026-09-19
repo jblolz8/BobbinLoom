@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   AvatarShapeSchema,
   CoverAspectSchema,
+  ChapterOpeningModeSchema,
   CharacterFormatSchema,
   CustomThemeColorsSchema,
   EMPTY_MODULE_SET,
@@ -126,6 +127,28 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
     const body = TagTaxonomyConfigSchema.parse(request.body ?? {});
     const updated = saveAppSettings(settingsDir, { tagTaxonomy: body });
     return { tagTaxonomy: updated.tagTaxonomy ?? { customCategories: [], tagOverrides: {} } };
+  });
+
+  /** The last chapter-opening mode the player chose. Its own endpoint rather than a field on the
+   *  appearance payload: it is not appearance, and that route hand-lists its response fields, which
+   *  would silently drop it. */
+  app.get("/api/settings/chapter-opening-mode", async () => {
+    const settings = loadAppSettings(settingsDir);
+    return { chapterOpeningMode: settings.chapterOpeningMode ?? DEFAULT_APP_SETTINGS.chapterOpeningMode };
+  });
+
+  app.put("/api/settings/chapter-opening-mode", async (request, reply) => {
+    // safeParse, not parse: an invalid value must be a 400 WITH the reason rather than the 500 a
+    // thrown ZodError would produce, and nothing may be written.
+    const parsed = z.object({ openingMode: ChapterOpeningModeSchema }).safeParse(request.body ?? {});
+    if (!parsed.success) {
+      const reason = parsed.error.issues
+        .map((issue) => `${issue.path.join(".") || "body"} ${issue.message}`)
+        .join("; ");
+      return reply.code(400).send({ error: `Invalid chapter opening mode: ${reason}` });
+    }
+    const updated = saveAppSettings(settingsDir, { chapterOpeningMode: parsed.data.openingMode });
+    return { chapterOpeningMode: updated.chapterOpeningMode ?? DEFAULT_APP_SETTINGS.chapterOpeningMode };
   });
 
   app.get("/api/settings/appearance", async () => {

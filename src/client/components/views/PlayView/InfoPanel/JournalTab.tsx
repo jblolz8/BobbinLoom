@@ -1,17 +1,35 @@
 import { useEffect, useMemo, useState } from "react";
 import type { LorebookSummary, MemoryEvent, Playthrough } from "../../../../../schemas";
 import { closeChapter, listLorebooks, type CloseChapterBody, type TokenUsage } from "../../../../api";
-import { AvatarBadge, Badge, Button, Icon, TextInput } from "../../../base";
+import { AvatarBadge, Badge, Button, Icon, IconButton, TextInput } from "../../../base";
 import { buildImageUrl, clearPlaythroughCover, setPlaythroughCover } from "../../../../api";
 import { buildCoverMedia } from "../../../../engine/coverMedia";
+import { chapterStaleSignature, chapterSummaryIsStale } from "../../../../../engine/chapterLifecycle";
 import { GalleryModal } from "../../../modals/GalleryModal";
 import { CloseChapterModal } from "../../../modals/CloseChapterModal";
+
+/** Where a dismissal of the stale-summary note is remembered, per device — the same
+ *  `bobbinloom_` prefixed key convention the other client preferences use. Keyed on the chapter PLUS
+ *  the edit it was dismissed for, so a later edit warns again instead of being silenced for good. */
+const STALE_DISMISSALS_KEY = "bobbinloom_chapter_stale_dismissed";
+
+function readStaleDismissals(): Record<string, string> {
+  try {
+    const raw = window.localStorage.getItem(STALE_DISMISSALS_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
 
 export function JournalTab({
   playthrough,
   onPlaythroughChange,
   onViewChapter,
   onCloseChapterComplete,
+  onResummarizeChapter,
+  resummarizingChapterId,
   onRevertToChapter,
   onStartNewWithSameScenario,
   onOpenTimelines
@@ -20,6 +38,10 @@ export function JournalTab({
   onPlaythroughChange: (updated: Playthrough) => void;
   onViewChapter: (chapterId: string) => void;
   onCloseChapterComplete: (tokenUsage: TokenUsage) => void;
+  /** Re-runs the summarizer on an archived chapter (one implementation: the chat's own
+   *  "Re-summarize previous chapter" action calls the same handler). */
+  onResummarizeChapter: (chapterId: string) => void;
+  resummarizingChapterId: string | null;
   /** Ask to revert to this chapter: everything after it is discarded and it becomes the running
    *  chapter again. The confirm dialog (with the counts and the backup button) lives in PlayView. */
   onRevertToChapter: (chapterId: string, chapterName: string) => void;
@@ -34,6 +56,7 @@ export function JournalTab({
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [coverSaving, setCoverSaving] = useState(false);
   const [coverError, setCoverError] = useState<string | null>(null);
+  const [staleDismissals, setStaleDismissals] = useState<Record<string, string>>(() => readStaleDismissals());
 
   // Filter state for timeline events
   const [eventSearch, setEventSearch] = useState("");
@@ -198,6 +221,18 @@ export function JournalTab({
     }
   }
 
+  function dismissStaleNote(chapterId: string, signature: string) {
+    setStaleDismissals((previous) => {
+      const next = { ...previous, [chapterId]: signature };
+      try {
+        window.localStorage.setItem(STALE_DISMISSALS_KEY, JSON.stringify(next));
+      } catch {
+        /* A blocked or full storage must not stop the note going away for this session. */
+      }
+      return next;
+    });
+  }
+
   function toggleExpand(chapterId: string) {
     setExpandedChapters(prev => {
       const next = new Set(prev);
@@ -352,6 +387,12 @@ export function JournalTab({
             <ul className="archived-volumes-list">
               {[...(playthrough.chapters ?? [])].reverse().map((ch) => {
                 const isExpanded = expandedChapters.has(ch.id);
+                // Derived, never stored: an edit after the summary was written makes it stale, and
+                // re-summarizing (which stamps the chapter) clears it with no second write.
+                const staleSignature = chapterSummaryIsStale(ch, playthrough.messages)
+                  ? chapterStaleSignature(ch, playthrough.messages)
+                  : null;
+                const staleNoteShown = staleSignature !== null && staleDismissals[ch.id] !== staleSignature;
                 return (
                   <li key={ch.id} className="archived-volume-card">
                     <div className="volume-header" onClick={() => toggleExpand(ch.id)}>
@@ -377,6 +418,22 @@ export function JournalTab({
                         {ch.shortDescription ? (
                           <p className="volume-short-desc">{ch.shortDescription}</p>
                         ) : null}
+                        {staleNoteShown ? (
+                          <div className="chapter-stale-note" role="status">
+                            <Icon name="TriangleAlert" size={13} className="chapter-stale-note-icon" />
+                            <span>
+                              This summary was written before a later edit to this chapter's messages,
+                              so it may no longer match them.
+                            </span>
+                            <IconButton
+                              icon="X"
+                              size="xs"
+                              variant="ghost"
+                              label="Dismiss this note"
+                              onClick={() => dismissStaleNote(ch.id, staleSignature)}
+                            />
+                          </div>
+                        ) : null}
                         <p className="volume-full-summary">{ch.fullSummary}</p>
                         <div className="volume-actions-bar">
                           <span
@@ -385,6 +442,20 @@ export function JournalTab({
                           >
                             {ch.createdAt ? new Date(ch.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : ""}
                           </span>
+                          <Button
+                            variant="outline"
+                            size="xs"
+                            leftIcon={<Icon name="RefreshCw" size={12} />}
+                            disabled={resummarizingChapterId === ch.id}
+                            isLoading={resummarizingChapterId === ch.id}
+                            title="Rewrite this chapter's summary from its messages"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onResummarizeChapter(ch.id);
+                            }}
+                          >
+                            {resummarizingChapterId === ch.id ? "Summarizing…" : "Re-summarize"}
+                          </Button>
                           <Button
                             variant="outline"
                             size="xs"

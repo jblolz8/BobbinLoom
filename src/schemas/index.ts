@@ -437,6 +437,15 @@ export const PromptConfigSchema = z.object({
 });
 export type PromptConfig = z.infer<typeof PromptConfigSchema>;
 
+/** How the NEXT chapter opens, chosen when a chapter is closed.
+ *
+ *  A zod enum is right here on purpose: this value is chosen by the CLIENT, never written by the
+ *  model — the free-form-string rule is about fields the model fills. The matching labels, blurbs
+ *  and prompt fragments live with it in `engine/chapterLifecycle.ts`, so the route's enum, the
+ *  modal's options and the instruction text cannot drift apart. */
+export const ChapterOpeningModeSchema = z.enum(["continuation", "shortJump", "longJump", "custom"]);
+export type ChapterOpeningMode = z.infer<typeof ChapterOpeningModeSchema>;
+
 export const AppSettingsSchema = z.object({
   schemaVersion: z.number().int().min(1).default(1),
   // The preset backing the global prompt config (renamed from defaultPresetId:
@@ -450,6 +459,9 @@ export const AppSettingsSchema = z.object({
   themeMode: ThemeModeSchema.optional(),
   themePreset: z.string().optional(),
   customThemeColors: CustomThemeColorsSchema.optional(),
+  /** The last chapter-opening mode the player chose. Optional, so a settings file written before
+   *  this preference parses untouched and no `dataMigrations` entry is needed. */
+  chapterOpeningMode: ChapterOpeningModeSchema.optional(),
   updatedAt: z.string().optional()
 });
 export type AppSettings = z.infer<typeof AppSettingsSchema>;

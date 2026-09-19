@@ -2,7 +2,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { atomicWriteJson, quarantineFile, readJsonFile } from "./persistence";
 import { AppSettingsSchema } from "../schemas";
-import type { AppSettings, AvatarShape, CustomThemeColors, PromptConfig, TagTaxonomyConfig, ThemeMode } from "../schemas";
+import type { AppSettings, AvatarShape, ChapterOpeningMode, CustomThemeColors, PromptConfig, TagTaxonomyConfig, ThemeMode } from "../schemas";
 
 /**
  * Shipped product defaults — the single source of truth for a fresh install
@@ -18,6 +18,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   themeMode: "dark",
   themePreset: "default-dark",
   customThemeColors: {},
+  // Every close starts here; the player's last choice replaces it once they make one.
+  chapterOpeningMode: "continuation",
 };
 
 /**
@@ -74,6 +76,7 @@ export function saveAppSettings(
     themeMode?: ThemeMode;
     themePreset?: string;
     customThemeColors?: CustomThemeColors;
+    chapterOpeningMode?: ChapterOpeningMode;
   }
 ): AppSettings {
   mkdirSync(dataDir, { recursive: true });

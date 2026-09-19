@@ -425,6 +425,8 @@ export function PlayView(props: PlayViewProps) {
           onViewChapter={setViewingChapterId}
           onCloseChapterComplete={(tu) => setTokenUsage(tu)}
           onRevertToChapter={(chapterId, name) => setRevertTarget({ kind: "chapter", id: chapterId, label: name })}
+          onResummarizeChapter={(chapterId) => { void handleResummarizeChapter(chapterId); }}
+          resummarizingChapterId={resummarizingChapterId}
           onStartNewWithSameScenario={(sd, pid, cids, name) => handleStartNewWithSameScenario(sd, pid, cids, name)}
           onOpenLibrary={(templateId) => {
             setCharacterManagerEditingId(templateId);

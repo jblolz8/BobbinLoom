@@ -7,6 +7,11 @@ import type { Chapter, ChapterMetaSummary, CharacterTemplate, Playthrough, Promp
 import { getCharacterTemplate, getPlaythroughRecord, listCharacterTemplates, saveCharacterTemplateRecord, updatePlaythroughRecord } from "./store";
 import { buildLorebookContext, lorebookBudgetChars } from "./lorebookContext";
 import { executeTurn } from "./turnActions";
+import {
+  buildChapterOpeningInstruction,
+  chapterOpeningModeNeedsMessage
+} from "../engine/chapterLifecycle";
+import type { ChapterOpeningMode } from "../schemas";
 import type { TurnProvider } from "./provider";
 import { COMPACT_TRIGGER_COUNT, IMPORTANCE_FLOOR, VERBATIM_CHAPTER_LIMIT } from "./provider";
 
@@ -255,19 +260,6 @@ export function saveToLibraryAction(
 export type CloseChapterResult = { ok: true; state: Playthrough } | ActionFailure;
 export type ResummarizeChapterResult = { ok: true; state: Playthrough } | ActionFailure;
 
-/**
- * Hardcoded instruction used to open a new chapter after the previous one is
- * archived. Story-so-far (chapter summaries) and current world state are
- * injected separately by buildUserPrompt, so this only needs to frame the
- * transition.
- *
- * TODO: make this editable via a preset module, alongside the
- * scenario-generation opening prompt (seed modules).
- */
-const CHAPTER_OPENING_INSTRUCTION =
-  "A new chapter begins. The previous chapter has been archived and summarized — read the STORY SO FAR and CURRENT STATE to pick up exactly where things left off. " +
-  "Write an opening that resumes the story seamlessly: ground the player in their current location and situation, acknowledge what just happened where relevant, and end by presenting the current moment as an invitation for the player to act. " +
-  "Do not take actions on behalf of the player. Write in second person.";
 
 /**
  * Roll older chapters into the single rolling meta-summary so the injected
@@ -399,8 +391,16 @@ export async function closeChapterAction(
   contextWindow: number = 65536,
   signal?: AbortSignal,
   summaryDurationMs?: number,
-  promptConfig?: PromptConfig
+  promptConfig?: PromptConfig,
+  /** How the next chapter opens, and the message the player wrote to open it. Absent means
+   *  `continuation` with no message — the behaviour every caller had before modes existed. */
+  options?: { openingMode?: ChapterOpeningMode; openingMessage?: string }
 ): Promise<CloseChapterResult> {
+  const openingMode: ChapterOpeningMode = options?.openingMode ?? "continuation";
+  const openingMessage = options?.openingMessage?.trim() ?? "";
+  if (chapterOpeningModeNeedsMessage(openingMode) && !openingMessage) {
+    return { ok: false, status: 400, error: "This opening mode needs a message to follow" };
+  }
   const loaded = load(dataDir, playthroughId);
   if (isFailure(loaded)) return loaded;
 
@@ -507,6 +507,22 @@ export async function closeChapterAction(
     });
   }
 
+  // ── The player's own opening message, if they wrote one ──
+  // It belongs to the chapter that FOLLOWS, not to the one just archived: no `chapterId`, not in
+  // `msgsToArchive`, not in the chapter's `messageIds`, and not part of the summary transcript.
+  // Pushed before the opening turn so the model sees it as the player's contribution, and BEFORE
+  // the persist below so a failed opening still leaves it saved (the chapter is never left empty).
+  if (openingMessage) {
+    loaded.messages.push({
+      id: `msg_${randomUUID()}`,
+      role: "user",
+      content: openingMessage,
+      createdAt: new Date().toISOString(),
+      // The turn the opening turn is about to occupy: the player's message of that turn.
+      turn: loaded.turn + 1
+    });
+  }
+
   updatePlaythroughRecord(dataDir, loaded);
 
   // ── Generate the opening assistant message for the new chapter ──
@@ -517,7 +533,7 @@ export async function closeChapterAction(
   try {
     const openingResult = await executeTurn(
       loaded,
-      CHAPTER_OPENING_INSTRUCTION,
+      buildChapterOpeningInstruction(openingMode, openingMessage),
       provider,
       suggestedChoicesEnabled,
       contextWindow,

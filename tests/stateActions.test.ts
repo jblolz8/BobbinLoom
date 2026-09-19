@@ -388,3 +388,116 @@ describe("promotion story context macro expansion", () => {
     expect(captured).toContain("{{char}} remembers Anon");
   });
 });
+
+describe("closeChapterAction — the opening message and the opening mode", () => {
+  /** Captures the opening turn's input, so the mode's instruction can be asserted. */
+  function makeProvider(captured: { raw?: string }): TurnProvider {
+    return {
+      async generateTurn(input: ParsedUserInput): Promise<ProviderTurn> {
+        captured.raw = input.raw;
+        return { turn: { narrative: "The next chapter opens." } };
+      },
+      async generateScenarioSeed(): Promise<ScenarioSeed> { throw new Error("not used"); },
+      async summarizeChapter(): Promise<{ name: string; shortDescription: string; fullSummary: string }> { throw new Error("not used"); },
+      async compactStorySoFar(): Promise<{ summary: string }> { return { summary: "compacted" }; },
+      async embedTexts(): Promise<number[][]> { return []; },
+      async generateCharacterSheet(): Promise<string> { throw new Error("not used"); },
+      async refineCharacterSheet(): Promise<string> { throw new Error("not used"); },
+      async reformatCharacterSheet(): Promise<string> { throw new Error("not used"); },
+      async suggestCharacterTags(): Promise<string[]> { return []; },
+      async brainstormCharacter() { throw new Error("not used"); }
+    };
+  }
+
+  function seedVisible(pt: Playthrough, count = 8): void {
+    pt.messages = [];
+    pt.turn = Math.floor(count / 2);
+    for (let i = 0; i < count; i++) {
+      pt.messages.push({
+        id: "msg_" + i,
+        role: i % 2 === 0 ? "user" : "assistant",
+        content: "message " + i,
+        createdAt: "2026-01-01T00:00:0" + i + ".000Z",
+        turn: Math.floor(i / 2) + 1
+      });
+    }
+  }
+
+  const SUMMARY = { name: "Closed Chapter", shortDescription: "short", fullSummary: "full" };
+  const NOTE = "Three days later, in the harbour town of Rime.";
+
+  it("appends the player message as the first message of the NEW chapter", async () => {
+    const dir = tempDir();
+    const pt = createPlaythroughRecord(dir, "Opening Message");
+    seedVisible(pt);
+    updatePlaythroughRecord(dir, pt);
+
+    const captured: { raw?: string } = {};
+    const result = await closeChapterAction(dir, pt.id, SUMMARY, makeProvider(captured), true, 32768, undefined, undefined, undefined, {
+      openingMode: "shortJump",
+      openingMessage: NOTE
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const messages = result.state.messages;
+    const opening = messages[messages.length - 1];
+    // executeTurn appends a hidden machinery instruction and then the assistant message, so the
+    // player own message sits two positions before the opening.
+    const appended = messages[messages.length - 3];
+    expect(opening.role).toBe("assistant");
+    expect(appended).toMatchObject({ role: "user", content: NOTE });
+    expect(appended.chapterId).toBeUndefined();
+    expect(appended.hidden).toBeFalsy();
+    expect(appended.turn).toBe(opening.turn);
+
+    // The chapter that closed knows nothing about it.
+    const chapter = result.state.chapters[result.state.chapters.length - 1];
+    expect(chapter.messageIds).not.toContain(appended.id);
+    expect(result.state.messages.filter((m) => m.chapterId === chapter.id).length).toBe(8);
+
+    // And the opening turn was asked for a short jump that honours the message.
+    expect(captured.raw).toContain("MOMENTS LATER");
+    expect(captured.raw).toContain(NOTE);
+  });
+
+  it("appends nothing at all when the player wrote no message", async () => {
+    const dir = tempDir();
+    const pt = createPlaythroughRecord(dir, "No Message");
+    seedVisible(pt);
+    updatePlaythroughRecord(dir, pt);
+
+    const captured: { raw?: string } = {};
+    const result = await closeChapterAction(dir, pt.id, SUMMARY, makeProvider(captured), true, 32768, undefined, undefined, undefined, {
+      openingMode: "continuation"
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Eight archived + the hidden machinery instruction + the opening.
+    expect(result.state.messages).toHaveLength(10);
+    expect(captured.raw).toContain("resumes the story seamlessly");
+    expect(captured.raw).not.toContain("<<<");
+  });
+
+  it("refuses Custom with no message, and writes nothing", async () => {
+    const dir = tempDir();
+    const pt = createPlaythroughRecord(dir, "Custom Without Message");
+    seedVisible(pt);
+    updatePlaythroughRecord(dir, pt);
+
+    const captured: { raw?: string } = {};
+    const result = await closeChapterAction(dir, pt.id, SUMMARY, makeProvider(captured), true, 32768, undefined, undefined, undefined, {
+      openingMode: "custom"
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.status).toBe(400);
+    expect(result.error).toContain("needs a message");
+
+    const stored = getPlaythroughRecord(dir, pt.id);
+    expect(stored?.chapters).toHaveLength(0);
+    expect(captured.raw).toBeUndefined();
+  });
+});

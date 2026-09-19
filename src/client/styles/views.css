@@ -2118,6 +2118,32 @@
   margin: 0 0 0.75rem 0;
 }
 
+/* A chapter's summary can predate an edit to its messages. Warning tokens, because it is a
+   should-look-at-this rather than a failure — and the ✕ is why it is not an error box. */
+.chapter-stale-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0.35rem 0 0.6rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--status-warning-border, var(--border-main));
+  border-radius: 8px;
+  background: var(--status-warning-bg, var(--bg-surface-elevated));
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.chapter-stale-note span {
+  flex: 1;
+  min-width: 0;
+}
+
+.chapter-stale-note-icon {
+  color: var(--status-warning);
+  margin-top: 0.1rem;
+}
+
 .volume-actions-bar {
   display: flex;
   align-items: center;
