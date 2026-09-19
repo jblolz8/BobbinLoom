@@ -3,13 +3,23 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { describeRevert, planRevert } from "../src/engine/chapterRevert";
+import { describeRevert, planRevert, toRevertAnchor, toRevertRequestAnchor } from "../src/engine/chapterRevert";
 import { takeTurnSnapshot } from "../src/engine/engine";
 import { createBlankPlaythroughRecord, getPlaythroughRecord, updatePlaythroughRecord } from "../src/server/store";
 import type { TurnSnapshot } from "../src/schemas";
 import { revertAction } from "../src/server/turnActions";
-import { turnRoutes } from "../src/server/routes/turns";
-import type { Chapter, MemoryEvent, Playthrough } from "../src/schemas";
+import { RevertBody, turnRoutes } from "../src/server/routes/turns";
+import type { Chapter, MemoryEvent, MessageImage, Playthrough } from "../src/schemas";
+
+function image(file: string): MessageImage {
+  return {
+    file,
+    prompt: `prompt for ${file}`,
+    providerId: "venice_images",
+    model: "probe",
+    createdAt: "2026-01-01T00:00:00.000Z"
+  };
+}
 
 const tempDirs: string[] = [];
 
@@ -253,6 +263,22 @@ describe("planRevert", () => {
     expect(facts.approximate).toBe(false);
   });
 
+  it("counts only the images that will actually be removed, not every image in the cut", () => {
+    const dir = tempDir();
+    const { playthrough, ch1, ch2 } = buildStory(dir);
+    // One file shared by a surviving message and a discarded one, one that only the cut holds.
+    // Index 1 survives a revert to chapter 2; the cut starts at 18 (chapter 3's opening).
+    playthrough.messages[1].images = [image("shared.png")];
+    playthrough.messages[19].images = [image("shared.png"), image("doomed.png")];
+
+    const plan = planRevert(playthrough, { kind: "chapter", chapterId: ch2.id });
+    expect(plan).not.toBeNull();
+    if (!plan) return;
+
+    // The shared file survives in chapter 1, so it is not promised away.
+    expect(describeRevert(plan, playthrough).images).toBe(1);
+  });
+
   it("flags an approximate revert when the restore point has no snapshot", () => {
     const dir = tempDir();
     const { playthrough, ch2 } = buildStory(dir, { snapshots: false });
@@ -391,6 +417,31 @@ describe("revertAction", () => {
     const stored = getPlaythroughRecord(dir, playthrough.id);
     expect(stored?.messages).toHaveLength(24);
     expect(stored?.chapters).toHaveLength(2);
+  });
+});
+
+describe("the body the client sends is the body the route accepts", () => {
+  /** This is the tripwire for the shapes: the engine anchor names its id field (`chapterId` /
+   *  `messageId`) and the wire body carries one generic `id`. Sending the engine shape validates
+   *  as far as the browser and dies at the route with "Required" — which is a 400 the UI can only
+   *  report verbatim, so it must be caught here instead. */
+  it("validates the wire anchor for both kinds against the route's own schema", () => {
+    for (const target of [
+      { kind: "chapter" as const, id: "ch_1", label: "The First Volume" },
+      { kind: "message" as const, id: "msg_a9", label: "a response" }
+    ]) {
+      const parsed = RevertBody.safeParse({ anchor: toRevertRequestAnchor(target) });
+      expect(parsed.success).toBe(true);
+      expect(parsed.success && parsed.data.anchor).toEqual({ kind: target.kind, id: target.id });
+    }
+  });
+
+  it("rejects the engine's own anchor shape — the bug these two types exist to prevent", () => {
+    const engineAnchor = toRevertAnchor({ kind: "chapter", id: "ch_1", label: "The First Volume" });
+    expect(engineAnchor).toEqual({ kind: "chapter", chapterId: "ch_1" });
+    // Falsification: shipping the engine shape over the wire is precisely the 400 users hit.
+    const parsed = RevertBody.safeParse({ anchor: engineAnchor });
+    expect(parsed.success).toBe(false);
   });
 });
 

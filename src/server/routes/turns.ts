@@ -30,8 +30,10 @@ const TruncateBody = z.object({
 });
 
 /** Where a revert starts. The union is deliberate: "revert to this chapter" and "revert from this
- *  response" are one operation, and the discriminator is the only thing that differs. */
-const RevertBody = z.object({
+ *  response" are one operation, and the discriminator is the only thing that differs. Exported so
+ *  a test can validate the CLIENT's request body against it — a shape mismatch here is a 400 the
+ *  UI shows as "Required", which is exactly how the first version of this shipped broken. */
+export const RevertBody = z.object({
   anchor: z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("chapter"), id: z.string() }),
     z.object({ kind: z.literal("message"), id: z.string() })

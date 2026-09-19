@@ -1,5 +1,5 @@
 import type { Playthrough, PlaythroughCover, PlaythroughListResponse, SimpleNPC } from "../../schemas";
-import type { RevertAnchor } from "../../engine/chapterRevert";
+import type { RevertRequestAnchor } from "../../engine/chapterRevert";
 import { request } from "./client";
 
 export type TokenBreakdown = {
@@ -148,7 +148,7 @@ export function truncatePlaythrough(playthroughId: string, messageId: string): P
  *  Nothing regenerates. */
 export function revertToAnchor(
   playthroughId: string,
-  anchor: RevertAnchor
+  anchor: RevertRequestAnchor
 ): Promise<Playthrough> {
   return request<Playthrough>(`/api/playthroughs/${playthroughId}/revert`, {
     method: "POST",

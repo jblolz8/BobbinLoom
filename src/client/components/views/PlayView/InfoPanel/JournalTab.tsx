@@ -310,7 +310,8 @@ export function JournalTab({
             <span>Chapters</span>
           </h3>
           <Badge variant="neutral" size="xs" pill>
-            {(playthrough.chapters?.length ?? 0) + 1} volumes
+            {(playthrough.chapters?.length ?? 0) + 1}{" "}
+            {(playthrough.chapters?.length ?? 0) + 1 === 1 ? "volume" : "volumes"}
           </Badge>
         </div>
 

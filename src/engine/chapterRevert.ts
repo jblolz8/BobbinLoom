@@ -21,7 +21,7 @@
  *  is a synthetic instruction (the "Continue" flow, the chapter-opening instruction) and stays
  *  hidden.
  */
-import type { Chapter, ChatMessage, Playthrough } from "../schemas";
+import type { Playthrough } from "../schemas";
 
 export type RevertAnchor =
   | { kind: "chapter"; chapterId: string }
@@ -159,32 +159,34 @@ export function planRevert(playthrough: Playthrough, anchor: RevertAnchor): Reve
   };
 }
 
-/** The counts the confirm dialog renders. Derived from the same plan the server executes. */
+/**
+ * The counts the confirm dialog renders. Derived from the same plan the server executes.
+ *
+ * `images` counts what the revert will actually REMOVE: the store is content-addressed, so a file
+ * the discarded turns share with a surviving message stays — and promising a deletion that does
+ * not happen is the same class of lie as promising a smaller one than happens.
+ */
 export function describeRevert(plan: RevertPlan, playthrough: Playthrough): RevertFacts {
   const deleted = playthrough.messages.slice(plan.truncationIndex);
-  const files = new Set<string>();
+  const surviving = new Set<string>();
+  for (const message of playthrough.messages.slice(0, plan.truncationIndex)) {
+    for (const image of message.images ?? []) {
+      if (image?.file) surviving.add(image.file);
+    }
+  }
+  const doomed = new Set<string>();
   for (const message of deleted) {
     for (const image of message.images ?? []) {
-      if (image?.file) files.add(image.file);
+      if (image?.file && !surviving.has(image.file)) doomed.add(image.file);
     }
   }
   return {
     messages: deleted.length,
     turns: Math.max(0, playthrough.turn - plan.keptTailTurn),
-    images: files.size,
+    images: doomed.size,
     chapters: plan.droppedChapterIds.length,
     approximate: plan.approximate
   };
-}
-
-/** The message-level revert offered by the transcript view: an archived assistant response. */
-export function canRevertMessage(message: ChatMessage): boolean {
-  return message.role === "assistant" && Boolean(message.chapterId);
-}
-
-/** The chapter-level revert offered by the Chapters list. */
-export function canRevertChapter(playthrough: Playthrough, chapter: Chapter): boolean {
-  return (playthrough.chapters ?? []).some((candidate) => candidate.id === chapter.id);
 }
 
 /** What the UI remembers while the confirm dialog is open: the anchor, plus what to call it.
@@ -200,4 +202,18 @@ export function toRevertAnchor(target: RevertTarget): RevertAnchor {
   return target.kind === "chapter"
     ? { kind: "chapter", chapterId: target.id }
     : { kind: "message", messageId: target.id };
+}
+
+/**
+ * The WIRE shape of an anchor — what the route's body schema accepts, and deliberately not the
+ * same thing as `RevertAnchor`: there the id is a named field (`chapterId` / `messageId`), here it
+ * is one generic `id` chosen by the discriminator. Two shapes with one converter each is how the
+ * first shipped version of this sent `{ chapterId }` and got back nothing but "Required".
+ *
+ * The route maps this to `RevertAnchor`, so the direction is: UI target → wire → engine.
+ */
+export type RevertRequestAnchor = { kind: "chapter" | "message"; id: string };
+
+export function toRevertRequestAnchor(target: RevertTarget): RevertRequestAnchor {
+  return { kind: target.kind, id: target.id };
 }

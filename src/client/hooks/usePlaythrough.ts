@@ -24,7 +24,7 @@ import {
   type TokenUsage
 } from "../api";
 import { checkImageRequestBody, formatImageRequestBody } from "../utils/imageRequestBody";
-import { toRevertAnchor, type RevertTarget } from "../../engine/chapterRevert";
+import { toRevertRequestAnchor, type RevertTarget } from "../../engine/chapterRevert";
 
 const CHAT_SETTINGS_KEY = "bobbinloom_chat_settings";
 
@@ -1097,7 +1097,7 @@ export function usePlaythrough() {
     setFailedNotice(null);
     setCancelledNotice(null);
     try {
-      const updated = await revertToAnchor(playthrough.id, toRevertAnchor(revertTarget));
+      const updated = await revertToAnchor(playthrough.id, toRevertRequestAnchor(revertTarget));
       setPlaythrough(updated);
       setRevertTarget(null);
       setRetryTarget(null);
