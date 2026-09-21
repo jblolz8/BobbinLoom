@@ -14,7 +14,12 @@
  *   --reinstall     force an install only
  *   --no-install    skip the install step entirely
  *   --no-build      skip the build step entirely
+ *   --pull          fetch and fast-forward from origin BEFORE deciding anything
  *   --check         print the decisions and change nothing
+ *
+ * `update.*` passes --pull --force; `start.*` never passes --pull, so a launch stays
+ * offline and instant and this script's only network call happens when the reader asks
+ * for it. See pullFromOrigin for why a refused pull is not a failed update.
  *
  * Why detection instead of always doing both: `npm install` needs the network and
  * costs 5-30s even when nothing moved, and this is a local-first app that has to
@@ -54,7 +59,7 @@ const NODE_MODULES = join(ROOT, "node_modules");
 const INSTALL_MARKER = join(NODE_MODULES, ".package-lock.json");
 
 function parseArgs(argv) {
-  const flags = { force: false, rebuild: false, reinstall: false, install: true, build: true, check: false };
+  const flags = { force: false, rebuild: false, reinstall: false, install: true, build: true, pull: false, check: false };
   for (const arg of argv) {
     switch (arg) {
       case "--force": case "-f": flags.force = true; break;
@@ -62,6 +67,7 @@ function parseArgs(argv) {
       case "--reinstall": flags.reinstall = true; break;
       case "--no-install": flags.install = false; break;
       case "--no-build": flags.build = false; break;
+      case "--pull": flags.pull = true; break;
       case "--check": flags.check = true; break;
       case "--help": case "-h": usage(); process.exit(0);
       default:
@@ -78,7 +84,7 @@ function parseArgs(argv) {
 
 function usage() {
   console.log(`Usage: node scripts/ensure-ready.mjs [--force|-f] [--rebuild|-r] [--reinstall]
-                                      [--no-install] [--no-build] [--check]`);
+                                      [--no-install] [--no-build] [--pull] [--check]`);
 }
 
 function mtime(path) {
@@ -196,6 +202,93 @@ function npm(args) {
   return result.status === 0;
 }
 
+/**
+ * Run git, capturing its output. Never throws: a missing git is a reason to report, not to crash, because
+ * the local tree can still be installed and built.
+ */
+function git(args) {
+  const result = spawnSync("git", args, { cwd: ROOT, encoding: "utf8" });
+  const error = result.error ? result.error.message : null;
+  return {
+    ok: !error && result.status === 0,
+    out: (result.stdout ?? "").trim(),
+    err: (result.stderr ?? "").trim() || error || ""
+  };
+}
+
+/**
+ * How the branch stands against its remote-tracking ref, WITHOUT touching the network: every number here
+ * comes from the last fetch. That is what makes `--check` a dry run that still says something useful, and
+ * the only reason this is separate from pullFromOrigin.
+ */
+function syncState() {
+  if (!git(["--version"]).ok) return { known: false, detail: "git not found in PATH" };
+  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
+  if (!branch.ok) return { known: false, detail: "not a git checkout" };
+  if (branch.out === "HEAD") return { known: false, detail: "detached HEAD — no branch to update" };
+  const upstream = git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
+  if (!upstream.ok) return { known: false, detail: `${branch.out} has no upstream to pull from` };
+  const counts = git(["rev-list", "--left-right", "--count", "HEAD...@{u}"]);
+  if (!counts.ok) return { known: false, detail: `cannot compare ${branch.out} with ${upstream.out}` };
+  const [ahead, behind] = counts.out.split(/\s+/).map((value) => Number(value));
+  return { known: true, branch: branch.out, upstream: upstream.out, ahead, behind };
+}
+
+function localPullReport() {
+  const state = syncState();
+  if (!state.known) return `not checked — ${state.detail}`;
+  if (state.behind === 0) {
+    return `level with ${state.upstream} as of the last fetch${state.ahead > 0 ? ` (${state.ahead} local commit(s) not pushed)` : ""}`;
+  }
+  return `behind ${state.upstream} by ${state.behind} commit(s) — would fetch and fast-forward`;
+}
+
+/**
+ * Bring the working tree up to date from origin, FAST-FORWARD ONLY.
+ *
+ * The launcher is the one place a network call belongs: `update.*` is the explicit "bring me current"
+ * action, while `start.*` stays offline and instant. Fast-forward only, because choosing between a merge
+ * and a rebase when the branch has diverged is the reader's call and never the launcher's — and this
+ * repository's convention is that commits land straight on main, so divergence means two devices, which is
+ * exactly when a human should look.
+ *
+ * A refusal is NOT a failed update: the caller carries on and installs/builds what is on disk. What the
+ * refusal must never become is silence, so the caller reports it loudly and exits non-zero.
+ */
+function pullFromOrigin() {
+  const start = syncState();
+  if (!start.known) return { ok: false, detail: start.detail };
+
+  const remote = start.upstream.split("/")[0];
+  const fetched = git(["fetch", "--quiet", remote]);
+  if (!fetched.ok) {
+    return { ok: false, detail: `git fetch ${remote} failed — offline?${fetched.err ? ` (${fetched.err})` : ""}` };
+  }
+
+  // Re-read: the fetch moved the remote-tracking ref, so this is the real distance now.
+  const state = syncState();
+  if (!state.known) return { ok: false, detail: state.detail };
+  if (state.behind === 0) {
+    return {
+      ok: true,
+      detail: `already up to date with ${state.upstream}${state.ahead > 0 ? ` (${state.ahead} local commit(s) not pushed)` : ""}`
+    };
+  }
+  if (state.ahead > 0) {
+    return {
+      ok: false,
+      detail: `${state.upstream} has ${state.behind} commit(s) this branch does not, and this branch has ${state.ahead} it does not — merge or rebase it yourself`
+    };
+  }
+
+  const pulled = git(["pull", "--ff-only", "--quiet"]);
+  if (!pulled.ok) {
+    // Git's own message is the useful one: it names the file it refused to overwrite.
+    return { ok: false, detail: pulled.err || "git pull --ff-only failed" };
+  }
+  return { ok: true, detail: `fast-forwarded ${state.behind} commit(s) from ${state.upstream}` };
+}
+
 function main() {
   const flags = parseArgs(process.argv.slice(2));
 
@@ -208,14 +301,37 @@ function main() {
   const build = flags.build ? (flags.rebuild ? "forced" : buildReason()) : null;
 
   if (flags.check) {
+    if (flags.pull) console.log(`[check] pull: ${localPullReport()}`);
     console.log(`[check] install: ${install ?? "up to date"}${flags.install ? "" : "  (disabled)"}`);
     console.log(`[check] rebuild: ${build ?? "up to date"}${flags.build ? "" : "  (disabled)"}`);
     return 0;
   }
 
+  // Update BEFORE deciding anything: a pull can bring a new package.json (so the install must happen after
+  // it) and new client source (so must the rebuild). A refused pull is reported and stepped over — this
+  // device still gets installed and built, and the exit code below is what says "not fully updated".
+  let pullProblem = null;
+  if (flags.pull) {
+    const result = pullFromOrigin();
+    if (result.ok) {
+      console.log(`[ensure] Repository: ${result.detail}`);
+    } else {
+      pullProblem = result.detail;
+      console.error("");
+      console.error(`[WARN] Could not update from origin — ${result.detail}`);
+      console.error("[WARN] Carrying on with the tree already on disk, so this device's install and build");
+      console.error("[WARN] still happen. It is BEHIND origin, and this exits non-zero so that is not");
+      console.error("[WARN] mistaken for a clean update.");
+      console.error("");
+    }
+  }
+
+  /** The pull's complaint outranks a clean install/build: both succeeding still means "not fully updated". */
+  const finish = (code) => (code !== 0 ? code : pullProblem ? 1 : 0);
+
   if (install === null && build === null) {
     console.log("[ensure] Dependencies and client build are up to date.");
-    return 0;
+    return finish(0);
   }
 
   if (install !== null) {
@@ -230,12 +346,12 @@ function main() {
     // Fresh dependencies mean a stale bundle.
     if (build === null && flags.build) {
       console.log("[ensure] Dependencies changed, so the client bundle must be rebuilt.");
-      return runBuild(true);
+      return finish(runBuild(true));
     }
   }
 
-  if (build !== null) return runBuild(false);
-  return 0;
+  if (build !== null) return finish(runBuild(false));
+  return finish(0);
 }
 
 function runBuild(afterInstall) {

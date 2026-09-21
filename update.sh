@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# BobbinLoom — unconditional update: install dependencies AND rebuild the client.
-# Use this after pulling changes, or on a fresh device. start.sh does the same thing
-# automatically, but only when it detects something changed.
+# BobbinLoom — unconditional update: pull from origin, install dependencies, rebuild the client.
+# Use this when you want this device current. start.sh does the install/build automatically, but
+# only when it detects something changed, and it never touches the network — pulling is what
+# update.* is for.
 cd "$(dirname "$0")" || exit 1
 
 if ! command -v node >/dev/null 2>&1; then
@@ -11,13 +12,15 @@ if ! command -v node >/dev/null 2>&1; then
     exit 1
 fi
 
-echo "Updating BobbinLoom (dependencies + client build)..."
+echo "Updating BobbinLoom (pull + dependencies + client build)..."
 echo
 
-node scripts/ensure-ready.mjs --force || {
+node scripts/ensure-ready.mjs --pull --force || {
     echo
-    echo "[FAIL] Update failed — see the message above."
-    echo "       The project may be in a partially updated state; re-run once the cause is fixed."
+    echo "[FAIL] The update did not finish cleanly — see the message above."
+    echo "       If it was the PULL that could not happen (offline, local commits, or edits in the"
+    echo "       way of the incoming ones), the install and build still ran for the tree already on"
+    echo "       disk, so this device is usable but behind origin. Sort the repository out and re-run."
     exit 1
 }
 
