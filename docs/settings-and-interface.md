@@ -105,7 +105,10 @@ A few patterns are consistent across every surface:
   the backdrop to dismiss it (the backdrop only on a press that starts there, so a drag out of a
   field does not throw the dialog away), Tab contained inside it, and focus handed to the dialog's
   first stop — which in a destructive dialog is the safe action, and in the rename dialog is the
-  name field. When it closes, focus goes back to whatever opened it
+  name field. When it closes, focus goes back to whatever opened it. Its action row reads the same
+  everywhere, too: the confirming action first, any secondary actions beside it (**Duplicate as
+  backup** in the revert and retry dialogs), and **Cancel last** — at the right end of the row on a
+  desktop, and the last full-width button once the row stacks on a phone
 - **A gesture works everywhere it appears** — the ⋮ menu on a playthrough card is the same menu
   in the save/load list; the same pager component drives every paginated list
 - **Compact controls are real controls** — inline remove buttons, tag chips and menu triggers

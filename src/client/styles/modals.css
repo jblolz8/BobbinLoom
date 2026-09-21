@@ -187,6 +187,24 @@
   flex-wrap: wrap;
 }
 
+/* The action row on a phone — every dialog's row, not only the confirm's.
+   Measured at 375px: three actions left to `flex-wrap` came out two lines with Cancel orphaned on
+   one of its own, while the same row stacked as it reads is a clean three. Source order is already
+   `[confirm][secondary actions…][cancel]` for a confirm and `[primary][cancel]` for a form, so
+   stacking in source order keeps visual order = DOM order = Tab order, puts the destructive action
+   furthest from the thumb, and leaves Cancel last. */
+@media (max-width: 680px) {
+  .settings-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .settings-actions > .base-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 /* The status line reports the result of a save/switch/refresh. Tokenized: it used to
    carry the default dark palette's bare hex and ignored a custom theme. */
 .settings-status {
@@ -201,6 +219,14 @@
 
 .confirm-modal {
   max-width: 480px;
+}
+
+/* The action row is one contract: `[confirm][secondary actions…][cancel]`, right-aligned, with the
+   dismissive action at the end. Declared here, on the confirm primitive, rather than on
+   `.settings-actions` — that base row is shared with form dialogs (save/cancel), whose own
+   alignment rules are not the confirm's to change. */
+.modal.confirm-modal .settings-actions {
+  justify-content: flex-end;
 }
 
 .retry-preview {
@@ -260,17 +286,9 @@
   color: var(--text-secondary);
 }
 
-/* The only recovery path, and deliberately not part of the destructive action: it runs on its
-   own and reports itself, so a failed copy can never ride along with the revert. */
-.revert-backup-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.6rem;
-}
-
+/* The backup's outcome, in the dialog's body now that its button lives in the action row. */
 .revert-backup-note {
+  margin: 0.6rem 0 0;
   font-size: 0.82rem;
   color: var(--text-secondary);
 }

@@ -138,6 +138,16 @@ export function RevertConfirmModal({
       isLoading={isLoading}
       confirmDisabled={!plan}
       maxWidth={520}
+      secondaryActions={
+        <Button
+          variant="secondary"
+          disabled={backupState.kind === "saving" || isLoading}
+          isLoading={backupState.kind === "saving"}
+          onClick={() => { void handleBackup(); }}
+        >
+          {backupState.kind === "saving" ? "Copying…" : "Duplicate as backup"}
+        </Button>
+      }
       onConfirm={onConfirm}
       onCancel={onCancel}
     >
@@ -150,23 +160,14 @@ export function RevertConfirmModal({
         </blockquote>
       ) : null}
 
-      <div className="revert-backup-row">
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={backupState.kind === "saving" || isLoading}
-          isLoading={backupState.kind === "saving"}
-          onClick={() => { void handleBackup(); }}
-        >
-          {backupState.kind === "saving" ? "Copying…" : "Duplicate as backup"}
-        </Button>
-        {backupState.kind === "done" ? (
-          <span className="revert-backup-note">Saved as “{backupState.name}” — it is on the shelf.</span>
-        ) : null}
-        {backupState.kind === "error" ? (
-          <span className="revert-backup-note error">Copy failed: {backupState.error}</span>
-        ) : null}
-      </div>
+      {/* The backup's outcome is an ordinary line of the body: the ACTION belongs in the action row
+          beside the confirm, but a status note in a row of buttons reads as one more button. */}
+      {backupState.kind === "done" ? (
+        <p className="revert-backup-note">Saved as “{backupState.name}” — it is on the shelf.</p>
+      ) : null}
+      {backupState.kind === "error" ? (
+        <p className="revert-backup-note error">Copy failed: {backupState.error}</p>
+      ) : null}
     </ConfirmModal>
   );
 }
