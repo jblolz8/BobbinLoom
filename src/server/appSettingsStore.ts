@@ -2,7 +2,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { atomicWriteJson, quarantineFile, readJsonFile } from "./persistence";
 import { AppSettingsSchema } from "../schemas";
-import type { AppSettings, AvatarShape, ChapterOpeningMode, CustomThemeColors, PromptConfig, TagTaxonomyConfig, ThemeMode } from "../schemas";
+import type { AppSettings, AvatarShape, ChapterOpeningMode, CustomThemeColors, PromptConfig, TagTaxonomyConfig, ThemeMode, ViewPreferences } from "../schemas";
 
 /**
  * Shipped product defaults — the single source of truth for a fresh install
@@ -74,6 +74,45 @@ export function loadAppSettings(dataDir: string): AppSettings {
   return merged;
 }
 
+/**
+ * Merge a PARTIAL preferences patch into what is stored, group by group and leaf by leaf.
+ *
+ * `saveAppSettings` merges at the top level only, so handing it a `viewPreferences` object would
+ * replace the whole thing — and a PUT that carries one leaf would silently drop every other
+ * preference the reader has. This is the one place that nesting is flattened, and it is explicit
+ * rather than a generic deep-merge so the shape stays readable.
+ *
+ * A group the reader has never chosen stays ABSENT rather than becoming an empty object: absent is
+ * what the one-shot adoption reads as "not migrated yet".
+ */
+export function saveViewPreferences(dataDir: string, patch: ViewPreferences): AppSettings {
+  const current = loadAppSettings(dataDir);
+  const before = current.viewPreferences ?? {};
+
+  const merged: ViewPreferences = {};
+  const put = <K extends keyof ViewPreferences>(key: K, value: ViewPreferences[K] | undefined): void => {
+    if (value !== undefined) merged[key] = value;
+  };
+  const group = <T extends object>(stored: T | undefined, patchValue: T | undefined): T | undefined => {
+    if (patchValue === undefined) return stored;
+    if (stored === undefined) return patchValue;
+    return { ...stored, ...patchValue };
+  };
+
+  put("chat", group(before.chat, patch.chat));
+  put("library", group(before.library, patch.library));
+  put("setup", group(before.setup, patch.setup));
+  put("cast", group(before.cast, patch.cast));
+  put("providers", group(before.providers, patch.providers));
+  put("nav", group(before.nav, patch.nav));
+  put(
+    "staleNoteDismissals",
+    group(before.staleNoteDismissals, patch.staleNoteDismissals)
+  );
+
+  return saveAppSettings(dataDir, { viewPreferences: merged });
+}
+
 export function saveAppSettings(
   dataDir: string,
   input: {
@@ -91,6 +130,7 @@ export function saveAppSettings(
     /** The play view's panel swipe. Display, not data — which is why it rides in the appearance
      *  settings beside the avatar shape, and why nothing reads it from a playthrough. */
     paneSwipeEnabled?: boolean;
+    viewPreferences?: ViewPreferences;
   }
 ): AppSettings {
   mkdirSync(dataDir, { recursive: true });

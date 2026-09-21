@@ -2,11 +2,11 @@ import type { FastifyReply } from "fastify";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { PromptPreset } from "../../schemas";
-import { loadAppSettings, saveAppSettings } from "../appSettingsStore";
+import { loadAppSettings, saveAppSettings, saveViewPreferences } from "../appSettingsStore";
 import { createProviderManager } from "../providerManager";
 import { atomicWriteJson } from "../persistence";
 
-export { loadAppSettings, saveAppSettings };
+export { loadAppSettings, saveAppSettings, saveViewPreferences };
 
 export const dataDir = join(process.cwd(), "data", "playthroughs");
 export const settingsDir = join(process.cwd(), "data");

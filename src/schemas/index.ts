@@ -446,6 +446,58 @@ export type PromptConfig = z.infer<typeof PromptConfigSchema>;
 export const ChapterOpeningModeSchema = z.enum(["continuation", "shortJump", "longJump", "custom"]);
 export type ChapterOpeningMode = z.infer<typeof ChapterOpeningModeSchema>;
 
+/**
+ * The reader's display preferences: every list's view mode and sort, the chat's toggles, the
+ * play-nav tabs, the stale-note dismissals. One group per surface that owns one, and every LEAF is
+ * optional — a settings file written before a group existed parses untouched (no `dataMigrations`
+ * entry) and, more importantly, an ABSENT leaf means "never chosen", which is what lets the one-shot
+ * `planAdoption` tell "not migrated yet" from "chosen equal to the default".
+ *
+ * The wire deliberately carries only what was chosen: `/api/settings/preferences` does not fill
+ * defaults the way the appearance route does, and the client resolves them in one place.
+ */
+export const ViewPreferencesSchema = z.object({
+  chat: z
+    .object({
+      choices: z.boolean().optional(),
+      showDebug: z.boolean().optional(),
+      showContextUsage: z.boolean().optional()
+    })
+    .optional(),
+  library: z
+    .object({
+      viewMode: z.string().optional(),
+      sortBy: z.string().optional(),
+      sortDir: z.string().optional(),
+      sidebarViewMode: z.string().optional(),
+      collapsedCategories: z.array(z.string()).optional(),
+      search: z.string().optional(),
+      pageSize: z.number().int().positive().optional()
+    })
+    .optional(),
+  setup: z
+    .object({
+      castSearch: z.string().optional(),
+      castSortBy: z.string().optional(),
+      castSortDir: z.string().optional(),
+      castViewMode: z.string().optional(),
+      showTagFilters: z.boolean().optional()
+    })
+    .optional(),
+  cast: z.object({ viewMode: z.string().optional() }).optional(),
+  providers: z
+    .object({
+      sortBy: z.string().optional(),
+      sortDir: z.string().optional()
+    })
+    .optional(),
+  nav: z.object({ showPlayNavTabs: z.boolean().optional() }).optional(),
+  /** Chapter id → the stale-summary note's dismissal. UI ephemera that happens to grow; it moves
+   *  only so nothing preference-shaped is left on the device. */
+  staleNoteDismissals: z.record(z.string(), z.string()).optional()
+});
+export type ViewPreferences = z.infer<typeof ViewPreferencesSchema>;
+
 export const AppSettingsSchema = z.object({
   schemaVersion: z.number().int().min(1).default(1),
   // The preset backing the global prompt config (renamed from defaultPresetId:
@@ -475,6 +527,10 @@ export const AppSettingsSchema = z.object({
    *  untouched and no `dataMigrations` entry is needed; absent means on, and the bottom tab bar
    *  works either way. */
   paneSwipeEnabled: z.boolean().optional(),
+  /** The reader's display preferences. Optional like every other display field, so a settings file
+   *  written before this parses untouched — and each LEAF stays individually absent until it is
+   *  actually chosen, which is the signal the one-shot adoption reads. */
+  viewPreferences: ViewPreferencesSchema.optional(),
   updatedAt: z.string().optional()
 });
 export type AppSettings = z.infer<typeof AppSettingsSchema>;

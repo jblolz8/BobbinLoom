@@ -1,7 +1,29 @@
-import type { AvatarShape, ChapterOpeningMode, CoverAspect, CustomThemeColors, TagTaxonomyConfig, ThemeMode } from "../../schemas";
+import type { AvatarShape, ChapterOpeningMode, CoverAspect, CustomThemeColors, TagTaxonomyConfig, ThemeMode, ViewPreferences } from "../../schemas";
 import { request } from "./client";
 
 export type { ThemeMode, CustomThemeColors, ChapterOpeningMode };
+
+/**
+ * The reader's display preferences as stored — only what was chosen.
+ *
+ * Unlike the appearance GET, this does NOT fill defaults: an absent leaf is the signal the one-shot
+ * adoption reads to tell "never migrated" from "chosen equal to the default". `resolveViewPreferences`
+ * is the one place the UI turns this into concrete values.
+ */
+export function getViewPreferences(): Promise<ViewPreferences> {
+  return request<{ preferences: ViewPreferences }>("/api/settings/preferences").then(
+    (result) => result.preferences ?? {}
+  );
+}
+
+/** Merge a partial preferences patch server-side. Callers set their own state optimistically first,
+ *  the way the appearance panel does. */
+export function updateViewPreferences(patch: ViewPreferences): Promise<ViewPreferences> {
+  return request<{ preferences: ViewPreferences }>("/api/settings/preferences", {
+    method: "PUT",
+    body: JSON.stringify(patch)
+  }).then((result) => result.preferences ?? {});
+}
 
 export interface AppearanceSettings {
   avatarShape: AvatarShape;

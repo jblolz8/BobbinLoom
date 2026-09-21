@@ -12,9 +12,10 @@ import {
   TagTaxonomyConfigSchema,
   ThemeModeSchema,
   type PromptModuleSet,
-  type PromptPreset
+  type PromptPreset,
+  ViewPreferencesSchema
 } from "../../schemas";
-import { loadPresets, savePresets, loadAppSettings, saveAppSettings, settingsDir } from "./helpers";
+import { loadPresets, savePresets, loadAppSettings, saveAppSettings, saveViewPreferences, settingsDir } from "./helpers";
 import { DEFAULT_APP_SETTINGS } from "../appSettingsStore";
 
 const CreatePresetBody = z.object({
@@ -231,5 +232,34 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
       customThemeColors: updated.customThemeColors ?? {},
       paneSwipeEnabled: updated.paneSwipeEnabled ?? DEFAULT_APP_SETTINGS.paneSwipeEnabled ?? true,
     };
+  });
+
+  /**
+   * The reader's display preferences — every list's view mode and sort, the chat's toggles, the
+   * play-nav tabs, the stale-note dismissals.
+   *
+   * This route deliberately does NOT fill defaults the way the appearance route does. It returns
+   * exactly what was chosen, because an ABSENT leaf is the signal the client's one-shot adoption
+   * reads to tell "never migrated" from "chosen equal to the default". The client resolves defaults
+   * in one place (`resolveViewPreferences`).
+   */
+  app.get("/api/settings/preferences", async () => {
+    const settings = loadAppSettings(settingsDir);
+    return { preferences: settings.viewPreferences ?? {} };
+  });
+
+  app.put("/api/settings/preferences", async (request, reply) => {
+    // safeParse: an invalid value is a 400 WITH the reason rather than the 500 a thrown ZodError
+    // would give, and nothing is written. The store merges group by group, so a body carrying one
+    // leaf leaves every other preference alone.
+    const parsed = ViewPreferencesSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      const reason = parsed.error.issues
+        .map((issue) => `${issue.path.join(".") || "body"} ${issue.message}`)
+        .join("; ");
+      return reply.code(400).send({ error: `Invalid preferences: ${reason}` });
+    }
+    const updated = saveViewPreferences(settingsDir, parsed.data);
+    return { preferences: updated.viewPreferences ?? {} };
   });
 }
