@@ -1,5 +1,6 @@
 import type { CharacterFormat, CharacterTemplate, ClothingItem, Playthrough } from "../../schemas";
 import { request } from "./client";
+import type { BrainstormSession } from "../../engine/brainstorm";
 
 export type CharacterTemplateUpdate = Partial<Pick<CharacterTemplate, "name" | "content" | "creatorNotes" | "tags">>;
 
@@ -35,6 +36,30 @@ export function listCharacters(): Promise<CharacterTemplate[]> {
 
 export function getCharacter(id: string): Promise<CharacterTemplate> {
   return request<CharacterTemplate>(`/api/characters/${id}`);
+}
+
+/** A character's brainstorm session, or null when it has never been brainstormed with. The session lives
+ *  beside the character on the server, so it survives a cleared browser and is visible from any device. */
+export function getBrainstormSession(characterId: string): Promise<BrainstormSession | null> {
+  return request<BrainstormSession | null>(`/api/characters/${characterId}/brainstorm`).catch(() =>
+    null
+  );
+}
+
+/** Stores the whole thread. Unusable entries are dropped server-side and the tail is trimmed there, so a
+ *  caller may send whatever it holds. */
+export function saveBrainstormSession(
+  characterId: string,
+  messages: unknown[]
+): Promise<BrainstormSession> {
+  return request<BrainstormSession>(`/api/characters/${characterId}/brainstorm`, {
+    method: "PUT",
+    body: JSON.stringify({ messages })
+  });
+}
+
+export function clearBrainstormSession(characterId: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/api/characters/${characterId}/brainstorm`, { method: "DELETE" });
 }
 
 export function createCharacter(name: string): Promise<CharacterTemplate> {

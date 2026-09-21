@@ -277,16 +277,39 @@ export function brainstormHistoryContent(message: { content: string; proposedCha
   ].join("\n");
 }
 
-// ── the per-character session, kept in browser storage ──
+// ── the per-character session ──
+//
+// A session lives beside its character on the server (`data/characters/<slug>/brainstorm.json`), so it
+// travels with the folder: exporting the folder carries the conversation, and deleting the character
+// quarantines the session in the same move. It used to live in the browser's localStorage under the key
+// below — the one piece of state a cleared browser or a second device could lose outright, and unlike a
+// tab choice, a lost brainstorm is lost work. That key is still READ once, to hand an existing device's
+// session over; nothing writes it any more.
 
 export const BRAINSTORM_STORAGE_VERSION = 1;
 
-/** Sessions are trimmed rather than refused: a long brainstorm should not be able to fill storage. */
+/** Sessions are trimmed rather than refused: a long thread should not grow without bound. */
 export const BRAINSTORM_MESSAGE_LIMIT = 60;
 
+/** The LEGACY device key, keyed by character id. Read once during adoption, never written. */
 export function brainstormStorageKey(characterId: string): string {
   return `bobbinloom_brainstorm_${characterId}`;
 }
+
+/** One message as it is stored. Checked by SHAPE, because the writer and the reader are a client and a
+ *  server that must agree on the format without sharing a component type. */
+export type BrainstormSessionMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  proposedChanges?: unknown;
+};
+
+export type BrainstormSession = {
+  v: number;
+  updatedAt: string;
+  messages: BrainstormSessionMessage[];
+};
 
 /** The tail of a long session, always starting on a question so the trimmed thread still reads. */
 export function trimBrainstormMessages<T extends { role: string }>(
@@ -299,22 +322,6 @@ export function trimBrainstormMessages<T extends { role: string }>(
   return kept;
 }
 
-export function encodeBrainstormSession(messages: unknown[]): string {
-  return JSON.stringify({ v: BRAINSTORM_STORAGE_VERSION, updatedAt: new Date().toISOString(), messages });
-}
-
-/** Stored messages, or null when there is nothing usable — a stale or hand-edited key is dropped. */
-export function decodeBrainstormSession(raw: string | null): unknown[] | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as { v?: unknown; messages?: unknown };
-    if (parsed?.v !== BRAINSTORM_STORAGE_VERSION || !Array.isArray(parsed.messages)) return null;
-    return parsed.messages;
-  } catch {
-    return null;
-  }
-}
-
 export function isBrainstormMessage(value: unknown): boolean {
   if (!value || typeof value !== "object") return false;
   const message = value as Record<string, unknown>;
@@ -323,4 +330,42 @@ export function isBrainstormMessage(value: unknown): boolean {
     (message.role === "user" || message.role === "assistant") &&
     typeof message.content === "string"
   );
+}
+
+/** The session the server stores, from messages of unknown provenance: unusable entries are DROPPED —
+ *  one bad message must not cost the reader the whole conversation — and the tail is trimmed. */
+export function buildBrainstormSession(messages: unknown[]): BrainstormSession {
+  const usable = messages.filter(isBrainstormMessage) as BrainstormSessionMessage[];
+  return {
+    v: BRAINSTORM_STORAGE_VERSION,
+    updatedAt: new Date().toISOString(),
+    messages: trimBrainstormMessages(usable)
+  };
+}
+
+/** A session read from disk or off the wire, or null when there is nothing usable: a stale version, a
+ *  hand-edited file or a truncated write all read as "no session" rather than as a broken panel. */
+export function parseBrainstormSession(raw: unknown): BrainstormSession | null {
+  if (!raw || typeof raw !== "object") return null;
+  const candidate = raw as { v?: unknown; updatedAt?: unknown; messages?: unknown };
+  if (candidate.v !== BRAINSTORM_STORAGE_VERSION || !Array.isArray(candidate.messages)) return null;
+  const usable = candidate.messages.filter(isBrainstormMessage) as BrainstormSessionMessage[];
+  return {
+    v: BRAINSTORM_STORAGE_VERSION,
+    updatedAt: typeof candidate.updatedAt === "string" ? candidate.updatedAt : new Date().toISOString(),
+    messages: trimBrainstormMessages(usable)
+  };
+}
+
+/** Messages from the LEGACY device key, or null when it holds nothing usable — a stale or hand-edited
+ *  key is dropped rather than handed over. */
+export function decodeLegacyBrainstormSession(raw: string | null): unknown[] | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { v?: unknown; messages?: unknown };
+    if (parsed?.v !== BRAINSTORM_STORAGE_VERSION || !Array.isArray(parsed.messages)) return null;
+    return parsed.messages;
+  } catch {
+    return null;
+  }
 }

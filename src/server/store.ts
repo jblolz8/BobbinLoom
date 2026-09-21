@@ -274,6 +274,15 @@ function characterFolderPath(dir: string, slug: string): string {
   return join(dir, slug);
 }
 
+/** The folder a character's own files live in (`<dir>/<slug>/`), or null when no record holds that id.
+ *  Exported because the brainstorm session is stored BESIDE the record, inside its folder, so the two
+ *  travel together. */
+export function characterFolderForId(id: string, dir: string = CHARACTERS_DIR): string | null {
+  const record = listCharacterTemplates(dir).find((t) => t.id === id);
+  if (!record) return null;
+  return findFolderContainingId(dir, id) ?? characterFolderPath(dir, slugify(record.name));
+}
+
 function characterFilePath(dir: string, slug: string, version?: number): string {
   return version === undefined
     ? join(characterFolderPath(dir, slug), `${slug}.json`)

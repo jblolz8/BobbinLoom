@@ -19,7 +19,10 @@ import {
   LIBRARY_PREFERENCE_DEFAULTS,
   adoptLocalPreferences,
   resolveLibraryPreferences,
-  updateViewPreferences
+  updateViewPreferences,
+  getBrainstormSession,
+  saveBrainstormSession,
+  clearBrainstormSession
 } from "../../api";
 import type { CharacterTemplateUpdate, ProposedSectionChange, CharacterBrainstormResult, Preset, ResolvedLibraryPreferences } from "../../api";
 import { CHARACTER_SHEET_EXAMPLE, applySectionChanges } from "../../../engine/characterSections";
@@ -52,8 +55,7 @@ import { BrainstormSettingsModal } from "./BrainstormSettingsModal";
 import {
   brainstormHistoryContent,
   brainstormStorageKey,
-  decodeBrainstormSession,
-  encodeBrainstormSession,
+  decodeLegacyBrainstormSession,
   isBrainstormMessage,
   trimBrainstormMessages
 } from "../../../engine/brainstorm";
@@ -657,27 +659,47 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     };
   }, []);
 
-  // A saved character's session lives in browser storage, so closing the editor no longer throws a
+  // A saved character's session lives on the server, so closing the editor no longer throws a
   // long brainstorm away. A brand-new character has no id to key one to, and keeps the discard
   // warning.
   useEffect(() => {
     if (!editorOpen || !editingId) return;
-    const stored = decodeBrainstormSession(window.localStorage.getItem(brainstormStorageKey(editingId)));
-    setAiMessages(((stored ?? []).filter(isBrainstormMessage) as BrainstormChatMessage[]));
+    let cancelled = false;
+    const key = brainstormStorageKey(editingId);
+    // The device's old localStorage copy is handed to the server once. The server always wins, so a
+    // session that already exists there is not overwritten by whatever this browser still holds.
+    const legacy = (decodeLegacyBrainstormSession(window.localStorage.getItem(key)) ?? [])
+      .filter(isBrainstormMessage) as BrainstormChatMessage[];
+    void (async () => {
+      const fromServer = await getBrainstormSession(editingId);
+      if (cancelled) return;
+      if (fromServer && fromServer.messages.length > 0) {
+        setAiMessages(fromServer.messages as BrainstormChatMessage[]);
+      } else if (legacy.length > 0) {
+        setAiMessages(legacy);
+        persistBrainstormSession(legacy, editingId);
+      } else {
+        setAiMessages([]);
+      }
+      // The server now owns the session, so keeping the local copy would let a stale one win later.
+      try {
+        window.localStorage.removeItem(key);
+      } catch {
+        /* A blocked storage is not a reason to lose the panel. */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [editorOpen, editingId]);
 
   function persistBrainstormSession(messages: BrainstormChatMessage[], id = editingId) {
     // The id is a parameter because the first save of a new character sets state that this closure
     // will not see until the next render, and those messages are exactly the ones at risk.
     if (!id) return;
-    try {
-      window.localStorage.setItem(
-        brainstormStorageKey(id),
-        encodeBrainstormSession(trimBrainstormMessages(messages))
-      );
-    } catch {
-      /* A full or blocked storage is not a reason to break the conversation. */
-    }
+    void saveBrainstormSession(id, trimBrainstormMessages(messages)).catch(() => {
+      /* A failed write must not break the conversation. */
+    });
   }
 
   // ── Deletion Confirmation Modal State ──
@@ -1060,11 +1082,9 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     setAiMessages([]);
     setAiError(null);
     if (!editingId) return;
-    try {
-      window.localStorage.removeItem(brainstormStorageKey(editingId));
-    } catch {
+    void clearBrainstormSession(editingId).catch(() => {
       /* Nothing to clear. */
-    }
+    });
   }
 
   async function handleOpenAiTagSuggestions(guidance?: unknown) {
@@ -1154,11 +1174,6 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     setConvertedSuccess(null);
     try {
       await deleteCharacter(id);
-      try {
-        window.localStorage.removeItem(brainstormStorageKey(id));
-      } catch {
-        /* Nothing to clear. */
-      }
       if (editingId === id) {
         closeEditor();
       }

@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   BRAINSTORM_MESSAGE_LIMIT,
+  BRAINSTORM_STORAGE_VERSION,
   brainstormHistoryContent,
   brainstormStorageKey,
-  decodeBrainstormSession,
-  encodeBrainstormSession,
+  buildBrainstormSession,
+  decodeLegacyBrainstormSession,
   findJsonBlocks,
   isBrainstormMessage,
   parseBrainstormReply,
+  parseBrainstormSession,
   sanitiseTagList,
   toProposal,
   trimBrainstormMessages
@@ -224,16 +226,28 @@ describe("the per-character session", () => {
     expect(brainstormStorageKey("abc")).toBe("bobbinloom_brainstorm_abc");
   });
 
-  it("round-trips messages", () => {
-    const messages = [{ id: "1", role: "user", content: "hi" }];
-    expect(decodeBrainstormSession(encodeBrainstormSession(messages))).toEqual(messages);
+  it("reads the legacy key's own format, not just a writer it shares code with", () => {
+    // A literal in the old on-disk shape: a fixture proves the FORMAT is understood, where a round
+    // trip only proves the two functions agree with each other.
+    const raw = JSON.stringify({
+      v: 1,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      messages: [
+        { id: "1", role: "user", content: "hi" },
+        { id: "2", role: "assistant", content: "hello" }
+      ]
+    });
+    expect(decodeLegacyBrainstormSession(raw)).toEqual([
+      { id: "1", role: "user", content: "hi" },
+      { id: "2", role: "assistant", content: "hello" }
+    ]);
   });
 
   it("refuses what it cannot trust", () => {
-    expect(decodeBrainstormSession(null)).toBeNull();
-    expect(decodeBrainstormSession("not json")).toBeNull();
-    expect(decodeBrainstormSession(JSON.stringify({ v: 99, messages: [] }))).toBeNull();
-    expect(decodeBrainstormSession(JSON.stringify({ v: 1, messages: "no" }))).toBeNull();
+    expect(decodeLegacyBrainstormSession(null)).toBeNull();
+    expect(decodeLegacyBrainstormSession("not json")).toBeNull();
+    expect(decodeLegacyBrainstormSession(JSON.stringify({ v: 99, messages: [] }))).toBeNull();
+    expect(decodeLegacyBrainstormSession(JSON.stringify({ v: 1, messages: "no" }))).toBeNull();
   });
 
   it("leaves a short session alone", () => {
@@ -257,5 +271,66 @@ describe("the per-character session", () => {
     expect(isBrainstormMessage({ id: "1", role: "system", content: "x" })).toBe(false);
     expect(isBrainstormMessage({ id: 1, role: "user", content: "x" })).toBe(false);
     expect(isBrainstormMessage(null)).toBe(false);
+  });
+});
+
+describe("a session built from loose messages", () => {
+  it("drops what is not a message and keeps the usable ones", () => {
+    const session = buildBrainstormSession([
+      null,
+      "not a message",
+      { id: "1", role: "user", content: "hi" },
+      { id: "2", role: "assistant" },
+      { id: "3", role: "assistant", content: "hello" }
+    ]);
+    // One bad entry costs its own message, not the conversation.
+    expect(session.messages).toEqual([
+      { id: "1", role: "user", content: "hi" },
+      { id: "3", role: "assistant", content: "hello" }
+    ]);
+    expect(session.v).toBe(BRAINSTORM_STORAGE_VERSION);
+    expect(typeof session.updatedAt).toBe("string");
+  });
+
+  it("trims a long one to the message limit", () => {
+    const many = Array.from({ length: BRAINSTORM_MESSAGE_LIMIT + 4 }, (_, i) => ({
+      id: `m${i}`,
+      role: i % 2 === 0 ? "user" : "assistant",
+      content: `line ${i}`
+    }));
+    const session = buildBrainstormSession(many);
+    expect(session.messages).toHaveLength(BRAINSTORM_MESSAGE_LIMIT);
+    expect(session.messages[0]?.role).toBe("user");
+    expect(session.messages[session.messages.length - 1]?.id).toBe(`m${BRAINSTORM_MESSAGE_LIMIT + 3}`);
+  });
+});
+
+describe("a session read back from the store", () => {
+  it("refuses a non-object, a stale version and messages that are not a list", () => {
+    expect(parseBrainstormSession(null)).toBeNull();
+    expect(parseBrainstormSession("nope")).toBeNull();
+    expect(parseBrainstormSession({ v: 99, updatedAt: "2026-01-01T00:00:00.000Z", messages: [] })).toBeNull();
+    expect(parseBrainstormSession({ v: 1, updatedAt: "2026-01-01T00:00:00.000Z", messages: "no" })).toBeNull();
+  });
+
+  it("treats an empty message list as a session, not as nothing", () => {
+    const session = parseBrainstormSession({ v: 1, updatedAt: "2026-01-01T00:00:00.000Z", messages: [] });
+    expect(session?.messages).toEqual([]);
+  });
+
+  it("keeps a stored time and supplies one when it is missing", () => {
+    const kept = parseBrainstormSession({ v: 1, updatedAt: "2026-01-01T00:00:00.000Z", messages: [] });
+    const stamped = parseBrainstormSession({ v: 1, messages: [] });
+    expect(kept?.updatedAt).toBe("2026-01-01T00:00:00.000Z");
+    expect(typeof stamped?.updatedAt).toBe("string");
+  });
+
+  it("drops unusable messages rather than the session", () => {
+    const session = parseBrainstormSession({
+      v: 1,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      messages: [null, "x", { id: "1", role: "user", content: "hi" }]
+    });
+    expect(session?.messages).toEqual([{ id: "1", role: "user", content: "hi" }]);
   });
 });

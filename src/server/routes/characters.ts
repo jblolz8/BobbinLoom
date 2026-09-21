@@ -17,6 +17,12 @@ import {
   updatePlaythroughRecord
 } from "../store";
 import { parseCard } from "../characterCards/parseCard";
+import {
+  deleteBrainstormSession,
+  readBrainstormSession,
+  writeBrainstormSession
+} from "../brainstormSessions";
+import { buildBrainstormSession, BRAINSTORM_MESSAGE_LIMIT } from "../../engine/brainstorm";
 import { convertCardApply, convertCardGenerate } from "../characterCards/convertCard";
 import { resolveCharacterFormat } from "../../engine/characterFormat";
 import { PNG_SIG } from "../characterCards/pngText";
@@ -327,6 +333,35 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
     allowNewSections: z.boolean().optional(),
     providerId: z.string().optional(),
     format: z.record(z.any()).optional(),
+  });
+
+  // ── the brainstorm session: one per character, stored beside its record ──
+  //
+  // No session yet is a 404 rather than an empty one: the panel treats "never brainstormed" and "the
+  // thread is empty" the same way, and a 404 keeps the file's absence honest.
+  app.get("/api/characters/:id/brainstorm", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const session = readBrainstormSession(params.id);
+    if (!session) return reply.code(404).send({ error: "No brainstorm session" });
+    return session;
+  });
+
+  app.put("/api/characters/:id/brainstorm", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const body = z
+      .object({ messages: z.array(z.unknown()).max(BRAINSTORM_MESSAGE_LIMIT * 2) })
+      .parse(request.body ?? {});
+    // Unusable messages are dropped rather than refused — one bad entry must not cost the reader the
+    // whole conversation — while the cap keeps a runaway thread out of the file.
+    const saved = writeBrainstormSession(params.id, buildBrainstormSession(body.messages));
+    if (!saved) return reply.code(404).send({ error: "Character not found" });
+    return saved;
+  });
+
+  app.delete("/api/characters/:id/brainstorm", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    deleteBrainstormSession(params.id);
+    return { ok: true };
   });
 
   app.post("/api/characters/brainstorm", async (request, reply) => {
