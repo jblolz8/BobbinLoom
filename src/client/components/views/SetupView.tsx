@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import type { CharacterTemplate, LorebookSummary } from "../../../schemas";
-import type { Persona } from "../../api";
-import { getTagTaxonomy } from "../../api";
+import type { CharacterTemplate, LorebookSummary, ViewPreferences } from "../../../schemas";
+import type { Persona, ResolvedSetupPreferences } from "../../api";
+import {
+  SETUP_PREFERENCE_DEFAULTS,
+  adoptLocalPreferences,
+  getTagTaxonomy,
+  resolveSetupPreferences,
+  updateViewPreferences
+} from "../../api";
 import { listProviderConnections, setGenerationTextProvider, type ProviderConnection } from "../../api/providers";
 import { AvatarBadge, Button, CharacterAvatar, Icon, Pagination, SearchBar, SimpleSelect, SwitchRow, TagChip, TextArea, TextInput } from "../base";
 import { usePagination } from "../../hooks/usePagination";
@@ -163,93 +169,85 @@ export function SetupView(props: SetupViewProps) {
   };
 
   const [activeTab, setActiveTab] = useState<SetupStepTab>("persona");
-  const [castSearch, setCastSearchState] = useState(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      return localStorage.getItem("bobbinloom_setup_cast_search") ?? "";
-    }
-    return "";
-  });
+  const [castSearch, setCastSearchState] = useState(SETUP_PREFERENCE_DEFAULTS.castSearch);
+  const [sortBy, setSortByState] = useState<CharacterSortOption>(SETUP_PREFERENCE_DEFAULTS.castSortBy);
+  const [sortDirection, setSortDirectionState] = useState<SortDirection>(
+    SETUP_PREFERENCE_DEFAULTS.castSortDir
+  );
+
+  /** Set the moment the reader changes any of these, so a read that lands later never overwrites what
+   *  they just chose. */
+  const setupTouchedRef = useRef(false);
+
+  /** One writer for every cast-picker preference: state first so the click feels instant, then the
+   *  leaves that changed. The device keeps nothing. */
+  const writeSetupPreference = (patch: ViewPreferences["setup"]) => {
+    setupTouchedRef.current = true;
+    void updateViewPreferences({ setup: patch }).catch(() => {
+      /* The next read reconciles; a failed write must not break the control. */
+    });
+  };
 
   const setCastSearch = (val: string) => {
     setCastSearchState(val);
-    try {
-      if (val) {
-        localStorage.setItem("bobbinloom_setup_cast_search", val);
-      } else {
-        localStorage.removeItem("bobbinloom_setup_cast_search");
-      }
-    } catch { /* silent */ }
+    writeSetupPreference({ castSearch: val });
   };
 
-  const [sortBy, setSortByState] = useState<CharacterSortOption>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const saved = localStorage.getItem("bobbinloom_setup_cast_sort_by");
-      if (saved === "name" || saved === "createdAt" || saved === "updatedAt") return saved;
-    }
-    return "name";
-  });
-
-  const [sortDirection, setSortDirectionState] = useState<SortDirection>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const saved = localStorage.getItem("bobbinloom_setup_cast_sort_dir");
-      if (saved === "asc" || saved === "desc") return saved;
-    }
-    return "asc";
-  });
-
   const setSortBy = (option: CharacterSortOption) => {
+    // The direction follows the field: dates read newest-first, names A to Z.
+    const nextDir: SortDirection = option === "createdAt" || option === "updatedAt" ? "desc" : "asc";
     setSortByState(option);
-    let nextDir: SortDirection = "asc";
-    if (option === "createdAt" || option === "updatedAt") {
-      nextDir = "desc";
-    } else {
-      nextDir = "asc";
-    }
     setSortDirectionState(nextDir);
-    try {
-      localStorage.setItem("bobbinloom_setup_cast_sort_by", option);
-      localStorage.setItem("bobbinloom_setup_cast_sort_dir", nextDir);
-    } catch { /* silent */ }
+    writeSetupPreference({ castSortBy: option, castSortDir: nextDir });
   };
 
   const toggleSortDirection = () => {
     const nextDir: SortDirection = sortDirection === "asc" ? "desc" : "asc";
     setSortDirectionState(nextDir);
-    try {
-      localStorage.setItem("bobbinloom_setup_cast_sort_dir", nextDir);
-    } catch { /* silent */ }
+    writeSetupPreference({ castSortDir: nextDir });
   };
 
   const [taxonomyConfig, setTaxonomyConfig] = useState<TagTaxonomyConfig | null>(null);
-  const [showTagFilters, setShowTagFiltersState] = useState<boolean>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      return localStorage.getItem("bobbinloom_setup_cast_show_tag_filters") === "true";
-    }
-    return false;
-  });
+  const [showTagFilters, setShowTagFiltersState] = useState<boolean>(
+    SETUP_PREFERENCE_DEFAULTS.showTagFilters
+  );
 
   const setShowTagFilters = (val: boolean) => {
     setShowTagFiltersState(val);
-    try {
-      localStorage.setItem("bobbinloom_setup_cast_show_tag_filters", String(val));
-    } catch { /* silent */ }
+    writeSetupPreference({ showTagFilters: val });
   };
 
-  // View mode with independent SetupView persistence
-  const [viewMode, setViewModeState] = useState<ViewMode>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const saved = localStorage.getItem("bobbinloom_setup_cast_view_mode");
-      if (saved === "portrait" || saved === "list" || saved === "grid") return saved;
-    }
-    return "portrait";
-  });
+  const [viewMode, setViewModeState] = useState<ViewMode>(SETUP_PREFERENCE_DEFAULTS.castViewMode);
 
   const setViewMode = (mode: ViewMode) => {
     setViewModeState(mode);
-    try {
-      localStorage.setItem("bobbinloom_setup_cast_view_mode", mode);
-    } catch { /* silent */ }
+    writeSetupPreference({ castViewMode: mode });
   };
+
+  const applySetupPreferences = (prefs: ResolvedSetupPreferences) => {
+    setCastSearchState(prefs.castSearch);
+    setSortByState(prefs.castSortBy);
+    setSortDirectionState(prefs.castSortDir);
+    setShowTagFiltersState(prefs.showTagFilters);
+    setViewModeState(prefs.castViewMode);
+  };
+
+  // These preferences live on the server now (adopting whatever this device still holds first), so they
+  // arrive after the first paint — while the cast list is still loading, which is what keeps the swap
+  // invisible rather than a grid that rearranges itself.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { preferences } = await adoptLocalPreferences();
+      if (cancelled || setupTouchedRef.current) return;
+      applySetupPreferences(resolveSetupPreferences(preferences));
+    })().catch(() => {
+      /* A failed read leaves the defaults; the next load tries again. */
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Fetch taxonomy configuration for tag styling
   useEffect(() => {

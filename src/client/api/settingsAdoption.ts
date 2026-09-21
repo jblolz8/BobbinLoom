@@ -22,9 +22,9 @@ import type { ViewPreferences } from "../../schemas";
 import { ALL_PAGE_SIZE, MAX_PAGE_SIZE } from "../engine/pagination";
 import { getViewPreferences, updateViewPreferences, type PageSizeSurface } from "./settings";
 
-/** The groups shaped as "a bag of leaves". `staleNoteDismissals` is a record, not a group of these,
- *  and is handled on its own when its surface migrates. */
-export type PreferenceGroup = Exclude<keyof ViewPreferences, "staleNoteDismissals">;
+/** The groups shaped as "a bag of leaves" that the registry can target. `staleNoteDismissals` is a
+ *  record rather than a group of leaves, but a source may still feed it: the leaf IS the whole record. */
+export type PreferenceGroup = keyof ViewPreferences;
 
 /** One migrated local key: which group and leaf it feeds, and how to read its raw value. A single key
  *  may appear several times — the chat settings blob feeds nine leaves — and the key is then adopted
@@ -33,7 +33,11 @@ export type LocalAdoptionSource = {
   /** The `localStorage` key on the device. */
   key: string;
   group: PreferenceGroup;
+  /** The leaf inside the group. Ignored when `wholeGroup` is set. */
   leaf: string;
+  /** The group IS a record rather than a bag of leaves (the stale-note dismissals), so the parsed value
+   *  replaces the group instead of a leaf inside it — a record's keys are data, not a fixed schema. */
+  wholeGroup?: boolean;
   /** Parse the raw local value into the leaf's own type. Returning undefined means "do not adopt" —
    *  an unreadable value is left where it is rather than written as junk. */
   parse: (raw: string) => unknown;
@@ -100,6 +104,24 @@ const asPageSize = (raw: string) => {
   return parsed >= MAX_PAGE_SIZE ? ALL_PAGE_SIZE : Math.round(parsed);
 };
 
+/** A leaf the old writers stored as the string "true"/"false". */
+const asBooleanString = (raw: string): boolean | undefined =>
+  raw === "true" ? true : raw === "false" ? false : undefined;
+
+/** A record of string values, stored as JSON (chapter id → the signature that was dismissed). */
+const asStringRecord = (raw: string) => {
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+    const entries = Object.entries(parsed as Record<string, unknown>);
+    return entries.every(([, value]) => typeof value === "string")
+      ? (parsed as Record<string, string>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 /** One key per pager, keyed as the settings group keys its leaves. */
 const PAGE_SIZE_KEYS: Record<PageSizeSurface, string> = {
   library: "bobbinloom_library_page_size",
@@ -108,6 +130,25 @@ const PAGE_SIZE_KEYS: Record<PageSizeSurface, string> = {
   setupCast: "bobbinloom_setup_cast_page_size",
   home: "bobbinloom_home_page_size"
 };
+
+const SETUP_KEYS = {
+  castSearch: "bobbinloom_setup_cast_search",
+  castSortBy: "bobbinloom_setup_cast_sort_by",
+  castSortDir: "bobbinloom_setup_cast_sort_dir",
+  castViewMode: "bobbinloom_setup_cast_view_mode",
+  showTagFilters: "bobbinloom_setup_cast_show_tag_filters"
+} as const;
+
+/** The provider keys are built per kind ("bobbinloom_provider_sort_by_text"), and each leaf names its
+ *  own kind, so one key still feeds exactly one leaf. */
+const PROVIDER_KEYS = {
+  sortByText: "bobbinloom_provider_sort_by_text",
+  sortDirText: "bobbinloom_provider_sort_dir_text",
+  sortByImage: "bobbinloom_provider_sort_by_image",
+  sortDirImage: "bobbinloom_provider_sort_dir_image"
+} as const;
+
+const SORT_BY_VALUES = ["lastActiveAt", "label", "updatedAt", "createdAt"] as const;
 
 /**
  * Every key this pass migrates, added one group at a time as its surface switches to the server. A
@@ -171,7 +212,42 @@ export const ADOPTION_SOURCES: readonly LocalAdoptionSource[] = [
   { key: PAGE_SIZE_KEYS.lorebook, group: "pageSizes", leaf: "lorebook", parse: asPageSize },
   { key: PAGE_SIZE_KEYS.persona, group: "pageSizes", leaf: "persona", parse: asPageSize },
   { key: PAGE_SIZE_KEYS.setupCast, group: "pageSizes", leaf: "setupCast", parse: asPageSize },
-  { key: PAGE_SIZE_KEYS.home, group: "pageSizes", leaf: "home", parse: asPageSize }
+  { key: PAGE_SIZE_KEYS.home, group: "pageSizes", leaf: "home", parse: asPageSize },
+  { key: SETUP_KEYS.castSearch, group: "setup", leaf: "castSearch", parse: asString },
+  { key: SETUP_KEYS.castSortBy, group: "setup", leaf: "castSortBy", parse: oneOf(["name", "createdAt", "updatedAt"]) },
+  { key: SETUP_KEYS.castSortDir, group: "setup", leaf: "castSortDir", parse: oneOf(["asc", "desc"]) },
+  {
+    key: SETUP_KEYS.castViewMode,
+    group: "setup",
+    leaf: "castViewMode",
+    parse: oneOf(["portrait", "list", "grid"])
+  },
+  { key: SETUP_KEYS.showTagFilters, group: "setup", leaf: "showTagFilters", parse: asBooleanString },
+  { key: "bobbinloom_cast_view_mode", group: "cast", leaf: "viewMode", parse: oneOf(["portrait", "compact"]) },
+  { key: PROVIDER_KEYS.sortByText, group: "providers", leaf: "sortByText", parse: oneOf(SORT_BY_VALUES) },
+  { key: PROVIDER_KEYS.sortDirText, group: "providers", leaf: "sortDirText", parse: oneOf(["asc", "desc"]) },
+  { key: PROVIDER_KEYS.sortByImage, group: "providers", leaf: "sortByImage", parse: oneOf(SORT_BY_VALUES) },
+  { key: PROVIDER_KEYS.sortDirImage, group: "providers", leaf: "sortDirImage", parse: oneOf(["asc", "desc"]) },
+  { key: "bobbinloom_show_play_nav_tabs", group: "nav", leaf: "showPlayNavTabs", parse: asBooleanString },
+  {
+    key: "bobbinloom_settings_tab",
+    group: "ui",
+    leaf: "settingsTab",
+    parse: oneOf(["provider", "prompts", "tags", "chat", "appearance"])
+  },
+  {
+    key: "bobbinloom_settings_provider_kind",
+    group: "ui",
+    leaf: "settingsProviderKind",
+    parse: oneOf(["text", "image"])
+  },
+  {
+    key: "bobbinloom_chapter_stale_dismissed",
+    group: "staleNoteDismissals",
+    leaf: "the record itself",
+    wholeGroup: true,
+    parse: asStringRecord
+  }
 ];
 
 export type AdoptionPlan = {
@@ -202,7 +278,8 @@ export function planAdoption(
     const raw = readLocal(source.key);
     if (raw === null) continue; // The device never had one: nothing to adopt, nothing to delete.
 
-    const chosen = (server[source.group] as Record<string, unknown> | undefined)?.[source.leaf];
+    const serverGroup = server[source.group] as Record<string, unknown> | undefined;
+    const chosen = source.wholeGroup ? serverGroup : serverGroup?.[source.leaf];
     if (chosen !== undefined) {
       // Already chosen server-side: the device's copy is superseded, not authoritative.
       removeKeys.add(source.key);
@@ -214,7 +291,11 @@ export function planAdoption(
     // (A key that reads fine but yields nothing adoptable is left alone too: it holds no preference to
     // migrate, and the first leaf that IS adoptable brings the key with it.)
 
-    (write[source.group] ??= {})[source.leaf] = parsed;
+    if (source.wholeGroup) {
+      write[source.group] = parsed as Record<string, unknown>;
+    } else {
+      (write[source.group] ??= {})[source.leaf] = parsed;
+    }
     removeKeys.add(source.key);
   }
 
@@ -225,13 +306,44 @@ export function planAdoption(
 export type AdoptionOutcome = { preferences: ViewPreferences; changed: boolean };
 
 /**
+ * The read in flight, shared by every surface that asks in the same tick.
+ *
+ * Several surfaces mount together — the settings dialog alongside the home screen, each library beside
+ * its pager — and each one calls the read path. Without this, a second call could fetch the server in
+ * the window between the first call DELETING the device's keys and its write landing: it would see an
+ * empty group, resolve the reader's value to the default, and its own writer would then store that
+ * default over the value the first call had just adopted. Sharing one round trip makes the answer the
+ * same for everyone who asked, and it is dropped as soon as it settles so a later mount still reads
+ * fresh.
+ */
+let inFlight: Promise<AdoptionOutcome> | null = null;
+
+/** Test seam: forget the shared read. */
+export function resetAdoptionCache(): void {
+  inFlight = null;
+}
+
+/**
  * Read the preferences, adopting anything still on the device first.
  *
  * Order matters in both directions: the write lands BEFORE the keys are deleted, so a failed write
  * cannot lose the values, and nothing is dual-written afterwards — a key left in place is a second
  * source of truth that will disagree later.
  */
-export async function adoptLocalPreferences(): Promise<AdoptionOutcome> {
+export function adoptLocalPreferences(): Promise<AdoptionOutcome> {
+  if (inFlight) return inFlight;
+  const run = readAndAdopt();
+  inFlight = run;
+  const done = () => {
+    if (inFlight === run) inFlight = null;
+  };
+  // Both arms: a rejected read must clear the cache for the next caller without becoming an unhandled
+  // rejection of its own (the caller holds `run` and handles it).
+  void run.then(done, done);
+  return run;
+}
+
+async function readAndAdopt(): Promise<AdoptionOutcome> {
   const server = await getViewPreferences();
 
   if (typeof window === "undefined" || !window.localStorage) {

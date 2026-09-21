@@ -2,6 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CharacterInstance, CharacterTemplate, Playthrough } from "../../../../../schemas";
 import { editCharacter, getCharacterAvatarUrl, listCharacters, promoteNpc, promoteNpcDraft, saveCharacterToLibrary } from "../../../../api";
 import type { CharacterEditPayload, PromoteDraftResult } from "../../../../api";
+import {
+  CAST_PREFERENCE_DEFAULTS,
+  adoptLocalPreferences,
+  resolveCastPreferences,
+  updateViewPreferences
+} from "../../../../api";
 import { CharacterEditor } from "../../../modals/CharacterEditor";
 import { CharacterSheetSections } from "./CharacterSheetSections";
 import { PromotePreview } from "../../../common/PromotePreview";
@@ -28,22 +34,38 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
   const draftAbortRef = useRef<AbortController | null>(null);
   const [promoteError, setPromoteError] = useState<string | null>(null);
   const [npcSearch, setNpcSearch] = useState("");
-  const [castViewMode, setCastViewModeState] = useState<CastViewMode>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const saved = localStorage.getItem("bobbinloom_cast_view_mode");
-      if (saved === "portrait" || saved === "compact") return saved;
-    }
-    return "portrait";
-  });
+  const [castViewMode, setCastViewModeState] = useState<CastViewMode>(
+    CAST_PREFERENCE_DEFAULTS.viewMode
+  );
+
+  /** Set the moment the reader picks a mode, so the read that lands after the first paint never
+   *  overwrites what they just chose. */
+  const castTouchedRef = useRef(false);
 
   const setCastViewMode = (mode: CastViewMode) => {
+    castTouchedRef.current = true;
+    // State first so the click feels instant; the device keeps nothing.
     setCastViewModeState(mode);
-    try {
-      localStorage.setItem("bobbinloom_cast_view_mode", mode);
-    } catch {
-      /* silent */
-    }
+    void updateViewPreferences({ cast: { viewMode: mode } }).catch(() => {
+      /* The next read reconciles; a failed write must not break the control. */
+    });
   };
+
+  // The cast layout lives on the server now (adopting whatever this device still holds first), so it
+  // arrives after the first paint — an invisible swap, since both modes render the same cards.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { preferences } = await adoptLocalPreferences();
+      if (cancelled || castTouchedRef.current) return;
+      setCastViewModeState(resolveCastPreferences(preferences).viewMode);
+    })().catch(() => {
+      /* A failed read leaves the default; the next load tries again. */
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     listCharacters().then(setLibrary).catch(() => { /* library membership is cosmetic */ });

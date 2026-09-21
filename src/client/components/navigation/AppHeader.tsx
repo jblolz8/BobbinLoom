@@ -1,5 +1,12 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { ViewPreferences } from "../../../schemas";
 import type { HomeTab } from "../views/HomeView";
+import {
+  NAV_PREFERENCE_DEFAULTS,
+  adoptLocalPreferences,
+  resolveNavPreferences,
+  updateViewPreferences
+} from "../../api";
 import { Button, Icon, Tooltip, ThreadIcon } from "../base";
 
 export type AppHeaderProps = {
@@ -17,8 +24,6 @@ export type AppHeaderProps = {
   isMobile?: boolean;
 };
 
-const STORAGE_KEY_SHOW_PLAY_NAV_TABS = "bobbinloom_show_play_nav_tabs";
-
 export function AppHeader({
   view,
   activeHomeTab,
@@ -31,24 +36,43 @@ export function AppHeader({
   onOpenDocs,
   isMobile = false,
 }: AppHeaderProps) {
-  const [showPlayNavTabs, setShowPlayNavTabs] = useState<boolean>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const saved = localStorage.getItem(STORAGE_KEY_SHOW_PLAY_NAV_TABS);
-      if (saved !== null) {
-        return saved === "true";
-      }
-    }
-    return true;
-  });
+  const [showPlayNavTabs, setShowPlayNavTabs] = useState<boolean>(
+    NAV_PREFERENCE_DEFAULTS.showPlayNavTabs
+  );
+
+  /** Set the moment the reader toggles it, so the read that lands later never overwrites what they
+   *  just chose. */
+  const navTouchedRef = useRef(false);
+
+  /** The sole writer for this preference: state first so the toggle feels instant, then the server.
+   *  The device keeps nothing. */
+  const writeNavPreference = (patch: ViewPreferences["nav"]) => {
+    navTouchedRef.current = true;
+    void updateViewPreferences({ nav: patch }).catch(() => {
+      /* The next read reconciles; a failed write must not break the toggle. */
+    });
+  };
+
+  // This preference lives on the server now (adopting whatever this device still holds first), so it
+  // arrives after the first paint — the toggle simply starts on the default until it does.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { preferences } = await adoptLocalPreferences();
+      if (cancelled || navTouchedRef.current) return;
+      setShowPlayNavTabs(resolveNavPreferences(preferences).showPlayNavTabs);
+    })().catch(() => {
+      /* A failed read leaves the default; the next load tries again. */
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleTogglePlayNavTabs = () => {
-    setShowPlayNavTabs((prev) => {
-      const next = !prev;
-      if (typeof window !== "undefined" && window.localStorage) {
-        localStorage.setItem(STORAGE_KEY_SHOW_PLAY_NAV_TABS, String(next));
-      }
-      return next;
-    });
+    const next = !showPlayNavTabs;
+    setShowPlayNavTabs(next);
+    writeNavPreference({ showPlayNavTabs: next });
   };
 
   // On Desktop/Wide view (!isMobile): Nav tabs are always shown in the center.

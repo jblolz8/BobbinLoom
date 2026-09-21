@@ -92,6 +92,81 @@ export function resolveLibraryPreferences(
  *  been sized keeps the pager's own `DEFAULT_PAGE_SIZE`. */
 export type PageSizeSurface = "library" | "lorebook" | "persona" | "setupCast" | "home";
 
+/** The shape every resolver below shares: defaults first, so a stored value always wins — including one
+ *  that happens to equal a default. `undefined` for a leaf means "never chosen", which is why the
+ *  server's answer never fills defaults of its own. */
+function resolveGroup<T extends object>(defaults: T, stored: Partial<T> | undefined): T {
+  return { ...defaults, ...(stored ?? {}) };
+}
+
+export const SETUP_PREFERENCE_DEFAULTS: ResolvedSetupPreferences = {
+  castSearch: "",
+  castSortBy: "name",
+  castSortDir: "asc",
+  castViewMode: "portrait",
+  showTagFilters: false
+};
+
+export type ResolvedSetupPreferences = {
+  castSearch: string;
+  castSortBy: "name" | "createdAt" | "updatedAt";
+  castSortDir: "asc" | "desc";
+  castViewMode: "portrait" | "list" | "grid";
+  showTagFilters: boolean;
+};
+
+export function resolveSetupPreferences(stored?: ViewPreferences): ResolvedSetupPreferences {
+  return resolveGroup(SETUP_PREFERENCE_DEFAULTS, stored?.setup);
+}
+
+export const CAST_PREFERENCE_DEFAULTS: ResolvedCastPreferences = { viewMode: "portrait" };
+
+export type ResolvedCastPreferences = { viewMode: "portrait" | "compact" };
+
+export function resolveCastPreferences(stored?: ViewPreferences): ResolvedCastPreferences {
+  return resolveGroup(CAST_PREFERENCE_DEFAULTS, stored?.cast);
+}
+
+export const PROVIDER_PREFERENCE_DEFAULTS: ResolvedProviderPreferences = {
+  sortByText: "lastActiveAt",
+  sortDirText: "desc",
+  sortByImage: "lastActiveAt",
+  sortDirImage: "desc"
+};
+
+export type ResolvedProviderPreferences = {
+  sortByText: "lastActiveAt" | "label" | "updatedAt" | "createdAt";
+  sortDirText: "asc" | "desc";
+  sortByImage: "lastActiveAt" | "label" | "updatedAt" | "createdAt";
+  sortDirImage: "asc" | "desc";
+};
+
+export function resolveProviderPreferences(stored?: ViewPreferences): ResolvedProviderPreferences {
+  return resolveGroup(PROVIDER_PREFERENCE_DEFAULTS, stored?.providers);
+}
+
+export const NAV_PREFERENCE_DEFAULTS: ResolvedNavPreferences = { showPlayNavTabs: true };
+
+export type ResolvedNavPreferences = { showPlayNavTabs: boolean };
+
+export function resolveNavPreferences(stored?: ViewPreferences): ResolvedNavPreferences {
+  return resolveGroup(NAV_PREFERENCE_DEFAULTS, stored?.nav);
+}
+
+export const UI_PREFERENCE_DEFAULTS: ResolvedUiPreferences = {
+  settingsTab: "provider",
+  settingsProviderKind: "text"
+};
+
+export type ResolvedUiPreferences = {
+  settingsTab: "provider" | "prompts" | "tags" | "chat" | "appearance";
+  settingsProviderKind: "text" | "image";
+};
+
+export function resolveUiPreferences(stored?: ViewPreferences): ResolvedUiPreferences {
+  return resolveGroup(UI_PREFERENCE_DEFAULTS, stored?.ui);
+}
+
 export interface AppearanceSettings {
   avatarShape: AvatarShape;
   /** The shape of every cover frame on the playthrough shelf. */

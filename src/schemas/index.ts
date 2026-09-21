@@ -506,23 +506,36 @@ export const ViewPreferencesSchema = z.object({
       home: PageSizeSchema.optional()
     })
     .optional(),
+  /** The setup wizard's cast picker. */
   setup: z
     .object({
       castSearch: z.string().optional(),
-      castSortBy: z.string().optional(),
-      castSortDir: z.string().optional(),
-      castViewMode: z.string().optional(),
+      castSortBy: z.enum(["name", "createdAt", "updatedAt"]).optional(),
+      castSortDir: z.enum(["asc", "desc"]).optional(),
+      castViewMode: z.enum(["portrait", "list", "grid"]).optional(),
       showTagFilters: z.boolean().optional()
     })
     .optional(),
-  cast: z.object({ viewMode: z.string().optional() }).optional(),
+  /** The play view's cast tab. */
+  cast: z.object({ viewMode: z.enum(["portrait", "compact"]).optional() }).optional(),
+  /** Provider-list sort, one leaf per kind: the text and image lists sit side by side, and one shared
+   *  value meant sorting one of them re-sorted the other. */
   providers: z
     .object({
-      sortBy: z.string().optional(),
-      sortDir: z.string().optional()
+      sortByText: z.enum(["lastActiveAt", "label", "updatedAt", "createdAt"]).optional(),
+      sortDirText: z.enum(["asc", "desc"]).optional(),
+      sortByImage: z.enum(["lastActiveAt", "label", "updatedAt", "createdAt"]).optional(),
+      sortDirImage: z.enum(["asc", "desc"]).optional()
     })
     .optional(),
   nav: z.object({ showPlayNavTabs: z.boolean().optional() }).optional(),
+  /** The Settings dialog's own memory: which tab was open, and which provider kind it was showing. */
+  ui: z
+    .object({
+      settingsTab: z.enum(["provider", "prompts", "tags", "chat", "appearance"]).optional(),
+      settingsProviderKind: z.enum(["text", "image"]).optional()
+    })
+    .optional(),
   /** Chapter id → the stale-summary note's dismissal. UI ephemera that happens to grow; it moves
    *  only so nothing preference-shaped is left on the device. */
   staleNoteDismissals: z.record(z.string(), z.string()).optional()

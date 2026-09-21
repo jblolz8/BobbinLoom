@@ -2,26 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import type { LorebookSummary, MemoryEvent, Playthrough } from "../../../../../schemas";
 import { closeChapter, listLorebooks, type CloseChapterBody, type TokenUsage } from "../../../../api";
 import { AvatarBadge, Badge, Button, Icon, IconButton, TextInput } from "../../../base";
-import { buildImageUrl, clearPlaythroughCover, setPlaythroughCover } from "../../../../api";
+import { adoptLocalPreferences, buildImageUrl, clearPlaythroughCover, setPlaythroughCover, updateViewPreferences } from "../../../../api";
 import { buildCoverMedia } from "../../../../engine/coverMedia";
 import { chapterStaleSignature, chapterSummaryIsStale } from "../../../../../engine/chapterLifecycle";
 import { GalleryModal } from "../../../modals/GalleryModal";
 import { CloseChapterModal } from "../../../modals/CloseChapterModal";
-
-/** Where a dismissal of the stale-summary note is remembered, per device — the same
- *  `bobbinloom_` prefixed key convention the other client preferences use. Keyed on the chapter PLUS
- *  the edit it was dismissed for, so a later edit warns again instead of being silenced for good. */
-const STALE_DISMISSALS_KEY = "bobbinloom_chapter_stale_dismissed";
-
-function readStaleDismissals(): Record<string, string> {
-  try {
-    const raw = window.localStorage.getItem(STALE_DISMISSALS_KEY);
-    const parsed: unknown = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, string>) : {};
-  } catch {
-    return {};
-  }
-}
 
 export function JournalTab({
   playthrough,
@@ -56,12 +41,27 @@ export function JournalTab({
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [coverSaving, setCoverSaving] = useState(false);
   const [coverError, setCoverError] = useState<string | null>(null);
-  const [staleDismissals, setStaleDismissals] = useState<Record<string, string>>(() => readStaleDismissals());
+  /** Which chapter's stale-summary note was dismissed, and for which edit signature. Keyed on the
+   *  chapter PLUS the signature, so a later edit warns again instead of being silenced for good.
+   *  The server owns the record; state starts empty and the mount effect below fills it. */
+  const [staleDismissals, setStaleDismissals] = useState<Record<string, string>>({});
 
   // Filter state for timeline events
   const [eventSearch, setEventSearch] = useState("");
   const [minImportance, setMinImportance] = useState<number>(0);
   const [hoverImportance, setHoverImportance] = useState<number | null>(null);
+
+  // A dismissal only ever ADDS a key, so the server's copy is merged UNDER whatever is already here:
+  // a dismissal made while this read was in flight must not be dropped when the answer lands.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { preferences } = await adoptLocalPreferences();
+      if (cancelled) return;
+      setStaleDismissals((current) => ({ ...(preferences.staleNoteDismissals ?? {}), ...current }));
+    })().catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     listLorebooks().then(setLorebookSummaries).catch(() => setLorebookSummaries([]));
@@ -222,15 +222,11 @@ export function JournalTab({
   }
 
   function dismissStaleNote(chapterId: string, signature: string) {
-    setStaleDismissals((previous) => {
-      const next = { ...previous, [chapterId]: signature };
-      try {
-        window.localStorage.setItem(STALE_DISMISSALS_KEY, JSON.stringify(next));
-      } catch {
-        /* A blocked or full storage must not stop the note going away for this session. */
-      }
-      return next;
-    });
+    // State first, then the write: the updater stays pure, so StrictMode's double invoke cannot send
+    // the patch twice. A failed write must not stop the note going away for this session.
+    const next = { ...staleDismissals, [chapterId]: signature };
+    setStaleDismissals(next);
+    void updateViewPreferences({ staleNoteDismissals: next }).catch(() => {});
   }
 
   function toggleExpand(chapterId: string) {

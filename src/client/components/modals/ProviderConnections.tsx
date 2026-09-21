@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Icon } from "../base";
 import type {
   ConnectionModelsResult,
@@ -19,7 +19,13 @@ import {
   testProviderConnection,
   updateProviderConnection
 } from "../../api";
-import type { ImageApiStyle, ProviderKind } from "../../../schemas";
+import {
+  PROVIDER_PREFERENCE_DEFAULTS,
+  adoptLocalPreferences,
+  resolveProviderPreferences,
+  updateViewPreferences
+} from "../../api";
+import type { ImageApiStyle, ProviderKind, ViewPreferences } from "../../../schemas";
 import { ApiKeyField, type ApiKeyFieldProps } from "./providers/ApiKeyField";
 import { ImageConnectionEditor } from "./providers/ImageConnectionEditor";
 import {
@@ -38,34 +44,27 @@ type EditorState =
 
 type EditorStatus = { kind: "ok" | "err"; text: string } | null;
 
-const SORT_BY_VALUES: ProviderSortBy[] = ["lastActiveAt", "label", "updatedAt", "createdAt"];
-
 /**
- * Sort preferences are per kind: the two lists are user-visible side by side and
- * one shared key meant sorting the image list also re-sorted the text list.
+ * Which two leaves of the `providers` group this kind owns. The text and image
+ * lists sit side by side, so one shared value meant sorting one re-sorted the
+ * other — each kind names its own pair here rather than branching per setter.
  */
-function sortStorageKey(kind: ProviderKind, which: "by" | "dir"): string {
-  return `bobbinloom_provider_sort_${which}_${kind}`;
-}
+const SORT_LEAVES: Record<ProviderKind, { by: "sortByText" | "sortByImage"; dir: "sortDirText" | "sortDirImage" }> = {
+  text: { by: "sortByText", dir: "sortDirText" },
+  image: { by: "sortByImage", dir: "sortDirImage" }
+};
 
-function readSortBy(kind: ProviderKind): ProviderSortBy {
-  if (typeof window !== "undefined" && window.localStorage) {
-    const saved = localStorage.getItem(sortStorageKey(kind, "by"));
-    if (saved && (SORT_BY_VALUES as string[]).includes(saved)) {
-      return saved as ProviderSortBy;
-    }
-  }
-  return "lastActiveAt";
-}
-
-function readSortDir(kind: ProviderKind): SortDirection {
-  if (typeof window !== "undefined" && window.localStorage) {
-    const saved = localStorage.getItem(sortStorageKey(kind, "dir"));
-    if (saved === "asc" || saved === "desc") {
-      return saved;
-    }
-  }
-  return "desc";
+/** One kind's sort as a `providers` patch. The leaves have different names, so the two keys are
+ *  assigned by index off the map above — no cast, and never the other kind's pair. */
+function sortPreferencePatch(
+  kind: ProviderKind,
+  sortBy: ProviderSortBy,
+  sortDir: SortDirection
+): ViewPreferences["providers"] {
+  const patch: NonNullable<ViewPreferences["providers"]> = {};
+  patch[SORT_LEAVES[kind].by] = sortBy;
+  patch[SORT_LEAVES[kind].dir] = sortDir;
+  return patch;
 }
 
 const emptyForm = (kind: ProviderKind): ProviderConnectionPayload =>
@@ -179,14 +178,45 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
   const [modelsStatus, setModelsStatus] = useState<EditorStatus>(null);
   const [fetchingModels, setFetchingModels] = useState(false);
 
-  const [sortBy, setSortBy] = useState<ProviderSortBy>(() => readSortBy(kind));
+  const [sortBy, setSortBy] = useState<ProviderSortBy>(
+    () => PROVIDER_PREFERENCE_DEFAULTS[SORT_LEAVES[kind].by]
+  );
 
-  const [sortDir, setSortDir] = useState<SortDirection>(() => readSortDir(kind));
+  const [sortDir, setSortDir] = useState<SortDirection>(
+    () => PROVIDER_PREFERENCE_DEFAULTS[SORT_LEAVES[kind].dir]
+  );
 
-  // Covers a caller that swaps `kind` without remounting.
+  /** Set the moment the reader sorts this kind's list, so a read that lands later never overwrites
+   *  the choice they just made. */
+  const providersTouchedRef = useRef(false);
+
+  /** One writer for this kind's sort: state first so the click feels instant, then only the two
+   *  leaves this kind owns. The device keeps nothing. */
+  function writeProviderPreference(nextBy: ProviderSortBy, nextDir: SortDirection) {
+    providersTouchedRef.current = true;
+    void updateViewPreferences({ providers: sortPreferencePatch(kind, nextBy, nextDir) }).catch(() => {
+      /* The next read reconciles; a failed write must not break the control. */
+    });
+  }
+
+  // Sort preferences live on the server now (adopting whatever this device still holds first), so
+  // they arrive after the first paint. The resolver answers all four leaves; this instance applies
+  // only the two its kind owns, because the other kind's list has its own instance. Keying on
+  // `kind` also covers a caller that swaps it without remounting.
   useEffect(() => {
-    setSortBy(readSortBy(kind));
-    setSortDir(readSortDir(kind));
+    let cancelled = false;
+    void (async () => {
+      const { preferences } = await adoptLocalPreferences();
+      if (cancelled || providersTouchedRef.current) return;
+      const resolved = resolveProviderPreferences(preferences);
+      setSortBy(resolved[SORT_LEAVES[kind].by]);
+      setSortDir(resolved[SORT_LEAVES[kind].dir]);
+    })().catch(() => {
+      /* A failed read leaves the defaults; the next load tries again. */
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [kind]);
 
   /** Connections of this kind only — never the other kind's rows. */
@@ -206,18 +236,13 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
     setSortBy(newSortBy);
     const nextDir: SortDirection = newSortBy === "label" ? "asc" : "desc";
     setSortDir(nextDir);
-    if (typeof window !== "undefined" && window.localStorage) {
-      localStorage.setItem(sortStorageKey(kind, "by"), newSortBy);
-      localStorage.setItem(sortStorageKey(kind, "dir"), nextDir);
-    }
+    writeProviderPreference(newSortBy, nextDir);
   }
 
   function handleToggleSortDir() {
     const nextDir: SortDirection = sortDir === "asc" ? "desc" : "asc";
     setSortDir(nextDir);
-    if (typeof window !== "undefined" && window.localStorage) {
-      localStorage.setItem(sortStorageKey(kind, "dir"), nextDir);
-    }
+    writeProviderPreference(sortBy, nextDir);
   }
 
   const sortedConnections = useMemo(() => {

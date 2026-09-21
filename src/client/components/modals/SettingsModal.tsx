@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ProviderKind } from "../../../schemas";
+import {
+  UI_PREFERENCE_DEFAULTS,
+  adoptLocalPreferences,
+  resolveUiPreferences,
+  updateViewPreferences
+} from "../../api";
 import { PresetEditor } from "./PresetEditor";
 import { ProviderConnections } from "./ProviderConnections";
 import { TagTaxonomyPanel } from "../library/TagTaxonomyModal";
@@ -24,30 +30,10 @@ const PROVIDER_KIND_TABS: TabItem<ProviderKind>[] = [
   { id: "image", label: "Image Providers", icon: "Image" },
 ];
 
-/** Which tab the user last had open. Same pattern as ProviderConnections' sort
- *  preferences: a UI tab choice is a client preference, kept out of the server's
- *  app settings. It has to outlive component state because the modal unmounts
- *  when the view leaves Home. */
-const SETTINGS_TAB_KEY = "bobbinloom_settings_tab";
-const PROVIDER_KIND_KEY = "bobbinloom_settings_provider_kind";
-const SETTINGS_TAB_IDS: readonly SettingsTab[] = ["provider", "prompts", "tags", "chat", "appearance"];
-const PROVIDER_KIND_IDS: readonly ProviderKind[] = ["text", "image"];
-
-function readStoredTab<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
-  if (typeof window !== "undefined" && window.localStorage) {
-    const saved = window.localStorage.getItem(key);
-    if (saved && (allowed as readonly string[]).includes(saved)) {
-      return saved as T;
-    }
-  }
-  return fallback;
-}
-
-function storeTab(key: string, value: string): void {
-  if (typeof window !== "undefined" && window.localStorage) {
-    window.localStorage.setItem(key, value);
-  }
-}
+/** The tab choice and the provider kind are view preferences like any other: they live on the single
+ *  server copy so the choice survives the modal unmounting when the view leaves Home, and follows the
+ *  reader to their next device. The declarations below read them AFTER first paint, so until that read
+ *  lands the defaults stand in. */
 
 export type SettingsModalProps = {
   open: boolean;
@@ -102,12 +88,24 @@ export function SettingsModal(props: SettingsModalProps) {
     setAlwaysDiscardOldImage,
     setImagePromptPreview,
   } = props;
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>(() =>
-    readStoredTab(SETTINGS_TAB_KEY, SETTINGS_TAB_IDS, "provider")
+  const [settingsTab, setSettingsTabState] = useState<SettingsTab>(UI_PREFERENCE_DEFAULTS.settingsTab);
+  const [providerKind, setProviderKindState] = useState<ProviderKind>(
+    UI_PREFERENCE_DEFAULTS.settingsProviderKind
   );
-  const [providerKind, setProviderKind] = useState<ProviderKind>(() =>
-    readStoredTab(PROVIDER_KIND_KEY, PROVIDER_KIND_IDS, "text")
-  );
+  /** The reader picked a tab: state first so the click feels instant, then the one leaf that changed. */
+  const setSettingsTab = (tab: SettingsTab) => {
+    setSettingsTabState(tab);
+    void updateViewPreferences({ ui: { settingsTab: tab } }).catch(() => {
+      /* The next read reconciles; a failed write must not break the tabs. */
+    });
+  };
+
+  const setProviderKind = (kind: ProviderKind) => {
+    setProviderKindState(kind);
+    void updateViewPreferences({ ui: { settingsProviderKind: kind } }).catch(() => {
+      /* The next read reconciles; a failed write must not break the tabs. */
+    });
+  };
 
   /**
    * Panels are mounted on FIRST VISIT and then KEPT mounted — hidden rather than
@@ -115,13 +113,14 @@ export function SettingsModal(props: SettingsModalProps) {
    * provider draft. Lazily mounting on first visit preserves the previous
    * behaviour of not fetching a panel the user never opened.
    *
-   * Seeded from the stored tab so the initial paint has content to show.
+   * Seeded from the default so the initial paint has content to show; the read
+   * below adds the stored tab, which the effects further down then visit.
    */
   const [visitedTabs, setVisitedTabs] = useState<Set<SettingsTab>>(
-    () => new Set<SettingsTab>([readStoredTab(SETTINGS_TAB_KEY, SETTINGS_TAB_IDS, "provider")])
+    () => new Set<SettingsTab>([UI_PREFERENCE_DEFAULTS.settingsTab])
   );
   const [visitedKinds, setVisitedKinds] = useState<Set<ProviderKind>>(
-    () => new Set<ProviderKind>([readStoredTab(PROVIDER_KIND_KEY, PROVIDER_KIND_IDS, "text")])
+    () => new Set<ProviderKind>([UI_PREFERENCE_DEFAULTS.settingsProviderKind])
   );
 
   /** Reported up from ProviderConnections, which owns the form. Keyed by kind
@@ -131,8 +130,24 @@ export function SettingsModal(props: SettingsModalProps) {
 
   const dirty = dirtyKinds.text || dirtyKinds.image;
 
-  useEffect(() => { storeTab(SETTINGS_TAB_KEY, settingsTab); }, [settingsTab]);
-  useEffect(() => { storeTab(PROVIDER_KIND_KEY, providerKind); }, [providerKind]);
+  // Both leaves come from the server (adopting whatever this device still held first), so they arrive
+  // after first paint — which is what keeps the swap invisible.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { preferences } = await adoptLocalPreferences();
+      if (cancelled) return;
+      const resolved = resolveUiPreferences(preferences);
+      setSettingsTabState(resolved.settingsTab);
+      setProviderKindState(resolved.settingsProviderKind);
+    })().catch(() => {
+      /* A failed read leaves the defaults on screen; nothing is written, so nothing is lost. */
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     setVisitedTabs((prev) => (prev.has(settingsTab) ? prev : new Set(prev).add(settingsTab)));
   }, [settingsTab]);
