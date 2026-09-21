@@ -108,7 +108,10 @@ A few patterns are consistent across every surface:
   name field. When it closes, focus goes back to whatever opened it. Its action row reads the same
   everywhere, too: the confirming action first, any secondary actions beside it (**Duplicate as
   backup** in the revert and retry dialogs), and **Cancel last** — at the right end of the row on a
-  desktop, and the last full-width button once the row stacks on a phone
+  desktop, and the last full-width button once the row stacks on a phone. Dialogs may **stack** (a
+  discard guard over the character sheet): only the top one traps focus, answers Escape and lets its
+  backdrop dismiss it, and the ones beneath stay inert. Below 680px the character sheet and Settings
+  are full-screen sheets — `100dvh` with a pinned header, a scrolling body and the action row in reach.
 - **A gesture works everywhere it appears** — the ⋮ menu on a playthrough card is the same menu
   in the save/load list; the same pager component drives every paginated list
 - **Compact controls are real controls** — inline remove buttons, tag chips and menu triggers

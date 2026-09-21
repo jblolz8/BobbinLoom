@@ -272,6 +272,12 @@ editor's draft, so nothing reaches disk until the character is saved.
 | `PUT /api/playthroughs/:id/characters/:characterId` | edit runtime/template fields (guards read-only CCv2 sheets) |
 | `POST /api/playthroughs/:id/characters/:characterId/save-to-library` | Save to Library (`update`/`newVersion`) |
 
+**The library card is the origin.** A playthrough's cast member carries the card's id but its own copy of
+the sheet, so the story can grow it without touching the card (and two timelines can grow it differently).
+Writing back is therefore an explicit choice in the sheet dialog, offered when the two have diverged:
+`update` overwrites the card every future playthrough starts from, `newVersion` keeps the original and
+mints a version beside it. The dialog shows the comparison before either.
+
 ---
 
 ## Data files

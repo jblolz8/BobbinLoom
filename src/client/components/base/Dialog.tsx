@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { FOCUSABLE_SELECTOR, wrapIndex } from "../../engine/dialogFocus";
+import { isTopDialog, popDialog, pushDialog } from "../../engine/dialogStack";
 
 export type DialogProps = {
   title: string;
@@ -38,6 +39,10 @@ export type DialogProps = {
  * Focus is remembered and restored on close, the tab ring is contained to the dialog, and the body
  * is portalled so a dialog can be opened from inside another one (the shelf is itself mounted as a
  * dialog in the play view).
+ *
+ * Dialogs may STACK — a confirm over the character sheet, say. Only the top one traps focus, answers
+ * Escape and lets its backdrop dismiss it; the ones beneath stay mounted and inert (`dialogStack.ts`).
+ * Without that rule an outer dialog takes focus back out of the inner one the moment it opens.
  */
 export function Dialog({
   title,
@@ -52,8 +57,16 @@ export function Dialog({
   headerAction
 }: DialogProps) {
   const titleId = useId();
+  const id = useId();
   const sectionRef = useRef<HTMLElement | null>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
+
+  // The stack: while another dialog is on top of this one, this one must not trap focus, answer
+  // Escape, or let its own backdrop dismiss it.
+  useEffect(() => {
+    pushDialog(id);
+    return () => popDialog(id);
+  }, [id]);
 
   // One mount-time move, and the reverse on the way out. The element that opened the dialog is
   // usually still there when it closes; when a re-render has replaced it, focus is left alone
@@ -82,6 +95,7 @@ export function Dialog({
    */
   useEffect(() => {
     function onFocusIn(event: FocusEvent) {
+      if (!isTopDialog(id)) return;
       const section = sectionRef.current;
       const target = event.target;
       if (!section || !(target instanceof HTMLElement)) return;
@@ -94,10 +108,11 @@ export function Dialog({
     }
     document.addEventListener("focusin", onFocusIn);
     return () => document.removeEventListener("focusin", onFocusIn);
-  }, [initialFocusRef]);
+  }, [id, initialFocusRef]);
 
   const handleKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLElement>) => {
+      if (!isTopDialog(id)) return;
       if (event.key === "Escape") {
         if (!isBusy) onClose();
         return;
@@ -123,7 +138,7 @@ export function Dialog({
       event.preventDefault();
       stops[wrapIndex(stops.length, current, event.shiftKey)].focus();
     },
-    [isBusy, onClose]
+    [id, isBusy, onClose]
   );
 
   // The net under the ring: if focus somehow ends up outside the dialog, Escape must still close it.
@@ -131,13 +146,15 @@ export function Dialog({
   useEffect(() => {
     function onWindowKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape" || isBusy) return;
+      // Nested: the dialog on top owns Escape, and this net must not also answer it.
+      if (!isTopDialog(id)) return;
       const section = sectionRef.current;
       if (section && event.target instanceof Node && section.contains(event.target)) return;
       onClose();
     }
     window.addEventListener("keydown", onWindowKeyDown);
     return () => window.removeEventListener("keydown", onWindowKeyDown);
-  }, [isBusy, onClose]);
+  }, [id, isBusy, onClose]);
 
   return createPortal(
     <div
@@ -145,7 +162,7 @@ export function Dialog({
       onMouseDown={(event) => {
         // Only a press on the backdrop itself: a drag that starts in a field and ends out here must
         // not dismiss the dialog mid-edit.
-        if (event.target === event.currentTarget && !isBusy) onClose();
+        if (event.target === event.currentTarget && !isBusy && isTopDialog(id)) onClose();
       }}
     >
       <section

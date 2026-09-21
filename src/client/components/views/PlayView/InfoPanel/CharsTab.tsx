@@ -314,6 +314,9 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
           character={editingChar}
           playthrough={playthrough}
           inLibrary={library.some((t) => t.id === editingChar.templateId)}
+          // The card's sheet in the library is the original this playthrough's copy is measured
+          // against — the sheet dialog compares against it and can restore a section from it.
+          originalSheet={library.find((t) => t.id === editingChar.templateId)?.content ?? null}
           initialMode="view"
           onSave={(payload) => handleEditSave(payload)}
           onSaveToLibrary={(mode) => handleEditorSaveToLibrary(mode)}
