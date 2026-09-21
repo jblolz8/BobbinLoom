@@ -51,6 +51,42 @@ export function resolveChatPreferences(stored: ViewPreferences | undefined): Res
   return { ...CHAT_PREFERENCE_DEFAULTS, ...(stored?.chat ?? {}) };
 }
 
+/** What a reader who has never chosen anything gets for the two browsing lists. The old initializers
+ *  had these literals scattered across both components; they live here now so a default exists once. */
+export const LIBRARY_PREFERENCE_DEFAULTS = {
+  /** The character library. */
+  viewMode: "portrait",
+  sortBy: "name",
+  sortDir: "asc",
+  sidebarViewMode: "grouped",
+  collapsedCategories: [] as string[],
+  search: "",
+  /** The home shelf. Its own view mode, sort and direction — a different list, same group. */
+  playthroughViewMode: "grid",
+  playthroughSortBy: "updatedAt",
+  playthroughSortDir: "desc"
+} satisfies ResolvedLibraryPreferences;
+
+export type ResolvedLibraryPreferences = {
+  viewMode: "portrait" | "list" | "grid";
+  sortBy: "name" | "createdAt" | "updatedAt";
+  sortDir: "asc" | "desc";
+  sidebarViewMode: "grouped" | "flat";
+  collapsedCategories: string[];
+  search: string;
+  playthroughViewMode: "grid" | "list";
+  playthroughSortBy: "updatedAt" | "name" | "turn";
+  playthroughSortDir: "asc" | "desc";
+};
+
+/** The library group, defaults filled. Absent means "never chosen", so the defaults are applied HERE
+ *  and nowhere else — a stored value always wins, including one that matches a default. */
+export function resolveLibraryPreferences(
+  stored: ViewPreferences | undefined
+): ResolvedLibraryPreferences {
+  return { ...LIBRARY_PREFERENCE_DEFAULTS, ...(stored?.library ?? {}) };
+}
+
 export interface AppearanceSettings {
   avatarShape: AvatarShape;
   /** The shape of every cover frame on the playthrough shelf. */

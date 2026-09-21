@@ -475,12 +475,23 @@ export const ViewPreferencesSchema = z.object({
     .optional(),
   library: z
     .object({
-      viewMode: z.string().optional(),
-      sortBy: z.string().optional(),
-      sortDir: z.string().optional(),
-      sidebarViewMode: z.string().optional(),
+      /** The character library's list. Enums rather than bare strings, so a hand-edited settings file
+       *  cannot put a layout the UI has no branch for into the store — the route answers 400. */
+      viewMode: z.enum(["portrait", "list", "grid"]).optional(),
+      sortBy: z.enum(["name", "createdAt", "updatedAt"]).optional(),
+      sortDir: z.enum(["asc", "desc"]).optional(),
+      sidebarViewMode: z.enum(["grouped", "flat"]).optional(),
+      /** Category ids whose sidebar groups are collapsed. An array, not a Set: this is JSON. */
       collapsedCategories: z.array(z.string()).optional(),
       search: z.string().optional(),
+      /** The home shelf's cards — a different list from the library's, so its leaves are prefixed
+       *  rather than sharing names that would collide with the library's own. */
+      playthroughViewMode: z.enum(["grid", "list"]).optional(),
+      playthroughSortBy: z.enum(["updatedAt", "name", "turn"]).optional(),
+      playthroughSortDir: z.enum(["asc", "desc"]).optional(),
+      /** How many rows a list shows. Declared, not yet written: all five pagers share one hook
+       *  (`usePagination`), so page size moves in its own pass rather than leaving that hook with two
+       *  persistence paths. */
       pageSize: z.number().int().positive().optional()
     })
     .optional(),

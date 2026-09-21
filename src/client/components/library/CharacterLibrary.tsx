@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import type { CharacterTemplate } from "../../../schemas";
 import type { CharacterFormat } from "../../../schemas";
+import type { ViewPreferences } from "../../../schemas";
 import {
   createCharacter,
   deleteCharacter,
@@ -14,7 +15,13 @@ import {
   getCharacterAvatarUrl,
 } from "../../api";
 import { convertCharacterApply, convertCharacterGenerate, reformatCharacterApply, reformatCharacterGenerate, suggestCharacterTags, brainstormCharacter, getPromptConfig, listPresets, getPreset } from "../../api";
-import type { CharacterTemplateUpdate, ProposedSectionChange, CharacterBrainstormResult, Preset } from "../../api";
+import {
+  LIBRARY_PREFERENCE_DEFAULTS,
+  adoptLocalPreferences,
+  resolveLibraryPreferences,
+  updateViewPreferences
+} from "../../api";
+import type { CharacterTemplateUpdate, ProposedSectionChange, CharacterBrainstormResult, Preset, ResolvedLibraryPreferences } from "../../api";
 import { CHARACTER_SHEET_EXAMPLE, applySectionChanges } from "../../../engine/characterSections";
 import { isFormatAligned, resolveCharacterFormat } from "../../../engine/characterFormat";
 import { displayTitle, entryKind, filterLibraryEntries, cardBadgeLabel, groupByLineage, getGroupCreatedAt, getGroupUpdatedAt, type CharacterSortOption, type SortDirection } from "../../../engine/characterCards";
@@ -445,78 +452,40 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
   const [editingIsCcv2, setEditingIsCcv2] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const [search, setSearchState] = useState(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      return localStorage.getItem("bobbinloom_library_search") ?? "";
-    }
-    return "";
-  });
+  const [search, setSearchState] = useState(LIBRARY_PREFERENCE_DEFAULTS.search);
 
   const setSearch = (val: string) => {
     setSearchState(val);
-    try {
-      if (val) {
-        localStorage.setItem("bobbinloom_library_search", val);
-      } else {
-        localStorage.removeItem("bobbinloom_library_search");
-      }
-    } catch { /* silent */ }
+    writeLibraryPreference({ search: val });
   };
 
   const [tagFilterSearch, setTagFilterSearch] = useState("");
   const [importing, setImporting] = useState(false);
-  const [viewMode, setViewModeState] = useState<ViewMode>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const saved = localStorage.getItem("bobbinloom_library_view_mode");
-      if (saved === "portrait" || saved === "list" || saved === "grid") return saved;
-    }
-    return "portrait";
-  });
+  const [viewMode, setViewModeState] = useState<ViewMode>(LIBRARY_PREFERENCE_DEFAULTS.viewMode);
 
   const setViewMode = (mode: ViewMode) => {
     setViewModeState(mode);
-    try {
-      localStorage.setItem("bobbinloom_library_view_mode", mode);
-    } catch { /* silent */ }
+    writeLibraryPreference({ viewMode: mode });
   };
 
-  const [sortBy, setSortByState] = useState<CharacterSortOption>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const saved = localStorage.getItem("bobbinloom_library_sort_by");
-      if (saved === "name" || saved === "createdAt" || saved === "updatedAt") return saved;
-    }
-    return "name";
-  });
+  const [sortBy, setSortByState] = useState<CharacterSortOption>(LIBRARY_PREFERENCE_DEFAULTS.sortBy);
 
-  const [sortDirection, setSortDirectionState] = useState<SortDirection>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const saved = localStorage.getItem("bobbinloom_library_sort_dir");
-      if (saved === "asc" || saved === "desc") return saved;
-    }
-    return "asc";
-  });
+  const [sortDirection, setSortDirectionState] = useState<SortDirection>(
+    LIBRARY_PREFERENCE_DEFAULTS.sortDir
+  );
 
   const setSortBy = (option: CharacterSortOption) => {
+    const nextDir: SortDirection =
+      option === "createdAt" || option === "updatedAt" ? "desc" : "asc";
     setSortByState(option);
-    let nextDir: SortDirection = "asc";
-    if (option === "createdAt" || option === "updatedAt") {
-      nextDir = "desc";
-    } else {
-      nextDir = "asc";
-    }
     setSortDirectionState(nextDir);
-    try {
-      localStorage.setItem("bobbinloom_library_sort_by", option);
-      localStorage.setItem("bobbinloom_library_sort_dir", nextDir);
-    } catch { /* silent */ }
+    writeLibraryPreference({ sortBy: option, sortDir: nextDir });
   };
 
   const toggleSortDirection = () => {
     const nextDir: SortDirection = sortDirection === "asc" ? "desc" : "asc";
     setSortDirectionState(nextDir);
-    try {
-      localStorage.setItem("bobbinloom_library_sort_dir", nextDir);
-    } catch { /* silent */ }
+    writeLibraryPreference({ sortDir: nextDir });
   };
   const [conversionFailed, setConversionFailed] = useState<{
     template: CharacterTemplate;
@@ -604,33 +573,57 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
   // ── Tag Taxonomy & Categorization State ──
   const [taxonomyConfig, setTaxonomyConfig] = useState<TagTaxonomyConfig | null>(null);
   const [taxonomyModalOpen, setTaxonomyModalOpen] = useState(false);
-  const [sidebarViewMode, setSidebarViewModeState] = useState<"grouped" | "flat">(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const saved = localStorage.getItem("bobbinloom_library_sidebar_view_mode");
-      if (saved === "grouped" || saved === "flat") return saved;
-    }
-    return "grouped";
-  });
+  const [sidebarViewMode, setSidebarViewModeState] = useState<"grouped" | "flat">(
+    LIBRARY_PREFERENCE_DEFAULTS.sidebarViewMode
+  );
 
   const setSidebarViewMode = (mode: "grouped" | "flat") => {
     setSidebarViewModeState(mode);
-    try {
-      localStorage.setItem("bobbinloom_library_sidebar_view_mode", mode);
-    } catch { /* silent */ }
+    writeLibraryPreference({ sidebarViewMode: mode });
   };
 
-  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      try {
-        const saved = localStorage.getItem("bobbinloom_library_collapsed_categories");
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) return new Set(parsed);
-        }
-      } catch { /* silent */ }
-    }
-    return new Set();
-  });
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(
+    () => new Set(LIBRARY_PREFERENCE_DEFAULTS.collapsedCategories)
+  );
+
+  /** Set the moment the reader changes any of these, so a read that lands later never overwrites what
+   *  they just chose. */
+  const libraryPrefsTouchedRef = useRef(false);
+
+  /** One writer for every list preference: state first so the click feels instant, then the leaf that
+   *  changed. The device keeps nothing. */
+  const writeLibraryPreference = (patch: ViewPreferences["library"]) => {
+    libraryPrefsTouchedRef.current = true;
+    void updateViewPreferences({ library: patch }).catch(() => {
+      /* The next read reconciles; a failed write must not break the control. */
+    });
+  };
+
+  const applyLibraryPreferences = (prefs: ResolvedLibraryPreferences) => {
+    setViewModeState(prefs.viewMode);
+    setSortByState(prefs.sortBy);
+    setSortDirectionState(prefs.sortDir);
+    setSidebarViewModeState(prefs.sidebarViewMode);
+    setCollapsedCategories(new Set(prefs.collapsedCategories));
+    setSearchState(prefs.search);
+  };
+
+  // These preferences live on the server now (adopting whatever this device still holds first), so they
+  // arrive after the first paint — while the list is still loading, which is what keeps the swap
+  // invisible rather than a grid that rearranges itself.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { preferences } = await adoptLocalPreferences();
+      if (cancelled || libraryPrefsTouchedRef.current) return;
+      applyLibraryPreferences(resolveLibraryPreferences(preferences));
+    })().catch(() => {
+      /* A failed read leaves the defaults; the next load tries again. */
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [mobileSidebarExpanded, setMobileSidebarExpanded] = useState(false);
 
   // ── AI Brainstorming State ──
@@ -1448,15 +1441,11 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
   }, [filteredTagCounts, taxonomyConfig]);
 
   function toggleCategoryCollapse(categoryId: string) {
-    setCollapsedCategories((prev) => {
-      const next = new Set(prev);
-      if (next.has(categoryId)) next.delete(categoryId);
-      else next.add(categoryId);
-      try {
-        localStorage.setItem("bobbinloom_library_collapsed_categories", JSON.stringify([...next]));
-      } catch { /* silent */ }
-      return next;
-    });
+    const next = new Set(collapsedCategories);
+    if (next.has(categoryId)) next.delete(categoryId);
+    else next.add(categoryId);
+    setCollapsedCategories(next);
+    writeLibraryPreference({ collapsedCategories: [...next] });
   }
 
   const activeFilterTags = useMemo(() => {

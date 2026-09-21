@@ -51,9 +51,49 @@ const fromChatBlob = (leaf: string) => (raw: string) => {
   }
 };
 
+/** A leaf stored as-is (a plain string, or `""` for an emptied search box). */
+const asString = (raw: string) => raw;
+
+/** A leaf that must be one of a fixed set, stored as-is. The old readers validated exactly this way,
+ *  which is why junk is left where it is rather than written to the server. */
+const oneOf =
+  (allowed: readonly string[]) =>
+  (raw: string): string | undefined =>
+    allowed.includes(raw) ? raw : undefined;
+
+/** A leaf stored as JSON — an array of category ids. */
+const asStringArray = (raw: string) => {
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.every((value) => typeof value === "string")
+      ? (parsed as string[])
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/** The two browsing lists' keys, so the registry below reads as a mapping rather than a wall of
+ *  string literals. */
+const LIBRARY_KEYS = {
+  viewMode: "bobbinloom_library_view_mode",
+  sortBy: "bobbinloom_library_sort_by",
+  sortDir: "bobbinloom_library_sort_dir",
+  sidebarViewMode: "bobbinloom_library_sidebar_view_mode",
+  collapsedCategories: "bobbinloom_library_collapsed_categories",
+  search: "bobbinloom_library_search"
+} as const;
+
+const SHELF_KEYS = {
+  viewMode: "bobbinloom_playthrough_view_mode",
+  sortBy: "bobbinloom_playthrough_sort_by",
+  sortDir: "bobbinloom_playthrough_sort_dir"
+} as const;
+
 /**
  * Every key this pass migrates, added one group at a time as its surface switches to the server. A
- * group that is missing here has simply not been migrated yet.
+ * group that is missing here has simply not been migrated yet — `PAGE_SIZE_KEYS` (the five pagers)
+ * are the known remainder.
  */
 export const ADOPTION_SOURCES: readonly LocalAdoptionSource[] = [
   { key: CHAT_KEY, group: "chat", leaf: "choicesEnabled", parse: fromChatBlob("choicesEnabled") },
@@ -74,6 +114,40 @@ export const ADOPTION_SOURCES: readonly LocalAdoptionSource[] = [
     group: "chat",
     leaf: "alwaysDiscardOldImage",
     parse: fromChatBlob("alwaysDiscardOldImage")
+  },
+  { key: LIBRARY_KEYS.viewMode, group: "library", leaf: "viewMode", parse: oneOf(["portrait", "list", "grid"]) },
+  { key: LIBRARY_KEYS.sortBy, group: "library", leaf: "sortBy", parse: oneOf(["name", "createdAt", "updatedAt"]) },
+  { key: LIBRARY_KEYS.sortDir, group: "library", leaf: "sortDir", parse: oneOf(["asc", "desc"]) },
+  {
+    key: LIBRARY_KEYS.sidebarViewMode,
+    group: "library",
+    leaf: "sidebarViewMode",
+    parse: oneOf(["grouped", "flat"])
+  },
+  {
+    key: LIBRARY_KEYS.collapsedCategories,
+    group: "library",
+    leaf: "collapsedCategories",
+    parse: asStringArray
+  },
+  { key: LIBRARY_KEYS.search, group: "library", leaf: "search", parse: asString },
+  {
+    key: SHELF_KEYS.viewMode,
+    group: "library",
+    leaf: "playthroughViewMode",
+    parse: oneOf(["grid", "list"])
+  },
+  {
+    key: SHELF_KEYS.sortBy,
+    group: "library",
+    leaf: "playthroughSortBy",
+    parse: oneOf(["updatedAt", "name", "turn"])
+  },
+  {
+    key: SHELF_KEYS.sortDir,
+    group: "library",
+    leaf: "playthroughSortDir",
+    parse: oneOf(["asc", "desc"])
   }
 ];
 

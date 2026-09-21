@@ -1,6 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LoadFailure, Playthrough } from "../../../schemas";
 import { listPlaythroughs, renamePlaythrough, type PlaythroughSummary } from "../../api";
+import {
+  LIBRARY_PREFERENCE_DEFAULTS,
+  adoptLocalPreferences,
+  resolveLibraryPreferences,
+  updateViewPreferences
+} from "../../api";
+import type { ResolvedLibraryPreferences } from "../../api";
+import type { ViewPreferences } from "../../../schemas";
 import { usePagination } from "../../hooks/usePagination";
 import { Badge, Button, CoverArt, Icon, Pagination, SearchBar, SimpleSelect } from "../base";
 import { PlaythroughActionsMenu } from "../common/PlaythroughActionsMenu";
@@ -28,10 +36,9 @@ export type PlaythroughLibraryProps = {
   onError: (message: string) => void;
 };
 
-const VIEW_MODE_KEY = "bobbinloom_playthrough_view_mode";
-const SORT_BY_KEY = "bobbinloom_playthrough_sort_by";
-const SORT_DIR_KEY = "bobbinloom_playthrough_sort_dir";
-/** Shared with the home screen's pager: one page size per device, whichever surface is open. */
+/** Shared with the home screen's pager: one page size per device, whichever surface is open. Page size
+ *  is the last thing this file keeps on the device: all five pagers share one hook, so it moves in its
+ *  own pass rather than leaving that hook with two persistence paths. */
 const PAGE_SIZE_KEY = "bobbinloom_home_page_size";
 
 export const PLAYTHROUGH_SORT_OPTIONS: { value: PlaythroughSortOption; label: string }[] = [
@@ -39,14 +46,6 @@ export const PLAYTHROUGH_SORT_OPTIONS: { value: PlaythroughSortOption; label: st
   { value: "name", label: "Name" },
   { value: "turn", label: "Turn" }
 ];
-
-function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
-  if (typeof window !== "undefined" && window.localStorage) {
-    const saved = localStorage.getItem(key);
-    if (saved && (allowed as readonly string[]).includes(saved)) return saved as T;
-  }
-  return fallback;
-}
 
 function formatDate(iso: string): string {
   try {
@@ -97,15 +96,49 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
   const [renameSaving, setRenameSaving] = useState(false);
   const [renameError, setRenameError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [viewMode, setViewModeState] = useState<PlaythroughViewMode>(() =>
-    readStored<PlaythroughViewMode>(VIEW_MODE_KEY, ["grid", "list"], "grid")
+  const [viewMode, setViewModeState] = useState<PlaythroughViewMode>(
+    LIBRARY_PREFERENCE_DEFAULTS.playthroughViewMode
   );
-  const [sortBy, setSortByState] = useState<PlaythroughSortOption>(() =>
-    readStored<PlaythroughSortOption>(SORT_BY_KEY, ["updatedAt", "name", "turn"], "updatedAt")
+  const [sortBy, setSortByState] = useState<PlaythroughSortOption>(
+    LIBRARY_PREFERENCE_DEFAULTS.playthroughSortBy
   );
-  const [sortDir, setSortDirState] = useState<"asc" | "desc">(() =>
-    readStored<"asc" | "desc">(SORT_DIR_KEY, ["asc", "desc"], "desc")
+  const [sortDir, setSortDirState] = useState<"asc" | "desc">(
+    LIBRARY_PREFERENCE_DEFAULTS.playthroughSortDir
   );
+
+  /** Set the moment the reader changes any of these, so a read that lands later never overwrites what
+   *  they just chose. */
+  const prefsTouchedRef = useRef(false);
+
+  /** One writer for the shelf's three preferences: state first so the click feels instant, then the
+   *  leaves that changed. The device keeps nothing. This component is mounted twice when the play view
+   *  is open (the shelf as a dialog over the home page's own), and both instances read the same
+   *  server value, so the second mount is a no-op rather than a second source of truth. */
+  const writeShelfPreference = (patch: ViewPreferences["library"]) => {
+    prefsTouchedRef.current = true;
+    void updateViewPreferences({ library: patch }).catch(() => {
+      /* The next read reconciles; a failed write must not break the control. */
+    });
+  };
+
+  // The shelf's layout lives on the server now (adopting whatever this device still holds first), so it
+  // arrives after the first paint — while the list is still loading, which keeps the swap invisible.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { preferences } = await adoptLocalPreferences();
+      if (cancelled || prefsTouchedRef.current) return;
+      const resolved: ResolvedLibraryPreferences = resolveLibraryPreferences(preferences);
+      setViewModeState(resolved.playthroughViewMode);
+      setSortByState(resolved.playthroughSortBy);
+      setSortDirState(resolved.playthroughSortDir);
+    })().catch(() => {
+      /* A failed read leaves the defaults; the next load tries again. */
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -126,18 +159,18 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
 
   function setViewMode(mode: PlaythroughViewMode) {
     setViewModeState(mode);
-    if (typeof window !== "undefined" && window.localStorage) localStorage.setItem(VIEW_MODE_KEY, mode);
+    writeShelfPreference({ playthroughViewMode: mode });
   }
 
   function setSortBy(option: PlaythroughSortOption) {
     setSortByState(option);
-    if (typeof window !== "undefined" && window.localStorage) localStorage.setItem(SORT_BY_KEY, option);
+    writeShelfPreference({ playthroughSortBy: option });
   }
 
   function toggleSortDirection() {
     const next: "asc" | "desc" = sortDir === "asc" ? "desc" : "asc";
     setSortDirState(next);
-    if (typeof window !== "undefined" && window.localStorage) localStorage.setItem(SORT_DIR_KEY, next);
+    writeShelfPreference({ playthroughSortDir: next });
   }
 
   // The server sends the list newest-first; a name or turn sort is the client's, and a direction
