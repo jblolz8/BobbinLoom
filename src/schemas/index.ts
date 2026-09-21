@@ -457,11 +457,20 @@ export type ChapterOpeningMode = z.infer<typeof ChapterOpeningModeSchema>;
  * defaults the way the appearance route does, and the client resolves them in one place.
  */
 export const ViewPreferencesSchema = z.object({
+  /** The Chat tab's display toggles. Leaves mirror the client's own field names one for one, so a
+   *  migrated toggle needs no translation table and the hook's per-field writers can send the single
+   *  leaf they just changed. */
   chat: z
     .object({
-      choices: z.boolean().optional(),
+      choicesEnabled: z.boolean().optional(),
       showDebug: z.boolean().optional(),
-      showContextUsage: z.boolean().optional()
+      showContextUsage: z.boolean().optional(),
+      showGenerationTime: z.boolean().optional(),
+      showMessageTimestamps: z.boolean().optional(),
+      showModelName: z.boolean().optional(),
+      imagePromptPreview: z.boolean().optional(),
+      autoImageAfterTurn: z.boolean().optional(),
+      alwaysDiscardOldImage: z.boolean().optional()
     })
     .optional(),
   library: z

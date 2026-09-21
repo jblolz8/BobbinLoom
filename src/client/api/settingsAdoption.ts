@@ -3,13 +3,17 @@
  *
  * The storage pass moved these preferences from `localStorage` to `AppSettings.viewPreferences`, and
  * an existing profile has real values in the keys. A naive move silently resets them — the reader's
- * chat toggles off, their page size back to the default — so the first load after a group migrates
- * reads the device's value, writes it to the server, and only then deletes the key.
+ * chat toggles off, their page size back to the default — so the first read after a group migrates
+ * takes the device's value, writes it to the server, and only then deletes the key.
  *
- * The registry below is deliberately EMPTY until a surface is migrated: a key is adopted only once
- * the surface that reads it has switched to the server, otherwise adoption would move the value away
- * from the only place still reading it. Each migrated group adds its keys in the same change that
- * swaps its call sites.
+ * It is called by the READ path (`adoptLocalPreferences`), not from a boot hook, because that is the
+ * only way the order is guaranteed: whoever asks for the preferences gets the adopted ones back, with
+ * no window in which a surface reads the server's empty answer and paints defaults over the reader's
+ * choices.
+ *
+ * The registry is kept in step with the surfaces: a key is listed here only once the surface that
+ * reads it has moved to the server, or adoption would take the value away from the only place still
+ * reading it. Each migration adds its keys in that same change.
  *
  * The plan-building half is pure and takes the local reader as an argument, so it is testable with no
  * DOM and no server.
@@ -21,7 +25,9 @@ import { getViewPreferences, updateViewPreferences } from "./settings";
  *  and is handled on its own when its surface migrates. */
 export type PreferenceGroup = Exclude<keyof ViewPreferences, "staleNoteDismissals">;
 
-/** One migrated local key: which group and leaf it feeds, and how to read its raw value. */
+/** One migrated local key: which group and leaf it feeds, and how to read its raw value. A single key
+ *  may appear several times — the chat settings blob feeds nine leaves — and the key is then adopted
+ *  once per leaf and deleted once in total. */
 export type LocalAdoptionSource = {
   /** The `localStorage` key on the device. */
   key: string;
@@ -32,16 +38,49 @@ export type LocalAdoptionSource = {
   parse: (raw: string) => unknown;
 };
 
+const CHAT_KEY = "bobbinloom_chat_settings";
+
+/** Read one boolean leaf out of the old chat-settings blob, so one key can feed every leaf it held. */
+const fromChatBlob = (leaf: string) => (raw: string) => {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const value = parsed?.[leaf];
+    return typeof value === "boolean" ? value : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 /**
- * Every key this pass migrates, added one group at a time as its surface switches to the server.
- * Each entry is one line, and a group that is missing here has simply not been migrated yet.
+ * Every key this pass migrates, added one group at a time as its surface switches to the server. A
+ * group that is missing here has simply not been migrated yet.
  */
-export const ADOPTION_SOURCES: readonly LocalAdoptionSource[] = [];
+export const ADOPTION_SOURCES: readonly LocalAdoptionSource[] = [
+  { key: CHAT_KEY, group: "chat", leaf: "choicesEnabled", parse: fromChatBlob("choicesEnabled") },
+  { key: CHAT_KEY, group: "chat", leaf: "showDebug", parse: fromChatBlob("showDebug") },
+  { key: CHAT_KEY, group: "chat", leaf: "showContextUsage", parse: fromChatBlob("showContextUsage") },
+  { key: CHAT_KEY, group: "chat", leaf: "showGenerationTime", parse: fromChatBlob("showGenerationTime") },
+  {
+    key: CHAT_KEY,
+    group: "chat",
+    leaf: "showMessageTimestamps",
+    parse: fromChatBlob("showMessageTimestamps")
+  },
+  { key: CHAT_KEY, group: "chat", leaf: "showModelName", parse: fromChatBlob("showModelName") },
+  { key: CHAT_KEY, group: "chat", leaf: "imagePromptPreview", parse: fromChatBlob("imagePromptPreview") },
+  { key: CHAT_KEY, group: "chat", leaf: "autoImageAfterTurn", parse: fromChatBlob("autoImageAfterTurn") },
+  {
+    key: CHAT_KEY,
+    group: "chat",
+    leaf: "alwaysDiscardOldImage",
+    parse: fromChatBlob("alwaysDiscardOldImage")
+  }
+];
 
 export type AdoptionPlan = {
   /** Only the leaves the device holds and the server does not. Grouped, ready to PUT. */
   write: ViewPreferences;
-  /** The keys to delete once `write` has landed. */
+  /** The keys to delete once `write` has landed — each key once, however many leaves it fed. */
   removeKeys: string[];
 };
 
@@ -60,7 +99,7 @@ export function planAdoption(
   sources: readonly LocalAdoptionSource[] = ADOPTION_SOURCES
 ): AdoptionPlan {
   const write: Record<string, Record<string, unknown>> = {};
-  const removeKeys: string[] = [];
+  const removeKeys = new Set<string>();
 
   for (const source of sources) {
     const raw = readLocal(source.key);
@@ -69,32 +108,39 @@ export function planAdoption(
     const chosen = (server[source.group] as Record<string, unknown> | undefined)?.[source.leaf];
     if (chosen !== undefined) {
       // Already chosen server-side: the device's copy is superseded, not authoritative.
-      removeKeys.push(source.key);
+      removeKeys.add(source.key);
       continue;
     }
 
     const parsed = source.parse(raw);
     if (parsed === undefined) continue; // Unreadable: leave it for a human rather than write junk.
+    // (A key that reads fine but yields nothing adoptable is left alone too: it holds no preference to
+    // migrate, and the first leaf that IS adoptable brings the key with it.)
 
     (write[source.group] ??= {})[source.leaf] = parsed;
-    removeKeys.push(source.key);
+    removeKeys.add(source.key);
   }
 
-  return { write: write as ViewPreferences, removeKeys };
+  return { write: write as ViewPreferences, removeKeys: [...removeKeys] };
 }
 
+/** What the read path gets back: the preferences to use, and whether anything moved. */
+export type AdoptionOutcome = { preferences: ViewPreferences; changed: boolean };
+
 /**
- * Run the adoption once, before any surface reads the preferences.
+ * Read the preferences, adopting anything still on the device first.
  *
  * Order matters in both directions: the write lands BEFORE the keys are deleted, so a failed write
  * cannot lose the values, and nothing is dual-written afterwards — a key left in place is a second
  * source of truth that will disagree later.
  */
-export async function adoptLocalPreferences(): Promise<void> {
-  if (ADOPTION_SOURCES.length === 0) return;
-  if (typeof window === "undefined" || !window.localStorage) return;
-
+export async function adoptLocalPreferences(): Promise<AdoptionOutcome> {
   const server = await getViewPreferences();
+
+  if (typeof window === "undefined" || !window.localStorage) {
+    return { preferences: server, changed: false };
+  }
+
   const plan = planAdoption(server, (key) => {
     try {
       return window.localStorage.getItem(key);
@@ -102,12 +148,12 @@ export async function adoptLocalPreferences(): Promise<void> {
       return null;
     }
   });
+  if (plan.removeKeys.length === 0) return { preferences: server, changed: false };
 
-  if (plan.removeKeys.length === 0) return;
+  // The server's answer to the write is the merged truth, not the patch that was sent.
+  const preferences =
+    Object.keys(plan.write).length > 0 ? await updateViewPreferences(plan.write) : server;
 
-  if (Object.keys(plan.write).length > 0) {
-    await updateViewPreferences(plan.write);
-  }
   for (const key of plan.removeKeys) {
     try {
       window.localStorage.removeItem(key);
@@ -115,4 +161,5 @@ export async function adoptLocalPreferences(): Promise<void> {
       /* A blocked storage is not a reason to break the first load. */
     }
   }
+  return { preferences, changed: true };
 }

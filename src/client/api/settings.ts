@@ -25,6 +25,32 @@ export function updateViewPreferences(patch: ViewPreferences): Promise<ViewPrefe
   }).then((result) => result.preferences ?? {});
 }
 
+/** What a reader who has never chosen anything gets for the chat toggles. These are the values the
+ *  hook's old `loadChatSettings` fell back to, moved here so a default lives in ONE place rather than
+ *  a `?? true` per call site. */
+export const CHAT_PREFERENCE_DEFAULTS = {
+  choicesEnabled: true,
+  showDebug: true,
+  showContextUsage: true,
+  showGenerationTime: true,
+  showMessageTimestamps: true,
+  showModelName: true,
+  imagePromptPreview: true,
+  /** Costs a text call plus a render per turn, and a local render runs for minutes: OFF. */
+  autoImageAfterTurn: false,
+  /** Skips the confirmation when re-sending an image's request body: OFF. */
+  alwaysDiscardOldImage: false
+} as const;
+
+export type ResolvedChatPreferences = { [K in keyof typeof CHAT_PREFERENCE_DEFAULTS]: boolean };
+
+/** The chat toggles with defaults filled. An absent leaf means "never chosen", so defaults are applied
+ *  HERE and nowhere else — and a stored `false` must beat a default `true`, which is why the spread
+ *  order is the whole point of this function. */
+export function resolveChatPreferences(stored: ViewPreferences | undefined): ResolvedChatPreferences {
+  return { ...CHAT_PREFERENCE_DEFAULTS, ...(stored?.chat ?? {}) };
+}
+
 export interface AppearanceSettings {
   avatarShape: AvatarShape;
   /** The shape of every cover frame on the playthrough shelf. */

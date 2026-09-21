@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChatMessage, ImageApiStyle, ImageInstructionMode, Playthrough } from "../../schemas";
 import {
+  adoptLocalPreferences,
+  CHAT_PREFERENCE_DEFAULTS,
   deleteMessageImage,
   editMessage,
   fetchImageProgress,
@@ -11,6 +13,7 @@ import {
   listProviderConnections,
   previewImagePrompt,
   questAction,
+  resolveChatPreferences,
   resummarizeChapter,
   retryTurn,
   revertToAnchor,
@@ -19,14 +22,13 @@ import {
   sendTurn,
   truncatePlaythrough,
   branchPlaythrough,
+  updateViewPreferences,
   type ImageGenerationProgress,
   type QuestAction,
   type TokenUsage
 } from "../api";
 import { checkImageRequestBody, formatImageRequestBody } from "../utils/imageRequestBody";
 import { toRevertRequestAnchor, type RevertTarget } from "../../engine/chapterRevert";
-
-const CHAT_SETTINGS_KEY = "bobbinloom_chat_settings";
 
 const DRAFT_KEY_PREFIX = "bobbinloom_draft_";
 
@@ -223,44 +225,6 @@ async function resolveImageOwner(providerId: string | undefined): Promise<Resolv
   }
 }
 
-function loadChatSettings(): ChatSettings {
-  try {
-    const raw = localStorage.getItem(CHAT_SETTINGS_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return {
-        choicesEnabled: typeof parsed.choicesEnabled === "boolean" ? parsed.choicesEnabled : true,
-        showDebug: typeof parsed.showDebug === "boolean" ? parsed.showDebug : true,
-        showContextUsage: typeof parsed.showContextUsage === "boolean" ? parsed.showContextUsage : true,
-        showGenerationTime: typeof parsed.showGenerationTime === "boolean" ? parsed.showGenerationTime : true,
-        showMessageTimestamps: typeof parsed.showMessageTimestamps === "boolean" ? parsed.showMessageTimestamps : true,
-        showModelName: typeof parsed.showModelName === "boolean" ? parsed.showModelName : true,
-        imagePromptPreview: typeof parsed.imagePromptPreview === "boolean" ? parsed.imagePromptPreview : true,
-        autoImageAfterTurn: typeof parsed.autoImageAfterTurn === "boolean" ? parsed.autoImageAfterTurn : false,
-        alwaysDiscardOldImage:
-          typeof parsed.alwaysDiscardOldImage === "boolean" ? parsed.alwaysDiscardOldImage : false,
-      };
-    }
-  } catch {}
-  return {
-    choicesEnabled: true,
-    showDebug: true,
-    showContextUsage: true,
-    showGenerationTime: true,
-    showMessageTimestamps: true,
-    showModelName: true,
-    imagePromptPreview: true,
-    autoImageAfterTurn: false,
-    alwaysDiscardOldImage: false,
-  };
-}
-
-function saveChatSettings(settings: ChatSettings) {
-  try {
-    localStorage.setItem(CHAT_SETTINGS_KEY, JSON.stringify(settings));
-  } catch {}
-}
-
 function readLocalDraft(playthroughId: string): { text: string; at: number } | null {
   try {
     const raw = localStorage.getItem(draftKey(playthroughId));
@@ -307,7 +271,35 @@ function resolveDraft(playthrough: Playthrough | null): { text: string; localWin
 export function usePlaythrough() {
   const [playthrough, setPlaythrough] = useState<Playthrough | null>(null);
   const [input, setInput] = useState("");
-  const [chatSettings, setChatSettingsState] = useState<ChatSettings>(loadChatSettings);
+  const [chatSettings, setChatSettingsState] = useState<ChatSettings>(CHAT_PREFERENCE_DEFAULTS);
+
+  // The chat toggles live on the server now, so this is a read — adopting anything still on the device
+  // first — rather than a localStorage parse. Defaults paint immediately and the read replaces them,
+  // unless the reader has already changed something: their click is the newer truth.
+  const chatTouchedRef = useRef(false);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { preferences } = await adoptLocalPreferences();
+      if (cancelled || chatTouchedRef.current) return;
+      setChatSettingsState(resolveChatPreferences(preferences));
+    })().catch(() => {
+      /* A failed read leaves the defaults; the next load tries again. */
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /** One writer for every chat toggle: state first so the click feels instant, then the single leaf
+   *  that changed. The server is the source of truth now, so nothing is left on the device. */
+  const setChatSetting = (patch: Partial<ChatSettings>) => {
+    chatTouchedRef.current = true;
+    setChatSettingsState((prev) => ({ ...prev, ...patch }));
+    void updateViewPreferences({ chat: patch }).catch(() => {
+      /* The next read reconciles; a failed write must not break the toggle. */
+    });
+  };
 
   const choicesEnabled = chatSettings.choicesEnabled;
   const showDebug = chatSettings.showDebug;
@@ -319,77 +311,23 @@ export function usePlaythrough() {
   const autoImageAfterTurn = chatSettings.autoImageAfterTurn;
   const alwaysDiscardOldImage = chatSettings.alwaysDiscardOldImage;
 
-  const setChoicesEnabled = (val: boolean) => {
-    setChatSettingsState((prev) => {
-      const next = { ...prev, choicesEnabled: val };
-      saveChatSettings(next);
-      return next;
-    });
-  };
+  const setChoicesEnabled = (val: boolean) => setChatSetting({ choicesEnabled: val });
 
-  const setAutoImageAfterTurn = (val: boolean) => {
-    setChatSettingsState((prev) => {
-      const next = { ...prev, autoImageAfterTurn: val };
-      saveChatSettings(next);
-      return next;
-    });
-  };
+  const setAutoImageAfterTurn = (val: boolean) => setChatSetting({ autoImageAfterTurn: val });
 
-  const setShowDebug = (val: boolean) => {
-    setChatSettingsState((prev) => {
-      const next = { ...prev, showDebug: val };
-      saveChatSettings(next);
-      return next;
-    });
-  };
+  const setShowDebug = (val: boolean) => setChatSetting({ showDebug: val });
 
-  const setShowContextUsage = (val: boolean) => {
-    setChatSettingsState((prev) => {
-      const next = { ...prev, showContextUsage: val };
-      saveChatSettings(next);
-      return next;
-    });
-  };
+  const setShowContextUsage = (val: boolean) => setChatSetting({ showContextUsage: val });
 
-  const setShowGenerationTime = (val: boolean) => {
-    setChatSettingsState((prev) => {
-      const next = { ...prev, showGenerationTime: val };
-      saveChatSettings(next);
-      return next;
-    });
-  };
+  const setShowGenerationTime = (val: boolean) => setChatSetting({ showGenerationTime: val });
 
-  const setShowMessageTimestamps = (val: boolean) => {
-    setChatSettingsState((prev) => {
-      const next = { ...prev, showMessageTimestamps: val };
-      saveChatSettings(next);
-      return next;
-    });
-  };
+  const setShowMessageTimestamps = (val: boolean) => setChatSetting({ showMessageTimestamps: val });
 
-  const setShowModelName = (val: boolean) => {
-    setChatSettingsState((prev) => {
-      const next = { ...prev, showModelName: val };
-      saveChatSettings(next);
-      return next;
-    });
-  };
+  const setShowModelName = (val: boolean) => setChatSetting({ showModelName: val });
 
-  const setImagePromptPreview = (val: boolean) => {
-    setChatSettingsState((prev) => {
-      const next = { ...prev, imagePromptPreview: val };
-      saveChatSettings(next);
-      return next;
-    });
-  };
+  const setImagePromptPreview = (val: boolean) => setChatSetting({ imagePromptPreview: val });
 
-  const setAlwaysDiscardOldImage = (val: boolean) => {
-    setChatSettingsState((prev) => {
-      const next = { ...prev, alwaysDiscardOldImage: val };
-      saveChatSettings(next);
-      return next;
-    });
-  };
+  const setAlwaysDiscardOldImage = (val: boolean) => setChatSetting({ alwaysDiscardOldImage: val });
   const [choices, setChoices] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -45,11 +45,11 @@ describe("view preferences storage", () => {
 
   it("keeps the groups independent", () => {
     const dir = tempDir();
-    saveViewPreferences(dir, { chat: { choices: false }, setup: { showTagFilters: true } });
+    saveViewPreferences(dir, { chat: { choicesEnabled: false }, setup: { showTagFilters: true } });
     saveViewPreferences(dir, { setup: { castViewMode: "list" } });
 
     const stored = loadAppSettings(dir).viewPreferences;
-    expect(stored?.chat).toEqual({ choices: false });
+    expect(stored?.chat).toEqual({ choicesEnabled: false });
     expect(stored?.setup).toEqual({ showTagFilters: true, castViewMode: "list" });
   });
 
