@@ -3,7 +3,6 @@ import {
   applyAvatarShapeTheme,
   applyCoverAspect,
   applyTheme,
-  cachedCoverAspect,
   createPlaythrough,
   generatePlaythrough,
   getAppearanceSettings,
@@ -61,35 +60,9 @@ export default function App() {
   // Existing-setting selector fed by imported CCv2 card scenarios (D7/F6)
   const [cardSettings, setCardSettings] = useState<Array<{ title: string; scenario: string }>>([]);
 
-  // Initialize appearance avatar shape & theme
+  // Live appearance re-apply only: the server paints these tokens into the first frame it serves,
+  // so nothing is read from the device here. The GET covers a theme changed on another device.
   useEffect(() => {
-    const cachedShape = typeof window !== "undefined" ? localStorage.getItem("bobbinloom_avatar_shape") : null;
-    if (cachedShape === "square" || cachedShape === "rounded" || cachedShape === "circle") {
-      applyAvatarShapeTheme(cachedShape);
-    } else {
-      applyAvatarShapeTheme("rounded");
-    }
-
-    // The cover frame shape is cached locally so the shelf paints correctly on the very first
-    // render, then re-applied from the server below; landscape is the shipped default.
-    applyCoverAspect(cachedCoverAspect() ?? "landscape");
-
-    const cachedMode = typeof window !== "undefined" ? (localStorage.getItem("bobbinloom_theme_mode") as any) : null;
-    const cachedPreset = typeof window !== "undefined" ? (localStorage.getItem("bobbinloom_theme_preset") ?? undefined) : undefined;
-    let cachedCustom = undefined;
-    try {
-      cachedCustom = typeof window !== "undefined" && localStorage.getItem("bobbinloom_theme_custom")
-        ? JSON.parse(localStorage.getItem("bobbinloom_theme_custom")!)
-        : undefined;
-    } catch {
-      /* silent */
-    }
-    applyTheme({
-      themeMode: cachedMode ?? "dark",
-      themePreset: cachedPreset,
-      customThemeColors: cachedCustom,
-    });
-
     getAppearanceSettings()
       .then((res) => {
         if (res.avatarShape) applyAvatarShapeTheme(res.avatarShape);

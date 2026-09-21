@@ -4,7 +4,6 @@ import {
   applyAvatarShapeTheme,
   applyCoverAspect,
   applyTheme,
-  cachedCoverAspect,
   getAppearanceSettings,
   THEME_PRESETS,
   updateAppearanceSettings,
@@ -450,47 +449,22 @@ const THEME_SHOWCASE_GROUPS: ThemeShowcaseGroup[] = [
 ];
 
 export function AppearanceSettingsPanel() {
-  const [avatarShape, setAvatarShape] = useState<AvatarShape>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const saved = localStorage.getItem("bobbinloom_avatar_shape");
-      if (saved === "square" || saved === "rounded" || saved === "circle") return saved;
-    }
-    return "rounded";
-  });
+  // Initial values are the shipped defaults: the server paints these tokens into the first frame and
+  // the GET below fills the controls, so the device cache is gone (it desynced across devices).
+  const [avatarShape, setAvatarShape] = useState<AvatarShape>("rounded");
 
-  const [coverAspect, setCoverAspect] = useState<CoverAspect>(() => cachedCoverAspect() ?? "landscape");
+  const [coverAspect, setCoverAspect] = useState<CoverAspect>("landscape");
 
   /** The play view's panel swipe. The panel is the switch's owner; the play view reads the same
    *  setting to decide whether the gesture exists. Nothing is cached locally — see the note on
    *  `AppearanceSettings.paneSwipeEnabled`. */
   const [paneSwipeEnabled, setPaneSwipeEnabled] = useState(true);
 
-  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const saved = localStorage.getItem("bobbinloom_theme_mode") as ThemeMode | null;
-      if (saved === "dark" || saved === "light" || saved === "system") return saved;
-    }
-    return "dark";
-  });
+  const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
 
-  const [themePreset, setThemePreset] = useState<string>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      return localStorage.getItem("bobbinloom_theme_preset") ?? "default-dark";
-    }
-    return "default-dark";
-  });
+  const [themePreset, setThemePreset] = useState<string>("default-dark");
 
-  const [customColors, setCustomColors] = useState<CustomThemeColors>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      try {
-        const raw = localStorage.getItem("bobbinloom_theme_custom");
-        if (raw) return JSON.parse(raw);
-      } catch {
-        /* silent */
-      }
-    }
-    return {};
-  });
+  const [customColors, setCustomColors] = useState<CustomThemeColors>({});
 
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);

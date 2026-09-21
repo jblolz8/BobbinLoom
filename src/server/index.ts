@@ -2,9 +2,13 @@ import "dotenv/config";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { loadAppSettings } from "./appSettingsStore";
+import { injectThemeFirstPaint } from "./themeFirstPaint";
+import { settingsDir } from "./routes/helpers";
 
 import { characterRoutes } from "./routes/characters";
 import { docsRoutes } from "./routes/docs";
@@ -40,13 +44,33 @@ async function main(): Promise<void> {
   const __dirname = dirname(fileURLToPath(import.meta.url));
   const distPath = join(__dirname, "..", "..", "dist");
   if (existsSync(distPath)) {
-    await app.register(fastifyStatic, { root: distPath });
+    // `index: false` and the `allowedPath` predicate together keep BOTH a bare `/` and a direct
+    // `/index.html` from being answered straight off disk: the shell has to pass through the first-paint
+    // injection, and a direct hit would otherwise hand out the unpainted copy with a cacheable header.
+    await app.register(fastifyStatic, {
+      root: distPath,
+      index: false,
+      allowedPath: (pathname: string) => pathname !== "/index.html" && pathname !== "/"
+    });
+    const shellPath = join(distPath, "index.html");
     app.setNotFoundHandler((req, reply) => {
       if (req.url.startsWith("/api/")) {
         reply.code(404).send({ error: "Not found" });
-      } else {
-        reply.sendFile("index.html");
+        return;
       }
+      // Read and paint per request: the settings can change while the server runs, and the shell is a
+      // couple of kilobytes. `no-store`, because the HTML now carries this instance's own theme.
+      let shell: string;
+      try {
+        shell = readFileSync(shellPath, "utf8");
+      } catch {
+        reply.code(404).send({ error: "Not found" });
+        return;
+      }
+      reply
+        .header("cache-control", "no-store")
+        .type("text/html")
+        .send(injectThemeFirstPaint(shell, loadAppSettings(settingsDir)));
     });
   }
 

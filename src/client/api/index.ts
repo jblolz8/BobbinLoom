@@ -9,4 +9,5 @@ export * from "./providers";
 export * from "./images";
 export * from "./settings";
 export * from "./settingsAdoption";
+export * from "../../engine/theme";
 export * from "./docs";

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { AvatarShape } from "../../../schemas";
 import { Button, Icon } from "../base";
+import { currentAvatarShape } from "../../api";
 import { detectSmartCrop } from "../../utils/smartCrop";
 
 export type ImageCropModalProps = {
@@ -9,6 +10,9 @@ export type ImageCropModalProps = {
   onApply: (dataBase64: string) => void;
   onClose: () => void;
   loading?: boolean;
+  /** The reader's avatar shape, for the preview. Absent, the modal reads the shape the page is currently
+   *  wearing off the root — the server paints it into the first frame, so no caller has to thread it. */
+  avatarShape?: AvatarShape;
 };
 
 const VIEWPORT_SIZE = 320; // Size of the interactive crop box in pixels
@@ -19,6 +23,7 @@ export function ImageCropModal({
   onApply,
   onClose,
   loading = false,
+  avatarShape,
 }: ImageCropModalProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -26,13 +31,7 @@ export function ImageCropModal({
   const [offset, setOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
 
-  const [activeShape] = useState<AvatarShape>(() => {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const saved = localStorage.getItem("bobbinloom_avatar_shape");
-      if (saved === "square" || saved === "rounded" || saved === "circle") return saved;
-    }
-    return "rounded";
-  });
+  const activeShape: AvatarShape = avatarShape ?? currentAvatarShape();
 
   const imageRef = useRef<HTMLImageElement | null>(null);
   const viewportCanvasRef = useRef<HTMLCanvasElement | null>(null);
