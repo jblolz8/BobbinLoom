@@ -69,6 +69,20 @@ export type DeletionFacts = {
   images: number;
   chapters: number;
   approximate: boolean;
+  /**
+   * Characters whose sheet exists at BOTH ends but is not the same sheet: the revert replaces it with
+   * the restore point's. Empty when nothing changed, and empty when there is no snapshot to go back to
+   * — `approximate` is what tells those two apart.
+   */
+  sheetsRewound: string[];
+  /**
+   * Characters whose sheet does NOT exist at the restore point — added to the cast after it, or their
+   * first section written later. A revert does not "rewind" these; it takes them away, which is not
+   * the same promise and must not be worded as one.
+   */
+  sheetsRemoved: string[];
+  /** Characters the restore point HAD whose sheet is gone now: the revert brings them back. */
+  sheetsRestored: string[];
 };
 
 /**
@@ -235,6 +249,11 @@ export function planRevert(playthrough: Playthrough, anchor: RevertAnchor): Reve
  * the discarded turns share with a surviving message stays — and promising a deletion that does
  * not happen is the same class of lie as promising a smaller one than happens.
  *
+ * `sheetsRewound` reads the restore point's snapshot (which captures `characterTemplates`, so a
+ * revert rewinds a grown sheet) and names the characters whose sheet is not the one that snapshot
+ * holds. A character is named by its instance when the cast still has one, because that is the name
+ * the reader knows; a template with no instance left falls back to its own.
+ *
  * `droppedChapterIds` is optional because a retry's plan has no chapter half: a retry only ever
  * anchors a live message, so it drops no chapter record and the count is 0.
  */
@@ -260,8 +279,63 @@ export function describeDeletion(
     turns: Math.max(0, playthrough.turn - plan.keptTailTurn),
     images: doomed.size,
     chapters: plan.droppedChapterIds?.length ?? 0,
-    approximate: plan.approximate
+    approximate: plan.approximate,
+    ...sheetReversion(plan, playthrough)
   };
+}
+
+/**
+ * The three ways a revert touches a character's sheet, computed against the restore point's snapshot
+ * (which captures `characterTemplates`, so a revert rewinds a grown sheet).
+ *
+ * They are deliberately three lists and not one: "this sheet goes back to how it was", "this sheet
+ * did not exist here and goes", and "this sheet comes back" are different things to tell a reader,
+ * and a single count would say the wrong one. Content and summary are what the sheet dialog and the
+ * section patches write; the rest of the instance rides along in the same snapshot.
+ *
+ * No snapshot, no claim: all three come back empty and `approximate` does the talking.
+ */
+function sheetReversion(
+  plan: DeletionPlan & { droppedChapterIds?: string[] },
+  playthrough: Playthrough
+): { sheetsRewound: string[]; sheetsRemoved: string[]; sheetsRestored: string[] } {
+  const empty = { sheetsRewound: [], sheetsRemoved: [], sheetsRestored: [] };
+  if (!plan.restorePointMessageId) return empty;
+  const snapshot = playthrough.snapshots?.[plan.restorePointMessageId];
+  if (!snapshot) return empty;
+
+  const atRestorePoint = new Map(
+    (snapshot.characterTemplates ?? []).map((template) => [template.id, template])
+  );
+  // The cast the restore point held, for the sheet that is gone now.
+  const castAtRestorePoint = new Set((snapshot.characters ?? []).map((character) => character.templateId));
+  const stillHere = new Set(playthrough.characterTemplates.map((template) => template.id));
+
+  const sheetsRewound: string[] = [];
+  const sheetsRemoved: string[] = [];
+  const sheetsRestored: string[] = [];
+
+  for (const template of playthrough.characterTemplates) {
+    const before = atRestorePoint.get(template.id);
+    const instance = playthrough.characters.find((character) => character.templateId === template.id);
+    const name = instance?.name ?? template.name ?? template.id;
+
+    if (!before) {
+      if (!sheetsRemoved.includes(name)) sheetsRemoved.push(name);
+      continue;
+    }
+    if (before.content !== template.content || before.summary !== template.summary) {
+      if (!sheetsRewound.includes(name)) sheetsRewound.push(name);
+    }
+  }
+
+  for (const template of snapshot.characterTemplates ?? []) {
+    if (stillHere.has(template.id) || !castAtRestorePoint.has(template.id)) continue;
+    const name = template.name ?? template.id;
+    if (!sheetsRestored.includes(name)) sheetsRestored.push(name);
+  }
+
+  return { sheetsRewound, sheetsRemoved, sheetsRestored };
 }
 
 /** What the UI remembers while the confirm dialog is open: the anchor, plus what to call it.

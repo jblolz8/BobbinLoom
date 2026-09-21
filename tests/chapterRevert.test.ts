@@ -176,6 +176,134 @@ function buildStory(dir: string, options: { snapshots?: boolean } = {}) {
   };
 }
 
+describe("describeDeletion: what happens to the character sheets", () => {
+  /** A template plus the cast member that carries it — the two things the facts read names from. */
+  function sheet(content: string) {
+    return {
+      id: "tpl_mika",
+      name: "Mika",
+      version: 1,
+      content,
+      summary: "A mechanic",
+      startingClothing: []
+    };
+  }
+
+  function castMember() {
+    return {
+      id: "char_mika",
+      templateId: "tpl_mika",
+      playthroughId: "play_1",
+      branchId: "main",
+      name: "Mika",
+      currentLocationId: "loc_1",
+      mood: "curious",
+      towardPlayer: "friendly",
+      memorySummary: "",
+      conditions: [],
+      flags: [],
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      clothing: []
+    };
+  }
+
+  it("names the sheets a revert takes back with it", () => {
+    const dir = tempDir();
+    const { playthrough, ch2 } = buildStory(dir);
+    const plan = planRevert(playthrough, { kind: "chapter", chapterId: ch2.id });
+    const restoreId = plan?.restorePointMessageId;
+    expect(restoreId).toBeTruthy();
+
+    // The restore point holds the original sheet; the story has grown it since.
+    playthrough.snapshots = {
+      ...playthrough.snapshots,
+      [restoreId as string]: {
+        ...(playthrough.snapshots?.[restoreId as string] as TurnSnapshot),
+        characterTemplates: [sheet("[Personality]:\n- guarded")]
+      }
+    };
+    playthrough.characterTemplates = [sheet("[Personality]:\n- openly curious")];
+    playthrough.characters = [castMember()];
+
+    expect(describeDeletion(plan as NonNullable<typeof plan>, playthrough).sheetsRewound).toEqual(["Mika"]);
+  });
+
+  it("says nothing when the sheet is the one the restore point holds", () => {
+    const dir = tempDir();
+    const { playthrough, ch2 } = buildStory(dir);
+    const plan = planRevert(playthrough, { kind: "chapter", chapterId: ch2.id });
+    const restoreId = plan?.restorePointMessageId as string;
+    playthrough.snapshots = {
+      ...playthrough.snapshots,
+      [restoreId]: {
+        ...(playthrough.snapshots?.[restoreId] as TurnSnapshot),
+        characterTemplates: [sheet("[Personality]:\n- guarded")]
+      }
+    };
+    playthrough.characterTemplates = [sheet("[Personality]:\n- guarded")];
+    playthrough.characters = [castMember()];
+
+    expect(describeDeletion(plan as NonNullable<typeof plan>, playthrough).sheetsRewound).toEqual([]);
+  });
+
+  it("says a sheet that did not exist at the restore point GOES instead of 'rewinding'", () => {
+    const dir = tempDir();
+    const { playthrough, ch2 } = buildStory(dir);
+    const plan = planRevert(playthrough, { kind: "chapter", chapterId: ch2.id });
+    const restoreId = plan?.restorePointMessageId as string;
+    // The restore point's cast had no Mika at all — she was added later, so the revert takes her away.
+    playthrough.snapshots = {
+      ...playthrough.snapshots,
+      [restoreId]: {
+        ...(playthrough.snapshots?.[restoreId] as TurnSnapshot),
+        characterTemplates: [],
+        characters: []
+      }
+    };
+    playthrough.characterTemplates = [sheet("[Personality]:\n- openly curious")];
+    playthrough.characters = [castMember()];
+
+    const facts = describeDeletion(plan as NonNullable<typeof plan>, playthrough);
+    expect(facts.sheetsRemoved).toEqual(["Mika"]);
+    expect(facts.sheetsRewound).toEqual([]);
+  });
+
+  it("says a sheet the restore point had comes back", () => {
+    const dir = tempDir();
+    const { playthrough, ch2 } = buildStory(dir);
+    const plan = planRevert(playthrough, { kind: "chapter", chapterId: ch2.id });
+    const restoreId = plan?.restorePointMessageId as string;
+    playthrough.snapshots = {
+      ...playthrough.snapshots,
+      [restoreId]: {
+        ...(playthrough.snapshots?.[restoreId] as TurnSnapshot),
+        characterTemplates: [sheet("[Personality]:\n- guarded")],
+        characters: [castMember()]
+      }
+    };
+    // She is off the cast now, sheet and all.
+    playthrough.characterTemplates = [];
+    playthrough.characters = [];
+
+    const facts = describeDeletion(plan as NonNullable<typeof plan>, playthrough);
+    expect(facts.sheetsRestored).toEqual(["Mika"]);
+    expect(facts.sheetsRewound).toEqual([]);
+  });
+
+  it("claims nothing without a snapshot — the sheets stay, and the dialog says so", () => {
+    const dir = tempDir();
+    const { playthrough, ch2 } = buildStory(dir, { snapshots: false });
+    const plan = planRevert(playthrough, { kind: "chapter", chapterId: ch2.id });
+    playthrough.characterTemplates = [sheet("[Personality]:\n- openly curious")];
+    playthrough.characters = [castMember()];
+
+    const facts = describeDeletion(plan as NonNullable<typeof plan>, playthrough);
+    expect(facts.sheetsRewound).toEqual([]);
+    expect(facts.approximate).toBe(true);
+  });
+});
+
 describe("planRevert", () => {
   it("anchors a chapter revert at the message after the chapter's run, and names the restore point", () => {
     const dir = tempDir();

@@ -117,13 +117,38 @@ export function RevertConfirmModal({
                   removed
                 </li>
               ) : null}
+              {/* The sheet is part of the state a restore point holds, so a revert that can rewind says
+                  which characters it takes back with it — and which sheets it takes AWAY, because a
+                  sheet that did not exist at the restore point does not "rewind", it goes. Silence here
+                  means nothing changed. */}
+              {facts.sheetsRewound.length > 0 ? (
+                <li>
+                  <strong>{facts.sheetsRewound.length}</strong> character sheet
+                  {facts.sheetsRewound.length === 1 ? "" : "s"} rewound to this point —{" "}
+                  {facts.sheetsRewound.join(", ")}
+                </li>
+              ) : null}
+              {facts.sheetsRemoved.length > 0 ? (
+                <li>
+                  <strong>{facts.sheetsRemoved.length}</strong> character
+                  {facts.sheetsRemoved.length === 1 ? "" : "s"} added after this point, sheet and all —{" "}
+                  {facts.sheetsRemoved.join(", ")}
+                </li>
+              ) : null}
+              {facts.sheetsRestored.length > 0 ? (
+                <li>
+                  <strong>{facts.sheetsRestored.length}</strong> character
+                  {facts.sheetsRestored.length === 1 ? "" : "s"} gone since this point come
+                  {facts.sheetsRestored.length === 1 ? "s" : ""} back — {facts.sheetsRestored.join(", ")}
+                </li>
+              ) : null}
             </ul>
           ) : null}
           {facts?.approximate ? (
             <p className="revert-approximate">
               {isRetry
-                ? "This story has no restore point here, so the messages go while the world state stays as it is — the new response is written against the story as it stands now."
-                : "This story has no restore point here, so the history and the chapters revert while the current world state stays as it is."}
+                ? "This story has no restore point here, so the messages go while the world state — the character sheets among it — stays as it is: the new response is written against the story as it stands now."
+                : "This story has no restore point here, so the history and the chapters revert while the current world state, the character sheets included, stays as it is."}
             </p>
           ) : null}
           <p className="revert-noway-back">
