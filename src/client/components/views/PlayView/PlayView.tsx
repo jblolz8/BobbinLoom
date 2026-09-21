@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   buildImageUrl,
+  getAppearanceSettings,
   getPromptConfig,
   listProviderConnections,
   type ImageGenerationProgress,
@@ -273,9 +274,10 @@ export function PlayView(props: PlayViewProps) {
   // exists as a move — and compared against the previous panel, with the ref written only when the
   // panel actually changed, so a second render cannot flip it.
   const paneMove = useRef<{ to: string; side: "left" | "right" }>({ to: mobileTab, side: "right" });
-  // The panel a swipe carried in. Its arrival WAS the drag, so it must not also run the entry
-  // animation — that would read as one slide too many. The marker lives until the panel changes by
-  // some other means, so an unrelated re-render cannot sneak the animation back in.
+  // The panel a swipe carried in — or carried and settled back. Its arrival WAS the drag, so it must
+  // not also run the entry animation — that would read as one slide too many. The marker lives until
+  // the panel changes by some other means, so an unrelated re-render cannot sneak the animation back
+  // in.
   const draggedInto = useRef<string | null>(null);
   if (paneMove.current.to !== mobileTab) {
     paneMove.current = {
@@ -298,6 +300,20 @@ export function PlayView(props: PlayViewProps) {
     return () => media.removeEventListener("change", update);
   }, []);
 
+  // ── The pane swipe, and the switch that turns it off ──
+  // Kept beside the gesture rather than with the other appearance reads: this is the one appearance
+  // value the play view ACTS on. Read on mount and again when the Settings dialog closes (that is
+  // where the switch lives), so flipping it takes effect without a reload.
+  const [paneSwipeEnabled, setPaneSwipeEnabled] = useState(true);
+  const refreshPaneSwipe = useCallback(() => {
+    void getAppearanceSettings()
+      .then((res) => setPaneSwipeEnabled(res.paneSwipeEnabled ?? true))
+      .catch(() => {
+        /* keep the last known value — the gesture must not flap on a failed read */
+      });
+  }, []);
+  useEffect(() => { refreshPaneSwipe(); }, [refreshPaneSwipe]);
+
   /** A drag in progress, and the release that finishes it. */
   const [paneDrag, setPaneDrag] = useState<{ target: string; offset: number; released: boolean } | null>(null);
   const settleTimer = useRef<number | null>(null);
@@ -308,10 +324,11 @@ export function PlayView(props: PlayViewProps) {
     []
   );
 
-  // Swiping between panels, on the single-panel layout only. The handlers sit on the layout rather
-  // than the document, which keeps the header and the tab bar outside the gesture.
+  // Swiping between panels, on the single-panel layout only, and only while the stored setting
+  // leaves it on. The handlers sit on the layout rather than the document, which keeps the header and
+  // the tab bar outside the gesture.
   const paneSwipe = usePaneSwipe({
-    enabled: isMobile,
+    enabled: isMobile && paneSwipeEnabled,
     live: !reducedMotion,
     index: paneIndexOf(mobileTab),
     paneWidth: () => layoutRef.current?.clientWidth ?? 0,
@@ -341,6 +358,11 @@ export function PlayView(props: PlayViewProps) {
         if (committed) {
           draggedInto.current = target;
           setMobileTab(target);
+        } else {
+          // A drag that sprang back still MOVED this panel, so it must not also run the entry slide
+          // on its way home: that reads as two motions for one gesture, and it is what a revoked
+          // swipe looks like. The marker is cleared by the next panel change, like the committed one.
+          draggedInto.current = mobileTab;
         }
         setPaneDrag(null);
       }, PANE_SETTLE_MS);
@@ -773,6 +795,9 @@ export function PlayView(props: PlayViewProps) {
           // limit is edited there too, so pick that up as well.
           void refreshImageProvider();
           refreshImageCharacterLimit();
+          // …and the swipe switch lives there, so arm or disarm the gesture now
+          // rather than at the next reload.
+          refreshPaneSwipe();
         }}
         choicesEnabled={choicesEnabled}
         setChoicesEnabled={setChoicesEnabled}

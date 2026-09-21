@@ -1,10 +1,11 @@
 import { useCallback, useRef, type TouchEvent as ReactTouchEvent } from "react";
 import {
   PANE_ORDER,
-  SWIPE_AXIS_LOCK_PX,
   commitSwipe,
+  dragAxis,
   ownsHorizontalGesture,
   stepPane,
+  stillPaneDrag,
   swipeIntent,
   swipeVelocity,
   type SwipeSample
@@ -46,6 +47,11 @@ type Gesture = {
   locked: boolean;
   /** Set when the drag turned out to be vertical, or pointed at a panel that does not exist. */
   dropped: boolean;
+  /**
+   * Set when the gesture has already finished — a drag that locked and was then revoked as a scroll.
+   * It has settled back on its own, so the finger coming up must not settle it a second time.
+   */
+  concluded: boolean;
   targetIndex: number;
   samples: SwipeSample[];
 };
@@ -74,7 +80,8 @@ export type UsePaneSwipeOptions = {
  *
  * Nothing is `preventDefault`ed: the panels are moved with transforms, never scrolled, so the
  * browser keeps native vertical scrolling and momentum in every panel. Until the drag is clearly
- * horizontal it is not a swipe at all — a vertical drag is left alone to scroll.
+ * horizontal it is not a swipe at all — a vertical drag is left alone to scroll — and a drag that
+ * locks and then turns vertical is revoked, because a scroll that drifts is still a scroll.
  */
 export function usePaneSwipe({
   enabled,
@@ -113,6 +120,7 @@ export function usePaneSwipe({
         y: touch.clientY,
         locked: false,
         dropped: false,
+        concluded: false,
         targetIndex: index,
         samples: [{ x: touch.clientX, t: event.timeStamp }]
       };
@@ -123,17 +131,19 @@ export function usePaneSwipe({
   const onTouchMove = useCallback(
     (event: ReactTouchEvent<HTMLElement>) => {
       const current = gesture.current;
-      if (!enabled || !current) return;
+      // A revoked drag has already settled and is over: nothing later in this touch may revive it.
+      if (!enabled || !current || current.concluded) return;
       const touch = event.touches[0];
       if (!touch) return;
       const dx = touch.clientX - current.x;
       const dy = touch.clientY - current.y;
 
       if (!current.locked) {
-        // Until the direction is clear, a small movement is neither axis: the panel's own scrolling
-        // must stay free to be the answer.
-        if (Math.abs(dx) < SWIPE_AXIS_LOCK_PX && Math.abs(dy) < SWIPE_AXIS_LOCK_PX) return;
-        if (Math.abs(dy) > Math.abs(dx)) {
+        // Until the axis is clear, a small movement is neither axis: the panel's own scrolling must
+        // stay free to be the answer.
+        const axis = dragAxis({ dx, dy });
+        if (axis === "pending") return;
+        if (axis === "vertical") {
           current.dropped = true;
           return;
         }
@@ -145,6 +155,15 @@ export function usePaneSwipe({
         }
         current.locked = true;
         current.targetIndex = targetIndex;
+      } else if (live && !stillPaneDrag({ dx, dy })) {
+        // The drag locked, and then turned into a scroll after all. Revoke it and let the pair settle
+        // back — settling, not clearing: clearing hands the displayed panel its entry-animation class
+        // again, which replays the slide on a panel nobody moved.
+        current.locked = false;
+        current.dropped = true;
+        current.concluded = true;
+        onSettle({ targetIndex: current.targetIndex, committed: false });
+        return;
       }
 
       current.samples.push({ x: touch.clientX, t: event.timeStamp });
@@ -153,7 +172,7 @@ export function usePaneSwipe({
       const width = paneWidth();
       onDrag({ offset: Math.max(-width, Math.min(width, dx)), targetIndex: current.targetIndex });
     },
-    [enabled, live, index, count, paneWidth, onDrag]
+    [enabled, live, index, count, paneWidth, onDrag, onSettle]
   );
 
   const onTouchEnd = useCallback(
@@ -163,6 +182,8 @@ export function usePaneSwipe({
         reset(false);
         return;
       }
+      // A revoked drag settled itself when it was revoked; a release must not settle it twice.
+      if (current.concluded) return;
       const touch = event.changedTouches[0];
       if (!touch || current.dropped) {
         reset(false);

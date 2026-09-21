@@ -470,6 +470,11 @@ export const AppSettingsSchema = z.object({
    *  sheet machinery appends unknown sections and `isFormatAligned` only checks that the format's own
    *  sections are present and in order, so an addition costs nothing. */
   brainstormAllowNewSections: z.boolean().optional(),
+  /** Whether a horizontal swipe moves between the play view's panels on the single-panel layout.
+   *  Optional like the other display preferences, so a settings file written before this parses
+   *  untouched and no `dataMigrations` entry is needed; absent means on, and the bottom tab bar
+   *  works either way. */
+  paneSwipeEnabled: z.boolean().optional(),
   updatedAt: z.string().optional()
 });
 export type AppSettings = z.infer<typeof AppSettingsSchema>;

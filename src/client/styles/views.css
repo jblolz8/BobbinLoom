@@ -2,7 +2,7 @@
 :root {
   --avatar-badge-radius: 8px;
 }
-/* ── Cover frame shape (Settings → Theme & Appearance → Cover Art) ──
+/* ── Cover frame shape (Settings → Interface & Appearance → Cover Art) ──
    One value, read by every cover frame on every surface. The fallback in each consuming rule is
    the shipped default (landscape), so a page that has not applied the attribute yet still paints
    a sane frame. */
@@ -8127,7 +8127,7 @@ button.ai-brainstorm-toggle-btn.active,
 }
 
 /* A single-image cover FILLS its frame: the frame's shape is chosen to suit the images
-   (Settings → Theme & Appearance → Cover Art), so there is nothing to letterbox and no second
+   (Settings → Interface & Appearance → Cover Art), so there is nothing to letterbox and no second
    copy of the image to blur behind it. Cropping is anchored at the centre. */
 .cover-art-main {
   position: relative;
@@ -8643,6 +8643,18 @@ button.ai-brainstorm-toggle-btn.active,
 @media (prefers-reduced-motion: reduce) {
   .pane-settling {
     transition: none;
+  }
+}
+
+/* ── The swipe switch, where the swipe exists ──────────────────────────────────────────────────
+   The gesture belongs to the single-panel layout, so the row that turns it off is offered exactly
+   where that layout is: below the app's one breakpoint. Above it every panel is already on screen,
+   the tab bar is gone, and a switch for a gesture your window cannot perform is a lie. Hidden by CSS
+   rather than rendered conditionally, so the panel keeps one markup path — and declared here, after
+   `.appearance-section-header` in the same file, because equal specificity is settled by load order. */
+@media (min-width: 1101px) {
+  .pane-swipe-setting {
+    display: none;
   }
 }
 

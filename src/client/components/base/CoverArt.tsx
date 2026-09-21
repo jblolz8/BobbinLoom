@@ -16,7 +16,7 @@ export type CoverArtProps = {
  * A playthrough's cover art, in one of three shapes:
  *
  * - a single image, FILLING its frame — no letterboxing, because the frame's shape follows the
- *   Cover Art setting (Settings → Theme & Appearance) rather than the other way round;
+ *   Cover Art setting (Settings → Interface & Appearance) rather than the other way round;
  * - a collage of the present cast's portraits, in cast order, each shown whole over a blurred
  *   copy of itself, with a count chip for the characters that did not fit;
  * - the monochrome bobbin mark, for a story with no art at all.

@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   PANE_ORDER,
+  SWIPE_AXIS_LOCK_PX,
+  SWIPE_DOMINANCE,
   commitSwipe,
+  dragAxis,
   incomingOffset,
   ownsHorizontalGesture,
   paneIndexOf,
   paneSide,
   stepPane,
+  stillPaneDrag,
   swipeIntent,
   swipeVelocity
 } from "../src/client/engine/paneSwipe";
@@ -46,6 +50,62 @@ describe("when a drag is a panel swipe", () => {
   it("is symmetric: the sign of the vertical travel never changes the direction", () => {
     expect(swipeIntent({ dx: -120, dy: 40 })).toBe("next");
     expect(swipeIntent({ dx: -120, dy: -40 })).toBe("next");
+  });
+});
+
+describe("which axis a drag belongs to before it locks", () => {
+  it("waits until the drag has travelled far enough to have one", () => {
+    expect(dragAxis({ dx: 3, dy: -4 })).toBe("pending");
+    expect(dragAxis({ dx: SWIPE_AXIS_LOCK_PX - 1, dy: 0 })).toBe("pending");
+    expect(dragAxis({ dx: SWIPE_AXIS_LOCK_PX, dy: 0 })).toBe("horizontal");
+    expect(dragAxis({ dx: 0, dy: SWIPE_AXIS_LOCK_PX })).toBe("vertical");
+  });
+
+  it("calls a scroll that drifted sideways vertical, not a swipe", () => {
+    // The reported shape: a thumb scrolling down drifts across while it travels. Under the old bare
+    // `|dy| > |dx|` lock both of these took the panels with them.
+    expect(dragAxis({ dx: 35, dy: -25 })).toBe("vertical");
+    expect(dragAxis({ dx: 25, dy: -20 })).toBe("vertical");
+    // …and a drag that is genuinely sideways still reads as one.
+    expect(dragAxis({ dx: -70, dy: -20 })).toBe("horizontal");
+  });
+
+  it("uses the same dominance the reduced-motion release rule uses", () => {
+    // Both paths, same input, same verdict: this is the asymmetry that made the gesture mean two
+    // different things depending on a media query.
+    for (const drag of [{ dx: -70, dy: -20 }, { dx: -100, dy: 60 }, { dx: -120, dy: -40 }]) {
+      expect(dragAxis(drag)).toBe(swipeIntent(drag) === null ? "vertical" : "horizontal");
+    }
+    // The boundary is `SWIPE_DOMINANCE`, not a second number nobody wrote down.
+    expect(dragAxis({ dx: -(SWIPE_DOMINANCE * 30), dy: -30 })).toBe("vertical");
+    expect(dragAxis({ dx: -(SWIPE_DOMINANCE * 30 + 1), dy: -30 })).toBe("horizontal");
+  });
+
+  it("takes the axis lock and the dominance as options", () => {
+    expect(dragAxis({ dx: 10, dy: 0 }, { axisLock: 5 })).toBe("horizontal");
+    expect(dragAxis({ dx: 30, dy: 20 }, { dominance: 1 })).toBe("horizontal");
+  });
+});
+
+describe("whether a locked drag is still a pane drag", () => {
+  it("keeps a drag that stays clearly sideways", () => {
+    expect(stillPaneDrag({ dx: -200, dy: -20 })).toBe(true);
+    expect(stillPaneDrag({ dx: 80, dy: -10 })).toBe(true);
+  });
+
+  it("revokes a drag that has turned vertical", () => {
+    expect(stillPaneDrag({ dx: -60, dy: -80 })).toBe(false);
+    expect(stillPaneDrag({ dx: 0, dy: 120 })).toBe(false);
+    // Exactly as vertical as it is horizontal belongs to the scroll: there is nothing to keep.
+    expect(stillPaneDrag({ dx: -60, dy: -60 })).toBe(false);
+  });
+
+  it("is deliberately more permissive than the lock", () => {
+    // The asymmetry is the point: a false revocation costs one repeatable gesture, a false lock is a
+    // panel that jumps while the reader is scrolling.
+    const drag = { dx: -40, dy: -25 };
+    expect(dragAxis(drag)).toBe("vertical"); // never locks in the first place
+    expect(stillPaneDrag(drag)).toBe(true); // but a lock that exists is not revoked by it
   });
 });
 

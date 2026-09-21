@@ -10,7 +10,7 @@ import {
   updateAppearanceSettings,
   type ThemePreset
 } from "../../api";
-import { AvatarBadge, Icon } from "../base";
+import { AvatarBadge, Icon, SwitchRow } from "../base";
 
 const SHAPE_OPTIONS: Array<{
   id: AvatarShape;
@@ -460,6 +460,11 @@ export function AppearanceSettingsPanel() {
 
   const [coverAspect, setCoverAspect] = useState<CoverAspect>(() => cachedCoverAspect() ?? "landscape");
 
+  /** The play view's panel swipe. The panel is the switch's owner; the play view reads the same
+   *  setting to decide whether the gesture exists. Nothing is cached locally — see the note on
+   *  `AppearanceSettings.paneSwipeEnabled`. */
+  const [paneSwipeEnabled, setPaneSwipeEnabled] = useState(true);
+
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     if (typeof window !== "undefined" && window.localStorage) {
       const saved = localStorage.getItem("bobbinloom_theme_mode") as ThemeMode | null;
@@ -504,6 +509,7 @@ export function AppearanceSettingsPanel() {
         if (res.themeMode) setThemeMode(res.themeMode);
         if (res.themePreset) setThemePreset(res.themePreset);
         if (res.customThemeColors) setCustomColors(res.customThemeColors);
+        if (typeof res.paneSwipeEnabled === "boolean") setPaneSwipeEnabled(res.paneSwipeEnabled);
 
         applyTheme({
           themeMode: res.themeMode,
@@ -522,6 +528,7 @@ export function AppearanceSettingsPanel() {
     themeMode?: ThemeMode;
     themePreset?: string;
     customThemeColors?: CustomThemeColors;
+    paneSwipeEnabled?: boolean;
   }) {
     setSaving(true);
     setSaveStatus(null);
@@ -547,6 +554,11 @@ export function AppearanceSettingsPanel() {
     setCoverAspect(aspect);
     applyCoverAspect(aspect);
     void persistAppearance({ coverAspect: aspect });
+  }
+
+  function handleTogglePaneSwipe(enabled: boolean) {
+    setPaneSwipeEnabled(enabled);
+    void persistAppearance({ paneSwipeEnabled: enabled });
   }
 
   function handleSelectMode(mode: ThemeMode) {
@@ -810,6 +822,33 @@ export function AppearanceSettingsPanel() {
             </button>
           );
         })}
+      </div>
+
+      {/* ── Mobile Panels Section ──
+          Offered only where the single-panel layout exists: above the app's breakpoint every panel is
+          already on screen and the tab bar is gone, so the row is hidden by CSS rather than rendered
+          conditionally — the panel keeps one markup path. */}
+      <div className="appearance-section-header pane-swipe-setting" style={{ marginTop: "1.75rem" }}>
+        <div>
+          <h3 className="appearance-section-title flex items-center gap-2">
+            <Icon name="MoveHorizontal" size={17} />
+            <span>Mobile Panels</span>
+          </h3>
+          <p className="appearance-section-desc">
+            How the play view moves between Scene, Chat and Info on a narrow screen.
+          </p>
+        </div>
+      </div>
+
+      <div className="pane-swipe-setting" style={{ marginBottom: "0.5rem" }}>
+        <SwitchRow
+          icon="MoveHorizontal"
+          title="Swipe Between Panels"
+          description="Drag horizontally to move between the panels. The bottom tab bar always works; turn this off if a scroll that drifts sideways keeps pulling a panel with it."
+          checked={paneSwipeEnabled}
+          onChange={(e) => handleTogglePaneSwipe(e.target.checked)}
+          disabled={saving}
+        />
       </div>
 
       {/* ── Live Interactive Story & UI Preview ── */}

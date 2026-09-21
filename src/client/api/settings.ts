@@ -10,6 +10,10 @@ export interface AppearanceSettings {
   themeMode: ThemeMode;
   themePreset: string;
   customThemeColors: CustomThemeColors;
+  /** Whether a horizontal swipe moves between the play view's panels on the single-panel layout.
+   *  The play view reads it; there is no `apply…`/cache helper here on purpose — a cache exists to
+   *  avoid a wrong PAINT before the server answers, and arming a gesture has no such flicker. */
+  paneSwipeEnabled: boolean;
 }
 
 export interface ThemePreset {

@@ -216,7 +216,7 @@ export function duplicatePlaythrough(id: string): Promise<Playthrough> {
 }
 
 /** The manual cover choice: which stored image. How the frame is shaped and filled is a display
- *  setting (Settings → Theme & Appearance → Cover Art), not a property of the choice. */
+ *  setting (Settings → Interface & Appearance → Cover Art), not a property of the choice. */
 export type PlaythroughCoverChoice = Pick<PlaythroughCover, "file">;
 
 export function setPlaythroughCover(id: string, cover: PlaythroughCoverChoice): Promise<Playthrough> {

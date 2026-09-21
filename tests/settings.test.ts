@@ -138,6 +138,23 @@ describe("app settings store", () => {
     expect(updated.avatarShape).toBe("square");
     expect(loadAppSettings(dir).avatarShape).toBe("square");
   });
+
+  it("defaults the panel swipe on, and persists it off", () => {
+    // A file written before the switch existed must read as ON: the gesture behaves that way today,
+    // so an absent field cannot start meaning "off" for everyone who upgrades.
+    const dir = tempDir();
+    writeFileSync(join(dir, "user-settings.json"), JSON.stringify({ schemaVersion: 1, themeMode: "dark" }), "utf8");
+    expect(loadAppSettings(dir).paneSwipeEnabled).toBe(true);
+
+    const saved = saveAppSettings(dir, { paneSwipeEnabled: false });
+    expect(saved.paneSwipeEnabled).toBe(false);
+    expect(loadAppSettings(dir).paneSwipeEnabled).toBe(false);
+    expect(JSON.parse(readFileSync(join(dir, "user-settings.json"), "utf8")).paneSwipeEnabled).toBe(false);
+
+    // And back on, so the switch is not a one-way door.
+    expect(saveAppSettings(dir, { paneSwipeEnabled: true }).paneSwipeEnabled).toBe(true);
+    expect(loadAppSettings(dir).paneSwipeEnabled).toBe(true);
+  });
 });
 
 // ── Wave 1: the a1111 image dialect's connection fields ──
@@ -964,6 +981,47 @@ describe("image generation: preset routes and the global prompt config", () => {
       payload: { coverAspect: "cinema" }
     });
     expect(rejected.statusCode).toBe(400);
+  });
+
+  it("round-trips the panel swipe switch, defaulting to on and rejecting a non-boolean", async () => {
+    // Display, like the cover shape beside it — and the one appearance value the play view ACTS on,
+    // which is why it has to survive a round trip through the same route.
+    const initial = await app.inject({ method: "GET", url: "/api/settings/appearance" });
+    expect((initial.json() as { paneSwipeEnabled?: boolean }).paneSwipeEnabled).toBe(true);
+
+    // A neighbouring appearance value, so the "leaves the rest alone" check below does not depend on
+    // another test having written one.
+    await app.inject({
+      method: "PUT",
+      url: "/api/settings/appearance",
+      payload: { coverAspect: "portrait" }
+    });
+
+    const saved = await app.inject({
+      method: "PUT",
+      url: "/api/settings/appearance",
+      payload: { paneSwipeEnabled: false }
+    });
+    expect(saved.statusCode).toBe(200);
+    expect((saved.json() as { paneSwipeEnabled?: boolean }).paneSwipeEnabled).toBe(false);
+
+    const reread = await app.inject({ method: "GET", url: "/api/settings/appearance" });
+    expect((reread.json() as { paneSwipeEnabled?: boolean }).paneSwipeEnabled).toBe(false);
+
+    // A switch is a boolean: a truthy string must be a 400 with a reason, and write nothing.
+    const rejected = await app.inject({
+      method: "PUT",
+      url: "/api/settings/appearance",
+      payload: { paneSwipeEnabled: "yes" }
+    });
+    expect(rejected.statusCode).toBe(400);
+    expect(JSON.stringify(rejected.json())).toContain("paneSwipeEnabled");
+
+    const afterRejection = await app.inject({ method: "GET", url: "/api/settings/appearance" });
+    expect((afterRejection.json() as { paneSwipeEnabled?: boolean }).paneSwipeEnabled).toBe(false);
+
+    // …and neither PUT disturbed the value beside it.
+    expect((afterRejection.json() as { coverAspect?: string }).coverAspect).toBe("portrait");
   });
 
 });

@@ -14,7 +14,7 @@ const SETTINGS_TABS: TabItem<SettingsTab>[] = [
   { id: "prompts", label: "Prompt Configuration", icon: "Sliders" },
   { id: "tags", label: "Tags & Taxonomy", icon: "Tag" },
   { id: "chat", label: "Chat", icon: "MessageSquare" },
-  { id: "appearance", label: "Theme & Appearance", icon: "Palette" },
+  { id: "appearance", label: "Interface & Appearance", icon: "Palette" },
 ];
 
 /** The Provider tab's own tabs: text and image connections are configured

@@ -36,7 +36,11 @@ const AppearanceBody = z.object({
   coverAspect: CoverAspectSchema.optional(),
   themeMode: ThemeModeSchema.optional(),
   themePreset: z.string().optional(),
-  customThemeColors: CustomThemeColorsSchema.optional()
+  customThemeColors: CustomThemeColorsSchema.optional(),
+  /** The panel swipe is display, not appearance — it lives here because this is the settings surface
+   *  the play view already reads, and the panel that edits it is the one the user thinks of as
+   *  "how the app behaves". */
+  paneSwipeEnabled: z.boolean().optional()
 });
 
 export async function presetRoutes(app: FastifyInstance): Promise<void> {
@@ -204,6 +208,7 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
       themeMode: settings.themeMode ?? DEFAULT_APP_SETTINGS.themeMode,
       themePreset: settings.themePreset ?? DEFAULT_APP_SETTINGS.themePreset,
       customThemeColors: settings.customThemeColors ?? {},
+      paneSwipeEnabled: settings.paneSwipeEnabled ?? DEFAULT_APP_SETTINGS.paneSwipeEnabled ?? true,
     };
   });
 
@@ -224,6 +229,7 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
       themeMode: updated.themeMode ?? DEFAULT_APP_SETTINGS.themeMode,
       themePreset: updated.themePreset ?? DEFAULT_APP_SETTINGS.themePreset,
       customThemeColors: updated.customThemeColors ?? {},
+      paneSwipeEnabled: updated.paneSwipeEnabled ?? DEFAULT_APP_SETTINGS.paneSwipeEnabled ?? true,
     };
   });
 }

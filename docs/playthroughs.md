@@ -43,7 +43,7 @@ A playthrough wears the first of these that exists:
 | 4 | **The placeholder** | Nothing to show — the monochrome BobbinLoom mark |
 
 A cover **fills** its frame, and the frame's shape comes from **Cover Art** in
-[Settings → Theme & Appearance](settings-and-interface.md): **Portrait** (2:3), **1:1 Square**, or
+[Settings → Interface & Appearance](settings-and-interface.md): **Portrait** (2:3), **1:1 Square**, or
 **Landscape** (16:9), Landscape by default. Pick the shape that matches the images you actually
 generate and nothing gets cropped.
 

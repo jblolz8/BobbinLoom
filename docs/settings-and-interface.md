@@ -15,7 +15,7 @@ playthrough alike. It has five tabs.
 | **Prompt Configuration** | The active preset's turn modules, character-sheet format and image prompt block |
 | **Tags & Taxonomy** | The tag categories and colours the character library uses |
 | **Chat** | The switches that change how the chat behaves and what it displays |
-| **Theme & Appearance** | Theme mode, theme preset, custom colours, avatar shape |
+| **Interface & Appearance** | Theme mode, theme preset, custom colours, avatar shape, cover art, and how the play view moves between panels on a narrow screen |
 
 ## Chat
 
@@ -41,15 +41,18 @@ confirmation's own *Always discard old image* checkbox turns it on for you. Edit
 does not ask and does not replace anything: that is a save, and it leaves the image alone. See
 [Image generation](image-generation.md) → *Editing and re-sending a stored request body*.
 
-## Theme & Appearance
+## Interface & Appearance
 
 - **Mode** — dark, light, or follow the system
 - **Preset** — the theme family, with a live swatch preview of each one
 - **Custom colours** — per-variable overrides on top of the preset
 - **Avatar shape** — how portraits are framed throughout the app
 - **Cover art** — the shape of every cover on the playthrough shelf: Portrait (2:3), 1:1 Square, or Landscape (16:9)
+- **Mobile panels** — **Swipe Between Panels**, whether a horizontal swipe moves between the play
+  view's panels. On by default, and offered on the layouts that have the gesture; the bottom tab bar
+  works either way
 
-Appearance applies immediately and is stored with your other runtime settings.
+Everything here applies immediately and is stored with your other runtime settings.
 
 ## Prompt Configuration is global
 
@@ -77,13 +80,16 @@ Everything is designed to collapse at one breakpoint, **1100px**:
   in the Journal opens the chat panel, because on a phone the transcript would otherwise be
   written into a panel that is not on screen
 - **Panels can be swiped** — left for the next one (Scene → Chat → Info), right for the previous,
-  stopping at the ends rather than wrapping. The panel follows your finger and the neighbour comes in
-  behind it; releasing past about 40% of the panel, or throwing it, lands on that panel, and a short
-  or slow drag springs back. Tapping a tab still swaps panels with a 150ms slide. A panel's own
-  horizontal controls keep the gesture: a swipe starting on a code block, on the info panel's tab
-  strip, or on the screen's left edge does what it would normally do, and a drag that is more
-  vertical than horizontal scrolls the panel instead. With **reduced motion** set, panels do not
-  follow the finger — a swipe still changes the panel, without the movement
+  stopping at the ends rather than wrapping. The drag has to be clearly sideways before it counts as
+  one — about twice as horizontal as it is vertical, and past a short travel — and if it turns
+  vertical after that it goes back to being a scroll. Once it counts, the panel follows your finger
+  and the neighbour comes in behind it; releasing past about 40% of the panel, or throwing it, lands
+  on that panel, and a short or slow drag springs back. Tapping a tab swaps panels with a 150ms
+  slide. A panel's own horizontal controls keep the gesture: a swipe starting on a code block, on the
+  info panel's tab strip, or on the screen's left edge does what it would normally do. With
+  **reduced motion** set, panels do not follow the finger — a swipe still changes the panel, without
+  the movement. **Swipe Between Panels** in Settings turns the gesture off entirely, and the bottom
+  tab bar is how panels are chosen then; it is always there, switched on or off
 
 Full-screen dialogs on small screens use the dynamic viewport height so the browser's own
 chrome can't crop them, and the scrollable region inside a dialog is the only thing that

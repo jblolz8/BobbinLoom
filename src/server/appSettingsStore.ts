@@ -24,6 +24,10 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   brainstormIncludeOriginalCard: false,
   // …and a section the format does not list is a normal thing for a character to need.
   brainstormAllowNewSections: true,
+  // A horizontal swipe moves between the panels; the tab bar is always there. The switch in
+  // Settings → Interface & Appearance is how a reader who keeps catching it while scrolling turns it
+  // off.
+  paneSwipeEnabled: true,
 };
 
 /**
@@ -84,6 +88,9 @@ export function saveAppSettings(
     brainstormIncludeOriginalCard?: boolean;
     brainstormTextProviderId?: string | null;
     brainstormAllowNewSections?: boolean;
+    /** The play view's panel swipe. Display, not data — which is why it rides in the appearance
+     *  settings beside the avatar shape, and why nothing reads it from a playthrough. */
+    paneSwipeEnabled?: boolean;
   }
 ): AppSettings {
   mkdirSync(dataDir, { recursive: true });
