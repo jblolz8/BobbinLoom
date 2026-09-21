@@ -1249,8 +1249,9 @@
   gap: 0.5rem;
 }
 
+/* The row's right end belongs to the way out (Cancel), not to a utility that replaces your text, so
+   this button carries no `margin-left: auto` — the row is left-aligned like every other form dialog. */
 .image-prompt-rerun {
-  margin-left: auto;
   color: var(--text-secondary);
 }
 
@@ -5931,35 +5932,6 @@ button.import-btn:active:not(:disabled),
 
 .char-badges-row.compact-badges {
   padding-left: 1px;
-}
-
-.lib-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.68rem;
-  font-weight: 600;
-  padding: 1px 6px;
-  border-radius: 5px;
-  white-space: nowrap;
-}
-
-.lib-badge.synced {
-  background: var(--status-success-bg);
-  color: var(--status-success);
-  border: 1px solid var(--status-success-border);
-}
-
-.lib-badge.stale {
-  background: var(--status-warning-bg);
-  color: var(--status-warning);
-  border: 1px solid var(--status-warning-border);
-}
-
-.lib-badge.local {
-  background: var(--bg-app);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-subtle);
 }
 
 .ccv2-readonly-badge {

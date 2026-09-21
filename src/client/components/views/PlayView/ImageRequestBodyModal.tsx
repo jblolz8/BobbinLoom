@@ -158,9 +158,6 @@ export function ImageRequestBodyModal(props: ImageRequestBodyModalProps) {
             >
               Save
             </Button>
-            <Button size="sm" variant="secondary" onClick={attemptClose} disabled={saving}>
-              Cancel
-            </Button>
             <Button
               size="sm"
               variant="ghost"
@@ -185,6 +182,11 @@ export function ImageRequestBodyModal(props: ImageRequestBodyModalProps) {
               title="Copy this body"
             >
               Copy
+            </Button>
+            {/* Cancel last: the row's order is a contract — the confirming action, then the
+                secondary actions beside it, then the way out. */}
+            <Button size="sm" variant="secondary" onClick={attemptClose} disabled={saving}>
+              Cancel
             </Button>
           </div>
         </div>

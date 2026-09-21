@@ -221,14 +221,6 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
             </Button>
             <Button
               size="sm"
-              variant="secondary"
-              onClick={onClose}
-              disabled={generating}
-            >
-              Cancel
-            </Button>
-            <Button
-              size="sm"
               variant="ghost"
               className="image-prompt-rerun"
               onClick={onRerun}
@@ -238,6 +230,17 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
               title="Ask the text model for a fresh draft (replaces the text above)"
             >
               Re-run text call
+            </Button>
+            {/* Cancel last: the row's order is a contract — the confirming action, then the secondary
+                actions beside it, then the way out. It also keeps the two "replace my text" actions
+                next to each other instead of splitting them around the safe one. */}
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={onClose}
+              disabled={generating}
+            >
+              Cancel
             </Button>
             {rerunning && promptElapsedMs !== null ? (
               <span className="image-prompt-elapsed">{formatDuration(promptElapsedMs)}</span>
