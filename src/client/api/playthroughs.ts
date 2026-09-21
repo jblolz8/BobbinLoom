@@ -115,11 +115,14 @@ export function sendTurn(
 export function retryTurn(
   playthroughId: string,
   messageId: string,
-  suggestedChoicesEnabled: boolean
+  suggestedChoicesEnabled: boolean,
+  signal?: AbortSignal
 ): Promise<TurnResponse> {
   return request<TurnResponse>(`/api/playthroughs/${playthroughId}/retry`, {
     method: "POST",
-    body: JSON.stringify({ messageId, suggestedChoicesEnabled })
+    body: JSON.stringify({ messageId, suggestedChoicesEnabled }),
+    // Same as sendTurn: the retry runs inline, so it needs the same cancel path.
+    signal
   });
 }
 

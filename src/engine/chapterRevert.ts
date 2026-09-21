@@ -1,7 +1,10 @@
 /** Reverting to an earlier chapter: what goes, what comes back, and where the world rewinds to.
  *
- *  Pure and shared. The server runs the plan; the confirm dialog shows its numbers — one rule,
- *  two consumers, no second implementation to drift.
+ *  Pure and shared. The server runs the plan; the confirm dialogs show its numbers — one rule, two
+ *  consumers, no second implementation to drift. `planDeletion` / `describeDeletion` are the half a
+ *  REVERT and a RETRY share (both delete forward and rewind to the same restore point);
+ *  `retryAnchorMessageId` is the retry's own anchor rule, here rather than in the route so the
+ *  dialog and the server cannot disagree about where a retry cuts.
  *
  *  The rule the whole feature stands on is the one `truncateChat` already states: the world
  *  returns to the snapshot of the FIRST assistant message in the deleted block, because a
@@ -27,14 +30,27 @@ export type RevertAnchor =
   | { kind: "chapter"; chapterId: string }
   | { kind: "message"; messageId: string };
 
-export type RevertPlan = {
-  anchor: RevertAnchor;
+/**
+ * What deleting forward from one message does — the half a revert and a retry both stand on.
+ *
+ * A revert's anchor is an archived message or a chapter; a retry's is the user message that
+ * produced the response being re-run. Both delete forward from an index and rewind the world to the
+ * same restore point, so both read this plan — which is what lets their confirm dialogs promise
+ * exactly what the server will do.
+ */
+export type DeletionPlan = {
   /** Index of the first message to delete; the kept region is `[0, truncationIndex)`. */
   truncationIndex: number;
   /** The first assistant message in the deleted block — whose snapshot is the restore point. */
   restorePointMessageId: string | null;
   /** An assistant message is in the deleted block but has no snapshot: the world cannot rewind. */
   approximate: boolean;
+  /** Turn of the last surviving message, or 0 when nothing survives. */
+  keptTailTurn: number;
+};
+
+export type RevertPlan = DeletionPlan & {
+  anchor: RevertAnchor;
   /** Chapters whose surviving messages become live again (tag cleared, un-hidden). */
   unarchivedChapterIds: string[];
   /** Every chapter record the revert deletes — the anchor's chapter and everything after it. */
@@ -43,18 +59,86 @@ export type RevertPlan = {
   runningChapterId: string | null;
   /** `currentChapterStartedAtTurn` after the revert. */
   currentChapterStartedAtTurn: number;
-  /** Turn of the last surviving message, or 0 when nothing survives. */
-  keptTailTurn: number;
 };
 
-/** Everything the confirm dialog says, in numbers. */
-export type RevertFacts = {
+/** Everything a confirm dialog says, in numbers. `chapters` is 0 for a plan with no chapter half —
+ *  a retry, which never drops a chapter record because it only ever anchors a live message. */
+export type DeletionFacts = {
   messages: number;
   turns: number;
   images: number;
   chapters: number;
   approximate: boolean;
 };
+
+/**
+ * The deletion index, the restore point and the honesty flag — the rule, in one place.
+ *
+ * `index` is where the caller wants the cut; the dangling-instruction walk may move it one or more
+ * messages earlier (see below), so callers read `truncationIndex` back off the result rather than
+ * trusting the index they passed.
+ */
+function deletionFromIndex(playthrough: Playthrough, index: number): DeletionPlan {
+  const messages = playthrough.messages;
+
+  // A synthetic instruction left dangling at the cut — the hidden user message of a turn whose
+  // response is going — has nothing left to instruct and would keep a turn number no message
+  // claims. Fold it into the deleted block; a tagged message stops the walk, so a chapter's own
+  // archived run is never eaten into.
+  let truncationIndex = index;
+  while (
+    truncationIndex > 0 &&
+    messages[truncationIndex - 1].hidden &&
+    !messages[truncationIndex - 1].chapterId
+  ) {
+    truncationIndex -= 1;
+  }
+
+  const deletedBlock = messages.slice(truncationIndex);
+  const restorePoint = deletedBlock.find((message) => message.role === "assistant");
+  const keptTail = messages[truncationIndex - 1];
+
+  return {
+    truncationIndex,
+    restorePointMessageId: restorePoint?.id ?? null,
+    approximate: restorePoint !== undefined && !playthrough.snapshots?.[restorePoint.id],
+    keptTailTurn: keptTail?.turn ?? 0
+  };
+}
+
+/**
+ * What deleting forward from `messageId` would do, or null when there is no such message.
+ *
+ * Deliberately has no eligibility rule of its own: a revert refuses a live message (that is the
+ * live chat's own delete action), while a retry REQUIRES one, so the rule belongs to each caller
+ * rather than here.
+ */
+export function planDeletion(playthrough: Playthrough, messageId: string): DeletionPlan | null {
+  const index = playthrough.messages.findIndex((message) => message.id === messageId);
+  if (index === -1) return null;
+  return deletionFromIndex(playthrough, index);
+}
+
+/**
+ * The user message that produced `assistantMessageId` — the retry's own anchor rule.
+ *
+ * Here rather than in the route so the confirmation dialog and the server cannot disagree about
+ * where a retry cuts: they call the same function, so the count the dialog shows is the count the
+ * server deletes. Returns null when there is no such message — an unknown id, an id that is not a
+ * response, or a response whose log starts with an assistant turn.
+ */
+export function retryAnchorMessageId(
+  playthrough: Playthrough,
+  assistantMessageId: string
+): string | null {
+  const index = playthrough.messages.findIndex((message) => message.id === assistantMessageId);
+  if (index === -1) return null;
+  if (playthrough.messages[index].role !== "assistant") return null;
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    if (playthrough.messages[cursor].role === "user") return playthrough.messages[cursor].id;
+  }
+  return null;
+}
 
 /**
  * What a revert from `anchor` would do, or null when the anchor is not a revertible one.
@@ -107,32 +191,20 @@ export function planRevert(playthrough: Playthrough, anchor: RevertAnchor): Reve
     if (chapterIndex === -1) return null;
   }
 
-  // A synthetic instruction left dangling at the cut — the hidden user message of a turn whose
-  // response is going — has nothing left to instruct and would keep a turn number no message
-  // claims. Fold it into the deleted block; a tagged message stops the walk, so a chapter's own
-  // archived run is never eaten into.
-  while (
-    truncationIndex > 0 &&
-    messages[truncationIndex - 1].hidden &&
-    !messages[truncationIndex - 1].chapterId
-  ) {
-    truncationIndex -= 1;
-  }
+  // The deletion half, shared with Retry: the cut (after the dangling-instruction walk), the restore
+  // point, and whether the world can rewind at all.
+  const deletion = deletionFromIndex(playthrough, truncationIndex);
+  const cut = deletion.truncationIndex;
 
   const droppedChapterIds = chapters.slice(chapterIndex).map((chapter) => chapter.id);
   const dropped = new Set(droppedChapterIds);
-
-  const deletedBlock = messages.slice(truncationIndex);
-  const restorePoint = deletedBlock.find((message) => message.role === "assistant");
-  const keptTail = messages[truncationIndex - 1];
-  const keptTailTurn = keptTail?.turn ?? 0;
 
   // A surviving message still tagged with a dropped chapter becomes live again. Read from the
   // SURVIVING messages, not from the chapter record: a message variant can cut a chapter in half,
   // and a chapter whose every message went un-archives nothing.
   const unarchivedChapterIds: string[] = [];
   let runningChapterId: string | null = null;
-  for (let index = 0; index < truncationIndex; index += 1) {
+  for (let index = 0; index < cut; index += 1) {
     const chapterId = messages[index].chapterId;
     if (!chapterId || !dropped.has(chapterId)) continue;
     if (!unarchivedChapterIds.includes(chapterId)) unarchivedChapterIds.push(chapterId);
@@ -144,29 +216,32 @@ export function planRevert(playthrough: Playthrough, anchor: RevertAnchor): Reve
     : undefined;
   const currentChapterStartedAtTurn = runningChapter
     ? runningChapter.turnRange.start
-    : keptTailTurn + 1;
+    : deletion.keptTailTurn + 1;
 
   return {
     anchor,
-    truncationIndex,
-    restorePointMessageId: restorePoint?.id ?? null,
-    approximate: restorePoint !== undefined && !playthrough.snapshots?.[restorePoint.id],
+    ...deletion,
     unarchivedChapterIds,
     droppedChapterIds,
     runningChapterId,
-    currentChapterStartedAtTurn,
-    keptTailTurn
+    currentChapterStartedAtTurn
   };
 }
 
 /**
- * The counts the confirm dialog renders. Derived from the same plan the server executes.
+ * The counts a confirm dialog renders. Derived from the same plan the server executes.
  *
- * `images` counts what the revert will actually REMOVE: the store is content-addressed, so a file
+ * `images` counts what the deletion will actually REMOVE: the store is content-addressed, so a file
  * the discarded turns share with a surviving message stays — and promising a deletion that does
  * not happen is the same class of lie as promising a smaller one than happens.
+ *
+ * `droppedChapterIds` is optional because a retry's plan has no chapter half: a retry only ever
+ * anchors a live message, so it drops no chapter record and the count is 0.
  */
-export function describeRevert(plan: RevertPlan, playthrough: Playthrough): RevertFacts {
+export function describeDeletion(
+  plan: DeletionPlan & { droppedChapterIds?: string[] },
+  playthrough: Playthrough
+): DeletionFacts {
   const deleted = playthrough.messages.slice(plan.truncationIndex);
   const surviving = new Set<string>();
   for (const message of playthrough.messages.slice(0, plan.truncationIndex)) {
@@ -184,7 +259,7 @@ export function describeRevert(plan: RevertPlan, playthrough: Playthrough): Reve
     messages: deleted.length,
     turns: Math.max(0, playthrough.turn - plan.keptTailTurn),
     images: doomed.size,
-    chapters: plan.droppedChapterIds.length,
+    chapters: plan.droppedChapterIds?.length ?? 0,
     approximate: plan.approximate
   };
 }

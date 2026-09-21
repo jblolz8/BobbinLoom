@@ -393,7 +393,8 @@ export default function App() {
           startEdit={playthroughHook.startEdit}
           cancelEdit={playthroughHook.cancelEdit}
           saveEdit={playthroughHook.saveEdit}
-          confirmRetry={playthroughHook.confirmRetry}
+          startRetry={playthroughHook.startRetry}
+          retryingTarget={playthroughHook.retryingTarget}
           confirmTruncate={playthroughHook.confirmTruncate}
           confirmRevert={playthroughHook.confirmRevert}
           confirmBranch={playthroughHook.confirmBranch}

@@ -429,6 +429,9 @@ export function usePlaythrough() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [retryTarget, setRetryTarget] = useState<ChatMessage | null>(null);
+  /** The response a retry is replacing, while it is in flight. In-flight UI only: nothing is
+   *  persisted and a reload forgets it — the same way `sendingMessage` behaves. */
+  const [retryingTarget, setRetryingTarget] = useState<{ messageId: string } | null>(null);
   const [truncateTarget, setTruncateTarget] = useState<ChatMessage | null>(null);
   // The pending revert (a chapter, or an archived response). The dialog derives its numbers from
   // the plan itself, so what is stored here is only the anchor and how to name it.
@@ -1020,38 +1023,71 @@ export function usePlaythrough() {
     }
   }
 
-  async function confirmRetry() {
-    if (!playthrough || !retryTarget || actionLoading) return;
-    setActionLoading(true);
+  /**
+   * The confirmed half of a Retry: closes the dialog and runs the turn INLINE, the way a Send runs —
+   * the composer locks, its own Cancel aborts, and the panels stay usable.
+   *
+   * Deliberately NOT optimistic. Nothing leaves the play view's state until the server returns the
+   * rewritten document, so a failure or a cancel costs nothing and the old response is exactly where
+   * it was — which is why the failure notice does not put anything back in the input box the way a
+   * send's does. The confirm dialog has already said what will go, and the chat marks it while it
+   * waits.
+   */
+  async function startRetry() {
+    if (!playthrough || !retryTarget || loading) return;
+    const target = retryTarget;
+    setRetryTarget(null);
+    setLoading(true);
+    setRetryingTarget({ messageId: target.id });
     setError(null);
     setFailedNotice(null);
     setCancelledNotice(null);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     const startTime = performance.now();
     try {
-      const response = await retryTurn(playthrough.id, retryTarget.id, choicesEnabled);
+      const response = await retryTurn(playthrough.id, target.id, choicesEnabled, controller.signal);
       setPlaythrough(response.state);
       setChoices(response.choices ?? []);
       setLastPatchInfo({ applied: response.applied, rejected: response.rejected, warnings: response.warnings });
       setTokenUsage(response.tokenUsage ?? null);
       setRawInput(response.rawInput ?? null);
       setRawOutput(response.rawOutput ?? null);
-      setRetryTarget(null);
       cancelEdit();
       void maybeAutoGenerateImage(response.state.messages[response.state.messages.length - 1]);
     } catch (e) {
       const durationMs = Math.round(performance.now() - startTime);
-      const rawErr = e instanceof Error ? e.message : String(e);
-      // Restore the failed message to the input box and close the confirm
-      // modal, so "retry" is just pressing Send again (same as send failures).
-      setInput(retryTarget.content);
-      setRetryTarget(null);
-      setFailedNotice({
-        message: "Retry failed — your message was restored to the input box. World state was not changed.",
-        rawError: rawErr,
-        durationMs
-      });
+      if (e instanceof DOMException && e.name === "AbortError") {
+        // A cancel can LOSE THE RACE: the abort may reach the server after it has already run the
+        // turn and written it, and our own abort tells us nothing about which happened. So ask the
+        // record — adopt it when the response being replaced is gone, and only claim "nothing was
+        // deleted" when it is still there. Saying "nothing was deleted" over a record that says
+        // otherwise is the one thing this notice must never do.
+        let latest: Playthrough | null = null;
+        try {
+          latest = await getPlaythrough(playthrough.id);
+        } catch {
+          latest = null;
+        }
+        if (latest && !latest.messages.some((message) => message.id === target.id)) {
+          setPlaythrough(latest);
+          setCancelledNotice("The retry finished before the cancel landed — the story already has the new response.");
+        } else {
+          setCancelledNotice("Retry cancelled — nothing was deleted.");
+        }
+        setFailedNotice(null);
+      } else {
+        setFailedNotice({
+          message: "Retry failed — the response is unchanged.",
+          rawError: e instanceof Error ? e.message : String(e),
+          durationMs
+        });
+      }
     } finally {
-      setActionLoading(false);
+      setRetryingTarget(null);
+      setLoading(false);
+      abortControllerRef.current = null;
     }
   }
 
@@ -1236,6 +1272,7 @@ export function usePlaythrough() {
     setEditDraft,
     retryTarget,
     setRetryTarget,
+    retryingTarget,
     truncateTarget,
     setTruncateTarget,
     revertTarget,
@@ -1280,7 +1317,7 @@ export function usePlaythrough() {
     startEdit,
     cancelEdit,
     saveEdit,
-    confirmRetry,
+    startRetry,
     confirmTruncate,
     confirmRevert,
     confirmBranch,

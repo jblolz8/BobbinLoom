@@ -9,7 +9,7 @@ import {
   restoreSnapshotState,
   updateTimingStates
 } from "../engine/engine";
-import { planRevert, type RevertAnchor } from "../engine/chapterRevert";
+import { planDeletion, planRevert, retryAnchorMessageId, type RevertAnchor } from "../engine/chapterRevert";
 import type { Playthrough, PromptConfig, ScenarioSeed } from "../schemas";
 import type { EntryTimingState, LorebookEntry, TurnSnapshot } from "../schemas";
 import type { TurnProvider } from "./provider";
@@ -309,9 +309,17 @@ function estimateTokenUsageFallback(state: Playthrough, input: string, contextWi
 }
 
 /**
- * Retries an assistant response: truncates the chat back to just before the
- * user message of that turn, restores the snapshotted world state (when one
- * exists), permanently discards everything after, then re-runs the turn.
+ * Retries an assistant response: deletes forward from the user message of that turn (the shared
+ * delete-and-rewind rule, so the world returns to the snapshot of the response being replaced),
+ * discards everything after it, then re-runs the turn.
+ *
+ * Two properties callers rely on:
+ *
+ *  - **Nothing is written until the model answers.** The deletion happens on a COPY; the failure and
+ *    aborted paths return before `updatePlaythroughRecord`, so a retry that does not land leaves the
+ *    record byte-identical. That is what lets the chat keep the old response on screen until the new
+ *    one arrives.
+ *  - **The record first, the images second**, exactly as `truncateChat` and `revertAction` order it.
  */
 export async function retryAssistantTurn(
   dataDir: string,
@@ -321,7 +329,8 @@ export async function retryAssistantTurn(
   suggestedChoicesEnabled: boolean,
   contextWindow: number = 65536,
   signal?: AbortSignal,
-  promptConfig?: PromptConfig
+  promptConfig?: PromptConfig,
+  imagesDir: string = defaultImagesDir(dataDir)
 ): Promise<RetryOutcome> {
   const playthrough = getPlaythroughRecord(dataDir, playthroughId);
   if (!playthrough) {
@@ -336,25 +345,23 @@ export async function retryAssistantTurn(
     return { ok: false, status: 400, error: "Only assistant responses can be retried" };
   }
 
-  let userIndex = -1;
-  for (let index = assistantIndex - 1; index >= 0; index -= 1) {
-    if (playthrough.messages[index].role === "user") {
-      userIndex = index;
-      break;
-    }
-  }
-  if (userIndex === -1) {
+  // The anchor and the plan come from the ENGINE rather than from a walk of this function's own: the
+  // confirmation dialog computes the same two things from the same record, and that is the only
+  // reason the count it shows can be trusted to be the count that goes.
+  const anchorId = retryAnchorMessageId(playthrough, assistantMessageId);
+  const anchor = anchorId ? playthrough.messages.find((message) => message.id === anchorId) : undefined;
+  const plan = anchorId ? planDeletion(playthrough, anchorId) : null;
+  if (!anchor || !plan) {
     return { ok: false, status: 400, error: "No user message exists before this response" };
   }
 
-  const userInput = playthrough.messages[userIndex].content;
-  const snapshot = playthrough.snapshots?.[assistantMessageId];
+  const userInput = anchor.content;
 
   // Preserve chapter-opening flags on retry: if the original assistant message
   // was a chapter opening, the regenerated one must be too; likewise the
   // synthetic user instruction stays hidden.
   const originalAssistant = playthrough.messages[assistantIndex];
-  const originalUser = playthrough.messages[userIndex];
+  const originalUser = anchor;
   const retryOptions: TurnOptions | undefined =
     originalAssistant.chapterOpening || originalUser.hidden
       ? {
@@ -363,12 +370,13 @@ export async function retryAssistantTurn(
         }
       : undefined;
 
-  const base: Playthrough = {
-    ...playthrough,
-    messages: playthrough.messages.slice(0, userIndex)
-  };
-
-  restoreSnapshotState(base, snapshot);
+  // The SAME delete-and-rewind `truncateChat` and `revertAction` use: inclusive from the plan's cut,
+  // restoring the snapshot of the first assistant message in the deleted block — which, for a retry,
+  // is the response being replaced — and pruning the snapshots of everything that goes with it.
+  //
+  // On a copy, deliberately: persisting here would throw the tail away before the model has
+  // answered, and a retry that never landed would have destroyed a story.
+  const base = deleteFrom(playthrough, plan.truncationIndex);
 
   const result = await executeTurn(
     base,
@@ -385,13 +393,13 @@ export async function retryAssistantTurn(
     return { ok: false, status: 499, error: "Request aborted by the client" };
   }
 
-  // Permanently drop snapshots belonging to messages that no longer exist.
-  const liveMessageIds = new Set(result.state.messages.map((message) => message.id));
-  result.state.snapshots = Object.fromEntries(
-    Object.entries(result.state.snapshots ?? {}).filter(([messageId]) => liveMessageIds.has(messageId))
-  );
-
+  // No snapshot pruning here any more: `deleteFrom` already dropped the snapshots of the messages it
+  // deleted, and the regenerated turn brings its own.
   updatePlaythroughRecord(dataDir, result.state);
+
+  // Same ordering rule as truncateChat and revertAction: record first, images second — and only on
+  // the success path, because a retry that never landed has deleted nothing to sweep.
+  sweepAfterDeleteForward(dataDir, playthroughId, imagesDir);
   return { ok: true, ...result };
 }
 

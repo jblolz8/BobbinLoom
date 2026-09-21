@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useElapsed } from "../../../hooks/useElapsed";
 import { formatDuration, imageCaption } from "../../../engine/displayFormat";
 import type { ChatMessage, Playthrough } from "../../../../schemas";
@@ -34,6 +34,11 @@ export type ChatPanelProps = {
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   onRetryRequest: (msg: ChatMessage) => void;
+  /**
+   * The response a retry is replacing while it runs inline: its action row reads Retrying… and the
+   * messages that will go with it are marked. The confirm dialog has already said how many.
+   */
+  retryingTargetId?: string | null;
   onRequestTruncate: (msg: ChatMessage) => void;
   /** An archived response: regenerate is not on offer — this reverts the story to it instead. */
   onRevertRequest: (msg: ChatMessage) => void;
@@ -404,7 +409,7 @@ export function ChatPanel(props: ChatPanelProps) {
     canContinue,
     onChoiceSelect,
     editingMessageId, editDraft, onEditDraftChange, onStartEdit, onSaveEdit, onCancelEdit,
-    onRetryRequest, onRequestTruncate, onRevertRequest, onBranchRequest, lastPatchInfo,
+    onRetryRequest, retryingTargetId = null, onRequestTruncate, onRevertRequest, onBranchRequest, lastPatchInfo,
     sendingMessage, cancelledNotice, failedNotice, onDismissNotice, onDismissFailedNotice, onCancel, tokenUsage,
     viewingChapterId, onReturnToCurrentChapter,
     onResummarizeChapter, resummarizingChapterId,
@@ -478,6 +483,22 @@ export function ChatPanel(props: ChatPanelProps) {
     ? playthrough.messages.filter((m) => m.chapterId === viewingChapterId)
     : playthrough.messages.filter((m) => !m.hidden);
 
+  /**
+   * The messages a retry will take with it, while it is in flight.
+   *
+   * Computed from the DOCUMENT (not from `showRealMessages`) so the count matches what the server
+   * deletes: a retry cuts the stored history, hidden instructions included. `firstDoomedId` is only
+   * where the one-line note goes — the dialog has already promised the number, and the wait has to
+   * look like something is about to happen.
+   */
+  const { doomedIds, firstDoomedId } = useMemo(() => {
+    if (!retryingTargetId) return { doomedIds: null as Set<string> | null, firstDoomedId: null as string | null };
+    const index = playthrough.messages.findIndex((message) => message.id === retryingTargetId);
+    if (index === -1) return { doomedIds: null as Set<string> | null, firstDoomedId: null as string | null };
+    const ids = playthrough.messages.slice(index + 1);
+    return { doomedIds: new Set(ids.map((message) => message.id)), firstDoomedId: ids[0]?.id ?? null };
+  }, [playthrough.messages, retryingTargetId]);
+
   return (
     <section className={`chat-panel${className ? ` ${className}` : ""}`} style={props.style}>
       <div className="messages">
@@ -502,7 +523,21 @@ export function ChatPanel(props: ChatPanelProps) {
             : undefined;
           const isResummarizing = previousChapter ? resummarizingChapterId === previousChapter.id : false;
           return (
-          <article key={msg.id} className={`message ${msg.role}`}>
+          <Fragment key={msg.id}>
+          {msg.id === firstDoomedId && doomedIds ? (
+            <div className="messages-doomed-note">
+              <Icon name="Trash2" size={11} />
+              <span>
+                {doomedIds.size} message{doomedIds.size === 1 ? "" : "s"} after this will be discarded
+                when the new response lands
+              </span>
+            </div>
+          ) : null}
+          <article
+            className={`message ${msg.role}${retryingTargetId === msg.id ? " message-retrying" : ""}${
+              doomedIds?.has(msg.id) ? " message-doomed" : ""
+            }`}
+          >
             <div className="message-header">
               <div className="message-header-info">
                 <strong>{msg.role === "user" ? "You" : "BobbinLoom"}</strong>
@@ -559,7 +594,7 @@ export function ChatPanel(props: ChatPanelProps) {
                       disabled={actionLoading || loading}
                       leftIcon={<Icon name="RefreshCw" size={11} />}
                     >
-                      Retry
+                      {retryingTargetId === msg.id ? "Retrying…" : "Retry"}
                     </Button>
                   )
                 ) : null}
@@ -820,6 +855,7 @@ export function ChatPanel(props: ChatPanelProps) {
               </>
             ) : null}
           </article>
+          </Fragment>
           );
         })}
 

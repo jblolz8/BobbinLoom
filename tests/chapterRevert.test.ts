@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { describeRevert, planRevert, toRevertAnchor, toRevertRequestAnchor } from "../src/engine/chapterRevert";
+import { describeDeletion, planDeletion, planRevert, retryAnchorMessageId, toRevertAnchor, toRevertRequestAnchor } from "../src/engine/chapterRevert";
 import { takeTurnSnapshot } from "../src/engine/engine";
 import { createBlankPlaythroughRecord, getPlaythroughRecord, updatePlaythroughRecord } from "../src/server/store";
 import type { TurnSnapshot } from "../src/schemas";
@@ -255,7 +255,7 @@ describe("planRevert", () => {
     expect(plan).not.toBeNull();
     if (!plan) return;
 
-    const facts = describeRevert(plan, playthrough);
+    const facts = describeDeletion(plan, playthrough);
     expect(facts.messages).toBe(6);
     expect(facts.turns).toBe(3);
     expect(facts.chapters).toBe(1);
@@ -276,7 +276,7 @@ describe("planRevert", () => {
     if (!plan) return;
 
     // The shared file survives in chapter 1, so it is not promised away.
-    expect(describeRevert(plan, playthrough).images).toBe(1);
+    expect(describeDeletion(plan, playthrough).images).toBe(1);
   });
 
   it("flags an approximate revert when the restore point has no snapshot", () => {
@@ -285,6 +285,67 @@ describe("planRevert", () => {
 
     const plan = planRevert(playthrough, { kind: "chapter", chapterId: ch2.id });
     expect(plan?.approximate).toBe(true);
+  });
+});
+
+describe("planDeletion and the retry anchor", () => {
+  it("finds the user message that produced a response, and nothing else", () => {
+    const dir = tempDir();
+    const { playthrough, ids } = buildStory(dir);
+
+    expect(retryAnchorMessageId(playthrough, ids.ch3LastAssistant)).toBe("msg_u12");
+    // A chapter opening's response anchors on its hidden instruction — the message a retry re-runs.
+    expect(retryAnchorMessageId(playthrough, ids.ch3OpeningAssistant)).toBe(ids.ch3OpeningUser);
+    expect(retryAnchorMessageId(playthrough, "msg_nope")).toBeNull();
+    // Only a RESPONSE has a user message before it. Asking about a user message is a caller bug, and
+    // the answer must be "nothing" rather than the previous turn's message.
+    expect(retryAnchorMessageId(playthrough, "msg_u12")).toBeNull();
+  });
+
+  it("plans a deletion for a LIVE message, which a revert refuses", () => {
+    const dir = tempDir();
+    const { playthrough, ids } = buildStory(dir);
+
+    // The live chat's own delete is not a revert anchor…
+    expect(planRevert(playthrough, { kind: "message", messageId: ids.ch3LastAssistant })).toBeNull();
+
+    // …but it is exactly what a retry deletes: the user message, the response, and everything after.
+    const anchorId = retryAnchorMessageId(playthrough, ids.ch3LastAssistant);
+    expect(anchorId).toBe("msg_u12");
+    const plan = planDeletion(playthrough, anchorId as string);
+    expect(plan?.truncationIndex).toBe(22);
+    expect(plan?.restorePointMessageId).toBe(ids.ch3LastAssistant);
+    expect(plan?.keptTailTurn).toBe(11);
+    expect(plan?.approximate).toBe(false);
+
+    // The count the dialog shows is the count that goes — and a retry drops no chapter record.
+    const facts = describeDeletion(plan as NonNullable<typeof plan>, playthrough);
+    expect(facts.messages).toBe(playthrough.messages.length - 22);
+    expect(facts.chapters).toBe(0);
+    expect(facts.turns).toBe(1);
+  });
+
+  it("is approximate when the response being replaced has no snapshot", () => {
+    const dir = tempDir();
+    const { playthrough, ids } = buildStory(dir, { snapshots: false });
+
+    const anchorId = retryAnchorMessageId(playthrough, ids.ch3LastAssistant);
+    expect(planDeletion(playthrough, anchorId as string)?.approximate).toBe(true);
+  });
+
+  it("folds a dangling synthetic instruction into the cut", () => {
+    const dir = tempDir();
+    const { playthrough } = buildStory(dir);
+
+    // a3 answers the hidden "Continue" instruction at index 4, and archiving skips hidden messages —
+    // so that instruction carries no chapter tag, and a cut at a3 has to take it along.
+    expect(planDeletion(playthrough, "msg_a3")?.truncationIndex).toBe(4);
+
+    // A retry anchors ON the instruction rather than after it, so nothing dangles in front of the
+    // cut: both paths land on the same index, which is the point of sharing the walk.
+    const anchorId = retryAnchorMessageId(playthrough, "msg_a3");
+    expect(anchorId).toBe("msg_u3");
+    expect(planDeletion(playthrough, anchorId as string)?.truncationIndex).toBe(4);
   });
 });
 

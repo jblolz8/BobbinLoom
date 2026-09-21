@@ -64,7 +64,10 @@ export type PlayViewProps = {
   editDraft: string;
   setEditDraft: (val: string) => void;
   retryTarget: ChatMessage | null;
+  /** The response whose confirm dialog is open. */
   setRetryTarget: (msg: ChatMessage | null) => void;
+  /** The response a retry is replacing while the turn runs inline, so the chat can mark it. */
+  retryingTarget?: { messageId: string } | null;
   truncateTarget: ChatMessage | null;
   setTruncateTarget: (msg: ChatMessage | null) => void;
   revertTarget: RevertTarget | null;
@@ -80,7 +83,7 @@ export type PlayViewProps = {
   startEdit: (msg: ChatMessage) => void;
   cancelEdit: () => void;
   saveEdit: () => Promise<void>;
-  confirmRetry: () => Promise<void>;
+  startRetry: () => Promise<void>;
   confirmTruncate: () => Promise<void>;
   confirmRevert: () => Promise<void>;
   branchTarget: ChatMessage | null;
@@ -198,6 +201,7 @@ export function PlayView(props: PlayViewProps) {
     setEditDraft,
     retryTarget,
     setRetryTarget,
+    retryingTarget,
     truncateTarget,
     setTruncateTarget,
     revertTarget,
@@ -213,7 +217,7 @@ export function PlayView(props: PlayViewProps) {
     startEdit,
     cancelEdit,
     saveEdit,
-    confirmRetry,
+    startRetry,
     confirmTruncate,
     confirmRevert,
     branchTarget,
@@ -504,6 +508,7 @@ export function PlayView(props: PlayViewProps) {
           onSaveEdit={() => { void saveEdit(); }}
           onCancelEdit={cancelEdit}
           onRetryRequest={setRetryTarget}
+          retryingTargetId={retryingTarget?.messageId ?? null}
           onRequestTruncate={setTruncateTarget}
           onRevertRequest={(msg) => setRevertTarget({ kind: "message", id: msg.id, label: msg.content })}
           onBranchRequest={setBranchTarget}
@@ -702,19 +707,13 @@ export function PlayView(props: PlayViewProps) {
       ) : null}
 
       {retryTarget ? (
-        <ConfirmModal
-          title="Retry this response?"
-          message="This will permanently delete this response and everything after it, then generate a new one. World state from the deleted turns will be reverted."
-          confirmLabel={actionLoading ? "Retrying…" : "Yes, retry"}
-          danger
-          isLoading={actionLoading}
-          onConfirm={() => { void confirmRetry(); }}
+        <RevertConfirmModal
+          playthrough={playthrough}
+          mode="retry"
+          target={{ kind: "message", id: retryTarget.id, label: retryTarget.content }}
+          onConfirm={() => { void startRetry(); }}
           onCancel={() => setRetryTarget(null)}
-        >
-          <blockquote className="retry-preview">
-            {retryTarget.content.slice(0, 200)}{retryTarget.content.length > 200 ? "…" : ""}
-          </blockquote>
-        </ConfirmModal>
+        />
       ) : null}
 
       {revertTarget ? (

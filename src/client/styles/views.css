@@ -876,6 +876,28 @@
   opacity: 1;
 }
 
+/* ── A retry in flight ─────────────────────────────────────────────────────────────────────────
+   Nothing is written until the new response arrives, so the response being replaced stays on screen
+   — and the wait has to say what is about to change. Its bubble is dimmed and its action row reads
+   Retrying…; the messages the server will take with it are dimmed under one note that agrees with
+   the count the confirm dialog promised. */
+.message.message-retrying {
+  opacity: 0.55;
+}
+
+.message.message-doomed {
+  opacity: 0.4;
+}
+
+.messages-doomed-note {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.4rem 0 0.25rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
 .message-action {
   font-size: 0.72rem;
   padding: 0.15rem 0.45rem;

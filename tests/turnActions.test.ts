@@ -1,7 +1,8 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { describeDeletion, planDeletion, retryAnchorMessageId } from "../src/engine/chapterRevert";
 import { MockProvider } from "../src/server/provider";
 import type { ProviderTurn, TurnProvider } from "../src/server/provider";
 import type { ScenarioSeed } from "../src/schemas";
@@ -382,6 +383,115 @@ describe("retryAssistantTurn", () => {
     const reloaded = getPlaythroughRecord(dir, playthrough.id);
     expect(reloaded?.messages).toHaveLength(4);
     expect(reloaded?.messages[3].id).toBe(secondAssistantId);
+  });
+
+  it("leaves the record byte-identical when the model call fails", async () => {
+    // The property the inline retry rests on: the deletion happens in memory, so a retry that does
+    // not land has destroyed nothing — which is what lets the chat keep the old response on screen
+    // until the new one arrives. Compared as FILE BYTES, not as a reloaded object: a rewrite that
+    // happened to round-trip to the same shape is still a write.
+    const dir = tempDir();
+    const provider = new MockProvider();
+    let playthrough = createPlaythroughRecord(dir, "Retry Failure Test");
+    playthrough = (await executeTurn(playthrough, "first input", provider, false)).state;
+    playthrough = (await executeTurn(playthrough, "second input", provider, false)).state;
+    updatePlaythroughRecord(dir, playthrough);
+
+    const file = join(dir, `${playthrough.id}.json`);
+    const before = readFileSync(file, "utf8");
+
+    class FailingProvider extends MockProvider {
+      override async generateTurn(): Promise<ProviderTurn> {
+        throw new Error("provider exploded");
+      }
+    }
+
+    await expect(
+      retryAssistantTurn(dir, playthrough.id, playthrough.messages[3].id, new FailingProvider(), false)
+    ).rejects.toThrow("provider exploded");
+
+    expect(readFileSync(file, "utf8")).toBe(before);
+  });
+
+  it("cuts exactly where the shared plan promises the dialog it will", async () => {
+    // The dialog shows `describeDeletion` of the plan `planDeletion` built from `retryAnchorMessageId`
+    // — the same three calls the server makes. If the server's cut ever drifts from that plan, the
+    // dialog becomes a lie, so pin them against each other.
+    const dir = tempDir();
+    const provider = new MockProvider();
+    let playthrough = createPlaythroughRecord(dir, "Plan Agreement Test");
+    playthrough = (await executeTurn(playthrough, "first input", provider, false)).state;
+    playthrough = (await executeTurn(playthrough, "second input", provider, false)).state;
+    updatePlaythroughRecord(dir, playthrough);
+
+    const secondAssistantId = playthrough.messages[3].id;
+    const anchorId = retryAnchorMessageId(playthrough, secondAssistantId);
+    expect(anchorId).not.toBeNull();
+    const plan = planDeletion(playthrough, anchorId as string);
+    expect(plan).not.toBeNull();
+    if (!plan) return;
+
+    const promised = describeDeletion(plan, playthrough).messages;
+    expect(promised).toBe(playthrough.messages.length - plan.truncationIndex);
+
+    const result = await retryAssistantTurn(dir, playthrough.id, secondAssistantId, provider, false);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Kept region + exactly one regenerated turn: the promise, kept.
+    expect(result.state.messages).toHaveLength(plan.truncationIndex + 2);
+  });
+
+  it("sweeps an image only the deleted messages referenced, and keeps a shared one", async () => {
+    // The retry now goes through the same delete-and-rewind as truncate and revert, which is what
+    // puts the orphan sweep on this path at all — before this, a retry left the bytes behind.
+    //
+    // The images dir is passed EXPLICITLY: the default is the sibling of the data dir, which in this
+    // suite would be the shared temp directory.
+    //
+    // Names must look like store entries — the sweep only touches files matching the store's own
+    // content-addressed pattern (64 hex chars + an image extension), so a "doomed.png" would be
+    // skipped by the sweep and the test would pass for the wrong reason.
+    const dir = tempDir();
+    const imagesDir = join(dir, "images");
+    mkdirSync(imagesDir, { recursive: true });
+    const shared = `${"a".repeat(64)}.png`;
+    const doomed = `${"b".repeat(64)}.png`;
+    writeFileSync(join(imagesDir, shared), "shared bytes");
+    writeFileSync(join(imagesDir, doomed), "doomed bytes");
+
+    const provider = new MockProvider();
+    let playthrough = createPlaythroughRecord(dir, "Retry Sweep Test");
+    playthrough = (await executeTurn(playthrough, "first input", provider, false)).state;
+    playthrough = (await executeTurn(playthrough, "second input", provider, false)).state;
+
+    const image = (file: string) => ({
+      file,
+      prompt: `prompt for ${file}`,
+      providerId: "venice_images",
+      model: "probe",
+      createdAt: "2026-01-01T00:00:00.000Z"
+    });
+    // Turn 1's response keeps its image; turn 2's response shares that file and owns another.
+    playthrough.messages[1].images = [image(shared)];
+    playthrough.messages[3].images = [image(shared), image(doomed)];
+    updatePlaythroughRecord(dir, playthrough);
+
+    const result = await retryAssistantTurn(
+      dir,
+      playthrough.id,
+      playthrough.messages[3].id,
+      provider,
+      false,
+      65536,
+      undefined,
+      undefined,
+      imagesDir
+    );
+    expect(result.ok).toBe(true);
+
+    expect(existsSync(join(imagesDir, doomed))).toBe(false);
+    expect(existsSync(join(imagesDir, shared))).toBe(true);
   });
 });
 
