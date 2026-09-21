@@ -1645,6 +1645,19 @@
   overflow: hidden;
 }
 
+/* The row sits under a SCROLLING body and the shared `.settings-actions` carries no chrome of its own,
+   so the last line of the sheet ran straight into the buttons with nothing to say where the content
+   ended. The bespoke footer this dialog used to own had `padding: 10px 16px` and a top border; this is
+   that chrome, on the row, scoped to this dialog (the same "surface supplies what the row lacks" move
+   as `.close-chapter-modal`'s `justify-content`). Two classes, so no later single-class rule can take
+   it back. */
+.modal.character-editor-modal .settings-actions {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
 /* The sheet's own surfaces. `Dialog` owns the shell — header, action row, Escape, focus, the phone
    sheet — and everything here is sheet CONTENT: the mode control in the header, the marks the turn log
    gave us, the runtime-state list, and the drift block against the library card. */
