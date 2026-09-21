@@ -456,6 +456,10 @@ export type ChapterOpeningMode = z.infer<typeof ChapterOpeningModeSchema>;
  * The wire deliberately carries only what was chosen: `/api/settings/preferences` does not fill
  * defaults the way the appearance route does, and the client resolves them in one place.
  */
+/** How many rows a list shows. `"all"` is the engine's sentinel for "show everything" — a real choice
+ *  rather than a number, so it is part of the type. */
+export const PageSizeSchema = z.union([z.number().int().positive(), z.literal("all")]);
+
 export const ViewPreferencesSchema = z.object({
   /** The Chat tab's display toggles. Leaves mirror the client's own field names one for one, so a
    *  migrated toggle needs no translation table and the hook's per-field writers can send the single
@@ -488,11 +492,18 @@ export const ViewPreferencesSchema = z.object({
        *  rather than sharing names that would collide with the library's own. */
       playthroughViewMode: z.enum(["grid", "list"]).optional(),
       playthroughSortBy: z.enum(["updatedAt", "name", "turn"]).optional(),
-      playthroughSortDir: z.enum(["asc", "desc"]).optional(),
-      /** How many rows a list shows. Declared, not yet written: all five pagers share one hook
-       *  (`usePagination`), so page size moves in its own pass rather than leaving that hook with two
-       *  persistence paths. */
-      pageSize: z.number().int().positive().optional()
+      playthroughSortDir: z.enum(["asc", "desc"]).optional()
+    })
+    .optional(),
+  /** How many rows each list shows, one leaf per pager. Deliberately NOT inside `library`: three of the
+   *  five surfaces that page are not the library, and all five share one hook. */
+  pageSizes: z
+    .object({
+      library: PageSizeSchema.optional(),
+      lorebook: PageSizeSchema.optional(),
+      persona: PageSizeSchema.optional(),
+      setupCast: PageSizeSchema.optional(),
+      home: PageSizeSchema.optional()
     })
     .optional(),
   setup: z

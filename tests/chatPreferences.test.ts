@@ -28,7 +28,7 @@ describe("the chat toggles, resolved", () => {
   });
 
   it("ignores other groups while resolving the chat one", () => {
-    const resolved = resolveChatPreferences({ library: { pageSize: 50 } });
+    const resolved = resolveChatPreferences({ library: { viewMode: "grid" } });
     expect(resolved).toEqual(CHAT_PREFERENCE_DEFAULTS);
   });
 

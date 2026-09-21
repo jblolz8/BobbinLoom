@@ -19,7 +19,8 @@
  * DOM and no server.
  */
 import type { ViewPreferences } from "../../schemas";
-import { getViewPreferences, updateViewPreferences } from "./settings";
+import { ALL_PAGE_SIZE, MAX_PAGE_SIZE } from "../engine/pagination";
+import { getViewPreferences, updateViewPreferences, type PageSizeSurface } from "./settings";
 
 /** The groups shaped as "a bag of leaves". `staleNoteDismissals` is a record, not a group of these,
  *  and is handled on its own when its surface migrates. */
@@ -90,10 +91,27 @@ const SHELF_KEYS = {
   sortDir: "bobbinloom_playthrough_sort_dir"
 } as const;
 
+/** A page size stored as-is: a number, the `"all"` sentinel, or the legacy numeric sentinel (1000)
+ *  that meant the same thing. Anything else is left on the device rather than written as junk. */
+const asPageSize = (raw: string) => {
+  if (raw === ALL_PAGE_SIZE) return ALL_PAGE_SIZE;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1) return undefined;
+  return parsed >= MAX_PAGE_SIZE ? ALL_PAGE_SIZE : Math.round(parsed);
+};
+
+/** One key per pager, keyed as the settings group keys its leaves. */
+const PAGE_SIZE_KEYS: Record<PageSizeSurface, string> = {
+  library: "bobbinloom_library_page_size",
+  lorebook: "bobbinloom_lorebook_page_size",
+  persona: "bobbinloom_persona_page_size",
+  setupCast: "bobbinloom_setup_cast_page_size",
+  home: "bobbinloom_home_page_size"
+};
+
 /**
  * Every key this pass migrates, added one group at a time as its surface switches to the server. A
- * group that is missing here has simply not been migrated yet — `PAGE_SIZE_KEYS` (the five pagers)
- * are the known remainder.
+ * group that is missing here has simply not been migrated yet.
  */
 export const ADOPTION_SOURCES: readonly LocalAdoptionSource[] = [
   { key: CHAT_KEY, group: "chat", leaf: "choicesEnabled", parse: fromChatBlob("choicesEnabled") },
@@ -148,7 +166,12 @@ export const ADOPTION_SOURCES: readonly LocalAdoptionSource[] = [
     group: "library",
     leaf: "playthroughSortDir",
     parse: oneOf(["asc", "desc"])
-  }
+  },
+  { key: PAGE_SIZE_KEYS.library, group: "pageSizes", leaf: "library", parse: asPageSize },
+  { key: PAGE_SIZE_KEYS.lorebook, group: "pageSizes", leaf: "lorebook", parse: asPageSize },
+  { key: PAGE_SIZE_KEYS.persona, group: "pageSizes", leaf: "persona", parse: asPageSize },
+  { key: PAGE_SIZE_KEYS.setupCast, group: "pageSizes", leaf: "setupCast", parse: asPageSize },
+  { key: PAGE_SIZE_KEYS.home, group: "pageSizes", leaf: "home", parse: asPageSize }
 ];
 
 export type AdoptionPlan = {

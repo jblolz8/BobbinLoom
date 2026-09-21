@@ -40,7 +40,7 @@ export function PersonaLibrary({ isModal, onPersonasChanged }: PersonaLibraryPro
   // Pagination for the persona list (shared: engine/pagination.ts + hooks/usePagination.ts).
   const personaPager = usePagination({
     items: personas,
-    storageKey: "bobbinloom_persona_page_size"
+    persistAs: "persona"
   });
 
   useEffect(() => {

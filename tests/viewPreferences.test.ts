@@ -34,13 +34,22 @@ describe("view preferences storage", () => {
   it("merges a later patch into the group instead of replacing it", () => {
     const dir = tempDir();
     saveViewPreferences(dir, { library: { viewMode: "grid", sortBy: "name" } });
-    saveViewPreferences(dir, { library: { pageSize: 25 } });
+    saveViewPreferences(dir, { library: { search: "elf" } });
 
     expect(loadAppSettings(dir).viewPreferences?.library).toEqual({
       viewMode: "grid",
       sortBy: "name",
-      pageSize: 25
+      search: "elf"
     });
+  });
+
+  it("merges inside the page-size group too", () => {
+    // One leaf per list, every one of them optional: a write for the shelf must not drop the library's.
+    const dir = tempDir();
+    saveViewPreferences(dir, { pageSizes: { library: 25 } });
+    saveViewPreferences(dir, { pageSizes: { home: 48 } });
+
+    expect(loadAppSettings(dir).viewPreferences?.pageSizes).toEqual({ library: 25, home: 48 });
   });
 
   it("keeps the groups independent", () => {

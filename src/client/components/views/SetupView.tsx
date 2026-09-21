@@ -343,7 +343,7 @@ export function SetupView(props: SetupViewProps) {
   // resetDeps so the picker starts on page 1 each time the wizard is opened.
   const castPager = usePagination({
     items: castGroups,
-    storageKey: "bobbinloom_setup_cast_page_size",
+    persistAs: "setupCast",
     resetDeps: [open, castSearch, sortBy, sortDirection]
   });
   const paginatedCastGroups = castPager.pageItems;

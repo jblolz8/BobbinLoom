@@ -111,7 +111,7 @@ export function LorebookLibrary({ isModal, onClose, onLorebooksChanged }: Lorebo
   // drag-reorderable, so paging them would fight reordering.
   const lorebookPager = usePagination({
     items: summaries,
-    storageKey: "bobbinloom_lorebook_page_size"
+    persistAs: "lorebook"
   });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [lorebook, setLorebook] = useState<LorebookFile | null>(null);

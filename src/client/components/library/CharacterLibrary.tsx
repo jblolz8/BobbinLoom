@@ -1499,7 +1499,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
   // per-handler page resets) and it clamps when filtering shrinks the list.
   const pager = usePagination({
     items: groups,
-    storageKey: "bobbinloom_library_page_size",
+    persistAs: "library",
     resetDeps: [search, sortBy, sortDirection]
   });
   const paginatedGroups = pager.pageItems;

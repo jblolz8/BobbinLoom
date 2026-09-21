@@ -87,6 +87,11 @@ export function resolveLibraryPreferences(
   return { ...LIBRARY_PREFERENCE_DEFAULTS, ...(stored?.library ?? {}) };
 }
 
+/** Which list a pager is, keyed as `viewPreferences.pageSizes` keys it. Page size has no resolver here
+ *  — unlike the other groups there is no meaningful "default" to fill, because a list that has never
+ *  been sized keeps the pager's own `DEFAULT_PAGE_SIZE`. */
+export type PageSizeSurface = "library" | "lorebook" | "persona" | "setupCast" | "home";
+
 export interface AppearanceSettings {
   avatarShape: AvatarShape;
   /** The shape of every cover frame on the playthrough shelf. */

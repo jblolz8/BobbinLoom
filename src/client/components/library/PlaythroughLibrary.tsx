@@ -36,10 +36,7 @@ export type PlaythroughLibraryProps = {
   onError: (message: string) => void;
 };
 
-/** Shared with the home screen's pager: one page size per device, whichever surface is open. Page size
- *  is the last thing this file keeps on the device: all five pagers share one hook, so it moves in its
- *  own pass rather than leaving that hook with two persistence paths. */
-const PAGE_SIZE_KEY = "bobbinloom_home_page_size";
+/** Shared with the home screen's pager: one page size per device, whichever surface is open. */
 
 export const PLAYTHROUGH_SORT_OPTIONS: { value: PlaythroughSortOption; label: string }[] = [
   { value: "updatedAt", label: "Updated Date" },
@@ -193,7 +190,7 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
 
   const pager = usePagination({
     items: visible,
-    storageKey: PAGE_SIZE_KEY,
+    persistAs: "home",
     resetDeps: [search, sortBy, sortDir, viewMode]
   });
 

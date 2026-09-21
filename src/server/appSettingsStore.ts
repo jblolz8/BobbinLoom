@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { atomicWriteJson, quarantineFile, readJsonFile } from "./persistence";
-import { AppSettingsSchema } from "../schemas";
+import { AppSettingsSchema, ViewPreferencesSchema } from "../schemas";
 import type { AppSettings, AvatarShape, ChapterOpeningMode, CustomThemeColors, PromptConfig, TagTaxonomyConfig, ThemeMode, ViewPreferences } from "../schemas";
 
 /**
@@ -87,30 +87,26 @@ export function loadAppSettings(dataDir: string): AppSettings {
  */
 export function saveViewPreferences(dataDir: string, patch: ViewPreferences): AppSettings {
   const current = loadAppSettings(dataDir);
-  const before = current.viewPreferences ?? {};
+  const stored = current.viewPreferences ?? {};
 
-  const merged: ViewPreferences = {};
-  const put = <K extends keyof ViewPreferences>(key: K, value: ViewPreferences[K] | undefined): void => {
-    if (value !== undefined) merged[key] = value;
-  };
-  const group = <T extends object>(stored: T | undefined, patchValue: T | undefined): T | undefined => {
-    if (patchValue === undefined) return stored;
-    if (stored === undefined) return patchValue;
-    return { ...stored, ...patchValue };
-  };
+  // One level deep, keyed by the SCHEMA's own groups: this list used to be spelled out by hand, and a
+  // group added to the schema was then silently dropped on the way to disk (the page-size group was).
+  const merged: Record<string, unknown> = {};
+  for (const key of Object.keys(ViewPreferencesSchema.shape) as (keyof ViewPreferences)[]) {
+    const patchValue = patch[key];
+    const storedValue = stored[key];
+    // A group the patch does not mention is carried forward untouched — a write for one group must never
+    // be the reason another one disappears.
+    const next =
+      patchValue === undefined
+        ? storedValue
+        : storedValue === undefined
+          ? patchValue
+          : Object.assign({}, storedValue, patchValue);
+    if (next !== undefined) merged[key] = next;
+  }
 
-  put("chat", group(before.chat, patch.chat));
-  put("library", group(before.library, patch.library));
-  put("setup", group(before.setup, patch.setup));
-  put("cast", group(before.cast, patch.cast));
-  put("providers", group(before.providers, patch.providers));
-  put("nav", group(before.nav, patch.nav));
-  put(
-    "staleNoteDismissals",
-    group(before.staleNoteDismissals, patch.staleNoteDismissals)
-  );
-
-  return saveAppSettings(dataDir, { viewPreferences: merged });
+  return saveAppSettings(dataDir, { viewPreferences: merged as ViewPreferences });
 }
 
 export function saveAppSettings(

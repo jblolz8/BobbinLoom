@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ALL_PAGE_SIZE,
   MAX_PAGE_SIZE,
@@ -54,10 +54,17 @@ export function Pagination({
 }: PaginationProps) {
   const totalPages = totalPagesFor(total, pageSize);
   // `customMode` is explicit state: deriving it from `pageSize` meant selecting "Custom…" while a
-  // preset was active did nothing (the input never appeared). It initialises from storage so a
-  // persisted custom size still shows the input.
+  // preset was active did nothing (the input never appeared). It has to FOLLOW the size as well, so a
+  // custom size still shows the input — including one that arrives after the first paint, which is how
+  // the size comes back now that it is read from the server rather than from the device.
   const [customMode, setCustomMode] = useState<boolean>(() => !isPresetPageSize(pageSize));
   const [draft, setDraft] = useState<string>(() => (isPresetPageSize(pageSize) ? "" : String(pageSize)));
+  useEffect(() => {
+    // A preset is handled by the select's own options; only the custom case needs the input.
+    if (isPresetPageSize(pageSize)) return;
+    setCustomMode(true);
+    setDraft(String(pageSize));
+  }, [pageSize]);
   const { from, to, all } = rangeParts(page, pageSize, total);
 
   function handleSelectChange(val: string) {
