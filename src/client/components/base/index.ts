@@ -22,3 +22,4 @@ export * from "./Switch";
 export * from "./SwitchRow";
 export * from "./ThreadIcon";
 export * from "./Pagination";
+export * from "./Spinner";

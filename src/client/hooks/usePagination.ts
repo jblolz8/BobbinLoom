@@ -28,6 +28,7 @@ export type UsePaginationOptions<T> = {
 };
 
 export type PaginationState<T> = {
+  isReady: boolean;
   page: number;
   pageSize: PageSize;
   totalItems: number;
@@ -43,21 +44,28 @@ export type PaginationState<T> = {
 };
 
 /** The stored page size for one list, plus the writer for a change. */
-function usePersistedPageSize(surface: PageSizeSurface): {
+export function usePersistedPageSize(surface: PageSizeSurface): {
   pageSize: PageSize;
+  isReady: boolean;
   write: (size: PageSize) => void;
 } {
   const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
+  const [isReady, setIsReady] = useState(false);
+  const chosenRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       const { preferences } = await adoptLocalPreferences();
       if (cancelled) return;
-      const stored = preferences.pageSizes?.[surface];
-      if (stored !== undefined) setPageSize(stored);
+      if (!chosenRef.current) {
+        const stored = preferences.pageSizes?.[surface];
+        if (stored !== undefined) setPageSize(stored);
+      }
+      setIsReady(true);
     })().catch(() => {
       /* A failed read leaves the pager's own default. */
+      if (!cancelled) setIsReady(true);
     });
     return () => {
       cancelled = true;
@@ -65,6 +73,8 @@ function usePersistedPageSize(surface: PageSizeSurface): {
   }, [surface]);
 
   const write = (size: PageSize) => {
+    chosenRef.current = true;
+    setPageSize(size);
     const patch: ViewPreferences["pageSizes"] = {};
     patch[surface] = size;
     void updateViewPreferences({ pageSizes: patch }).catch(() => {
@@ -72,7 +82,7 @@ function usePersistedPageSize(surface: PageSizeSurface): {
     });
   };
 
-  return { pageSize, write };
+  return { pageSize, isReady, write };
 }
 
 export function usePagination<T>({
@@ -81,16 +91,7 @@ export function usePagination<T>({
   resetDeps = []
 }: UsePaginationOptions<T>): PaginationState<T> {
   const stored = usePersistedPageSize(persistAs);
-  const [pageSize, setPageSizeState] = useState<PageSize>(stored.pageSize);
-  /** Set the moment the reader picks a size, so a read that lands afterwards cannot undo their choice. */
-  const chosenRef = useRef(false);
-
-  // The stored size may arrive AFTER the first paint (it is read from the server on mount), so the
-  // pager adopts it once — unless the reader has already picked a size of their own.
-  useEffect(() => {
-    if (chosenRef.current) return;
-    setPageSizeState(stored.pageSize);
-  }, [stored.pageSize]);
+  const pageSize = stored.pageSize;
 
   const [page, setPageState] = useState(1);
 
@@ -100,8 +101,6 @@ export function usePagination<T>({
   const setPage = (next: number) => setPageState(clampPage(next, totalPages));
 
   const setPageSize = (size: PageSize) => {
-    chosenRef.current = true;
-    setPageSizeState(size);
     setPageState(1);
     stored.write(size);
   };
@@ -116,7 +115,7 @@ export function usePagination<T>({
   // Filters shrank the list past the current page → back to page 1 (the SetupView copy lacked this,
   // which left an empty grid after filtering).
   useEffect(() => {
-    if (page > totalPages) setPageState(1);
+    if (page > totalPages && totalPages > 0) setPageState(1);
   }, [page, totalPages]);
 
   // Reset when the caller's filter/sort identity changes. JSON-keyed so an inline array literal
@@ -132,6 +131,7 @@ export function usePagination<T>({
   );
 
   return {
+    isReady: stored.isReady,
     page,
     pageSize,
     totalItems,

@@ -838,6 +838,7 @@ export function getPlaythroughRecord(dir: string, id: string): Playthrough | nul
 }
 
 export function updatePlaythroughRecord(dir: string, playthrough: Playthrough): void {
+  invalidatePlaythroughCache();
   // Validate-on-write canary (decision 6): never persist an invalid playthrough.
   const parsed = PlaythroughSchema.safeParse(playthrough);
   if (!parsed.success) {
@@ -852,6 +853,7 @@ export function updatePlaythroughRecord(dir: string, playthrough: Playthrough): 
 }
 
 export function deletePlaythroughRecord(dir: string, id: string): boolean {
+  invalidatePlaythroughCache();
   const path = playthroughPath(dir, id);
   if (!existsSync(path)) return false;
   unlinkSync(path);
@@ -1051,6 +1053,12 @@ export type PlaythroughRecordList = {
   failures: LoadFailure[];
 };
 
+let playthroughRecordsCache: PlaythroughRecordList | null = null;
+
+export function invalidatePlaythroughCache() {
+  playthroughRecordsCache = null;
+}
+
 /** Reads EVERY playthrough file, migrating each one, sorted newest-first.
  *
  *  Every reader below goes through here, so the per-file try/catch, the quarantine of an
@@ -1059,6 +1067,9 @@ export type PlaythroughRecordList = {
  *  eight real documents, which is why the LIST route ships a projection rather than whole
  *  documents — parses stay, bytes on the wire do not. */
 function readAllPlaythroughRecords(dir: string): PlaythroughRecordList {
+  if (playthroughRecordsCache) {
+    return playthroughRecordsCache;
+  }
   ensureStoreDir(dir);
   const playthroughs: Playthrough[] = [];
   const failures: LoadFailure[] = [];
@@ -1087,7 +1098,8 @@ function readAllPlaythroughRecords(dir: string): PlaythroughRecordList {
     }
   }
   playthroughs.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  return { playthroughs, failures };
+  playthroughRecordsCache = { playthroughs, failures };
+  return playthroughRecordsCache;
 }
 
 function filterBranches(playthroughs: Playthrough[], includeTimelineBranches: boolean): Playthrough[] {
@@ -1132,15 +1144,57 @@ export function toPlaythroughSummary(
 
 /** The playthrough LIST: one projection per playthrough, newest first. This is what the list route
  *  serves, and `total` is authoritative so the client's pager never has to infer it. */
+export type PlaythroughListOptions = {
+  includeTimelineBranches?: boolean;
+  page?: number;
+  pageSize?: number | "all";
+  search?: string;
+  sortBy?: "updatedAt" | "name" | "turn";
+  sortDir?: "asc" | "desc";
+};
+
 export function listPlaythroughSummaries(
   dir: string,
-  options?: { includeTimelineBranches?: boolean } & PlaythroughSummaryOptions
+  options?: PlaythroughListOptions & PlaythroughSummaryOptions
 ): PlaythroughListResponse {
   const { playthroughs, failures } = readAllPlaythroughRecords(dir);
-  const summaries = filterBranches(playthroughs, options?.includeTimelineBranches === true).map((p) =>
+  let summaries = filterBranches(playthroughs, options?.includeTimelineBranches === true).map((p) =>
     toPlaythroughSummary(p, options)
   );
-  return { playthroughs: summaries, failures, total: summaries.length };
+
+  if (options?.search) {
+    const needle = options.search.trim().toLowerCase();
+    if (needle) {
+      summaries = summaries.filter(
+        (p) =>
+          p.name.toLowerCase().includes(needle) ||
+          p.locationName.toLowerCase().includes(needle)
+      );
+    }
+  }
+
+  if (options?.sortBy) {
+    summaries.sort((a, b) => {
+      if (options.sortBy === "name") return a.name.localeCompare(b.name);
+      if (options.sortBy === "turn") return a.turn - b.turn;
+      return a.updatedAt.localeCompare(b.updatedAt);
+    });
+  }
+
+  if (options?.sortDir === "asc") {
+    summaries.reverse();
+  }
+
+  const total = summaries.length;
+
+  if (options?.page && options?.pageSize && options.pageSize !== "all") {
+    const page = options.page;
+    const pageSize = options.pageSize;
+    const start = (page - 1) * pageSize;
+    summaries = summaries.slice(start, start + pageSize);
+  }
+
+  return { playthroughs: summaries, failures, total };
 }
 
 /** FULL documents — for readers that genuinely walk the state: the image-orphan sweep (which needs

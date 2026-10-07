@@ -9,8 +9,8 @@ import {
 } from "../../api";
 import type { ResolvedLibraryPreferences } from "../../api";
 import type { ViewPreferences } from "../../../schemas";
-import { usePagination } from "../../hooks/usePagination";
-import { Badge, Button, CoverArt, Icon, Pagination, SearchBar, SimpleSelect } from "../base";
+import { useServerPagination } from "../../hooks/useServerPagination";
+import { Badge, Button, CoverArt, Icon, Pagination, SearchBar, SimpleSelect, Spinner } from "../base";
 import { PlaythroughActionsMenu } from "../common/PlaythroughActionsMenu";
 import { RenameModal } from "../common/RenameModal";
 
@@ -93,6 +93,7 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
   const [renameSaving, setRenameSaving] = useState(false);
   const [renameError, setRenameError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [prefsReady, setPrefsReady] = useState(false);
   const [viewMode, setViewModeState] = useState<PlaythroughViewMode>(
     LIBRARY_PREFERENCE_DEFAULTS.playthroughViewMode
   );
@@ -124,23 +125,43 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
     let cancelled = false;
     void (async () => {
       const { preferences } = await adoptLocalPreferences();
-      if (cancelled || prefsTouchedRef.current) return;
-      const resolved: ResolvedLibraryPreferences = resolveLibraryPreferences(preferences);
-      setViewModeState(resolved.playthroughViewMode);
-      setSortByState(resolved.playthroughSortBy);
-      setSortDirState(resolved.playthroughSortDir);
+      if (cancelled) return;
+      if (!prefsTouchedRef.current) {
+        const resolved: ResolvedLibraryPreferences = resolveLibraryPreferences(preferences);
+        setViewModeState(resolved.playthroughViewMode);
+        setSortByState(resolved.playthroughSortBy);
+        setSortDirState(resolved.playthroughSortDir);
+      }
+      setPrefsReady(true);
     })().catch(() => {
-      /* A failed read leaves the defaults; the next load tries again. */
+      if (!cancelled) setPrefsReady(true);
     });
     return () => {
       cancelled = true;
     };
   }, []);
 
+  const [totalPlaythroughs, setTotalPlaythroughs] = useState(0);
+
+  const pager = useServerPagination({
+    totalItems: totalPlaythroughs,
+    persistAs: "home",
+    resetDeps: [search, sortBy, sortDir, viewMode]
+  });
+
   const refresh = useCallback(async () => {
+    if (!prefsReady || !pager.isReady) return;
+    setLoading(true);
     try {
-      const { playthroughs: list, failures } = await listPlaythroughs();
+      const { playthroughs: list, failures, total } = await listPlaythroughs({
+        page: pager.page,
+        pageSize: pager.pageSize,
+        search,
+        sortBy,
+        sortDir
+      });
       setPlaythroughs(list);
+      setTotalPlaythroughs(total);
       setLoadFailures(failures);
       setFailuresDismissed(false);
     } catch (e) {
@@ -148,8 +169,8 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
     } finally {
       setLoading(false);
     }
-  }, [onError]);
-
+  }, [pager.page, pager.pageSize, pager.isReady, search, sortBy, sortDir, prefsReady, onError]);
+  
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -169,30 +190,6 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
     setSortDirState(next);
     writeShelfPreference({ playthroughSortDir: next });
   }
-
-  // The server sends the list newest-first; a name or turn sort is the client's, and a direction
-  // flip is one reverse away. Search matches the two fields a card makes visible.
-  const visible = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    const filtered = needle
-      ? playthroughs.filter(
-          (p) =>
-            p.name.toLowerCase().includes(needle) || p.locationName.toLowerCase().includes(needle)
-        )
-      : playthroughs;
-    const sorted = [...filtered].sort((a, b) => {
-      if (sortBy === "name") return a.name.localeCompare(b.name);
-      if (sortBy === "turn") return a.turn - b.turn;
-      return a.updatedAt.localeCompare(b.updatedAt);
-    });
-    return sortDir === "asc" ? sorted : sorted.reverse();
-  }, [playthroughs, search, sortBy, sortDir]);
-
-  const pager = usePagination({
-    items: visible,
-    persistAs: "home",
-    resetDeps: [search, sortBy, sortDir, viewMode]
-  });
 
   function handleRenameRequest(id: string, name: string) {
     setRenameError(null);
@@ -272,11 +269,26 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
       </Badge>
     ) : null;
 
+  const paginationElement = (
+    <Pagination
+      className="home-page-pagination"
+      page={pager.page}
+      pageSize={pager.pageSize}
+      total={pager.totalItems}
+      onPageChange={pager.setPage}
+      onPageSizeChange={pager.setPageSize}
+      onCommitCustomPageSize={pager.commitCustomPageSize}
+      itemLabel="playthroughs"
+    />
+  );
+
   const body = (
     <>
       {loading ? (
-        <p className="home-loading">Loading playthroughs…</p>
-      ) : visible.length === 0 ? (
+        <div className="home-loading flex justify-center py-12">
+          <Spinner size={32} />
+        </div>
+      ) : playthroughs.length === 0 ? (
         <div className="home-empty">
           {search ? (
             <>
@@ -303,9 +315,10 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
         </div>
       ) : (
         <>
+          {paginationElement}
           {viewMode === "grid" ? (
             <div className="playthrough-grid">
-              {pager.pageItems.map((p) => (
+              {playthroughs.map((p) => (
                 <article
                   key={p.id}
                   className={`playthrough-card ${p.id === currentPlaythroughId ? "current" : ""}`}
@@ -353,7 +366,7 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
             </div>
           ) : (
             <div className="playthrough-list">
-              {pager.pageItems.map((p) => (
+              {playthroughs.map((p) => (
                 <div
                   key={p.id}
                   className={`playthrough-row ${p.id === currentPlaythroughId ? "current" : ""}`}
@@ -398,17 +411,8 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
               ))}
             </div>
           )}
-
-          <Pagination
-            className="home-page-pagination"
-            page={pager.page}
-            pageSize={pager.pageSize}
-            total={pager.totalItems}
-            onPageChange={pager.setPage}
-            onPageSizeChange={pager.setPageSize}
-            onCommitCustomPageSize={pager.commitCustomPageSize}
-            itemLabel="playthroughs"
-          />
+          
+          {paginationElement}
         </>
       )}
     </>

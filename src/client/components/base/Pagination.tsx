@@ -3,7 +3,6 @@ import {
   ALL_PAGE_SIZE,
   MAX_PAGE_SIZE,
   PAGE_SIZE_PRESETS,
-  getPageNumbers,
   isPresetPageSize,
   parsePageSizeInput,
   rangeParts,
@@ -59,13 +58,24 @@ export function Pagination({
   // the size comes back now that it is read from the server rather than from the device.
   const [customMode, setCustomMode] = useState<boolean>(() => !isPresetPageSize(pageSize));
   const [draft, setDraft] = useState<string>(() => (isPresetPageSize(pageSize) ? "" : String(pageSize)));
+
+  const [pageDraft, setPageDraft] = useState<string>(String(page));
+
   useEffect(() => {
     // A preset is handled by the select's own options; only the custom case needs the input.
     if (isPresetPageSize(pageSize)) return;
     setCustomMode(true);
     setDraft(String(pageSize));
   }, [pageSize]);
+
+  useEffect(() => {
+    setPageDraft(String(page));
+  }, [page]);
+
   const { from, to, all } = rangeParts(page, pageSize, total);
+
+  const progressLeft = total === 0 ? 0 : Math.max(0, ((from - 1) / total) * 100);
+  const progressWidth = total === 0 ? 0 : Math.min(100 - progressLeft, ((to - from + 1) / total) * 100);
 
   function handleSelectChange(val: string) {
     if (val === "custom") {
@@ -93,8 +103,27 @@ export function Pagination({
     }
   }
 
+  function commitPageDraft() {
+    const parsed = parseInt(pageDraft, 10);
+    if (!isNaN(parsed)) {
+      let next = parsed;
+      if (next < 1) next = 1;
+      if (next > totalPages) next = totalPages;
+      onPageChange(next);
+      setPageDraft(String(next));
+    } else {
+      setPageDraft(String(page));
+    }
+  }
+
   return (
-    <div className={`base-pagination ${className}`.trim()}>
+    <div className={`base-pagination ${className}`.trim()} style={{ position: 'relative' }}>
+      <div className="pagination-progress-track" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: 'var(--border-main)', borderTopLeftRadius: '9px', borderTopRightRadius: '9px', overflow: 'hidden' }}>
+        <div
+          className="pagination-progress-fill"
+          style={{ position: 'absolute', top: 0, bottom: 0, background: 'var(--accent-highlight)', left: `${progressLeft}%`, width: `${progressWidth}%`, transition: 'all 0.2s ease-out' }}
+        />
+      </div>
       <div className="pagination-info">
         {total === 0 ? (
           <>Showing <strong>0</strong>{itemLabel ? ` ${itemLabel}` : ""}</>
@@ -136,26 +165,26 @@ export function Pagination({
             </Button>
           </Tooltip>
 
-          {getPageNumbers(page, totalPages).map((p, idx) => {
-            if (p === -1) {
-              return <span key={`ellipsis-${idx}`} className="pagination-ellipsis">…</span>;
-            }
-            const active = page === p;
-            return (
-              <Button
-                key={p}
-                type="button"
-                variant={active ? "primary" : "secondary"}
-                size="xs"
-                className={`pagination-page-btn ${active ? "active" : ""}`}
-                onClick={() => onPageChange(p)}
-                aria-label={`Page ${p}`}
-                aria-current={active ? "page" : undefined}
-              >
-                {p}
-              </Button>
-            );
-          })}
+          <div className="pagination-page-jumper" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '0 8px' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Page</span>
+            <TextInput
+              type="number"
+              size="sm"
+              min={1}
+              max={totalPages}
+              value={pageDraft}
+              onChange={(e) => setPageDraft(e.target.value)}
+              onBlur={commitPageDraft}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitPageDraft();
+              }}
+              fullWidth={false}
+              containerClassName="pagination-page-input"
+              aria-label="Current page"
+              style={{ width: '3.5rem', textAlign: 'center' }}
+            />
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>of {totalPages}</span>
+          </div>
 
           <Tooltip content="Next page">
             <Button

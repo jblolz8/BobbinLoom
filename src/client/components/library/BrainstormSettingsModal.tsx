@@ -57,9 +57,8 @@ export function BrainstormSettingsModal({
   const options = useMemo(() => {
     const rows = connections.map((connection) => ({
       value: connection.id,
-      label: `${connection.label}${connection.model ? ` — ${connection.model}` : ""}${
-        connection.id === activeTextProviderId ? " (active)" : ""
-      }`
+      label: `${connection.label}${connection.model ? ` — ${connection.model}` : ""}${connection.id === activeTextProviderId ? " (active)" : ""
+        }`
     }));
     // A stored choice whose connection is gone stays selectable so it can be re-pointed.
     if (providerId && !connections.some((connection) => connection.id === providerId)) {

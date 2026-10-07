@@ -43,6 +43,19 @@ export function PersonaLibrary({ isModal, onPersonasChanged }: PersonaLibraryPro
     persistAs: "persona"
   });
 
+  const paginationElement = (
+    <Pagination
+      className="persona-list-pagination"
+      page={personaPager.page}
+      pageSize={personaPager.pageSize}
+      total={personaPager.totalItems}
+      onPageChange={personaPager.setPage}
+      onPageSizeChange={personaPager.setPageSize}
+      onCommitCustomPageSize={personaPager.commitCustomPageSize}
+      itemLabel="personas"
+    />
+  );
+
   useEffect(() => {
     setPersonaStatus(null);
     setPersonaEditorOpen(false);
@@ -169,6 +182,7 @@ export function PersonaLibrary({ isModal, onPersonasChanged }: PersonaLibraryPro
 
       {!personaEditorOpen ? (
         <div className="persona-list">
+          {paginationElement}
           {personaPager.pageItems.map((p) => (
             <div key={p.id} className={`persona-row ${p.isDefault ? "default" : ""}`}>
               <AvatarBadge icon="User" name={p.name} size="sm" />
@@ -196,16 +210,7 @@ export function PersonaLibrary({ isModal, onPersonasChanged }: PersonaLibraryPro
             </div>
           ))}
 
-          <Pagination
-            className="persona-list-pagination"
-            page={personaPager.page}
-            pageSize={personaPager.pageSize}
-            total={personaPager.totalItems}
-            onPageChange={personaPager.setPage}
-            onPageSizeChange={personaPager.setPageSize}
-            onCommitCustomPageSize={personaPager.commitCustomPageSize}
-            itemLabel="personas"
-          />
+          {paginationElement}
 
           <Button
             variant="primary"

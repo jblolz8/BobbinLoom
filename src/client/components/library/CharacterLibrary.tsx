@@ -1519,6 +1519,18 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
   });
   const paginatedGroups = pager.pageItems;
 
+  const paginationElement = (
+    <Pagination
+      page={pager.page}
+      pageSize={pager.pageSize}
+      total={pager.totalItems}
+      onPageChange={pager.setPage}
+      onPageSizeChange={pager.setPageSize}
+      onCommitCustomPageSize={pager.commitCustomPageSize}
+      itemLabel="characters"
+    />
+  );
+
   const galleryRef = useRef<HTMLElement>(null);
   const [galleryHeight, setGalleryHeight] = useState<number | null>(null);
 
@@ -2459,6 +2471,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                 </div>
               ) : (
                 <>
+                  {paginationElement}
                   {/* 1. Card Portrait View */}
                   {viewMode === "portrait" && (
                     <div className="character-portrait-grid">
@@ -2711,15 +2724,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                     </div>
                   )}
 
-                  <Pagination
-                    page={pager.page}
-                    pageSize={pager.pageSize}
-                    total={pager.totalItems}
-                    onPageChange={pager.setPage}
-                    onPageSizeChange={pager.setPageSize}
-                    onCommitCustomPageSize={pager.commitCustomPageSize}
-                    itemLabel="characters"
-                  />
+                  {paginationElement}
                 </>
               )}
             </main>

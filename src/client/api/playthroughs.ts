@@ -64,8 +64,23 @@ export type CloseChapterBody = {
   providerId?: string;
 };
 
-export function listPlaythroughs(): Promise<PlaythroughListResponse> {
-  return request<PlaythroughListResponse>("/api/playthroughs");
+export type ListPlaythroughsOptions = {
+  page?: number;
+  pageSize?: number | "all";
+  search?: string;
+  sortBy?: "updatedAt" | "name" | "turn";
+  sortDir?: "asc" | "desc";
+};
+
+export function listPlaythroughs(options?: ListPlaythroughsOptions): Promise<PlaythroughListResponse> {
+  const query = new URLSearchParams();
+  if (options?.page) query.set("page", String(options.page));
+  if (options?.pageSize) query.set("pageSize", String(options.pageSize));
+  if (options?.search) query.set("search", options.search);
+  if (options?.sortBy) query.set("sortBy", options.sortBy);
+  if (options?.sortDir) query.set("sortDir", options.sortDir);
+  const q = query.toString();
+  return request<PlaythroughListResponse>(`/api/playthroughs${q ? `?${q}` : ""}`);
 }
 
 export function getPlaythrough(id: string): Promise<Playthrough> {

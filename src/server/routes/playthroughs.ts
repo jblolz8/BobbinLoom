@@ -107,8 +107,20 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
   const manager = options.manager ?? providerManager;
 
   app.get("/api/playthroughs", async (request) => {
-    const query = z.object({ includeBranches: z.string().optional() }).parse(request.query ?? {});
+    const query = z.object({ 
+      includeBranches: z.string().optional(),
+      page: z.string().optional(),
+      pageSize: z.string().optional(),
+      search: z.string().optional(),
+      sortBy: z.enum(["updatedAt", "name", "turn"]).optional(),
+      sortDir: z.enum(["asc", "desc"]).optional(),
+    }).parse(request.query ?? {});
+    
     const includeTimelineBranches = query.includeBranches === "true";
+    
+    const page = query.page ? parseInt(query.page, 10) : undefined;
+    const pageSize = query.pageSize === "all" ? "all" : (query.pageSize ? parseInt(query.pageSize, 10) : undefined);
+
     // Summaries, not whole documents: the list only renders cards, and a document carries
     // messages, snapshots and catalogs the cards never read (measured at ~750 KB for five
     // playthroughs). Full documents stay behind listPlaythroughRecords for the sweep and the
@@ -117,6 +129,11 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
     // store, which imports the store back, so the wiring lives here rather than in the store.
     return listPlaythroughSummaries(dataDir, {
       includeTimelineBranches,
+      page,
+      pageSize,
+      search: query.search,
+      sortBy: query.sortBy,
+      sortDir: query.sortDir,
       resolveCover: (p) => resolvePlaythroughCover(p, { imagesDir, charactersDir })
     });
   });
