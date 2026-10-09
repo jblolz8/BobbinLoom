@@ -8,7 +8,7 @@ import {
   resolveSetupPreferences,
   updateViewPreferences
 } from "../../api";
-import { listProviderConnections, setGenerationTextProvider, type ProviderConnection } from "../../api/providers";
+import { listProviderConnections, setGenerationTextProvider, setCharacterTextProvider, type ProviderConnection } from "../../api/providers";
 import { AvatarBadge, Button, CharacterAvatar, Icon, Pagination, SearchBar, SimpleSelect, SwitchRow, TagChip, TextArea, TextInput } from "../base";
 import { usePagination } from "../../hooks/usePagination";
 import type { ViewMode } from "../library/CharacterLibrary";
@@ -59,6 +59,7 @@ export type SetupViewProps = {
   onSetupFormChange: (updater: (f: SetupFormState) => SetupFormState) => void;
   generating: boolean;
   genError: string | null;
+  genProgressPhase?: string | null;
   onGenerate: () => void;
   onCancelGenerate: () => void;
   onStartBlank: () => void;
@@ -101,6 +102,7 @@ export function SetupView(props: SetupViewProps) {
     onSetupFormChange,
     generating,
     genError,
+    genProgressPhase,
     onGenerate,
     onCancelGenerate,
     onStartBlank,
@@ -112,6 +114,7 @@ export function SetupView(props: SetupViewProps) {
   // editor's "Prompt Writer" control, down to the dangling-id row.
   const [textConnections, setTextConnections] = useState<ProviderConnection[]>([]);
   const [activeTextProviderId, setActiveTextProviderId] = useState("");
+  const [characterProviderId, setCharacterProviderId] = useState("");
   const [providerChoiceError, setProviderChoiceError] = useState<string | null>(null);
   // Held in a ref so the registry read depends on `open` ALONE: the parent passes a fresh
   // callback every render, and re-running the effect would refetch on every keystroke.
@@ -126,6 +129,7 @@ export function SetupView(props: SetupViewProps) {
         if (cancelled) return;
         setTextConnections(registry.connections.filter((c) => c.kind === "text"));
         setActiveTextProviderId(registry.activeTextProviderId);
+        setCharacterProviderId(registry.characterTextProviderId ?? "");
         const stored = registry.generationTextProviderId ?? "";
         // Adopt the remembered choice into the form so the generate request carries the
         // connection the user actually sees selected.
@@ -159,6 +163,28 @@ export function SetupView(props: SetupViewProps) {
     if (!setupForm.providerId) return "Active connection";
     return textConnections.find((c) => c.id === setupForm.providerId)?.label ?? `${setupForm.providerId} (not found)`;
   }, [setupForm.providerId, textConnections]);
+
+  const characterProviderOptions = useMemo(() => {
+    const options = [
+      { value: "", label: "Current active text provider" },
+      ...textConnections.map((c) => ({
+        value: c.id,
+        label: `${c.label}${c.model ? ` - ${c.model}` : ""}${c.id === activeTextProviderId ? " (active)" : ""}`
+      }))
+    ];
+    if (characterProviderId && !textConnections.some((c) => c.id === characterProviderId)) {
+      options.push({ value: characterProviderId, label: `${characterProviderId} (not found)` });
+    }
+    return options;
+  }, [textConnections, activeTextProviderId, characterProviderId]);
+
+  const handleCharacterProviderChange = (id: string) => {
+    setCharacterProviderId(id);
+    setProviderChoiceError(null);
+    setCharacterTextProvider(id === "" ? null : id).catch(() =>
+      setProviderChoiceError("Could not remember that choice - it will still be used for this generation.")
+    );
+  };
 
   const handleProviderChange = (id: string) => {
     onSetupFormChange((f) => ({ ...f, providerId: id }));
@@ -428,9 +454,9 @@ export function SetupView(props: SetupViewProps) {
             </div>
             <h3>Weaving Your Playthrough...</h3>
             <p className="setup-generating-subtitle">
-              {setupForm.openingMode === "fleshedOut"
+              {genProgressPhase || (setupForm.openingMode === "fleshedOut"
                 ? "Generating world scenario, characters, and writing the opening scene (2-stage narrative)…"
-                : "Generating starting scenario, character state, and initial scene…"}
+                : "Generating starting scenario, character state, and initial scene…")}
             </p>
             <div className="setup-shimmer-bar-wrap">
               <div className="setup-shimmer-bar" />
@@ -1240,7 +1266,7 @@ export function SetupView(props: SetupViewProps) {
                   <div className="setup-setting-block">
                     <div className="setup-block-header">
                       <div>
-                        <h4>Text Provider</h4>
+                        <h4>Text Provider - Playthrough Creation</h4>
                         <span className="field-hint">
                           Writes the world and the opening scene. Later turns follow the active connection.
                         </span>
@@ -1255,9 +1281,32 @@ export function SetupView(props: SetupViewProps) {
                       onChange={handleProviderChange}
                       options={textProviderOptions}
                       placeholder="Current active text provider"
-                      aria-label="Text provider"
+                      aria-label="Text provider for Playthrough Creation"
                     />
                     <p className="field-hint">Falls back to the active connection if the chosen one is deleted.</p>
+                  </div>
+
+                  {/* Character Flesh Out Provider Section */}
+                  <div className="setup-setting-block">
+                    <div className="setup-block-header">
+                      <div>
+                        <h4>Text Provider - Character Flesh Out</h4>
+                        <span className="field-hint">
+                          Builds detailed character sheets during scenario generation and mid-turn automation.
+                        </span>
+                      </div>
+                    </div>
+
+                    <SimpleSelect
+                      size="sm"
+                      variant="filled"
+                      fullWidth
+                      value={characterProviderId}
+                      onChange={handleCharacterProviderChange}
+                      options={characterProviderOptions}
+                      placeholder="Current active text provider"
+                      aria-label="Text provider for Character Flesh Out"
+                    />
                     {providerChoiceError && <p className="error-box setup-error">{providerChoiceError}</p>}
                   </div>
 

@@ -65,7 +65,11 @@ export const turnRoutes: FastifyPluginAsync<TurnRoutesOptions> = async (app, opt
         providerManager.getProvider(),
         body.suggestedChoicesEnabled,
         providerManager.getContextWindow(),
-        { signal: controller.signal, hideUserMessage: body.hideUserMessage },
+        {
+          signal: controller.signal,
+          hideUserMessage: body.hideUserMessage,
+          characterProvider: providerManager.getProvider(providerManager.characterTextProviderId() ?? undefined)
+        },
         loadPromptConfig(settingsDir).promptConfig
       );
     } catch (error) {
@@ -104,7 +108,9 @@ export const turnRoutes: FastifyPluginAsync<TurnRoutesOptions> = async (app, opt
       body.suggestedChoicesEnabled,
       providerManager.getContextWindow(),
       controller.signal,
-      loadPromptConfig(settingsDir).promptConfig
+      loadPromptConfig(settingsDir).promptConfig,
+      undefined,
+      providerManager.getProvider(providerManager.characterTextProviderId() ?? undefined)
     );
 
     if (controller.signal.aborted) return;

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { describeDeletion, planDeletion, retryAnchorMessageId } from "../src/engine/chapterRevert";
+import { applyStatePatch } from "../src/engine/stateMutations";
 import { MockProvider } from "../src/server/provider";
 import type { ProviderTurn, TurnProvider } from "../src/server/provider";
 import type { ScenarioSeed } from "../src/schemas";
@@ -809,5 +810,56 @@ describe("truncateChat (Delete up to here)", () => {
     const missing = truncateChat(dir, playthrough.id, "msg_missing");
     expect(missing.ok).toBe(false);
     if (!missing.ok) expect(missing.status).toBe(404);
+  });
+
+  it("automatically generates character sheet on assistantTurn.statePatch.characterFleshOut", async () => {
+    const dir = tempDir();
+    let playthrough = createPlaythroughRecord(dir, "Mid-Turn Flesh Out Test");
+    const withChar = applyStatePatch(playthrough, {
+      characterAddSimple: [{ name: "Borg", description: "Gruff blacksmith", storyRole: "Blacksmith" }]
+    });
+    playthrough = withChar.state;
+    const borg = playthrough.characters.find((c) => c.name === "Borg")!;
+    expect(borg.templateId).toBeUndefined();
+
+    class FleshOutTurnProvider extends MockProvider {
+      async generateTurn(...args: Parameters<MockProvider["generateTurn"]>): Promise<ProviderTurn> {
+        const out = await super.generateTurn(...args);
+        return {
+          ...out,
+          turn: {
+            ...out.turn,
+            statePatch: {
+              characterFleshOut: { characterId: borg.id }
+            }
+          }
+        };
+      }
+    }
+
+    let sheetGeneratedFor = "";
+    class DedicatedCharProvider extends MockProvider {
+      async generateCharacterSheet(npc: { name: string; description: string; storyRole?: string }): Promise<string> {
+        sheetGeneratedFor = npc.name;
+        return "[Species]: Dwarf\n\n[Body]\n- Build: Sturdy\n\n[Personality]\n- Quiet and diligent";
+      }
+    }
+
+    const result = await executeTurn(
+      playthrough,
+      "I talk to Borg.",
+      new FleshOutTurnProvider(),
+      false,
+      65536,
+      { characterProvider: new DedicatedCharProvider() }
+    );
+
+    expect(sheetGeneratedFor).toBe("Borg");
+    const updatedBorg = result.state.characters.find((c) => c.id === borg.id)!;
+    expect(updatedBorg.templateId).toBeDefined();
+    const template = result.state.characterTemplates.find((t) => t.id === updatedBorg.templateId);
+    expect(template).toBeDefined();
+    expect(template?.content).toContain("Dwarf");
+    expect(result.applied.some((a) => a.includes("character fleshed out: Borg"))).toBe(true);
   });
 });

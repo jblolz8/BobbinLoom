@@ -15,7 +15,7 @@ to you in the chat's debug panel.
 
 World state is a flat list of `{ id, name, description }` objects. 
 
-- **The model** adds states as they arise (e.g. "💢 Slime Encounter Started"). When they resolve, the engine issues a removal and optionally a new state.
+- **The model** adds states to represent ongoing active conditions in the world (e.g. "🌧️ Heavy Rain", "🚨 Town on Alert"). It is instructed to rigorously issue a removal (`worldStateRemove`) when a condition resolves to prevent clutter, rather than using it as an event timeline.
 - **You** control the list from the scene panel to edit, delete, or add states.
 
 State changes are silent by design: the model already receives the full world state list in every
@@ -40,8 +40,7 @@ Three separate trackers, all of them plain lists of strings:
 | `playerCharacter.flags` / `.conditions` | Your own lasting marks |
 | `characters[].flags` / `.conditions` | Per-character marks |
 
-The model writes them as short human-readable, emoji-prefixed names (`💢 Slime Encounter
-Started`), so both the interface and the model read the same string with no id-to-label step.
+The model writes them as short human-readable, emoji-prefixed names (`🗝️ Knows the Password`), so both the interface and the model read the same string with no id-to-label step.
 
 ## The cast in play
 

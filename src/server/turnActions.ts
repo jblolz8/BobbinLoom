@@ -16,6 +16,9 @@ import type { TurnProvider } from "./provider";
 import type { PromptUsageBreakdown } from "./provider";
 import type { MeasuredUsage } from "./provider";
 import { getLorebook, getPlaythroughRecord, updatePlaythroughRecord } from "./store";
+import { buildFleshOutStoryContext } from "./stateActions";
+import { ensureAllSections } from "../engine/characterFormat";
+import { seedMemorySummary } from "../engine/characterSections";
 import { sweepOrphansInDataDir } from "./imageStore";
 import { clampCalibration } from "./provider/promptBuilder";
 
@@ -63,6 +66,8 @@ export type EditOutcome = { ok: true; state: Playthrough } | ActionFailure;
 
 /** Optional flags that change how executeTurn appends messages. */
 export type TurnOptions = {
+  characterProvider?: TurnProvider;
+  contextWindow?: number;
   /** Hide the synthetic user message (used by chapter-opening turns, where
    *  the "instruction" should not appear in the chat). The hidden message is
    *  still recorded so retryAssistantTurn can find a preceding user message
@@ -95,6 +100,42 @@ export async function executeTurn(
   const startTime = performance.now();
   const { turn: assistantTurn, promptUsage, measuredUsage, model, rawInput, rawOutput, finishReason } = await provider.generateTurn(parsedInput, playthrough, suggestedChoicesEnabled, promptConfig ?? { modules: { turn: [] } }, options?.signal);
   const durationMs = Math.round(performance.now() - startTime);
+
+  const charProvider = options?.characterProvider ?? provider;
+  if (assistantTurn.statePatch?.characterFleshOut) {
+    const { characterId, content: presetContent } = assistantTurn.statePatch.characterFleshOut;
+    const character = playthrough.characters.find(
+      (c) => c.id === characterId || c.name.toLowerCase() === characterId.toLowerCase()
+    );
+    if (character && !character.templateId) {
+      try {
+        let content = presetContent;
+        if (!content) {
+          const context = buildFleshOutStoryContext(
+            playthrough,
+            character,
+            options?.contextWindow ?? contextWindow
+          );
+          content = await charProvider.generateCharacterSheet(
+            { name: character.name, description: character.description ?? "", storyRole: character.storyRole },
+            context,
+            options?.signal,
+            promptConfig?.characterFormat
+          );
+        }
+        content = ensureAllSections(content, promptConfig?.characterFormat);
+        const memorySummary = seedMemorySummary(character.name, content);
+        assistantTurn.statePatch.characterFleshOut.characterId = character.id;
+        assistantTurn.statePatch.characterFleshOut.content = content;
+        assistantTurn.statePatch.characterFleshOut.memorySummary = memorySummary;
+      } catch (error) {
+        console.warn(`Failed to flesh out character ${character.name}`, error);
+        delete assistantTurn.statePatch.characterFleshOut;
+      }
+    } else {
+      delete assistantTurn.statePatch.characterFleshOut;
+    }
+  }
 
   const patchResult = assistantTurn.statePatch
     ? applyStatePatch(playthrough, assistantTurn.statePatch, promptConfig?.characterFormat)
@@ -329,7 +370,8 @@ export async function retryAssistantTurn(
   contextWindow: number = 65536,
   signal?: AbortSignal,
   promptConfig?: PromptConfig,
-  imagesDir: string = defaultImagesDir(dataDir)
+  imagesDir: string = defaultImagesDir(dataDir),
+  characterProvider?: TurnProvider
 ): Promise<RetryOutcome> {
   const playthrough = getPlaythroughRecord(dataDir, playthroughId);
   if (!playthrough) {
@@ -361,13 +403,11 @@ export async function retryAssistantTurn(
   // synthetic user instruction stays hidden.
   const originalAssistant = playthrough.messages[assistantIndex];
   const originalUser = anchor;
-  const retryOptions: TurnOptions | undefined =
-    originalAssistant.chapterOpening || originalUser.hidden
-      ? {
-          chapterOpening: originalAssistant.chapterOpening ?? false,
-          hideUserMessage: originalUser.hidden ?? false
-        }
-      : undefined;
+  const retryOptions: TurnOptions = {
+    chapterOpening: originalAssistant.chapterOpening ?? false,
+    hideUserMessage: originalUser.hidden ?? false,
+    characterProvider
+  };
 
   // The SAME delete-and-rewind `truncateChat` and `revertAction` use: inclusive from the plan's cut,
   // restoring the snapshot of the first assistant message in the deleted block — which, for a retry,
@@ -383,7 +423,7 @@ export async function retryAssistantTurn(
     provider,
     suggestedChoicesEnabled,
     contextWindow,
-    retryOptions ? { ...retryOptions, ...(signal ? { signal } : {}) } : signal ? { signal } : undefined,
+    { ...retryOptions, ...(signal ? { signal } : {}) },
     promptConfig
   );
 

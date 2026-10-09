@@ -161,6 +161,12 @@ export const providerRoutes: FastifyPluginAsync<ProviderRoutesOptions> = async (
     return manager.setChapterTextProvider(parsedBody.data.providerId);
   });
 
+  app.put("/api/settings/providers/character-provider", async (request, reply) => {
+    const parsedBody = GenerationProviderBody.safeParse(request.body ?? {});
+    if (!parsedBody.success) return reply.code(400).send({ error: "providerId must be a string or null" });
+    return manager.setCharacterTextProvider(parsedBody.data.providerId);
+  });
+
   app.post("/api/settings/providers/test", async (request) => {
     const body = TestConnectionBody.parse(request.body ?? {});
     return manager.testConnection(body);

@@ -5,6 +5,7 @@ import {
   applyTheme,
   createPlaythrough,
   generatePlaythrough,
+  getGenerationProgress,
   getAppearanceSettings,
   listCharacters,
   listLorebooks,
@@ -44,6 +45,7 @@ export default function App() {
   // Setup state
   const [setupForm, setSetupForm] = useState<SetupFormState>(defaultSetupForm);
   const [generating, setGenerating] = useState(false);
+  const [genProgressPhase, setGenProgressPhase] = useState<string | null>(null);
   const [genError, setGenError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -151,6 +153,20 @@ export default function App() {
     setGenError(null);
     const controller = new AbortController();
     abortControllerRef.current = controller;
+    
+    const sessionId = `gen_${Math.random().toString(36).substring(2)}`;
+    
+    const pollProgress = setInterval(async () => {
+      try {
+        const p = await getGenerationProgress(sessionId);
+        if (p.active && p.phase) {
+          setGenProgressPhase(p.phase);
+        } else if (!p.active) {
+          setGenProgressPhase(null);
+        }
+      } catch (e) { /* ignore */ }
+    }, 500);
+
     try {
       const prefs: ScenarioPreferences = {
         name: setupForm.name || "New Adventure",
@@ -166,7 +182,8 @@ export default function App() {
         selectedLorebookIds,
         undefined,
         setupForm.providerId || undefined,
-        controller.signal
+        controller.signal,
+        sessionId
       );
       playthroughHook.resetTurnState(response.state);
       playthroughHook.setTokenUsage(response.tokenUsage ?? null);
@@ -181,7 +198,9 @@ export default function App() {
         setGenError(e instanceof Error ? e.message : String(e));
       }
     } finally {
+      clearInterval(pollProgress);
       setGenerating(false);
+      setGenProgressPhase(null);
       abortControllerRef.current = null;
     }
   }
@@ -417,6 +436,7 @@ export default function App() {
         onSetupFormChange={setSetupForm}
         generating={generating}
         genError={genError}
+        genProgressPhase={genProgressPhase}
         onGenerate={() => { void handleGenerate(); }}
         onCancelGenerate={handleCancelGenerate}
         onStartBlank={() => { void handleStartBlank(); }}

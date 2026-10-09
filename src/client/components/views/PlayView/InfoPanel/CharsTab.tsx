@@ -5,10 +5,14 @@ import {
   getCharacterAvatarUrl,
   listCharacters,
   fleshOutCharacter,
-  fleshOutCharacterDraft,
   saveCharacterToLibrary,
 } from "../../../../api";
-import type { CharacterEditPayload, FleshOutDraftResult } from "../../../../api";
+import {
+  listProviderConnections,
+  setCharacterTextProvider,
+  type ProviderConnection
+} from "../../../../api/providers";
+import type { CharacterEditPayload } from "../../../../api";
 import {
   CAST_PREFERENCE_DEFAULTS,
   adoptLocalPreferences,
@@ -17,8 +21,7 @@ import {
 } from "../../../../api";
 import { CharacterEditor } from "../../../modals/CharacterEditor";
 import { CharacterSheetSections } from "./CharacterSheetSections";
-import { FleshOutPreview } from "../../../common/FleshOutPreview";
-import { AvatarBadge, Badge, Button, Icon, SearchBar } from "../../../base";
+import { AvatarBadge, Badge, Button, Icon, SearchBar, SimpleSelect } from "../../../base";
 
 type SaveFeedback = { ok: boolean; text: string };
 
@@ -35,11 +38,12 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
   const [saveFeedback, setSaveFeedback] = useState<Record<string, SaveFeedback>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editingChar, setEditingChar] = useState<CharacterInstance | null>(null);
-  const [draftingId, setDraftingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<FleshOutDraftResult | null>(null);
-  const [fleshOutBusy, setFleshOutBusy] = useState(false);
-  const draftAbortRef = useRef<AbortController | null>(null);
+  const [fleshingOutId, setFleshingOutId] = useState<string | null>(null);
+  const fleshOutAbortRef = useRef<AbortController | null>(null);
   const [fleshOutError, setFleshOutError] = useState<string | null>(null);
+  const [textConnections, setTextConnections] = useState<ProviderConnection[]>([]);
+  const [activeTextProviderId, setActiveTextProviderId] = useState("");
+  const [characterProviderId, setCharacterProviderId] = useState("");
   const [charSearch, setCharSearch] = useState("");
   const [castViewMode, setCastViewModeState] = useState<CastViewMode>(
     CAST_PREFERENCE_DEFAULTS.viewMode
@@ -98,63 +102,66 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
     }
   }
 
-  async function requestDraft(characterId: string) {
-    draftAbortRef.current?.abort();
-    const controller = new AbortController();
-    draftAbortRef.current = controller;
-    setFleshOutError(null);
-    try {
-      const result = await fleshOutCharacterDraft(playthrough.id, characterId, controller.signal);
-      if (draftAbortRef.current === controller) setDraft(result);
-    } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") {
-        // cancelled
-      } else if (draftAbortRef.current === controller) {
-        setFleshOutError(e instanceof Error ? e.message : "Failed to generate draft");
-      }
-    } finally {
-      if (draftAbortRef.current === controller) {
-        draftAbortRef.current = null;
-        setDraftingId(null);
-      }
+  useEffect(() => {
+    let cancelled = false;
+    listProviderConnections()
+      .then((reg) => {
+        if (cancelled) return;
+        setTextConnections(reg.connections.filter((c) => c.kind === "text"));
+        setActiveTextProviderId(reg.activeTextProviderId ?? "");
+        setCharacterProviderId(reg.characterTextProviderId ?? "");
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function handleCharacterProviderChange(id: string) {
+    setCharacterProviderId(id);
+    setCharacterTextProvider(id === "" ? null : id).catch((e: unknown) => {
+      console.warn("Failed to set character text provider", e);
+    });
+  }
+
+  const characterProviderOptions = useMemo(() => {
+    const rows = textConnections.map((c) => ({
+      value: c.id,
+      label: `${c.label}${c.model ? ` — ${c.model}` : ""}${c.id === activeTextProviderId ? " (active)" : ""}`
+    }));
+    if (characterProviderId && !textConnections.some((c) => c.id === characterProviderId)) {
+      rows.push({ value: characterProviderId, label: `${characterProviderId} (not found)` });
     }
-  }
+    return [{ value: "", label: "Current active text provider" }, ...rows];
+  }, [textConnections, activeTextProviderId, characterProviderId]);
 
-  function handleStartFleshOut(characterId: string) {
-    if (draftingId !== null || draft) return;
-    setDraftingId(characterId);
-    void requestDraft(characterId);
-  }
-
-  async function handleConfirmFleshOut() {
-    if (!draft) return;
+  async function handleFleshOut(characterId: string) {
+    fleshOutAbortRef.current?.abort();
     const controller = new AbortController();
-    setFleshOutBusy(true);
+    fleshOutAbortRef.current = controller;
+    setFleshingOutId(characterId);
     setFleshOutError(null);
     try {
-      const updated = await fleshOutCharacter(playthrough.id, draft.character.id, draft.content, controller.signal);
-      onPlaythroughChange(updated);
-      setDraft(null);
+      const updated = await fleshOutCharacter(playthrough.id, characterId, undefined, controller.signal);
+      if (fleshOutAbortRef.current === controller) {
+        onPlaythroughChange(updated);
+      }
     } catch (e) {
-      if (!(e instanceof DOMException && e.name === "AbortError")) {
+      if (!(e instanceof DOMException && e.name === "AbortError") && fleshOutAbortRef.current === controller) {
         setFleshOutError(e instanceof Error ? e.message : "Fleshing out character failed");
       }
     } finally {
-      setFleshOutBusy(false);
+      if (fleshOutAbortRef.current === controller) {
+        fleshOutAbortRef.current = null;
+        setFleshingOutId(null);
+      }
     }
   }
 
-  function handleRegenerate() {
-    if (!draft) return;
-    setFleshOutBusy(true);
-    void requestDraft(draft.character.id).finally(() => setFleshOutBusy(false));
-  }
-
   function handleCancelFleshOut() {
-    if (fleshOutBusy) return;
-    draftAbortRef.current?.abort();
-    setDraft(null);
-    setDraftingId(null);
+    fleshOutAbortRef.current?.abort();
+    fleshOutAbortRef.current = null;
+    setFleshingOutId(null);
   }
 
   async function handleEditSave(payload: CharacterEditPayload) {
@@ -224,15 +231,49 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
         key={character.id}
         character={character}
         present={inScene}
-        isDrafting={draftingId === character.id}
-        onFleshOut={() => handleStartFleshOut(character.id)}
-        onCancelDraft={() => { draftAbortRef.current?.abort(); setDraftingId(null); }}
+        isFleshingOut={fleshingOutId === character.id}
+        onFleshOut={() => void handleFleshOut(character.id)}
+        onCancel={handleCancelFleshOut}
       />
     );
   }
 
   return (
     <div className="chars-tab-container">
+      {/* ── Character Creator Provider Settings ── */}
+      <div
+        className="char-creator-provider-row flex items-center justify-between gap-2"
+        style={{
+          padding: "0.5rem 0.75rem",
+          marginBottom: "0.75rem",
+          borderRadius: "6px",
+          background: "var(--bg-subtle, rgba(0, 0, 0, 0.03))",
+          border: "1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))",
+          fontSize: "0.8rem",
+        }}
+      >
+        <label
+          htmlFor="char-provider-select"
+          className="flex items-center gap-1.5"
+          style={{ color: "var(--text-muted)", whiteSpace: "nowrap" }}
+        >
+          <Icon name="Cpu" size={13} />
+          <span>Flesh-Out Provider:</span>
+        </label>
+        <div style={{ minWidth: "170px" }}>
+          <SimpleSelect
+            id="char-provider-select"
+            size="xs"
+            variant="filled"
+            value={characterProviderId}
+            onChange={handleCharacterProviderChange}
+            options={characterProviderOptions}
+            placeholder="Current active text provider"
+            aria-label="Character creator AI provider"
+          />
+        </div>
+      </div>
+
       {/* ── 1. In Scene (Active) Section ── */}
       <section className="chars-section">
         <div className="main-cast-header-row">
@@ -317,17 +358,6 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
         </p>
       ) : null}
 
-      {draft ? (
-        <FleshOutPreview
-          character={draft.character}
-          content={draft.content}
-          busy={fleshOutBusy}
-          onConfirm={() => void handleConfirmFleshOut()}
-          onRegenerate={() => void handleRegenerate()}
-          onCancel={handleCancelFleshOut}
-        />
-      ) : null}
-
       {editingChar ? (
         <CharacterEditor
           character={editingChar}
@@ -347,11 +377,11 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
 export function SimpleCharacterCard(props: {
   character: CharacterInstance;
   present: boolean;
-  isDrafting: boolean;
+  isFleshingOut: boolean;
   onFleshOut: () => void;
-  onCancelDraft: () => void;
+  onCancel: () => void;
 }) {
-  const { character, present, isDrafting, onFleshOut, onCancelDraft } = props;
+  const { character, present, isFleshingOut, onFleshOut, onCancel } = props;
 
   return (
     <article className="card playview-char-card simple-character-card">
@@ -444,12 +474,12 @@ export function SimpleCharacterCard(props: {
         {/* Action Row */}
         <div className="char-actions-footer" style={{ marginTop: "0.6rem", paddingTop: "0.5rem", borderTop: "1px solid var(--border-subtle)" }}>
           <div style={{ flex: 1 }} />
-          {isDrafting ? (
+          {isFleshingOut ? (
             <span className="promote-actions flex items-center gap-1.5">
               <Button size="sm" variant="secondary" disabled leftIcon={<Icon name="Sparkles" size={13} className="sparkle-pulse" />}>
-                Drafting Sheet…
+                Fleshing Out…
               </Button>
-              <Button size="sm" variant="ghost" onClick={onCancelDraft}>
+              <Button size="sm" variant="ghost" onClick={onCancel}>
                 Cancel
               </Button>
             </span>

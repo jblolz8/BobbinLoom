@@ -95,6 +95,7 @@ export type ProviderRegistry = {
   /** The connection new playthroughs are generated with; null = follow the active one. */
   generationTextProviderId?: string | null;
   chapterTextProviderId?: string | null;
+  characterTextProviderId?: string | null;
   connections: ProviderConnection[];
   warnings: string[];
 };
@@ -202,6 +203,13 @@ export function setChapterTextProvider(providerId: string | null): Promise<Provi
 
 export function setGenerationTextProvider(providerId: string | null): Promise<ProviderRegistry> {
   return request<ProviderRegistry>("/api/settings/providers/generation-provider", {
+    method: "PUT",
+    body: JSON.stringify({ providerId })
+  });
+}
+
+export function setCharacterTextProvider(providerId: string | null): Promise<ProviderRegistry> {
+  return request<ProviderRegistry>("/api/settings/providers/character-provider", {
     method: "PUT",
     body: JSON.stringify({ providerId })
   });

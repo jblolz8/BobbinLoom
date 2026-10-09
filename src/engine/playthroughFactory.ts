@@ -165,17 +165,26 @@ export function createPlaythroughFromSeed(
     characterTemplates = clone(ordered);
   }
 
-  // Map seed.additionalCharacters into instances and templates
+  // Map seed.additionalCharacters into simple instances
   for (const ac of seed.additionalCharacters) {
     if (!castNames.has(ac.name.trim().toLowerCase())) {
-      const tId = newId("tmpl");
-      characterTemplates.push({
-        id: tId, name: ac.name, version: 1,
-        content: `Story Role: ${ac.storyRole || "Stranger"}\nDescription: ${ac.description}`,
-        summary: ac.description, startingClothing: []
-      });
-      const inst = instantiateTemplate(characterTemplates[characterTemplates.length - 1], playthroughId, branchId);
-      inst.storyRole = ac.storyRole || "Stranger";
+      const createdAt = nowIso();
+      const inst: CharacterInstance = {
+        id: newId("inst"),
+        playthroughId,
+        branchId,
+        name: ac.name,
+        storyRole: ac.storyRole || "Stranger",
+        description: ac.description,
+        mood: "neutral",
+        towardPlayer: "neutral",
+        memorySummary: `${ac.name} has not formed a strong opinion of the player yet.`,
+        conditions: [],
+        flags: [],
+        clothing: [],
+        createdAt,
+        updatedAt: createdAt
+      };
       characters.push(inst);
     }
   }

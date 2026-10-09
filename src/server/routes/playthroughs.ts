@@ -25,7 +25,6 @@ import {
 import {
   closeChapterAction,
   fleshOutCharacterAction,
-  fleshOutCharacterDraftAction,
   worldStateAction,
   resummarizeChapterAction
 } from "../stateActions";
@@ -33,6 +32,11 @@ import { buildOpeningPrompt, executeTurn } from "../turnActions";
 import { imageFilePath, sweepOrphansInDataDir } from "../imageStore";
 import { resolvePlaythroughCover } from "../coverResolver";
 import { loadPromptConfig } from "../promptConfigStore";
+import { publishGenerationProgress, readGenerationProgress, clearGenerationProgress } from "../generationProgress";
+import { applyStatePatch } from "../../engine/stateMutations";
+import { ensureAllSections } from "../../engine/characterFormat";
+import { seedMemorySummary } from "../../engine/characterSections";
+import { buildFleshOutStoryContext } from "../stateActions";
 import { abortOnClientDisconnect, dataDir as defaultDataDir, imagesDir as defaultImagesDir, providerManager, settingsDir } from "./helpers";
 import type { ProviderManager } from "../providerManager";
 
@@ -69,6 +73,7 @@ const GenerateBody = z.object({
   lorebookIds: z.array(z.string()).optional(),
   presetId: z.string().optional(),
   allowAdditionalCharacters: z.boolean().optional(),
+  sessionId: z.string().optional(),
 });
 
 const WorldStateActionBody = z.object({
@@ -106,6 +111,11 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
   const imagesDir = options.imagesDir ?? defaultImagesDir;
   const charactersDir = options.charactersDir ?? CHARACTERS_DIR;
   const manager = options.manager ?? providerManager;
+
+  app.get("/api/playthroughs/generate/progress", async (request, reply) => {
+    const query = z.object({ sessionId: z.string() }).parse(request.query ?? {});
+    return readGenerationProgress(query.sessionId);
+  });
 
   app.get("/api/playthroughs", async (request) => {
     const query = z.object({ 
@@ -270,6 +280,7 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
     const contextWindow = manager.getContextWindow(providerId);
 
     try {
+      if (body.sessionId) publishGenerationProgress(body.sessionId, "Generating scenario seed...");
       const seed = await provider.generateScenarioSeed(preferences, body.lorebookIds, controller.signal, preset?.characterFormat);
       if (controller.signal.aborted) return;
 
@@ -285,7 +296,31 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
       }
 
       // fleshedOut: create WITHOUT seeding the opening text, then run a setting-aware opening turn.
-      const fleshed = createPlaythroughFromSeedRecord(dataDir, body.name, seed, body.personaId, body.castIds, body.lorebookIds, body.setting, /* includeOpening */ false);
+      let fleshed = createPlaythroughFromSeedRecord(dataDir, body.name, seed, body.personaId, body.castIds, body.lorebookIds, body.setting, /* includeOpening */ false);
+      
+      if (openingMode === "fleshedOut") {
+          const characterProvider = manager.getProvider(manager.characterTextProviderId() ?? undefined);
+          const charactersToFleshOut = fleshed.characters.filter(c => fleshed.activeCharacters.includes(c.id) && !c.templateId);
+          
+          for (const char of charactersToFleshOut) {
+              if (body.sessionId) publishGenerationProgress(body.sessionId, `Fleshing out ${char.name}...`);
+              try {
+                  const context = buildFleshOutStoryContext(fleshed, char, contextWindow);
+                  let content = await characterProvider.generateCharacterSheet(
+                      { name: char.name, description: char.description ?? "", storyRole: char.storyRole },
+                      context, controller.signal, preset?.characterFormat
+                  );
+                  content = ensureAllSections(content, preset?.characterFormat);
+                  const memorySummary = seedMemorySummary(char.name, content);
+                  
+                  // applyStatePatch is pure, so we reassign full state (keeps next.characterTemplates!)
+                  fleshed = applyStatePatch(fleshed, { characterFleshOut: { characterId: char.id, content, memorySummary } }, preset?.characterFormat).state;
+              } catch (error) {
+                  console.warn(`Failed to flesh out starting cast member ${char.name}`);
+              }
+          }
+      }
+      if (body.sessionId) publishGenerationProgress(body.sessionId, "Writing opening scene...");
       const openingChoices = body.generateOpeningChoices ?? false;
       const result = await executeTurn(
         fleshed,
@@ -293,7 +328,10 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
         provider,
         openingChoices,
         contextWindow,
-        { signal: controller.signal },
+        {
+          signal: controller.signal,
+          characterProvider: manager.getProvider(manager.characterTextProviderId() ?? undefined)
+        },
         loadPromptConfig(settingsDir).promptConfig
       );
 
@@ -314,6 +352,8 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
       if (controller.signal.aborted) return;
       const message = error instanceof Error ? error.message : "Scenario generation failed";
       return reply.code(422).send({ error: message });
+    } finally {
+      if (body.sessionId) clearGenerationProgress(body.sessionId);
     }
   });
 
@@ -368,20 +408,10 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
     const body = z.object({ content: z.string().optional() }).parse(request.body ?? {});
 
     const controller = abortOnClientDisconnect(reply);
-    const result = await fleshOutCharacterAction(dataDir, id, characterId, manager.getProvider(), body.content, manager.getMaxTokens(), controller.signal, loadPromptConfig(settingsDir).promptConfig);
+    const result = await fleshOutCharacterAction(dataDir, id, characterId, manager.getProvider(manager.characterTextProviderId() ?? undefined), body.content, manager.getMaxTokens(manager.characterTextProviderId() ?? undefined), controller.signal, loadPromptConfig(settingsDir).promptConfig);
     if (controller.signal.aborted) return;
     if (!result.ok) return reply.code(result.status).send({ error: result.error });
     return result.state;
-  });
-
-  app.post("/api/playthroughs/:id/characters/:characterId/flesh-out/draft", async (request, reply) => {
-    const { id, characterId } = z.object({ id: z.string(), characterId: z.string() }).parse(request.params);
-
-    const controller = abortOnClientDisconnect(reply);
-    const result = await fleshOutCharacterDraftAction(dataDir, id, characterId, manager.getProvider(), manager.getMaxTokens(), controller.signal, loadPromptConfig(settingsDir).promptConfig);
-    if (controller.signal.aborted) return;
-    if (!result.ok) return reply.code(result.status).send({ error: result.error });
-    return { character: result.character, content: result.content, storyContext: result.storyContext };
   });
 
   app.post("/api/playthroughs/:id/flesh-out-character", async (request, reply) => {
@@ -389,21 +419,10 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
     const body = z.object({ characterId: z.string(), content: z.string().optional() }).parse(request.body ?? {});
 
     const controller = abortOnClientDisconnect(reply);
-    const result = await fleshOutCharacterAction(dataDir, id, body.characterId, manager.getProvider(), body.content, manager.getMaxTokens(), controller.signal, loadPromptConfig(settingsDir).promptConfig);
+    const result = await fleshOutCharacterAction(dataDir, id, body.characterId, manager.getProvider(manager.characterTextProviderId() ?? undefined), body.content, manager.getMaxTokens(manager.characterTextProviderId() ?? undefined), controller.signal, loadPromptConfig(settingsDir).promptConfig);
     if (controller.signal.aborted) return;
     if (!result.ok) return reply.code(result.status).send({ error: result.error });
     return result.state;
-  });
-
-  app.post("/api/playthroughs/:id/flesh-out-character/draft", async (request, reply) => {
-    const { id } = z.object({ id: z.string() }).parse(request.params);
-    const body = z.object({ characterId: z.string() }).parse(request.body ?? {});
-
-    const controller = abortOnClientDisconnect(reply);
-    const result = await fleshOutCharacterDraftAction(dataDir, id, body.characterId, manager.getProvider(), manager.getMaxTokens(), controller.signal, loadPromptConfig(settingsDir).promptConfig);
-    if (controller.signal.aborted) return;
-    if (!result.ok) return reply.code(result.status).send({ error: result.error });
-    return { character: result.character, content: result.content, storyContext: result.storyContext };
   });
 
   app.post("/api/playthroughs/:id/close-chapter", async (request, reply) => {

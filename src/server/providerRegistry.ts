@@ -19,6 +19,7 @@ export type ProviderRegistry = {
    *  null follows whichever text connection is active, exactly like the generation preference
    *  above, and it is remembered separately because a chapter is its own user action. */
   chapterTextProviderId?: string | null;
+  characterTextProviderId?: string | null;
   connections: ProviderConnection[];
 };
 
@@ -98,6 +99,9 @@ function migrateToV2(raw: Record<string, unknown>): Record<string, unknown> {
     ...(typeof raw.chapterTextProviderId === "string" || raw.chapterTextProviderId === null
       ? { chapterTextProviderId: raw.chapterTextProviderId }
       : {}),
+    ...(typeof raw.characterTextProviderId === "string" || raw.characterTextProviderId === null
+      ? { characterTextProviderId: raw.characterTextProviderId }
+      : {}),
     connections: connections.map((c) =>
       c && typeof c === "object" && !Array.isArray(c)
         ? { kind: "text", ...(c as Record<string, unknown>) }
@@ -153,6 +157,7 @@ function readRegistry(dir: string): ReadResult {
           activeImageProviderId: parsed.activeImageProviderId,
           generationTextProviderId: parsed.generationTextProviderId ?? null,
           chapterTextProviderId: parsed.chapterTextProviderId ?? null,
+          characterTextProviderId: parsed.characterTextProviderId ?? null,
           connections: decryptConnections(parsed.connections, vaultKey),
         },
         warnings,
@@ -165,6 +170,7 @@ function readRegistry(dir: string): ReadResult {
         activeImageProviderId: file.data.activeImageProviderId,
         generationTextProviderId: file.data.generationTextProviderId ?? null,
         chapterTextProviderId: file.data.chapterTextProviderId ?? null,
+        characterTextProviderId: file.data.characterTextProviderId ?? null,
         connections: decryptConnections(file.data.connections, vaultKey),
       },
       warnings,
@@ -198,6 +204,10 @@ function readRegistry(dir: string): ReadResult {
       typeof rawObj.chapterTextProviderId === "string" || rawObj.chapterTextProviderId === null
         ? rawObj.chapterTextProviderId
         : null,
+    characterTextProviderId:
+      typeof rawObj.characterTextProviderId === "string" || rawObj.characterTextProviderId === null
+        ? rawObj.characterTextProviderId
+        : null,
     connections: kept,   // ProviderConnectionSchema now defaults every kept row to kind: "text"
   };
   const backup = backupFile(path);
@@ -216,6 +226,7 @@ function readRegistry(dir: string): ReadResult {
       activeImageProviderId: salvaged.activeImageProviderId,
       generationTextProviderId: salvaged.generationTextProviderId ?? null,
       chapterTextProviderId: salvaged.chapterTextProviderId ?? null,
+      characterTextProviderId: salvaged.characterTextProviderId ?? null,
       connections: decryptConnections(salvaged.connections, vaultKey),
     },
     warnings,
@@ -231,6 +242,7 @@ function writeRegistry(dir: string, reg: ProviderRegistry): void {
     activeImageProviderId: reg.activeImageProviderId,
     generationTextProviderId: reg.generationTextProviderId ?? null,
     chapterTextProviderId: reg.chapterTextProviderId ?? null,
+    characterTextProviderId: reg.characterTextProviderId ?? null,
     connections: reg.connections.map((c) =>
       c.apiKey ? { ...c, apiKey: encryptApiKey(c.apiKey, vaultKey) } : c
     ),
@@ -247,6 +259,7 @@ export function seedRegistry(dir: string): ProviderRegistry {
     activeImageProviderId: "",
     generationTextProviderId: null,
     chapterTextProviderId: null,
+    characterTextProviderId: null,
     connections: []
   };
   writeRegistry(dir, reg);
@@ -271,6 +284,7 @@ export function listConnections(dir: string): PublicProviderRegistry {
     activeImageProviderId: reg.activeImageProviderId,
     generationTextProviderId: reg.generationTextProviderId ?? null,
     chapterTextProviderId: reg.chapterTextProviderId ?? null,
+    characterTextProviderId: reg.characterTextProviderId ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings,
   };
@@ -408,6 +422,7 @@ export function deleteConnection(dir: string, id: string): PublicProviderRegistr
     activeImageProviderId: reg.activeImageProviderId,
     generationTextProviderId: reg.generationTextProviderId ?? null,
     chapterTextProviderId: reg.chapterTextProviderId ?? null,
+    characterTextProviderId: reg.characterTextProviderId ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings: [],
   };
@@ -432,6 +447,7 @@ export function setActiveConnection(dir: string, id: string): PublicProviderRegi
     activeImageProviderId: reg.activeImageProviderId,
     generationTextProviderId: reg.generationTextProviderId ?? null,
     chapterTextProviderId: reg.chapterTextProviderId ?? null,
+    characterTextProviderId: reg.characterTextProviderId ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings: [],
   };
@@ -453,6 +469,7 @@ export function setGenerationTextProvider(dir: string, id: string | null): Publi
     activeImageProviderId: reg.activeImageProviderId,
     generationTextProviderId: reg.generationTextProviderId ?? null,
     chapterTextProviderId: reg.chapterTextProviderId ?? null,
+    characterTextProviderId: reg.characterTextProviderId ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings: [],
   };
@@ -471,6 +488,26 @@ export function setChapterTextProvider(dir: string, id: string | null): PublicPr
     activeImageProviderId: reg.activeImageProviderId,
     generationTextProviderId: reg.generationTextProviderId ?? null,
     chapterTextProviderId: reg.chapterTextProviderId ?? null,
+    characterTextProviderId: reg.characterTextProviderId ?? null,
+    connections: reg.connections.map(toPublicConnection),
+    warnings: [],
+  };
+}
+
+/** Remember which text connection fleshes out simple characters.
+ *  `null` means "follow whichever connection is active". Accepts a dangling id for the same
+ *  reason the generation preference does: it is a preference, resolution falls back at use
+ *  time, and refusing the write would leave a stale choice unsaveable. */
+export function setCharacterTextProvider(dir: string, id: string | null): PublicProviderRegistry {
+  const reg = getRegistry(dir);
+  reg.characterTextProviderId = id;
+  writeRegistry(dir, reg);
+  return {
+    activeTextProviderId: reg.activeTextProviderId,
+    activeImageProviderId: reg.activeImageProviderId,
+    generationTextProviderId: reg.generationTextProviderId ?? null,
+    chapterTextProviderId: reg.chapterTextProviderId ?? null,
+    characterTextProviderId: reg.characterTextProviderId ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings: [],
   };

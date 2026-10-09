@@ -253,6 +253,7 @@ export const ProviderRegistryFileSchema = z.object({
    *  null follows whichever text connection is active, and a registry written before this
    *  preference exists parses untouched. */
   chapterTextProviderId: z.string().nullable().optional(),
+  characterTextProviderId: z.string().nullable().optional(),
   connections: z.array(ProviderConnectionSchema)
 });
 export type ProviderRegistryFile = z.infer<typeof ProviderRegistryFileSchema>;

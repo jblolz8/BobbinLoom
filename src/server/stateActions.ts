@@ -62,7 +62,7 @@ export function worldStateAction(
   return { ok: true, state: loaded, applied: [`world state ${action}: ${entry.name}`], rejected: [], warnings: [] };
 }
 
-function buildFleshOutStoryContext(loaded: Playthrough, character: CharacterInstance, maxTokens: number): string {
+export function buildFleshOutStoryContext(loaded: Playthrough, character: CharacterInstance, maxTokens: number): string {
   const parts: string[] = [];
   if (loaded.scenarioDescription) parts.push(`Setting: ${loaded.scenarioDescription}`);
 

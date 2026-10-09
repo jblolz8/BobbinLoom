@@ -280,6 +280,10 @@ export function promotePlaythroughBranch(id: string): Promise<Playthrough> {
   });
 }
 
+export function getGenerationProgress(sessionId: string): Promise<{ active: boolean; phase?: string }> {
+  return request<{ active: boolean; phase?: string }>(`/api/playthroughs/generate/progress?sessionId=${sessionId}`);
+}
+
 export function generatePlaythrough(
   preferences: ScenarioPreferences,
   personaId?: string,
@@ -291,7 +295,8 @@ export function generatePlaythrough(
   /** The text connection to generate with; absent = the server's stored preference,
    *  then the active connection. */
   providerId?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  sessionId?: string
 ): Promise<GeneratePlaythroughResponse> {
   return request<GeneratePlaythroughResponse>("/api/playthroughs/generate", {
     method: "POST",
@@ -303,7 +308,8 @@ export function generatePlaythrough(
       openingMode,
       lorebookIds,
       ...(presetId ? { presetId } : {}),
-      ...(providerId ? { providerId } : {})
+      ...(providerId ? { providerId } : {}),
+      ...(sessionId ? { sessionId } : {})
     }),
     signal
   });

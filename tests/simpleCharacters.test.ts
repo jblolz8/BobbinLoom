@@ -68,7 +68,7 @@ describe("simple characters and character lifecycle", () => {
     expect(pt.characters.length).toBe(2);
     const guard = pt.characters[1];
     expect(guard.name).toBe("Guard");
-    expect(guard.templateId).toBeDefined();
+    expect(guard.templateId).toBeUndefined();
     expect(guard.storyRole).toBe("gruff");
   });
 

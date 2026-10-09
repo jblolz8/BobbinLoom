@@ -16,6 +16,7 @@ import {
   setActiveConnection as setActiveRegistryConnection,
   setChapterTextProvider as setChapterRegistryTextProvider,
   setGenerationTextProvider as setGenerationRegistryTextProvider,
+  setCharacterTextProvider as setCharacterRegistryTextProvider,
   testProviderConnection,
   updateConnection
 } from "./providerRegistry";
@@ -72,6 +73,14 @@ export class ProviderManager {
 
   setChapterTextProvider(id: string | null): PublicProviderRegistry {
     return setChapterRegistryTextProvider(this.dataDir, id);
+  }
+
+  characterTextProviderId(): string | null {
+    return getRegistry(this.dataDir).characterTextProviderId ?? null;
+  }
+
+  setCharacterTextProvider(id: string | null): PublicProviderRegistry {
+    return setCharacterRegistryTextProvider(this.dataDir, id);
   }
 
   getProvider(id?: string): TurnProvider {
