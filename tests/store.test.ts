@@ -46,11 +46,11 @@ describe("playthrough store", () => {
 
     expect(loaded?.name).toBe("Stored Run");
 
-    loaded!.flags.push("stored_flag");
+    loaded!.worldState.push({ id: "flag1", name: "stored_flag", description: "" });
     updatePlaythroughRecord(dir, loaded!);
 
     const reloaded = getPlaythroughRecord(dir, created.id);
-    expect(reloaded?.flags).toContain("stored_flag");
+    expect(reloaded?.worldState.find(w => w.name === "stored_flag")).toBeDefined();
   });
 
   it("round-trips the per-playthrough input draft fields (draft + draftUpdatedAt)", () => {
@@ -77,14 +77,10 @@ describe("playthrough store", () => {
 
 describe("createPlaythroughFromSeedRecord (scenario generation)", () => {
   const seed = {
-    locations: [
-      { id: "loc_start", name: "Start", description: "A spot.", state: "", icon: "🏠", connections: [] }
-    ],
     character: { name: "Mira", content: "[Species]: Human" },
-    quest: { id: "quest_1", name: "First Quest", summary: "Do a thing." },
+    startingWorldState: [],
     items: [],
-    startingFlags: [],
-    npcs: []
+    additionalCharacters: []
   };
 
   it("does not persist — the route commits only after the opening turn succeeds", () => {
@@ -95,7 +91,7 @@ describe("createPlaythroughFromSeedRecord (scenario generation)", () => {
 
     // Seed is in memory (usable by the route), but nothing on disk yet.
     expect(created.name).toBe("Atomic Run");
-    expect(created.locationCatalog?.[0]?.name).toBe("Start");
+    expect(created.characters[0]?.name).toBe("Mira");
     expect(existsSync(join(dir, `${created.id}.json`))).toBe(false);
   });
 });

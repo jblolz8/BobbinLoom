@@ -20,7 +20,7 @@ branch, while the original keeps its full history.
 The branch gets its own id and its own branch identity, and every part of the world that is
 scoped to a branch is re-keyed so the two stories cannot bleed into each other: characters,
 memory events and memory layers all move to the new branch. The characters' sheets, the
-inventory, the quests and the locations come from the checkpoint.
+inventory and the quests come from the checkpoint.
 
 A branch is a full playthrough in its own right — it lives in `data/playthroughs/` alongside
 the original, and it can be retried, closed into chapters, duplicated and branched again.

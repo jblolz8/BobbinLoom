@@ -76,39 +76,26 @@ function promptText(assembled: ReturnType<typeof assembleTurnPrompt>): string {
 }
 
 const VALID_SEED = {
-  locations: [
-    {
-      id: "loc_start",
-      name: "Start",
-      description: "A small starting spot.",
-      state: "",
-      icon: "🏠",
-      connections: []
-    }
-  ],
   character: {
     name: "Mira",
     content: "[Species]: Human\n\n[Body]\n- Height: tall"
   },
-  quest: { id: "quest_1", name: "First Quest", summary: "Do a thing." },
+  startingWorldState: [],
   items: [],
-  startingFlags: [],
-  npcs: []
+  additionalCharacters: []
 };
 
 describe("ScenarioSeedSchema", () => {
-  it("parses seed missing startingFlags by defaulting startingFlags to []", () => {
+  it("parses seed missing startingWorldState by defaulting to []", () => {
     const seedWithoutFlags = {
-      locations: VALID_SEED.locations,
       character: VALID_SEED.character,
-      quest: VALID_SEED.quest,
       items: [],
     };
     const parsed = ScenarioSeedSchema.safeParse(seedWithoutFlags);
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.data.startingFlags).toEqual([]);
-      expect(parsed.data.npcs).toEqual([]);
+      expect(parsed.data.startingWorldState).toEqual([]);
+      expect(parsed.data.additionalCharacters).toEqual([]);
     }
   });
 });
@@ -261,7 +248,7 @@ describe("OpenAICompatibleProvider", () => {
               content: JSON.stringify({
                 narrative: "Mira nods once.",
                 choices: ["Ask about the gym"],
-                statePatch: { flagsAdd: ["met_mira"] }
+                statePatch: { worldStateAdd: ["met_mira"] }
               })
             }
           }
@@ -297,7 +284,7 @@ describe("OpenAICompatibleProvider", () => {
 
     expect(turn.narrative).toContain("Mira");
     expect(turn.choices).toEqual(["Ask about the gym"]);
-    expect(turn.statePatch?.flagsAdd).toContain("met_mira");
+    expect(turn.statePatch?.worldStateAdd).toContain("met_mira");
   });
 
   it("extracts JSON from a markdown code fence", async () => {
@@ -306,7 +293,7 @@ describe("OpenAICompatibleProvider", () => {
         choices: [
           {
             message: {
-              content: "```json\n{\"narrative\":\"Fenced narrative\",\"statePatch\":{\"flagsAdd\":[\"fenced\"]}}\n```"
+              content: "```json\n{\"narrative\":\"Fenced narrative\",\"statePatch\":{\"worldStateAdd\":[\"fenced\"]}}\n```"
             }
           }
         ]
@@ -326,7 +313,7 @@ describe("OpenAICompatibleProvider", () => {
 
     expect(turn.narrative).toBe("Fenced narrative");
     expect(turn.choices).toBeUndefined();
-    expect(turn.statePatch?.flagsAdd).toContain("fenced");
+    expect(turn.statePatch?.worldStateAdd).toContain("fenced");
   });
 
   it("falls back to raw narrative when the provider does not return JSON", async () => {
@@ -485,24 +472,13 @@ describe("OpenAICompatibleProvider", () => {
           {
             message: {
               content: JSON.stringify({
-                locations: [
-                  {
-                    id: "loc_start",
-                    name: "Start",
-                    description: "A small starting spot.",
-                    state: "",
-                    icon: "🏠",
-                    connections: []
-                  }
-                ],
                 character: {
                   name: "Mira",
                   content: "[Species]: Human\n\n[Body]\n- Height: tall"
                 },
-                quest: { id: "quest_1", name: "First Quest", summary: "Do a thing." },
+                startingWorldState: [],
                 items: [],
-                startingFlags: [],
-                npcs: []
+                additionalCharacters: []
               })
             }
           }
@@ -513,7 +489,8 @@ describe("OpenAICompatibleProvider", () => {
     const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
     await provider.generateScenarioSeed({
       name: "Test World",
-      setting: "A quiet starting village."
+      setting: "A quiet starting village.",
+      allowAdditionalCharacters: true
     });
 
     const example = jsonExampleAfter(sentPrompt, "Return ONLY a JSON object with this exact shape:");
@@ -718,15 +695,11 @@ describe("OpenAICompatibleProvider", () => {
     expect(assembled.promptUsage.breakdown.storySoFar).toBe(0);
   });
 
-  it("npcPromote guidance is honest about the starter sheet (no overpromising)", () => {
+  it("characterFleshOut and characterAddSimple guidance is present in the prompt", () => {
     const pt = createInitialPlaythrough("Guidance Test");
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
-    expect(promptText(assembled)).toContain("npcPromote");
-    // The model-initiated path creates a starter sheet from the NPC's info —
-    // the guidance must not claim the character gains full tracked state.
-    expect(promptText(assembled)).not.toContain("They gain full tracked state");
-    expect(promptText(assembled)).toContain("basic sheet built from their description");
-    expect(promptText(assembled)).toContain("npcAdd is the right tool");
+    expect(promptText(assembled)).toContain("characterFleshOut");
+    expect(promptText(assembled)).toContain("characterAddSimple");
   });
 
   it("sizes the scenario-seed max_tokens off the connection config (with a 4000 floor)", async () => {
@@ -743,14 +716,14 @@ describe("OpenAICompatibleProvider", () => {
       testConfig({ maxTokens: 6000 }),
       fetchImpl as unknown as typeof fetch
     );
-    await provider.generateScenarioSeed({ name: "Test World", setting: "A village." });
+    await provider.generateScenarioSeed({ name: "Test World", setting: "A village.", allowAdditionalCharacters: true });
 
     // Connection configured below the floor → seed still gets the 4000 floor.
     const lowProvider = new OpenAICompatibleProvider(
       testConfig({ maxTokens: 800 }),
       fetchImpl as unknown as typeof fetch
     );
-    await lowProvider.generateScenarioSeed({ name: "Test World", setting: "A village." });
+    await lowProvider.generateScenarioSeed({ name: "Test World", setting: "A village.", allowAdditionalCharacters: true });
 
     expect(sentBodies[0].max_tokens).toBe(6000);
     expect(sentBodies[1].max_tokens).toBe(4000);
@@ -771,7 +744,7 @@ describe("OpenAICompatibleProvider", () => {
       testConfig({}),
       fetchImpl as unknown as typeof fetch
     );
-    const seed = await provider.generateScenarioSeed({ name: "Test World", setting: "A village." });
+    const seed = await provider.generateScenarioSeed({ name: "Test World", setting: "A village.", allowAdditionalCharacters: true });
 
     expect(calls).toBe(2);
     expect(seed.character.name).toBe("Mira");
@@ -792,10 +765,10 @@ describe("OpenAICompatibleProvider", () => {
       testConfig({}),
       fetchImpl as unknown as typeof fetch
     );
-    const seed = await provider.generateScenarioSeed({ name: "Test World", setting: "A village." });
+    const seed = await provider.generateScenarioSeed({ name: "Test World", setting: "A village.", allowAdditionalCharacters: true });
 
     expect(calls).toBe(2);
-    expect(seed.quest.name).toBe("First Quest");
+    expect(seed.character.name).toBe("Mira");
   });
 
   it("retries generateTurn when the completion content is empty, then succeeds", async () => {
@@ -970,7 +943,7 @@ describe("OpenAICompatibleProvider", () => {
       jsonResponse({
         choices: [{
           // Truncated JSON — extraction can't repair unbalanced braces.
-          message: { content: '{"locations": [{"id": "loc_a", "name": "A"' },
+          message: { content: '{"character": {"name": "A"' },
           finish_reason: "length"
         }]
       })
@@ -981,7 +954,7 @@ describe("OpenAICompatibleProvider", () => {
       fetchImpl as unknown as typeof fetch
     );
     await expect(
-      provider.generateScenarioSeed({ name: "Test World", setting: "A village." })
+      provider.generateScenarioSeed({ name: "Test World", setting: "A village.", allowAdditionalCharacters: true })
     ).rejects.toThrow(/token limit/i);
   });
 
@@ -989,7 +962,7 @@ describe("OpenAICompatibleProvider", () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({
         choices: [{
-          message: { content: JSON.stringify({ narrative: "", statePatch: { flagsAdd: ["met_mira"] } }) }
+          message: { content: JSON.stringify({ narrative: "", statePatch: { worldStateAdd: ["met_mira"] } }) }
         }]
       })
     );
@@ -1005,7 +978,7 @@ describe("OpenAICompatibleProvider", () => {
     , CFG);
 
     expect(turn.narrative).toBe("The provider returned an empty response.");
-    expect(turn.statePatch?.flagsAdd).toContain("met_mira");
+    expect(turn.statePatch?.worldStateAdd).toContain("met_mira");
   });
 
   it("treats whitespace-only narratives as empty", async () => {
@@ -1194,43 +1167,42 @@ describe("presence-gated character injection", () => {
     ].join("\n")
   };
 
-  it("renders same-location characters with their full sheet and no ABSENT block", () => {
+  it("renders active characters with their full sheet and no INACTIVE block", () => {
     const pt = createInitialPlaythrough("Presence Present Test");
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
-    expect(promptText(assembled)).toContain("CHARACTER: Mira");
+    expect(promptText(assembled)).toContain("ACTIVE CHARACTER [Detailed Character]: Mira");
     expect(promptText(assembled)).toContain("- Values competence, honesty, and self-control.");
-    expect(promptText(assembled)).not.toContain("ABSENT CHARACTERS");
+    expect(promptText(assembled)).not.toContain("INACTIVE CHARACTERS");
   });
 
-  it("demotes different-location characters to a one-liner and withholds the full sheet", () => {
+  it("demotes inactive characters to a one-liner and withholds the full sheet", () => {
     const pt = createInitialPlaythrough("Presence Absent Test");
     const miraId = pt.characters[0].id;
-    pt.characters[0].currentLocationId = "loc_other";
+    pt.activeCharacters = [];
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
-    expect(promptText(assembled)).toContain("ABSENT CHARACTERS");
-    expect(promptText(assembled)).toContain(`- Mira (${miraId}) — `);
-    expect(promptText(assembled)).toContain("at loc_other (loc_other)");
-    // Full sheet withheld for the absent character.
+    expect(promptText(assembled)).toContain("INACTIVE CHARACTERS");
+    expect(promptText(assembled)).toContain(`- [Detailed Character] Mira (${miraId})`);
+    // Full sheet withheld for the inactive character.
     expect(promptText(assembled)).not.toContain("- Values competence, honesty, and self-control.");
     expect(promptText(assembled)).not.toContain("[RUNTIME STATE]");
   });
 
-  it("includes towardPlayer brackets in the absent line only when non-neutral", () => {
+  it("includes towardPlayer brackets in the inactive line only when non-neutral", () => {
     const pt = createInitialPlaythrough("Presence Toward Test");
     const miraId = pt.characters[0].id;
-    pt.characters[0].currentLocationId = "loc_other";
+    pt.activeCharacters = [];
     pt.characters[0].towardPlayer = "wary";
     const wary = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
-    expect(promptText(wary)).toContain(`- Mira (${miraId}) [wary] — `);
+    expect(promptText(wary)).toContain(`[Role: Stranger] [wary] —`);
     pt.characters[0].towardPlayer = "neutral";
     const neutral = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
-    expect(promptText(neutral)).toContain(`- Mira (${miraId}) — `);
+    expect(promptText(neutral)).toContain(`[Role: Stranger] —`);
     expect(promptText(neutral)).not.toContain("[neutral]");
   });
 
-  it("appends conditions to the absent line only when non-empty", () => {
+  it("appends conditions to the inactive line only when non-empty", () => {
     const pt = createInitialPlaythrough("Presence Conditions Test");
-    pt.characters[0].currentLocationId = "loc_other";
+    pt.activeCharacters = [];
     pt.characters[0].conditions = ["🤕 wounded"];
     const wounded = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
     // The OUTPUT FORMAT contract's own guidance quotes "(e.g. \"🤕 wounded\")",
@@ -1241,25 +1213,25 @@ describe("presence-gated character injection", () => {
     expect(currentStateText(clean)).not.toContain("🤕 wounded");
   });
 
-  it("treats a blank playthrough (all at 'unknown') as fully present", () => {
+  it("treats a blank playthrough with all characters active as fully present", () => {
     const pt = createBlankPlaythrough("Presence Blank Test", undefined, [DEMO_TEMPLATE]);
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
-    expect(promptText(assembled)).toContain("CHARACTER: Mira");
-    expect(promptText(assembled)).not.toContain("ABSENT CHARACTERS");
+    expect(promptText(assembled)).toContain("ACTIVE CHARACTER [Detailed Character]: Mira");
+    expect(promptText(assembled)).not.toContain("INACTIVE CHARACTERS");
   });
 
   it("keeps all instance ids in the Allowed IDs line regardless of presence", () => {
     const pt = createInitialPlaythrough("Presence AllowedIds Test", undefined, [DEMO_TEMPLATE, CLOTHED_TEMPLATE]);
-    pt.characters[1].currentLocationId = "loc_other";
+    pt.activeCharacters = [pt.characters[0].id];
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
     expect(promptText(assembled)).toContain(`Characters: ${pt.characters[0].id}, ${pt.characters[1].id}`);
-    expect(promptText(assembled)).toContain("ABSENT CHARACTERS");
+    expect(promptText(assembled)).toContain("INACTIVE CHARACTERS");
   });
 
   it("omits the raw [Clothing] section and renders a derived line when structured clothing exists", () => {
     const pt = createInitialPlaythrough("Presence Clothing Test", undefined, [CLOTHED_TEMPLATE]);
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
-    expect(promptText(assembled)).toContain("CHARACTER: Aya");
+    expect(promptText(assembled)).toContain("ACTIVE CHARACTER [Detailed Character]: Aya");
     // Sheet-level assertions target the CURRENT STATE region: the OUTPUT FORMAT
     // contract also lists "[Clothing]"/"[Personality]" as canonical section names.
     expect(currentStateText(assembled)).not.toContain("[Clothing]");
@@ -1272,20 +1244,20 @@ describe("presence-gated character injection", () => {
   it("injects the blob unchanged when the character wears no structured clothing", () => {
     const pt = createInitialPlaythrough("Presence NoClothing Test");
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
-    expect(promptText(assembled)).toContain("CHARACTER: Mira");
+    expect(promptText(assembled)).toContain("ACTIVE CHARACTER [Detailed Character]: Mira");
     expect(promptText(assembled)).toContain("[Species]: Human");
     expect(currentStateText(assembled)).toContain("[Personality]");
     expect(promptText(assembled)).toContain("- Values competence, honesty, and self-control.");
   });
 
-  it("documents the absent-character rules and characterClothing* patches in the system prompt", () => {
+  it("documents the active/inactive character rules and characterClothing* patches in the system prompt", () => {
     const pt = createInitialPlaythrough("Presence System Test");
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
     expect(promptText(assembled)).toContain("characterClothingAdd/Remove/SetState/Set: manage a character's worn clothing.");
     expect(promptText(assembled)).toContain('The "Clothing" section is managed via characterClothing* patches');
-    expect(promptText(assembled)).toContain("A character is present at the scene only when their location matches the current location.");
-    expect(promptText(assembled)).toContain("Absent characters can still be affected by statePatch: characterLocation");
-    expect(promptText(assembled)).toContain("While a character is absent they may evolve off-screen");
+    expect(promptText(assembled)).toContain("Active characters are present in the scene. Inactive characters are off-screen.");
+    expect(promptText(assembled)).toContain("Inactive characters can still be affected by statePatch");
+    expect(promptText(assembled)).toContain("While a character is off-screen they may evolve");
   });
 });
 
@@ -1314,7 +1286,7 @@ describe("CCv2 runtime macros (D10)", () => {
     pt.playerCharacter.name = "Anon";
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
     // Sheet is rendered verbatim + macros expanded (D6/D10).
-    expect(promptText(assembled)).toContain("CHARACTER: Mira");
+    expect(promptText(assembled)).toContain("ACTIVE CHARACTER [Detailed Character]: Mira");
     expect(promptText(assembled)).toContain("Mira loves Anon");
     // Raw macros never leak into the prompt.
     expect(promptText(assembled)).not.toContain("{{char}}");
@@ -1329,12 +1301,12 @@ describe("CCv2 runtime macros (D10)", () => {
     expect(promptText(assembled)).not.toContain("{{Char}}");
   });
 
-  it("expands macros in the absent-character one-liner summary", () => {
+  it("expands macros in the inactive-character one-liner summary", () => {
     const pt = createInitialPlaythrough("CCv2 Absent Macro Test", undefined, [CCV2_TEMPLATE]);
     pt.playerCharacter.name = "Anon";
-    pt.characters[0].currentLocationId = "loc_other";
+    pt.activeCharacters = [];
     const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
-    expect(promptText(assembled)).toContain("ABSENT CHARACTERS");
+    expect(promptText(assembled)).toContain("INACTIVE CHARACTERS");
     expect(promptText(assembled)).not.toContain("{{char}}");
   });
 });
@@ -1360,7 +1332,7 @@ describe("turn prompt modules + hardcoded tone", () => {
       enabled: true
     };
 
-    await provider.generateScenarioSeed({ name: "Test World", setting: "A quiet starting village." }, undefined);
+    await provider.generateScenarioSeed({ name: "Test World", setting: "A quiet starting village.", allowAdditionalCharacters: true }, undefined);
     expect(sentPrompt).toContain("Write in a neutral tone");
     expect(sentPrompt).not.toContain("TURN MARKER");
 
@@ -1384,7 +1356,8 @@ describe("turn prompt modules + hardcoded tone", () => {
     await provider.generateScenarioSeed({
       name: "Test World",
       setting: "A quiet starting village.",
-      cast: [{ name: "Mira", summary: "a fox companion" }]
+      cast: [{ name: "Mira", summary: "a fox companion" }],
+      allowAdditionalCharacters: true
     });
     expect(sentPrompt).toContain("EXISTING CAST");
     expect(sentPrompt).toContain("Mira");
@@ -1418,12 +1391,12 @@ describe("turn prompt modules + hardcoded tone", () => {
     const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
 
     // Default format (10 sections, no Sexual Capabilities).
-    await provider.generateScenarioSeed({ name: "World", setting: "A quiet village." }, undefined, undefined, DEFAULT_CHARACTER_FORMAT);
+    await provider.generateScenarioSeed({ name: "World", setting: "A quiet village.", allowAdditionalCharacters: true }, undefined, undefined, DEFAULT_CHARACTER_FORMAT);
     expect(sentPrompt).toContain("Use the standard section headers, in this order: [Species], [Gender], [Body]");
     expect(sentPrompt).not.toContain("Sexual Capabilities");
 
     // NSFW format (11 sections).
-    await provider.generateScenarioSeed({ name: "World", setting: "A quiet village." }, undefined, undefined, NSFW_CHARACTER_FORMAT);
+    await provider.generateScenarioSeed({ name: "World", setting: "A quiet village.", allowAdditionalCharacters: true }, undefined, undefined, NSFW_CHARACTER_FORMAT);
     expect(sentPrompt).toContain("[Sexual Capabilities]");
   });
 
@@ -1436,7 +1409,7 @@ describe("turn prompt modules + hardcoded tone", () => {
     });
     const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
 
-    await provider.generateScenarioSeed({ name: "World", setting: "A quiet village." }, undefined, undefined, DEFAULT_CHARACTER_FORMAT);
+    await provider.generateScenarioSeed({ name: "World", setting: "A quiet village.", allowAdditionalCharacters: true }, undefined, undefined, DEFAULT_CHARACTER_FORMAT);
 
     // The per-section guidance, not just the sample sheet blob. This path used to be
     // the only creation path without buildFormatRules, and its sheets came out at one

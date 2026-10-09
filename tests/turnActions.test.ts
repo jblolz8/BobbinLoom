@@ -214,7 +214,7 @@ describe("retryAssistantTurn", () => {
     playthrough = (await executeTurn(playthrough, "second input", provider, false)).state;
 
     // Simulate extra state that turn 2 produced.
-    playthrough.flags.push("flag_from_turn_2");
+    playthrough.worldState.push({ id: "flag_from_turn_2", name: "flag_from_turn_2", description: "flag_from_turn_2" });
     updatePlaythroughRecord(dir, playthrough);
 
     const secondAssistantId = playthrough.messages[3].id;
@@ -231,7 +231,7 @@ describe("retryAssistantTurn", () => {
 
     // State was rolled back to the snapshot, then the turn re-ran.
     expect(result.state.turn).toBe(2);
-    expect(result.state.flags).not.toContain("flag_from_turn_2");
+    expect(result.state.worldState).not.toContain("flag_from_turn_2");
 
     // The old assistant message id is gone, and its snapshot was pruned.
     const newAssistantId = result.state.messages[3].id;
@@ -596,7 +596,7 @@ describe("executeTurn tokenUsage", () => {
     expect(presentResult.tokenUsage.castPresence).toEqual({ present: 1, absent: 0 });
 
     const absentPt = createPlaythroughRecord(dir, "Usage Absent Cast Test");
-    absentPt.characters[0].currentLocationId = "loc_other";
+    absentPt.activeCharacters = [];
     const absentResult = await executeTurn(absentPt, "hello", new MockProvider(), false, 32768);
     expect(absentResult.tokenUsage.castPresence).toEqual({ present: 0, absent: 1 });
 
@@ -649,24 +649,21 @@ describe("executeTurn tokenUsage", () => {
 });
 
 describe("buildOpeningPrompt", () => {
-  it("includes the setting and starting location, and is second person", () => {
+  it("includes the setting and is second person", () => {
     const seed = {
-      locations: [{ id: "loc_a", name: "The Fox Den", description: "A mossy burrow.", state: "", icon: "", connections: [] }],
       character: { name: "Mira", content: "x" },
-      quest: { id: "q", name: "Q", summary: "s" },
-      items: [], npcs: [], startingFlags: [], openingText: "",
+      startingWorldState: [],
+      items: [], additionalCharacters: [], openingText: "",
     } as ScenarioSeed;
     const out = buildOpeningPrompt("A fog-wrapped valley.", seed);
     expect(out).toContain("A fog-wrapped valley.");
-    expect(out).toContain("The Fox Den");
     expect(out).toContain("second person");
   });
 
   it("omits the world context when no setting is given", () => {
     const seed = {
-      locations: [{ id: "loc_a", name: "A", description: "", state: "", icon: "", connections: [] }],
-      character: { name: "Mira", content: "x" }, quest: { id: "q", name: "Q", summary: "s" },
-      items: [], npcs: [], startingFlags: [], openingText: "",
+      character: { name: "Mira", content: "x" }, startingWorldState: [],
+      items: [], additionalCharacters: [], openingText: "",
     } as ScenarioSeed;
     const out = buildOpeningPrompt(undefined, seed);
     expect(out).not.toContain("World context");
@@ -683,10 +680,10 @@ describe("truncateChat (Delete up to here)", () => {
     const provider = new MockProvider();
     let playthrough = createPlaythroughRecord(dir, "Truncate Test");
     playthrough = (await executeTurn(playthrough, "first input", provider, false)).state;
-    playthrough.flags.push("flag_before_turn_2");
+    playthrough.worldState.push({ id: "flag_before_turn_2", name: "flag_before_turn_2", description: "flag_before_turn_2" });
     updatePlaythroughRecord(dir, playthrough);
     playthrough = (await executeTurn(playthrough, "second input", provider, false)).state;
-    playthrough.flags.push("flag_after_turn_2");
+    playthrough.worldState.push({ id: "flag_after_turn_2", name: "flag_after_turn_2", description: "flag_after_turn_2" });
     updatePlaythroughRecord(dir, playthrough);
     return { playthrough, provider };
   }
@@ -704,8 +701,8 @@ describe("truncateChat (Delete up to here)", () => {
     expect(result.state.messages.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
     expect(result.state.messages[2].content).toBe("second input");
     expect(result.state.turn).toBe(1);
-    expect(result.state.flags).toContain("flag_before_turn_2");
-    expect(result.state.flags).not.toContain("flag_after_turn_2");
+    expect(result.state.worldState.find(w => w.id === "flag_before_turn_2")).toBeDefined();
+    expect(result.state.worldState.find(w => w.id === "flag_after_turn_2")).toBeUndefined();
 
     // Snapshot of the deleted assistant message is pruned.
     expect(result.state.snapshots?.[assistant2Id]).toBeUndefined();
@@ -722,8 +719,8 @@ describe("truncateChat (Delete up to here)", () => {
 
     expect(result.state.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
     expect(result.state.turn).toBe(1);
-    expect(result.state.flags).toContain("flag_before_turn_2");
-    expect(result.state.flags).not.toContain("flag_after_turn_2");
+    expect(result.state.worldState.find(w => w.id === "flag_before_turn_2")).toBeDefined();
+    expect(result.state.worldState.find(w => w.id === "flag_after_turn_2")).toBeUndefined();
   });
 
   it("deleting the last assistant message reverts that turn's effects (its own snapshot)", async () => {
@@ -737,7 +734,7 @@ describe("truncateChat (Delete up to here)", () => {
 
     expect(result.state.messages).toHaveLength(3); // U1 A1 U2
     expect(result.state.turn).toBe(1);
-    expect(result.state.flags).not.toContain("flag_after_turn_2");
+    expect(result.state.worldState.find(w => w.id === "flag_after_turn_2")).toBeUndefined();
   });
 
   it("deleting a trailing user message with no reply keeps live state (nothing happened after it)", async () => {
@@ -768,7 +765,7 @@ describe("truncateChat (Delete up to here)", () => {
 
     expect(result.state.messages).toHaveLength(0);
     expect(result.state.turn).toBe(0);
-    expect(result.state.flags).not.toContain("flag_before_turn_2");
+    expect(result.state.worldState.find(w => w.id === "flag_before_turn_2")).toBeUndefined();
     expect(result.state.snapshots).toEqual({});
   });
 

@@ -814,9 +814,9 @@ export function PresetEditor() {
                 helperText="A soft cap on the COMPOSED prompt: the writer is told it and the composer cuts the tag line to it. 0 leaves the provider's own cap as the only limit."
               />
               <SwitchRow
-                icon="MapPin"
+                icon="Activity"
                 title="Include current state"
-                description="The location and the player's visible conditions."
+                description="The player's visible conditions and current narrative state."
                 checked={image.includeState}
                 onChange={(e) => updateImage({ includeState: e.target.checked })}
               />

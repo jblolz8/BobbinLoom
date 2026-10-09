@@ -1,16 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CharacterInstance, CharacterTemplate, Playthrough } from "../../../../../schemas";
-import { editCharacter, getCharacterAvatarUrl, listCharacters, promoteNpc, promoteNpcDraft, saveCharacterToLibrary } from "../../../../api";
-import type { CharacterEditPayload, PromoteDraftResult } from "../../../../api";
+import {
+  editCharacter,
+  getCharacterAvatarUrl,
+  listCharacters,
+  fleshOutCharacter,
+  fleshOutCharacterDraft,
+  saveCharacterToLibrary,
+} from "../../../../api";
+import type { CharacterEditPayload, FleshOutDraftResult } from "../../../../api";
 import {
   CAST_PREFERENCE_DEFAULTS,
   adoptLocalPreferences,
   resolveCastPreferences,
-  updateViewPreferences
+  updateViewPreferences,
 } from "../../../../api";
 import { CharacterEditor } from "../../../modals/CharacterEditor";
 import { CharacterSheetSections } from "./CharacterSheetSections";
-import { PromotePreview } from "../../../common/PromotePreview";
+import { FleshOutPreview } from "../../../common/FleshOutPreview";
 import { AvatarBadge, Badge, Button, Icon, SearchBar } from "../../../base";
 
 type SaveFeedback = { ok: boolean; text: string };
@@ -29,11 +36,11 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editingChar, setEditingChar] = useState<CharacterInstance | null>(null);
   const [draftingId, setDraftingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<PromoteDraftResult | null>(null);
-  const [promoteBusy, setPromoteBusy] = useState(false);
+  const [draft, setDraft] = useState<FleshOutDraftResult | null>(null);
+  const [fleshOutBusy, setFleshOutBusy] = useState(false);
   const draftAbortRef = useRef<AbortController | null>(null);
-  const [promoteError, setPromoteError] = useState<string | null>(null);
-  const [npcSearch, setNpcSearch] = useState("");
+  const [fleshOutError, setFleshOutError] = useState<string | null>(null);
+  const [charSearch, setCharSearch] = useState("");
   const [castViewMode, setCastViewModeState] = useState<CastViewMode>(
     CAST_PREFERENCE_DEFAULTS.viewMode
   );
@@ -44,15 +51,12 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
 
   const setCastViewMode = (mode: CastViewMode) => {
     castTouchedRef.current = true;
-    // State first so the click feels instant; the device keeps nothing.
     setCastViewModeState(mode);
     void updateViewPreferences({ cast: { viewMode: mode } }).catch(() => {
       /* The next read reconciles; a failed write must not break the control. */
     });
   };
 
-  // The cast layout lives on the server now (adopting whatever this device still holds first), so it
-  // arrives after the first paint — an invisible swap, since both modes render the same cards.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -94,19 +98,19 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
     }
   }
 
-  async function requestDraft(npcId: string) {
+  async function requestDraft(characterId: string) {
     draftAbortRef.current?.abort();
     const controller = new AbortController();
     draftAbortRef.current = controller;
-    setPromoteError(null);
+    setFleshOutError(null);
     try {
-      const result = await promoteNpcDraft(playthrough.id, npcId, controller.signal);
+      const result = await fleshOutCharacterDraft(playthrough.id, characterId, controller.signal);
       if (draftAbortRef.current === controller) setDraft(result);
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
         // cancelled
       } else if (draftAbortRef.current === controller) {
-        setPromoteError(e instanceof Error ? e.message : "Failed to generate draft");
+        setFleshOutError(e instanceof Error ? e.message : "Failed to generate draft");
       }
     } finally {
       if (draftAbortRef.current === controller) {
@@ -116,38 +120,38 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
     }
   }
 
-  function handleStartPromote(npcId: string) {
+  function handleStartFleshOut(characterId: string) {
     if (draftingId !== null || draft) return;
-    setDraftingId(npcId);
-    void requestDraft(npcId);
+    setDraftingId(characterId);
+    void requestDraft(characterId);
   }
 
-  async function handleConfirmPromote() {
+  async function handleConfirmFleshOut() {
     if (!draft) return;
     const controller = new AbortController();
-    setPromoteBusy(true);
-    setPromoteError(null);
+    setFleshOutBusy(true);
+    setFleshOutError(null);
     try {
-      const updated = await promoteNpc(playthrough.id, draft.npc.id, draft.content, controller.signal);
+      const updated = await fleshOutCharacter(playthrough.id, draft.character.id, draft.content, controller.signal);
       onPlaythroughChange(updated);
       setDraft(null);
     } catch (e) {
       if (!(e instanceof DOMException && e.name === "AbortError")) {
-        setPromoteError(e instanceof Error ? e.message : "Promotion failed");
+        setFleshOutError(e instanceof Error ? e.message : "Fleshing out character failed");
       }
     } finally {
-      setPromoteBusy(false);
+      setFleshOutBusy(false);
     }
   }
 
   function handleRegenerate() {
     if (!draft) return;
-    setPromoteBusy(true);
-    void requestDraft(draft.npc.id).finally(() => setPromoteBusy(false));
+    setFleshOutBusy(true);
+    void requestDraft(draft.character.id).finally(() => setFleshOutBusy(false));
   }
 
-  function handleCancelPromote() {
-    if (promoteBusy) return;
+  function handleCancelFleshOut() {
+    if (fleshOutBusy) return;
     draftAbortRef.current?.abort();
     setDraft(null);
     setDraftingId(null);
@@ -166,168 +170,161 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
     return { version: result.template.version, created: result.created };
   }
 
-  const filteredNpcs = useMemo(() => {
-    if (!npcSearch.trim()) return playthrough.npcs;
-    const q = npcSearch.toLowerCase().trim();
-    return playthrough.npcs.filter(
-      (n) => n.name.toLowerCase().includes(q) || n.description.toLowerCase().includes(q) || (n.disposition && n.disposition.toLowerCase().includes(q))
+  const activeCharIds = useMemo(() => new Set(playthrough.activeCharacters ?? []), [playthrough.activeCharacters]);
+
+  const filterFn = (c: CharacterInstance) => {
+    if (!charSearch.trim()) return true;
+    const q = charSearch.toLowerCase().trim();
+    return (
+      c.name.toLowerCase().includes(q) ||
+      (c.description ? c.description.toLowerCase().includes(q) : false) ||
+      (c.storyRole ? c.storyRole.toLowerCase().includes(q) : false) ||
+      (c.memorySummary ? c.memorySummary.toLowerCase().includes(q) : false)
     );
-  }, [playthrough.npcs, npcSearch]);
+  };
+
+  const activeCharacters = useMemo(() => {
+    return playthrough.characters.filter((c) => activeCharIds.has(c.id)).filter(filterFn);
+  }, [playthrough.characters, activeCharIds, charSearch]);
+
+  const inactiveCharacters = useMemo(() => {
+    return playthrough.characters.filter((c) => !activeCharIds.has(c.id)).filter(filterFn);
+  }, [playthrough.characters, activeCharIds, charSearch]);
+
+  function renderCharacterItem(character: CharacterInstance, inScene: boolean) {
+    if (character.templateId) {
+      const localTpl = playthrough.characterTemplates.find((t) => t.id === character.templateId);
+      const libTpl = library.find((t) => t.id === character.templateId);
+      const isCcv2 = localTpl?.format === "ccv2";
+      const libraryStale = !!localTpl && !!libTpl
+        && JSON.stringify({ content: localTpl.content, summary: localTpl.summary, startingClothing: localTpl.startingClothing })
+        !== JSON.stringify({ content: libTpl.content, summary: libTpl.summary, startingClothing: libTpl.startingClothing });
+      return (
+        <CharacterCard
+          key={character.id}
+          character={character}
+          content={localTpl?.content ?? ""}
+          localTemplate={localTpl}
+          viewMode={castViewMode}
+          inLibrary={library.some((t) => t.id === character.templateId)}
+          present={inScene}
+          libraryStale={libraryStale}
+          readOnlySheet={isCcv2}
+          feedback={saveFeedback[character.id] ?? null}
+          saving={savingId === character.id}
+          onSave={(mode) => { void handleSave(character.id, mode); }}
+          onEdit={() => setEditingChar(character)}
+          onOpenLibrary={onOpenLibrary}
+        />
+      );
+    }
+
+    return (
+      <SimpleCharacterCard
+        key={character.id}
+        character={character}
+        present={inScene}
+        isDrafting={draftingId === character.id}
+        onFleshOut={() => handleStartFleshOut(character.id)}
+        onCancelDraft={() => { draftAbortRef.current?.abort(); setDraftingId(null); }}
+      />
+    );
+  }
 
   return (
     <div className="chars-tab-container">
+      {/* ── 1. In Scene (Active) Section ── */}
       <section className="chars-section">
         <div className="main-cast-header-row">
           <div className="section-title-wrap">
             <Icon name="Users" size={14} />
-            <span className="section-title-text">Main Cast</span>
-            <Badge variant="neutral" size="xs" pill>{playthrough.characters.length}</Badge>
+            <span className="section-title-text">In Scene (Active)</span>
+            <Badge variant="success" size="xs" pill>{activeCharacters.length}</Badge>
           </div>
 
-          {playthrough.characters.length > 0 && (
-            <div className="view-mode-switcher cast-view-switcher" role="group" aria-label="Cast View Mode">
-              <button
-                type="button"
-                className={`view-mode-btn ${castViewMode === "portrait" ? "active" : ""}`}
-                onClick={() => setCastViewMode("portrait")}
-                title="Full Portrait View"
-              >
-                <Icon name="IdCard" size={13} />
-                <span>Portrait</span>
-              </button>
-              <button
-                type="button"
-                className={`view-mode-btn ${castViewMode === "compact" ? "active" : ""}`}
-                onClick={() => setCastViewMode("compact")}
-                title="Compact Profile View"
-              >
-                <Icon name="List" size={13} />
-                <span>Compact</span>
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {playthrough.characters.length > 3 && (
+              <SearchBar
+                value={charSearch}
+                onChange={setCharSearch}
+                placeholder="Filter characters…"
+                size="sm"
+                containerClassName="npc-search-wrapper"
+              />
+            )}
+
+            {activeCharacters.some((c) => !!c.templateId) && (
+              <div className="view-mode-switcher cast-view-switcher" role="group" aria-label="Cast View Mode">
+                <button
+                  type="button"
+                  className={`view-mode-btn ${castViewMode === "portrait" ? "active" : ""}`}
+                  onClick={() => setCastViewMode("portrait")}
+                  title="Full Portrait View"
+                >
+                  <Icon name="IdCard" size={13} />
+                  <span>Portrait</span>
+                </button>
+                <button
+                  type="button"
+                  className={`view-mode-btn ${castViewMode === "compact" ? "active" : ""}`}
+                  onClick={() => setCastViewMode("compact")}
+                  title="Compact Profile View"
+                >
+                  <Icon name="List" size={13} />
+                  <span>Compact</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
-        {playthrough.characters.length === 0 ? (
-          <p className="info-empty-state">No main cast yet — background characters can be promoted as the story develops.</p>
+        {activeCharacters.length === 0 ? (
+          <p className="info-empty-state">
+            {charSearch.trim() ? `No active characters match "${charSearch}".` : "No characters currently in the scene."}
+          </p>
         ) : (
           <div className={`chars-cards-list mode-${castViewMode}`}>
-            {playthrough.characters.map((character) => {
-              const localTpl = playthrough.characterTemplates.find((t) => t.id === character.templateId);
-              const libTpl = library.find((t) => t.id === character.templateId);
-              const isCcv2 = localTpl?.format === "ccv2";
-              const libraryStale = !!localTpl && !!libTpl
-                && JSON.stringify({ content: localTpl.content, summary: localTpl.summary, startingClothing: localTpl.startingClothing })
-                !== JSON.stringify({ content: libTpl.content, summary: libTpl.summary, startingClothing: libTpl.startingClothing });
-              return (
-                <CharacterCard
-                  key={character.id}
-                  character={character}
-                  content={localTpl?.content ?? ""}
-                  localTemplate={localTpl}
-                  viewMode={castViewMode}
-                  inLibrary={library.some((t) => t.id === character.templateId)}
-                  present={character.currentLocationId === playthrough.locationId}
-                  locationName={playthrough.locationCatalog?.find((l) => l.id === character.currentLocationId)?.name ?? character.currentLocationId}
-                  libraryStale={libraryStale}
-                  readOnlySheet={isCcv2}
-                  feedback={saveFeedback[character.id] ?? null}
-                  saving={savingId === character.id}
-                  onSave={(mode) => { void handleSave(character.id, mode); }}
-                  onEdit={() => setEditingChar(character)}
-                  onOpenLibrary={onOpenLibrary}
-                />
-              );
-            })}
+            {activeCharacters.map((c) => renderCharacterItem(c, true))}
           </div>
         )}
       </section>
 
+      {/* ── 2. Off-Screen (Inactive) Section ── */}
       <section className="chars-section background-section">
         <div className="background-header-row">
           <div className="section-title-wrap">
             <Icon name="UserCheck" size={14} />
-            <span className="section-title-text">Background</span>
-            <Badge variant="neutral" size="xs" pill>{playthrough.npcs.length}</Badge>
+            <span className="section-title-text">Off-Screen (Inactive)</span>
+            <Badge variant="neutral" size="xs" pill>{inactiveCharacters.length}</Badge>
           </div>
-
-          {playthrough.npcs.length > 3 && (
-            <SearchBar
-              value={npcSearch}
-              onChange={setNpcSearch}
-              placeholder="Filter NPCs…"
-              size="sm"
-              containerClassName="npc-search-wrapper"
-            />
-          )}
         </div>
 
-        {playthrough.npcs.length === 0 ? (
-          <p className="info-empty-state">No background characters yet.</p>
-        ) : filteredNpcs.length === 0 ? (
-          <p className="info-empty-state">No NPCs matching &quot;{npcSearch}&quot;.</p>
+        {inactiveCharacters.length === 0 ? (
+          <p className="info-empty-state">
+            {charSearch.trim() ? `No off-screen characters match "${charSearch}".` : "No off-screen characters."}
+          </p>
         ) : (
-          <div className="background-roster-grid">
-            {filteredNpcs.map((npc) => (
-              <div key={npc.id} className="npc-card-item">
-                <div className="npc-header-row">
-                  <AvatarBadge name={npc.name} size="xs" />
-                  <div className="npc-title-wrap">
-                    <strong className="npc-name">{npc.name}</strong>
-                    {npc.disposition ? (
-                      <Badge variant="neutral" size="xs">{npc.disposition}</Badge>
-                    ) : null}
-                  </div>
-                </div>
-
-                <p className="npc-desc">{npc.description}</p>
-
-                <div className="npc-actions">
-                  {draftingId === npc.id ? (
-                    <span className="promote-actions">
-                      <Button size="xs" variant="secondary" disabled leftIcon={<Icon name="Sparkles" size={13} className="sparkle-pulse" />}>
-                        Drafting…
-                      </Button>
-                      <Button
-                        size="xs"
-                        variant="ghost"
-                        onClick={() => { draftAbortRef.current?.abort(); setDraftingId(null); }}
-                      >
-                        Cancel
-                      </Button>
-                    </span>
-                  ) : (
-                    <Button
-                      size="xs"
-                      variant="primary"
-                      onClick={() => handleStartPromote(npc.id)}
-                      leftIcon={<Icon name="Sparkles" size={13} />}
-                    >
-                      Promote to Detailed
-                    </Button>
-                  )}
-                </div>
-              </div>
-            ))}
+          <div className={`chars-cards-list mode-${castViewMode}`}>
+            {inactiveCharacters.map((c) => renderCharacterItem(c, false))}
           </div>
         )}
       </section>
 
-      {promoteError ? (
+      {fleshOutError ? (
         <p className="promote-error">
-          <Icon name="AlertTriangle" size={14} /> {promoteError}
-          <button className="dismiss" onClick={() => setPromoteError(null)} aria-label="Dismiss">×</button>
+          <Icon name="AlertTriangle" size={14} /> {fleshOutError}
+          <button className="dismiss" onClick={() => setFleshOutError(null)} aria-label="Dismiss">×</button>
         </p>
       ) : null}
 
       {draft ? (
-        <PromotePreview
-          npc={draft.npc}
+        <FleshOutPreview
+          character={draft.character}
           content={draft.content}
-          busy={promoteBusy}
-          onConfirm={() => void handleConfirmPromote()}
+          busy={fleshOutBusy}
+          onConfirm={() => void handleConfirmFleshOut()}
           onRegenerate={() => void handleRegenerate()}
-          onCancel={handleCancelPromote}
+          onCancel={handleCancelFleshOut}
         />
       ) : null}
 
@@ -335,10 +332,8 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
         <CharacterEditor
           character={editingChar}
           playthrough={playthrough}
-          inLibrary={library.some((t) => t.id === editingChar.templateId)}
-          // The card's sheet in the library is the original this playthrough's copy is measured
-          // against — the sheet dialog compares against it and can restore a section from it.
-          originalSheet={library.find((t) => t.id === editingChar.templateId)?.content ?? null}
+          inLibrary={editingChar.templateId ? library.some((t) => t.id === editingChar.templateId) : false}
+          originalSheet={editingChar.templateId ? library.find((t) => t.id === editingChar.templateId)?.content ?? null : null}
           initialMode="view"
           onSave={(payload) => handleEditSave(payload)}
           onSaveToLibrary={(mode) => handleEditorSaveToLibrary(mode)}
@@ -346,6 +341,132 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
         />
       ) : null}
     </div>
+  );
+}
+
+export function SimpleCharacterCard(props: {
+  character: CharacterInstance;
+  present: boolean;
+  isDrafting: boolean;
+  onFleshOut: () => void;
+  onCancelDraft: () => void;
+}) {
+  const { character, present, isDrafting, onFleshOut, onCancelDraft } = props;
+
+  return (
+    <article className="card playview-char-card simple-character-card">
+      <div className="char-compact-header-wrap" style={{ padding: "0.75rem" }}>
+        <div className="char-compact-top-line">
+          <AvatarBadge
+            name={character.name}
+            size="md"
+            className="char-compact-avatar"
+          />
+
+          <div className="char-compact-name-row">
+            <h4 className="char-name">{character.name}</h4>
+            {character.storyRole ? (
+              <Badge variant="accent" size="xs" title={`Story Role: ${character.storyRole}`}>
+                {character.storyRole}
+              </Badge>
+            ) : null}
+            <Badge
+              variant={present ? "success" : "neutral"}
+              size="xs"
+              pill
+            >
+              {present ? "● In Scene" : "○ Off-Screen"}
+            </Badge>
+            <Badge variant="neutral" size="xs" title="Simple Character without detailed sheet">
+              Simple
+            </Badge>
+          </div>
+        </div>
+
+        {character.description ? (
+          <p className="npc-desc" style={{ marginTop: "0.5rem" }}>
+            {character.description}
+          </p>
+        ) : character.memorySummary ? (
+          <p className="npc-desc" style={{ marginTop: "0.5rem" }}>
+            {character.memorySummary}
+          </p>
+        ) : null}
+
+        {/* Glanceable Metrics (Mood & Toward Player) */}
+        {(character.mood || character.towardPlayer) && (
+          <div className="char-metrics-grid" style={{ marginTop: "0.5rem" }}>
+            <div className="char-metric-pill" title={`Mood: ${character.mood || "neutral"}`}>
+              <span className="metric-icon">
+                <Icon name="Smile" size={12} />
+              </span>
+              <span className="metric-label">Mood:</span>
+              <span className="metric-val">{character.mood || "neutral"}</span>
+            </div>
+
+            <div className="char-metric-pill" title={`Toward Player: ${character.towardPlayer || "neutral"}`}>
+              <span className="metric-icon">
+                <Icon name="Heart" size={12} />
+              </span>
+              <span className="metric-label">Toward:</span>
+              <span className="metric-val">{character.towardPlayer || "neutral"}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Conditions & Flags Chips */}
+        {(character.conditions.length > 0 || character.flags.length > 0) && (
+          <div className="char-status-section" style={{ marginTop: "0.5rem" }}>
+            {character.conditions.length > 0 && (
+              <div className="conditions-grid">
+                {character.conditions.map((c, i) => (
+                  <div key={i} className="condition-chip">
+                    <Icon name="Zap" size={12} className="condition-icon" />
+                    <span className="condition-text">{c}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {character.flags.length > 0 && (
+              <div className="flags-chip-grid">
+                {character.flags.map((f, i) => (
+                  <div key={i} className="flag-chip">
+                    <Icon name="Bookmark" size={11} className="flag-icon" />
+                    <span className="flag-text">{f}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Action Row */}
+        <div className="char-actions-footer" style={{ marginTop: "0.6rem", paddingTop: "0.5rem", borderTop: "1px solid var(--border-subtle)" }}>
+          <div style={{ flex: 1 }} />
+          {isDrafting ? (
+            <span className="promote-actions flex items-center gap-1.5">
+              <Button size="sm" variant="secondary" disabled leftIcon={<Icon name="Sparkles" size={13} className="sparkle-pulse" />}>
+                Drafting Sheet…
+              </Button>
+              <Button size="sm" variant="ghost" onClick={onCancelDraft}>
+                Cancel
+              </Button>
+            </span>
+          ) : (
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={onFleshOut}
+              leftIcon={<Icon name="Sparkles" size={13} />}
+              title="Generate a full character sheet and promote to Detailed Character"
+            >
+              Flesh Out
+            </Button>
+          )}
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -361,7 +482,6 @@ export function CharacterCard(props: {
   onOpenLibrary?: (templateId: string) => void;
   content: string;
   present: boolean;
-  locationName: string;
   libraryStale: boolean;
   readOnlySheet: boolean;
 }) {
@@ -377,7 +497,6 @@ export function CharacterCard(props: {
     onEdit,
     onOpenLibrary,
     present,
-    locationName,
     libraryStale,
     readOnlySheet,
   } = props;
@@ -385,8 +504,9 @@ export function CharacterCard(props: {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
 
-  const profileUrl = getCharacterAvatarUrl(character.templateId, "profile", localTemplate?.avatarUpdatedAt);
-  const portraitUrl = getCharacterAvatarUrl(character.templateId, "portrait", localTemplate?.avatarUpdatedAt);
+  const templateId = character.templateId ?? "";
+  const profileUrl = getCharacterAvatarUrl(templateId, "profile", localTemplate?.avatarUpdatedAt);
+  const portraitUrl = getCharacterAvatarUrl(templateId, "portrait", localTemplate?.avatarUpdatedAt);
 
   return (
     <article className={`card playview-char-card mode-${viewMode}`}>
@@ -423,12 +543,17 @@ export function CharacterCard(props: {
 
             <div className="char-compact-name-row">
               <h4 className="char-name">{character.name}</h4>
+              {character.storyRole ? (
+                <Badge variant="accent" size="xs" title={`Story Role: ${character.storyRole}`}>
+                  {character.storyRole}
+                </Badge>
+              ) : null}
               <Badge
                 variant={present ? "success" : "neutral"}
                 size="xs"
                 pill
               >
-                {present ? "● Present" : "○ Away"} · at {locationName}
+                {present ? "● In Scene" : "○ Off-Screen"}
               </Badge>
             </div>
           </div>
@@ -465,11 +590,11 @@ export function CharacterCard(props: {
               </Badge>
             )}
 
-            {inLibrary && onOpenLibrary && (
+            {inLibrary && onOpenLibrary && templateId && (
               <Button
                 size="xs"
                 variant="ghost"
-                onClick={() => onOpenLibrary(character.templateId)}
+                onClick={() => onOpenLibrary(templateId)}
                 title="Open and edit global template in Character Library"
                 leftIcon={<Icon name="ExternalLink" size={11} />}
               >
@@ -483,12 +608,17 @@ export function CharacterCard(props: {
           {/* Portrait Mode Header */}
           <div className="char-title-row">
             <h4 className="char-name">{character.name}</h4>
+            {character.storyRole ? (
+              <Badge variant="accent" size="xs" title={`Story Role: ${character.storyRole}`}>
+                {character.storyRole}
+              </Badge>
+            ) : null}
             <Badge
               variant={present ? "success" : "neutral"}
               size="xs"
               pill
             >
-              {present ? "● Present" : "○ Away"} · at {locationName}
+              {present ? "● In Scene" : "○ Off-Screen"}
             </Badge>
           </div>
 
@@ -523,11 +653,11 @@ export function CharacterCard(props: {
               </Badge>
             )}
 
-            {inLibrary && onOpenLibrary && (
+            {inLibrary && onOpenLibrary && templateId && (
               <Button
                 size="xs"
                 variant="ghost"
-                onClick={() => onOpenLibrary(character.templateId)}
+                onClick={() => onOpenLibrary(templateId)}
                 title="Open and edit global template in Character Library"
                 leftIcon={<Icon name="ExternalLink" size={11} />}
               >

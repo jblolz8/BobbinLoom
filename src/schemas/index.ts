@@ -101,18 +101,6 @@ export const CharacterTemplateSchema = z.object({
 });
 export type CharacterTemplate = z.infer<typeof CharacterTemplateSchema>;
 
-export const LocationEntrySchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  description: z.string().default(""),
-  state: z.string().default(""),
-  icon: z.string().default("📍"),
-  connections: z.array(z.string()).default([]),
-  x: z.number().default(0),
-  y: z.number().default(0),
-});
-export type LocationEntry = z.infer<typeof LocationEntrySchema>;
-
 export const InventoryRefSchema = z.object({
   itemId: z.string(),
   quantity: z.number(),
@@ -132,11 +120,12 @@ export type Item = z.infer<typeof ItemSchema>;
 
 export const CharacterInstanceSchema = z.object({
   id: z.string(),
-  templateId: z.string(),
+  templateId: z.string().optional(),
   playthroughId: z.string(),
   branchId: z.string(),
   name: z.string(),
-  currentLocationId: z.string(),
+  description: z.string().optional(),
+  storyRole: z.string().default("Stranger"),
   mood: z.string(),
   towardPlayer: z.string(),
   memorySummary: z.string(),
@@ -299,24 +288,12 @@ export type ThemeMode = z.infer<typeof ThemeModeSchema>;
 export const CustomThemeColorsSchema = z.record(z.string());
 export type CustomThemeColors = z.infer<typeof CustomThemeColorsSchema>;
 
-export const SimpleNPCSchema = z.object({
+export const WorldStateEntrySchema = z.object({
   id: z.string(),
   name: z.string(),
-  description: z.string(),
-  disposition: z.string().optional(),
-  locationId: z.string(),
-  createdAt: z.string()
+  description: z.string()
 });
-export type SimpleNPC = z.infer<typeof SimpleNPCSchema>;
-
-export const QuestSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  summary: z.string(),
-  tracking: z.boolean(),
-  status: z.enum(["active", "completed", "failed"])
-});
-export type Quest = z.infer<typeof QuestSchema>;
+export type WorldStateEntry = z.infer<typeof WorldStateEntrySchema>;
 
 export const MODULE_CONTEXTS = ["turn"] as const;
 export type ModuleContext = (typeof MODULE_CONTEXTS)[number];
@@ -724,15 +701,12 @@ export type MemoryLayers = z.infer<typeof MemoryLayersSchema>;
 
 export const TurnSnapshotSchema = z.object({
   turn: z.number(),
-  locationId: z.string(),
-  flags: z.array(z.string()),
+  activeCharacters: z.array(z.string()).default([]),
+  worldState: z.array(WorldStateEntrySchema).default([]),
   playerCharacter: PlayerCharacterSchema,
   characters: z.array(CharacterInstanceSchema),
   characterTemplates: z.array(CharacterTemplateSchema),
-  npcs: z.array(SimpleNPCSchema),
   inventory: z.array(InventoryRefSchema),
-  quests: z.array(QuestSchema),
-  locationCatalog: z.array(LocationEntrySchema).optional(),
   itemCatalog: z.array(ItemSchema).optional(),
   memoryEvents: z.array(MemoryEventSchema),
   memoryLayers: MemoryLayersSchema.optional(),
@@ -759,7 +733,7 @@ export const PlaythroughCoverSchema = z.object({
 export type PlaythroughCover = z.infer<typeof PlaythroughCoverSchema>;
 
 export const PlaythroughSchema = z.object({
-  schemaVersion: z.number().int().min(1).default(1),
+  schemaVersion: z.number().int().min(1).default(2),
   id: z.string(),
   name: z.string(),
   branchId: z.string(),
@@ -768,15 +742,12 @@ export const PlaythroughSchema = z.object({
   isTimelineBranch: z.boolean().optional(),
   createdFromTurn: z.number().optional(),
   turn: z.number(),
-  locationId: z.string(),
-  flags: z.array(z.string()),
+  worldState: z.array(WorldStateEntrySchema).default([]),
   playerCharacter: PlayerCharacterSchema,
   characters: z.array(CharacterInstanceSchema),
+  activeCharacters: z.array(z.string()).default([]),
   characterTemplates: z.array(CharacterTemplateSchema),
-  npcs: z.array(SimpleNPCSchema),
   inventory: z.array(InventoryRefSchema),
-  quests: z.array(QuestSchema),
-  locationCatalog: z.array(LocationEntrySchema).optional(),
   itemCatalog: z.array(ItemSchema).optional(),
   memoryEvents: z.array(MemoryEventSchema),
   memoryLayers: MemoryLayersSchema.optional(),
@@ -822,7 +793,7 @@ export type LoadFailure = z.infer<typeof LoadFailureSchema>;
  *  Deliberately NOT a `Partial<Playthrough>`: the list response must never carry messages,
  *  snapshots or the catalogs (they are ~90% of a document's bytes and no card reads them), and
  *  every field a card renders belongs here so a missing one is a compile error rather than a
- *  blank card. `locationName` is resolved server-side so the client needs no `locationCatalog`. */
+ *  blank card. */
 /** A card's RESOLVED cover — what to render, and why that source won.
  *
  *  The stored `cover` is only ever the manual choice; the other sources are derived
@@ -852,7 +823,6 @@ export const PlaythroughSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
   turn: z.number(),
-  locationName: z.string(),
   castCount: z.number(),
   /** Count of non-hidden messages; the card shows "No messages yet" at 0. */
   visibleMessageCount: z.number(),
@@ -898,8 +868,16 @@ export const MemoryEventDraftSchema = z.object({
 });
 
 export const StatePatchSchema = z.object({
-  flagsAdd: z.array(z.string()).optional(),
-  flagsRemove: z.array(z.string()).optional(),
+  worldStateAdd: z.array(z.object({
+    name: z.string(),
+    description: z.string().default("")
+  })).optional(),
+  worldStateRemove: z.array(z.string()).optional(),
+  worldStateUpdate: z.array(z.object({
+    id: z.string(),
+    name: z.string().optional(),
+    description: z.string().optional()
+  })).optional(),
   // Targeted detailed-character patches (keyed by characterId)
   characterMood: z.array(z.object({
     characterId: z.string(),
@@ -959,46 +937,23 @@ export const StatePatchSchema = z.object({
     characterId: z.string(),
     flags: z.array(z.string()),
   })).optional(),
-  // Simple NPC (background cast) patches
-  npcAdd: z.array(z.object({
+  // Scene & Character presence patches
+  characterEnterScene: z.array(z.string()).optional(),
+  characterExitScene: z.array(z.string()).optional(),
+  characterUpdateRole: z.array(z.object({
+    characterId: z.string(),
+    storyRole: z.string(),
+  })).optional(),
+  characterAddSimple: z.array(z.object({
     name: z.string(),
     description: z.string(),
-    disposition: z.string().optional(),
-    locationId: z.string().optional()
+    storyRole: z.string(),
   })).optional(),
-  npcRemove: z.array(z.string()).optional(),
-  npcPromote: z.object({
-      npcId: z.string(),
-      content: z.string().optional(),
-      memorySummary: z.string().optional(),
-    }).optional(),
-  locationAdd: z.array(z.object({
-    id: z.string(),
-    name: z.string(),
-    description: z.string().default(""),
-    state: z.string().default(""),
-    icon: z.string().default("📍"),
-    connections: z.array(z.string()).default([]),
-  })).optional(),
-  locationUpdate: z.array(z.object({
-    locationId: z.string(),
-    name: z.string().optional(),
-    description: z.string().optional(),
-    state: z.string().optional(),
-    icon: z.string().optional(),
-  })).optional(),
-  locationConnect: z.array(z.object({
-    locationId: z.string(),
-    targetId: z.string(),
-  })).optional(),
-  locationDisconnect: z.array(z.object({
-    locationId: z.string(),
-    targetId: z.string(),
-  })).optional(),
-  characterLocation: z.array(z.object({
+  characterFleshOut: z.object({
     characterId: z.string(),
-    locationId: z.string(),
-  })).optional(),
+    content: z.string().optional(),
+    memorySummary: z.string().optional(),
+  }).optional(),
   inventoryAdd: z.array(InventoryPatchSchema).optional(),
   inventoryRemove: z.array(InventoryPatchSchema).optional(),
   itemAdd: z.array(z.object({
@@ -1015,21 +970,8 @@ export const StatePatchSchema = z.object({
     type: z.string().optional(),
     description: z.string().optional(),
   })).optional(),
-  questAdd: z.array(z.object({
-    name: z.string(),
-    summary: z.string()
-  })).optional(),
-  questUpdate: z.array(z.object({
-    questId: z.string(),
-    name: z.string().optional(),
-    summary: z.string().optional(),
-    status: z.enum(["active", "completed", "failed"]).optional()
-  })).optional(),
+
   memoryEvents: z.array(MemoryEventDraftSchema).optional(),
-  locationId: z.string().optional(),
-  // Optional ordered route for player travel: current -> via[0] -> ... -> locationId.
-  // Every consecutive hop must be a real connection; the engine validates the route.
-  travelVia: z.array(z.string()).optional(),
   // Player-specific patches
   playerConditionsAdd: z.array(z.string()).optional(),
   playerConditionsRemove: z.array(z.string()).optional(),
@@ -1071,27 +1013,13 @@ export const ScenarioPreferencesSchema = z.object({
     name: z.string(),
     summary: z.string().optional(),
   })).optional(),
+  allowAdditionalCharacters: z.boolean().default(true),
 });
 export type ScenarioPreferences = z.infer<typeof ScenarioPreferencesSchema>;
-
-export const ScenarioSeedLocationSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  description: z.string().default(""),
-  state: z.string().default(""),
-  icon: z.string().default("📍"),
-  connections: z.array(z.string()).default([]),
-});
 
 export const ScenarioSeedCharacterSchema = z.object({
   name: z.string(),
   content: z.string(),
-});
-
-export const ScenarioSeedQuestSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  summary: z.string()
 });
 
 export const ScenarioSeedItemSchema = z.object({
@@ -1103,15 +1031,16 @@ export const ScenarioSeedItemSchema = z.object({
 });
 
 export const ScenarioSeedSchema = z.object({
-  locations: z.array(ScenarioSeedLocationSchema).min(1).max(5),
   character: ScenarioSeedCharacterSchema,
-  quest: ScenarioSeedQuestSchema,
+  startingWorldState: z.array(z.object({
+    name: z.string(),
+    description: z.string()
+  })).default([]),
   items: z.array(ScenarioSeedItemSchema),
-  startingFlags: z.array(z.string()).default([]),
-  npcs: z.array(z.object({
+  additionalCharacters: z.array(z.object({
     name: z.string(),
     description: z.string(),
-    disposition: z.string().optional()
+    storyRole: z.string().optional()
   })).default([]),
   openingText: z.string().optional()
 });

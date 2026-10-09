@@ -1,17 +1,4 @@
-import type { CharacterTemplate, InventoryRef, Item, LocationEntry, Quest } from "../schemas";
-
-export const LOCATIONS: LocationEntry[] = [
-  {
-    id: "starter_town",
-    name: "Starter Town",
-    description: "A quiet local hub with a gym, a shop, and enough trouble to start a story.",
-    state: "",
-    icon: "🏘️",
-    connections: [],
-    x: 0,
-    y: 0,
-  },
-];
+import type { CharacterTemplate, InventoryRef, Item, WorldStateEntry } from "../schemas";
 
 export const ITEMS: Item[] = [
   {
@@ -83,12 +70,10 @@ export const STARTER_INVENTORY: InventoryRef[] = [
   { itemId: "town_map", quantity: 1 }
 ];
 
-export const STARTER_QUESTS: Quest[] = [
+export const STARTER_WORLD_STATE: WorldStateEntry[] = [
   {
     id: "first_steps",
     name: "First Steps",
-    summary: "Get oriented in town and prove you can handle basic trouble.",
-    tracking: false,
-    status: "active"
+    description: "Get oriented in town and prove you can handle basic trouble."
   }
 ];

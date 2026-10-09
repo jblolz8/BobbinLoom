@@ -45,15 +45,15 @@ describe("branching playthroughs", () => {
     tempDirs.push(dir);
 
     const original = createPlaythroughRecord(dir, "Main Quest");
-    original.locationId = "loc_tavern";
-    original.flags = ["entered_tavern"];
+    original.activeCharacters = ["char_1"];
+    original.worldState = [{ id: "ws0", name: "entered_tavern", description: "" }];
     original.inventory = [{ itemId: "gold_coin", quantity: 10 }];
 
     // Simulate Turn 1: snapshot taken at turn 0, then user + assistant added
     const snapshotTurn0 = takeTurnSnapshot(original);
     original.turn = 1;
-    original.locationId = "loc_cellar";
-    original.flags.push("found_cellar");
+    original.activeCharacters = ["char_1", "char_2"];
+    original.worldState.push({ id: "ws1", name: "found_cellar", description: "" });
     original.inventory.push({ itemId: "rusty_key", quantity: 1 });
     original.memoryEvents.push({
       id: "ev1",
@@ -76,8 +76,8 @@ describe("branching playthroughs", () => {
     // Simulate Turn 2: snapshot taken at turn 1, then user + assistant added
     const snapshotTurn1 = takeTurnSnapshot(original);
     original.turn = 2;
-    original.locationId = "loc_dungeon";
-    original.flags.push("unlocked_dungeon");
+    original.activeCharacters = ["char_1", "char_2", "char_3"];
+    original.worldState.push({ id: "ws2", name: "unlocked_dungeon", description: "" });
     original.inventory.push({ itemId: "magic_sword", quantity: 1 });
     original.memoryEvents.push({
       id: "ev2",
@@ -114,9 +114,9 @@ describe("branching playthroughs", () => {
 
     // World state should be rolled back to Turn 1 (before Turn 2 ran)
     expect(branch?.turn).toBe(1);
-    expect(branch?.locationId).toBe("loc_cellar");
-    expect(branch?.flags).toContain("found_cellar");
-    expect(branch?.flags).not.toContain("unlocked_dungeon");
+    expect(branch?.activeCharacters).toEqual(["char_1", "char_2"]);
+    expect(branch?.worldState.find(w => w.name === "found_cellar")).toBeDefined();
+    expect(branch?.worldState.find(w => w.name === "unlocked_dungeon")).toBeUndefined();
     expect(branch?.inventory.some((i) => i.itemId === "rusty_key")).toBe(true);
     expect(branch?.inventory.some((i) => i.itemId === "magic_sword")).toBe(false);
 
@@ -136,9 +136,9 @@ describe("branching playthroughs", () => {
     // Verify original playthrough is completely untouched on disk
     const reloadedOriginal = getPlaythroughRecord(dir, original.id);
     expect(reloadedOriginal?.turn).toBe(2);
-    expect(reloadedOriginal?.locationId).toBe("loc_dungeon");
+    expect(reloadedOriginal?.activeCharacters).toEqual(["char_1", "char_2", "char_3"]);
     expect(reloadedOriginal?.messages.length).toBe(4);
-    expect(reloadedOriginal?.flags).toContain("unlocked_dungeon");
+    expect(reloadedOriginal?.worldState.find(w => w.name === "unlocked_dungeon")).toBeDefined();
   });
 
   it("supports internal timeline branches vs standalone branches, listing and promotion", () => {
@@ -203,15 +203,15 @@ describe("branching playthroughs", () => {
     tempDirs.push(dir);
 
     const original = createPlaythroughRecord(dir, "Walkback");
-    original.locationId = "loc_tavern";
-    original.flags = ["f0"];
+    original.activeCharacters = ["c1"];
+    original.worldState = [{ id: "f0", name: "f0", description: "" }];
     original.snapshots = {};
 
     // Turn 1
     const s0 = takeTurnSnapshot(original); // turn 0
     original.turn = 1;
-    original.flags.push("f1");
-    original.locationId = "loc_cellar";
+    original.worldState.push({ id: "f1", name: "f1", description: "" });
+    original.activeCharacters = ["c1", "c2"];
     original.messages.push(
       { id: "u1", role: "user", content: "one", createdAt: "2026-01-01T00:00:00Z", turn: 1 },
       { id: "a1", role: "assistant", content: "A1", createdAt: "2026-01-01T00:00:01Z", turn: 1 }
@@ -221,8 +221,8 @@ describe("branching playthroughs", () => {
     // Turn 2
     const s1 = takeTurnSnapshot(original); // turn 1
     original.turn = 2;
-    original.flags.push("f2");
-    original.locationId = "loc_dungeon";
+    original.worldState.push({ id: "f2", name: "f2", description: "" });
+    original.activeCharacters = ["c1", "c2", "c3"];
     original.messages.push(
       { id: "u2", role: "user", content: "two", createdAt: "2026-01-01T00:00:02Z", turn: 2 },
       { id: "a2", role: "assistant", content: "A2", createdAt: "2026-01-01T00:00:03Z", turn: 2 }
@@ -232,7 +232,7 @@ describe("branching playthroughs", () => {
     // Turn 3
     const s2 = takeTurnSnapshot(original); // turn 2
     original.turn = 3;
-    original.flags.push("f3");
+    original.worldState.push({ id: "f3", name: "f3", description: "" });
     original.messages.push(
       { id: "u3", role: "user", content: "three", createdAt: "2026-01-01T00:00:04Z", turn: 3 },
       { id: "a3", role: "assistant", content: "A3", createdAt: "2026-01-01T00:00:05Z", turn: 3 }
@@ -256,9 +256,9 @@ describe("branching playthroughs", () => {
     // Must NOT keep the latest world state (flags f0..f3). It reverts to the
     // nearest snapshot at-or-before the branch point: a1's own snapshot (turn 0).
     expect(branch.turn).toBe(0);
-    expect(branch.flags).toEqual(["f0"]);
-    expect(branch.flags).not.toContain("f1");
-    expect(branch.locationId).toBe("loc_tavern");
+    expect(branch.worldState.length).toBe(1);
+    expect(branch.worldState[0].name).toBe("f0");
+    expect(branch.activeCharacters).toEqual(["c1"]);
   });
 
   it("restores memoryLayers from the branch-point snapshot and re-keys them to the new branch", () => {

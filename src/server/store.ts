@@ -918,7 +918,7 @@ export function duplicatePlaythroughRecord(dir: string, id: string): Playthrough
 /**
  * Creates a new playthrough branch originating from a specific message in the chat log.
  * - Truncates messages and memory events to the target message.
- * - Restores the world state (characters, location, inventory, flags, quests, etc.)
+ * - Restores the world state (characters, inventory, flags, quests, etc.)
  *   from the pre-turn snapshot right after the target message.
  * - Generates a new playthrough id and branchId, links parentBranchId and createdFromTurn.
  * - Leaves the original playthrough completely untouched.
@@ -1121,8 +1121,7 @@ export type PlaythroughSummaryOptions = {
  *
  *  The catalogs, messages, snapshots and cast sheets stay on the server: they are ~90% of a
  *  document's bytes and no card reads them. Kept as an explicit projection rather than a
- *  `Partial<Playthrough>` so adding a field to the card without adding it here fails to compile.
- *  `locationName` resolves here, which is why the client no longer needs `locationCatalog`. */
+ *  `Partial<Playthrough>` so adding a field to the card without adding it here fails to compile. */
 export function toPlaythroughSummary(
   p: Playthrough,
   options: PlaythroughSummaryOptions = {}
@@ -1132,7 +1131,6 @@ export function toPlaythroughSummary(
     id: p.id,
     name: p.name,
     turn: p.turn,
-    locationName: p.locationCatalog?.find((l) => l.id === p.locationId)?.name ?? p.locationId,
     castCount: p.characters.length,
     visibleMessageCount: visible.length,
     lastMessagePreview: visible.slice(-1)[0]?.content.slice(0, 120) ?? "",
@@ -1165,11 +1163,7 @@ export function listPlaythroughSummaries(
   if (options?.search) {
     const needle = options.search.trim().toLowerCase();
     if (needle) {
-      summaries = summaries.filter(
-        (p) =>
-          p.name.toLowerCase().includes(needle) ||
-          p.locationName.toLowerCase().includes(needle)
-      );
+      summaries = summaries.filter((p) => p.name.toLowerCase().includes(needle));
     }
   }
 

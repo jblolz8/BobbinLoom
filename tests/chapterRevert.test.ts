@@ -122,8 +122,7 @@ function buildStory(dir: string, options: { snapshots?: boolean } = {}) {
   pt.chapters = [ch1];
   pt.currentChapterStartedAtTurn = 5;
   pt.memoryEvents = [event("evt_ch1", 3, ch1.id)];
-  pt.locationId = "loc_after_ch1";
-  pt.flags = ["after-ch1"];
+  pt.worldState = [{ id: "ws_ch1", name: "after-ch1", description: "" }];
 
   // ── Chapter 2: opening turn 5, then turns 6-9 ──
   const ch2OpeningAssistant = turn("ch2 opening", { hiddenUser: true, chapterOpening: true });
@@ -136,8 +135,7 @@ function buildStory(dir: string, options: { snapshots?: boolean } = {}) {
   pt.chapters = [ch1, ch2];
   pt.currentChapterStartedAtTurn = 10;
   pt.memoryEvents = [...pt.memoryEvents, event("evt_ch2", 7, ch2.id)];
-  pt.locationId = "loc_after_ch2";
-  pt.flags = ["after-ch2"];
+  pt.worldState = [{ id: "ws_ch2", name: "after-ch2", description: "" }];
   // A rolling meta that folds BOTH chapters, so pruning has something to empty.
   pt.storyMetaSummaries = [
     {
@@ -196,7 +194,7 @@ describe("describeDeletion: what happens to the character sheets", () => {
       playthroughId: "play_1",
       branchId: "main",
       name: "Mika",
-      currentLocationId: "loc_1",
+      storyRole: "Companion",
       mood: "curious",
       towardPlayer: "friendly",
       memorySummary: "",
@@ -493,8 +491,7 @@ describe("revertAction", () => {
 
     // The world is as chapter 2 left it — captured by the following chapter's opening snapshot,
     // which is why the close's own effects are part of it.
-    expect(state.locationId).toBe("loc_after_ch2");
-    expect(state.flags).toEqual(["after-ch2"]);
+    expect(state.worldState).toEqual([{ id: "ws_ch2", name: "after-ch2", description: "" }]);
     expect(state.turn).toBe(9);
 
     // Chapter 2 is un-closed: its messages are live, its record and summary are gone.
@@ -538,7 +535,7 @@ describe("revertAction", () => {
     expect(state.chapters).toEqual([]);
     expect(state.currentChapterStartedAtTurn).toBe(1);
     expect(state.turn).toBe(4);
-    expect(state.locationId).toBe("loc_after_ch1");
+    expect(state.worldState).toEqual([{ id: "ws_ch1", name: "after-ch1", description: "" }]);
     // Every folded chapter went, so the meta has nothing left to say.
     expect(state.storyMetaSummaries).toEqual([]);
     // Chapter 1's own run is live again, its summary gone.
@@ -564,7 +561,7 @@ describe("revertAction", () => {
     // The restore point is the clicked response's own snapshot: the state before its turn. The
     // counter stays at the surviving message's turn so the next turn cannot reuse its number.
     expect(state.turn).toBe(9);
-    expect(state.locationId).toBe("loc_after_ch1");
+    expect(state.worldState).toEqual([{ id: "ws_ch1", name: "after-ch1", description: "" }]);
     // Its chapter is un-closed and every later chapter is gone.
     expect(state.chapters.map((chapter) => chapter.id)).toEqual([ch1.id]);
     expect(state.currentChapterStartedAtTurn).toBe(5);
@@ -585,7 +582,7 @@ describe("revertAction", () => {
     expect(state.currentChapterStartedAtTurn).toBe(5);
     // No rewind happened — and the turn counter still moves back to the kept tail, so the next
     // turn does not claim turns that no longer exist.
-    expect(state.locationId).toBe("loc_after_ch2");
+    expect(state.worldState).toEqual([{ id: "ws_ch2", name: "after-ch2", description: "" }]);
     expect(state.turn).toBe(9);
     // Memory the deleted turns recorded is pruned by turn, since no snapshot could replace it.
     expect(state.memoryEvents.some((event) => event.id === "evt_ch3")).toBe(false);

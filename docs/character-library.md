@@ -122,7 +122,7 @@ uploads (`bodyLimit: 10MB`) because card PNGs exceed the default 1MB.
 - **Read-only sheets:** a character backed by an un-converted CCv2 card has a
   **read-only sheet** — `content`/`clothing` edits are rejected (both at the
   engine `applyStatePatch` level and the PUT route). Runtime fields (mood,
-  towardPlayer, memorySummary, conditions, flags, location) and name remain
+  towardPlayer, memorySummary, conditions, flags) and name remain
   editable.
 - **Not cast-selectable:** CCv2 cards are **disabled in the Setup cast picker**
   (with a "Convert to BL first to be able to select" warning) and `resolveCast`

@@ -29,7 +29,7 @@ export type TokenUsage = {
    *  provider returns a usage block. Absent before the first turn and on
    *  providers that report none (the estimate is then the only number). */
   measured?: MeasuredUsage;
-  /** How many cast members are present vs absent at the current location
+  /** How many cast members are present vs absent in the current scene
    *  when this usage was measured — makes presence gating observable. */
   castPresence?: { present: number; absent: number };
 };
@@ -208,8 +208,8 @@ export async function executeTurn(
 
   // ── Token usage: real measurement from the provider, or fixed fallback estimate ──
   const castPresence = {
-    present: next.characters.filter((c) => c.currentLocationId === next.locationId).length,
-    absent: next.characters.filter((c) => c.currentLocationId !== next.locationId).length,
+    present: next.characters.filter((c) => next.activeCharacters.includes(c.id)).length,
+    absent: next.characters.filter((c) => !next.activeCharacters.includes(c.id)).length,
   };
   const tokenUsage: TokenUsage = promptUsage
     ? {
@@ -262,15 +262,14 @@ function estimateTokenUsageFallback(state: Playthrough, input: string, contextWi
 
   const stateChars = state.characters.reduce((sum, c) => {
     const tpl = state.characterTemplates.find((t) => t.id === c.templateId);
-    const present = c.currentLocationId === state.locationId;
+    const present = state.activeCharacters.includes(c.id);
     return sum + (present
-      ? c.name.length + (tpl?.content.length ?? 300) + 80      // full sheet + runtime state
+      ? c.name.length + (tpl?.content.length ?? c.description?.length ?? 300) + 80      // full sheet + runtime state
       : Math.min(c.name.length + c.memorySummary.length + 160, 260)); // one-liner, capped
   }, 0)
     + state.inventory.reduce((sum, i) => sum + i.itemId.length + 20, 0)
-    + state.quests.reduce((sum, q) => sum + q.name.length + q.summary.length + 40, 0)
-    + state.npcs.reduce((sum, n) => sum + n.name.length + n.description.length + 30, 0)
-    + 200; // player + location + flags overhead
+    + (state.worldState ?? []).reduce((sum, ws) => sum + ws.name.length + ws.description.length + 40, 0)
+    + 200; // player + flags overhead
 
   const chatHistory = state.messages
     .filter(m => !m.hidden)
@@ -302,8 +301,8 @@ function estimateTokenUsageFallback(state: Playthrough, input: string, contextWi
     contextWindow,
     breakdown,
     castPresence: {
-      present: state.characters.filter((c) => c.currentLocationId === state.locationId).length,
-      absent: state.characters.filter((c) => c.currentLocationId !== state.locationId).length,
+      present: state.characters.filter((c) => state.activeCharacters.includes(c.id)).length,
+      absent: state.characters.filter((c) => !state.activeCharacters.includes(c.id)).length,
     },
   };
 }
@@ -613,8 +612,6 @@ function sweepAfterDeleteForward(dataDir: string, playthroughId: string, imagesD
 export function buildOpeningPrompt(scenarioDescription: string | undefined, seed: ScenarioSeed): string {
   const parts: string[] = [];
   if (scenarioDescription?.trim()) parts.push(`World context: ${scenarioDescription.trim()}`);
-  const start = seed.locations[0];
-  if (start) parts.push(`You are opening at "${start.name}" — ${start.description}`);
   parts.push(
     "Introduce the scene to the player character. Establish the atmosphere and immediate surroundings. " +
     "Write in second person. Do not take actions on behalf of the player. " +

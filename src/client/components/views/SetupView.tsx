@@ -18,6 +18,7 @@ import { groupTagsByCategory, sortTags, type TagTaxonomyConfig } from "../../../
 export type SetupFormState = {
   name: string;
   setting: string;
+  allowAdditionalCharacters: boolean;
   generateOpeningChoices: boolean;
   openingMode: "quick" | "fleshedOut";
   /** The text connection this playthrough is generated with; "" follows whichever
@@ -29,6 +30,7 @@ export type SetupFormState = {
 export const defaultSetupForm: SetupFormState = {
   name: "",
   setting: "",
+  allowAdditionalCharacters: true,
   generateOpeningChoices: false,
   openingMode: "fleshedOut",
   providerId: "",
@@ -1214,6 +1216,15 @@ export function SetupView(props: SetupViewProps) {
                         </label>
                       </div>
                     </div>
+
+                    {/* Allow Additional Characters */}
+                    <SwitchRow
+                      icon="UserPlus"
+                      title="Allow AI to invent additional characters"
+                      description="Let the story introduce new characters organically as events unfold, or restrict encounters strictly to your selected cast."
+                      checked={setupForm.allowAdditionalCharacters}
+                      onChange={() => onSetupFormChange((f) => ({ ...f, allowAdditionalCharacters: !f.allowAdditionalCharacters }))}
+                    />
 
                     {/* Generate Initial Choices */}
                     <SwitchRow

@@ -9,16 +9,8 @@ import { IMAGE_HISTORY_HEADER, buildImageCastBlock, buildImageHistoryBlock, buil
  *  outfit rather than her current state. */
 function fixture() {
   return {
-    locationId: "loc_bedroom",
-    locationCatalog: [
-      {
-        id: "loc_bedroom",
-        name: "Cramped apartment",
-        description: "A dim studio with a sagging mattress.",
-        state: "messy",
-        connections: ["loc_hall"]
-      }
-    ],
+    scenarioDescription: "A dim studio with a sagging mattress.",
+    activeCharacters: ["char_j"],
     playerCharacter: {
       name: "Anon",
       description: "A male human. Wears glasses since he is short-sighted. Prefers a long sleeve shirt, slacks and a necktie.",
@@ -41,7 +33,6 @@ function fixture() {
         id: "char_j",
         name: "Jeneine",
         templateId: "tpl_j",
-        currentLocationId: "loc_bedroom",
         clothing: [{ slot: "Torso", name: "Faded gray hoodie" }],
         mood: "overwhelmed_content",
         conditions: ["flushed"],
@@ -51,7 +42,6 @@ function fixture() {
         id: "char_ghost",
         name: "Ghost",
         templateId: "tpl_g",
-        currentLocationId: "loc_attic",
         clothing: [],
         mood: "wary",
         conditions: [],
@@ -114,8 +104,7 @@ describe("buildImageStateBlock", () => {
   const block = buildImageStateBlock(fixture());
 
   it("carries the place and the player's visible physical state", () => {
-    expect(block).toContain("Location: Cramped apartment — A dim studio with a sagging mattress.");
-    expect(block).toContain("Location state: messy");
+    expect(block).toContain("Setting: A dim studio with a sagging mattress.");
     expect(block).toContain("Player visible state: handcuffed");
   });
 
@@ -304,7 +293,7 @@ describe("buildImageCastBlock", () => {
     expect(block).not.toContain("loose cotton shorts");
   });
 
-  it("leaves out characters who are not at the current location", () => {
+  it("leaves out characters who are not in activeCharacters", () => {
     expect(block).not.toContain("Ghost");
   });
 });

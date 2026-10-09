@@ -7,7 +7,7 @@ import {
   type ImageGenerationProgress,
   type TokenUsage,
   type Persona,
-  type QuestAction
+  type WorldStateAction
 } from "../../../api";
 import type { ChatMessage, Playthrough } from "../../../../schemas";
 import type { RevertTarget } from "../../../../engine/chapterRevert";
@@ -90,7 +90,7 @@ export type PlayViewProps = {
   setBranchTarget: (msg: ChatMessage | null) => void;
   confirmBranch: (branchName?: string, asStandalone?: boolean) => Promise<void>;
   handleResummarizeChapter: (chapterId: string) => Promise<void>;
-  handleQuestAction: (questId: string, action: QuestAction, name?: string, summary?: string) => Promise<void>;
+  handleWorldStateAction: (worldStateId: string, action: WorldStateAction, name?: string, description?: string) => Promise<void>;
   handleDismissNotice: () => void;
   handleDismissFailedNotice?: () => void;
   openPersonaManager: () => void;
@@ -224,7 +224,7 @@ export function PlayView(props: PlayViewProps) {
     setBranchTarget,
     confirmBranch,
     handleResummarizeChapter,
-    handleQuestAction,
+    handleWorldStateAction,
     handleDismissNotice,
     handleDismissFailedNotice,
     handlePersonasChanged,
@@ -481,7 +481,7 @@ export function PlayView(props: PlayViewProps) {
         <ScenePanel
           playthrough={playthrough}
           actionLoading={actionLoading}
-          onQuestAction={handleQuestAction}
+          onWorldStateAction={handleWorldStateAction}
           {...paneLayout("scene")}
         />
 

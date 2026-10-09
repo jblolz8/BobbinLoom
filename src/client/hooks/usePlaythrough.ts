@@ -12,7 +12,7 @@ import {
   listPlaythroughs,
   listProviderConnections,
   previewImagePrompt,
-  questAction,
+  worldStateAction,
   resolveChatPreferences,
   resummarizeChapter,
   retryTurn,
@@ -24,7 +24,7 @@ import {
   branchPlaythrough,
   updateViewPreferences,
   type ImageGenerationProgress,
-  type QuestAction,
+  type WorldStateAction,
   type TokenUsage
 } from "../api";
 import { checkImageRequestBody, formatImageRequestBody } from "../utils/imageRequestBody";
@@ -1131,12 +1131,12 @@ export function usePlaythrough() {
     }
   }
 
-  async function handleQuestAction(questId: string, action: QuestAction, name?: string, summary?: string) {
+  async function handleWorldStateAction(worldStateId: string, action: WorldStateAction, name?: string, description?: string) {
     if (!playthrough || actionLoading) return;
     setActionLoading(true);
     setError(null);
     try {
-      setPlaythrough(await questAction(playthrough.id, questId, action, name, summary));
+      setPlaythrough(await worldStateAction(playthrough.id, worldStateId, action, name, description));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1260,6 +1260,6 @@ export function usePlaythrough() {
     confirmRevert,
     confirmBranch,
     handleResummarizeChapter,
-    handleQuestAction
+    handleWorldStateAction
   };
 }

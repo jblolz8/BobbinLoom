@@ -23,30 +23,22 @@ function twoCastPlaythrough() {
 
 function makeSeed(): ScenarioSeed {
   return {
-    locations: [
-      { id: "loc_test", name: "Test Town", description: "A quiet place.", state: "", icon: "🏘️", connections: [] },
-      { id: "loc_guild", name: "Adventurer Guild", description: "A bustling hall.", state: "", icon: "🏰", connections: ["loc_test"] },
-    ],
     character: {
       name: "Sera",
       content: "[Species]: Human\n[Gender]: Female\n\n[Body]\n- Build: Slender\n\n[Personality]\n- Curious, measured, and calm.\n\n[Communication - Public]\nMeasured and calm.\n\n[Likes]\n- Finding the archive\n\n[Dislikes]\n- (not established)",
     },
-    quest: {
-      id: "quest_test",
-      name: "The Archive",
-      summary: "Find the hidden archive."
-    },
+    startingWorldState: [],
     items: [
       { id: "item_potion", name: "Potion", type: "consumable", description: "Heals.", quantity: 1 }
     ],
-    npcs: [
-      { name: "Guard", description: "Town guard.", disposition: "gruff" }
+    additionalCharacters: [
+      { name: "Guard", description: "Town guard.", storyRole: "gruff" }
     ],
-    startingFlags: []
+
   };
 }
 
-describe("basic NPC lifecycle", () => {
+describe("simple characters and character lifecycle", () => {
   it("instantiates Mira from the demo template", () => {
     const pt = createInitialPlaythrough("Test");
     expect(pt.characters.length).toBe(1);
@@ -55,6 +47,7 @@ describe("basic NPC lifecycle", () => {
     expect(mira.mood).toBe("neutral");
     expect(mira.towardPlayer).toBe("neutral");
     expect(mira.conditions.length).toBe(0);
+    expect(pt.activeCharacters).toContain(mira.id);
   });
 
   it("creates a playthrough with two cast members", () => {
@@ -62,16 +55,21 @@ describe("basic NPC lifecycle", () => {
     expect(pt.characters.length).toBe(2);
     expect(pt.characters[0].name).toBe("Mira");
     expect(pt.characters[1].name).toBe("Borg");
+    expect(pt.activeCharacters).toHaveLength(2);
   });
 
-  it("creates a playthrough from a scenario seed", () => {
+  it("creates a playthrough from a scenario seed with additional simple characters", () => {
     const seed = makeSeed();
     const pt = createPlaythroughFromSeed("Test Seed", seed);
     const sera = pt.characters[0];
     expect(sera.name).toBe("Sera");
     expect(sera.mood).toBe("neutral");
-    expect(pt.npcs.length).toBe(1);
-    expect(pt.npcs[0].name).toBe("Guard");
+    expect(sera.templateId).toBeDefined();
+    expect(pt.characters.length).toBe(2);
+    const guard = pt.characters[1];
+    expect(guard.name).toBe("Guard");
+    expect(guard.templateId).toBeDefined();
+    expect(guard.storyRole).toBe("gruff");
   });
 
   it("applies characterMood patch", () => {
@@ -202,67 +200,100 @@ describe("basic NPC lifecycle", () => {
     expect(result.state.characters[0].mood).toBe("elated");
   });
 
-  it("promotes a background NPC to main cast", () => {
+  it("adds a simple character and manages scene presence", () => {
     const pt = createInitialPlaythrough("Test");
-    // First add an NPC
-    const withNpc = applyStatePatch(pt, {
-      npcAdd: [{ name: "Shopkeep", description: "A friendly shopkeeper.", disposition: "friendly" }]
+    const withSimple = applyStatePatch(pt, {
+      characterAddSimple: [{ name: "Shopkeep", description: "A friendly shopkeeper.", storyRole: "Merchant" }]
     });
-    const npcId = withNpc.state.npcs[0].id;
-    
-    // Then promote
-    const result = applyStatePatch(withNpc.state, {
-      npcPromote: { npcId }
+    expect(withSimple.applied.some(a => a.includes("simple character added"))).toBe(true);
+    expect(withSimple.state.characters.length).toBe(2);
+    const shopkeep = withSimple.state.characters[1];
+    expect(shopkeep.name).toBe("Shopkeep");
+    expect(shopkeep.templateId).toBeUndefined();
+    expect(shopkeep.storyRole).toBe("Merchant");
+    expect(withSimple.state.activeCharacters).toContain(shopkeep.id);
+
+    // Character exits scene
+    const exitResult = applyStatePatch(withSimple.state, {
+      characterExitScene: [shopkeep.id]
     });
-    
-    expect(result.applied.some(a => a.includes("promoted"))).toBe(true);
-    expect(result.state.npcs.length).toBe(0);
-    expect(result.state.characters.length).toBe(2);
-    const promoted = result.state.characters[1];
-    expect(promoted.name).toBe("Shopkeep");
-    expect(promoted.mood).toBe("neutral");
+    expect(exitResult.state.activeCharacters).not.toContain(shopkeep.id);
+
+    // Character enters scene
+    const enterResult = applyStatePatch(exitResult.state, {
+      characterEnterScene: [shopkeep.id]
+    });
+    expect(enterResult.state.activeCharacters).toContain(shopkeep.id);
+
+    // Update role
+    const roleResult = applyStatePatch(enterResult.state, {
+      characterUpdateRole: [{ characterId: shopkeep.id, storyRole: "Allied Merchant" }]
+    });
+    expect(roleResult.state.characters.find(c => c.id === shopkeep.id)?.storyRole).toBe("Allied Merchant");
   });
 
-  it("promotes with a custom memorySummary", () => {
+  it("fleshes out a simple character into a detailed character", () => {
     const pt = createInitialPlaythrough("Test");
-    const withNpc = applyStatePatch(pt, { npcAdd: [{ name: "Shopkeep", description: "A friendly shopkeeper.", disposition: "friendly" }] });
-    const npcId = withNpc.state.npcs[0].id;
-    const result = applyStatePatch(withNpc.state, { npcPromote: { npcId, memorySummary: "Shopkeep — Cheerful" } });
-    const promoted = result.state.characters[1];
-    expect(promoted.memorySummary).toBe("Shopkeep — Cheerful");
-  });
-
-  it("promotes without content into a starter sheet preserving the NPC info", () => {
-    const pt = createInitialPlaythrough("Test");
-    const withNpc = applyStatePatch(pt, {
-      npcAdd: [{ name: "Shopkeep", description: "A friendly shopkeeper.", disposition: "friendly" }]
+    const withSimple = applyStatePatch(pt, {
+      characterAddSimple: [{ name: "Shopkeep", description: "A friendly shopkeeper.", storyRole: "Merchant" }]
     });
-    const npcId = withNpc.state.npcs[0].id;
-    const result = applyStatePatch(withNpc.state, { npcPromote: { npcId } });
-    const promoted = result.state.characters[1];
-    const template = result.state.characterTemplates.find((t) => t.id === promoted.templateId);
-    // The starter sheet must not lose the NPC's recorded info.
+    const shopkeepId = withSimple.state.characters[1].id;
+
+    const result = applyStatePatch(withSimple.state, {
+      characterFleshOut: { characterId: shopkeepId }
+    });
+
+    expect(result.applied.some(a => a.includes("character fleshed out"))).toBe(true);
+    const fleshed = result.state.characters.find(c => c.id === shopkeepId)!;
+    expect(fleshed.templateId).toBeDefined();
+    const template = result.state.characterTemplates.find(t => t.id === fleshed.templateId);
+    expect(template).toBeDefined();
     expect(template?.content).toContain("A friendly shopkeeper.");
-    expect(template?.content).toContain("friendly");
-    expect(template?.content).toContain("(unknown)");
   });
 
-  it("promote with content stores the sheet verbatim on the promoted template", () => {
+  it("fleshes out with custom memorySummary", () => {
     const pt = createInitialPlaythrough("Test");
-    const withNpc = applyStatePatch(pt, { npcAdd: [{ name: "Borg", description: "Gruff blacksmith" }] });
-    const npcId = withNpc.state.npcs[0].id;
-    const sheet = "[Species]: Dwarf\n\n[Body]\n- Height: short\n\n[Personality]\n- Sturdy and quiet";
-    const result = applyStatePatch(withNpc.state, { npcPromote: { npcId, content: sheet, memorySummary: "Borg — Sturdy and quiet" } });
-    const promoted = result.state.characters.find((c) => c.name === "Borg");
-    const template = result.state.characterTemplates.find((t) => t.id === promoted?.templateId);
-    expect(template?.content).toBe(sheet);
-    expect(promoted?.memorySummary).toBe("Borg — Sturdy and quiet");
+    const withSimple = applyStatePatch(pt, {
+      characterAddSimple: [{ name: "Shopkeep", description: "A friendly shopkeeper.", storyRole: "Merchant" }]
+    });
+    const shopkeepId = withSimple.state.characters[1].id;
+    const result = applyStatePatch(withSimple.state, {
+      characterFleshOut: { characterId: shopkeepId, memorySummary: "Shopkeep — Cheerful" }
+    });
+    const fleshed = result.state.characters.find(c => c.id === shopkeepId)!;
+    expect(fleshed.memorySummary).toBe("Shopkeep — Cheerful");
   });
 
-  it("snapshot includes characters and characterTemplates", () => {
+  it("flesh out with content stores the sheet verbatim on the template", () => {
+    const pt = createInitialPlaythrough("Test");
+    const withSimple = applyStatePatch(pt, {
+      characterAddSimple: [{ name: "Borg", description: "Gruff blacksmith", storyRole: "Blacksmith" }]
+    });
+    const borgId = withSimple.state.characters[1].id;
+    const sheet = "[Species]: Dwarf\n\n[Body]\n- Height: short\n\n[Personality]\n- Sturdy and quiet";
+    const result = applyStatePatch(withSimple.state, {
+      characterFleshOut: { characterId: borgId, content: sheet, memorySummary: "Borg — Sturdy and quiet" }
+    });
+    const fleshed = result.state.characters.find((c) => c.id === borgId)!;
+    const template = result.state.characterTemplates.find((t) => t.id === fleshed.templateId);
+    expect(template?.content).toBe(sheet);
+    expect(fleshed.memorySummary).toBe("Borg — Sturdy and quiet");
+  });
+
+  it("rejects fleshing out an already detailed character", () => {
+    const pt = createInitialPlaythrough("Test");
+    const result = applyStatePatch(pt, {
+      characterFleshOut: { characterId: pt.characters[0].id }
+    });
+    expect(result.rejected.length).toBeGreaterThan(0);
+    expect(result.rejected[0]).toContain("already detailed");
+  });
+
+  it("snapshot includes activeCharacters, characters and characterTemplates", () => {
     const pt = createInitialPlaythrough("Test");
     const snap = takeTurnSnapshot(pt);
     expect(snap.characters.length).toBe(1);
+    expect(snap.activeCharacters).toEqual([pt.characters[0].id]);
     expect(snap.characterTemplates.length).toBe(1);
   });
 });

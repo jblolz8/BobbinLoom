@@ -17,7 +17,6 @@ import { playthroughRoutes } from "../src/server/routes/playthroughs";
 import { saveImageBytes } from "../src/server/imageStore";
 import { createPlaythroughRecord, updatePlaythroughRecord } from "../src/server/store";
 import { imageRef, pngBytes } from "./helpers/imageFixtures";
-import { LocationEntrySchema } from "../src/schemas";
 import type { ChatMessage, Playthrough } from "../src/schemas";
 
 let tempDirs: string[] = [];
@@ -45,12 +44,6 @@ function message(id: string, content: string, hidden = false): ChatMessage {
     : { id, role: "assistant", content, createdAt: "2026-01-01T00:00:00.000Z" };
 }
 
-/** A catalog entry with its schema defaults filled in (x/y/icon/… are declared with .default(),
- *  so building the literal by hand fails the typecheck while a parse does not). */
-function location(id: string, name: string) {
-  return LocationEntrySchema.parse({ id, name });
-}
-
 /** The full key set a card may receive. Exact equality (not a subset check) is the point: a field
  *  smuggled in from the document — or a document field renamed into the summary — fails here. */
 const SUMMARY_KEYS = [
@@ -59,7 +52,6 @@ const SUMMARY_KEYS = [
   "id",
   "isTimelineBranch",
   "lastMessagePreview",
-  "locationName",
   "name",
   "turn",
   "updatedAt",
@@ -75,8 +67,6 @@ describe("GET /api/playthroughs ships summaries, not documents", () => {
     const { app, dataDir } = harness();
     const first = createPlaythroughRecord(dataDir, "First Run");
     first.messages.push(message("m1", "The door creaks open."));
-    first.locationCatalog = [location("loc_hall", "Great Hall")];
-    first.locationId = "loc_hall";
     updatePlaythroughRecord(dataDir, first);
     createPlaythroughRecord(dataDir, "Second Run");
 
@@ -94,24 +84,7 @@ describe("GET /api/playthroughs ships summaries, not documents", () => {
       expect(item).not.toHaveProperty("messages");
       expect(item).not.toHaveProperty("snapshots");
       expect(item).not.toHaveProperty("characters");
-      expect(item).not.toHaveProperty("locationCatalog");
     }
-  });
-
-  it("resolves the location name, falling back to the location id", async () => {
-    const { app, dataDir } = harness();
-    const named = createPlaythroughRecord(dataDir, "Named");
-    named.locationCatalog = [location("loc_hall", "Great Hall")];
-    named.locationId = "loc_hall";
-    updatePlaythroughRecord(dataDir, named);
-    const unnamed = createPlaythroughRecord(dataDir, "Unnamed");
-    unnamed.locationId = "loc_missing";
-    updatePlaythroughRecord(dataDir, unnamed);
-
-    const body = (await list(app)).json() as { playthroughs: { id: string; locationName: string }[] };
-
-    expect(body.playthroughs.find((p) => p.id === named.id)?.locationName).toBe("Great Hall");
-    expect(body.playthroughs.find((p) => p.id === unnamed.id)?.locationName).toBe("loc_missing");
   });
 
   it("counts visible messages only and previews the last one, truncated to 120 chars", async () => {

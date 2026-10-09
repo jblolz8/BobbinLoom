@@ -18,8 +18,8 @@ describe("migratePlaythrough", () => {
 
     expect(res.ok).toBe(true);
     if (res.ok) {
-      expect(res.data.schemaVersion).toBe(1);
-      expect(res.migratedFrom).toBeUndefined();
+      expect(res.data.schemaVersion).toBe(2);
+      expect(res.migratedFrom).toBe(1);
       expect(res.data.name).toBe("Migration Test");
     }
   });
@@ -29,13 +29,13 @@ describe("migratePlaythrough", () => {
 
     expect(res.ok).toBe(true);
     if (res.ok) {
-      expect(res.data.schemaVersion).toBe(1);
+      expect(res.data.schemaVersion).toBe(2);
       expect(res.data.name).toBe("Migration Test");
     }
   });
 
   it("rejects a future version without downgrading", () => {
-    const res = migratePlaythrough({ ...createInitialPlaythrough("Future"), schemaVersion: 2 });
+    const res = migratePlaythrough({ ...createInitialPlaythrough("Future"), schemaVersion: 3 });
 
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.reason).toBe("newer than supported");
@@ -69,6 +69,6 @@ describe("migratePlaythrough", () => {
   });
 
   it("exposes the current playthrough version constant", () => {
-    expect(CURRENT_PLAYTHROUGH_VERSION).toBe(1);
+    expect(CURRENT_PLAYTHROUGH_VERSION).toBe(2);
   });
 });

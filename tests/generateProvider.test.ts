@@ -53,7 +53,6 @@ function startTransport(options: { fail?: boolean } = {}): Promise<{ server: Ser
 
 /** A seed that satisfies ScenarioSeedSchema — the point is to get PAST the seed call. */
 const SEED = {
-  locations: [{ id: "loc_home", name: "Home", description: "A warm room.", state: "", icon: "🏠", connections: [] }],
   character: { name: "Seeded Character", content: "[Species]: Test" },
   quest: { id: "quest_start", name: "Begin", summary: "Start the story." },
   items: [],

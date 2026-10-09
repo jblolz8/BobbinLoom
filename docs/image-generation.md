@@ -386,14 +386,14 @@ PLAYER'S LAST ACTION:
  twice>
 
 CURRENT STATE:
-<buildImageStateBlock(playthrough) — the place, plus the player's VISIBLE physical
- state. Not summarizePlaythrough: that is the turn block (inventory, quests,
- allowed ids, reachable locations, absent characters, per-character memory) and it
+<buildImageStateBlock(playthrough) — the setting, plus the player's VISIBLE physical
+ state. Not summarizePlaythrough: that is the turn block (inventory, world state,
+ allowed ids, absent characters, per-character memory) and it
  also carried the player's description, appearance and wardrobe>
 
 PRESENT CHARACTERS:
 <buildImageCastBlock(playthrough) — the player as THE CAMERA (never tag their
- stored appearance or clothing), then each character at the current location:
+ stored appearance or clothing), then each active character:
  their instance line (clothing/mood/conditions) plus their stable sheet identity>
 
 Return ONE line of comma-separated tags describing this moment. Return JSON only: {"prompt": "…", "negative": "…"}
@@ -403,7 +403,7 @@ Return ONE line of comma-separated tags describing this moment. Return JSON only
 
 **The JSON contract is enforced, not merely requested.** `response_format: { "type": "json_object" }` is sent on every call, matching the turn path (`src/server/openAiCompatibleProvider.ts`). It is safe on a model or proxy that does not implement structured output: `requestWithRetry` (`src/server/provider/openaiClient.ts`) already retries **once, without** `response_format`, when the endpoint rejects the body with a 400/422/404. Nothing about the parsing below depends on the field being honoured — a model that ignores it and answers in prose still works.
 
-Every block is omitted when empty (an empty header invites the model to invent one), and each is gated by its own field: `includeState` / `includeCast` for the two original context blocks, `historyMessages > 0` for the history window, `includePreviousAnswer` for the reference. **All non-current material is grouped AHEAD of `SCENE TEXT`**, deliberately: an example placed at the end of the message sits closest to the model's own output and anchors hardest. The blocks come from `src/server/provider/imageContext.ts`, and each one withholds more than it carries — the state block leaves out every turn-only category (inventory, quests, reachable locations, absent characters, per-character memory), and the cast block leaves out the player's wardrobe for the reason above.
+Every block is omitted when empty (an empty header invites the model to invent one), and each is gated by its own field: `includeState` / `includeCast` for the two original context blocks, `historyMessages > 0` for the history window, `includePreviousAnswer` for the reference. **All non-current material is grouped AHEAD of `SCENE TEXT`**, deliberately: an example placed at the end of the message sits closest to the model's own output and anchors hardest. The blocks come from `src/server/provider/imageContext.ts`, and each one withholds more than it carries — the state block leaves out every turn-only category (inventory, quests, absent characters, per-character memory), and the cast block leaves out the player's wardrobe for the reason above.
 
 The dry run and the generate call build this input in **one** place (`buildImagePromptInput` in `src/server/routes/images.ts`). That is what makes the review modal a review of what will actually be sent, and a test asserts the two requests' user messages are byte-identical.
 
@@ -431,7 +431,7 @@ The dry run and the generate call build this input in **one** place (`buildImage
 
 ### The cast block carries each character's STABLE identity
 
-`PRESENT CHARACTERS` describes every character at the current location **twice**: the instance line (`name — wearing white shirt, wet, wary`) and, when their sheet resolves, an identity line read from the character template:
+`PRESENT CHARACTERS` describes every active character **twice**: the instance line (`name — wearing white shirt, wet, wary`) and, when their sheet resolves, an identity line read from the character template:
 
 ```
 Mira — wearing white shirt, wet, wary

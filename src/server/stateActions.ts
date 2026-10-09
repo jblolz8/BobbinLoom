@@ -3,7 +3,7 @@ import { applyStatePatch } from "../engine/engine";
 import { seedMemorySummary, summaryFromContent } from "../engine/characterSections";
 import { ensureAllSections, resolveCharacterFormat } from "../engine/characterFormat";
 import { expandUserMacro } from "../engine/macros";
-import type { Chapter, ChapterMetaSummary, CharacterTemplate, Playthrough, PromptConfig, SimpleNPC } from "../schemas";
+import type { Chapter, ChapterMetaSummary, CharacterInstance, CharacterTemplate, Playthrough, PromptConfig } from "../schemas";
 import { getCharacterTemplate, getPlaythroughRecord, listCharacterTemplates, saveCharacterTemplateRecord, updatePlaythroughRecord } from "./store";
 import { buildLorebookContext, lorebookBudgetChars } from "./lorebookContext";
 import { executeTurn } from "./turnActions";
@@ -36,51 +36,39 @@ function isFailure(value: Playthrough | ActionFailure): value is ActionFailure {
   return "ok" in value && !value.ok;
 }
 
-export function questAction(
+export function worldStateAction(
   dataDir: string,
   playthroughId: string,
-  questId: string,
-  action: "toggleTracking" | "delete" | "edit",
+  worldStateId: string,
+  action: "delete" | "edit",
   name?: string,
-  summary?: string
+  description?: string
 ): StateActionOutcome {
   const loaded = load(dataDir, playthroughId);
   if (isFailure(loaded)) return loaded;
 
-  const quest = loaded.quests.find((q) => q.id === questId);
-  if (!quest) return { ok: false, status: 404, error: "Quest not found" };
+  const entry = loaded.worldState.find((ws) => ws.id === worldStateId);
+  if (!entry) return { ok: false, status: 404, error: "World State not found" };
 
-  if (action === "toggleTracking") {
-    quest.tracking = !quest.tracking;
-    // Auto-remove completed/failed quests when untracked
-    if (!quest.tracking && (quest.status === "completed" || quest.status === "failed")) {
-      loaded.quests = loaded.quests.filter((q) => q.id !== questId);
-    }
-  } else if (action === "delete") {
-    loaded.quests = loaded.quests.filter((q) => q.id !== questId);
+  if (action === "delete") {
+    loaded.worldState = loaded.worldState.filter((ws) => ws.id !== worldStateId);
   } else if (action === "edit") {
-    if (name !== undefined) quest.name = name;
-    if (summary !== undefined) quest.summary = summary;
+    if (name !== undefined) entry.name = name;
+    if (description !== undefined) entry.description = description;
   }
 
   loaded.updatedAt = new Date().toISOString();
   updatePlaythroughRecord(dataDir, loaded);
-  return { ok: true, state: loaded, applied: [`quest ${action}: ${quest.name}`], rejected: [], warnings: [] };
+  return { ok: true, state: loaded, applied: [`world state ${action}: ${entry.name}`], rejected: [], warnings: [] };
 }
 
-function buildPromoteStoryContext(loaded: Playthrough, npc: SimpleNPC, maxTokens: number): string {
+function buildFleshOutStoryContext(loaded: Playthrough, character: CharacterInstance, maxTokens: number): string {
   const parts: string[] = [];
   if (loaded.scenarioDescription) parts.push(`Setting: ${loaded.scenarioDescription}`);
 
-  // NPC's own location (was: player's location — a bug)
-  const npcLoc = (loaded.locationCatalog ?? []).find((l) => l.id === npc.locationId);
-  if (npcLoc) parts.push(`NPC Location: ${npcLoc.name} — ${npcLoc.description}`);
-  const playerLoc = (loaded.locationCatalog ?? []).find((l) => l.id === loaded.locationId);
-  if (playerLoc) parts.push(`Player Location: ${playerLoc.name} — ${playerLoc.description}`);
-
   // Every player-visible string here may carry {{user}}. {{char}} has no owner — the
-  // cast lines belong to several different characters, and the promotion target is a
-  // background NPC — so it is left literal rather than guessed.
+  // cast lines belong to several different characters, and the flesh-out target is a
+  // simple character — so it is left literal rather than guessed.
   const playerName = loaded.playerCharacter.name;
 
   const pc = loaded.playerCharacter;
@@ -89,14 +77,19 @@ function buildPromoteStoryContext(loaded: Playthrough, npc: SimpleNPC, maxTokens
       expandUserMacro(pc.description, playerName)
   );
 
-  if (loaded.characters.length > 0) {
-    const cast = loaded.characters.map((c) => {
-      const tpl = loaded.characterTemplates.find((t) => t.id === c.templateId);
-      const species = tpl?.content.match(/\[Species\]:\s*(.+)/)?.[1] ?? "unknown";
-      const memory = expandUserMacro(c.memorySummary || "no details yet", playerName);
-      return `- ${c.name} (${species}): ${memory}`;
+  const otherChars = loaded.characters.filter((c) => c.id !== character.id);
+  if (otherChars.length > 0) {
+    const cast = otherChars.map((c) => {
+      if (c.templateId) {
+        const tpl = loaded.characterTemplates.find((t) => t.id === c.templateId);
+        const species = tpl?.content.match(/\[Species\]:\s*(.+)/)?.[1] ?? "unknown";
+        const memory = expandUserMacro(c.memorySummary || "no details yet", playerName);
+        return `- ${c.name} (${species}) [Role: ${c.storyRole}]: ${memory}`;
+      } else {
+        return `- ${c.name} [Role: ${c.storyRole}]: ${c.description || "no details"}`;
+      }
     });
-    parts.push(`Other Main Cast:\n${cast.join("\n")}`);
+    parts.push(`Other Cast Members:\n${cast.join("\n")}`);
   }
 
   if (loaded.chapters?.length) {
@@ -105,17 +98,17 @@ function buildPromoteStoryContext(loaded: Playthrough, npc: SimpleNPC, maxTokens
     parts.push(`Recent Story:\n${recent.join("\n")}`);
   }
 
-  const haystack = [npc.description, npc.disposition ?? "", loaded.scenarioDescription ?? ""].join(" ");
+  const haystack = [character.description ?? "", character.storyRole ?? "", loaded.scenarioDescription ?? ""].join(" ");
   const lore = buildLorebookContext(loaded.lorebookIds, haystack, lorebookBudgetChars(maxTokens));
   if (lore) parts.push(expandUserMacro(lore, playerName));
 
   return parts.join("\n\n");
 }
 
-export async function promoteNpcAction(
+export async function fleshOutCharacterAction(
   dataDir: string,
   playthroughId: string,
-  npcId: string,
+  characterId: string,
   provider: TurnProvider,
   acceptedContent?: string,
   maxTokens = 4000,
@@ -125,10 +118,13 @@ export async function promoteNpcAction(
   const loaded = load(dataDir, playthroughId);
   if (isFailure(loaded)) return loaded;
 
-  const npc = loaded.npcs.find((n) => n.id === npcId);
-  if (!npc) return { ok: false, status: 404, error: "NPC not found" };
+  const character = loaded.characters.find((c) => c.id === characterId);
+  if (!character) return { ok: false, status: 404, error: "Character not found" };
+  if (character.templateId) {
+    return { ok: false, status: 400, error: "Character is already a detailed character" };
+  }
 
-  const storyContext = buildPromoteStoryContext(loaded, npc, maxTokens);
+  const storyContext = buildFleshOutStoryContext(loaded, character, maxTokens);
   const format = resolveCharacterFormat(promptConfig?.characterFormat);
 
   // 1) Generate (only when no approved draft content was supplied)
@@ -136,7 +132,7 @@ export async function promoteNpcAction(
   if (content === undefined) {
     try {
       content = await provider.generateCharacterSheet(
-        { name: npc.name, description: npc.description, disposition: npc.disposition },
+        { name: character.name, description: character.description ?? "", storyRole: character.storyRole },
         storyContext,
         signal,
         format
@@ -147,46 +143,52 @@ export async function promoteNpcAction(
     }
   }
 
-  // Client cancelled — don't commit the promotion.
+  // Client cancelled — don't commit.
   if (signal?.aborted) {
     return { ok: false, status: 499, error: "Request aborted by the client" };
   }
 
   // 2) Post-process: fill the target format's sections, seed memory
   content = ensureAllSections(content, format);
-  const memorySummary = seedMemorySummary(npc.name, content);
+  const memorySummary = seedMemorySummary(character.name, content);
 
   // 3) Apply (single commit — no partial state)
-  const result = applyStatePatch(loaded, { npcPromote: { npcId, content, memorySummary } }, promptConfig?.characterFormat);
+  const result = applyStatePatch(loaded, { characterFleshOut: { characterId, content, memorySummary } }, promptConfig?.characterFormat);
   result.state.updatedAt = new Date().toISOString();
   updatePlaythroughRecord(dataDir, result.state);
   return { ok: true, state: result.state, applied: result.applied, rejected: result.rejected, warnings: result.warnings };
 }
 
-export type PromoteDraftOutcome =
-  | { ok: true; npc: SimpleNPC; content: string; storyContext: string }
+export type FleshOutDraftOutcome =
+  | { ok: true; character: CharacterInstance; content: string; storyContext: string }
   | { ok: false; status: number; error: string };
 
-export async function promoteNpcDraftAction(
+/** @deprecated Use FleshOutDraftOutcome */
+export type PromoteDraftOutcome = FleshOutDraftOutcome;
+
+export async function fleshOutCharacterDraftAction(
   dataDir: string,
   playthroughId: string,
-  npcId: string,
+  characterId: string,
   provider: TurnProvider,
   maxTokens = 4000,
   signal?: AbortSignal,
   promptConfig?: PromptConfig
-): Promise<PromoteDraftOutcome> {
+): Promise<FleshOutDraftOutcome> {
   const loaded = load(dataDir, playthroughId);
   if (isFailure(loaded)) return loaded;
-  const npc = loaded.npcs.find((n) => n.id === npcId);
-  if (!npc) return { ok: false, status: 404, error: "NPC not found" };
+  const character = loaded.characters.find((c) => c.id === characterId);
+  if (!character) return { ok: false, status: 404, error: "Character not found" };
+  if (character.templateId) {
+    return { ok: false, status: 400, error: "Character is already a detailed character" };
+  }
 
-  const storyContext = buildPromoteStoryContext(loaded, npc, maxTokens);
+  const storyContext = buildFleshOutStoryContext(loaded, character, maxTokens);
   const format = resolveCharacterFormat(promptConfig?.characterFormat);
   let content: string;
   try {
     content = await provider.generateCharacterSheet(
-      { name: npc.name, description: npc.description, disposition: npc.disposition },
+      { name: character.name, description: character.description ?? "", storyRole: character.storyRole },
       storyContext,
       signal,
       format
@@ -196,8 +198,13 @@ export async function promoteNpcDraftAction(
     return { ok: false, status: 502, error: `Failed to generate character sheet: ${message}` };
   }
   content = ensureAllSections(content, format);
-  return { ok: true, npc, content, storyContext };
+  return { ok: true, character, content, storyContext };
 }
+
+/** @deprecated Use fleshOutCharacterAction */
+export const promoteNpcAction = fleshOutCharacterAction;
+/** @deprecated Use fleshOutCharacterDraftAction */
+export const promoteNpcDraftAction = fleshOutCharacterDraftAction;
 
 /**
  * Save a playthrough character's local template into the global library.
@@ -467,21 +474,18 @@ export async function closeChapterAction(
   // Safe to be standalone — it mutates `loaded` in place and degrades on failure.
   await foldOldestChaptersIntoMetaSummaries(loaded, provider, signal);
 
-  // ── Stale background-NPC pruning (Phase E) ──
-  // An NPC is stale when, across the closing chapter, it was never named in a
-  // message, never referenced by a memory event, and never at a location the
-  // player visited. Background cast only — main cast (characters[]) is never a
-  // candidate.
-  const visitedLocations = new Set<string>();
-  // Runtime snapshots are keyed by assistant message id (each records the turn
-  // it was taken on). Legacy records may carry turn-string keys. Honor every
-  // snapshot whose captured turn falls inside the chapter regardless of key.
+  // ── Stale simple-character pruning (Phase E) ──
+  // A simple character (no templateId) is stale when, across the closing chapter,
+  // it was never active in a scene, never named in a message, and never referenced
+  // by a memory event. Detailed cast (with templateId) is never a candidate.
+  const activeInChapter = new Set<string>(loaded.activeCharacters ?? []);
   for (const snap of Object.values(loaded.snapshots ?? {})) {
     if (snap.turn >= chapterStartTurn && snap.turn <= loaded.turn) {
-      visitedLocations.add(snap.locationId);
+      for (const charId of snap.activeCharacters ?? []) {
+        activeInChapter.add(charId);
+      }
     }
   }
-  if (visitedLocations.size === 0) visitedLocations.add(loaded.locationId); // snapshot-less fallback
 
   const chapterText = msgsToArchive.map((m) => m.content).join("\n").toLowerCase();
   const eventText = eventsToTag
@@ -489,16 +493,19 @@ export async function closeChapterAction(
     .join("\n")
     .toLowerCase();
 
-  const staleNpcs = loaded.npcs.filter((npc) => {
-    const name = npc.name.toLowerCase();
-    return !chapterText.includes(name)
-        && !eventText.includes(name)
-        && !visitedLocations.has(npc.locationId);
+  const staleCharacters = loaded.characters.filter((c) => {
+    if (c.templateId) return false; // detailed character — keep
+    const name = c.name.toLowerCase();
+    return !activeInChapter.has(c.id)
+        && !chapterText.includes(name)
+        && !eventText.includes(name);
   });
 
-  if (staleNpcs.length > 0) {
-    const names = staleNpcs.map((n) => n.name);
-    loaded.npcs = loaded.npcs.filter((n) => !staleNpcs.includes(n));
+  if (staleCharacters.length > 0) {
+    const staleIds = new Set(staleCharacters.map((c) => c.id));
+    const names = staleCharacters.map((n) => n.name);
+    loaded.characters = loaded.characters.filter((c) => !staleIds.has(c.id));
+    loaded.activeCharacters = (loaded.activeCharacters ?? []).filter((id) => !staleIds.has(id));
     loaded.messages.push({
       id: `msg_${randomUUID()}`,
       role: "system",

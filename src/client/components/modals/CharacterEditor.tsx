@@ -43,7 +43,7 @@ export type CharacterEditPayload = {
   memorySummary?: string;
   conditions?: string[];
   flags?: string[];
-  currentLocationId?: string;
+
   clothing?: ClothingItem[];
   name?: string;
   content?: string;

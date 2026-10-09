@@ -51,9 +51,9 @@ const EditCharacterBody = z.object({
   clothing: z.array(z.object({
     slot: z.string(),
     name: z.string(),
-    state: z.string().optional(),
   })).optional(),
-  currentLocationId: z.string().optional(),
+  storyRole: z.string().optional(),
+  description: z.string().optional(),
   name: z.string().min(1).optional(),
   content: z.string().optional(),
   summary: z.string().optional(),
@@ -412,7 +412,7 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
     // CCv2 sheets are read-only (D9/C3): the PUT route applies content/clothing
     // edits directly, bypassing applyStatePatch, so guard here — but only the
     // sheet fields. Name and runtime fields (mood, towardPlayer, memorySummary,
-    // conditions, flags, currentLocationId) remain editable.
+    // conditions, flags) remain editable.
     const template = playthrough.characterTemplates.find((t) => t.id === character.templateId);
     const attemptsSheetEdit =
       body.content !== undefined || body.startingClothing !== undefined || body.clothing !== undefined;
@@ -430,7 +430,8 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
     if (body.conditions !== undefined) updated.conditions = body.conditions;
     if (body.flags !== undefined) updated.flags = body.flags;
     if (body.clothing !== undefined) updated.clothing = body.clothing;
-    if (body.currentLocationId !== undefined) updated.currentLocationId = body.currentLocationId;
+    if (body.storyRole !== undefined) updated.storyRole = body.storyRole;
+    if (body.description !== undefined) updated.description = body.description;
 
     playthrough.characters = playthrough.characters.map((c) =>
       c.id === params.characterId ? updated : c

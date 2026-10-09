@@ -7,7 +7,7 @@ import { clampChars } from "../imageProvider/shared";
  * The image-prompt call's context blocks.
  *
  * These are deliberately NOT `summarizePlaythrough`: that block is written for a
- * TURN (inventory, quests, allowed ids, reachable locations, absent characters,
+ * TURN (inventory, quests, allowed ids, absent characters,
  * per-character memory) and is useless to a tag writer while being actively
  * harmful in one specific way — it carries the PLAYER CHARACTER block with the
  * player's description, appearance and wardrobe, which the writer copied straight
@@ -90,18 +90,13 @@ function castHair(content: string): string {
  *
  *  Categories that appear when a tag line is invented: each character's sheet
  *  (`bodyType` / `appearance` / wardrobe), inventory, quests, allowed ids,
- *  reachable locations, absent characters, per-character memory and the turn
+ *  absent characters, per-character memory and the turn
  *  counter. All of them are withheld here, not merely discouraged in prose. */
 export function buildImageStateBlock(playthrough: Playthrough): string {
-  const catalog = playthrough.locationCatalog ?? [];
-  const location = catalog.find((entry) => entry.id === playthrough.locationId);
   const lines: string[] = [];
 
-  if (location) {
-    lines.push(`Location: ${location.name}${location.description ? ` — ${location.description}` : ""}`);
-    if (location.state) lines.push(`Location state: ${location.state}`);
-  } else {
-    lines.push(`Location: ${playthrough.locationId}`);
+  if (playthrough.scenarioDescription) {
+    lines.push(`Setting: ${playthrough.scenarioDescription}`);
   }
 
   // The player's conditions are on camera (restrained, handcuffed, wounded) and
@@ -142,8 +137,8 @@ function playerIdentity(player: PlayerCharacter): string {
   return clampChars(parts.join(" | "), CAST_IDENTITY_CHARS);
 }
 
-/** Compact cast block: the player as THE CAMERA, then every character actually
- *  at the current location. Deliberately short — the scene text is the primary
+/** Compact cast block: the player as THE CAMERA, then every active character in
+ *  the scene. Deliberately short — the scene text is the primary
  *  source of what is happening.
  *
  *  Each present character is described TWICE on purpose: the instance line
@@ -194,8 +189,9 @@ export function buildImageCastBlock(
     lines.push(`${player.name}${cameraNote ? ` — ${cameraNote}` : ""}`);
   }
 
+  const activeSet = new Set(playthrough.activeCharacters ?? []);
   for (const character of playthrough.characters) {
-    if (character.currentLocationId !== playthrough.locationId) continue;
+    if (!activeSet.has(character.id)) continue;
     const clothing = character.clothing.length
       ? `wearing ${character.clothing.map((item) => item.name).join(", ")}`
       : "clothing unspecified";

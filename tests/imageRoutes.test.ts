@@ -638,7 +638,7 @@ const SHEET = [
   ""
 ].join("\n");
 
-/** Put one character, at the current location, behind a resolvable template. */
+/** Put one character, active in the scene, behind a resolvable template. */
 function withPresentCast(h: ReturnType<typeof harness>, templateContent = SHEET) {
   const record = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
   record.characterTemplates = [
@@ -651,6 +651,7 @@ function withPresentCast(h: ReturnType<typeof harness>, templateContent = SHEET)
       startingClothing: []
     }
   ];
+  record.activeCharacters = ["char_mira"];
   record.characters = [
     {
       id: "char_mira",
@@ -658,7 +659,7 @@ function withPresentCast(h: ReturnType<typeof harness>, templateContent = SHEET)
       playthroughId: record.id,
       branchId: record.branchId,
       name: "Mira",
-      currentLocationId: record.locationId,
+      storyRole: "Companion",
       mood: "wary",
       towardPlayer: "guarded",
       memorySummary: "",

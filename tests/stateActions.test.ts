@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { closeChapterAction, promoteNpcAction, promoteNpcDraftAction, questAction } from "../src/server/stateActions";
+import { closeChapterAction, fleshOutCharacterAction, fleshOutCharacterDraftAction, worldStateAction } from "../src/server/stateActions";
 import { applyStatePatch, takeTurnSnapshot } from "../src/engine/engine";
 import { createPlaythroughRecord, getPlaythroughRecord, updatePlaythroughRecord } from "../src/server/store";
 import type { CharacterInstance, ParsedUserInput, Playthrough, ScenarioPreferences, ScenarioSeed } from "../src/schemas";
@@ -23,52 +23,44 @@ afterEach(() => {
   }
 });
 
-describe("questAction", () => {
-  it("toggles tracking on a quest", () => {
+describe("worldStateAction", () => {
+  it("edits a world state name and description", () => {
     const dir = tempDir();
-    const playthrough = createPlaythroughRecord(dir, "Quest Track");
+    const playthrough = createPlaythroughRecord(dir, "WS Edit");
+    playthrough.worldState.push({ id: "ws_starter", name: "Old Name", description: "Old." });
+    updatePlaythroughRecord(dir, playthrough);
 
-    const result = questAction(dir, playthrough.id, "first_steps", "toggleTracking");
+    const result = worldStateAction(dir, playthrough.id, "ws_starter", "edit", "New Name", "New description.");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const quest = result.state.quests.find((q) => q.id === "first_steps");
-    expect(quest?.tracking).toBe(true);
-
+    const ws = result.state.worldState.find((q: any) => q.id === "ws_starter");
+    expect(ws?.name).toBe("New Name");
+    expect(ws?.description).toBe("New description.");
+    
     // Verify persistence
     const stored = getPlaythroughRecord(dir, playthrough.id);
-    expect(stored?.quests[0].tracking).toBe(true);
+    expect(stored?.worldState.find((w: any) => w.id === "ws_starter")?.name).toBe("New Name");
   });
 
-  it("edits a quest name and summary", () => {
+  it("deletes a world state", () => {
     const dir = tempDir();
-    const playthrough = createPlaythroughRecord(dir, "Quest Edit");
-
-    const result = questAction(dir, playthrough.id, "first_steps", "edit", "New Name", "New summary.");
+    const playthrough = createPlaythroughRecord(dir, "WS Delete");
+    playthrough.worldState.push({ id: "ws_starter", name: "Old Name", description: "Old." });
+    updatePlaythroughRecord(dir, playthrough);
+    
+    const result = worldStateAction(dir, playthrough.id, "ws_starter", "delete");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const quest = result.state.quests.find((q) => q.id === "first_steps");
-    expect(quest?.name).toBe("New Name");
-    expect(quest?.summary).toBe("New summary.");
+    expect(result.state.worldState.find((q: any) => q.id === "ws_starter")).toBeUndefined();
   });
 
-  it("deletes a quest and logs abandonment", () => {
+  it("rejects unknown world states", () => {
     const dir = tempDir();
-    const playthrough = createPlaythroughRecord(dir, "Quest Delete");
+    const playthrough = createPlaythroughRecord(dir, "WS Missing");
 
-    const result = questAction(dir, playthrough.id, "first_steps", "delete");
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    expect(result.state.quests.find((q) => q.id === "first_steps")).toBeUndefined();
-  });
-
-  it("rejects unknown quests", () => {
-    const dir = tempDir();
-    const playthrough = createPlaythroughRecord(dir, "Quest Missing");
-
-    const result = questAction(dir, playthrough.id, "quest_nope", "toggleTracking");
+    const result = worldStateAction(dir, playthrough.id, "ws_nope", "edit", "Foo");
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.status).toBe(404);
   });
@@ -120,40 +112,42 @@ class MockProviderShim implements TurnProvider {
   }
 }
 
-describe("promoteNpcDraftAction", () => {
+describe("fleshOutCharacterDraftAction", () => {
   it("drafts a sheet without mutating the playthrough", async () => {
     const dir = tempDir();
     const pt = createPlaythroughRecord(dir, "Draft Test");
-    const withNpc = applyStatePatch(pt, { npcAdd: [{ name: "Shopkeep", description: "A friendly shopkeeper." }] });
-    updatePlaythroughRecord(dir, withNpc.state);
-    const npcId = withNpc.state.npcs[0].id;
+    const withChar = applyStatePatch(pt, { characterAddSimple: [{ name: "Shopkeep", description: "A friendly shopkeeper.", storyRole: "Merchant" }] });
+    updatePlaythroughRecord(dir, withChar.state);
+    const charId = withChar.state.characters.find((c) => c.name === "Shopkeep")!.id;
 
     const provider = new MockProviderShim();
-    const out = await promoteNpcDraftAction(dir, withNpc.state.id, npcId, provider, 4000);
+    const out = await fleshOutCharacterDraftAction(dir, withChar.state.id, charId, provider, 4000);
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     expect(out.content).toContain("[Species]");
 
-    // No mutation: npc still present, no new characters
-    const after = getPlaythroughRecord(dir, withNpc.state.id);
-    expect(after?.npcs.some((n) => n.id === npcId)).toBe(true);
-    expect(after?.characters.length).toBe(withNpc.state.characters.length);
+    // No mutation: simple character still present, templateId still undefined
+    const after = getPlaythroughRecord(dir, withChar.state.id);
+    const afterChar = after?.characters.find((c) => c.id === charId);
+    expect(afterChar).toBeDefined();
+    expect(afterChar?.templateId).toBeUndefined();
   });
 
-  it("promoteNpcAction with acceptedContent skips the provider", async () => {
+  it("fleshOutCharacterAction with acceptedContent skips the provider", async () => {
     const dir = tempDir();
     const pt = createPlaythroughRecord(dir, "Confirm Test");
-    const withNpc = applyStatePatch(pt, { npcAdd: [{ name: "Shopkeep", description: "A friendly shopkeeper." }] });
-    updatePlaythroughRecord(dir, withNpc.state);
-    const npcId = withNpc.state.npcs[0].id;
+    const withChar = applyStatePatch(pt, { characterAddSimple: [{ name: "Shopkeep", description: "A friendly shopkeeper.", storyRole: "Merchant" }] });
+    updatePlaythroughRecord(dir, withChar.state);
+    const charId = withChar.state.characters.find((c) => c.name === "Shopkeep")!.id;
 
     const throwing = { generateCharacterSheet: async () => { throw new Error("should not be called"); } } as unknown as TurnProvider;
-    const out = await promoteNpcAction(dir, withNpc.state.id, npcId, throwing, "[Species]: Human\n\n[Personality]\n- Cheerful", 4000);
+    const out = await fleshOutCharacterAction(dir, withChar.state.id, charId, throwing, "[Species]: Human\n\n[Personality]\n- Cheerful", 4000);
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     expect(out.state.characters.some((c) => c.name === "Shopkeep")).toBe(true);
     const promoted = out.state.characters.find((c) => c.name === "Shopkeep");
     expect(promoted?.memorySummary).toContain("Cheerful");
+    expect(promoted?.templateId).toBeDefined();
     // The approved draft becomes the promoted template's content (sections ensured).
     const template = out.state.characterTemplates.find((t) => t.id === promoted?.templateId);
     expect(template?.content).toContain("[Species]: Human");
@@ -193,11 +187,19 @@ describe("closeChapterAction — NPC staleness pruning (Phase E)", () => {
     }
   }
 
-  /** Adds a background NPC at a location, persists the playthrough, returns the persisted state. */
-  function addNpc(dir: string, pt: Playthrough, name: string, locationId: string): Playthrough {
-    const withNpc = applyStatePatch(pt, { npcAdd: [{ name, description: `${name} keeps to themselves.`, locationId }] });
-    updatePlaythroughRecord(dir, withNpc.state);
-    return withNpc.state;
+  /** Adds a simple character, persists the playthrough, returns the persisted state. */
+  function addSimpleChar(dir: string, pt: Playthrough, name: string, active = false): Playthrough {
+    const withChar = applyStatePatch(pt, {
+      characterAddSimple: [{ name, description: `${name} keeps to themselves.`, storyRole: "Townsfolk" }]
+    });
+    if (!active) {
+      const added = withChar.state.characters.find((c) => c.name === name);
+      if (added) {
+        withChar.state.activeCharacters = (withChar.state.activeCharacters ?? []).filter((id) => id !== added.id);
+      }
+    }
+    updatePlaythroughRecord(dir, withChar.state);
+    return withChar.state;
   }
 
   async function closeChapter(dir: string, pt: Playthrough): Promise<void> {
@@ -211,23 +213,23 @@ describe("closeChapterAction — NPC staleness pruning (Phase E)", () => {
     return pt.messages.filter((m) => m.role === "system");
   }
 
-  it("keeps an NPC mentioned in a chapter message", async () => {
+  it("keeps a simple character mentioned in a chapter message", async () => {
     const dir = tempDir();
     const pt = createPlaythroughRecord(dir, "Mentioned Test");
     seedMessages(pt);
     pt.messages[3].content = "Marta waves from the window.";
-    const withNpc = addNpc(dir, pt, "Marta", "loc_tavern");
-    await closeChapter(dir, withNpc);
+    const withChar = addSimpleChar(dir, pt, "Marta", false);
+    await closeChapter(dir, withChar);
 
-    const loaded = getPlaythroughRecord(dir, withNpc.id)!;
-    expect(loaded.npcs.some((n) => n.name === "Marta")).toBe(true);
+    const loaded = getPlaythroughRecord(dir, withChar.id)!;
+    expect(loaded.characters.some((n) => n.name === "Marta")).toBe(true);
     expect(systemFadeMessages(loaded)).toHaveLength(0);
     // Existing archiving intact.
     expect(loaded.chapters).toHaveLength(1);
     expect(loaded.chapters[0].messageIds).toHaveLength(8);
   });
 
-  it("keeps an NPC referenced by a chapter memory event", async () => {
+  it("keeps a simple character referenced by a chapter memory event", async () => {
     const dir = tempDir();
     const pt = createPlaythroughRecord(dir, "Event Test");
     seedMessages(pt);
@@ -242,55 +244,56 @@ describe("closeChapterAction — NPC staleness pruning (Phase E)", () => {
       tags: ["corvin"],
       createdAt: "2026-01-02T00:00:00.000Z"
     }];
-    const withNpc = addNpc(dir, pt, "Corvin", "loc_tavern");
-    await closeChapter(dir, withNpc);
+    const withChar = addSimpleChar(dir, pt, "Corvin", false);
+    await closeChapter(dir, withChar);
 
-    const loaded = getPlaythroughRecord(dir, withNpc.id)!;
-    expect(loaded.npcs.some((n) => n.name === "Corvin")).toBe(true);
+    const loaded = getPlaythroughRecord(dir, withChar.id)!;
+    expect(loaded.characters.some((n) => n.name === "Corvin")).toBe(true);
     expect(systemFadeMessages(loaded)).toHaveLength(0);
     // Wave-1 event attribution intact.
     expect(loaded.memoryEvents[0].chapterId).toBe(loaded.chapters[0].id);
   });
 
-  it("keeps an NPC at the player's current location (snapshot-less fallback)", async () => {
+  it("keeps a simple character active in the current scene (activeCharacters fallback)", async () => {
     const dir = tempDir();
     const pt = createPlaythroughRecord(dir, "Fallback Test");
     seedMessages(pt);
-    const withNpc = addNpc(dir, pt, "Pip", pt.locationId);
-    await closeChapter(dir, withNpc);
+    const withChar = addSimpleChar(dir, pt, "Pip", true);
+    await closeChapter(dir, withChar);
 
-    const loaded = getPlaythroughRecord(dir, withNpc.id)!;
-    expect(loaded.npcs.some((n) => n.name === "Pip")).toBe(true);
+    const loaded = getPlaythroughRecord(dir, withChar.id)!;
+    expect(loaded.characters.some((n) => n.name === "Pip")).toBe(true);
     expect(systemFadeMessages(loaded)).toHaveLength(0);
   });
 
-  it("keeps an NPC at a location visited this chapter (turn-snapshot path)", async () => {
+  it("keeps a simple character active in a scene during this chapter (turn-snapshot path)", async () => {
     const dir = tempDir();
     const pt = createPlaythroughRecord(dir, "Snapshot Test");
     seedMessages(pt);
-    const withNpc = applyStatePatch(pt, { npcAdd: [{ name: "Pip", description: "Pip tends bar.", locationId: "loc_x" }] });
-    withNpc.state.turn = 3;
-    withNpc.state.snapshots = {
-      "2": { ...takeTurnSnapshot(withNpc.state), turn: 2, locationId: "loc_x" },
-      msg_snap1: { ...takeTurnSnapshot(withNpc.state), turn: 2, locationId: "loc_x" }
+    const withChar = addSimpleChar(dir, pt, "Pip", false);
+    const pipId = withChar.characters.find((c) => c.name === "Pip")!.id;
+    withChar.turn = 3;
+    withChar.snapshots = {
+      "2": { ...takeTurnSnapshot(withChar), turn: 2, activeCharacters: [pipId] },
+      msg_snap1: { ...takeTurnSnapshot(withChar), turn: 2, activeCharacters: [pipId] }
     };
-    updatePlaythroughRecord(dir, withNpc.state);
-    await closeChapter(dir, withNpc.state);
+    updatePlaythroughRecord(dir, withChar);
+    await closeChapter(dir, withChar);
 
-    const loaded = getPlaythroughRecord(dir, withNpc.state.id)!;
-    expect(loaded.npcs.some((n) => n.name === "Pip")).toBe(true);
+    const loaded = getPlaythroughRecord(dir, withChar.id)!;
+    expect(loaded.characters.some((n) => n.name === "Pip")).toBe(true);
     expect(systemFadeMessages(loaded)).toHaveLength(0);
   });
 
-  it("prunes a stale NPC and logs the fade system message", async () => {
+  it("prunes a stale simple character and logs the fade system message", async () => {
     const dir = tempDir();
     const pt = createPlaythroughRecord(dir, "Stale Test");
     seedMessages(pt);
-    const withNpc = addNpc(dir, pt, "Zelda", "loc_elsewhere");
-    await closeChapter(dir, withNpc);
+    const withChar = addSimpleChar(dir, pt, "Zelda", false);
+    await closeChapter(dir, withChar);
 
-    const loaded = getPlaythroughRecord(dir, withNpc.id)!;
-    expect(loaded.npcs.some((n) => n.name === "Zelda")).toBe(false);
+    const loaded = getPlaythroughRecord(dir, withChar.id)!;
+    expect(loaded.characters.some((n) => n.name === "Zelda")).toBe(false);
     const fades = systemFadeMessages(loaded);
     expect(fades).toHaveLength(1);
     expect(fades[0].role).toBe("system");
@@ -304,19 +307,19 @@ describe("closeChapterAction — NPC staleness pruning (Phase E)", () => {
     expect(loaded.chapters[0].messageIds).toHaveLength(8);
   });
 
-  it("is a no-op when no NPC is stale", async () => {
+  it("is a no-op when no simple character is stale", async () => {
     const dir = tempDir();
     const pt = createPlaythroughRecord(dir, "NoStale Test");
     seedMessages(pt);
-    const withNpc = addNpc(dir, pt, "Pip", pt.locationId);
-    await closeChapter(dir, withNpc);
+    const withChar = addSimpleChar(dir, pt, "Pip", true);
+    await closeChapter(dir, withChar);
 
-    const loaded = getPlaythroughRecord(dir, withNpc.id)!;
-    expect(loaded.npcs).toHaveLength(1);
+    const loaded = getPlaythroughRecord(dir, withChar.id)!;
+    expect(loaded.characters.some((c) => c.name === "Pip")).toBe(true);
     expect(systemFadeMessages(loaded)).toHaveLength(0);
   });
 
-  it("never prunes the main cast (characters[] untouched)", async () => {
+  it("never prunes the main cast (characters with templateId untouched)", async () => {
     const dir = tempDir();
     const pt = createPlaythroughRecord(dir, "Cast Test");
     seedMessages(pt);
@@ -326,7 +329,7 @@ describe("closeChapterAction — NPC staleness pruning (Phase E)", () => {
       playthroughId: pt.id,
       branchId: pt.branchId,
       name: "Sir Gallant",
-      currentLocationId: "loc_far",
+      storyRole: "Main Cast",
       mood: "neutral",
       towardPlayer: "neutral",
       memorySummary: "",
@@ -337,21 +340,21 @@ describe("closeChapterAction — NPC staleness pruning (Phase E)", () => {
       updatedAt: "2026-01-01T00:00:00.000Z"
     };
     pt.characters.push(far);
-    const charsBefore = pt.characters.length;
-    const withNpc = addNpc(dir, pt, "Zelda", "loc_elsewhere");
-    await closeChapter(dir, withNpc);
+    const detailedBefore = pt.characters.filter((c) => c.templateId).length;
+    const withChar = addSimpleChar(dir, pt, "Zelda", false);
+    await closeChapter(dir, withChar);
 
-    const loaded = getPlaythroughRecord(dir, withNpc.id)!;
-    expect(loaded.characters).toHaveLength(charsBefore);
+    const loaded = getPlaythroughRecord(dir, withChar.id)!;
+    expect(loaded.characters.filter((c) => c.templateId)).toHaveLength(detailedBefore);
     expect(loaded.characters.some((c) => c.id === "char_far")).toBe(true);
-    expect(loaded.npcs.some((n) => n.name === "Zelda")).toBe(false);
+    expect(loaded.characters.some((n) => n.name === "Zelda")).toBe(false);
     const fades = systemFadeMessages(loaded);
     expect(fades).toHaveLength(1);
     expect(fades[0].content).toBe("Some background characters faded from the story: Zelda.");
   });
 });
 
-describe("promotion story context macro expansion", () => {
+describe("flesh-out story context macro expansion", () => {
   it("expands {{user}} and leaves {{char}} ownerless in the cast lines", async () => {
     const dir = tempDir();
     const pt = createPlaythroughRecord(dir, "Macro Promote Test");
@@ -359,7 +362,7 @@ describe("promotion story context macro expansion", () => {
 
     class CapturingProvider extends MockProviderShim {
       async generateCharacterSheet(
-        _npc: { name: string; description: string; disposition?: string },
+        _npc: { name: string; description: string; storyRole?: string },
         storyContext: string
       ): Promise<string> {
         captured = storyContext;
@@ -374,13 +377,13 @@ describe("promotion story context macro expansion", () => {
     }
     updatePlaythroughRecord(dir, pt);
 
-    const withNpc = applyStatePatch(pt, {
-      npcAdd: [{ name: "Shopkeep", description: "A friendly shopkeeper." }]
+    const withChar = applyStatePatch(pt, {
+      characterAddSimple: [{ name: "Shopkeep", description: "A friendly shopkeeper.", storyRole: "Merchant" }]
     });
-    updatePlaythroughRecord(dir, withNpc.state);
-    const npcId = withNpc.state.npcs[0].id;
+    updatePlaythroughRecord(dir, withChar.state);
+    const charId = withChar.state.characters.find((c) => c.name === "Shopkeep")!.id;
 
-    const out = await promoteNpcDraftAction(dir, withNpc.state.id, npcId, new CapturingProvider(), 4000);
+    const out = await fleshOutCharacterDraftAction(dir, withChar.state.id, charId, new CapturingProvider(), 4000);
     expect(out.ok).toBe(true);
     expect(captured).toContain("Anon wanders the district.");
     expect(captured).not.toContain("{{user}}");

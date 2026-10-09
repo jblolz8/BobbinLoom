@@ -146,7 +146,7 @@ importance * 3
   + 8  if it belongs to a character currently in the cast
   + 6  per tag matching a current character name
   + 5  if a tag equals the CURRENT LOCATION
-  + 4  per matching quest id or flag
+  + 4  per matching world state id
   + min(turn / 5, 5)                      recency
   + cosineSimilarity(queryEmbedding, event.embedding) * 10
 ```

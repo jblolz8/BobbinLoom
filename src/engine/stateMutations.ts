@@ -4,9 +4,7 @@ import {
   CharacterTemplate,
   InventoryRef,
   Item,
-  LocationEntry,
   Playthrough,
-  SimpleNPC,
   StatePatchSchema
 } from "../schemas";
 import {
@@ -20,8 +18,7 @@ import {
   splitContentSections
 } from "./characterSections";
 import { formatSections, resolveCharacterFormat } from "./characterFormat";
-import { ITEMS, LOCATIONS } from "./demoData";
-import { instantiateTemplate } from "./playthroughFactory";
+import { ITEMS } from "./demoData";
 
 /** The active prompt config's section order + inline set, threaded into section
  *  patches so new sections land where the user's format expects them. Falls back
@@ -42,6 +39,7 @@ function newId(prefix: string): string {
 
 /** CCv2 sheets are read-only in play (D9): no section or clothing patches. */
 function isReadOnlySheet(next: Playthrough, character: CharacterInstance): boolean {
+  if (!character.templateId) return false;
   return next.characterTemplates.find((t) => t.id === character.templateId)?.format === "ccv2";
 }
 
@@ -66,8 +64,7 @@ function addInventory(inventory: InventoryRef[], itemId: string, quantity: numbe
   return inventory.map((item) => (item.itemId === itemId ? { ...item, quantity: item.quantity + quantity } : item));
 }
 
-function buildPromotionStubContent(npc: SimpleNPC): string {
-  const disposition = npc.disposition ?? "";
+function buildFleshOutStubContent(name: string, description?: string, storyRole?: string): string {
   return [
     "[Species]: (unknown)",
     "[Gender]: (unknown)",
@@ -76,10 +73,10 @@ function buildPromotionStubContent(npc: SimpleNPC): string {
     "(no details recorded yet)",
     "",
     "[Appearance]",
-    npc.description,
+    description ?? "(no details recorded yet)",
     "",
     "[Personality]",
-    disposition ? `- ${disposition}` : "- (not yet established)",
+    storyRole ? `- ${storyRole}` : "- (not yet established)",
     "",
     "[Communication - Public]",
     "(not yet established)",
@@ -108,18 +105,32 @@ export function applyStatePatch(state: Playthrough, patchInput: unknown, charact
 
   const patch = parsed.data;
 
-  for (const flag of patch.flagsAdd ?? []) {
-    if (!next.flags.includes(flag)) {
-      next.flags.push(flag);
-      applied.push(`flag added: ${flag}`);
+  for (const entry of patch.worldStateAdd ?? []) {
+    next.worldState.push({
+      id: newId("ws"),
+      name: entry.name,
+      description: entry.description
+    });
+    applied.push("world state added: " + entry.name);
+  }
+
+  for (const nameOrId of patch.worldStateRemove ?? []) {
+    const originalLength = next.worldState.length;
+    next.worldState = next.worldState.filter((ws) => ws.id !== nameOrId && ws.name !== nameOrId);
+    if (next.worldState.length < originalLength) {
+      applied.push(`world state removed: ${nameOrId}`);
     }
   }
 
-  for (const flag of patch.flagsRemove ?? []) {
-    if (next.flags.includes(flag)) {
-      next.flags = next.flags.filter((existing) => existing !== flag);
-      applied.push(`flag removed: ${flag}`);
+  for (const update of patch.worldStateUpdate ?? []) {
+    const entry = next.worldState.find((ws) => ws.id === update.id || ws.name.toLowerCase() === update.id.toLowerCase());
+    if (!entry) {
+      rejected.push("unknown world state: " + update.id);
+      continue;
     }
+    if (update.name !== undefined) entry.name = update.name;
+    if (update.description !== undefined) entry.description = update.description;
+    applied.push("world state updated: " + (update.name ?? entry.name));
   }
 
   const itemCatalog: Item[] = next.itemCatalog ?? ITEMS;
@@ -180,28 +191,7 @@ export function applyStatePatch(state: Playthrough, patchInput: unknown, charact
     applied.push("item updated: " + (update.name ?? item.name) + " (" + update.itemId + ")");
   }
 
-  for (const q of patch.questAdd ?? []) {
-    next.quests.push({
-      id: newId("quest"),
-      name: q.name,
-      summary: q.summary,
-      tracking: false,
-      status: "active"
-    });
-    applied.push("quest added: " + q.name);
-  }
 
-  for (const u of patch.questUpdate ?? []) {
-    const quest = next.quests.find((q) => q.id === u.questId);
-    if (!quest) {
-      rejected.push("unknown quest: " + u.questId);
-      continue;
-    }
-    if (u.name !== undefined) quest.name = u.name;
-    if (u.summary !== undefined) quest.summary = u.summary;
-    if (u.status !== undefined) quest.status = u.status;
-    applied.push("quest updated: " + quest.name + " -> " + (u.status ?? "(fields only)"));
-  }
 
   function findCharacter(ref: string): CharacterInstance | undefined {
     return next.characters.find(
@@ -332,7 +322,7 @@ export function applyStatePatch(state: Playthrough, patchInput: unknown, charact
     if (!character) { rejected.push("unknown character for sectionItemAdd: " + entry.characterId); continue; }
     if (isReadOnlySheet(next, character)) { rejected.push("section item add rejected: " + character.name + " has a read-only CCv2 sheet"); continue; }
     if (entry.section.trim().toLowerCase() === "clothing") { rejected.push("section item add rejected: use characterClothing* patches for Clothing"); continue; }
-    if (character.currentLocationId !== next.locationId) { rejected.push("section item add rejected: " + character.name + " is not present (absent characters' sections aren't in context)"); continue; }
+    if (!next.activeCharacters.includes(character.id)) { rejected.push("section item add rejected: " + character.name + " is not present (absent characters' sections aren't in context)"); continue; }
     const tplIdx = next.characterTemplates.findIndex((t) => t.id === character.templateId);
     if (tplIdx < 0) { rejected.push("no template found for character: " + character.name); continue; }
     const r = addSectionItem(next.characterTemplates[tplIdx].content, entry.section, entry.item);
@@ -346,7 +336,7 @@ export function applyStatePatch(state: Playthrough, patchInput: unknown, charact
     if (!character) { rejected.push("unknown character for sectionItemRemove: " + entry.characterId); continue; }
     if (isReadOnlySheet(next, character)) { rejected.push("section item remove rejected: " + character.name + " has a read-only CCv2 sheet"); continue; }
     if (entry.section.trim().toLowerCase() === "clothing") { rejected.push("section item remove rejected: use characterClothing* patches for Clothing"); continue; }
-    if (character.currentLocationId !== next.locationId) { rejected.push("section item remove rejected: " + character.name + " is not present (absent characters' sections aren't in context)"); continue; }
+    if (!next.activeCharacters.includes(character.id)) { rejected.push("section item remove rejected: " + character.name + " is not present (absent characters' sections aren't in context)"); continue; }
     const tplIdx = next.characterTemplates.findIndex((t) => t.id === character.templateId);
     if (tplIdx < 0) { rejected.push("no template found for character: " + character.name); continue; }
     const r = removeSectionItem(next.characterTemplates[tplIdx].content, entry.section, entry.item);
@@ -360,7 +350,7 @@ export function applyStatePatch(state: Playthrough, patchInput: unknown, charact
     if (!character) { rejected.push("unknown character for sectionItemReplace: " + entry.characterId); continue; }
     if (isReadOnlySheet(next, character)) { rejected.push("section item replace rejected: " + character.name + " has a read-only CCv2 sheet"); continue; }
     if (entry.section.trim().toLowerCase() === "clothing") { rejected.push("section item replace rejected: use characterClothing* patches for Clothing"); continue; }
-    if (character.currentLocationId !== next.locationId) { rejected.push("section item replace rejected: " + character.name + " is not present (absent characters' sections aren't in context)"); continue; }
+    if (!next.activeCharacters.includes(character.id)) { rejected.push("section item replace rejected: " + character.name + " is not present (absent characters' sections aren't in context)"); continue; }
     const tplIdx = next.characterTemplates.findIndex((t) => t.id === character.templateId);
     if (tplIdx < 0) { rejected.push("no template found for character: " + character.name); continue; }
     const r = replaceSectionItem(next.characterTemplates[tplIdx].content, entry.section, entry.from, entry.to);
@@ -466,220 +456,95 @@ export function applyStatePatch(state: Playthrough, patchInput: unknown, charact
     applied.push("outfit replaced: " + character.name);
   }
 
-  for (const npc of patch.npcAdd ?? []) {
-    next.npcs.push({
-      id: newId("npc"),
-      name: npc.name,
-      description: npc.description,
-      disposition: npc.disposition,
-      locationId: npc.locationId ?? next.locationId,
-      createdAt: nowIso()
-    });
-    applied.push(`background NPC added: ${npc.name}`);
-  }
-
-  for (const npcRef of patch.npcRemove ?? []) {
-    const before = next.npcs.length;
-    next.npcs = next.npcs.filter((n) => n.id !== npcRef && n.name.toLowerCase() !== npcRef.toLowerCase());
-    if (next.npcs.length < before) {
-      applied.push(`background NPC removed: ${npcRef}`);
-    } else {
-      rejected.push(`unknown background NPC: ${npcRef}`);
+  for (const ref of patch.characterEnterScene ?? []) {
+    const character = findCharacter(ref);
+    if (!character) {
+      rejected.push(`unknown character to enter scene: ${ref}`);
+      continue;
+    }
+    if (!next.activeCharacters.includes(character.id)) {
+      next.activeCharacters.push(character.id);
+      applied.push(`character entered scene: ${character.name}`);
     }
   }
 
-  if (patch.npcPromote) {
-    const { npcId, content } = patch.npcPromote;
-    const npc = next.npcs.find((n) => n.id === npcId || n.name.toLowerCase() === npcId.toLowerCase());
-    if (!npc) {
-      rejected.push(`unknown background NPC to promote: ${npcId}`);
+  for (const ref of patch.characterExitScene ?? []) {
+    const character = findCharacter(ref);
+    if (!character) {
+      rejected.push(`unknown character to exit scene: ${ref}`);
+      continue;
+    }
+    if (next.activeCharacters.includes(character.id)) {
+      next.activeCharacters = next.activeCharacters.filter((id) => id !== character.id);
+      applied.push(`character exited scene: ${character.name}`);
+    }
+  }
+
+  for (const entry of patch.characterUpdateRole ?? []) {
+    const character = findCharacter(entry.characterId);
+    if (!character) {
+      rejected.push(`unknown character for role update: ${entry.characterId}`);
+      continue;
+    }
+    character.storyRole = entry.storyRole;
+    character.updatedAt = nowIso();
+    applied.push(`role updated: ${character.name} → ${entry.storyRole}`);
+  }
+
+  for (const simple of patch.characterAddSimple ?? []) {
+    const charId = newId("inst");
+    const newChar: CharacterInstance = {
+      id: charId,
+      playthroughId: next.id,
+      branchId: next.branchId,
+      name: simple.name,
+      description: simple.description,
+      storyRole: simple.storyRole,
+      mood: "neutral",
+      towardPlayer: "neutral",
+      memorySummary: `${simple.name} has not formed a strong opinion of the player yet.`,
+      conditions: [],
+      flags: [],
+      clothing: [],
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    };
+    next.characters.push(newChar);
+    if (!next.activeCharacters.includes(charId)) {
+      next.activeCharacters.push(charId);
+    }
+    applied.push(`simple character added: ${simple.name} (${simple.storyRole})`);
+  }
+
+  if (patch.characterFleshOut) {
+    const { characterId, content, memorySummary } = patch.characterFleshOut;
+    const character = findCharacter(characterId);
+    if (!character) {
+      rejected.push(`unknown character to flesh out: ${characterId}`);
+    } else if (character.templateId) {
+      rejected.push(`character already detailed: ${character.name}`);
     } else {
+      const templateId = `tmpl_fleshed_${character.id}`;
+      const templateContent = content ?? buildFleshOutStubContent(character.name, character.description, character.storyRole);
       const template: CharacterTemplate = {
-        id: `tmpl_promoted_${npc.id}`,
-        name: npc.name,
+        id: templateId,
+        name: character.name,
         version: 1,
-        content: content ?? buildPromotionStubContent(npc),
+        content: templateContent,
         summary: "",
         startingClothing: [],
       };
-      const instance = instantiateTemplate(template, next.id, next.branchId, npc.locationId, patch.npcPromote.memorySummary);
+      character.templateId = templateId;
+      if (memorySummary) {
+        character.memorySummary = memorySummary;
+      }
+      if (!character.clothing || character.clothing.length === 0) {
+        character.clothing = parseClothingFromContent(templateContent);
+      }
+      character.updatedAt = nowIso();
       next.characterTemplates.push(template);
-      next.characters.push(instance);
-      next.npcs = next.npcs.filter((n) => n.id !== npc.id);
-      applied.push(`background NPC promoted to main cast: ${npc.name}`);
+      applied.push(`character fleshed out: ${character.name}`);
     }
-  }
-
-  function isNameSimilar(a: string, b: string): boolean {
-    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const na = norm(a), nb = norm(b);
-    if (na === nb) return true;
-    if (na.length > 3 && nb.length > 3 && (na.includes(nb) || nb.includes(na))) return true;
-    return false;
-  }
-
-  function assignCoordinates(catalog: LocationEntry[], connections: string[]): { x: number; y: number } {
-    const PARENT_OFFSET = 80;
-    const JITTER = 40;
-
-    for (const connRef of connections) {
-      const parent = catalog.find(l => l.id === connRef || l.name.toLowerCase() === connRef.toLowerCase());
-      if (parent) {
-        return {
-          x: parent.x + (Math.random() - 0.5) * 2 * JITTER,
-          y: parent.y + PARENT_OFFSET + (Math.random() - 0.5) * 2 * JITTER,
-        };
-      }
-    }
-
-    return {
-      x: (Math.random() - 0.5) * 2 * JITTER,
-      y: (Math.random() - 0.5) * 2 * JITTER,
-    };
-  }
-
-  for (const loc of patch.locationAdd ?? []) {
-    const catalog = next.locationCatalog ?? [];
-
-    const similar = catalog.find(l => isNameSimilar(l.name, loc.name));
-    if (similar) {
-      rejected.push(`similar location exists: "${similar.name}" (${similar.id}) — use locationId to move there instead`);
-      continue;
-    }
-
-    if (catalog.some((l) => l.id === loc.id)) {
-      rejected.push(`location already exists: ${loc.id}`);
-      continue;
-    }
-
-    const coords = assignCoordinates(catalog, loc.connections);
-
-    const resolvedConnections: string[] = [];
-    for (const connRef of loc.connections) {
-      const target = catalog.find(l => l.id === connRef || l.name.toLowerCase() === connRef.toLowerCase());
-      if (target) {
-        resolvedConnections.push(target.id);
-        if (!target.connections.includes(loc.id)) {
-          target.connections.push(loc.id);
-        }
-      } else {
-        warnings.push(`location "${loc.name}" added but connection to "${connRef}" skipped: unknown location`);
-      }
-    }
-
-    const entry: LocationEntry = {
-      id: loc.id,
-      name: loc.name,
-      description: loc.description,
-      state: loc.state,
-      icon: loc.icon,
-      connections: resolvedConnections,
-      x: coords.x,
-      y: coords.y,
-    };
-    catalog.push(entry);
-    next.locationCatalog = catalog;
-    applied.push(`location added: ${loc.name} (${loc.id})`);
-  }
-
-  for (const update of patch.locationUpdate ?? []) {
-    const catalog = next.locationCatalog ?? [];
-    const loc = catalog.find(l => l.id === update.locationId || l.name.toLowerCase() === update.locationId.toLowerCase());
-    if (!loc) {
-      rejected.push(`unknown location for update: ${update.locationId}`);
-      continue;
-    }
-    if (update.name !== undefined) loc.name = update.name;
-    if (update.description !== undefined) loc.description = update.description;
-    if (update.state !== undefined) loc.state = update.state;
-    if (update.icon !== undefined) loc.icon = update.icon;
-    next.locationCatalog = catalog;
-    applied.push(`location updated: ${loc.name} (${loc.id})`);
-  }
-
-  for (const edge of patch.locationConnect ?? []) {
-    const catalog = next.locationCatalog ?? [];
-    const a = catalog.find(l => l.id === edge.locationId || l.name.toLowerCase() === edge.locationId.toLowerCase());
-    const b = catalog.find(l => l.id === edge.targetId || l.name.toLowerCase() === edge.targetId.toLowerCase());
-    if (!a) { rejected.push(`unknown location: ${edge.locationId}`); continue; }
-    if (!b) { rejected.push(`unknown location: ${edge.targetId}`); continue; }
-    if (a.id === b.id) { rejected.push(`cannot connect location to itself: ${a.id}`); continue; }
-    if (!a.connections.includes(b.id)) {
-      a.connections.push(b.id);
-      applied.push(`connection added: ${a.name} → ${b.name}`);
-    }
-    if (!b.connections.includes(a.id)) {
-      b.connections.push(a.id);
-    }
-    next.locationCatalog = catalog;
-  }
-
-  for (const edge of patch.locationDisconnect ?? []) {
-    const catalog = next.locationCatalog ?? [];
-    const a = catalog.find(l => l.id === edge.locationId || l.name.toLowerCase() === edge.locationId.toLowerCase());
-    const b = catalog.find(l => l.id === edge.targetId || l.name.toLowerCase() === edge.targetId.toLowerCase());
-    if (!a || !b) { rejected.push(`unknown location for disconnect: ${edge.locationId} / ${edge.targetId}`); continue; }
-    a.connections = a.connections.filter(id => id !== b.id);
-    b.connections = b.connections.filter(id => id !== a.id);
-    next.locationCatalog = catalog;
-    applied.push(`connection removed: ${a.name} ↔ ${b.name}`);
-  }
-
-  if (patch.locationId) {
-    const catalog = next.locationCatalog ?? LOCATIONS;
-    const resolveLoc = (ref: string) => catalog.find(
-      (l) => l.id === ref || l.name.toLowerCase() === ref.toLowerCase()
-    );
-    const start = resolveLoc(next.locationId);
-    const target = resolveLoc(patch.locationId);
-    if (!target) {
-      rejected.push(`unknown location: ${patch.locationId}`);
-    } else {
-      const viaRefs = patch.travelVia ?? [];
-      const badViaIdx = viaRefs.findIndex((ref) => !resolveLoc(ref));
-      if (badViaIdx >= 0) {
-        rejected.push(`unknown location in travelVia: ${viaRefs[badViaIdx]}`);
-      } else if (!start) {
-        rejected.push(`cannot validate travel: current location ${next.locationId} not found`);
-      } else {
-        const route = [start, ...viaRefs.map(resolveLoc), target];
-        let valid = true;
-        for (let i = 0; i < route.length - 1; i++) {
-          const a = route[i], b = route[i + 1];
-          if (!a || !b) { valid = false; break; }
-          if (a.id === b.id) {
-            rejected.push(`travel route repeats location: ${a.id}`);
-            valid = false;
-            break;
-          }
-          if (!a.connections.includes(b.id)) {
-            rejected.push(`no direct path: ${a.name} → ${b.name} are not connected`);
-            valid = false;
-            break;
-          }
-        }
-        if (valid) {
-          next.locationId = target.id;
-          applied.push(`location changed: ${target.name} (${target.id})`);
-        }
-      }
-    }
-  }
-
-  for (const entry of patch.characterLocation ?? []) {
-    const character = findCharacter(entry.characterId);
-    if (!character) {
-      rejected.push(`unknown character for location: ${entry.characterId}`);
-      continue;
-    }
-    const catalog = next.locationCatalog ?? [];
-    const loc = catalog.find(l => l.id === entry.locationId || l.name.toLowerCase() === entry.locationId.toLowerCase());
-    if (!loc) {
-      rejected.push(`unknown location for character: ${entry.locationId}`);
-      continue;
-    }
-    character.currentLocationId = loc.id;
-    applied.push(`character moved: ${character.name} → ${loc.name}`);
   }
 
   for (const item of patch.playerClothingAdd ?? []) {

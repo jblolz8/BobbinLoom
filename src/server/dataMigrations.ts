@@ -8,14 +8,67 @@ export type MigrationResult<T> =
   | { ok: true; data: T; migratedFrom?: number }
   | { ok: false; reason: string };
 
-export const CURRENT_PLAYTHROUGH_VERSION = 1;
+export const CURRENT_PLAYTHROUGH_VERSION = 2;
 
 type MigrationFn = (raw: unknown) => unknown;
 
 /** Version chains: maps a source version to the migration producing the next
  *  version's shape. Empty today (v1 is current) — the seam is the machinery,
  *  exercised by synthetic fixtures. */
-const playthroughMigrations: Record<number, MigrationFn> = {};
+const playthroughMigrations: Record<number, MigrationFn> = {
+  1: (raw: any) => {
+    const data = { ...raw };
+    
+    // Helper to migrate worldState for a given state object (root or snapshot)
+    const migrateWorldState = (stateObj: any) => {
+      stateObj.worldState = stateObj.worldState || [];
+      let idCounter = 1;
+      if (Array.isArray(stateObj.flags)) {
+        for (const flag of stateObj.flags) {
+          if (typeof flag === "string") {
+            stateObj.worldState.push({ id: `ws_mig_f_${idCounter++}`, name: flag, description: "" });
+          }
+        }
+      }
+      if (Array.isArray(stateObj.quests)) {
+        for (const quest of stateObj.quests) {
+          if (quest && typeof quest === "object" && typeof quest.name === "string") {
+            const status = quest.status ? ` [${quest.status}]` : "";
+            stateObj.worldState.push({
+              id: quest.id || `ws_mig_q_${idCounter++}`,
+              name: quest.name + status,
+              description: typeof quest.summary === "string" ? quest.summary : ""
+            });
+          }
+        }
+      }
+      delete stateObj.flags;
+      delete stateObj.quests;
+    };
+
+    // Migrate root
+    migrateWorldState(data);
+    data.activeCharacters = data.activeCharacters ?? (Array.isArray(data.characters) ? data.characters.map((c: any) => c.id) : []);
+    
+    delete data.npcs;
+    delete data.locationCatalog;
+    delete data.locationId;
+
+    // Migrate snapshots
+    if (data.snapshots && typeof data.snapshots === "object") {
+      for (const key of Object.keys(data.snapshots)) {
+        const snap = data.snapshots[key];
+        if (snap && typeof snap === "object") {
+          migrateWorldState(snap);
+          snap.activeCharacters = snap.activeCharacters ?? (Array.isArray(snap.characters) ? snap.characters.map((c: any) => c.id) : []);
+        }
+      }
+    }
+    
+    data.schemaVersion = 2;
+    return data;
+  }
+};
 
 function extractVersion(raw: unknown): number | undefined {
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {

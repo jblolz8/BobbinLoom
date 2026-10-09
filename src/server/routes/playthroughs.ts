@@ -24,9 +24,9 @@ import {
 } from "../store";
 import {
   closeChapterAction,
-  promoteNpcAction,
-  promoteNpcDraftAction,
-  questAction,
+  fleshOutCharacterAction,
+  fleshOutCharacterDraftAction,
+  worldStateAction,
   resummarizeChapterAction
 } from "../stateActions";
 import { buildOpeningPrompt, executeTurn } from "../turnActions";
@@ -68,13 +68,14 @@ const GenerateBody = z.object({
   openingMode: z.enum(["quick", "fleshedOut"]).default("fleshedOut"),
   lorebookIds: z.array(z.string()).optional(),
   presetId: z.string().optional(),
+  allowAdditionalCharacters: z.boolean().optional(),
 });
 
-const QuestActionBody = z.object({
-  questId: z.string(),
-  action: z.enum(["toggleTracking", "delete", "edit"]),
+const WorldStateActionBody = z.object({
+  worldStateId: z.string(),
+  action: z.enum(["delete", "edit"]),
   name: z.string().optional(),
-  summary: z.string().optional()
+  description: z.string().optional()
 });
 
 const CloseChapterBody = z.object({
@@ -252,6 +253,7 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
     const preferences: ScenarioPreferences = {
       name: body.name,
       setting: body.setting,
+      allowAdditionalCharacters: body.allowAdditionalCharacters ?? true,
     };
     if (body.castIds && body.castIds.length) {
       const castTemplates = resolveCast(body.castIds) ?? [];
@@ -347,39 +349,61 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
       contextWindow: manager.getContextWindow(),
       breakdown: promptUsage.breakdown,
       castPresence: {
-        present: playthrough.characters.filter((c) => c.currentLocationId === playthrough.locationId).length,
-        absent: playthrough.characters.filter((c) => c.currentLocationId !== playthrough.locationId).length,
+        present: playthrough.characters.filter((c) => playthrough.activeCharacters.includes(c.id)).length,
+        absent: playthrough.characters.filter((c) => !playthrough.activeCharacters.includes(c.id)).length,
       }
     };
   });
 
-  app.post("/api/playthroughs/:id/quest-action", async (request, reply) => {
+  app.post("/api/playthroughs/:id/world-state-action", async (request, reply) => {
     const params = z.object({ id: z.string() }).parse(request.params);
-    const body = QuestActionBody.parse(request.body);
-    const result = questAction(dataDir, params.id, body.questId, body.action, body.name, body.summary);
+    const body = WorldStateActionBody.parse(request.body);
+    const result = worldStateAction(dataDir, params.id, body.worldStateId, body.action, body.name, body.description);
     if (!result.ok) return reply.code(result.status).send({ error: result.error });
     return result.state;
   });
 
-  app.post("/api/playthroughs/:id/npcs/:npcId/promote", async (request, reply) => {
-    const { id, npcId } = z.object({ id: z.string(), npcId: z.string() }).parse(request.params);
+  app.post("/api/playthroughs/:id/characters/:characterId/flesh-out", async (request, reply) => {
+    const { id, characterId } = z.object({ id: z.string(), characterId: z.string() }).parse(request.params);
     const body = z.object({ content: z.string().optional() }).parse(request.body ?? {});
 
     const controller = abortOnClientDisconnect(reply);
-    const result = await promoteNpcAction(dataDir, id, npcId, manager.getProvider(), body.content, manager.getMaxTokens(), controller.signal, loadPromptConfig(settingsDir).promptConfig);
+    const result = await fleshOutCharacterAction(dataDir, id, characterId, manager.getProvider(), body.content, manager.getMaxTokens(), controller.signal, loadPromptConfig(settingsDir).promptConfig);
     if (controller.signal.aborted) return;
     if (!result.ok) return reply.code(result.status).send({ error: result.error });
     return result.state;
   });
 
-  app.post("/api/playthroughs/:id/npcs/:npcId/promote/draft", async (request, reply) => {
-    const { id, npcId } = z.object({ id: z.string(), npcId: z.string() }).parse(request.params);
+  app.post("/api/playthroughs/:id/characters/:characterId/flesh-out/draft", async (request, reply) => {
+    const { id, characterId } = z.object({ id: z.string(), characterId: z.string() }).parse(request.params);
 
     const controller = abortOnClientDisconnect(reply);
-    const result = await promoteNpcDraftAction(dataDir, id, npcId, manager.getProvider(), manager.getMaxTokens(), controller.signal, loadPromptConfig(settingsDir).promptConfig);
+    const result = await fleshOutCharacterDraftAction(dataDir, id, characterId, manager.getProvider(), manager.getMaxTokens(), controller.signal, loadPromptConfig(settingsDir).promptConfig);
     if (controller.signal.aborted) return;
     if (!result.ok) return reply.code(result.status).send({ error: result.error });
-    return { npc: result.npc, content: result.content, storyContext: result.storyContext };
+    return { character: result.character, content: result.content, storyContext: result.storyContext };
+  });
+
+  app.post("/api/playthroughs/:id/flesh-out-character", async (request, reply) => {
+    const { id } = z.object({ id: z.string() }).parse(request.params);
+    const body = z.object({ characterId: z.string(), content: z.string().optional() }).parse(request.body ?? {});
+
+    const controller = abortOnClientDisconnect(reply);
+    const result = await fleshOutCharacterAction(dataDir, id, body.characterId, manager.getProvider(), body.content, manager.getMaxTokens(), controller.signal, loadPromptConfig(settingsDir).promptConfig);
+    if (controller.signal.aborted) return;
+    if (!result.ok) return reply.code(result.status).send({ error: result.error });
+    return result.state;
+  });
+
+  app.post("/api/playthroughs/:id/flesh-out-character/draft", async (request, reply) => {
+    const { id } = z.object({ id: z.string() }).parse(request.params);
+    const body = z.object({ characterId: z.string() }).parse(request.body ?? {});
+
+    const controller = abortOnClientDisconnect(reply);
+    const result = await fleshOutCharacterDraftAction(dataDir, id, body.characterId, manager.getProvider(), manager.getMaxTokens(), controller.signal, loadPromptConfig(settingsDir).promptConfig);
+    if (controller.signal.aborted) return;
+    if (!result.ok) return reply.code(result.status).send({ error: result.error });
+    return { character: result.character, content: result.content, storyContext: result.storyContext };
   });
 
   app.post("/api/playthroughs/:id/close-chapter", async (request, reply) => {
@@ -468,8 +492,8 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
         contextWindow,
         breakdown: promptUsage.breakdown,
         castPresence: {
-          present: result.state.characters.filter((c) => c.currentLocationId === result.state.locationId).length,
-          absent: result.state.characters.filter((c) => c.currentLocationId !== result.state.locationId).length,
+          present: result.state.characters.filter((c) => result.state.activeCharacters.includes(c.id)).length,
+          absent: result.state.characters.filter((c) => !result.state.activeCharacters.includes(c.id)).length,
         }
       }
     };

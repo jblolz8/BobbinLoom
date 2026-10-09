@@ -1,56 +1,57 @@
 import type { CSSProperties } from "react";
 import { useState } from "react";
-import type { Playthrough, Quest } from "../../../../schemas";
-import type { QuestAction } from "../../../api";
-import { MiniMap } from "../../common/MiniMap";
+import type { Playthrough, WorldStateEntry } from "../../../../schemas";
+import type { WorldStateAction } from "../../../api";
 import { ConfirmModal } from "../../common/ConfirmModal";
-import { Badge, Button, Checkbox, Icon, TextArea, TextInput } from "../../base";
+import { Badge, Button, Icon, TextArea, TextInput } from "../../base";
 
 export type ScenePanelProps = {
   playthrough: Playthrough;
   actionLoading: boolean;
-  onQuestAction: (questId: string, action: QuestAction, name?: string, summary?: string) => void;
+  onWorldStateAction: (wsId: string, action: WorldStateAction, name?: string, description?: string) => void;
   className?: string;
   style?: CSSProperties;
 };
 
 type EditState = {
-  questId: string;
+  id: string;
   name: string;
-  summary: string;
+  description: string;
 } | null;
 
 type DeleteConfirm = {
-  questId: string;
+  id: string;
   name: string;
 } | null;
 
-function visibleQuests(quests: Quest[]): Quest[] {
-  return quests.filter((q) => q.tracking || q.status === "active");
-}
-
-export function ScenePanel({ playthrough, actionLoading, onQuestAction, className, style }: ScenePanelProps) {
+export function ScenePanel({ playthrough, actionLoading, onWorldStateAction, className, style }: ScenePanelProps) {
   const [editing, setEditing] = useState<EditState>(null);
+  const [isAdding, setIsAdding] = useState(false);
+  const [addName, setAddName] = useState("");
+  const [addDescription, setAddDescription] = useState("");
   const [deleting, setDeleting] = useState<DeleteConfirm>(null);
-
-  function handleToggle(questId: string) {
-    onQuestAction(questId, "toggleTracking");
-  }
 
   function handleDelete() {
     if (!deleting) return;
-    onQuestAction(deleting.questId, "delete");
+    onWorldStateAction(deleting.id, "delete");
     setDeleting(null);
   }
 
   function handleEditSave() {
     if (!editing) return;
-    onQuestAction(editing.questId, "edit", editing.name, editing.summary);
+    onWorldStateAction(editing.id, "edit", editing.name, editing.description);
     setEditing(null);
   }
 
-  const quests = visibleQuests(playthrough.quests);
-  const currentLocation = playthrough.locationCatalog?.find((l) => l.id === playthrough.locationId);
+  function handleAddSave() {
+    onWorldStateAction("new", "add", addName, addDescription);
+    setIsAdding(false);
+    setAddName("");
+    setAddDescription("");
+  }
+
+  const worldState = playthrough.worldState || [];
+  const activeCount = (playthrough.activeCharacters ?? []).length;
 
   return (
     <aside className={`panel left-panel${className ? ` ${className}` : ""}`} style={style}>
@@ -68,84 +69,51 @@ export function ScenePanel({ playthrough, actionLoading, onQuestAction, classNam
 
           <div className="scene-meta-grid">
             <div className="scene-meta-item">
-              <span className="meta-label"><Icon name="MapPin" size={13} /> Location</span>
-              <span className="meta-val flex items-center gap-1">
-                {currentLocation?.icon ? <span className="location-icon">{currentLocation.icon}</span> : null}
-                <strong>{currentLocation ? currentLocation.name : playthrough.locationId}</strong>
-              </span>
-            </div>
-
-            <div className="scene-meta-item">
               <span className="meta-label"><Icon name="Clock" size={13} /> Turn</span>
               <Badge variant="accent" size="sm">#{playthrough.turn}</Badge>
             </div>
 
-            {currentLocation?.description ? (
-              <p className="scene-location-description">{currentLocation.description}</p>
-            ) : null}
+            <div className="scene-meta-item">
+              <span className="meta-label"><Icon name="Users" size={13} /> In Scene</span>
+              <Badge variant="neutral" size="sm">{activeCount} active</Badge>
+            </div>
           </div>
         </article>
 
-        <MiniMap
-          locations={playthrough.locationCatalog ?? []}
-          currentLocationId={playthrough.locationId}
-        />
-
         <section className="scene-section">
           <h3 className="section-subtitle flex items-center justify-between">
             <span className="flex items-center gap-1.5">
-              <Icon name="Flag" size={15} /> World Flags
+              <Icon name="Globe" size={15} /> World State
+              <Badge variant="neutral" size="xs" pill>{worldState.length}</Badge>
             </span>
-            <Badge variant="neutral" size="xs" pill>{playthrough.flags.length}</Badge>
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => { setIsAdding(true); setAddName(""); setAddDescription(""); }}
+              disabled={actionLoading}
+              leftIcon={<Icon name="Plus" size={12} />}
+            >
+              Add
+            </Button>
           </h3>
-          {playthrough.flags.length > 0 ? (
-            <div className="flags-grid">
-              {playthrough.flags.map((f) => (
-                <div key={f} className="flag-chip" title={f}>
-                  <span className="flag-chip-text">{f}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="info-empty-state">
-              <Icon name="BookmarkCheck" size={15} />
-              <span>No active world flags</span>
-            </div>
-          )}
-        </section>
-
-        <section className="scene-section">
-          <h3 className="section-subtitle flex items-center justify-between">
-            <span className="flex items-center gap-1.5">
-              <Icon name="Scroll" size={15} /> Quests
-            </span>
-            <Badge variant="neutral" size="xs" pill>{quests.length}</Badge>
-          </h3>
-          {quests.length > 0 ? (
+          {worldState.length > 0 ? (
             <div className="quests-container">
-              {quests.map((quest) => (
-                <div key={quest.id} className={`quest-card ${quest.tracking ? "tracking" : ""}`}>
+              {worldState.map((ws) => (
+                <div key={ws.id} className="quest-card">
                   <div className="quest-card-header">
-                    <Checkbox
-                      checked={quest.tracking}
-                      onChange={() => handleToggle(quest.id)}
-                      disabled={actionLoading}
-                      label={<strong className="quest-title">{quest.name}</strong>}
-                      containerClassName="quest-checkbox-label"
-                      title={quest.tracking ? "Untrack quest" : "Track quest"}
-                    />
+                    <strong className="quest-title">{ws.name}</strong>
                   </div>
 
-                  {quest.summary ? <p className="quest-summary">{quest.summary}</p> : null}
+                  {ws.description ? <p className="quest-summary">{ws.description}</p> : null}
 
                   <div className="quest-card-actions">
                     <Button
                       size="xs"
                       variant="ghost"
                       disabled={actionLoading}
-                      onClick={() => setEditing({ questId: quest.id, name: quest.name, summary: quest.summary })}
+                      onClick={() => setEditing({ id: ws.id, name: ws.name, description: ws.description })}
                       leftIcon={<Icon name="Pencil" size={12} />}
-                      title="Edit quest"
+                      title="Edit state"
                     >
                       Edit
                     </Button>
@@ -154,11 +122,11 @@ export function ScenePanel({ playthrough, actionLoading, onQuestAction, classNam
                       variant="ghost"
                       className="text-danger hover:bg-danger-subtle"
                       disabled={actionLoading}
-                      onClick={() => setDeleting({ questId: quest.id, name: quest.name })}
+                      onClick={() => setDeleting({ id: ws.id, name: ws.name })}
                       leftIcon={<Icon name="Trash2" size={12} />}
-                      title="Abandon quest"
+                      title="Delete state"
                     >
-                      Abandon
+                      Delete
                     </Button>
                   </div>
                 </div>
@@ -166,8 +134,8 @@ export function ScenePanel({ playthrough, actionLoading, onQuestAction, classNam
             </div>
           ) : (
             <div className="info-empty-state">
-              <Icon name="BookOpen" size={15} />
-              <span>No quests active</span>
+              <Icon name="Globe" size={15} />
+              <span>No notable world states</span>
             </div>
           )}
         </section>
@@ -175,7 +143,7 @@ export function ScenePanel({ playthrough, actionLoading, onQuestAction, classNam
 
       {editing ? (
         <ConfirmModal
-          title="Edit Quest"
+          title="Edit World State"
           confirmLabel="Save Changes"
           confirmDisabled={!editing.name.trim()}
           isLoading={actionLoading}
@@ -185,16 +153,16 @@ export function ScenePanel({ playthrough, actionLoading, onQuestAction, classNam
         >
           <div className="modal-form-fields">
             <TextInput
-              label="Quest Name"
+              label="Name / Status"
               value={editing.name}
               onChange={(e) => setEditing({ ...editing, name: e.target.value })}
               disabled={actionLoading}
               autoFocus
             />
             <TextArea
-              label="Summary"
-              value={editing.summary}
-              onChange={(e) => setEditing({ ...editing, summary: e.target.value })}
+              label="Description"
+              value={editing.description}
+              onChange={(e) => setEditing({ ...editing, description: e.target.value })}
               rows={3}
               disabled={actionLoading}
             />
@@ -204,14 +172,45 @@ export function ScenePanel({ playthrough, actionLoading, onQuestAction, classNam
 
       {deleting ? (
         <ConfirmModal
-          title="Abandon Quest?"
-          message={<>This will permanently remove <strong>{deleting.name}</strong> from your quest list and log it in the chat.</>}
-          confirmLabel="Yes, abandon"
+          title="Delete World State?"
+          message={<>This will permanently remove <strong>{deleting.name}</strong> from your active world state.</>}
+          confirmLabel="Yes, delete"
           danger
           isLoading={actionLoading}
           onConfirm={handleDelete}
           onCancel={() => setDeleting(null)}
         />
+      ) : null}
+
+      {isAdding ? (
+        <ConfirmModal
+          title="Add World State"
+          confirmLabel="Add State"
+          confirmDisabled={!addName.trim()}
+          isLoading={actionLoading}
+          onConfirm={handleAddSave}
+          onCancel={() => setIsAdding(false)}
+          maxWidth={460}
+        >
+          <div className="modal-form-fields">
+            <TextInput
+              label="Name / Status"
+              value={addName}
+              onChange={(e) => setAddName(e.target.value)}
+              disabled={actionLoading}
+              autoFocus
+              placeholder="E.g. Festival Preparing, Dragon Slain"
+            />
+            <TextArea
+              label="Description (Optional)"
+              value={addDescription}
+              onChange={(e) => setAddDescription(e.target.value)}
+              rows={3}
+              disabled={actionLoading}
+              placeholder="What this means for the world..."
+            />
+          </div>
+        </ConfirmModal>
       ) : null}
     </aside>
   );

@@ -11,9 +11,9 @@ opens on the home screen, which lists every playthrough you have.
 
 ## The playthrough shelf
 
-Each item shows a cover image, the playthrough's name, its current location, turn count, cast
-size, when it was last touched, and a two-line preview of the most recent message. The **⋮**
-menu offers **Rename**, **Duplicate** and **Delete**.
+Each item shows a cover image, the playthrough's name, turn count, cast size, when it was last
+touched, and a two-line preview of the most recent message. The **⋮** menu offers **Rename**,
+**Duplicate** and **Delete**.
 
 **Rename** opens a small dialog with the current name selected, so typing replaces it: Enter saves,
 Escape or Cancel leaves it alone, and a failure is reported in the dialog that asked. The name on a
@@ -24,7 +24,7 @@ than sent.
 
 Two view modes, switched by the toolbar's **Grid** / **List** buttons and remembered per device:
 **Grid** shows the cover as a wide banner above the text, **List** shows it as a small thumbnail
-beside the title. **Search** matches the name and the location, the sort control orders by
+beside the title. **Search** matches the name, the sort control orders by
 updated date, name or turn, and the pager keeps a page size of its own.
 
 The whole shelf — search, sort, view modes, pager, the **⋮** menu — is also inside the play view,
@@ -39,7 +39,7 @@ A playthrough wears the first of these that exists:
 |---|---|---|
 | 1 | **A picture you picked** | Chosen by hand in **Gallery Media** |
 | 2 | **The latest image** | The newest image generated anywhere in the story so far |
-| 3 | **The present cast** | No images yet: a collage of the characters at your current location, in cast order — up to four, with a **+N** count for the rest |
+| 3 | **The present cast** | No images yet: a collage of the active characters in the scene, in cast order — up to four, with a **+N** count for the rest |
 | 4 | **The placeholder** | Nothing to show — the monochrome BobbinLoom mark |
 
 A cover **fills** its frame, and the frame's shape comes from **Cover Art** in
@@ -92,12 +92,11 @@ A few other things live on the setting step:
   generation.
 
 **Start Blank** skips generation entirely. You get a minimal playthrough — no scenario, no
-starter data, one unknown location — and your first message is the world-building.
+starter data — and your first message is the world-building.
 
-With the premise in hand, generation produces a scenario seed: a location (or several,
-connected), a lead character, a starting quest, some items, starting flags, and a background
-roster of three to six minor characters. Characters from your cast picker are instantiated
-alongside the generated cast.
+With the premise in hand, generation produces a scenario seed: a lead character, a starting
+world state, some items, and a background roster of three to six minor characters.
+Characters from your cast picker are instantiated alongside the generated cast.
 
 ## What a playthrough holds
 
@@ -106,15 +105,15 @@ A playthrough is one JSON document. The parts you'll see while playing:
 | Field | What it is |
 |---|---|
 | `playerCharacter` | You — name, description, body type, appearance, clothing, conditions, flags |
-| `characters` | The detailed cast: mood, attitude toward you, memory summary, clothing, conditions, flags, current location |
+| `characters` | The detailed cast: mood, attitude toward you, memory summary, clothing, conditions, flags |
 | `npcs` | Background characters, one line each, with an optional one-word disposition |
 | `characterTemplates` | A local copy of each detailed character's sheet, so the story keeps its own version |
 | `messages` | The chat, including hidden instruction messages and per-message metadata |
 | `chapters` | Closed chapters, each with its transcript, summary and turn range |
 | `storyMetaSummaries` | Older chapters rolled into a bounded rolling summary |
 | `memoryEvents`, `memoryLayers` | The memory pipeline — see [Chapters & memory](chapters-and-memory.md) |
-| `locationCatalog`, `itemCatalog` | The world's locations and items |
-| `quests`, `inventory`, `flags` | World state |
+| `itemCatalog` | The world's items |
+| `worldState`, `inventory` | World state |
 | `lorebookIds`, `lorebookTimingStates` | Attached lorebooks and their per-entry timers |
 | `snapshots` | One restore point per turn, which is what makes Retry possible |
 | `scenarioDescription`, `personaId`, `initialCastIds` | Creation-time metadata, kept so a scenario can be replayed |

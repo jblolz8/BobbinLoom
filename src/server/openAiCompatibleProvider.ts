@@ -170,24 +170,18 @@ export class OpenAICompatibleProvider {
       "",
       "Return ONLY a JSON object with this exact shape:",
       "{",
-      '  "locations": [',
-      '    { "id": "loc_shortname", "name": "Location Name", "description": "What this place is.", "state": "", "icon": "🏠", "connections": ["loc_other_id"] }',
-      "  ],",
       '  "character": {',
       '    "name": "Character Name",',
       `    "content": "${sheetExample}"`,
       "  },",
-      '  "quest": {',
-      '    "id": "quest_shortname",',
-      '    "name": "Quest Name",',
-      '    "summary": "One-line quest summary."',
-      "  },",
+      '  "startingWorldState": [',
+      '    { "name": "Objective / World Situation", "description": "Context and goal description." }',
+      "  ],",
       '  "items": [',
       '    { "id": "item_id", "name": "Item Name", "type": "weapon", "description": "What it does.", "quantity": 1 }',
       "  ],",
-      '  "startingFlags": [],',
-      '  "npcs": [',
-      '    { "name": "Borg", "description": "Gruff blacksmith at the forge.", "disposition": "gruff" }',
+      '  "additionalCharacters": [',
+      '    { "name": "Borg", "description": "Gruff blacksmith at the forge.", "storyRole": "Local Blacksmith" }',
       "  ],",
       '  "openingText": "Setting the stage: 2-3 sentences of introduction to the situation."',
       "}",
@@ -207,14 +201,13 @@ export class OpenAICompatibleProvider {
       ] : []),
       "Guidelines:",
       "- Write in a neutral tone; let the user's setting description carry the genre and atmosphere.",
-      "- Provide 2 to 4 distinct connected locations (the first location is where the player starts).",
-      "- Give locations realistic snake_case IDs with loc_ prefix (e.g. loc_tavern, loc_square).",
-      "- Ensure connections form a valid graph using the loc_ IDs defined in the list.",
       "- Provide 1 starting companion character template with a complete character sheet in the content field. Write a compelling, detailed character sheet; these rules define its shape:",
       rules,
-      "- Provide 1 clear starting quest with a snake_case id (quest_ prefix).",
+      "- startingWorldState: Provide 1 to 2 clear starting world state entries (active objectives, situations, or notable world facts) with concise names and descriptions.",
       "- Provide 2 to 4 starting items with snake_case IDs (item_ prefix), unique names, type words, descriptions, and quantities (1-5).",
-      "- Provide 0 to 2 simple background NPCs with names, one-line descriptions, and optional dispositions.",
+      preferences.allowAdditionalCharacters === false
+        ? "- additionalCharacters: Keep this array empty []. Do NOT invent or create any new background characters. The story must only involve the existing cast or characters explicitly named in the setting."
+        : "- additionalCharacters: Provide 0 to 2 simple characters who appear in the opening scene with names, one-line descriptions, and their storyRole (e.g. 'Town Guard', 'Tavern Keeper', 'Mysterious Stranger').",
       "- Make openingText engaging, setting up immediate atmosphere and context for the player.",
       "- Return ONLY the JSON object. No markdown, no explanation."
     ].filter(Boolean).join("\n");
@@ -263,7 +256,7 @@ export class OpenAICompatibleProvider {
   }
 
   async generateCharacterSheet(
-    npc: { name: string; description: string; disposition?: string },
+    npc: { name: string; description: string; disposition?: string; storyRole?: string },
     storyContext: string,
     signal?: AbortSignal,
     format?: CharacterFormat
@@ -271,9 +264,10 @@ export class OpenAICompatibleProvider {
     const fmt = resolveCharacterFormat(format);
     const example = toJsonExampleContent(buildFormatExample(fmt));
     const rules = buildFormatRules(fmt);
+    const roleOrDisp = npc.storyRole ?? npc.disposition;
     const prompt = [
       "You are a character sheet generator for a local RPG chat engine called BobbinLoom.",
-      "Given a background NPC's basic info and the current story context, produce a detailed character sheet content blob.",
+      "Given a character's basic info and the current story context, produce a detailed character sheet content blob.",
       "",
       "Return ONLY a JSON object with this exact shape:",
       "{",
@@ -281,7 +275,7 @@ export class OpenAICompatibleProvider {
       "}",
       "",
       "Rules:",
-      `- The NPC is named "${npc.name}". Their current description is: "${npc.description}"${npc.disposition ? ` and their disposition is "${npc.disposition}".` : "."}`,
+      `- The character is named "${npc.name}". Their current description is: "${npc.description}"${roleOrDisp ? ` and their story role is "${roleOrDisp}".` : "."}`,
       "- Expand this into a full character sheet. Invent reasonable details that fit the story context.",
       "- Match the tone and detail level of the story context.",
       "- The character should feel like they belong in this world.",

@@ -4,20 +4,18 @@ import {
   CharacterTemplate,
   EMPTY_MODULE_SET,
   Item,
-  LocationEntry,
   ParsedUserInput,
   PlayerPersona,
   Playthrough,
   PromptModuleSet,
   ScenarioSeed,
   ImageGenerationSettings,
-  SimpleNPC,
   TurnSnapshot,
   AssistantTurn,
   ChatMessage
 } from "../schemas";
 import { parseClothingFromContent } from "./characterSections";
-import { DEMO_TEMPLATE, ITEMS, LOCATIONS, STARTER_INVENTORY, STARTER_QUESTS } from "./demoData";
+import { DEMO_TEMPLATE, ITEMS, STARTER_INVENTORY, STARTER_WORLD_STATE } from "./demoData";
 
 function newId(prefix: string): string {
   const cryptoObj = globalThis.crypto as Crypto | undefined;
@@ -58,7 +56,6 @@ export function instantiateTemplate(
   template: CharacterTemplate,
   playthroughId: string,
   branchId: string,
-  locationId: string,
   memorySummary = `${template.name} has not formed a strong opinion of the player yet.`
 ): CharacterInstance {
   const createdAt = nowIso();
@@ -68,7 +65,7 @@ export function instantiateTemplate(
     playthroughId,
     branchId,
     name: template.name,
-    currentLocationId: locationId,
+    storyRole: "Stranger",
     mood: "neutral",
     towardPlayer: "neutral",
     memorySummary,
@@ -90,7 +87,7 @@ export function createInitialPlaythrough(
   const branchId = newId("branch");
 
   const castTemplates = cast ?? [DEMO_TEMPLATE];
-  const characters = castTemplates.map((t) => instantiateTemplate(t, playthroughId, branchId, LOCATIONS[0].id));
+  const characters = castTemplates.map((t) => instantiateTemplate(t, playthroughId, branchId));
 
   const p = persona ?? {
     id: "persona_default",
@@ -103,13 +100,12 @@ export function createInitialPlaythrough(
   };
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: playthroughId,
     name,
     branchId,
     turn: 0,
-    locationId: LOCATIONS[0].id,
-    flags: [],
+    worldState: [],
     playerCharacter: {
       name: p.name,
       description: p.description,
@@ -120,16 +116,14 @@ export function createInitialPlaythrough(
       flags: [],
     },
     characters,
+    activeCharacters: characters.map((c) => c.id),
     characterTemplates: clone(castTemplates),
-    npcs: [],
     inventory: clone(STARTER_INVENTORY),
-    quests: clone(STARTER_QUESTS),
     memoryLayers: { recent: [], compressed: [] },
     memoryEvents: [],
     messages: [],
     snapshots: {},
     lorebookIds: [],
-    locationCatalog: LOCATIONS,
     itemCatalog: ITEMS,
     chapters: [],
     storyMetaSummaries: [],
@@ -150,7 +144,6 @@ export function createPlaythroughFromSeed(
   const playthroughId = newId("play");
   const branchId = newId("branch");
 
-  const startLocationId = seed.locations[0].id;
   const castTemplates = cast ?? [];
   const castNames = new Set(castTemplates.map((t) => t.name.trim().toLowerCase()));
 
@@ -162,19 +155,30 @@ export function createPlaythroughFromSeed(
       id: newId("tmpl"), name: seed.character.name, version: 1,
       content: seed.character.content, summary: "", startingClothing: [],
     };
-    characters = [instantiateTemplate(template, playthroughId, branchId, startLocationId)];
+    characters = [instantiateTemplate(template, playthroughId, branchId)];
     characterTemplates = [template];
   } else {
     const lead = castTemplates.find((t) => t.name.trim().toLowerCase() === seed.character.name.trim().toLowerCase())
       ?? castTemplates[0];
     const ordered = [lead, ...castTemplates.filter((t) => t.id !== lead.id)];
-    characters = ordered.map((t) => instantiateTemplate(t, playthroughId, branchId, startLocationId));
+    characters = ordered.map((t) => instantiateTemplate(t, playthroughId, branchId));
     characterTemplates = clone(ordered);
   }
 
-  const npcs: SimpleNPC[] = seed.npcs
-    .filter((n) => !castNames.has(n.name.trim().toLowerCase()))
-    .map((n) => ({ id: newId("npc"), name: n.name, description: n.description, disposition: n.disposition, locationId: startLocationId, createdAt }));
+  // Map seed.additionalCharacters into instances and templates
+  for (const ac of seed.additionalCharacters) {
+    if (!castNames.has(ac.name.trim().toLowerCase())) {
+      const tId = newId("tmpl");
+      characterTemplates.push({
+        id: tId, name: ac.name, version: 1,
+        content: `Story Role: ${ac.storyRole || "Stranger"}\nDescription: ${ac.description}`,
+        summary: ac.description, startingClothing: []
+      });
+      const inst = instantiateTemplate(characterTemplates[characterTemplates.length - 1], playthroughId, branchId);
+      inst.storyRole = ac.storyRole || "Stranger";
+      characters.push(inst);
+    }
+  }
 
   const items: Item[] = seed.items.map((si) => ({
     id: si.id,
@@ -189,25 +193,13 @@ export function createPlaythroughFromSeed(
     quantity: si.quantity
   }));
 
-  const locationCatalog: LocationEntry[] = seed.locations.map((loc, i) => ({
-    id: loc.id,
-    name: loc.name,
-    description: loc.description,
-    state: loc.state,
-    icon: loc.icon,
-    connections: loc.connections,
-    x: i === 0 ? 0 : (Math.cos((i - 1) * 2.4) * 100),
-    y: i === 0 ? 0 : (Math.sin((i - 1) * 2.4) * 100),
-  }));
-
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: playthroughId,
     name,
     branchId,
     turn: 0,
-    locationId: startLocationId,
-    flags: seed.startingFlags,
+    worldState: seed.startingWorldState.map((ws, i) => ({ id: `ws_${i}`, name: ws.name, description: ws.description })),
     playerCharacter: (() => {
       const p = persona ?? {
         id: "persona_default",
@@ -229,19 +221,9 @@ export function createPlaythroughFromSeed(
       };
     })(),
     characters,
+    activeCharacters: characters.map((c) => c.id),
     characterTemplates,
-    npcs,
     inventory,
-    quests: [
-      {
-        id: seed.quest.id,
-        name: seed.quest.name,
-        summary: seed.quest.summary,
-        tracking: false,
-        status: "active"
-      }
-    ],
-    locationCatalog,
     itemCatalog: items,
     memoryEvents: [],
     messages: includeOpening && seed.openingText?.trim()
@@ -266,7 +248,7 @@ export function createBlankPlaythrough(
   const playthroughId = newId("play");
   const branchId = newId("branch");
 
-  const characters = cast.map((t) => instantiateTemplate(t, playthroughId, branchId, "unknown"));
+  const characters = cast.map((t) => instantiateTemplate(t, playthroughId, branchId));
 
   const p = persona ?? {
     id: "persona_default",
@@ -279,13 +261,12 @@ export function createBlankPlaythrough(
   };
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: playthroughId,
     name,
     branchId,
     turn: 0,
-    locationId: "unknown",
-    flags: [],
+    worldState: [],
     playerCharacter: {
       name: p.name,
       description: p.description,
@@ -296,16 +277,14 @@ export function createBlankPlaythrough(
       flags: [],
     },
     characters,
+    activeCharacters: characters.map((c) => c.id),
     characterTemplates: clone(cast),
-    npcs: [],
     inventory: [],
-    quests: [],
     memoryLayers: { recent: [], compressed: [] },
     memoryEvents: [],
     messages: [],
     snapshots: {},
     lorebookIds: [],
-    locationCatalog: [{ id: "unknown", name: "Unknown", description: "An unwritten world.", state: "", icon: "📍", connections: [], x: 0, y: 0 }],
     itemCatalog: [],
     chapters: [],
     storyMetaSummaries: [],
@@ -318,15 +297,12 @@ export function createBlankPlaythrough(
 export function takeTurnSnapshot(playthrough: Playthrough): TurnSnapshot {
   return clone({
     turn: playthrough.turn,
-    locationId: playthrough.locationId,
-    flags: playthrough.flags,
+    worldState: playthrough.worldState,
     playerCharacter: playthrough.playerCharacter,
     characters: playthrough.characters,
+    activeCharacters: playthrough.activeCharacters,
     characterTemplates: playthrough.characterTemplates,
-    npcs: playthrough.npcs,
     inventory: playthrough.inventory,
-    quests: playthrough.quests,
-    locationCatalog: playthrough.locationCatalog,
     itemCatalog: playthrough.itemCatalog,
     memoryEvents: playthrough.memoryEvents,
     memoryLayers: playthrough.memoryLayers,
@@ -345,14 +321,12 @@ export function takeTurnSnapshot(playthrough: Playthrough): TurnSnapshot {
 export function restoreSnapshotState(target: Playthrough, snapshot: TurnSnapshot | undefined): void {
   if (!snapshot) return;
   target.turn = snapshot.turn;
-  target.locationId = snapshot.locationId;
-  target.flags = clone(snapshot.flags);
+  target.worldState = clone(snapshot.worldState);
   target.playerCharacter = clone(snapshot.playerCharacter);
   target.characters = clone(snapshot.characters);
+  target.activeCharacters = clone(snapshot.activeCharacters);
   target.characterTemplates = clone(snapshot.characterTemplates);
-  target.npcs = clone(snapshot.npcs);
   target.inventory = clone(snapshot.inventory);
-  target.quests = clone(snapshot.quests);
   target.memoryEvents = clone(snapshot.memoryEvents);
   // memoryLayers were being captured by takeTurnSnapshot but never restored,
   // so a reverted branch kept the latest layers in its Journal. Restore them
@@ -362,7 +336,6 @@ export function restoreSnapshotState(target: Playthrough, snapshot: TurnSnapshot
   target.lorebookTimingStates = snapshot.lorebookTimingStates
     ? clone(snapshot.lorebookTimingStates)
     : undefined;
-  target.locationCatalog = clone(snapshot.locationCatalog ?? []);
   target.itemCatalog = snapshot.itemCatalog
     ? clone(snapshot.itemCatalog)
     : undefined;

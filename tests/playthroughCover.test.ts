@@ -160,12 +160,12 @@ describe("resolvePlaythroughCover", () => {
     });
   });
 
-  it("leaves out cast who are somewhere else", () => {
+  it("leaves out cast who are inactive/absent", () => {
     const { dataDir, imagesDir, charactersDir } = harness();
     const aria = characterWithArt(charactersDir, "Aria");
     const bran = characterWithArt(charactersDir, "Bran");
     const pt = createBlankPlaythrough("Apart", undefined, [aria, bran]);
-    pt.characters[1].currentLocationId = "somewhere_else";
+    pt.activeCharacters = [pt.characters[0].id];
     updatePlaythroughRecord(dataDir, pt);
 
     expect(coverOf(pt, { imagesDir, charactersDir })).toEqual({

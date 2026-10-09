@@ -346,9 +346,7 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
                     {renameTarget?.id === p.id ? renameDialog(p.id, p.name) : null}
                   </div>
                   <div className="playthrough-card-meta">
-                    <span className="inline-flex items-center gap-1">
-                      <Icon name="MapPin" size={14} /> {p.locationName}
-                    </span>
+
                     <span>Turn {p.turn}</span>
                     <span className="inline-flex items-center gap-1">
                       <Icon name="User" size={14} /> {p.castCount}{" "}
@@ -390,9 +388,7 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
                       {renameTarget?.id === p.id ? renameDialog(p.id, p.name) : null}
                     </div>
                     <div className="playthrough-card-meta">
-                      <span className="inline-flex items-center gap-1">
-                        <Icon name="MapPin" size={14} /> {p.locationName}
-                      </span>
+
                       <span>Turn {p.turn}</span>
                       <span className="inline-flex items-center gap-1">
                         <Icon name="User" size={14} /> {p.castCount}{" "}
@@ -458,7 +454,7 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
       <SearchBar
         value={search}
         onChange={setSearch}
-        placeholder="Search name or location…"
+        placeholder="Search playthroughs…"
         size="md"
         containerClassName="library-search-wrapper"
       />

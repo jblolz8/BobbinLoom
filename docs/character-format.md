@@ -101,7 +101,6 @@ type CharacterInstance = {
   playthroughId: string;
   branchId: string;
   name: string;
-  currentLocationId: string;   // presence is exact match against the player's location
   mood: string;                // default "neutral"
   towardPlayer: string;        // default "neutral" — the always-on relationship anchor
   memorySummary: string;       // kept deliberately (see Memory model)
@@ -128,25 +127,25 @@ Instantiation (`instantiateTemplate`) seeds `clothing` from `template.startingCl
 
 ## 4. Presence gating — the scene rule
 
-A cast character is **present** iff `instance.currentLocationId === playthrough.locationId` (exact match — no "nearby" tier; the location string IS the information).
+A cast character is **present** iff their id is in `playthrough.activeCharacters`.
 
-- **Present** → full sheet + `[RUNTIME STATE]` (location, mood, toward player, clothing line, conditions, flags, memory) injected verbatim.
-- **Absent** → one-liner under `ABSENT CHARACTERS (full sheets withheld — not at the current location):`
-  `- Name (id) [towardPlayer] — summary; at LocationName (locId), conditions`
+- **Present** → full sheet + `[RUNTIME STATE]` (mood, toward player, clothing line, conditions, flags, memory) injected verbatim.
+- **Absent** → one-liner under `ABSENT CHARACTERS (full sheets withheld — not in the current scene):`
+  `- Name (id) [towardPlayer] — summary, conditions`
   (towardPlayer only when non-neutral; conditions only when non-empty; block omitted when nobody is away).
-- **Gating is prompt-view only.** The `Allowed IDs` roster lists every instance id every turn, and all patches (`characterMood`, `characterConditions*`, `characterFlags*`, `characterMemory`, `characterLocation`, `characterClothing*`, `characterSectionUpdate`, `characterSectionRemove`, `characterSectionRename`) work on present AND absent characters. Engine state is always complete.
+- **Gating is prompt-view only.** The `Allowed IDs` roster lists every instance id every turn, and all patches (`characterMood`, `characterConditions*`, `characterFlags*`, `characterMemory`, `characterClothing*`, `characterSectionUpdate`, `characterSectionRemove`, `characterSectionRename`) work on present AND absent characters. Engine state is always complete.
 - **Incremental sheet edits are present-gated.** The bullet-level patch actions `characterSectionItemAdd` / `characterSectionItemRemove` / `characterSectionItemReplace` mutate individual bullets of a section (add a discovered Like, remove a no-longer-true trait, evolve a personality bullet) and are **gated to present characters** — an absent character's sections aren't in context, so item-level edits reject.
 - **Whole-section ops work anywhere, on any header.** `characterSectionUpdate` inserts/rewrites a whole section (used for full rewrites, freeform `Communication` sections, and absent characters) — any header is accepted, not just the format's. `characterSectionRemove` deletes a whole section (removing `[Clothing]` also clears structured clothing). `characterSectionRename` renames a header while preserving its body (renaming *to* `[Clothing]` re-derives structured clothing from the renamed body). All section/Clothing edits reject read-only CCv2 sheets; `Clothing` item routes through the structured `characterClothing*` pipeline.
 - Off-screen evolution is **model-driven**: the system prompt permits the model to evolve absent characters' mood/conditions/flags via patches; no engine timers.
 - **The sheet's growth is legible in the Info panel.** Info → Chars → **Full Sheet** shows each section with the turn that last changed it, read back out of that turn's `patchInfo.applied` (`section item replaced: Mika → [Personality] …`) — nothing is stored a second time, so a reverted story takes its marks with it. Each section is also marked against the library card the character came from (`changed`/`new since the library`), with a two-pane comparison and a per-section **Restore the original**. A section the log doesn't mention simply carries no mark: an unparsed line never becomes a claim.
 - **A revert takes the sheets with it.** A turn snapshot holds `characterTemplates`, and a delete-and-rewind restores the snapshot of the first assistant message in the deleted block — so a sheet the story (or a hand edit) grew after that point goes back, and the confirm dialog says which characters it takes back (`N character sheets rewound to this point — Mika`), which ones were added after the point and therefore *go* (`added after this point, sheet and all`), and which come back. Those three are separate facts on purpose: a sheet that did not exist at the restore point does not "rewind". With no snapshot at the anchor (`approximate`) nothing is claimed about the sheets at all, and the dialog says the sheets stay as they are.
-- Background NPCs render one line each regardless of location; stale ones (never named in a chapter's messages or memory events, never at a visited location) are pruned at chapter close with a visible "faded from the story" note. Background NPCs can be promoted to main cast via the `npcPromote` patch (or UI action), creating a new template and instance while seeding `memorySummary` from their personality.
+- Background NPCs render one line each; stale ones (never named in a chapter's messages or memory events, never active in a scene) are pruned at chapter close with a visible "faded from the story" note. Background NPCs can be promoted to main cast via the `npcPromote` patch (or UI action), creating a new template and instance while seeding `memorySummary` from their personality.
 
 ## 5. Memory model
 
 - **Episodic:** playthrough-wide `memoryEvents` with `characterInstanceId` tags, retrieved per turn by semantic query (embedding) with keyword fallback (`retrieveMemoriesVector`), layered into `recent`/`compressed`. Retrieval is probabilistic — events surface only when relevant to the recent context.
 - **Anchor:** `instance.memorySummary` is deliberately **kept** as the always-on relationship line (the retrieval system can't guarantee a character's current stance is recalled). Mood + towardPlayer do the same job more cheaply in the absent one-liner.
-- Tagging rule for the model: always tag events with character names and location IDs — untagged events won't be recalled in the right context.
+- Tagging rule for the model: always tag events with character names — untagged events won't be recalled in the right context.
 
 ## 6. Prompting model
 

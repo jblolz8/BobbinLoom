@@ -7,7 +7,7 @@
  *                   choice self-heals instead of blanking the card.
  *    2. `latest`  — the newest image the story has produced.
  *    3. `cast`    — a collage of the PRESENT cast's portraits (the same presence rule the
- *                   prompt builder uses: `currentLocationId === locationId`), capped.
+ *                   prompt builder uses: `activeCharacters`), capped.
  *    4. `null`    — nothing to show; the client renders the placeholder mark.
  *
  *  This lives outside `store.ts` on purpose: it needs the image store for the
@@ -58,13 +58,14 @@ export function resolvePlaythroughCover(
 
   // Cast order, not recency: a cover's job is recognition, and re-ordering it by who spoke
   // last would reshuffle the shelf mid-scene.
-  const present = p.characters.filter((character) => character.currentLocationId === p.locationId);
+  const activeSet = new Set(p.activeCharacters ?? []);
+  const present = p.characters.filter((character) => activeSet.has(character.id));
   const portraits = resolveCharacterPortraits(
-    present.map((character) => character.templateId),
+    present.map((character) => character.templateId).filter((id): id is string => Boolean(id)),
     options.charactersDir
   );
   if (portraits.length > 0) {
-    const nameById = new Map(present.map((character) => [character.templateId, character.name]));
+    const nameById = new Map(present.map((character) => [character.templateId ?? character.id, character.name]));
     return {
       source: "cast",
       characterCount: portraits.length,

@@ -154,7 +154,8 @@ export default function App() {
     try {
       const prefs: ScenarioPreferences = {
         name: setupForm.name || "New Adventure",
-        setting: setupForm.setting || undefined
+        setting: setupForm.setting || undefined,
+        allowAdditionalCharacters: setupForm.allowAdditionalCharacters,
       };
       const response = await generatePlaythrough(
         prefs,
@@ -372,7 +373,7 @@ export default function App() {
           confirmRevert={playthroughHook.confirmRevert}
           confirmBranch={playthroughHook.confirmBranch}
           handleResummarizeChapter={playthroughHook.handleResummarizeChapter}
-          handleQuestAction={playthroughHook.handleQuestAction}
+          handleWorldStateAction={playthroughHook.handleWorldStateAction}
           handleDismissNotice={() => playthroughHook.setCancelledNotice(null)}
           handleDismissFailedNotice={() => playthroughHook.setFailedNotice(null)}
           openPersonaManager={modalHook.openPersona}

@@ -1,4 +1,4 @@
-import type { ChapterOpeningMode, Playthrough, PlaythroughCover, PlaythroughListResponse, SimpleNPC } from "../../schemas";
+import type { ChapterOpeningMode, CharacterInstance, Playthrough, PlaythroughCover, PlaythroughListResponse } from "../../schemas";
 import type { RevertRequestAnchor } from "../../engine/chapterRevert";
 import { request } from "./client";
 
@@ -36,13 +36,16 @@ export type TurnResponse = {
   finishReason?: string | null;
 };
 
-export type QuestAction = "toggleTracking" | "delete" | "edit";
+export type WorldStateAction = "add" | "delete" | "edit";
 
-export type PromoteDraftResult = { npc: SimpleNPC; content: string; storyContext: string };
+export type FleshOutDraftResult = { character: CharacterInstance; content: string; storyContext: string };
+/** @deprecated Use FleshOutDraftResult */
+export type PromoteDraftResult = FleshOutDraftResult;
 
 export type ScenarioPreferences = {
   name: string;
   setting?: string;
+  allowAdditionalCharacters?: boolean;
 };
 
 export type GeneratePlaythroughResponse = {
@@ -188,33 +191,38 @@ export function saveDraft(
   });
 }
 
-export function questAction(
+export function worldStateAction(
   playthroughId: string,
-  questId: string,
-  action: QuestAction,
+  worldStateId: string,
+  action: WorldStateAction,
   name?: string,
-  summary?: string
+  description?: string
 ): Promise<Playthrough> {
-  return request<Playthrough>(`/api/playthroughs/${playthroughId}/quest-action`, {
+  return request<Playthrough>(`/api/playthroughs/${playthroughId}/world-state-action`, {
     method: "POST",
-    body: JSON.stringify({ questId, action, name, summary })
+    body: JSON.stringify({ worldStateId, action, name, description })
   });
 }
 
-export function promoteNpc(playthroughId: string, npcId: string, content?: string, signal?: AbortSignal): Promise<Playthrough> {
-  return request<Playthrough>(`/api/playthroughs/${playthroughId}/npcs/${npcId}/promote`, {
+export function fleshOutCharacter(playthroughId: string, characterId: string, content?: string, signal?: AbortSignal): Promise<Playthrough> {
+  return request<Playthrough>(`/api/playthroughs/${playthroughId}/characters/${characterId}/flesh-out`, {
     method: "POST",
     body: JSON.stringify(content !== undefined ? { content } : {}),
     signal,
   });
 }
 
-export function promoteNpcDraft(playthroughId: string, npcId: string, signal?: AbortSignal): Promise<PromoteDraftResult> {
-  return request<PromoteDraftResult>(`/api/playthroughs/${playthroughId}/npcs/${npcId}/promote/draft`, {
+export function fleshOutCharacterDraft(playthroughId: string, characterId: string, signal?: AbortSignal): Promise<FleshOutDraftResult> {
+  return request<FleshOutDraftResult>(`/api/playthroughs/${playthroughId}/characters/${characterId}/flesh-out/draft`, {
     method: "POST",
     signal,
   });
 }
+
+/** @deprecated Use fleshOutCharacter */
+export const promoteNpc = fleshOutCharacter;
+/** @deprecated Use fleshOutCharacterDraft */
+export const promoteNpcDraft = fleshOutCharacterDraft;
 
 export function deletePlaythrough(id: string): Promise<void> {
   return request<void>(`/api/playthroughs/${id}`, { method: "DELETE" });

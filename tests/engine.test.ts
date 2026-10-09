@@ -29,7 +29,6 @@ describe("createInitialPlaythrough", () => {
     expect(playthrough.characters.length).toBeGreaterThan(0);
     expect(playthrough.characters[0].templateId).toBeTruthy();
     expect(playthrough.inventory.length).toBeGreaterThan(0);
-    expect(playthrough.quests.length).toBeGreaterThan(0);
   });
 
   it("includes a player character with default values", () => {
@@ -43,29 +42,27 @@ describe("createInitialPlaythrough", () => {
 });
 
 describe("applyStatePatch", () => {
-  it("applies valid inventory, flag, and quest updates", () => {
+  it("applies valid inventory and world state updates", () => {
     const playthrough = createInitialPlaythrough("Patch Test");
 
     const result = applyStatePatch(playthrough, {
-      flagsAdd: ["met_mira"],
-      inventoryAdd: [{ itemId: "potion", quantity: 2 }],
-      questUpdate: [{ questId: "first_steps", status: "active" }]
+      worldStateAdd: [{ name: "Met Mira", description: "You met her." }],
+      inventoryAdd: [{ itemId: "potion", quantity: 2 }]
     });
 
     expect(result.rejected).toEqual([]);
-    expect(result.state.flags).toContain("met_mira");
+    expect(result.state.worldState.find(w => w.name === "Met Mira")).toBeDefined();
     expect(result.state.inventory.find((item) => item.itemId === "potion")?.quantity).toBeGreaterThanOrEqual(2);
-    expect(result.state.quests.find((quest) => quest.id === "first_steps")?.status).toBe("active");
   });
 
-  it("rejects unknown quest updates", () => {
+  it("rejects unknown world state updates", () => {
     const playthrough = createInitialPlaythrough("Reject Test");
 
     const result = applyStatePatch(playthrough, {
-      questUpdate: [{ questId: "missing_quest", status: "completed" }]
+      worldStateUpdate: [{ id: "missing_ws", description: "completed" }]
     });
 
-    expect(result.state.quests.every((quest) => quest.id !== "missing_quest")).toBe(true);
+    expect(result.state.worldState.every((w: any) => w.id !== "missing_ws")).toBe(true);
     expect(result.rejected.length).toBeGreaterThan(0);
   });
 
@@ -280,7 +277,7 @@ describe("applyStatePatch — CCv2 read-only sheets (D9)", () => {
   function withCcV2Cast(): Playthrough {
     const pt = createInitialPlaythrough("CCv2 Read-Only Test");
     pt.characterTemplates.push(CCV2_TEMPLATE);
-    pt.characters.push(instantiateTemplate(CCV2_TEMPLATE, pt.id, pt.branchId, pt.locationId));
+    pt.characters.push(instantiateTemplate(CCV2_TEMPLATE, pt.id, pt.branchId));
     return pt;
   }
 
@@ -335,9 +332,8 @@ describe("createPlaythroughFromSeed — cast reuse", () => {
   it("reuses the selected library template as the lead instead of a fresh AI clone", () => {
     const cast = [{ id: "tmpl_mira", name: "Mira", version: 1, content: "[Species]: Fox\n\n[Personality]\n- Original library sheet", summary: "the fox companion", startingClothing: [] }];
     const seed = {
-      locations: [{ id: "loc_a", name: "A", description: "", state: "", icon: "", connections: [] }],
       character: { name: "Mira", content: "[Species]: Fox\n\n[Personality]\n- AI-paraphrased clone sheet" },
-      quest: { id: "q", name: "Q", summary: "s" }, items: [], npcs: [], startingFlags: [], openingText: "",
+      startingWorldState: [], items: [], additionalCharacters: [], openingText: "",
     } as ScenarioSeed;
     const pt = createPlaythroughFromSeed("T", seed, undefined, cast);
     expect(pt.characters).toHaveLength(1);
@@ -349,13 +345,13 @@ describe("createPlaythroughFromSeed — cast reuse", () => {
 
   it("includeOpening=false does not seed the opening message even when openingText is set", () => {
     const cast = [{ id: "tmpl_x", name: "X", version: 1, content: "[Species]: Human", summary: "", startingClothing: [] }];
-    const seed = { locations: [{ id: "loc_a", name: "A", description: "", state: "", icon: "", connections: [] }], character: { name: "X", content: "c" }, quest: { id: "q", name: "Q", summary: "s" }, items: [], npcs: [], startingFlags: [], openingText: "A seeded opening." } as ScenarioSeed;
+    const seed = { character: { name: "X", content: "c" }, startingWorldState: [], items: [], additionalCharacters: [], openingText: "A seeded opening." } as ScenarioSeed;
     const pt = createPlaythroughFromSeed("T", seed, undefined, cast, false);
     expect(pt.messages).toHaveLength(0);
   });
 
   it("no cast => still seeds the AI lead and uses the seed opening text by default", () => {
-    const seed = { locations: [{ id: "loc_a", name: "A", description: "", state: "", icon: "", connections: [] }], character: { name: "Mira", content: "c" }, quest: { id: "q", name: "Q", summary: "s" }, items: [], npcs: [], startingFlags: [], openingText: "Open." } as ScenarioSeed;
+    const seed = { character: { name: "Mira", content: "c" }, startingWorldState: [], items: [], additionalCharacters: [], openingText: "Open." } as ScenarioSeed;
     const pt = createPlaythroughFromSeed("T", seed, undefined, undefined);
     expect(pt.characters).toHaveLength(1);
     expect(pt.characters[0].name).toBe("Mira");
@@ -366,7 +362,7 @@ describe("applyStatePatch — character section item ops", () => {
   it("adds an item to a present character's section", () => {
     const pt = createInitialPlaythrough("Item Test");
     const mira = pt.characters[0];
-    expect(mira.currentLocationId).toBe(pt.locationId);
+    expect(pt.activeCharacters).toContain(mira.id);
     const res = applyStatePatch(pt, {
       characterSectionItemAdd: [{ characterId: mira.id, section: "Likes", item: "Stargazing" }]
     });
@@ -379,8 +375,8 @@ describe("applyStatePatch — character section item ops", () => {
     const pt = createInitialPlaythrough("Absent Test");
     const mira = pt.characters[0];
     const absentPt = structuredClone(pt);
-    absentPt.characters[0] = { ...mira, currentLocationId: "loc_elsewhere" };
-    expect(absentPt.characters[0].currentLocationId).not.toBe(absentPt.locationId);
+    absentPt.activeCharacters = absentPt.activeCharacters.filter((id: string) => id !== mira.id);
+    expect(absentPt.activeCharacters).not.toContain(mira.id);
     const res = applyStatePatch(absentPt, {
       characterSectionItemAdd: [{ characterId: mira.id, section: "Likes", item: "Stargazing" }]
     });

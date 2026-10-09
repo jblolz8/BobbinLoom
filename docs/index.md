@@ -56,7 +56,7 @@ Everything is a file under `data/`, and playthroughs are one JSON document each.
 - [Timelines](timelines.md) — branching from any message, internal vs standalone branches
 
 **World**
-- [World state](world-state.md) — locations and the map, quests, inventory, flags, NPCs
+- [World state](world-state.md) — world state, inventory, NPCs
 - [Lorebooks](lorebooks.md) — keyword-activated world info
 - [Player character & personas](player-and-personas.md) — the player's own sheet and reusable templates
 

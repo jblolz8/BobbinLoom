@@ -38,16 +38,18 @@ interface ScoredEvent {
 function scoreEventKeyword(event: MemoryEvent, state: Playthrough): number {
   const characterIds = new Set(state.characters.map((c) => c.id));
   const characterNames = new Set(state.characters.map((c) => c.name.toLowerCase()));
-  const locationId = state.locationId;
-  const questIds = new Set(state.quests.map((q) => q.id));
-  const flagSet = new Set(state.flags);
+  const activeIds = new Set(state.activeCharacters ?? []);
+  const questIds = new Set((state.worldState ?? []).map((q) => q.id));
+  const flagSet = new Set((state.worldState ?? []).map((q) => q.name.toLowerCase()));
 
   let score = event.importance * 3;
 
-  if (event.characterInstanceId && characterIds.has(event.characterInstanceId)) score += 8;
+  if (event.characterInstanceId && characterIds.has(event.characterInstanceId)) {
+    score += 8;
+    if (activeIds.has(event.characterInstanceId)) score += 3;
+  }
   for (const tag of event.tags) {
     if (characterNames.has(tag.toLowerCase())) score += 6;
-    if (tag === locationId) score += 5;
     if (questIds.has(tag)) score += 4;
     if (flagSet.has(tag)) score += 4;
   }

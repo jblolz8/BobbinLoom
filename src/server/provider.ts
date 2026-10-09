@@ -96,7 +96,7 @@ export interface TurnProvider {
    *  (the text blob of the preset's sections). `format` is the target character
    *  format (defaults to the shipped Default format when omitted). */
   generateCharacterSheet(
-    npc: { name: string; description: string; disposition?: string },
+    npc: { name: string; description: string; disposition?: string; storyRole?: string },
     storyContext: string,
     signal?: AbortSignal,
     format?: CharacterFormat
@@ -207,7 +207,7 @@ export class MockProvider implements TurnProvider {
     return []; // mock doesn't support embeddings
   }
 
-  async generateCharacterSheet(_npc: { name: string; description: string; disposition?: string }, _storyContext: string, _signal?: AbortSignal, _format?: CharacterFormat): Promise<string> {
+  async generateCharacterSheet(_npc: { name: string; description: string; disposition?: string; storyRole?: string }, _storyContext: string, _signal?: AbortSignal, _format?: CharacterFormat): Promise<string> {
     throw new Error("Character sheet generation is not available with the Mock provider. Switch to a real provider in Settings.");
   }
 

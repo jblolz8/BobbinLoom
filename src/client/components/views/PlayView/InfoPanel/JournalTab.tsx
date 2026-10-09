@@ -569,78 +569,49 @@ export function JournalTab({
             <span>Dramatis Personae</span>
           </h3>
           <Badge variant="neutral" size="xs" pill>
-            {playthrough.characters.length + playthrough.npcs.length} persons
+            {playthrough.characters.length} persons
           </Badge>
         </div>
 
-        {playthrough.characters.length === 0 && playthrough.npcs.length === 0 ? (
+        {playthrough.characters.length === 0 ? (
           <div className="info-empty-state">
             <Icon name="UserX" size={15} />
             <span>No cast or characters encountered yet</span>
           </div>
         ) : (
           <div className="dramatis-sections">
-            {/* Playthrough Characters */}
-            {playthrough.characters.length > 0 ? (
-              <div>
-                <h4 className="dramatis-group-header">Active Party & Cast</h4>
-                <div className="dramatis-grid">
-                  {playthrough.characters.map((c) => (
-                    <div key={c.id} className="dramatis-card">
-                      <AvatarBadge name={c.name} icon="User" size="sm" />
-                      <div className="dramatis-info">
-                        <div className="dramatis-title-row">
-                          <strong className="dramatis-name" title={c.name}>{c.name}</strong>
-                        </div>
-                        {c.memorySummary ? (
-                          <p className="dramatis-desc">{c.memorySummary}</p>
+            <div className="dramatis-grid">
+              {playthrough.characters.map((c) => {
+                const isActive = (playthrough.activeCharacters ?? []).includes(c.id);
+                return (
+                  <div key={c.id} className="dramatis-card">
+                    <AvatarBadge name={c.name} icon="User" size="sm" />
+                    <div className="dramatis-info">
+                      <div className="dramatis-title-row">
+                        <strong className="dramatis-name" title={c.name}>{c.name}</strong>
+                        {c.storyRole ? (
+                          <Badge variant="neutral" size="xs" title={`Role: ${c.storyRole}`}>
+                            {c.storyRole}
+                          </Badge>
                         ) : null}
+                        <Badge
+                          variant={isActive ? "success" : "neutral"}
+                          size="xs"
+                          pill
+                        >
+                          {isActive ? "● In Scene" : "○ Off-Screen"}
+                        </Badge>
                       </div>
+                      {c.description ? (
+                        <p className="dramatis-desc">{c.description}</p>
+                      ) : c.memorySummary ? (
+                        <p className="dramatis-desc">{c.memorySummary}</p>
+                      ) : null}
                     </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            {/* NPCs */}
-            {playthrough.npcs.length > 0 ? (
-              <div>
-                <h4 className="dramatis-group-header">Encountered NPCs</h4>
-                <div className="dramatis-grid">
-                  {playthrough.npcs.map((npc) => (
-                    <div key={npc.id} className="dramatis-card npc">
-                      <AvatarBadge name={npc.name} icon="Users" size="sm" />
-                      <div className="dramatis-info">
-                        <div className="dramatis-title-row">
-                          <strong className="dramatis-name" title={npc.name}>{npc.name}</strong>
-                          {npc.disposition ? (
-                            <Badge
-                              variant={
-                                npc.disposition.toLowerCase().includes("friend") ||
-                                npc.disposition.toLowerCase().includes("ally")
-                                  ? "success"
-                                  : npc.disposition.toLowerCase().includes("hostil") ||
-                                    npc.disposition.toLowerCase().includes("aggress") ||
-                                    npc.disposition.toLowerCase().includes("threat")
-                                  ? "danger"
-                                  : "neutral"
-                              }
-                              size="xs"
-                              title={`Disposition: ${npc.disposition}`}
-                            >
-                              {npc.disposition}
-                            </Badge>
-                          ) : null}
-                        </div>
-                        {npc.description ? (
-                          <p className="dramatis-desc">{npc.description}</p>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </section>
