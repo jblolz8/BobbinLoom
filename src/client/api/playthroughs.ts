@@ -1,4 +1,4 @@
-import type { ChapterOpeningMode, CharacterInstance, Playthrough, PlaythroughCover, PlaythroughListResponse } from "../../schemas";
+import type { ChapterOpeningMode, CharacterInstance, ClothingItem, Playthrough, PlaythroughCover, PlaythroughListResponse } from "../../schemas";
 import type { RevertRequestAnchor } from "../../engine/chapterRevert";
 import { request } from "./client";
 
@@ -201,6 +201,26 @@ export function worldStateAction(
   return request<Playthrough>(`/api/playthroughs/${playthroughId}/world-state-action`, {
     method: "POST",
     body: JSON.stringify({ worldStateId, action, name, description })
+  });
+}
+
+export type EditPlayerPayload = {
+  name?: string;
+  description?: string;
+  bodyType?: string;
+  appearance?: string;
+  conditions?: string[];
+  flags?: string[];
+  clothing?: ClothingItem[];
+};
+
+export function editPlayer(
+  playthroughId: string,
+  payload: EditPlayerPayload
+): Promise<Playthrough> {
+  return request<Playthrough>(`/api/playthroughs/${playthroughId}/player`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
   });
 }
 

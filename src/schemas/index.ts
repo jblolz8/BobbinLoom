@@ -438,6 +438,9 @@ export type ChapterOpeningMode = z.infer<typeof ChapterOpeningModeSchema>;
  *  rather than a number, so it is part of the type. */
 export const PageSizeSchema = z.union([z.number().int().positive(), z.literal("all")]);
 
+export const AutoScrollBehaviorSchema = z.enum(["start", "bottom", "none"]);
+export type AutoScrollBehavior = z.infer<typeof AutoScrollBehaviorSchema>;
+
 export const ViewPreferencesSchema = z.object({
   /** The Chat tab's display toggles. Leaves mirror the client's own field names one for one, so a
    *  migrated toggle needs no translation table and the hook's per-field writers can send the single
@@ -450,9 +453,11 @@ export const ViewPreferencesSchema = z.object({
       showGenerationTime: z.boolean().optional(),
       showMessageTimestamps: z.boolean().optional(),
       showModelName: z.boolean().optional(),
+      showMessageNumbers: z.boolean().optional(),
       imagePromptPreview: z.boolean().optional(),
       autoImageAfterTurn: z.boolean().optional(),
-      alwaysDiscardOldImage: z.boolean().optional()
+      alwaysDiscardOldImage: z.boolean().optional(),
+      autoScrollBehavior: AutoScrollBehaviorSchema.optional()
     })
     .optional(),
   library: z
@@ -930,6 +935,16 @@ export const StatePatchSchema = z.object({
     characterId: z.string(),
     conditions: z.array(z.string()),
   })).optional(),
+  characterConditionsReplace: z.array(z.object({
+    characterId: z.string(),
+    from: z.string(),
+    to: z.string(),
+  })).optional(),
+  characterConditionsUpdate: z.array(z.object({
+    characterId: z.string(),
+    from: z.string(),
+    to: z.string(),
+  })).optional(),
   characterFlagsAdd: z.array(z.object({
     characterId: z.string(),
     flags: z.array(z.string()),
@@ -976,6 +991,14 @@ export const StatePatchSchema = z.object({
   // Player-specific patches
   playerConditionsAdd: z.array(z.string()).optional(),
   playerConditionsRemove: z.array(z.string()).optional(),
+  playerConditionsReplace: z.array(z.object({
+    from: z.string(),
+    to: z.string(),
+  })).optional(),
+  playerConditionsUpdate: z.array(z.object({
+    from: z.string(),
+    to: z.string(),
+  })).optional(),
   playerClothingAdd: z.array(ClothingItemSchema).optional(),
   playerClothingRemove: z.array(z.object({ slot: z.string() })).optional(),
   playerClothingSetState: z.array(z.object({ slot: z.string(), state: z.string() })).optional(),

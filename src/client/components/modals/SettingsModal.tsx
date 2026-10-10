@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ProviderKind } from "../../../schemas";
+import type { AutoScrollBehavior, ProviderKind } from "../../../schemas";
 import {
   UI_PREFERENCE_DEFAULTS,
   adoptLocalPreferences,
@@ -21,6 +21,32 @@ const SETTINGS_TABS: TabItem<SettingsTab>[] = [
   { id: "tags", label: "Tags & Taxonomy", icon: "Tag" },
   { id: "chat", label: "Chat", icon: "MessageSquare" },
   { id: "appearance", label: "Interface & Appearance", icon: "Palette" },
+];
+
+const AUTOSCROLL_OPTIONS: Array<{
+  id: AutoScrollBehavior;
+  title: string;
+  desc: string;
+  icon: string;
+}> = [
+  {
+    id: "start",
+    title: "Top of Message",
+    desc: "Auto-scroll to the beginning of the new AI reply so you can read from paragraph 1 (Default)",
+    icon: "ArrowUpToLine"
+  },
+  {
+    id: "bottom",
+    title: "Bottom of Message",
+    desc: "Auto-scroll all the way to the end of the newly generated turn",
+    icon: "ArrowDownToLine"
+  },
+  {
+    id: "none",
+    title: "Off",
+    desc: "Leave the scroll position completely untouched when the response arrives",
+    icon: "Ban"
+  }
 ];
 
 /** The Provider tab's own tabs: text and image connections are configured
@@ -50,6 +76,8 @@ export type SettingsModalProps = {
   setShowMessageTimestamps?: (show: boolean) => void;
   showModelName?: boolean;
   setShowModelName?: (show: boolean) => void;
+  showMessageNumbers?: boolean;
+  setShowMessageNumbers?: (show: boolean) => void;
   /** Review the text model's image prompt before it is sent to the image
    *  provider. Optional (default on) so the modal can be rendered without a
    *  chat-settings source. */
@@ -63,6 +91,8 @@ export type SettingsModalProps = {
   alwaysDiscardOldImage?: boolean;
   setAlwaysDiscardOldImage?: (always: boolean) => void;
   setImagePromptPreview?: (show: boolean) => void;
+  autoScrollBehavior?: AutoScrollBehavior;
+  setAutoScrollBehavior?: (behavior: AutoScrollBehavior) => void;
 };
 
 export function SettingsModal(props: SettingsModalProps) {
@@ -81,12 +111,16 @@ export function SettingsModal(props: SettingsModalProps) {
     setShowMessageTimestamps,
     showModelName = true,
     setShowModelName,
+    showMessageNumbers = true,
+    setShowMessageNumbers,
     imagePromptPreview = true,
     autoImageAfterTurn = false,
     setAutoImageAfterTurn,
     alwaysDiscardOldImage = false,
     setAlwaysDiscardOldImage,
     setImagePromptPreview,
+    autoScrollBehavior = "start",
+    setAutoScrollBehavior,
   } = props;
   const [settingsTab, setSettingsTabState] = useState<SettingsTab>(UI_PREFERENCE_DEFAULTS.settingsTab);
   const [providerKind, setProviderKindState] = useState<ProviderKind>(
@@ -279,12 +313,46 @@ export function SettingsModal(props: SettingsModalProps) {
                   />
 
                   <SwitchRow
+                    icon="Hash"
+                    title="Display Message Numbers"
+                    description="Show #0, #1, #2... numbering on player and AI messages"
+                    checked={showMessageNumbers}
+                    onChange={(e) => setShowMessageNumbers?.(e.target.checked)}
+                  />
+
+                  <SwitchRow
                     icon="BarChart2"
                     title="Show Context Usage"
                     description="Display the Context Meter token and memory usage indicator"
                     checked={showContextUsage}
                     onChange={(e) => setShowContextUsage(e.target.checked)}
                   />
+                </div>
+
+                <h4 className="chat-settings-section-title">Auto-Scroll on AI Reply</h4>
+                <div className="autoscroll-options-grid">
+                  {AUTOSCROLL_OPTIONS.map((opt) => {
+                    const isSelected = autoScrollBehavior === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        className={`autoscroll-option-card ${isSelected ? "active" : ""}`}
+                        onClick={() => setAutoScrollBehavior?.(opt.id)}
+                      >
+                        <div className="autoscroll-option-header">
+                          <div className="autoscroll-option-title-wrap">
+                            <Icon name={opt.icon} size={15} className="autoscroll-option-icon" />
+                            <strong className="autoscroll-option-title">{opt.title}</strong>
+                          </div>
+                          {isSelected && (
+                            <span className="autoscroll-badge-active">Active</span>
+                          )}
+                        </div>
+                        <p className="autoscroll-option-desc">{opt.desc}</p>
+                      </button>
+                    );
+                  })}
                 </div>
 
                 <h4 className="chat-settings-section-title">Image Generation</h4>

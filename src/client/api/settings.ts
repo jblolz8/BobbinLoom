@@ -1,4 +1,4 @@
-import type { AvatarShape, ChapterOpeningMode, CoverAspect, CustomThemeColors, TagTaxonomyConfig, ThemeMode, ViewPreferences } from "../../schemas";
+import type { AutoScrollBehavior, AvatarShape, ChapterOpeningMode, CoverAspect, CustomThemeColors, TagTaxonomyConfig, ThemeMode, ViewPreferences } from "../../schemas";
 import {
   COVER_ASPECT_VALUES,
   avatarBadgeRadius,
@@ -41,17 +41,32 @@ export const CHAT_PREFERENCE_DEFAULTS = {
   showGenerationTime: true,
   showMessageTimestamps: true,
   showModelName: true,
+  showMessageNumbers: true,
   imagePromptPreview: true,
   /** Costs a text call plus a render per turn, and a local render runs for minutes: OFF. */
   autoImageAfterTurn: false,
   /** Skips the confirmation when re-sending an image's request body: OFF. */
-  alwaysDiscardOldImage: false
+  alwaysDiscardOldImage: false,
+  /** Behavior when receiving a new AI message turn: start of message (default), bottom, or none. */
+  autoScrollBehavior: "start" as AutoScrollBehavior
 } as const;
 
-export type ResolvedChatPreferences = { [K in keyof typeof CHAT_PREFERENCE_DEFAULTS]: boolean };
+export type ResolvedChatPreferences = {
+  choicesEnabled: boolean;
+  showDebug: boolean;
+  showContextUsage: boolean;
+  showGenerationTime: boolean;
+  showMessageTimestamps: boolean;
+  showModelName: boolean;
+  showMessageNumbers: boolean;
+  imagePromptPreview: boolean;
+  autoImageAfterTurn: boolean;
+  alwaysDiscardOldImage: boolean;
+  autoScrollBehavior: AutoScrollBehavior;
+};
 
 /** The chat toggles with defaults filled. An absent leaf means "never chosen", so defaults are applied
- *  HERE and nowhere else — and a stored `false` must beat a default `true`, which is why the spread
+ *  HERE and nowhere else — and a stored value must beat a default, which is why the spread
  *  order is the whole point of this function. */
 export function resolveChatPreferences(stored: ViewPreferences | undefined): ResolvedChatPreferences {
   return { ...CHAT_PREFERENCE_DEFAULTS, ...(stored?.chat ?? {}) };

@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyPluginOptions } from "fastify";
 import { z } from "zod";
-import { ChapterOpeningModeSchema } from "../../schemas";
+import { ChapterOpeningModeSchema, ClothingItemSchema } from "../../schemas";
 import type { ScenarioPreferences } from "../../schemas";
 import { parseUserInput } from "../../engine/engine";
 import { assembleTurnPrompt } from "../openAiCompatibleProvider";
@@ -81,6 +81,16 @@ const WorldStateActionBody = z.object({
   action: z.enum(["delete", "edit"]),
   name: z.string().optional(),
   description: z.string().optional()
+});
+
+const EditPlayerBody = z.object({
+  name: z.string().optional(),
+  description: z.string().optional(),
+  bodyType: z.string().optional(),
+  appearance: z.string().optional(),
+  conditions: z.array(z.string()).optional(),
+  flags: z.array(z.string()).optional(),
+  clothing: z.array(ClothingItemSchema).optional()
 });
 
 const CloseChapterBody = z.object({
@@ -401,6 +411,26 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
     const result = worldStateAction(dataDir, params.id, body.worldStateId, body.action, body.name, body.description);
     if (!result.ok) return reply.code(result.status).send({ error: result.error });
     return result.state;
+  });
+
+  app.put("/api/playthroughs/:id/player", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const body = EditPlayerBody.parse(request.body ?? {});
+
+    const playthrough = getPlaythroughRecord(dataDir, params.id);
+    if (!playthrough) return reply.code(404).send({ error: "Playthrough not found" });
+
+    if (body.name !== undefined) playthrough.playerCharacter.name = body.name;
+    if (body.description !== undefined) playthrough.playerCharacter.description = body.description;
+    if (body.bodyType !== undefined) playthrough.playerCharacter.bodyType = body.bodyType;
+    if (body.appearance !== undefined) playthrough.playerCharacter.appearance = body.appearance;
+    if (body.conditions !== undefined) playthrough.playerCharacter.conditions = body.conditions;
+    if (body.flags !== undefined) playthrough.playerCharacter.flags = body.flags;
+    if (body.clothing !== undefined) playthrough.playerCharacter.clothing = body.clothing;
+
+    playthrough.updatedAt = new Date().toISOString();
+    updatePlaythroughRecord(dataDir, playthrough);
+    return playthrough;
   });
 
   app.post("/api/playthroughs/:id/characters/:characterId/flesh-out", async (request, reply) => {

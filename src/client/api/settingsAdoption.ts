@@ -56,6 +56,17 @@ const fromChatBlob = (leaf: string) => (raw: string) => {
   }
 };
 
+/** Read one enum string leaf out of the chat-settings blob, validated against allowed values. */
+const fromChatBlobOneOf = (leaf: string, allowed: readonly string[]) => (raw: string) => {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const value = parsed?.[leaf];
+    return typeof value === "string" && allowed.includes(value) ? value : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 /** A leaf stored as-is (a plain string, or `""` for an emptied search box). */
 const asString = (raw: string) => raw;
 
@@ -166,6 +177,7 @@ export const ADOPTION_SOURCES: readonly LocalAdoptionSource[] = [
     parse: fromChatBlob("showMessageTimestamps")
   },
   { key: CHAT_KEY, group: "chat", leaf: "showModelName", parse: fromChatBlob("showModelName") },
+  { key: CHAT_KEY, group: "chat", leaf: "showMessageNumbers", parse: fromChatBlob("showMessageNumbers") },
   { key: CHAT_KEY, group: "chat", leaf: "imagePromptPreview", parse: fromChatBlob("imagePromptPreview") },
   { key: CHAT_KEY, group: "chat", leaf: "autoImageAfterTurn", parse: fromChatBlob("autoImageAfterTurn") },
   {
@@ -173,6 +185,12 @@ export const ADOPTION_SOURCES: readonly LocalAdoptionSource[] = [
     group: "chat",
     leaf: "alwaysDiscardOldImage",
     parse: fromChatBlob("alwaysDiscardOldImage")
+  },
+  {
+    key: CHAT_KEY,
+    group: "chat",
+    leaf: "autoScrollBehavior",
+    parse: fromChatBlobOneOf("autoScrollBehavior", ["start", "bottom", "none"])
   },
   { key: LIBRARY_KEYS.viewMode, group: "library", leaf: "viewMode", parse: oneOf(["portrait", "list", "grid"]) },
   { key: LIBRARY_KEYS.sortBy, group: "library", leaf: "sortBy", parse: oneOf(["name", "createdAt", "updatedAt"]) },

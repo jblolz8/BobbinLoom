@@ -29,11 +29,14 @@ you or the scenario wrote.
 | Body | Body type and the description you play with |
 | Appearance | The appearance text |
 | Clothing | Structured items, one per slot, each with an optional state note |
-| Conditions | The marks currently on you |
+| Conditions | The temporary status conditions currently on you |
+| Player Flags | Lasting tags, knowledge, and narrative markers |
 | Inventory | What you're carrying, with quantities |
 
-The tab is a read of your situation, not a form. Your conditions, clothing and inventory change
-as the story moves — the model proposes those changes each turn and the engine applies them.
+While your conditions, clothing, and inventory naturally evolve as the story moves through model
+patches, the Player tab also provides direct interactive control: you can add new conditions
+or flags via the **+ Add** buttons, click any condition or flag to edit it in place, or tap the **×**
+button to remove it immediately.
 
 ## Personas
 

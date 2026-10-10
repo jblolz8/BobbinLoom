@@ -9,7 +9,7 @@ import {
   type Persona,
   type WorldStateAction
 } from "../../../api";
-import type { ChatMessage, Playthrough } from "../../../../schemas";
+import type { AutoScrollBehavior, ChatMessage, Playthrough } from "../../../../schemas";
 import type { RevertTarget } from "../../../../engine/chapterRevert";
 import type { DeleteImageTarget, FailedResponseNotice, ImageGenerationOverrides, ImagePromptRequest, ImageRequestEditorState, RetryImageTarget } from "../../../hooks/usePlaythrough";
 import { ScenePanel } from "./ScenePanel";
@@ -46,6 +46,10 @@ export type PlayViewProps = {
   setShowMessageTimestamps?: (val: boolean) => void;
   showModelName?: boolean;
   setShowModelName?: (val: boolean) => void;
+  showMessageNumbers?: boolean;
+  setShowMessageNumbers?: (val: boolean) => void;
+  autoScrollBehavior?: AutoScrollBehavior;
+  setAutoScrollBehavior?: (val: AutoScrollBehavior) => void;
   choices: string[];
   input: string;
   setInput: (val: string) => void;
@@ -182,6 +186,10 @@ export function PlayView(props: PlayViewProps) {
     setShowMessageTimestamps,
     showModelName,
     setShowModelName,
+    showMessageNumbers = true,
+    setShowMessageNumbers,
+    autoScrollBehavior,
+    setAutoScrollBehavior,
     choices,
     input,
     setInput,
@@ -499,6 +507,8 @@ export function PlayView(props: PlayViewProps) {
           showGenerationTime={showGenerationTime}
           showMessageTimestamps={showMessageTimestamps}
           showModelName={showModelName}
+          showMessageNumbers={showMessageNumbers}
+          autoScrollBehavior={autoScrollBehavior}
           canContinue={canContinue}
           onChoiceSelect={setInput}
           editingMessageId={editingMessageId}
@@ -810,12 +820,16 @@ export function PlayView(props: PlayViewProps) {
         setShowMessageTimestamps={setShowMessageTimestamps}
         showModelName={showModelName}
         setShowModelName={setShowModelName}
+        showMessageNumbers={showMessageNumbers}
+        setShowMessageNumbers={setShowMessageNumbers}
         imagePromptPreview={imagePromptPreview}
         setImagePromptPreview={setImagePromptPreview}
         autoImageAfterTurn={autoImageAfterTurn}
         setAutoImageAfterTurn={setAutoImageAfterTurn}
         alwaysDiscardOldImage={alwaysDiscardOldImage}
         setAlwaysDiscardOldImage={setAlwaysDiscardOldImage}
+        autoScrollBehavior={autoScrollBehavior}
+        setAutoScrollBehavior={setAutoScrollBehavior}
       />
 
       <PersonaManager

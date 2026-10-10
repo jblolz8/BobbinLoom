@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChatMessage, ImageApiStyle, ImageInstructionMode, Playthrough } from "../../schemas";
+import type { AutoScrollBehavior, ChatMessage, ImageApiStyle, ImageInstructionMode, Playthrough } from "../../schemas";
 import {
   adoptLocalPreferences,
   CHAT_PREFERENCE_DEFAULTS,
@@ -64,6 +64,7 @@ type ChatSettings = {
   showGenerationTime: boolean;
   showMessageTimestamps: boolean;
   showModelName: boolean;
+  showMessageNumbers: boolean;
   imagePromptPreview: boolean;
   /** Generate an image for every completed turn without pressing the button.
    *  OFF by default: it costs a text call plus a render per turn, and a local
@@ -73,6 +74,7 @@ type ChatSettings = {
    *  default: a re-send is the one image action that destroys the image it came
    *  from, so it asks first until the user says otherwise. */
   alwaysDiscardOldImage: boolean;
+  autoScrollBehavior: AutoScrollBehavior;
 };
 
 /** Overrides the preview modal posts back. When BOTH prompt fields are present
@@ -307,9 +309,11 @@ export function usePlaythrough() {
   const showGenerationTime = chatSettings.showGenerationTime;
   const showMessageTimestamps = chatSettings.showMessageTimestamps;
   const showModelName = chatSettings.showModelName;
+  const showMessageNumbers = chatSettings.showMessageNumbers;
   const imagePromptPreview = chatSettings.imagePromptPreview;
   const autoImageAfterTurn = chatSettings.autoImageAfterTurn;
   const alwaysDiscardOldImage = chatSettings.alwaysDiscardOldImage;
+  const autoScrollBehavior = chatSettings.autoScrollBehavior;
 
   const setChoicesEnabled = (val: boolean) => setChatSetting({ choicesEnabled: val });
 
@@ -325,9 +329,13 @@ export function usePlaythrough() {
 
   const setShowModelName = (val: boolean) => setChatSetting({ showModelName: val });
 
+  const setShowMessageNumbers = (val: boolean) => setChatSetting({ showMessageNumbers: val });
+
   const setImagePromptPreview = (val: boolean) => setChatSetting({ imagePromptPreview: val });
 
   const setAlwaysDiscardOldImage = (val: boolean) => setChatSetting({ alwaysDiscardOldImage: val });
+
+  const setAutoScrollBehavior = (val: AutoScrollBehavior) => setChatSetting({ autoScrollBehavior: val });
   const [choices, setChoices] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1185,6 +1193,8 @@ export function usePlaythrough() {
     setShowMessageTimestamps,
     showModelName,
     setShowModelName,
+    showMessageNumbers,
+    setShowMessageNumbers,
     imagePromptPreview,
     setImagePromptPreview,
     choices,
@@ -1233,6 +1243,8 @@ export function usePlaythrough() {
     setAutoImageAfterTurn,
     alwaysDiscardOldImage,
     setAlwaysDiscardOldImage,
+    autoScrollBehavior,
+    setAutoScrollBehavior,
     imagePromptRequest,
     imageProgress,
     handleGenerateImage,

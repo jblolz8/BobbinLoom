@@ -85,7 +85,8 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
   } = props;
 
   const [playthroughs, setPlaythroughs] = useState<PlaythroughSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
   const [loadFailures, setLoadFailures] = useState<LoadFailure[]>([]);
   const [failuresDismissed, setFailuresDismissed] = useState(false);
   // Which card is being renamed, and the dialog's own state. The draft lives in the dialog.
@@ -93,6 +94,7 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
   const [renameSaving, setRenameSaving] = useState(false);
   const [renameError, setRenameError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [prefsReady, setPrefsReady] = useState(false);
   const [viewMode, setViewModeState] = useState<PlaythroughViewMode>(
     LIBRARY_PREFERENCE_DEFAULTS.playthroughViewMode
@@ -103,6 +105,18 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
   const [sortDir, setSortDirState] = useState<"asc" | "desc">(
     LIBRARY_PREFERENCE_DEFAULTS.playthroughSortDir
   );
+
+  /** Debounce search input to avoid firing requests on every keystroke. */
+  useEffect(() => {
+    if (!search) {
+      setDebouncedSearch("");
+      return;
+    }
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   /** Set the moment the reader changes any of these, so a read that lands later never overwrites what
    *  they just chose. */
@@ -146,30 +160,67 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
   const pager = useServerPagination({
     totalItems: totalPlaythroughs,
     persistAs: "home",
-    resetDeps: [search, sortBy, sortDir, viewMode]
+    resetDeps: [debouncedSearch, sortBy, sortDir]
   });
 
-  const refresh = useCallback(async () => {
-    if (!prefsReady || !pager.isReady) return;
-    setLoading(true);
-    try {
-      const { playthroughs: list, failures, total } = await listPlaythroughs({
-        page: pager.page,
-        pageSize: pager.pageSize,
-        search,
-        sortBy,
-        sortDir
-      });
-      setPlaythroughs(list);
-      setTotalPlaythroughs(total);
-      setLoadFailures(failures);
-      setFailuresDismissed(false);
-    } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [pager.page, pager.pageSize, pager.isReady, search, sortBy, sortDir, prefsReady, onError]);
+  const activeRequestRef = useRef(0);
+  type PageCacheEntry = {
+    list: PlaythroughSummary[];
+    total: number;
+    failures: LoadFailure[];
+  };
+  const pageCacheRef = useRef<Map<string, PageCacheEntry>>(new Map());
+
+  // Invalidate page cache when search, sort, or page size changes
+  useEffect(() => {
+    pageCacheRef.current.clear();
+  }, [debouncedSearch, sortBy, sortDir, pager.pageSize]);
+
+  const refresh = useCallback(
+    async (options?: { force?: boolean }) => {
+      if (!prefsReady || !pager.isReady) return;
+
+      const cacheKey = `${pager.page}:${pager.pageSize}:${debouncedSearch}:${sortBy}:${sortDir}`;
+      if (!options?.force && pageCacheRef.current.has(cacheKey)) {
+        const cached = pageCacheRef.current.get(cacheKey)!;
+        setPlaythroughs(cached.list);
+        setTotalPlaythroughs(cached.total);
+        setLoadFailures(cached.failures);
+        setFailuresDismissed(false);
+        setIsFetching(false);
+        setInitialLoading(false);
+        return;
+      }
+
+      const requestId = ++activeRequestRef.current;
+      setIsFetching(true);
+      try {
+        const { playthroughs: list, failures, total } = await listPlaythroughs({
+          page: pager.page,
+          pageSize: pager.pageSize,
+          search: debouncedSearch,
+          sortBy,
+          sortDir
+        });
+        if (requestId !== activeRequestRef.current) return;
+        pageCacheRef.current.set(cacheKey, { list, total, failures });
+        setPlaythroughs(list);
+        setTotalPlaythroughs(total);
+        setLoadFailures(failures);
+        setFailuresDismissed(false);
+      } catch (e) {
+        if (requestId === activeRequestRef.current) {
+          onError(e instanceof Error ? e.message : String(e));
+        }
+      } finally {
+        if (requestId === activeRequestRef.current) {
+          setIsFetching(false);
+          setInitialLoading(false);
+        }
+      }
+    },
+    [pager.page, pager.pageSize, pager.isReady, debouncedSearch, sortBy, sortDir, prefsReady, onError]
+  );
   
   useEffect(() => {
     void refresh();
@@ -196,6 +247,11 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
     setRenameTarget({ id, name });
   }
 
+  function handleClearSearch() {
+    setSearch("");
+    setDebouncedSearch("");
+  }
+
   async function submitRename(id: string, name: string) {
     if (!name.trim()) return;
     setRenameSaving(true);
@@ -206,7 +262,8 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
       if (currentPlaythroughId === id) onCurrentRenamed?.(updated);
       // The route answers with the whole document; the list is a projection, so re-read it
       // rather than splicing a document into an array of summaries.
-      await refresh();
+      pageCacheRef.current.clear();
+      await refresh({ force: true });
     } catch (e) {
       // A failed rename stays in the dialog that asked for it.
       setRenameError(e instanceof Error ? e.message : String(e));
@@ -233,16 +290,20 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
   // The list arrives server-sorted by `updatedAt` desc, so the clone's position (and its
   // projected card) comes from the server — a locally prepended entry is the duplicate.
   function handleDuplicated() {
-    void refresh();
+    pageCacheRef.current.clear();
+    void refresh({ force: true });
   }
 
   function handleDeleted(id: string) {
+    pageCacheRef.current.clear();
     const remaining = playthroughs.filter((p) => p.id !== id);
     setPlaythroughs(remaining);
+    setTotalPlaythroughs((prev) => Math.max(0, prev - 1));
     if (currentPlaythroughId === id) {
       // The caller owns what happens next: it loads the first survivor, or goes home.
       onCurrentDeleted?.(remaining.map((p) => p.id));
     }
+    void refresh({ force: true });
   }
 
   function openCard(id: string) {
@@ -282,18 +343,20 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
     />
   );
 
+  const hasPlaythroughs = totalPlaythroughs > 0;
+
   const body = (
     <>
-      {loading ? (
+      {initialLoading ? (
         <div className="home-loading flex justify-center py-12">
           <Spinner size={32} />
         </div>
-      ) : playthroughs.length === 0 ? (
+      ) : !hasPlaythroughs ? (
         <div className="home-empty">
           {search ? (
             <>
               <p>No playthroughs match “{search}”.</p>
-              <Button variant="secondary" onClick={() => setSearch("")}>
+              <Button variant="secondary" onClick={handleClearSearch}>
                 Clear search
               </Button>
             </>
@@ -316,75 +379,34 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
       ) : (
         <>
           {paginationElement}
-          {viewMode === "grid" ? (
-            <div className="playthrough-grid">
-              {playthroughs.map((p) => (
-                <article
-                  key={p.id}
-                  className={`playthrough-card ${p.id === currentPlaythroughId ? "current" : ""}`}
-                >
-                  <div className="playthrough-card-cover">
-                    <CoverArt cover={p.cover} size="card" />
-                  </div>
-                  <div className="playthrough-card-header">
-                    {/* The name is the navigation target: a real button, stretched over the card, so
-                        nothing interactive is nested inside a button and Enter/Space come for free. */}
-                    <h3 className="playthrough-card-title">
-                      <button
-                        type="button"
-                        className="playthrough-card-open"
-                        onClick={() => openCard(p.id)}
-                        aria-current={p.id === currentPlaythroughId ? "true" : undefined}
-                      >
-                        {p.name}
-                      </button>
-                    </h3>
-                    <div className="playthrough-card-header-right">
-                      {p.id === currentPlaythroughId ? currentBadge : null}
-                      {actionsMenu(p)}
+          <div className={`playthrough-shelf-content ${isFetching ? "is-fetching" : ""}`}>
+            {viewMode === "grid" ? (
+              <div className="playthrough-grid">
+                {playthroughs.map((p) => (
+                  <article
+                    key={p.id}
+                    className={`playthrough-card ${p.id === currentPlaythroughId ? "current" : ""}`}
+                  >
+                    <div className="playthrough-card-cover">
+                      <CoverArt cover={p.cover} size="card" />
                     </div>
-                    {renameTarget?.id === p.id ? renameDialog(p.id, p.name) : null}
-                  </div>
-                  <div className="playthrough-card-meta">
-
-                    <span>Turn {p.turn}</span>
-                    <span className="inline-flex items-center gap-1">
-                      <Icon name="User" size={14} /> {p.castCount}{" "}
-                      {p.castCount === 1 ? "character" : "characters"}
-                    </span>
-                  </div>
-                  <p className="playthrough-card-updated">Updated {formatDate(p.updatedAt)}</p>
-                  {p.visibleMessageCount > 0 ? (
-                    <p className="playthrough-card-preview">{p.lastMessagePreview}…</p>
-                  ) : (
-                    <p className="playthrough-card-preview">No messages yet.</p>
-                  )}
-                </article>
-              ))}
-            </div>
-          ) : (
-            <div className="playthrough-list">
-              {playthroughs.map((p) => (
-                <div
-                  key={p.id}
-                  className={`playthrough-row ${p.id === currentPlaythroughId ? "current" : ""}`}
-                >
-                  <div className="playthrough-row-cover">
-                    <CoverArt cover={p.cover} size="thumb" />
-                  </div>
-                  <div className="playthrough-row-content">
-                    <div className="playthrough-row-title-row">
-                      <strong className="playthrough-row-title">
+                    <div className="playthrough-card-header">
+                      {/* The name is the navigation target: a real button, stretched over the card, so
+                          nothing interactive is nested inside a button and Enter/Space come for free. */}
+                      <h3 className="playthrough-card-title">
                         <button
                           type="button"
-                          className="playthrough-row-open"
+                          className="playthrough-card-open"
                           onClick={() => openCard(p.id)}
                           aria-current={p.id === currentPlaythroughId ? "true" : undefined}
                         >
                           {p.name}
                         </button>
-                      </strong>
-                      {p.id === currentPlaythroughId ? currentBadge : null}
+                      </h3>
+                      <div className="playthrough-card-header-right">
+                        {p.id === currentPlaythroughId ? currentBadge : null}
+                        {actionsMenu(p)}
+                      </div>
                       {renameTarget?.id === p.id ? renameDialog(p.id, p.name) : null}
                     </div>
                     <div className="playthrough-card-meta">
@@ -394,20 +416,62 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
                         <Icon name="User" size={14} /> {p.castCount}{" "}
                         {p.castCount === 1 ? "character" : "characters"}
                       </span>
-                      <span className="playthrough-row-updated">Updated {formatDate(p.updatedAt)}</span>
                     </div>
+                    <p className="playthrough-card-updated">Updated {formatDate(p.updatedAt)}</p>
                     {p.visibleMessageCount > 0 ? (
                       <p className="playthrough-card-preview">{p.lastMessagePreview}…</p>
                     ) : (
                       <p className="playthrough-card-preview">No messages yet.</p>
                     )}
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="playthrough-list">
+                {playthroughs.map((p) => (
+                  <div
+                    key={p.id}
+                    className={`playthrough-row ${p.id === currentPlaythroughId ? "current" : ""}`}
+                  >
+                    <div className="playthrough-row-cover">
+                      <CoverArt cover={p.cover} size="thumb" />
+                    </div>
+                    <div className="playthrough-row-content">
+                      <div className="playthrough-row-title-row">
+                        <strong className="playthrough-row-title">
+                          <button
+                            type="button"
+                            className="playthrough-row-open"
+                            onClick={() => openCard(p.id)}
+                            aria-current={p.id === currentPlaythroughId ? "true" : undefined}
+                          >
+                            {p.name}
+                          </button>
+                        </strong>
+                        {p.id === currentPlaythroughId ? currentBadge : null}
+                        {renameTarget?.id === p.id ? renameDialog(p.id, p.name) : null}
+                      </div>
+                      <div className="playthrough-card-meta">
+
+                        <span>Turn {p.turn}</span>
+                        <span className="inline-flex items-center gap-1">
+                          <Icon name="User" size={14} /> {p.castCount}{" "}
+                          {p.castCount === 1 ? "character" : "characters"}
+                        </span>
+                        <span className="playthrough-row-updated">Updated {formatDate(p.updatedAt)}</span>
+                      </div>
+                      {p.visibleMessageCount > 0 ? (
+                        <p className="playthrough-card-preview">{p.lastMessagePreview}…</p>
+                      ) : (
+                        <p className="playthrough-card-preview">No messages yet.</p>
+                      )}
+                    </div>
+                    <div className="playthrough-row-actions">{actionsMenu(p)}</div>
                   </div>
-                  <div className="playthrough-row-actions">{actionsMenu(p)}</div>
-                </div>
-              ))}
-            </div>
-          )}
-          
+                ))}
+              </div>
+            )}
+          </div>
           {paginationElement}
         </>
       )}
@@ -454,6 +518,7 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
       <SearchBar
         value={search}
         onChange={setSearch}
+        onClear={handleClearSearch}
         placeholder="Search playthroughs…"
         size="md"
         containerClassName="library-search-wrapper"

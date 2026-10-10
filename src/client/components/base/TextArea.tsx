@@ -63,17 +63,26 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
     if (!autoGrow) return;
     const el = measureRef.current;
     if (!el) return;
-    // First run: remember the CSS `rows`-based height as the floor so an empty
-    // field doesn't collapse to a single line.
-    if (baselineRef.current === null) baselineRef.current = el.clientHeight;
 
-    el.style.height = "auto";
-    const content = el.scrollHeight;
-    const grown = Math.max(content, baselineRef.current);
-    const capped = autoGrowMax ? Math.min(grown, autoGrowMax) : grown;
-    el.style.height = `${capped}px`;
-    // Flip to scroll only once content passes the cap (keeps layout stable).
-    el.style.overflowY = autoGrowMax && content > autoGrowMax ? "auto" : "hidden";
+    const adjustHeight = () => {
+      // Remember the CSS `rows`-based height as the floor once visible so an empty
+      // field doesn't collapse smaller than its baseline.
+      if ((baselineRef.current === null || baselineRef.current <= 0) && el.clientHeight > 0) {
+        baselineRef.current = el.clientHeight;
+      }
+
+      el.style.height = "auto";
+      const content = el.scrollHeight;
+      const grown = baselineRef.current ? Math.max(content, baselineRef.current) : content;
+      const capped = autoGrowMax ? Math.min(grown, autoGrowMax) : grown;
+      el.style.height = `${capped}px`;
+      // Flip to scroll only once content passes the cap (keeps layout stable).
+      el.style.overflowY = autoGrowMax && content > autoGrowMax ? "auto" : "hidden";
+    };
+
+    adjustHeight();
+    window.addEventListener("resize", adjustHeight);
+    return () => window.removeEventListener("resize", adjustHeight);
   }, [autoGrow, autoGrowMax, value]);
 
   return (

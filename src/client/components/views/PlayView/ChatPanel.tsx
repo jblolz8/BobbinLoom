@@ -1,8 +1,8 @@
 import type { CSSProperties } from "react";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useElapsed } from "../../../hooks/useElapsed";
 import { formatDuration, imageCaption } from "../../../engine/displayFormat";
-import type { ChatMessage, Playthrough } from "../../../../schemas";
+import type { AutoScrollBehavior, ChatMessage, Playthrough } from "../../../../schemas";
 import { buildImageUrl, type ImageGenerationProgress, type TokenUsage } from "../../../api";
 import type { FailedResponseNotice, ImagePromptRequest } from "../../../hooks/usePlaythrough";
 import { ContextMeter } from "../../common/ContextMeter";
@@ -10,6 +10,7 @@ import { MarkdownView } from "../../common/MarkdownView";
 import { ImageViewer, type ImageViewerImage } from "../../common/ImageViewer";
 import { Badge, Button, CodeBlock, Icon, IconButton, ModelBadge, TextArea } from "../../base";
 import { ImagePromptModal } from "./ImagePromptModal";
+import { triggerHaptic } from "../../../utils/haptics";
 
 export type ChatPanelProps = {
   playthrough: Playthrough;
@@ -25,6 +26,8 @@ export type ChatPanelProps = {
   showGenerationTime?: boolean;
   showMessageTimestamps?: boolean;
   showModelName?: boolean;
+  showMessageNumbers?: boolean;
+  autoScrollBehavior?: AutoScrollBehavior;
   canContinue: boolean;
   onChoiceSelect: (text: string) => void;
   editingMessageId: string | null;
@@ -406,6 +409,8 @@ export function ChatPanel(props: ChatPanelProps) {
     playthrough, input, onInputChange, onSend, loading, actionLoading,
     choices, choicesEnabled, showDebug, showContextUsage,
     showGenerationTime = true, showMessageTimestamps = true, showModelName = true,
+    showMessageNumbers = true,
+    autoScrollBehavior = "start",
     canContinue,
     onChoiceSelect,
     editingMessageId, editDraft, onEditDraftChange, onStartEdit, onSaveEdit, onCancelEdit,
@@ -440,8 +445,15 @@ export function ChatPanel(props: ChatPanelProps) {
   // view, and the state lives here because only one can be open at a time.
   const [viewerImage, setViewerImage] = useState<ImageViewerImage | null>(null);
 
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesStartRef = useRef<HTMLDivElement>(null);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+
+  const lastPlaythroughIdRef = useRef<string | null>(null);
+  const prevLoadingRef = useRef(loading);
+  const prevSendingRef = useRef(sendingMessage);
+  const prevMessagesLengthRef = useRef(playthrough.messages.length);
 
   // Live readout for the message whose image is being generated — and only that
   // message, in the branch that draws its Cancel button. The hook clears the
@@ -452,9 +464,124 @@ export function ChatPanel(props: ChatPanelProps) {
   const promptElapsedMs = useElapsed(imagePromptStartedAt, imagePreviewMessageId !== null && imagePreviewMessageId !== undefined);
   const renderElapsedMs = useElapsed(imageGeneratingStartedAt, imageGeneratingId !== null && imageGeneratingId !== undefined);
 
-  useEffect(() => {
+  const handleScroll = useCallback(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setShowScrollBottom(distanceFromBottom > 160);
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    triggerHaptic(8);
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [playthrough.messages.length, loading, sendingMessage, cancelledNotice, failedNotice]);
+  }, []);
+
+  const scrollToFirstPartOfMessage = useCallback((msgId: string) => {
+    const performScroll = () => {
+      const container = messagesContainerRef.current;
+      const messageEl = document.getElementById(`message-${msgId}`);
+      if (container && messageEl) {
+        const containerRect = container.getBoundingClientRect();
+        const messageRect = messageEl.getBoundingClientRect();
+        const targetScrollTop = container.scrollTop + (messageRect.top - containerRect.top) - 12;
+        container.scrollTo({
+          top: Math.max(0, targetScrollTop),
+          behavior: "smooth"
+        });
+        setShowScrollBottom(false);
+        return true;
+      }
+      return false;
+    };
+
+    if (!performScroll()) {
+      requestAnimationFrame(() => {
+        if (!performScroll()) {
+          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+          setShowScrollBottom(false);
+        }
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    // Opening or changing playthrough: initial load lands at the bottom
+    if (lastPlaythroughIdRef.current !== playthrough.id) {
+      lastPlaythroughIdRef.current = playthrough.id;
+      prevLoadingRef.current = loading;
+      prevSendingRef.current = sendingMessage;
+      prevMessagesLengthRef.current = playthrough.messages.length;
+      messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+      setShowScrollBottom(false);
+      return;
+    }
+
+    const wasLoading = prevLoadingRef.current;
+    const wasSending = prevSendingRef.current;
+    const prevCount = prevMessagesLengthRef.current;
+
+    prevLoadingRef.current = loading;
+    prevSendingRef.current = sendingMessage;
+    prevMessagesLengthRef.current = playthrough.messages.length;
+
+    // Case 1: User just sent a message or continuing (sendingMessage became non-null or loading started)
+    if ((!wasSending && sendingMessage) || (!wasLoading && loading)) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      setShowScrollBottom(false);
+      return;
+    }
+
+    // Case 2: AI response just landed (was loading or sending, now finished)
+    const isNowSettled = (wasLoading && !loading) || (wasSending && !sendingMessage);
+    const lastMessage = playthrough.messages[playthrough.messages.length - 1];
+    const isNewAssistantMessage =
+      isNowSettled && lastMessage && lastMessage.role === "assistant" && !lastMessage.hidden;
+
+    if (isNewAssistantMessage) {
+      if (autoScrollBehavior === "start") {
+        scrollToFirstPartOfMessage(lastMessage.id);
+        return;
+      } else if (autoScrollBehavior === "none") {
+        // Do not alter scroll position
+        return;
+      } else {
+        // "bottom"
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        setShowScrollBottom(false);
+        return;
+      }
+    }
+
+    // Case 3: Notice appeared (error or cancelled)
+    if (cancelledNotice || failedNotice) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      setShowScrollBottom(false);
+      return;
+    }
+
+    // Case 4: Any other message addition while not loading
+    if (playthrough.messages.length > prevCount) {
+      if (lastMessage?.role === "assistant") {
+        if (autoScrollBehavior === "start") {
+          scrollToFirstPartOfMessage(lastMessage.id);
+          return;
+        } else if (autoScrollBehavior === "none") {
+          return;
+        }
+      }
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      setShowScrollBottom(false);
+    }
+  }, [
+    playthrough.id,
+    playthrough.messages,
+    loading,
+    sendingMessage,
+    cancelledNotice,
+    failedNotice,
+    autoScrollBehavior,
+    scrollToFirstPartOfMessage
+  ]);
 
   // Opening an archived chapter is a jump rather than an append: land on its banner and its first
   // message. Without this the list is swapped underneath a scroll position held over from the live
@@ -465,14 +592,46 @@ export function ChatPanel(props: ChatPanelProps) {
     messagesStartRef.current?.scrollIntoView({ block: "start" });
   }, [viewingChapterId]);
 
+  // On mobile devices, when the virtual keyboard pops up, keep the latest message visible
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const handleViewportResize = () => {
+      if (document.activeElement?.tagName === "TEXTAREA") {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      }
+    };
+    vv.addEventListener("resize", handleViewportResize);
+    return () => {
+      vv.removeEventListener("resize", handleViewportResize);
+    };
+  }, []);
+
+  const handleInputFocus = useCallback(() => {
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }, 250);
+  }, []);
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (!loading && (input.trim() || canContinue)) {
+        triggerHaptic(10);
         onSend();
       }
     }
   }
+
+  const handleSendClick = useCallback(() => {
+    triggerHaptic(10);
+    onSend();
+  }, [onSend]);
+
+  const handleChoiceClick = useCallback((c: string) => {
+    triggerHaptic(8);
+    onChoiceSelect(c);
+  }, [onChoiceSelect]);
 
   const isViewingArchive = viewingChapterId !== null;
   const chapterName = isViewingArchive
@@ -482,6 +641,15 @@ export function ChatPanel(props: ChatPanelProps) {
   const showRealMessages = isViewingArchive
     ? playthrough.messages.filter((m) => m.chapterId === viewingChapterId)
     : playthrough.messages.filter((m) => !m.hidden);
+
+  const { messageIndexMap, totalStoryMessagesCount } = useMemo(() => {
+    const map = new Map<string, number>();
+    const allStoryMessages = playthrough.messages.filter((m) => !m.hidden || m.chapterId);
+    allStoryMessages.forEach((msg, idx) => {
+      map.set(msg.id, idx);
+    });
+    return { messageIndexMap: map, totalStoryMessagesCount: allStoryMessages.length };
+  }, [playthrough.messages]);
 
   /**
    * The messages a retry will take with it, while it is in flight.
@@ -501,8 +669,9 @@ export function ChatPanel(props: ChatPanelProps) {
 
   return (
     <section className={`chat-panel${className ? ` ${className}` : ""}`} style={props.style}>
-      <div className="messages">
-        {isViewingArchive ? <div ref={messagesStartRef} /> : null}
+      <div className="messages-wrap">
+        <div className="messages" ref={messagesContainerRef} onScroll={handleScroll}>
+          {isViewingArchive ? <div ref={messagesStartRef} /> : null}
         {isViewingArchive ? (
           <div className="chapter-view-banner">
             <span>
@@ -517,7 +686,8 @@ export function ChatPanel(props: ChatPanelProps) {
           <p className="empty-chat">No messages yet.</p>
         ) : null}
 
-        {showRealMessages.map((msg) => {
+        {showRealMessages.map((msg, index) => {
+          const messageIndex = messageIndexMap.get(msg.id) ?? index;
           const previousChapter = msg.chapterOpening
             ? (playthrough.chapters ?? [])[(playthrough.chapters ?? []).length - 1]
             : undefined;
@@ -534,6 +704,7 @@ export function ChatPanel(props: ChatPanelProps) {
             </div>
           ) : null}
           <article
+            id={`message-${msg.id}`}
             className={`message ${msg.role}${retryingTargetId === msg.id ? " message-retrying" : ""}${
               doomedIds?.has(msg.id) ? " message-doomed" : ""
             }`}
@@ -541,6 +712,11 @@ export function ChatPanel(props: ChatPanelProps) {
             <div className="message-header">
               <div className="message-header-info">
                 <strong>{msg.role === "user" ? "You" : "BobbinLoom"}</strong>
+                {showMessageNumbers ? (
+                  <span className="message-number-badge" title={`Message #${messageIndex}`}>
+                    #{messageIndex}
+                  </span>
+                ) : null}
                 {showModelName && msg.role === "assistant" && msg.model ? (
                   <ModelBadge model={msg.model} />
                 ) : null}
@@ -865,6 +1041,11 @@ export function ChatPanel(props: ChatPanelProps) {
               <div className="message-header">
                 <div className="message-header-info">
                   <strong>You</strong>
+                  {showMessageNumbers ? (
+                    <span className="message-number-badge" title={`Message #${totalStoryMessagesCount}`}>
+                      #{totalStoryMessagesCount}
+                    </span>
+                  ) : null}
                   {showMessageTimestamps ? (
                     <span className="message-timestamp sending">Sending…</span>
                   ) : null}
@@ -909,6 +1090,19 @@ export function ChatPanel(props: ChatPanelProps) {
         <div ref={messagesEndRef} />
       </div>
 
+      {showScrollBottom ? (
+        <button
+          type="button"
+          className="scroll-to-bottom-floating-btn"
+          onClick={scrollToBottom}
+          title="Scroll to bottom"
+          aria-label="Scroll to bottom"
+        >
+          <Icon name="ArrowDown" size={16} />
+        </button>
+      ) : null}
+    </div>
+
       {imagePromptRequest ? (
         <ImagePromptModal
           prompt={imagePromptRequest.prompt}
@@ -938,7 +1132,7 @@ export function ChatPanel(props: ChatPanelProps) {
               size="sm"
               variant="secondary"
               className="choice-btn"
-              onClick={() => onChoiceSelect(c)}
+              onClick={() => handleChoiceClick(c)}
             >
               {c}
             </Button>
@@ -952,8 +1146,11 @@ export function ChatPanel(props: ChatPanelProps) {
             value={input}
             onChange={(e) => onInputChange(e.target.value)}
             onKeyDown={handleKeyDown}
+            onFocus={handleInputFocus}
             placeholder='Plain text is action. "Quoted text" is dialogue.'
-            rows={3}
+            rows={1}
+            autoGrow
+            autoGrowMax={110}
             disabled={loading}
             className="prompt-card-textarea"
           />
@@ -983,7 +1180,7 @@ export function ChatPanel(props: ChatPanelProps) {
                   size="sm"
                   variant="primary"
                   className="send-btn"
-                  onClick={onSend}
+                  onClick={handleSendClick}
                   disabled={!input.trim() && !canContinue}
                   leftIcon={<Icon name={!input.trim() && canContinue ? "FastForward" : "Send"} size={13} />}
                   title={!input.trim() && canContinue ? "Ask the AI to respond to your last message" : undefined}

@@ -111,6 +111,7 @@ export function summarizePlaythrough(state: Playthrough): string {
         character.towardPlayer !== "neutral" ? ` [${character.towardPlayer}]` : "",
         ` — ${summary}`,
         character.conditions.length > 0 ? `, ${character.conditions.join(", ")}` : "",
+        character.flags.length > 0 ? ` [Flags: ${character.flags.join(", ")}]` : "",
       ].join("");
     } else {
       return [
@@ -118,6 +119,7 @@ export function summarizePlaythrough(state: Playthrough): string {
         character.towardPlayer !== "neutral" ? ` [${character.towardPlayer}]` : "",
         ` — ${character.description || "no details"}`,
         character.conditions.length > 0 ? `, ${character.conditions.join(", ")}` : "",
+        character.flags.length > 0 ? ` [Flags: ${character.flags.join(", ")}]` : "",
       ].join("");
     }
   });
@@ -221,8 +223,9 @@ export function buildOutputContract(choicesEnabled: boolean, format?: CharacterF
     '    "worldStateUpdate": [{ "id": "ws_id", "name": "🌦️ Light Rain", "description": "The storm has passed, drizzling." }],',
     '    "characterMood": [{ "characterId": "inst_id_or_name", "mood": "nervous" }],',
     '    "characterTowardPlayer": [{ "characterId": "inst_id_or_name", "towardPlayer": "wary" }],',
-    '    "characterConditionsAdd": [{ "characterId": "inst_id_or_name", "conditions": ["🤕 wounded"] }],',
-    '    "characterConditionsRemove": [{ "characterId": "inst_id_or_name", "conditions": ["😴 exhausted"] }],',
+    '    "characterConditionsAdd": [{ "characterId": "inst_id_or_name", "conditions": ["🤕 Wounded"] }],',
+    '    "characterConditionsRemove": [{ "characterId": "inst_id_or_name", "conditions": ["😴 Exhausted"] }],',
+    '    "characterConditionsReplace": [{ "characterId": "inst_id_or_name", "from": "🤕 Bleeding", "to": "🩹 Bandaged" }],',
     '    "characterFlagsAdd": [{ "characterId": "inst_id_or_name", "flags": ["knows_secret"] }],',
     '    "characterFlagsRemove": [{ "characterId": "inst_id_or_name", "flags": ["old_flag"] }],',
     '    "characterMemory": [{ "characterId": "inst_id_or_name", "memorySummary": "Mira now trusts the player after they saved her." }],',
@@ -240,9 +243,10 @@ export function buildOutputContract(choicesEnabled: boolean, format?: CharacterF
     '    "playerClothingAdd": [{ "slot": "Top", "name": "Wool coat", "state": "damp" }],',
     '    "playerClothingRemove": [{ "slot": "Hands" }],',
     '    "playerClothingSetState": [{ "slot": "Top", "state": "torn" }],',
-    '    "playerConditionsAdd": ["wounded"],',
-    '    "playerConditionsRemove": ["exhausted"],',
-    '    "playerFlagsAdd": ["player_knows_secret"],',
+    '    "playerConditionsAdd": ["🤕 Wounded"],',
+    '    "playerConditionsRemove": ["😴 Exhausted"],',
+    '    "playerConditionsReplace": [{ "from": "🤕 Bleeding", "to": "🩹 Bandaged" }],',
+    '    "playerFlagsAdd": ["🗝️ Knows the Password"],',
     '    "playerFlagsRemove": ["old_player_flag"]',
     "  }",
     "}",
@@ -255,8 +259,8 @@ export function buildOutputContract(choicesEnabled: boolean, format?: CharacterF
     "FIELD GUIDANCE:",
     "- characterMood: set a character's current mood (e.g. happy, nervous, angry).",
     "- characterTowardPlayer: set a character's stance toward the player (e.g. friendly, wary, hostile).",
-    "- characterConditionsAdd/Remove: add or remove conditions from a character (e.g. wounded, exhausted, inspired). Use emoji-prefixed human-readable names (\"🤕 wounded\").",
-    "- characterFlagsAdd/Remove: set or clear flags on a character (e.g. knows_secret, met_player).",
+    '- characterConditionsAdd/Remove/Replace: add, remove, or evolve conditions for characters (e.g. "🤕 Wounded", "😴 Exhausted", "✨ Inspired"). You MUST remove temporary conditions using characterConditionsRemove when healed, rested, cured, or no longer active to prevent clutter. Use characterConditionsReplace ({ "characterId": "...", "from": "...", "to": "..." }) to evolve a condition (e.g. Bleeding to Bandaged).',
+    "- characterFlagsAdd/Remove: set or clear narrative flags on a character (e.g. knows_secret, met_player). Clear flags using characterFlagsRemove when the event or situation has concluded.",
     "- characterMemory: update what the character remembers about the player and recent events. Use this to track relationship development.",
     "- characterEnterScene: add characters to the active scene when they arrive or appear. Use character IDs or names from the known characters roster.",
     "- characterExitScene: remove characters from the active scene when they leave, depart, or move off-screen.",
@@ -268,8 +272,8 @@ export function buildOutputContract(choicesEnabled: boolean, format?: CharacterF
     "- itemAdd: introduce a new item into the world (e.g. when the player finds or receives something). Provide a unique snake_case id (item_ prefix), an emoji-prefixed name, a descriptive type word, a one-line description, and quantity. The item is added to the catalog AND inventory automatically — no separate inventoryAdd needed.",
     "- itemUpdate: update an existing item's name, type, or description (e.g. a weapon rusts, a potion is identified, an item is examined). All fields optional — only send what changed.",
     "- playerClothingAdd/Remove/SetState: manage player clothing. Slots are freeform strings. Add overwrites the same slot. SetState updates an existing item state (e.g. wet, torn).",
-    "- playerConditionsAdd/Remove: track player conditions with emoji prefixes (e.g. \"🤕 wounded\", \"😴 exhausted\").",
-    "- playerFlagsAdd/Remove: player-specific flags separate from world flags. Use emoji-prefixed human-readable names (e.g. \"🗝️ Knows the Password\" instead of \"knows_password\").",
+    '- playerConditionsAdd/Remove/Replace: track player status conditions with emoji prefixes (e.g. "🤕 Wounded", "😴 Exhausted"). You MUST remove conditions using playerConditionsRemove when healed, rested, or treated. Use playerConditionsReplace ({ "from": "...", "to": "..." }) to transition a condition (e.g. "🤕 Bleeding" to "🩹 Bandaged").',
+    '- playerFlagsAdd/Remove: player-specific flags separate from world flags. Use emoji-prefixed human-readable names (e.g. "🗝️ Knows the Password"). Remove flags when a temporary state or milestone is passed.',
     "- worldStateAdd/Remove/Update: ACTIVE, ONGOING conditions of the world (e.g. 🌧️ Raining, 🚨 Town on Alert). DO NOT use this as an event log or timeline for past events. You MUST rigorously remove states using worldStateRemove when they are no longer active to prevent clutter.",
     `- characterSectionUpdate: replace the entire content of one section in a character's sheet. Use canonical section names: ${sectionNamesList}. Send the COMPLETE new text for that section, not a delta. Use this to update clothing, appearance changes, or personality shifts. The "Clothing" section is managed via characterClothing* patches — a Clothing section update is applied as a full outfit replace. Prefer the characterSectionItem* actions for incremental changes to bulleted sections of ACTIVE characters; use this whole-section replace for full rewrites, freeform Communication sections, and INACTIVE characters.`,
     "- characterClothingAdd/Remove/SetState/Set: manage a character's worn clothing. Add items by slot (one item per slot), remove by slot, set state (wet, torn, removed) on worn items, or Set to replace the whole outfit.",

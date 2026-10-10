@@ -58,6 +58,46 @@ export type ApplyPatchResult = {
   warnings: string[];
 };
 
+export function normalizeTag(str: string): string {
+  return str
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\p{Emoji}\uFE0F]/gu, "")
+    .replace(/[_\W]+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+export function findMatchingTagIndex(list: string[], target: string): number {
+  if (!target || list.length === 0) return -1;
+
+  // 1. Exact match
+  const exact = list.indexOf(target);
+  if (exact >= 0) return exact;
+
+  // 2. Case-insensitive trimmed match
+  const targetTrim = target.trim().toLowerCase();
+  const caseIdx = list.findIndex((item) => item.trim().toLowerCase() === targetTrim);
+  if (caseIdx >= 0) return caseIdx;
+
+  // 3. Normalized match (stripping emojis, punctuation, snake_case underscores to spaces)
+  const targetNorm = normalizeTag(target);
+  if (targetNorm.length > 0) {
+    const normIdx = list.findIndex((item) => normalizeTag(item) === targetNorm);
+    if (normIdx >= 0) return normIdx;
+
+    // 4. Substring / inclusion match for specific terms (>= 3 chars)
+    if (targetNorm.length >= 3) {
+      const subIdx = list.findIndex((item) => {
+        const itemNorm = normalizeTag(item);
+        if (!itemNorm) return false;
+        return itemNorm.includes(targetNorm) || targetNorm.includes(itemNorm);
+      });
+      if (subIdx >= 0) return subIdx;
+    }
+  }
+
+  return -1;
+}
+
 function addInventory(inventory: InventoryRef[], itemId: string, quantity: number): InventoryRef[] {
   const existing = inventory.find((item) => item.itemId === itemId);
   if (!existing) return [...inventory, { itemId, quantity }];
@@ -374,8 +414,31 @@ export function applyStatePatch(state: Playthrough, patchInput: unknown, charact
     const character = findCharacter(entry.characterId);
     if (!character) { rejected.push("unknown character for conditions: " + entry.characterId); continue; }
     for (const cond of entry.conditions) {
-      const idx = character.conditions.indexOf(cond);
-      if (idx >= 0) { character.conditions.splice(idx, 1); applied.push("condition removed: " + character.name + " → " + cond); }
+      const idx = findMatchingTagIndex(character.conditions, cond);
+      if (idx >= 0) {
+        const removed = character.conditions.splice(idx, 1)[0];
+        applied.push("condition removed: " + character.name + " → " + removed);
+      }
+    }
+  }
+
+  const charCondReplaces = [
+    ...(patch.characterConditionsReplace ?? []),
+    ...(patch.characterConditionsUpdate ?? []),
+  ];
+  for (const entry of charCondReplaces) {
+    const character = findCharacter(entry.characterId);
+    if (!character) { rejected.push("unknown character for conditions replace: " + entry.characterId); continue; }
+    const idx = findMatchingTagIndex(character.conditions, entry.from);
+    if (idx >= 0) {
+      const old = character.conditions[idx];
+      character.conditions[idx] = entry.to;
+      applied.push("condition replaced: " + character.name + " → " + old + " ⇒ " + entry.to);
+    } else {
+      if (!character.conditions.includes(entry.to)) {
+        character.conditions.push(entry.to);
+        applied.push("condition added (replace fallback): " + character.name + " → " + entry.to);
+      }
     }
   }
 
@@ -394,8 +457,11 @@ export function applyStatePatch(state: Playthrough, patchInput: unknown, charact
     const character = findCharacter(entry.characterId);
     if (!character) { rejected.push("unknown character for flags: " + entry.characterId); continue; }
     for (const flag of entry.flags) {
-      const idx = character.flags.indexOf(flag);
-      if (idx >= 0) { character.flags.splice(idx, 1); applied.push("character flag removed: " + character.name + " → " + flag); }
+      const idx = findMatchingTagIndex(character.flags, flag);
+      if (idx >= 0) {
+        const removed = character.flags.splice(idx, 1)[0];
+        applied.push("character flag removed: " + character.name + " → " + removed);
+      }
     }
   }
 
@@ -578,10 +644,28 @@ export function applyStatePatch(state: Playthrough, patchInput: unknown, charact
     }
   }
   for (const condition of patch.playerConditionsRemove ?? []) {
-    const idx = next.playerCharacter.conditions.indexOf(condition);
+    const idx = findMatchingTagIndex(next.playerCharacter.conditions, condition);
     if (idx >= 0) {
-      next.playerCharacter.conditions.splice(idx, 1);
-      applied.push(`player condition removed: ${condition}`);
+      const removed = next.playerCharacter.conditions.splice(idx, 1)[0];
+      applied.push(`player condition removed: ${removed}`);
+    }
+  }
+
+  const playerCondReplaces = [
+    ...(patch.playerConditionsReplace ?? []),
+    ...(patch.playerConditionsUpdate ?? []),
+  ];
+  for (const entry of playerCondReplaces) {
+    const idx = findMatchingTagIndex(next.playerCharacter.conditions, entry.from);
+    if (idx >= 0) {
+      const old = next.playerCharacter.conditions[idx];
+      next.playerCharacter.conditions[idx] = entry.to;
+      applied.push(`player condition replaced: ${old} ⇒ ${entry.to}`);
+    } else {
+      if (!next.playerCharacter.conditions.includes(entry.to)) {
+        next.playerCharacter.conditions.push(entry.to);
+        applied.push(`player condition added (replace fallback): ${entry.to}`);
+      }
     }
   }
 
@@ -592,10 +676,10 @@ export function applyStatePatch(state: Playthrough, patchInput: unknown, charact
     }
   }
   for (const flag of patch.playerFlagsRemove ?? []) {
-    const idx = next.playerCharacter.flags.indexOf(flag);
+    const idx = findMatchingTagIndex(next.playerCharacter.flags, flag);
     if (idx >= 0) {
-      next.playerCharacter.flags.splice(idx, 1);
-      applied.push(`player flag removed: ${flag}`);
+      const removed = next.playerCharacter.flags.splice(idx, 1)[0];
+      applied.push(`player flag removed: ${removed}`);
     }
   }
 

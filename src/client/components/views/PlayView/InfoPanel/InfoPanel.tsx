@@ -51,7 +51,12 @@ export function InfoPanel(props: InfoPanelProps) {
       </div>
 
       <div className="info-panel-body">
-        {activeTab === "player" ? <PlayerTab playthrough={playthrough} /> : null}
+        {activeTab === "player" ? (
+          <PlayerTab
+            playthrough={playthrough}
+            onPlaythroughChange={props.onPlaythroughChange}
+          />
+        ) : null}
         {activeTab === "chars" ? (
           <CharsTab
             playthrough={playthrough}

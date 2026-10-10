@@ -25,6 +25,8 @@ playthrough alike. It has five tabs.
 | Display Response Generation Time | The stopwatch on each assistant message |
 | Display Chat Message Timestamps | The timestamp on each message |
 | Display AI Model Name | The model badge on each response |
+| Show Message Numbers | Displays turn numbers (#0, #1, #2...) on both user and assistant message bubbles |
+| AI Response Auto-Scroll | Auto-scroll behavior on response arrival: Scroll to Start of Message (default), Scroll to Bottom, or No Auto-Scroll |
 | Show Context Usage | The context meter below the input |
 | Review Image Prompt Before Generating | Whether the image prompt opens for review before the image call |
 | Generate Image right after AI Response | Chains an image generation onto each response |

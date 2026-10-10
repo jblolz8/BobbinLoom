@@ -2888,6 +2888,88 @@
   gap: 0.45rem;
 }
 
+.autoscroll-options-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .autoscroll-options-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.autoscroll-option-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  padding: 0.65rem 0.75rem;
+  border-radius: 6px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-main);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+  width: 100%;
+}
+
+.autoscroll-option-card:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--border-light);
+}
+
+.autoscroll-option-card.active {
+  background: var(--accent-translucent);
+  border-color: var(--accent-highlight, var(--accent-base));
+  box-shadow: 0 0 0 1px var(--accent-highlight, var(--accent-base));
+}
+
+.autoscroll-option-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 0.35rem;
+  margin-bottom: 0.25rem;
+}
+
+.autoscroll-option-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.autoscroll-option-icon {
+  color: var(--accent-highlight, var(--accent-base));
+  flex-shrink: 0;
+}
+
+.autoscroll-option-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.autoscroll-badge-active {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.08rem 0.35rem;
+  border-radius: 4px;
+  background: var(--accent-base);
+  color: #ffffff;
+}
+
+.autoscroll-option-desc {
+  font-size: 0.76rem;
+  line-height: 1.35;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
 /* The stale-image-prompt marker in the preset editor's Image Generation tab: the
    playthrough is still running the block it was created with. */
 .image-block-refresh {

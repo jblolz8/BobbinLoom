@@ -168,19 +168,73 @@ describe("simple characters and character lifecycle", () => {
     expect(removeResult.state.characters[0].conditions).not.toContain("🤕 wounded");
   });
 
-  it("applies characterFlagsAdd/Remove patches", () => {
+  it("applies fuzzy matching when removing character conditions (emojis, casing, whitespace)", () => {
+    const pt = createInitialPlaythrough("Test");
+    const charId = pt.characters[0].id;
+
+    const addResult = applyStatePatch(pt, {
+      characterConditionsAdd: [{ characterId: charId, conditions: ["🤕 Severely Bleeding"] }]
+    });
+    expect(addResult.state.characters[0].conditions).toContain("🤕 Severely Bleeding");
+
+    // Remove with lowercase, no emoji
+    const removeResult = applyStatePatch(addResult.state, {
+      characterConditionsRemove: [{ characterId: charId, conditions: ["severely bleeding"] }]
+    });
+    expect(removeResult.state.characters[0].conditions).toEqual([]);
+  });
+
+  it("applies characterConditionsReplace patches", () => {
+    const pt = createInitialPlaythrough("Test");
+    const charId = pt.characters[0].id;
+
+    const addResult = applyStatePatch(pt, {
+      characterConditionsAdd: [{ characterId: charId, conditions: ["🤕 Bleeding"] }]
+    });
+
+    const replaceResult = applyStatePatch(addResult.state, {
+      characterConditionsReplace: [{ characterId: charId, from: "bleeding", to: "🩹 Bandaged" }]
+    });
+    expect(replaceResult.state.characters[0].conditions).toEqual(["🩹 Bandaged"]);
+  });
+
+  it("applies characterFlagsAdd/Remove patches with fuzzy matching", () => {
     const pt = createInitialPlaythrough("Test");
     const charId = pt.characters[0].id;
     
     const addResult = applyStatePatch(pt, {
-      characterFlagsAdd: [{ characterId: charId, flags: ["knows_secret"] }]
+      characterFlagsAdd: [{ characterId: charId, flags: ["🗝️ Knows the Password"] }]
     });
-    expect(addResult.state.characters[0].flags).toContain("knows_secret");
+    expect(addResult.state.characters[0].flags).toContain("🗝️ Knows the Password");
     
+    // Remove with snake_case and no emoji
     const removeResult = applyStatePatch(addResult.state, {
-      characterFlagsRemove: [{ characterId: charId, flags: ["knows_secret"] }]
+      characterFlagsRemove: [{ characterId: charId, flags: ["knows_the_password"] }]
     });
-    expect(removeResult.state.characters[0].flags).not.toContain("knows_secret");
+    expect(removeResult.state.characters[0].flags).toEqual([]);
+  });
+
+  it("applies player condition and flag patches with fuzzy removal and replace", () => {
+    const pt = createInitialPlaythrough("Test");
+
+    const addResult = applyStatePatch(pt, {
+      playerConditionsAdd: ["🤕 Deep Cut"],
+      playerFlagsAdd: ["🗺️ Has Map"]
+    });
+    expect(addResult.state.playerCharacter.conditions).toContain("🤕 Deep Cut");
+    expect(addResult.state.playerCharacter.flags).toContain("🗺️ Has Map");
+
+    const replaceResult = applyStatePatch(addResult.state, {
+      playerConditionsReplace: [{ from: "deep cut", to: "🩹 Stitched Wound" }]
+    });
+    expect(replaceResult.state.playerCharacter.conditions).toEqual(["🩹 Stitched Wound"]);
+
+    const removeResult = applyStatePatch(replaceResult.state, {
+      playerConditionsRemove: ["stitched wound"],
+      playerFlagsRemove: ["has_map"]
+    });
+    expect(removeResult.state.playerCharacter.conditions).toEqual([]);
+    expect(removeResult.state.playerCharacter.flags).toEqual([]);
   });
 
   it("applies characterMemory patch", () => {

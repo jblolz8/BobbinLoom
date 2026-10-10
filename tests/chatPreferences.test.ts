@@ -32,9 +32,20 @@ describe("the chat toggles, resolved", () => {
     expect(resolved).toEqual(CHAT_PREFERENCE_DEFAULTS);
   });
 
-  it("covers every leaf the chat blob used to hold", () => {
-    // Nine, not three: the blob fed nine toggles and the schema must be able to carry all of them.
-    expect(Object.keys(CHAT_PREFERENCE_DEFAULTS)).toHaveLength(9);
+  it("resolves autoScrollBehavior with default 'start' and honors stored values", () => {
+    expect(resolveChatPreferences(undefined).autoScrollBehavior).toBe("start");
+    expect(resolveChatPreferences({ chat: { autoScrollBehavior: "bottom" } }).autoScrollBehavior).toBe("bottom");
+    expect(resolveChatPreferences({ chat: { autoScrollBehavior: "none" } }).autoScrollBehavior).toBe("none");
+  });
+
+  it("resolves showMessageNumbers with default true and honors stored false", () => {
+    expect(resolveChatPreferences(undefined).showMessageNumbers).toBe(true);
+    expect(resolveChatPreferences({ chat: { showMessageNumbers: false } }).showMessageNumbers).toBe(false);
+  });
+
+  it("covers every leaf the chat preferences carry", () => {
+    // 11 leaves: 10 toggles + autoScrollBehavior
+    expect(Object.keys(CHAT_PREFERENCE_DEFAULTS)).toHaveLength(11);
   });
 });
 
@@ -89,7 +100,7 @@ describe("adopting the chat blob", () => {
   it("reads every leaf through the real registry", () => {
     // The registry is the contract with the hook: all nine leaves, one key.
     const chatSources = ADOPTION_SOURCES.filter((source) => source.group === "chat");
-    expect(chatSources).toHaveLength(9);
+    expect(chatSources).toHaveLength(11);
     expect(new Set(chatSources.map((source) => source.key))).toEqual(new Set(["bobbinloom_chat_settings"]));
   });
 });

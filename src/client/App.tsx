@@ -320,6 +320,10 @@ export default function App() {
           setShowMessageTimestamps={playthroughHook.setShowMessageTimestamps}
           showModelName={playthroughHook.showModelName}
           setShowModelName={playthroughHook.setShowModelName}
+          showMessageNumbers={playthroughHook.showMessageNumbers}
+          setShowMessageNumbers={playthroughHook.setShowMessageNumbers}
+          autoScrollBehavior={playthroughHook.autoScrollBehavior}
+          setAutoScrollBehavior={playthroughHook.setAutoScrollBehavior}
           choices={playthroughHook.choices}
           input={playthroughHook.input}
           setInput={playthroughHook.setInput}
@@ -465,12 +469,16 @@ export default function App() {
             setShowMessageTimestamps={playthroughHook.setShowMessageTimestamps}
             showModelName={playthroughHook.showModelName}
             setShowModelName={playthroughHook.setShowModelName}
+            showMessageNumbers={playthroughHook.showMessageNumbers}
+            setShowMessageNumbers={playthroughHook.setShowMessageNumbers}
             imagePromptPreview={playthroughHook.imagePromptPreview}
             autoImageAfterTurn={playthroughHook.autoImageAfterTurn}
             setAutoImageAfterTurn={playthroughHook.setAutoImageAfterTurn}
             alwaysDiscardOldImage={playthroughHook.alwaysDiscardOldImage}
             setAlwaysDiscardOldImage={playthroughHook.setAlwaysDiscardOldImage}
             setImagePromptPreview={playthroughHook.setImagePromptPreview}
+            autoScrollBehavior={playthroughHook.autoScrollBehavior}
+            setAutoScrollBehavior={playthroughHook.setAutoScrollBehavior}
           />
           <PersonaManager
             open={modalHook.personaManagerOpen}

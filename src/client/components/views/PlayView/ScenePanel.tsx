@@ -52,6 +52,10 @@ export function ScenePanel({ playthrough, actionLoading, onWorldStateAction, cla
 
   const worldState = playthrough.worldState || [];
   const activeCount = (playthrough.activeCharacters ?? []).length;
+  const storyMessages = (playthrough.messages ?? []).filter((m) => !m.hidden || m.chapterId);
+  const userMsgCount = storyMessages.filter((m) => m.role === "user").length;
+  const aiMsgCount = storyMessages.filter((m) => m.role === "assistant").length;
+  const totalMsgCount = storyMessages.length;
 
   return (
     <aside className={`panel left-panel${className ? ` ${className}` : ""}`} style={style}>
@@ -71,6 +75,14 @@ export function ScenePanel({ playthrough, actionLoading, onWorldStateAction, cla
             <div className="scene-meta-item">
               <span className="meta-label"><Icon name="Clock" size={13} /> Turn</span>
               <Badge variant="accent" size="sm">#{playthrough.turn}</Badge>
+            </div>
+
+            <div className="scene-meta-item scene-meta-messages">
+              <span className="meta-label"><Icon name="MessageSquare" size={13} /> Messages</span>
+              <div className="scene-meta-stat-group">
+                <Badge variant="neutral" size="sm">{totalMsgCount} msgs</Badge>
+                <span className="scene-meta-subtext">({userMsgCount} You · {aiMsgCount} AI)</span>
+              </div>
             </div>
 
             <div className="scene-meta-item">

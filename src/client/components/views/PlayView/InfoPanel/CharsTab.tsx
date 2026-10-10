@@ -22,6 +22,8 @@ import {
 import { CharacterEditor } from "../../../modals/CharacterEditor";
 import { CharacterSheetSections } from "./CharacterSheetSections";
 import { AvatarBadge, Badge, Button, Icon, SearchBar, SimpleSelect } from "../../../base";
+import type { SimpleSelectOption } from "../../../base/Select";
+import { ModelIcon } from "../../../base/ModelIcon";
 
 type SaveFeedback = { ok: boolean; text: string };
 
@@ -45,6 +47,7 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
   const [activeTextProviderId, setActiveTextProviderId] = useState("");
   const [characterProviderId, setCharacterProviderId] = useState("");
   const [charSearch, setCharSearch] = useState("");
+  const [offScreenCollapsed, setOffScreenCollapsed] = useState(false);
   const [castViewMode, setCastViewModeState] = useState<CastViewMode>(
     CAST_PREFERENCE_DEFAULTS.viewMode
   );
@@ -124,15 +127,35 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
     });
   }
 
-  const characterProviderOptions = useMemo(() => {
-    const rows = textConnections.map((c) => ({
+  const characterProviderOptions = useMemo<SimpleSelectOption<string>[]>(() => {
+    const activeConn = textConnections.find((c) => c.id === activeTextProviderId);
+    const activeDesc = activeConn
+      ? `${activeConn.label}${activeConn.model ? ` (${activeConn.model})` : ""}`
+      : "Follows active story connection";
+
+    const defaultOpt: SimpleSelectOption<string> = {
+      value: "",
+      label: "Current active text provider",
+      description: activeDesc,
+      icon: activeConn?.model ? <ModelIcon model={activeConn.model} size={14} /> : <Icon name="Cpu" size={14} />
+    };
+
+    const rows: SimpleSelectOption<string>[] = textConnections.map((c) => ({
       value: c.id,
-      label: `${c.label}${c.model ? ` — ${c.model}` : ""}${c.id === activeTextProviderId ? " (active)" : ""}`
+      label: `${c.label}${c.id === activeTextProviderId ? " (active)" : ""}`,
+      description: c.model || undefined,
+      icon: <ModelIcon model={c.model} size={14} />
     }));
+
     if (characterProviderId && !textConnections.some((c) => c.id === characterProviderId)) {
-      rows.push({ value: characterProviderId, label: `${characterProviderId} (not found)` });
+      rows.push({
+        value: characterProviderId,
+        label: `${characterProviderId} (not found)`,
+        icon: <Icon name="AlertTriangle" size={14} />
+      });
     }
-    return [{ value: "", label: "Current active text provider" }, ...rows];
+
+    return [defaultOpt, ...rows];
   }, [textConnections, activeTextProviderId, characterProviderId]);
 
   async function handleFleshOut(characterId: string) {
@@ -198,6 +221,18 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
     return playthrough.characters.filter((c) => !activeCharIds.has(c.id)).filter(filterFn);
   }, [playthrough.characters, activeCharIds, charSearch]);
 
+  async function handleRemoveCharCondition(char: CharacterInstance, index: number) {
+    const updatedConditions = char.conditions.filter((_, i) => i !== index);
+    const updated = await editCharacter(playthrough.id, char.id, { conditions: updatedConditions });
+    onPlaythroughChange(updated);
+  }
+
+  async function handleRemoveCharFlag(char: CharacterInstance, index: number) {
+    const updatedFlags = char.flags.filter((_, i) => i !== index);
+    const updated = await editCharacter(playthrough.id, char.id, { flags: updatedFlags });
+    onPlaythroughChange(updated);
+  }
+
   function renderCharacterItem(character: CharacterInstance, inScene: boolean) {
     if (character.templateId) {
       const localTpl = playthrough.characterTemplates.find((t) => t.id === character.templateId);
@@ -222,6 +257,8 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
           onSave={(mode) => { void handleSave(character.id, mode); }}
           onEdit={() => setEditingChar(character)}
           onOpenLibrary={onOpenLibrary}
+          onRemoveCondition={(i) => void handleRemoveCharCondition(character, i)}
+          onRemoveFlag={(i) => void handleRemoveCharFlag(character, i)}
         />
       );
     }
@@ -231,9 +268,13 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
         key={character.id}
         character={character}
         present={inScene}
+        viewMode={castViewMode}
         isFleshingOut={fleshingOutId === character.id}
         onFleshOut={() => void handleFleshOut(character.id)}
         onCancel={handleCancelFleshOut}
+        onEdit={() => setEditingChar(character)}
+        onRemoveCondition={(i) => void handleRemoveCharCondition(character, i)}
+        onRemoveFlag={(i) => void handleRemoveCharFlag(character, i)}
       />
     );
   }
@@ -241,30 +282,22 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
   return (
     <div className="chars-tab-container">
       {/* ── Character Creator Provider Settings ── */}
-      <div
-        className="char-creator-provider-row flex items-center justify-between gap-2"
-        style={{
-          padding: "0.5rem 0.75rem",
-          marginBottom: "0.75rem",
-          borderRadius: "6px",
-          background: "var(--bg-subtle, rgba(0, 0, 0, 0.03))",
-          border: "1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))",
-          fontSize: "0.8rem",
-        }}
-      >
-        <label
-          htmlFor="char-provider-select"
-          className="flex items-center gap-1.5"
-          style={{ color: "var(--text-muted)", whiteSpace: "nowrap" }}
-        >
-          <Icon name="Cpu" size={13} />
-          <span>Flesh-Out Provider:</span>
-        </label>
-        <div style={{ minWidth: "170px" }}>
+      <div className="char-provider-toolbar">
+        <div className="char-provider-header">
+          <div className="char-provider-label-wrap">
+            <Icon name="Sparkles" size={13} className="char-provider-sparkle" />
+            <span className="char-provider-title">Flesh-Out Provider</span>
+          </div>
+          <span className="char-provider-hint" title="AI model used when generating detailed character sheets for simple NPCs">
+            Used to expand simple characters
+          </span>
+        </div>
+        <div className="char-provider-select-wrap">
           <SimpleSelect
             id="char-provider-select"
             size="xs"
             variant="filled"
+            fullWidth
             value={characterProviderId}
             onChange={handleCharacterProviderChange}
             options={characterProviderOptions}
@@ -274,48 +307,54 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
         </div>
       </div>
 
+      {fleshOutError ? (
+        <div className="promote-error char-provider-error">
+          <Icon name="AlertTriangle" size={14} />
+          <span className="error-text">{fleshOutError}</span>
+          <button className="dismiss" onClick={() => setFleshOutError(null)} aria-label="Dismiss">×</button>
+        </div>
+      ) : null}
+
+      {/* ── Search & View Mode Toolbar ── */}
+      {playthrough.characters.length > 0 && (
+        <div className="chars-filter-bar">
+          <SearchBar
+            value={charSearch}
+            onChange={setCharSearch}
+            placeholder="Search characters…"
+            size="sm"
+            containerClassName="chars-search-input"
+          />
+          <div className="view-mode-switcher cast-view-switcher" role="group" aria-label="Cast View Mode">
+            <button
+              type="button"
+              className={`view-mode-btn ${castViewMode === "portrait" ? "active" : ""}`}
+              onClick={() => setCastViewMode("portrait")}
+              title="Full Portrait View"
+            >
+              <Icon name="IdCard" size={13} />
+              <span>Portrait</span>
+            </button>
+            <button
+              type="button"
+              className={`view-mode-btn ${castViewMode === "compact" ? "active" : ""}`}
+              onClick={() => setCastViewMode("compact")}
+              title="Compact Profile View"
+            >
+              <Icon name="List" size={13} />
+              <span>Compact</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── 1. In Scene (Active) Section ── */}
       <section className="chars-section">
-        <div className="main-cast-header-row">
+        <div className="section-header-clean">
           <div className="section-title-wrap">
             <Icon name="Users" size={14} />
             <span className="section-title-text">In Scene (Active)</span>
             <Badge variant="success" size="xs" pill>{activeCharacters.length}</Badge>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {playthrough.characters.length > 3 && (
-              <SearchBar
-                value={charSearch}
-                onChange={setCharSearch}
-                placeholder="Filter characters…"
-                size="sm"
-                containerClassName="npc-search-wrapper"
-              />
-            )}
-
-            {activeCharacters.some((c) => !!c.templateId) && (
-              <div className="view-mode-switcher cast-view-switcher" role="group" aria-label="Cast View Mode">
-                <button
-                  type="button"
-                  className={`view-mode-btn ${castViewMode === "portrait" ? "active" : ""}`}
-                  onClick={() => setCastViewMode("portrait")}
-                  title="Full Portrait View"
-                >
-                  <Icon name="IdCard" size={13} />
-                  <span>Portrait</span>
-                </button>
-                <button
-                  type="button"
-                  className={`view-mode-btn ${castViewMode === "compact" ? "active" : ""}`}
-                  onClick={() => setCastViewMode("compact")}
-                  title="Compact Profile View"
-                >
-                  <Icon name="List" size={13} />
-                  <span>Compact</span>
-                </button>
-              </div>
-            )}
           </div>
         </div>
 
@@ -332,31 +371,35 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
 
       {/* ── 2. Off-Screen (Inactive) Section ── */}
       <section className="chars-section background-section">
-        <div className="background-header-row">
-          <div className="section-title-wrap">
-            <Icon name="UserCheck" size={14} />
-            <span className="section-title-text">Off-Screen (Inactive)</span>
-            <Badge variant="neutral" size="xs" pill>{inactiveCharacters.length}</Badge>
-          </div>
+        <div className="section-header-clean">
+          <button
+            type="button"
+            className="section-title-toggle-btn"
+            onClick={() => setOffScreenCollapsed(!offScreenCollapsed)}
+            aria-expanded={!offScreenCollapsed}
+            title={offScreenCollapsed ? "Expand off-screen characters" : "Collapse off-screen characters"}
+          >
+            <span className="section-title-wrap">
+              <Icon name="UserCheck" size={14} />
+              <span className="section-title-text">Off-Screen (Inactive)</span>
+              <Badge variant="neutral" size="xs" pill>{inactiveCharacters.length}</Badge>
+            </span>
+            <Icon name={offScreenCollapsed ? "ChevronDown" : "ChevronUp"} size={14} className="toggle-chevron" />
+          </button>
         </div>
 
-        {inactiveCharacters.length === 0 ? (
-          <p className="info-empty-state">
-            {charSearch.trim() ? `No off-screen characters match "${charSearch}".` : "No off-screen characters."}
-          </p>
-        ) : (
-          <div className={`chars-cards-list mode-${castViewMode}`}>
-            {inactiveCharacters.map((c) => renderCharacterItem(c, false))}
-          </div>
+        {!offScreenCollapsed && (
+          inactiveCharacters.length === 0 ? (
+            <p className="info-empty-state">
+              {charSearch.trim() ? `No off-screen characters match "${charSearch}".` : "No off-screen characters."}
+            </p>
+          ) : (
+            <div className={`chars-cards-list mode-${castViewMode}`}>
+              {inactiveCharacters.map((c) => renderCharacterItem(c, false))}
+            </div>
+          )
         )}
       </section>
-
-      {fleshOutError ? (
-        <p className="promote-error">
-          <Icon name="AlertTriangle" size={14} /> {fleshOutError}
-          <button className="dismiss" onClick={() => setFleshOutError(null)} aria-label="Dismiss">×</button>
-        </p>
-      ) : null}
 
       {editingChar ? (
         <CharacterEditor
@@ -380,121 +423,218 @@ export function SimpleCharacterCard(props: {
   isFleshingOut: boolean;
   onFleshOut: () => void;
   onCancel: () => void;
+  viewMode?: CastViewMode;
+  onEdit?: () => void;
+  onRemoveCondition?: (index: number) => void;
+  onRemoveFlag?: (index: number) => void;
 }) {
-  const { character, present, isFleshingOut, onFleshOut, onCancel } = props;
+  const {
+    character,
+    present,
+    isFleshingOut,
+    onFleshOut,
+    onCancel,
+    viewMode = "portrait",
+    onEdit,
+    onRemoveCondition,
+    onRemoveFlag
+  } = props;
 
   return (
-    <article className="card playview-char-card simple-character-card">
-      <div className="char-compact-header-wrap" style={{ padding: "0.75rem" }}>
-        <div className="char-compact-top-line">
+    <article className={`card playview-char-card simple-character-card mode-${viewMode}${isFleshingOut ? " is-fleshing-out" : ""}`}>
+      {viewMode === "portrait" ? (
+        <div className="char-simple-portrait-header">
           <AvatarBadge
             name={character.name}
-            size="md"
-            className="char-compact-avatar"
+            size="lg"
+            className="char-simple-avatar"
           />
-
-          <div className="char-compact-name-row">
-            <h4 className="char-name">{character.name}</h4>
-            {character.storyRole ? (
-              <Badge variant="accent" size="xs" title={`Story Role: ${character.storyRole}`}>
-                {character.storyRole}
+          <div className="char-simple-title-group">
+            <div className="char-title-row">
+              <h4 className="char-name">{character.name}</h4>
+              <Badge
+                variant={present ? "success" : "neutral"}
+                size="xs"
+                pill
+              >
+                {present ? "● In Scene" : "○ Off-Screen"}
               </Badge>
-            ) : null}
-            <Badge
-              variant={present ? "success" : "neutral"}
-              size="xs"
-              pill
-            >
-              {present ? "● In Scene" : "○ Off-Screen"}
-            </Badge>
-            <Badge variant="neutral" size="xs" title="Simple Character without detailed sheet">
-              Simple
-            </Badge>
+            </div>
+            <div className="char-badges-wrap">
+              {character.storyRole ? (
+                <Badge variant="accent" size="xs" title={`Story Role: ${character.storyRole}`}>
+                  {character.storyRole}
+                </Badge>
+              ) : null}
+              <Badge
+                variant="neutral"
+                size="xs"
+                title="Basic story character. Click 'Flesh Out' to generate full lore & sheet."
+                leftIcon={<Icon name="Sparkles" size={10} />}
+              >
+                Simple NPC
+              </Badge>
+            </div>
           </div>
         </div>
+      ) : (
+        <div className="char-compact-header-wrap">
+          <div className="char-compact-top-line">
+            <AvatarBadge
+              name={character.name}
+              size="md"
+              className="char-compact-avatar"
+            />
+            <div className="char-compact-name-row">
+              <h4 className="char-name">{character.name}</h4>
+              {character.storyRole ? (
+                <Badge variant="accent" size="xs" title={`Story Role: ${character.storyRole}`}>
+                  {character.storyRole}
+                </Badge>
+              ) : null}
+              <Badge
+                variant={present ? "success" : "neutral"}
+                size="xs"
+                pill
+              >
+                {present ? "● In Scene" : "○ Off-Screen"}
+              </Badge>
+              <Badge
+                variant="neutral"
+                size="xs"
+                title="Basic story character without full sheet"
+                leftIcon={<Icon name="Sparkles" size={10} />}
+              >
+                Simple NPC
+              </Badge>
+            </div>
+          </div>
+        </div>
+      )}
 
-        {character.description ? (
-          <p className="npc-desc" style={{ marginTop: "0.5rem" }}>
-            {character.description}
-          </p>
-        ) : character.memorySummary ? (
-          <p className="npc-desc" style={{ marginTop: "0.5rem" }}>
-            {character.memorySummary}
-          </p>
-        ) : null}
+      {character.description ? (
+        <p className="npc-desc">
+          {character.description}
+        </p>
+      ) : character.memorySummary ? (
+        <p className="npc-desc">
+          {character.memorySummary}
+        </p>
+      ) : null}
 
-        {/* Glanceable Metrics (Mood & Toward Player) */}
-        {(character.mood || character.towardPlayer) && (
-          <div className="char-metrics-grid" style={{ marginTop: "0.5rem" }}>
-            <div className="char-metric-pill" title={`Mood: ${character.mood || "neutral"}`}>
+      {/* Glanceable Metrics (Mood & Toward Player) */}
+      {(character.mood || character.towardPlayer) && (
+        <div className="char-metrics-grid">
+          {character.mood ? (
+            <div className="char-metric-pill" title={`Mood: ${character.mood}`}>
               <span className="metric-icon">
                 <Icon name="Smile" size={12} />
               </span>
               <span className="metric-label">Mood:</span>
-              <span className="metric-val">{character.mood || "neutral"}</span>
+              <span className="metric-val">{character.mood}</span>
             </div>
+          ) : null}
 
-            <div className="char-metric-pill" title={`Toward Player: ${character.towardPlayer || "neutral"}`}>
+          {character.towardPlayer ? (
+            <div className="char-metric-pill" title={`Toward Player: ${character.towardPlayer}`}>
               <span className="metric-icon">
                 <Icon name="Heart" size={12} />
               </span>
               <span className="metric-label">Toward:</span>
-              <span className="metric-val">{character.towardPlayer || "neutral"}</span>
+              <span className="metric-val">{character.towardPlayer}</span>
             </div>
-          </div>
-        )}
+          ) : null}
+        </div>
+      )}
 
-        {/* Conditions & Flags Chips */}
-        {(character.conditions.length > 0 || character.flags.length > 0) && (
-          <div className="char-status-section" style={{ marginTop: "0.5rem" }}>
-            {character.conditions.length > 0 && (
-              <div className="conditions-grid">
-                {character.conditions.map((c, i) => (
-                  <div key={i} className="condition-chip">
-                    <Icon name="Zap" size={12} className="condition-icon" />
-                    <span className="condition-text">{c}</span>
+      {/* Conditions & Flags Chips */}
+      {(character.conditions.length > 0 || character.flags.length > 0) && (
+        <div className="char-status-section">
+          {character.conditions.length > 0 && (
+            <div className="conditions-grid">
+              {character.conditions.map((c, i) => (
+                <div key={i} className="condition-chip group flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Icon name="Zap" size={12} className="condition-icon shrink-0" />
+                    <span className="condition-text truncate">{c}</span>
                   </div>
-                ))}
-              </div>
-            )}
+                  {onRemoveCondition ? (
+                    <button
+                      type="button"
+                      className="chip-remove-btn"
+                      onClick={(e) => { e.stopPropagation(); onRemoveCondition(i); }}
+                      title="Remove condition"
+                      aria-label={`Remove condition ${c}`}
+                    >
+                      <Icon name="X" size={10} />
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
 
-            {character.flags.length > 0 && (
-              <div className="flags-chip-grid">
-                {character.flags.map((f, i) => (
-                  <div key={i} className="flag-chip">
-                    <Icon name="Bookmark" size={11} className="flag-icon" />
-                    <span className="flag-text">{f}</span>
+          {character.flags.length > 0 && (
+            <div className="flags-chip-grid">
+              {character.flags.map((f, i) => (
+                <div key={i} className="flag-chip group flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Icon name="Bookmark" size={11} className="flag-icon shrink-0" />
+                    <span className="flag-text truncate">{f}</span>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Action Row */}
-        <div className="char-actions-footer" style={{ marginTop: "0.6rem", paddingTop: "0.5rem", borderTop: "1px solid var(--border-subtle)" }}>
-          <div style={{ flex: 1 }} />
-          {isFleshingOut ? (
-            <span className="promote-actions flex items-center gap-1.5">
-              <Button size="sm" variant="secondary" disabled leftIcon={<Icon name="Sparkles" size={13} className="sparkle-pulse" />}>
-                Fleshing Out…
-              </Button>
-              <Button size="sm" variant="ghost" onClick={onCancel}>
-                Cancel
-              </Button>
-            </span>
-          ) : (
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={onFleshOut}
-              leftIcon={<Icon name="Sparkles" size={13} />}
-              title="Generate a full character sheet and promote to Detailed Character"
-            >
-              Flesh Out
-            </Button>
+                  {onRemoveFlag ? (
+                    <button
+                      type="button"
+                      className="chip-remove-btn"
+                      onClick={(e) => { e.stopPropagation(); onRemoveFlag(i); }}
+                      title="Remove flag"
+                      aria-label={`Remove flag ${f}`}
+                    >
+                      <Icon name="X" size={10} />
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
           )}
         </div>
+      )}
+
+      {/* Action Row */}
+      <div className="char-actions-footer">
+        {onEdit ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={onEdit}
+            disabled={isFleshingOut}
+            leftIcon={<Icon name="Pencil" size={12} />}
+            title="Edit character profile and notes"
+          >
+            Edit
+          </Button>
+        ) : <div />}
+
+        {isFleshingOut ? (
+          <span className="promote-actions flex items-center gap-1.5">
+            <Button size="sm" variant="secondary" disabled leftIcon={<Icon name="Sparkles" size={13} className="sparkle-pulse" />}>
+              Fleshing Out…
+            </Button>
+            <Button size="sm" variant="ghost" onClick={onCancel}>
+              Cancel
+            </Button>
+          </span>
+        ) : (
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={onFleshOut}
+            leftIcon={<Icon name="Sparkles" size={13} />}
+            title="Generate a full character sheet and promote to Detailed Character"
+          >
+            Flesh Out
+          </Button>
+        )}
       </div>
     </article>
   );
@@ -514,6 +654,8 @@ export function CharacterCard(props: {
   present: boolean;
   libraryStale: boolean;
   readOnlySheet: boolean;
+  onRemoveCondition?: (index: number) => void;
+  onRemoveFlag?: (index: number) => void;
 }) {
   const {
     character,
@@ -529,6 +671,8 @@ export function CharacterCard(props: {
     present,
     libraryStale,
     readOnlySheet,
+    onRemoveCondition,
+    onRemoveFlag
   } = props;
 
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -551,9 +695,12 @@ export function CharacterCard(props: {
               onError={() => setAvatarFailed(true)}
             />
           ) : (
-            <div className="char-portrait-fallback">
-              <Icon name="Image" size={32} />
-              <span>{character.name}</span>
+            <div className="char-portrait-fallback-header">
+              <AvatarBadge src={profileUrl} name={character.name} size="lg" />
+              <div className="char-fallback-text-wrap">
+                <span className="char-fallback-title">{character.name}</span>
+                <span className="char-no-art-hint">Detailed Character</span>
+              </div>
             </div>
           )}
         </div>
@@ -723,9 +870,22 @@ export function CharacterCard(props: {
           {character.conditions.length > 0 && (
             <div className="conditions-grid">
               {character.conditions.map((c, i) => (
-                <div key={i} className="condition-chip">
-                  <Icon name="Zap" size={12} className="condition-icon" />
-                  <span className="condition-text">{c}</span>
+                <div key={i} className="condition-chip group flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Icon name="Zap" size={12} className="condition-icon shrink-0" />
+                    <span className="condition-text truncate">{c}</span>
+                  </div>
+                  {onRemoveCondition ? (
+                    <button
+                      type="button"
+                      className="chip-remove-btn"
+                      onClick={(e) => { e.stopPropagation(); onRemoveCondition(i); }}
+                      title="Remove condition"
+                      aria-label={`Remove condition ${c}`}
+                    >
+                      <Icon name="X" size={10} />
+                    </button>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -734,9 +894,22 @@ export function CharacterCard(props: {
           {character.flags.length > 0 && (
             <div className="flags-chip-grid">
               {character.flags.map((f, i) => (
-                <div key={i} className="flag-chip">
-                  <Icon name="Bookmark" size={11} className="flag-icon" />
-                  <span className="flag-text">{f}</span>
+                <div key={i} className="flag-chip group flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Icon name="Bookmark" size={11} className="flag-icon shrink-0" />
+                    <span className="flag-text truncate">{f}</span>
+                  </div>
+                  {onRemoveFlag ? (
+                    <button
+                      type="button"
+                      className="chip-remove-btn"
+                      onClick={(e) => { e.stopPropagation(); onRemoveFlag(i); }}
+                      title="Remove flag"
+                      aria-label={`Remove flag ${f}`}
+                    >
+                      <Icon name="X" size={10} />
+                    </button>
+                  ) : null}
                 </div>
               ))}
             </div>

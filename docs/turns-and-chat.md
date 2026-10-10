@@ -13,12 +13,15 @@ playthrough.
 ## Sending a turn
 
 Your message appears immediately as an optimistic bubble while the response generates below
-it. The Send button becomes a red **Cancel** for the duration; cancelling restores your text
+it. The composer's text input dynamically adjusts its height based on your input — starting as a
+clean single line and expanding smoothly up to four lines before scrolling, saving vertical screen real estate.
+The Send button becomes a red **Cancel** for the duration; cancelling restores your text
 and marks the turn as cancelled rather than failing it.
 
 A turn sends the assembled prompt (see [Prompt architecture](prompt-architecture.md)), applies
 whatever state patches the model returned, records the response, refreshes the context meter
-and stores a snapshot of the state as it was before the turn.
+and stores a snapshot of the state as it was before the turn. Once the AI responds, the chat
+auto-scrolls based on your preference in Settings → Chat (smoothly to the start of the new message by default).
 
 ## Message actions
 
@@ -81,6 +84,10 @@ curly quotes — gets its own accent styling, so speech reads differently from n
 
 The renderer is deliberately self-contained: no markdown dependency, and dialogue handling is
 part of the parser rather than a post-processing pass.
+
+When **Show Message Numbers** is enabled in Settings → Chat, each user and assistant message bubble
+displays its sequential index (`#0`, `#1`, `#2`...). The Scene Overview displays the total turn count
+along with a breakdown of player and assistant turns.
 
 ## The debug box
 
