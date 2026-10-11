@@ -32,6 +32,7 @@ export type CharacterEditorProps = {
    *  against, and the only place a "restore" can come from. */
   originalSheet?: string | null;
   initialMode?: "view" | "edit";
+  inScene?: boolean;
   onSave: (payload: CharacterEditPayload) => Promise<void>;
   onSaveToLibrary?: (mode: "update" | "newVersion") => Promise<{ version: number; created: boolean }>;
   onClose: () => void;
@@ -55,8 +56,10 @@ export type CharacterEditPayload = {
 
 type EditorForm = {
   name: string;
-  content: string;
+  storyRole: string;
   summary: string;
+  inScene: boolean;
+  content: string;
   clothing: ClothingItem[];
   mood: string;
   towardPlayer: string;
@@ -67,30 +70,44 @@ type EditorForm = {
 
 function instanceToForm(
   char: CharacterInstance,
-  playthrough: Playthrough
+  playthrough: Playthrough,
+  inSceneOverride?: boolean
 ): EditorForm {
   const tpl = playthrough.characterTemplates.find((t) => t.id === char.templateId);
+  const activeInScene = inSceneOverride ?? (playthrough.activeCharacters ?? []).includes(char.id);
   return {
     name: char.name,
+    storyRole: char.storyRole || "Stranger",
+    summary: tpl?.summary ?? char.description ?? "",
+    inScene: activeInScene,
     content: tpl?.content ?? "",
-    summary: tpl?.summary ?? "",
     clothing: [...(char.clothing ?? [])],
-    mood: char.mood,
-    towardPlayer: char.towardPlayer,
-    memorySummary: char.memorySummary,
-    conditions: [...char.conditions],
-    flags: [...char.flags],
+    mood: char.mood ?? "",
+    towardPlayer: char.towardPlayer ?? "",
+    memorySummary: char.memorySummary ?? "",
+    conditions: [...(char.conditions ?? [])],
+    flags: [...(char.flags ?? [])],
   };
 }
 
 function formToPayload(form: EditorForm): CharacterEditPayload {
+  const trimmedName = form.name.trim();
+  const trimmedRole = form.storyRole.trim();
+  const trimmedSummary = form.summary.trim();
+  const trimmedMood = form.mood.trim();
+  const trimmedToward = form.towardPlayer.trim();
+  const trimmedMemory = form.memorySummary.trim();
+
   return {
-    name: form.name || undefined,
+    name: trimmedName || undefined,
+    storyRole: trimmedRole || undefined,
+    summary: trimmedSummary || undefined,
+    description: trimmedSummary || undefined,
+    inScene: form.inScene,
     content: form.content || undefined,
-    summary: form.summary || undefined,
-    mood: form.mood || undefined,
-    towardPlayer: form.towardPlayer || undefined,
-    memorySummary: form.memorySummary || undefined,
+    mood: trimmedMood || undefined,
+    towardPlayer: trimmedToward || undefined,
+    memorySummary: trimmedMemory || undefined,
     conditions: form.conditions,
     flags: form.flags,
   };
@@ -114,6 +131,7 @@ export function CharacterEditor({
   inLibrary,
   originalSheet = null,
   initialMode = "edit",
+  inScene,
   onSave,
   onSaveToLibrary,
   onClose,
@@ -121,7 +139,7 @@ export function CharacterEditor({
   const template = playthrough.characterTemplates.find((t) => t.id === character.templateId);
   // CCv2-backed sheets are read-only in play (D9): content + clothing are locked.
   const isReadOnlySheet = template?.format === "ccv2";
-  const initialForm = useRef<EditorForm>(instanceToForm(character, playthrough));
+  const initialForm = useRef<EditorForm>(instanceToForm(character, playthrough, inScene));
   const [form, setForm] = useState<EditorForm>(initialForm.current);
 
   const [mode, setMode] = useState<"view" | "edit">(initialMode);
@@ -136,7 +154,7 @@ export function CharacterEditor({
   const isDirty = JSON.stringify(form) !== JSON.stringify(initialForm.current);
 
   useEffect(() => {
-    initialForm.current = instanceToForm(character, playthrough);
+    initialForm.current = instanceToForm(character, playthrough, inScene);
     setForm(initialForm.current);
     setMode(initialMode);
     setStatus(null);
@@ -145,7 +163,7 @@ export function CharacterEditor({
     setPendingDiscard(null);
     setShowRaw(false);
     setShowDiff(false);
-  }, [character.id, initialMode, playthrough.id]);
+  }, [character.id, character.updatedAt, initialMode, inScene, playthrough.id]);
 
   // ── The sheet's own history ────────────────────────────────────────────────────────────────
   /** What the story changed, per section — read from the turn log, never stored a second time. */
@@ -226,6 +244,11 @@ export function CharacterEditor({
   }
 
   async function handleSave(closeAfter: boolean) {
+    const trimmedName = form.name.trim();
+    if (!trimmedName) {
+      setStatus({ text: "Character name is required.", isError: true });
+      return;
+    }
     setSaving(true);
     setStatus(null);
     try {
@@ -250,8 +273,13 @@ export function CharacterEditor({
         libMsg = result.created ? ` + saved to the library as v${result.version}` : " + library card updated";
       }
 
-      initialForm.current = { ...form };
-      setStatus({ text: `"${character.name}" updated${libMsg}.`, isError: false });
+      initialForm.current = {
+        ...form,
+        clothing: [...form.clothing],
+        conditions: [...form.conditions],
+        flags: [...form.flags],
+      };
+      setStatus({ text: `"${trimmedName}" updated${libMsg}.`, isError: false });
 
       if (closeAfter) {
         setTimeout(onClose, 1000);
@@ -331,6 +359,30 @@ export function CharacterEditor({
   const runtimeState = (
     <dl className="sheet-readonly">
       <div>
+        <dt>Story role</dt>
+        <dd>
+          {form.storyRole ? (
+            <Badge variant="accent" size="xs">{form.storyRole}</Badge>
+          ) : (
+            <span className="empty-value">—</span>
+          )}
+        </dd>
+      </div>
+      <div>
+        <dt>Presence</dt>
+        <dd>
+          {form.inScene ? (
+            <Badge variant="success" size="xs">● In Scene (Active)</Badge>
+          ) : (
+            <Badge variant="neutral" size="xs">○ Off-Screen (Inactive)</Badge>
+          )}
+        </dd>
+      </div>
+      <div>
+        <dt>Off-screen summary</dt>
+        <dd>{form.summary || <span className="empty-value">—</span>}</dd>
+      </div>
+      <div>
         <dt>Mood</dt>
         <dd>{form.mood || <span className="empty-value">—</span>}</dd>
       </div>
@@ -370,12 +422,20 @@ export function CharacterEditor({
   return (
     <>
       <Dialog
-        title={character.name}
+        title={form.name || character.name}
         description={
-          <>
-            {mode === "view" ? "Read-only view" : "Edit mode"}
+          <span className="sheet-dialog-desc">
+            <span>{mode === "view" ? "Read-only view" : "Edit mode"}</span>
+            {form.storyRole ? (
+              <Badge variant="accent" size="xs">
+                {form.storyRole}
+              </Badge>
+            ) : null}
+            <Badge variant={form.inScene ? "success" : "neutral"} size="xs">
+              {form.inScene ? "● In Scene" : "○ Off-Screen"}
+            </Badge>
             {isDirty ? <span className="dirty-indicator"> — unsaved changes</span> : null}
-          </>
+          </span>
         }
         className="character-editor-modal"
         maxWidth={820}
@@ -478,7 +538,16 @@ export function CharacterEditor({
               <TextInput
                 label="Name"
                 value={form.name}
+                required
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              />
+
+              <TextInput
+                label="Story Role"
+                placeholder="e.g. Companion, Mentor, Rival, Local Blacksmith"
+                helperText="Their narrative role or occupation in the story"
+                value={form.storyRole}
+                onChange={(e) => setForm((f) => ({ ...f, storyRole: e.target.value }))}
               />
 
               <TextInput
@@ -486,6 +555,18 @@ export function CharacterEditor({
                 helperText="One-line description used when the character is away from the scene"
                 value={form.summary}
                 onChange={(e) => setForm((f) => ({ ...f, summary: e.target.value }))}
+              />
+
+              <SwitchRow
+                icon="Users"
+                title="Present In Scene"
+                description={
+                  form.inScene
+                    ? "In Scene: This character is in the current location and part of active story dialogue and events."
+                    : "Off-Screen: This character is currently elsewhere or in the background."
+                }
+                checked={form.inScene}
+                onChange={(e) => setForm((f) => ({ ...f, inScene: e.target.checked }))}
               />
 
               <h4>

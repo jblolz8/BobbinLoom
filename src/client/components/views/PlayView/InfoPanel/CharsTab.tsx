@@ -564,6 +564,7 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
           inLibrary={library.some((t) => t.id === editingChar.templateId)}
           originalSheet={library.find((t) => t.id === editingChar.templateId)?.content ?? null}
           initialMode="view"
+          inScene={activeCharIds.has(editingChar.id)}
           onSave={(payload) => handleEditSave(payload)}
           onSaveToLibrary={(mode) => handleEditorSaveToLibrary(mode)}
           onClose={() => setEditingChar(null)}

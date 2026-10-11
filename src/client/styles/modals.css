@@ -1778,6 +1778,13 @@
   align-items: center;
 }
 
+.sheet-dialog-desc {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .dirty-indicator {
   color: var(--story-quote);
   font-size: 0.8rem;

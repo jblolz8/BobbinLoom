@@ -150,4 +150,42 @@ describe("PUT /api/playthroughs/:id/characters/:characterId", () => {
     expect(reloaded?.characters.find((c) => c.id === char.id)?.name).toBe("Mira Vance");
     expect(reloaded?.characterTemplates.find((t) => t.id === char.templateId)?.name).toBe("Mira Vance");
   });
+
+  it("edits template-backed character storyRole, summary, description, and inScene", async () => {
+    const h = harness();
+    const pt = createPlaythroughRecord(h.dataDir, "Detailed Char Role & Presence Test");
+    const char = pt.characters[0];
+    expect(char.templateId).toBeDefined();
+
+    const res = await h.app.inject({
+      method: "PUT",
+      url: `/api/playthroughs/${pt.id}/characters/${char.id}`,
+      payload: {
+        storyRole: "Trusted Confidante",
+        summary: "A stalwart ally guarding the eastern gate.",
+        description: "A stalwart ally guarding the eastern gate.",
+        inScene: false,
+      }
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as Playthrough;
+    const updatedChar = body.characters.find((c) => c.id === char.id)!;
+    expect(updatedChar.storyRole).toBe("Trusted Confidante");
+    expect(updatedChar.description).toBe("A stalwart ally guarding the eastern gate.");
+    expect(body.activeCharacters).not.toContain(char.id);
+
+    const updatedTpl = body.characterTemplates.find((t) => t.id === char.templateId)!;
+    expect(updatedTpl.summary).toBe("A stalwart ally guarding the eastern gate.");
+
+    // Check storage persistence
+    const reloaded = getPlaythroughRecord(h.dataDir, pt.id);
+    const reloadedChar = reloaded?.characters.find((c) => c.id === char.id)!;
+    expect(reloadedChar.storyRole).toBe("Trusted Confidante");
+    expect(reloadedChar.description).toBe("A stalwart ally guarding the eastern gate.");
+    expect(reloaded?.activeCharacters).not.toContain(char.id);
+    expect(reloaded?.characterTemplates.find((t) => t.id === char.templateId)?.summary).toBe(
+      "A stalwart ally guarding the eastern gate."
+    );
+  });
 });
