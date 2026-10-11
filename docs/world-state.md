@@ -70,12 +70,20 @@ The detail a character is given in the prompt depends on whether they are in the
 
 Being absent never blocks anything: you can still edit an absent character's sheet and patch their state normally. Presence only decides how much of them the model is shown.
 
+- **1-Click Presence Toggle**: On both Detailed and Simple character cards in the Chars tab, clicking the presence badge (`● In Scene` / `○ Off-Screen`) instantly toggles them between active in the scene and off-screen without waiting for an AI model state patch.
+
 ### Background characters & Character Manager
 
 Simple characters are `{ name, description, storyRole }` — a story role
 and a brief description, enough to populate a scene without a full sheet.
 
-- **Manual editing**: You can click **Edit** on any simple character card to adjust their name, description, role, mood, conditions, or flags directly in the Character Editor.
+- **Dedicated Simple Character Editor**: Clicking **Edit** on a simple character card opens a dedicated Simple Character Editor modal. Unlike the full sheet editor, this modal is specifically tailored for lightweight cast members:
+  - **Identity & Story Role**: Edit Name, narrative Story Role, and physical/personality Description.
+  - **Presence & Scene State**: Toggle active scene presence (`In Scene` / `Off-Screen`), current Mood, and stance Toward Player.
+  - **Memory Summary**: Edit their continuity summary passed to the prompt.
+  - **Conditions & Flags**: Direct tag editing for temporary statuses or narrative flags.
+  - **Flesh Out Shortcut**: Built-in callout button to trigger the Character Manager expansion into a full format sheet.
+  - **Discard Protection**: Warns and prevents loss of unsaved edits when closing.
 - **Fleshing out**: The **Flesh Out** button uses an AI model to draft a complete character sheet from their description and story context. The specific connection used is managed in the **Character Manager** toolbar at the top of the Chars tab, defaulting to your active text connection.
 - **Story Context Scope**: You can customize how much story context the Character Manager receives when fleshing out or generating characters:
   - **Current Chapter (All)** (default): Includes complete dialogue, actions, and events from the active chapter.

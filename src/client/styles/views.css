@@ -6335,6 +6335,34 @@ button.import-btn:active:not(:disabled),
   border: 1px solid var(--border-subtle);
 }
 
+/* Presence 1-Click Toggle Button */
+.char-presence-toggle-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  display: inline-flex;
+  border-radius: 9999px;
+  line-height: 1;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+  vertical-align: middle;
+}
+
+.char-presence-toggle-btn:hover {
+  opacity: 0.85;
+  transform: scale(1.04);
+}
+
+.char-presence-toggle-btn:active {
+  transform: scale(0.96);
+}
+
+.char-presence-toggle-btn:focus-visible {
+  outline: 2px solid var(--accent-base);
+  outline-offset: 2px;
+}
+
 .char-badges-row {
   display: flex;
   align-items: center;

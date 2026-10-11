@@ -23,6 +23,9 @@ export type CharacterEditPayload = {
   memorySummary?: string;
   conditions?: string[];
   flags?: string[];
+  storyRole?: string;
+  description?: string;
+  inScene?: boolean;
 
   clothing?: ClothingItem[];
   name?: string;

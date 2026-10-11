@@ -21,6 +21,7 @@ import {
   updateViewPreferences,
 } from "../../../../api";
 import { CharacterEditor } from "../../../modals/CharacterEditor";
+import { SimpleCharacterEditor } from "../../../modals/SimpleCharacterEditor";
 import { CharacterSheetSections } from "./CharacterSheetSections";
 import { AvatarBadge, Badge, Button, Icon, SearchBar, SimpleSelect, TextArea } from "../../../base";
 import type { SimpleSelectOption } from "../../../base/Select";
@@ -336,6 +337,11 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
     onPlaythroughChange(updated);
   }
 
+  async function handleTogglePresence(character: CharacterInstance, currentPresent: boolean) {
+    const updated = await editCharacter(playthrough.id, character.id, { inScene: !currentPresent });
+    onPlaythroughChange(updated);
+  }
+
   function renderCharacterItem(character: CharacterInstance, inScene: boolean) {
     if (character.templateId) {
       const localTpl = playthrough.characterTemplates.find((t) => t.id === character.templateId);
@@ -359,6 +365,7 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
           saving={savingId === character.id}
           onSave={(mode) => { void handleSave(character.id, mode); }}
           onEdit={() => setEditingChar(character)}
+          onTogglePresence={() => void handleTogglePresence(character, inScene)}
           onOpenLibrary={onOpenLibrary}
           onRemoveCondition={(i) => void handleRemoveCharCondition(character, i)}
           onRemoveFlag={(i) => void handleRemoveCharFlag(character, i)}
@@ -376,6 +383,7 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
         onFleshOut={() => void handleFleshOut(character.id)}
         onCancel={handleCancelFleshOut}
         onEdit={() => setEditingChar(character)}
+        onTogglePresence={() => void handleTogglePresence(character, inScene)}
         onRemoveCondition={(i) => void handleRemoveCharCondition(character, i)}
         onRemoveFlag={(i) => void handleRemoveCharFlag(character, i)}
       />
@@ -549,15 +557,23 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
         )}
       </section>
 
-      {editingChar ? (
+      {editingChar && editingChar.templateId ? (
         <CharacterEditor
           character={editingChar}
           playthrough={playthrough}
-          inLibrary={editingChar.templateId ? library.some((t) => t.id === editingChar.templateId) : false}
-          originalSheet={editingChar.templateId ? library.find((t) => t.id === editingChar.templateId)?.content ?? null : null}
+          inLibrary={library.some((t) => t.id === editingChar.templateId)}
+          originalSheet={library.find((t) => t.id === editingChar.templateId)?.content ?? null}
           initialMode="view"
           onSave={(payload) => handleEditSave(payload)}
           onSaveToLibrary={(mode) => handleEditorSaveToLibrary(mode)}
+          onClose={() => setEditingChar(null)}
+        />
+      ) : editingChar ? (
+        <SimpleCharacterEditor
+          character={editingChar}
+          inScene={activeCharIds.has(editingChar.id)}
+          onSave={(payload) => handleEditSave(payload)}
+          onFleshOut={() => void handleFleshOut(editingChar.id)}
           onClose={() => setEditingChar(null)}
         />
       ) : null}
@@ -674,6 +690,7 @@ export function SimpleCharacterCard(props: {
   onCancel: () => void;
   viewMode?: CastViewMode;
   onEdit?: () => void;
+  onTogglePresence?: () => void;
   onRemoveCondition?: (index: number) => void;
   onRemoveFlag?: (index: number) => void;
 }) {
@@ -685,9 +702,39 @@ export function SimpleCharacterCard(props: {
     onCancel,
     viewMode = "portrait",
     onEdit,
+    onTogglePresence,
     onRemoveCondition,
     onRemoveFlag
   } = props;
+
+  const renderPresenceBadge = () => {
+    const badge = (
+      <Badge
+        variant={present ? "success" : "neutral"}
+        size="xs"
+        pill
+      >
+        {present ? "● In Scene" : "○ Off-Screen"}
+      </Badge>
+    );
+
+    if (!onTogglePresence) return badge;
+
+    return (
+      <button
+        type="button"
+        className="char-presence-toggle-btn"
+        onClick={(e) => {
+          e.stopPropagation();
+          onTogglePresence();
+        }}
+        title={present ? "In Scene (Active). Click to move Off-Screen" : "Off-Screen (Inactive). Click to bring In Scene"}
+        aria-label={present ? `Move ${character.name} off-screen` : `Bring ${character.name} into scene`}
+      >
+        {badge}
+      </button>
+    );
+  };
 
   return (
     <article className={`card playview-char-card simple-character-card mode-${viewMode}${isFleshingOut ? " is-fleshing-out" : ""}`}>
@@ -701,13 +748,7 @@ export function SimpleCharacterCard(props: {
           <div className="char-simple-title-group">
             <div className="char-title-row">
               <h4 className="char-name">{character.name}</h4>
-              <Badge
-                variant={present ? "success" : "neutral"}
-                size="xs"
-                pill
-              >
-                {present ? "● In Scene" : "○ Off-Screen"}
-              </Badge>
+              {renderPresenceBadge()}
             </div>
             <div className="char-badges-wrap">
               {character.storyRole ? (
@@ -741,13 +782,7 @@ export function SimpleCharacterCard(props: {
                   {character.storyRole}
                 </Badge>
               ) : null}
-              <Badge
-                variant={present ? "success" : "neutral"}
-                size="xs"
-                pill
-              >
-                {present ? "● In Scene" : "○ Off-Screen"}
-              </Badge>
+              {renderPresenceBadge()}
               <Badge
                 variant="neutral"
                 size="xs"
@@ -898,6 +933,7 @@ export function CharacterCard(props: {
   saving: boolean;
   onSave: (mode: "update" | "newVersion") => void;
   onEdit: () => void;
+  onTogglePresence?: () => void;
   onOpenLibrary?: (templateId: string) => void;
   content: string;
   present: boolean;
@@ -916,6 +952,7 @@ export function CharacterCard(props: {
     saving,
     onSave,
     onEdit,
+    onTogglePresence,
     onOpenLibrary,
     present,
     libraryStale,
@@ -930,6 +967,35 @@ export function CharacterCard(props: {
   const templateId = character.templateId ?? "";
   const profileUrl = getCharacterAvatarUrl(templateId, "profile", localTemplate?.avatarUpdatedAt);
   const portraitUrl = getCharacterAvatarUrl(templateId, "portrait", localTemplate?.avatarUpdatedAt);
+
+  const renderPresenceBadge = () => {
+    const badge = (
+      <Badge
+        variant={present ? "success" : "neutral"}
+        size="xs"
+        pill
+      >
+        {present ? "● In Scene" : "○ Off-Screen"}
+      </Badge>
+    );
+
+    if (!onTogglePresence) return badge;
+
+    return (
+      <button
+        type="button"
+        className="char-presence-toggle-btn"
+        onClick={(e) => {
+          e.stopPropagation();
+          onTogglePresence();
+        }}
+        title={present ? "In Scene (Active). Click to move Off-Screen" : "Off-Screen (Inactive). Click to bring In Scene"}
+        aria-label={present ? `Move ${character.name} off-screen` : `Bring ${character.name} into scene`}
+      >
+        {badge}
+      </button>
+    );
+  };
 
   return (
     <article className={`card playview-char-card mode-${viewMode}`}>
@@ -974,13 +1040,7 @@ export function CharacterCard(props: {
                   {character.storyRole}
                 </Badge>
               ) : null}
-              <Badge
-                variant={present ? "success" : "neutral"}
-                size="xs"
-                pill
-              >
-                {present ? "● In Scene" : "○ Off-Screen"}
-              </Badge>
+              {renderPresenceBadge()}
             </div>
           </div>
 
@@ -1039,13 +1099,7 @@ export function CharacterCard(props: {
                 {character.storyRole}
               </Badge>
             ) : null}
-            <Badge
-              variant={present ? "success" : "neutral"}
-              size="xs"
-              pill
-            >
-              {present ? "● In Scene" : "○ Off-Screen"}
-            </Badge>
+            {renderPresenceBadge()}
           </div>
 
           <div className="char-badges-row">

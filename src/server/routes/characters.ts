@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { createReadStream } from "node:fs";
 import {
@@ -27,7 +27,7 @@ import { convertCardApply, convertCardGenerate } from "../characterCards/convert
 import { resolveCharacterFormat } from "../../engine/characterFormat";
 import { PNG_SIG } from "../characterCards/pngText";
 import { saveToLibraryAction } from "../stateActions";
-import { abortOnClientDisconnect, dataDir, providerManager } from "./helpers";
+import { abortOnClientDisconnect, dataDir as defaultDataDir, providerManager } from "./helpers";
 import type { CharacterFormat } from "../../schemas";
 
 const UpdateCharacterBody = z.object({
@@ -62,9 +62,15 @@ const EditCharacterBody = z.object({
     name: z.string(),
     state: z.string().optional(),
   })).optional(),
+  inScene: z.boolean().optional(),
 });
 
-export async function characterRoutes(app: FastifyInstance): Promise<void> {
+export type CharacterRoutesOptions = {
+  dataDir?: string;
+};
+
+export const characterRoutes: FastifyPluginAsync<CharacterRoutesOptions> = async (app, options = {}) => {
+  const dataDir = options.dataDir ?? defaultDataDir;
   app.get("/api/characters", async () => {
     return listCharacterTemplates();
   });
@@ -424,6 +430,7 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
 
     const updated = { ...character, updatedAt: new Date().toISOString() };
 
+    if (body.name !== undefined) updated.name = body.name;
     if (body.mood !== undefined) updated.mood = body.mood;
     if (body.towardPlayer !== undefined) updated.towardPlayer = body.towardPlayer;
     if (body.memorySummary !== undefined) updated.memorySummary = body.memorySummary;
@@ -433,10 +440,6 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
     if (body.storyRole !== undefined) updated.storyRole = body.storyRole;
     if (body.description !== undefined) updated.description = body.description;
 
-    playthrough.characters = playthrough.characters.map((c) =>
-      c.id === params.characterId ? updated : c
-    );
-
     const hasTemplateUpdate =
       body.name !== undefined || body.content !== undefined ||
       body.startingClothing !== undefined || body.summary !== undefined;
@@ -444,11 +447,25 @@ export async function characterRoutes(app: FastifyInstance): Promise<void> {
     if (hasTemplateUpdate) {
       const tpl = template;
       if (tpl) {
-        if (body.name !== undefined) { tpl.name = body.name; updated.name = body.name; }
+        if (body.name !== undefined) tpl.name = body.name;
         if (body.content !== undefined) tpl.content = body.content;
         if (body.summary !== undefined) tpl.summary = body.summary;
         if (body.startingClothing !== undefined) tpl.startingClothing = body.startingClothing;
       }
+    }
+
+    playthrough.characters = playthrough.characters.map((c) =>
+      c.id === params.characterId ? updated : c
+    );
+
+    if (body.inScene !== undefined) {
+      const activeSet = new Set(playthrough.activeCharacters ?? []);
+      if (body.inScene) {
+        activeSet.add(params.characterId);
+      } else {
+        activeSet.delete(params.characterId);
+      }
+      playthrough.activeCharacters = Array.from(activeSet);
     }
 
     playthrough.updatedAt = updated.updatedAt;
