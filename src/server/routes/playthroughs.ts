@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyPluginOptions } from "fastify";
 import { z } from "zod";
-import { ChapterOpeningModeSchema, ClothingItemSchema } from "../../schemas";
+import { ChapterOpeningModeSchema, CharacterContextScopeSchema, ClothingItemSchema } from "../../schemas";
 import type { ScenarioPreferences } from "../../schemas";
 import { parseUserInput } from "../../engine/engine";
 import { assembleTurnPrompt } from "../openAiCompatibleProvider";
@@ -25,6 +25,7 @@ import {
 import {
   closeChapterAction,
   fleshOutCharacterAction,
+  generateNewCharacterAction,
   worldStateAction,
   resummarizeChapterAction
 } from "../stateActions";
@@ -435,10 +436,27 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
 
   app.post("/api/playthroughs/:id/characters/:characterId/flesh-out", async (request, reply) => {
     const { id, characterId } = z.object({ id: z.string(), characterId: z.string() }).parse(request.params);
-    const body = z.object({ content: z.string().optional() }).parse(request.body ?? {});
+    const body = z.object({
+      content: z.string().optional(),
+      scope: CharacterContextScopeSchema.optional(),
+      recentCount: z.number().int().min(1).max(50).optional()
+    }).parse(request.body ?? {});
 
     const controller = abortOnClientDisconnect(reply);
-    const result = await fleshOutCharacterAction(dataDir, id, characterId, manager.getProvider(manager.characterTextProviderId() ?? undefined), body.content, manager.getMaxTokens(manager.characterTextProviderId() ?? undefined), controller.signal, loadPromptConfig(settingsDir).promptConfig);
+    const result = await fleshOutCharacterAction(
+      dataDir,
+      id,
+      characterId,
+      manager.getProvider(manager.characterTextProviderId() ?? undefined),
+      body.content,
+      manager.getMaxTokens(manager.characterTextProviderId() ?? undefined),
+      controller.signal,
+      loadPromptConfig(settingsDir).promptConfig,
+      {
+        scope: body.scope,
+        recentCount: body.recentCount
+      }
+    );
     if (controller.signal.aborted) return;
     if (!result.ok) return reply.code(result.status).send({ error: result.error });
     return result.state;
@@ -446,13 +464,65 @@ export const playthroughRoutes: FastifyPluginAsync<PlaythroughRoutesOptions> = a
 
   app.post("/api/playthroughs/:id/flesh-out-character", async (request, reply) => {
     const { id } = z.object({ id: z.string() }).parse(request.params);
-    const body = z.object({ characterId: z.string(), content: z.string().optional() }).parse(request.body ?? {});
+    const body = z.object({
+      characterId: z.string(),
+      content: z.string().optional(),
+      scope: CharacterContextScopeSchema.optional(),
+      recentCount: z.number().int().min(1).max(50).optional()
+    }).parse(request.body ?? {});
 
     const controller = abortOnClientDisconnect(reply);
-    const result = await fleshOutCharacterAction(dataDir, id, body.characterId, manager.getProvider(manager.characterTextProviderId() ?? undefined), body.content, manager.getMaxTokens(manager.characterTextProviderId() ?? undefined), controller.signal, loadPromptConfig(settingsDir).promptConfig);
+    const result = await fleshOutCharacterAction(
+      dataDir,
+      id,
+      body.characterId,
+      manager.getProvider(manager.characterTextProviderId() ?? undefined),
+      body.content,
+      manager.getMaxTokens(manager.characterTextProviderId() ?? undefined),
+      controller.signal,
+      loadPromptConfig(settingsDir).promptConfig,
+      {
+        scope: body.scope,
+        recentCount: body.recentCount
+      }
+    );
     if (controller.signal.aborted) return;
     if (!result.ok) return reply.code(result.status).send({ error: result.error });
     return result.state;
+  });
+
+  app.post("/api/playthroughs/:id/characters/generate", async (request, reply) => {
+    const { id } = z.object({ id: z.string() }).parse(request.params);
+    const body = z.object({
+      prompt: z.string().optional(),
+      tier: z.enum(["simple", "detailed"]).default("simple"),
+      inScene: z.boolean().default(true),
+      scope: CharacterContextScopeSchema.optional(),
+      recentCount: z.number().int().min(1).max(50).optional()
+    }).parse(request.body ?? {});
+
+    const controller = abortOnClientDisconnect(reply);
+    const result = await generateNewCharacterAction(
+      dataDir,
+      id,
+      manager.getProvider(manager.characterTextProviderId() ?? undefined),
+      {
+        prompt: body.prompt,
+        tier: body.tier,
+        inScene: body.inScene,
+        contextOptions: {
+          scope: body.scope,
+          recentCount: body.recentCount,
+          maxTokens: manager.getMaxTokens(manager.characterTextProviderId() ?? undefined)
+        }
+      },
+      controller.signal,
+      loadPromptConfig(settingsDir).promptConfig
+    );
+
+    if (controller.signal.aborted) return;
+    if (!result.ok) return reply.code(result.status).send({ error: result.error });
+    return { state: result.state, character: result.character };
   });
 
   app.post("/api/playthroughs/:id/close-chapter", async (request, reply) => {

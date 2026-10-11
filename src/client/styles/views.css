@@ -5709,38 +5709,61 @@ button.import-btn:active:not(:disabled),
 .chars-tab-container {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .char-provider-toolbar {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
-  padding: 0.6rem 0.75rem;
+  padding: 0.55rem 0.65rem;
   background: var(--bg-surface-elevated, var(--bg-card));
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.08));
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .char-provider-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.4rem;
+  min-width: 0;
+  width: 100%;
+  flex-wrap: wrap;
 }
 
 .char-provider-label-wrap {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 600;
   color: var(--text-primary);
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.char-provider-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .char-provider-sparkle {
   color: var(--accent-highlight, var(--accent-base));
+  flex-shrink: 0;
 }
 
 .char-provider-hint {
@@ -5751,13 +5774,264 @@ button.import-btn:active:not(:disabled),
   text-overflow: ellipsis;
 }
 
+.char-gen-trigger-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 0.74rem;
+  padding: 0.2rem 0.5rem;
+  height: 26px;
+}
+
+@container (max-width: 330px) {
+  .char-gen-btn-label-extra {
+    display: none;
+  }
+}
+
 .char-provider-select-wrap {
   width: 100%;
 }
 
+.char-provider-controls-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.45rem;
+  margin-top: 0.1rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+@container (min-width: 440px) {
+  .char-provider-controls-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+  }
+}
+
+.char-provider-control-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.char-field-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.char-scope-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.char-recent-count-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.char-recent-count-input {
+  width: 2.5rem;
+  height: 1.35rem;
+  padding: 0 0.25rem;
+  font-size: 0.72rem;
+  text-align: center;
+  background: var(--bg-surface, var(--bg-canvas));
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+/* ── Character Generator Modal Styles ── */
+.char-gen-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0.25rem 0;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.char-gen-desc {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  margin: 0;
+  word-break: break-word;
+}
+
+.char-gen-error {
+  margin: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.char-gen-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.char-gen-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.char-gen-optional {
+  font-size: 0.72rem;
+  font-weight: normal;
+  color: var(--text-muted);
+}
+
+.char-gen-tier-options {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+@media (min-width: 480px) {
+  .char-gen-tier-options {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+  }
+}
+
+.char-gen-tier-pill {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.55rem 0.65rem;
+  background: var(--bg-surface-elevated, var(--bg-card));
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.char-gen-tier-pill:hover {
+  border-color: var(--border-strong, var(--accent-base));
+}
+
+.char-gen-tier-pill.active {
+  border-color: var(--accent-base);
+  background: var(--accent-subtle, rgba(var(--accent-base-rgb, 100, 100, 255), 0.08));
+}
+
+.char-gen-tier-pill input[type="radio"] {
+  margin-top: 0.15rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.tier-pill-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.tier-pill-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tier-pill-desc {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.char-gen-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  user-select: none;
+  min-width: 0;
+}
+
+.char-gen-checkbox-label input[type="checkbox"] {
+  flex-shrink: 0;
+}
+
+.char-gen-context-note {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.55rem;
+  background: var(--bg-surface, var(--bg-canvas));
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  font-size: 0.73rem;
+  color: var(--text-muted);
+  width: 100%;
+  box-sizing: border-box;
+  flex-wrap: wrap;
+  word-break: break-word;
+}
+
+.char-gen-context-note strong {
+  color: var(--text-secondary);
+}
+
 .char-provider-error {
-  margin-top: -0.25rem;
+  margin-top: -0.15rem;
   margin-bottom: 0.15rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.char-provider-error .error-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .chars-filter-bar {

@@ -441,6 +441,9 @@ export const PageSizeSchema = z.union([z.number().int().positive(), z.literal("a
 export const AutoScrollBehaviorSchema = z.enum(["start", "bottom", "none"]);
 export type AutoScrollBehavior = z.infer<typeof AutoScrollBehaviorSchema>;
 
+export const CharacterContextScopeSchema = z.enum(["chapter", "timeline", "recent"]);
+export type CharacterContextScope = z.infer<typeof CharacterContextScopeSchema>;
+
 export const ViewPreferencesSchema = z.object({
   /** The Chat tab's display toggles. Leaves mirror the client's own field names one for one, so a
    *  migrated toggle needs no translation table and the hook's per-field writers can send the single
@@ -500,7 +503,13 @@ export const ViewPreferencesSchema = z.object({
     })
     .optional(),
   /** The play view's cast tab. */
-  cast: z.object({ viewMode: z.enum(["portrait", "compact"]).optional() }).optional(),
+  cast: z
+    .object({
+      viewMode: z.enum(["portrait", "compact"]).optional(),
+      contextScope: CharacterContextScopeSchema.optional(),
+      recentCount: z.number().int().min(1).max(50).optional()
+    })
+    .optional(),
   /** Provider-list sort, one leaf per kind: the text and image lists sit side by side, and one shared
    *  value meant sorting one of them re-sorted the other. */
   providers: z

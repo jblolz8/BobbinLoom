@@ -4,6 +4,7 @@ import { buildFormatExample, buildFormatRules, resolveCharacterFormat } from "..
 import {
   AssistantTurnSchema,
   CharacterFormat,
+  ClothingItem,
   ParsedUserInput,
   Playthrough,
   PromptConfig,
@@ -276,9 +277,10 @@ export class OpenAICompatibleProvider {
       "",
       "Rules:",
       `- The character is named "${npc.name}". Their current description is: "${npc.description}"${roleOrDisp ? ` and their story role is "${roleOrDisp}".` : "."}`,
-      "- Expand this into a full character sheet. Invent reasonable details that fit the story context.",
-      "- Match the tone and detail level of the story context.",
-      "- The character should feel like they belong in this world.",
+      "- Expand this into a full character sheet. Invent compelling details that fit the story context.",
+      "- Anchor their background, personality, and motivations directly to the active world state, ongoing dilemmas, and recent story events.",
+      "- Embed at least 1-2 narrative secrets, personal stakes, or plot hooks that offer the player compelling interactive opportunities, leads to investigate, or relationship dynamics.",
+      "- Match their communication style, vocabulary, and tone to the setting and their dialogue.",
       rules,
       "",
       "STORY CONTEXT:",
@@ -288,6 +290,137 @@ export class OpenAICompatibleProvider {
     ].join("\n");
 
     return this.executeSheetJsonRequest(prompt, signal, "The model did not return a valid character sheet.");
+  }
+
+  async generateNewCharacter(
+    input: {
+      prompt?: string;
+      tier: "simple" | "detailed";
+      storyContext: string;
+      format?: CharacterFormat;
+    },
+    signal?: AbortSignal
+  ): Promise<{
+    name: string;
+    storyRole: string;
+    description: string;
+    mood?: string;
+    towardPlayer?: string;
+    clothing?: ClothingItem[];
+    sheetContent?: string;
+  }> {
+    const isDetailed = input.tier === "detailed";
+    const fmt = resolveCharacterFormat(input.format);
+    const example = toJsonExampleContent(buildFormatExample(fmt));
+    const rules = buildFormatRules(fmt);
+
+    const userPromptText = input.prompt?.trim()
+      ? `USER'S DESIRED CONCEPT / INSTRUCTIONS:\n"${input.prompt.trim()}"`
+      : "No specific character concept provided. Invent an original character who naturally fits the current scene, world state, and unfolding narrative.";
+
+    const shapeExample = isDetailed
+      ? [
+          "{",
+          '  "name": "Character Name",',
+          '  "storyRole": "Role (e.g. Traveling Merchant, Suspicious Guard, Arcane Scholar)",',
+          '  "description": "A 1-2 sentence overview of who they are and how they appear.",',
+          '  "mood": "neutral",',
+          '  "towardPlayer": "neutral",',
+          '  "clothing": [{ "slot": "Top", "name": "Traveler tunic", "state": "worn" }],',
+          `  "sheetContent": "${example}"`,
+          "}"
+        ].join("\n")
+      : [
+          "{",
+          '  "name": "Character Name",',
+          '  "storyRole": "Role (e.g. Traveling Merchant, Suspicious Guard, Arcane Scholar)",',
+          '  "description": "A 1-2 sentence overview of who they are and how they appear.",',
+          '  "mood": "neutral",',
+          '  "towardPlayer": "neutral",',
+          '  "clothing": [{ "slot": "Top", "name": "Traveler tunic", "state": "worn" }]',
+          "}"
+        ].join("\n");
+
+    const prompt = [
+      "You are a character designer for a local RPG chat engine called BobbinLoom.",
+      `Your task is to invent a brand-new ${isDetailed ? "Detailed Character" : "Simple NPC"} to be introduced into the ongoing story.`,
+      "",
+      userPromptText,
+      "",
+      "Return ONLY a JSON object with this exact shape:",
+      shapeExample,
+      "",
+      "Rules:",
+      "- The character must feel cohesive with the story context, active world state, and setting.",
+      "- Anchor their presence, occupation, or purpose directly to the current events, environment, and ongoing dilemmas.",
+      "- Provide a distinct name, a concise 1-2 sentence description, an appropriate storyRole, initial mood, attitude toward the player, and clothing items worn.",
+      isDetailed ? "- For sheetContent, expand their full character sheet following the format rules below. Embed at least 1-2 narrative secrets, personal stakes, or plot hooks that offer the player new interactive opportunities or avenues to explore." : "",
+      isDetailed ? rules : "",
+      "",
+      "STORY CONTEXT:",
+      input.storyContext,
+      "",
+      "Return ONLY the JSON object. No markdown, no explanation."
+    ].filter(Boolean).join("\n");
+
+    const messages = [{ role: "user" as const, content: prompt }];
+    const body: Record<string, unknown> = {
+      model: this.config.model,
+      messages,
+      temperature: 0.7,
+      max_tokens: Math.min(4000, this.config.maxTokens),
+      response_format: { type: "json_object" }
+    };
+
+    const response = await this.executeRequest(body, "/chat/completions", undefined, signal);
+    const payload = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+
+    const rawContent = payload.choices?.[0]?.message?.content?.trim() ?? "";
+    const extracted = extractJsonPayload(rawContent);
+
+    if (extracted && typeof extracted === "object" && extracted !== null) {
+      const obj = extracted as Record<string, unknown>;
+      const name = typeof obj.name === "string" && obj.name.trim() ? obj.name.trim() : "Mysterious Stranger";
+      const storyRole = typeof obj.storyRole === "string" && obj.storyRole.trim() ? obj.storyRole.trim() : "Stranger";
+      const description = typeof obj.description === "string" && obj.description.trim() ? obj.description.trim() : "A newcomer in the area.";
+      const mood = typeof obj.mood === "string" && obj.mood.trim() ? obj.mood.trim() : "neutral";
+      const towardPlayer = typeof obj.towardPlayer === "string" && obj.towardPlayer.trim() ? obj.towardPlayer.trim() : "neutral";
+
+      let clothing: ClothingItem[] = [];
+      if (Array.isArray(obj.clothing)) {
+        clothing = obj.clothing
+          .filter((c): c is { slot: string; name: string; state?: string } => Boolean(c && typeof c === "object" && typeof c.slot === "string" && typeof c.name === "string"))
+          .map((c) => ({
+            slot: String(c.slot).trim(),
+            name: String(c.name).trim(),
+            state: typeof c.state === "string" ? c.state.trim() : undefined
+          }));
+      }
+
+      let sheetContent: string | undefined = undefined;
+      if (isDetailed) {
+        if (typeof obj.sheetContent === "string" && obj.sheetContent.trim()) {
+          sheetContent = obj.sheetContent.trim();
+        } else if (typeof obj.content === "string" && obj.content.trim()) {
+          sheetContent = obj.content.trim();
+        }
+      }
+
+      return {
+        name,
+        storyRole,
+        description,
+        mood,
+        towardPlayer,
+        clothing,
+        sheetContent
+      };
+    }
+
+    const errSnippet = rawContent ? rawContent.slice(0, 300) : "(empty response)";
+    throw new Error(`The model did not return a valid character definition. Raw response snippet: "${errSnippet}"`);
   }
 
   async refineCharacterSheet(

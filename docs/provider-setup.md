@@ -370,10 +370,13 @@ opening `generateTurn` run on the Text Provider field's choice (see
 | `refineCharacterSheet` | Targeted sheet edits from user feedback |
 | `suggestCharacterTags` | **AI tag suggestion** in the character library (`POST /api/characters/suggest-tags`) |
 | `brainstormCharacter` | **AI brainstorming assistant** for character cards (`POST /api/characters/brainstorm`) |
+| `generateNewCharacter` | **New character generation** (simple NPC or detailed sheet) in the Character Manager (`POST /api/playthroughs/:id/characters/generate`) |
 
 The brainstorm request carries its own `providerId` (from the panel's settings), so a session can
 think with a connection other than the active one; tag suggestion always follows the active
-connection.
+connection. Similarly, the **Character Manager** in the PlayView's Chars tab can designate a specific
+text connection slot (`characterTextProviderId`) to run character generation and sheet expansion independently
+from the active story connection.
 
 The two library features (tag suggestion and brainstorming) are documented in
 `character-library.md`.

@@ -3,7 +3,7 @@ import { applyStatePatch } from "../engine/engine";
 import { seedMemorySummary, summaryFromContent } from "../engine/characterSections";
 import { ensureAllSections, resolveCharacterFormat } from "../engine/characterFormat";
 import { expandUserMacro } from "../engine/macros";
-import type { Chapter, ChapterMetaSummary, CharacterInstance, CharacterTemplate, Playthrough, PromptConfig } from "../schemas";
+import type { Chapter, ChapterMetaSummary, CharacterContextScope, CharacterInstance, CharacterTemplate, ClothingItem, Playthrough, PromptConfig } from "../schemas";
 import { getCharacterTemplate, getPlaythroughRecord, listCharacterTemplates, saveCharacterTemplateRecord, updatePlaythroughRecord } from "./store";
 import { buildLorebookContext, lorebookBudgetChars } from "./lorebookContext";
 import { executeTurn } from "./turnActions";
@@ -62,22 +62,37 @@ export function worldStateAction(
   return { ok: true, state: loaded, applied: [`world state ${action}: ${entry.name}`], rejected: [], warnings: [] };
 }
 
-export function buildFleshOutStoryContext(loaded: Playthrough, character: CharacterInstance, maxTokens: number): string {
+export type CharacterContextOptions = {
+  scope?: CharacterContextScope;
+  recentCount?: number;
+  maxTokens?: number;
+};
+
+export function buildFleshOutStoryContext(
+  loaded: Playthrough,
+  character: CharacterInstance | { name: string; description?: string; storyRole?: string; id?: string },
+  maxTokens = 4000,
+  options?: CharacterContextOptions
+): string {
   const parts: string[] = [];
   if (loaded.scenarioDescription) parts.push(`Setting: ${loaded.scenarioDescription}`);
 
-  // Every player-visible string here may carry {{user}}. {{char}} has no owner — the
-  // cast lines belong to several different characters, and the flesh-out target is a
-  // simple character — so it is left literal rather than guessed.
-  const playerName = loaded.playerCharacter.name;
+  // Active World State
+  if (loaded.worldState && loaded.worldState.length > 0) {
+    const wsLines = loaded.worldState.map((ws) => `- ${ws.name}: ${ws.description}`);
+    parts.push(`Active World State / Environment:\n${wsLines.join("\n")}`);
+  }
 
+  // Player Character
+  const playerName = loaded.playerCharacter.name;
   const pc = loaded.playerCharacter;
   parts.push(
     `Player Character: ${pc.name} (${expandUserMacro(pc.bodyType, playerName)}) — ` +
       expandUserMacro(pc.description, playerName)
   );
 
-  const otherChars = loaded.characters.filter((c) => c.id !== character.id);
+  // Other Cast Members
+  const otherChars = loaded.characters.filter((c) => c.id !== character.id && c.name.toLowerCase() !== character.name.toLowerCase());
   if (otherChars.length > 0) {
     const cast = otherChars.map((c) => {
       if (c.templateId) {
@@ -92,10 +107,61 @@ export function buildFleshOutStoryContext(loaded: Playthrough, character: Charac
     parts.push(`Other Cast Members:\n${cast.join("\n")}`);
   }
 
-  if (loaded.chapters?.length) {
+  // Story So Far / Earlier Chapters
+  if (loaded.storyMetaSummaries && loaded.storyMetaSummaries.length > 0) {
+    const latest = loaded.storyMetaSummaries[loaded.storyMetaSummaries.length - 1];
+    parts.push(`Earlier Story Summary:\n${latest.summary}`);
+  } else if (loaded.chapters && loaded.chapters.length > 0) {
     const recent = loaded.chapters.slice(-3).map((ch) =>
       `- ${ch.name}: ${ch.shortDescription || ch.fullSummary?.slice(0, 200) || ""}`);
-    parts.push(`Recent Story:\n${recent.join("\n")}`);
+    parts.push(`Recent Story Chapters:\n${recent.join("\n")}`);
+  }
+
+  // Scene & Dialogue Scope Context
+  const scope = options?.scope ?? "chapter";
+  if (scope === "timeline") {
+    const charNameLower = character.name.toLowerCase();
+    const events = (loaded.memoryEvents ?? [])
+      .filter((e) => e.importance >= 3 || e.tags?.some((t) => t.toLowerCase() === charNameLower) || e.summary.toLowerCase().includes(charNameLower))
+      .slice(-15);
+    if (events.length > 0) {
+      const eventLines = events.map((e) => `- [Turn ${e.turn}] ${e.summary}`);
+      parts.push(`Story Timeline Highlights:\n${eventLines.join("\n")}`);
+    }
+  } else if (scope === "recent") {
+    const count = options?.recentCount ?? 8;
+    const recentMessages = (loaded.messages ?? []).filter((m) => !m.hidden).slice(-count);
+    if (recentMessages.length > 0) {
+      const msgLines = recentMessages.map((m) =>
+        `[${m.role === "user" ? playerName : "Story"}]: ${m.content}`
+      );
+      parts.push(`Recent Scene Transcript:\n${msgLines.join("\n\n")}`);
+    }
+  } else {
+    // scope === "chapter" (default)
+    const chapterStartTurn = loaded.currentChapterStartedAtTurn ?? 1;
+    let chapterMessages = (loaded.messages ?? []).filter(
+      (m) => !m.hidden && (typeof m.turn !== "number" || m.turn >= chapterStartTurn)
+    );
+    if (chapterMessages.length === 0) {
+      chapterMessages = (loaded.messages ?? []).filter((m) => !m.hidden).slice(-8);
+    }
+    // Cap total transcript characters to prevent excessive context
+    const MAX_TRANSCRIPT_CHARS = 12000;
+    let totalChars = 0;
+    const selectedMessages: typeof chapterMessages = [];
+    for (let i = chapterMessages.length - 1; i >= 0; i--) {
+      const len = chapterMessages[i].content.length;
+      if (selectedMessages.length > 0 && totalChars + len > MAX_TRANSCRIPT_CHARS) break;
+      selectedMessages.unshift(chapterMessages[i]);
+      totalChars += len;
+    }
+    if (selectedMessages.length > 0) {
+      const msgLines = selectedMessages.map((m) =>
+        `[${m.role === "user" ? playerName : "Story"}]: ${m.content}`
+      );
+      parts.push(`Current Chapter Dialogue & Scene Transcript:\n${msgLines.join("\n\n")}`);
+    }
   }
 
   const haystack = [character.description ?? "", character.storyRole ?? "", loaded.scenarioDescription ?? ""].join(" ");
@@ -113,7 +179,8 @@ export async function fleshOutCharacterAction(
   acceptedContent?: string,
   maxTokens = 4000,
   signal?: AbortSignal,
-  promptConfig?: PromptConfig
+  promptConfig?: PromptConfig,
+  contextOptions?: CharacterContextOptions
 ): Promise<StateActionOutcome> {
   const loaded = load(dataDir, playthroughId);
   if (isFailure(loaded)) return loaded;
@@ -124,7 +191,7 @@ export async function fleshOutCharacterAction(
     return { ok: false, status: 400, error: "Character is already a detailed character" };
   }
 
-  const storyContext = buildFleshOutStoryContext(loaded, character, maxTokens);
+  const storyContext = buildFleshOutStoryContext(loaded, character, maxTokens, contextOptions);
   const format = resolveCharacterFormat(promptConfig?.characterFormat);
 
   // 1) Generate (only when no approved draft content was supplied)
@@ -173,7 +240,8 @@ export async function fleshOutCharacterDraftAction(
   provider: TurnProvider,
   maxTokens = 4000,
   signal?: AbortSignal,
-  promptConfig?: PromptConfig
+  promptConfig?: PromptConfig,
+  contextOptions?: CharacterContextOptions
 ): Promise<FleshOutDraftOutcome> {
   const loaded = load(dataDir, playthroughId);
   if (isFailure(loaded)) return loaded;
@@ -183,7 +251,7 @@ export async function fleshOutCharacterDraftAction(
     return { ok: false, status: 400, error: "Character is already a detailed character" };
   }
 
-  const storyContext = buildFleshOutStoryContext(loaded, character, maxTokens);
+  const storyContext = buildFleshOutStoryContext(loaded, character, maxTokens, contextOptions);
   const format = resolveCharacterFormat(promptConfig?.characterFormat);
   let content: string;
   try {
@@ -199,6 +267,117 @@ export async function fleshOutCharacterDraftAction(
   }
   content = ensureAllSections(content, format);
   return { ok: true, character, content, storyContext };
+}
+
+export type GenerateNewCharacterOutcome =
+  | { ok: true; state: Playthrough; character: CharacterInstance }
+  | { ok: false; status: number; error: string };
+
+export async function generateNewCharacterAction(
+  dataDir: string,
+  playthroughId: string,
+  provider: TurnProvider,
+  input: {
+    prompt?: string;
+    tier: "simple" | "detailed";
+    inScene?: boolean;
+    contextOptions?: CharacterContextOptions;
+  },
+  signal?: AbortSignal,
+  promptConfig?: PromptConfig
+): Promise<GenerateNewCharacterOutcome> {
+  const loaded = load(dataDir, playthroughId);
+  if (isFailure(loaded)) return loaded;
+
+  const format = resolveCharacterFormat(promptConfig?.characterFormat);
+  const storyContext = buildFleshOutStoryContext(
+    loaded,
+    { name: input.prompt ? input.prompt.slice(0, 50) : "New Character" },
+    input.contextOptions?.maxTokens ?? 4000,
+    input.contextOptions
+  );
+
+  if (!provider.generateNewCharacter) {
+    return { ok: false, status: 501, error: "Active provider does not support generating new characters" };
+  }
+
+  let generated;
+  try {
+    generated = await provider.generateNewCharacter(
+      {
+        prompt: input.prompt,
+        tier: input.tier,
+        storyContext,
+        format
+      },
+      signal
+    );
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return { ok: false, status: 502, error: `Failed to generate character: ${message}` };
+  }
+
+  if (signal?.aborted) {
+    return { ok: false, status: 499, error: "Request aborted by the client" };
+  }
+
+  // Ensure unique name if one already exists
+  let finalName = generated.name.trim();
+  const existingNames = new Set(loaded.characters.map((c) => c.name.toLowerCase()));
+  if (existingNames.has(finalName.toLowerCase())) {
+    finalName = `${finalName} (2)`;
+  }
+
+  const now = new Date().toISOString();
+  const charId = `inst_${randomUUID()}`;
+
+  let templateId: string | undefined = undefined;
+  if (input.tier === "detailed") {
+    templateId = `tmpl_${randomUUID()}`;
+    let sheetContent = generated.sheetContent ?? "";
+    sheetContent = ensureAllSections(sheetContent, format);
+    const template: CharacterTemplate = {
+      id: templateId,
+      name: finalName,
+      version: 1,
+      content: sheetContent,
+      summary: "",
+      startingClothing: (generated.clothing ?? []).map((c) => ({ slot: c.slot, name: c.name, state: c.state })),
+      createdAt: now,
+      updatedAt: now
+    };
+    loaded.characterTemplates.push(template);
+  }
+
+  const newChar: CharacterInstance = {
+    id: charId,
+    templateId,
+    playthroughId,
+    branchId: loaded.branchId,
+    name: finalName,
+    storyRole: generated.storyRole || "Stranger",
+    description: generated.description,
+    mood: generated.mood || "neutral",
+    towardPlayer: generated.towardPlayer || "neutral",
+    memorySummary: `${finalName} has just entered the story.`,
+    conditions: [],
+    flags: [],
+    clothing: generated.clothing ?? [],
+    createdAt: now,
+    updatedAt: now
+  };
+
+  loaded.characters.push(newChar);
+
+  const shouldBeInScene = input.inScene !== false;
+  if (shouldBeInScene && !loaded.activeCharacters.includes(charId)) {
+    loaded.activeCharacters.push(charId);
+  }
+
+  loaded.updatedAt = now;
+  updatePlaythroughRecord(dataDir, loaded);
+
+  return { ok: true, state: loaded, character: newChar };
 }
 
 /** @deprecated Use fleshOutCharacterAction */

@@ -1,5 +1,5 @@
 import { buildMockAssistantTurn } from "../engine/engine";
-import type { AssistantTurn, CharacterFormat, ParsedUserInput, Playthrough, PromptConfig, ScenarioPreferences, ScenarioSeed } from "../schemas";
+import type { AssistantTurn, CharacterFormat, ClothingItem, ParsedUserInput, Playthrough, PromptConfig, ScenarioPreferences, ScenarioSeed } from "../schemas";
 
 /** Per-segment token estimates (chars/4) of the prompt actually sent to the model. */
 export type PromptUsageBreakdown = {
@@ -136,6 +136,25 @@ export interface TurnProvider {
     input: CharacterBrainstormInput,
     signal?: AbortSignal
   ): Promise<CharacterBrainstormOutput>;
+
+  /** Generate a brand-new character (simple NPC or detailed character) from a user concept/prompt and story context. */
+  generateNewCharacter?(
+    input: {
+      prompt?: string;
+      tier: "simple" | "detailed";
+      storyContext: string;
+      format?: CharacterFormat;
+    },
+    signal?: AbortSignal
+  ): Promise<{
+    name: string;
+    storyRole: string;
+    description: string;
+    mood?: string;
+    towardPlayer?: string;
+    clothing?: ClothingItem[];
+    sheetContent?: string;
+  }>;
 }
 
 export interface ProposedSectionChange {
@@ -225,5 +244,25 @@ export class MockProvider implements TurnProvider {
 
   async brainstormCharacter(_input: CharacterBrainstormInput, _signal?: AbortSignal): Promise<CharacterBrainstormOutput> {
     throw new Error("Character brainstorming is not available with the Mock provider. Switch to a real provider in Settings.");
+  }
+
+  async generateNewCharacter(
+    _input: {
+      prompt?: string;
+      tier: "simple" | "detailed";
+      storyContext: string;
+      format?: CharacterFormat;
+    },
+    _signal?: AbortSignal
+  ): Promise<{
+    name: string;
+    storyRole: string;
+    description: string;
+    mood?: string;
+    towardPlayer?: string;
+    clothing?: ClothingItem[];
+    sheetContent?: string;
+  }> {
+    throw new Error("Character generation is not available with the Mock provider. Switch to a real provider in Settings.");
   }
 }

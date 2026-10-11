@@ -70,15 +70,23 @@ The detail a character is given in the prompt depends on whether they are in the
 
 Being absent never blocks anything: you can still edit an absent character's sheet and patch their state normally. Presence only decides how much of them the model is shown.
 
-### Background characters
+### Background characters & Character Manager
 
 Simple characters are `{ name, description, storyRole }` — a story role
 and a brief description, enough to populate a scene without a full sheet.
 
 - **Manual editing**: You can click **Edit** on any simple character card to adjust their name, description, role, mood, conditions, or flags directly in the Character Editor.
-- **Fleshing out**: The **Flesh Out** button uses an AI model to draft a complete character sheet from their description and story history. The specific model used can be selected from the **Flesh-Out Provider** dropdown at the top of the Chars tab, defaulting to your active text connection.
+- **Fleshing out**: The **Flesh Out** button uses an AI model to draft a complete character sheet from their description and story context. The specific connection used is managed in the **Character Manager** toolbar at the top of the Chars tab, defaulting to your active text connection.
+- **Story Context Scope**: You can customize how much story context the Character Manager receives when fleshing out or generating characters:
+  - **Current Chapter (All)** (default): Includes complete dialogue, actions, and events from the active chapter.
+  - **Timeline Highlights**: Feeds key milestone summaries from the story timeline.
+  - **Recent Messages**: Uses the last *N* messages of dialogue (user-configurable count, default 8).
+- **Manual Generation**: The **Generate Character** button in the Character Manager toolbar allows you to prompt the AI to invent a brand-new character on the fly:
+  - Specify an optional concept or role (e.g. *"A suspicious dockmaster named Orson who recognizes the player"*), or leave it empty to invent someone contextually grounded.
+  - Choose between creating a full **Detailed Character** (complete format sheet, personality, and clothing) or a **Simple NPC** note card.
+  - Option to place them in the active scene immediately.
 
-A promoted character gets a sheet local to the playthrough. Nothing is written to your character
+A promoted or newly generated character gets a sheet local to the playthrough. Nothing is written to your character
 library unless you save it there yourself — see
 [Character library](character-library.md).
 

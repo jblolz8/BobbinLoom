@@ -1,4 +1,4 @@
-import type { AutoScrollBehavior, AvatarShape, ChapterOpeningMode, CoverAspect, CustomThemeColors, TagTaxonomyConfig, ThemeMode, ViewPreferences } from "../../schemas";
+import type { AutoScrollBehavior, AvatarShape, ChapterOpeningMode, CharacterContextScope, CoverAspect, CustomThemeColors, TagTaxonomyConfig, ThemeMode, ViewPreferences } from "../../schemas";
 import {
   COVER_ASPECT_VALUES,
   avatarBadgeRadius,
@@ -140,9 +140,17 @@ export function resolveSetupPreferences(stored?: ViewPreferences): ResolvedSetup
   return resolveGroup(SETUP_PREFERENCE_DEFAULTS, stored?.setup);
 }
 
-export const CAST_PREFERENCE_DEFAULTS: ResolvedCastPreferences = { viewMode: "portrait" };
+export const CAST_PREFERENCE_DEFAULTS: ResolvedCastPreferences = {
+  viewMode: "portrait",
+  contextScope: "chapter",
+  recentCount: 8
+};
 
-export type ResolvedCastPreferences = { viewMode: "portrait" | "compact" };
+export type ResolvedCastPreferences = {
+  viewMode: "portrait" | "compact";
+  contextScope: CharacterContextScope;
+  recentCount: number;
+};
 
 export function resolveCastPreferences(stored?: ViewPreferences): ResolvedCastPreferences {
   return resolveGroup(CAST_PREFERENCE_DEFAULTS, stored?.cast);

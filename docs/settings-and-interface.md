@@ -54,6 +54,14 @@ does not ask and does not replace anything: that is a save, and it leaves the im
   view's panels. On by default, and offered on the layouts that have the gesture; the bottom tab bar
   works either way
 
+### Cast and Character Manager
+
+Preferences on the PlayView's Chars tab are saved per profile and remembered across sessions:
+
+- **Cast view mode** — Portrait card view or Compact profile view
+- **Context scope** — Story context fed to the Character Manager (`Current Chapter (All)`, `Timeline Highlights`, or `Recent Messages`)
+- **Recent message count** — When using the *Recent Messages* scope, how many recent messages to include (default: 8, up to 50)
+
 Everything here applies immediately and is stored with your other runtime settings.
 
 ## Prompt Configuration is global

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CharacterInstance, CharacterTemplate, Playthrough } from "../../../../../schemas";
+import type { CharacterInstance, CharacterTemplate, CharacterContextScope, Playthrough } from "../../../../../schemas";
 import {
   editCharacter,
   getCharacterAvatarUrl,
   listCharacters,
   fleshOutCharacter,
+  generatePlaythroughCharacter,
   saveCharacterToLibrary,
 } from "../../../../api";
 import {
@@ -21,9 +22,10 @@ import {
 } from "../../../../api";
 import { CharacterEditor } from "../../../modals/CharacterEditor";
 import { CharacterSheetSections } from "./CharacterSheetSections";
-import { AvatarBadge, Badge, Button, Icon, SearchBar, SimpleSelect } from "../../../base";
+import { AvatarBadge, Badge, Button, Icon, SearchBar, SimpleSelect, TextArea } from "../../../base";
 import type { SimpleSelectOption } from "../../../base/Select";
-import { ModelIcon } from "../../../base/ModelIcon";
+import { ModelIcon, resolveModelInfo } from "../../../base/ModelIcon";
+import { ConfirmModal } from "../../../common/ConfirmModal";
 
 type SaveFeedback = { ok: boolean; text: string };
 
@@ -51,6 +53,21 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
   const [castViewMode, setCastViewModeState] = useState<CastViewMode>(
     CAST_PREFERENCE_DEFAULTS.viewMode
   );
+  const [contextScope, setContextScopeState] = useState<CharacterContextScope>(
+    CAST_PREFERENCE_DEFAULTS.contextScope
+  );
+  const [recentCount, setRecentCountState] = useState<number>(
+    CAST_PREFERENCE_DEFAULTS.recentCount
+  );
+
+  // New character generation modal state
+  const [generateModalOpen, setGenerateModalOpen] = useState(false);
+  const [genPrompt, setGenPrompt] = useState("");
+  const [genTier, setGenTier] = useState<"simple" | "detailed">("detailed");
+  const [genInScene, setGenInScene] = useState(true);
+  const [isGeneratingChar, setIsGeneratingChar] = useState(false);
+  const [generateCharError, setGenerateCharError] = useState<string | null>(null);
+  const genAbortRef = useRef<AbortController | null>(null);
 
   /** Set the moment the reader picks a mode, so the read that lands after the first paint never
    *  overwrites what they just chose. */
@@ -64,12 +81,28 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
     });
   };
 
+  const setContextScope = (scope: CharacterContextScope) => {
+    castTouchedRef.current = true;
+    setContextScopeState(scope);
+    void updateViewPreferences({ cast: { contextScope: scope } }).catch(() => {});
+  };
+
+  const setRecentCount = (count: number) => {
+    castTouchedRef.current = true;
+    const clamped = Math.max(1, Math.min(50, count));
+    setRecentCountState(clamped);
+    void updateViewPreferences({ cast: { recentCount: clamped } }).catch(() => {});
+  };
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       const { preferences } = await adoptLocalPreferences();
       if (cancelled || castTouchedRef.current) return;
-      setCastViewModeState(resolveCastPreferences(preferences).viewMode);
+      const resolved = resolveCastPreferences(preferences);
+      setCastViewModeState(resolved.viewMode);
+      setContextScopeState(resolved.contextScope);
+      setRecentCountState(resolved.recentCount);
     })().catch(() => {
       /* A failed read leaves the default; the next load tries again. */
     });
@@ -137,14 +170,14 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
       value: "",
       label: "Current active text provider",
       description: activeDesc,
-      icon: activeConn?.model ? <ModelIcon model={activeConn.model} size={14} /> : <Icon name="Cpu" size={14} />
+      icon: activeConn?.model ? <ModelIcon family={resolveModelInfo(activeConn.model).family} size={14} /> : <Icon name="Cpu" size={14} />
     };
 
     const rows: SimpleSelectOption<string>[] = textConnections.map((c) => ({
       value: c.id,
       label: `${c.label}${c.id === activeTextProviderId ? " (active)" : ""}`,
       description: c.model || undefined,
-      icon: <ModelIcon model={c.model} size={14} />
+      icon: <ModelIcon family={resolveModelInfo(c.model).family} size={14} />
     }));
 
     if (characterProviderId && !textConnections.some((c) => c.id === characterProviderId)) {
@@ -158,6 +191,27 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
     return [defaultOpt, ...rows];
   }, [textConnections, activeTextProviderId, characterProviderId]);
 
+  const contextScopeOptions = useMemo<SimpleSelectOption<CharacterContextScope>[]>(() => [
+    {
+      value: "chapter",
+      label: "Current Chapter (All)",
+      description: "Full dialogue & events from active chapter",
+      icon: <Icon name="BookOpen" size={13} />
+    },
+    {
+      value: "timeline",
+      label: "Timeline Highlights",
+      description: "Key milestone summaries from story timeline",
+      icon: <Icon name="Clock" size={13} />
+    },
+    {
+      value: "recent",
+      label: "Recent Messages",
+      description: `Last ${recentCount} messages of dialogue`,
+      icon: <Icon name="MessageSquare" size={13} />
+    }
+  ], [recentCount]);
+
   async function handleFleshOut(characterId: string) {
     fleshOutAbortRef.current?.abort();
     const controller = new AbortController();
@@ -165,7 +219,12 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
     setFleshingOutId(characterId);
     setFleshOutError(null);
     try {
-      const updated = await fleshOutCharacter(playthrough.id, characterId, undefined, controller.signal);
+      const updated = await fleshOutCharacter(
+        playthrough.id,
+        characterId,
+        { scope: contextScope, recentCount },
+        controller.signal
+      );
       if (fleshOutAbortRef.current === controller) {
         onPlaythroughChange(updated);
       }
@@ -185,6 +244,50 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
     fleshOutAbortRef.current?.abort();
     fleshOutAbortRef.current = null;
     setFleshingOutId(null);
+  }
+
+  async function handleGenerateCharacter() {
+    setIsGeneratingChar(true);
+    setGenerateCharError(null);
+    genAbortRef.current?.abort();
+    const controller = new AbortController();
+    genAbortRef.current = controller;
+
+    try {
+      const res = await generatePlaythroughCharacter(
+        playthrough.id,
+        {
+          prompt: genPrompt.trim() || undefined,
+          tier: genTier,
+          inScene: genInScene,
+          scope: contextScope,
+          recentCount
+        },
+        controller.signal
+      );
+      if (genAbortRef.current === controller) {
+        onPlaythroughChange(res.state);
+        setGenerateModalOpen(false);
+        setGenPrompt("");
+      }
+    } catch (e) {
+      if (!(e instanceof DOMException && e.name === "AbortError") && genAbortRef.current === controller) {
+        setGenerateCharError(e instanceof Error ? e.message : "Failed to generate character");
+      }
+    } finally {
+      if (genAbortRef.current === controller) {
+        genAbortRef.current = null;
+        setIsGeneratingChar(false);
+      }
+    }
+  }
+
+  function handleCancelGenerate() {
+    genAbortRef.current?.abort();
+    genAbortRef.current = null;
+    setIsGeneratingChar(false);
+    setGenerateModalOpen(false);
+    setGenerateCharError(null);
   }
 
   async function handleEditSave(payload: CharacterEditPayload) {
@@ -281,29 +384,74 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
 
   return (
     <div className="chars-tab-container">
-      {/* ── Character Creator Provider Settings ── */}
+      {/* ── Character Manager Toolbar ── */}
       <div className="char-provider-toolbar">
         <div className="char-provider-header">
           <div className="char-provider-label-wrap">
             <Icon name="Sparkles" size={13} className="char-provider-sparkle" />
-            <span className="char-provider-title">Flesh-Out Provider</span>
+            <span className="char-provider-title">Character Manager</span>
           </div>
-          <span className="char-provider-hint" title="AI model used when generating detailed character sheets for simple NPCs">
-            Used to expand simple characters
-          </span>
-        </div>
-        <div className="char-provider-select-wrap">
-          <SimpleSelect
-            id="char-provider-select"
+          <Button
             size="xs"
-            variant="filled"
-            fullWidth
-            value={characterProviderId}
-            onChange={handleCharacterProviderChange}
-            options={characterProviderOptions}
-            placeholder="Current active text provider"
-            aria-label="Character creator AI provider"
-          />
+            variant="primary"
+            leftIcon={<Icon name="Plus" size={12} />}
+            onClick={() => {
+              setGenerateCharError(null);
+              setGenerateModalOpen(true);
+            }}
+            className="char-gen-trigger-btn"
+            title="Generate New Character"
+          >
+            <span>Generate</span>
+            <span className="char-gen-btn-label-extra"> Character</span>
+          </Button>
+        </div>
+
+        <div className="char-provider-controls-grid">
+          <div className="char-provider-control-field">
+            <label htmlFor="char-provider-select" className="char-field-label">AI Provider</label>
+            <SimpleSelect
+              id="char-provider-select"
+              size="xs"
+              variant="filled"
+              fullWidth
+              value={characterProviderId}
+              onChange={handleCharacterProviderChange}
+              options={characterProviderOptions}
+              placeholder="Current active text provider"
+              aria-label="Character creator AI provider"
+            />
+          </div>
+
+          <div className="char-provider-control-field">
+            <div className="char-scope-header-row">
+              <label htmlFor="char-scope-select" className="char-field-label">Context Scope</label>
+              {contextScope === "recent" && (
+                <label className="char-recent-count-label">
+                  <span>Count:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={recentCount}
+                    onChange={(e) => setRecentCount(parseInt(e.target.value, 10) || 8)}
+                    className="char-recent-count-input"
+                    aria-label="Number of recent messages"
+                  />
+                </label>
+              )}
+            </div>
+            <SimpleSelect
+              id="char-scope-select"
+              size="xs"
+              variant="filled"
+              fullWidth
+              value={contextScope}
+              onChange={(val) => setContextScope(val as CharacterContextScope)}
+              options={contextScopeOptions}
+              aria-label="Story context scope for character operations"
+            />
+          </div>
         </div>
       </div>
 
@@ -413,6 +561,107 @@ export function CharsTab({ playthrough, onPlaythroughChange, onOpenLibrary }: Ch
           onClose={() => setEditingChar(null)}
         />
       ) : null}
+
+      {generateModalOpen && (
+        <ConfirmModal
+          title="Generate New Character"
+          confirmLabel={isGeneratingChar ? "Generating..." : "Generate Character"}
+          cancelLabel="Cancel"
+          isLoading={isGeneratingChar}
+          confirmDisabled={isGeneratingChar}
+          onConfirm={handleGenerateCharacter}
+          onCancel={handleCancelGenerate}
+          maxWidth={500}
+        >
+          <div className="char-gen-modal-body">
+            <p className="char-gen-desc">
+              Instruct the Character Manager to generate a new character grounded in the story so far.
+              You can provide a specific concept or leave it empty to invent an appropriate character.
+            </p>
+
+            {generateCharError && (
+              <div className="promote-error char-gen-error">
+                <Icon name="AlertTriangle" size={14} />
+                <span className="error-text">{generateCharError}</span>
+              </div>
+            )}
+
+            <div className="char-gen-field">
+              <label htmlFor="char-gen-prompt-input" className="char-gen-label">
+                Concept or Prompt <span className="char-gen-optional">(Optional)</span>
+              </label>
+              <TextArea
+                id="char-gen-prompt-input"
+                value={genPrompt}
+                onChange={(e) => setGenPrompt(e.target.value)}
+                placeholder="e.g. A suspicious dockmaster named Orson who recognizes the player, or leave empty to invent someone contextually relevant..."
+                rows={3}
+                disabled={isGeneratingChar}
+              />
+            </div>
+
+            <div className="char-gen-field">
+              <span className="char-gen-label">Character Tier</span>
+              <div className="char-gen-tier-options">
+                <label className={`char-gen-tier-pill ${genTier === "detailed" ? "active" : ""}`}>
+                  <input
+                    type="radio"
+                    name="genTier"
+                    value="detailed"
+                    checked={genTier === "detailed"}
+                    onChange={() => setGenTier("detailed")}
+                    disabled={isGeneratingChar}
+                  />
+                  <div className="tier-pill-content">
+                    <span className="tier-pill-title">Detailed Character</span>
+                    <span className="tier-pill-desc">Full sheet with personality, background & clothing</span>
+                  </div>
+                </label>
+                <label className={`char-gen-tier-pill ${genTier === "simple" ? "active" : ""}`}>
+                  <input
+                    type="radio"
+                    name="genTier"
+                    value="simple"
+                    checked={genTier === "simple"}
+                    onChange={() => setGenTier("simple")}
+                    disabled={isGeneratingChar}
+                  />
+                  <div className="tier-pill-content">
+                    <span className="tier-pill-title">Simple NPC</span>
+                    <span className="tier-pill-desc">Compact note card (can be fleshed out later)</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="char-gen-field">
+              <label className="char-gen-checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={genInScene}
+                  onChange={(e) => setGenInScene(e.target.checked)}
+                  disabled={isGeneratingChar}
+                />
+                <span>Place in scene immediately (In Scene / Active)</span>
+              </label>
+            </div>
+
+            <div className="char-gen-context-note">
+              <Icon name="Info" size={13} />
+              <span>
+                Using story context:{" "}
+                <strong>
+                  {contextScope === "chapter"
+                    ? "Current Chapter (All)"
+                    : contextScope === "timeline"
+                    ? "Timeline Highlights"
+                    : `Recent ${recentCount} messages`}
+                </strong>
+              </span>
+            </div>
+          </div>
+        </ConfirmModal>
+      )}
     </div>
   );
 }

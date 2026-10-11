@@ -1,4 +1,4 @@
-import type { ChapterOpeningMode, CharacterInstance, ClothingItem, Playthrough, PlaythroughCover, PlaythroughListResponse } from "../../schemas";
+import type { ChapterOpeningMode, CharacterContextScope, CharacterInstance, ClothingItem, Playthrough, PlaythroughCover, PlaythroughListResponse } from "../../schemas";
 import type { RevertRequestAnchor } from "../../engine/chapterRevert";
 import { request } from "./client";
 
@@ -224,11 +224,64 @@ export function editPlayer(
   });
 }
 
-export function fleshOutCharacter(playthroughId: string, characterId: string, content?: string, signal?: AbortSignal): Promise<Playthrough> {
+export type FleshOutOptions = {
+  content?: string;
+  scope?: CharacterContextScope;
+  recentCount?: number;
+  signal?: AbortSignal;
+};
+
+export type GenerateCharacterPayload = {
+  prompt?: string;
+  tier?: "simple" | "detailed";
+  inScene?: boolean;
+  scope?: CharacterContextScope;
+  recentCount?: number;
+  signal?: AbortSignal;
+};
+
+export type GenerateCharacterResult = {
+  state: Playthrough;
+  character: CharacterInstance;
+};
+
+export function fleshOutCharacter(
+  playthroughId: string,
+  characterId: string,
+  contentOrOptions?: string | FleshOutOptions,
+  signal?: AbortSignal
+): Promise<Playthrough> {
+  const opts: FleshOutOptions =
+    typeof contentOrOptions === "string"
+      ? { content: contentOrOptions, signal }
+      : contentOrOptions ?? { signal };
+
   return request<Playthrough>(`/api/playthroughs/${playthroughId}/characters/${characterId}/flesh-out`, {
     method: "POST",
-    body: JSON.stringify(content !== undefined ? { content } : {}),
-    signal,
+    body: JSON.stringify({
+      ...(opts.content !== undefined ? { content: opts.content } : {}),
+      ...(opts.scope ? { scope: opts.scope } : {}),
+      ...(opts.recentCount ? { recentCount: opts.recentCount } : {})
+    }),
+    signal: opts.signal ?? signal
+  });
+}
+
+export function generatePlaythroughCharacter(
+  playthroughId: string,
+  payload: GenerateCharacterPayload,
+  signal?: AbortSignal
+): Promise<GenerateCharacterResult> {
+  return request<GenerateCharacterResult>(`/api/playthroughs/${playthroughId}/characters/generate`, {
+    method: "POST",
+    body: JSON.stringify({
+      prompt: payload.prompt,
+      tier: payload.tier ?? "simple",
+      inScene: payload.inScene !== false,
+      ...(payload.scope ? { scope: payload.scope } : {}),
+      ...(payload.recentCount ? { recentCount: payload.recentCount } : {})
+    }),
+    signal: signal ?? payload.signal
   });
 }
 

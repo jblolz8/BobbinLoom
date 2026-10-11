@@ -40,7 +40,10 @@ describe("the remaining groups' resolvers", () => {
   it("keep a group's own leaves out of another group's answer", () => {
     // Every resolver is called with the WHOLE settings object, so a sloppy spread would leak.
     const stored = { setup: { showTagFilters: true }, cast: { viewMode: "compact" as const } };
-    expect(resolveCastPreferences(stored)).toEqual({ viewMode: "compact" });
+    expect(resolveCastPreferences(stored)).toEqual({
+      ...CAST_PREFERENCE_DEFAULTS,
+      viewMode: "compact"
+    });
     expect(resolveNavPreferences(stored).showPlayNavTabs).toBe(true);
   });
 });
