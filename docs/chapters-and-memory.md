@@ -113,6 +113,8 @@ summary text is kept, so the state stays coherent and the next fold recovers.
 
 The model chronicles the story as it unfolds by recording **1–2 timeline events per turn**: a short summary, a type (`action`, `dialogue`, `discovery`, `combat`, `milestone`), an importance rating (1–5), and relevant tags. These form the chronological Event Timeline displayed in the Journal tab and fuel semantic memory retrieval.
 
+In the Journal tab, each event displays a turn badge (`T1`, `T4`, `T11`...) marking the narrative turn on which it occurred. Newly added events are stamped with the executed turn number as they are generated, preserving each event's historical turn as the story advances. Existing playthrough saves are also self-healed on load by cross-referencing event summaries with immutable assistant message turn logs.
+
 Tags are what make retrieval work — they carry the character names, location ids and quest ids the event belongs to, and the model is instructed to always include them. When a model specifies a character name in `characterInstanceId`, the engine automatically resolves it to the correct character ID, and newly added events are stamped with the executed turn number so the Journal timeline stays synchronized with the narrative.
 
 Events are stored in three places, and older ones rotate down:
