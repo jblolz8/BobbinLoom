@@ -874,30 +874,127 @@ export const InventoryPatchSchema = z.object({
 });
 
 
-export const MemoryEventDraftSchema = z.object({
+export const MemoryEventDraftSchema = z.preprocess((val) => {
+  if (typeof val === "object" && val !== null) {
+    const raw = val as Record<string, unknown>;
+    const summary = raw.summary ?? raw.event ?? raw.description ?? raw.text ?? "";
+    return { ...raw, summary: typeof summary === "string" ? summary.trim() : String(summary) };
+  }
+  return val;
+}, z.object({
   characterInstanceId: z.string().optional(),
-  type: z.string(),
-  summary: z.string(),
-  importance: z.number().default(1),
-  tags: z.array(z.string()).default([])
-});
+  type: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() ? v.trim() : "event"),
+    z.string().default("event")
+  ),
+  summary: z.string().min(1),
+  importance: z.preprocess((val) => {
+    if (typeof val === "number" && !isNaN(val)) return Math.min(5, Math.max(1, Math.round(val)));
+    if (typeof val === "string") {
+      const parsed = parseFloat(val);
+      if (!isNaN(parsed)) return Math.min(5, Math.max(1, Math.round(parsed)));
+      const lower = val.toLowerCase().trim();
+      if (lower === "high" || lower === "major") return 4;
+      if (lower === "critical" || lower === "pivotal") return 5;
+      if (lower === "medium" || lower === "moderate") return 3;
+      if (lower === "low" || lower === "minor") return 2;
+    }
+    return 1;
+  }, z.number().default(1)),
+  tags: z.preprocess((val) => {
+    if (Array.isArray(val)) return val.map((v) => String(v).trim()).filter(Boolean);
+    if (typeof val === "string" && val.trim()) return [val.trim()];
+    return [];
+  }, z.array(z.string()).default([]))
+}));
+
+export const WorldStateAddEntrySchema = z.preprocess((val) => {
+  if (typeof val === "string") {
+    return val.trim();
+  }
+  if (typeof val === "object" && val !== null) {
+    const raw = val as Record<string, unknown>;
+    const name = raw.name ?? raw.title ?? raw.state ?? "";
+    const description = raw.description ?? raw.desc ?? raw.summary ?? "";
+    return {
+      name: typeof name === "string" ? name.trim() : String(name),
+      description: typeof description === "string" ? description.trim() : String(description)
+    };
+  }
+  return val;
+}, z.union([
+  z.string().min(1),
+  z.object({
+    name: z.string().min(1),
+    description: z.string().default("")
+  })
+]));
+
+export const CharacterConditionsEntrySchema = z.preprocess((val) => {
+  if (typeof val === "object" && val !== null) {
+    const raw = val as Record<string, unknown>;
+    const characterId = raw.characterId ?? raw.id ?? raw.character;
+    let conditions = raw.conditions ?? raw.condition;
+    if (typeof conditions === "string") {
+      conditions = [conditions.trim()];
+    } else if (Array.isArray(conditions)) {
+      conditions = conditions.map((c) => String(c).trim()).filter(Boolean);
+    } else {
+      conditions = [];
+    }
+    return { characterId: typeof characterId === "string" ? characterId.trim() : characterId, conditions };
+  }
+  return val;
+}, z.object({
+  characterId: z.string(),
+  conditions: z.array(z.string()),
+}));
+
+export const CharacterFlagsEntrySchema = z.preprocess((val) => {
+  if (typeof val === "object" && val !== null) {
+    const raw = val as Record<string, unknown>;
+    const characterId = raw.characterId ?? raw.id ?? raw.character;
+    let flags = raw.flags ?? raw.flag;
+    if (typeof flags === "string") {
+      flags = [flags.trim()];
+    } else if (Array.isArray(flags)) {
+      flags = flags.map((f) => String(f).trim()).filter(Boolean);
+    } else {
+      flags = [];
+    }
+    return { characterId: typeof characterId === "string" ? characterId.trim() : characterId, flags };
+  }
+  return val;
+}, z.object({
+  characterId: z.string(),
+  flags: z.array(z.string()),
+}));
 
 export const StatePatchSchema = z.object({
-  worldStateAdd: z.array(z.object({
-    name: z.string(),
-    description: z.string().default("")
-  })).optional(),
-  worldStateRemove: z.array(z.string()).optional(),
-  worldStateUpdate: z.array(z.object({
-    id: z.string(),
-    name: z.string().optional(),
-    description: z.string().optional()
-  })).optional(),
+  worldStateAdd: z.preprocess(
+    (val) => Array.isArray(val) ? val : (val ? [val] : []),
+    z.array(WorldStateAddEntrySchema)
+  ).optional(),
+  worldStateRemove: z.preprocess(
+    (val) => Array.isArray(val) ? val : (typeof val === "string" ? [val] : []),
+    z.array(z.string())
+  ).optional(),
+  worldStateUpdate: z.preprocess(
+    (val) => Array.isArray(val) ? val : (val && typeof val === "object" ? [val] : []),
+    z.array(z.object({
+      id: z.string(),
+      name: z.string().optional(),
+      description: z.string().optional()
+    }))
+  ).optional(),
   // Targeted detailed-character patches (keyed by characterId)
-  characterMood: z.array(z.object({
-    characterId: z.string(),
-    mood: z.string(),
-  })).optional(),
+  characterMood: z.preprocess(
+    (val) => Array.isArray(val) ? val : (val && typeof val === "object" ? [val] : []),
+    z.array(z.object({
+      characterId: z.string(),
+      mood: z.string(),
+    }))
+  ).optional(),
   characterSectionUpdate: z.array(z.object({
     characterId: z.string(),
     section: z.string(),
@@ -928,22 +1025,28 @@ export const StatePatchSchema = z.object({
     from: z.string(),
     to: z.string(),
   })).optional(),
-  characterTowardPlayer: z.array(z.object({
-    characterId: z.string(),
-    towardPlayer: z.string(),
-  })).optional(),
-  characterMemory: z.array(z.object({
-    characterId: z.string(),
-    memorySummary: z.string(),
-  })).optional(),
-  characterConditionsAdd: z.array(z.object({
-    characterId: z.string(),
-    conditions: z.array(z.string()),
-  })).optional(),
-  characterConditionsRemove: z.array(z.object({
-    characterId: z.string(),
-    conditions: z.array(z.string()),
-  })).optional(),
+  characterTowardPlayer: z.preprocess(
+    (val) => Array.isArray(val) ? val : (val && typeof val === "object" ? [val] : []),
+    z.array(z.object({
+      characterId: z.string(),
+      towardPlayer: z.string(),
+    }))
+  ).optional(),
+  characterMemory: z.preprocess(
+    (val) => Array.isArray(val) ? val : (val && typeof val === "object" ? [val] : []),
+    z.array(z.object({
+      characterId: z.string(),
+      memorySummary: z.string(),
+    }))
+  ).optional(),
+  characterConditionsAdd: z.preprocess(
+    (val) => Array.isArray(val) ? val : (val ? [val] : []),
+    z.array(CharacterConditionsEntrySchema)
+  ).optional(),
+  characterConditionsRemove: z.preprocess(
+    (val) => Array.isArray(val) ? val : (val ? [val] : []),
+    z.array(CharacterConditionsEntrySchema)
+  ).optional(),
   characterConditionsReplace: z.array(z.object({
     characterId: z.string(),
     from: z.string(),
@@ -954,17 +1057,25 @@ export const StatePatchSchema = z.object({
     from: z.string(),
     to: z.string(),
   })).optional(),
-  characterFlagsAdd: z.array(z.object({
-    characterId: z.string(),
-    flags: z.array(z.string()),
-  })).optional(),
-  characterFlagsRemove: z.array(z.object({
-    characterId: z.string(),
-    flags: z.array(z.string()),
-  })).optional(),
+  characterFlagsAdd: z.preprocess(
+    (val) => Array.isArray(val) ? val : (val ? [val] : []),
+    z.array(CharacterFlagsEntrySchema)
+  ).optional(),
+  characterFlagsRemove: z.preprocess(
+    (val) => Array.isArray(val) ? val : (val ? [val] : []),
+    z.array(CharacterFlagsEntrySchema)
+  ).optional(),
   // Scene & Character presence patches
-  characterEnterScene: z.array(z.string()).optional(),
-  characterExitScene: z.array(z.string()).optional(),
+  characterEnterScene: z.preprocess((val) => {
+    if (Array.isArray(val)) return val.map((v) => String(v).trim()).filter(Boolean);
+    if (typeof val === "string" && val.trim()) return [val.trim()];
+    return [];
+  }, z.array(z.string())).optional(),
+  characterExitScene: z.preprocess((val) => {
+    if (Array.isArray(val)) return val.map((v) => String(v).trim()).filter(Boolean);
+    if (typeof val === "string" && val.trim()) return [val.trim()];
+    return [];
+  }, z.array(z.string())).optional(),
   characterUpdateRole: z.array(z.object({
     characterId: z.string(),
     storyRole: z.string(),
@@ -996,10 +1107,21 @@ export const StatePatchSchema = z.object({
     description: z.string().optional(),
   })).optional(),
 
-  memoryEvents: z.array(MemoryEventDraftSchema).optional(),
+  memoryEvents: z.preprocess(
+    (val) => Array.isArray(val) ? val : (val && typeof val === "object" ? [val] : []),
+    z.array(MemoryEventDraftSchema)
+  ).optional(),
   // Player-specific patches
-  playerConditionsAdd: z.array(z.string()).optional(),
-  playerConditionsRemove: z.array(z.string()).optional(),
+  playerConditionsAdd: z.preprocess((val) => {
+    if (Array.isArray(val)) return val.map((v) => String(v).trim()).filter(Boolean);
+    if (typeof val === "string" && val.trim()) return [val.trim()];
+    return [];
+  }, z.array(z.string())).optional(),
+  playerConditionsRemove: z.preprocess((val) => {
+    if (Array.isArray(val)) return val.map((v) => String(v).trim()).filter(Boolean);
+    if (typeof val === "string" && val.trim()) return [val.trim()];
+    return [];
+  }, z.array(z.string())).optional(),
   playerConditionsReplace: z.array(z.object({
     from: z.string(),
     to: z.string(),
@@ -1027,8 +1149,16 @@ export const StatePatchSchema = z.object({
     characterId: z.string(),
     items: z.array(ClothingItemSchema),
   })).optional(),
-  playerFlagsAdd: z.array(z.string()).optional(),
-  playerFlagsRemove: z.array(z.string()).optional()
+  playerFlagsAdd: z.preprocess((val) => {
+    if (Array.isArray(val)) return val.map((v) => String(v).trim()).filter(Boolean);
+    if (typeof val === "string" && val.trim()) return [val.trim()];
+    return [];
+  }, z.array(z.string())).optional(),
+  playerFlagsRemove: z.preprocess((val) => {
+    if (Array.isArray(val)) return val.map((v) => String(v).trim()).filter(Boolean);
+    if (typeof val === "string" && val.trim()) return [val.trim()];
+    return [];
+  }, z.array(z.string())).optional()
 });
 export type StatePatch = z.infer<typeof StatePatchSchema>;
 

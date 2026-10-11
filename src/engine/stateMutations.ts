@@ -5,6 +5,7 @@ import {
   InventoryRef,
   Item,
   Playthrough,
+  StatePatch,
   StatePatchSchema
 } from "../schemas";
 import {
@@ -133,25 +134,48 @@ function buildFleshOutStubContent(name: string, description?: string, storyRole?
 }
 
 export function applyStatePatch(state: Playthrough, patchInput: unknown, characterFormat?: CharacterFormat): ApplyPatchResult {
-  const parsed = StatePatchSchema.safeParse(patchInput);
   const next = clone(state);
   const applied: string[] = [];
   const rejected: string[] = [];
   const warnings: string[] = [];
 
-  if (!parsed.success) {
-    return { state, applied, rejected: ["statePatch failed schema validation"], warnings };
+  if (!patchInput || typeof patchInput !== "object" || Array.isArray(patchInput)) {
+    return { state, applied, rejected: ["statePatch must be an object"], warnings };
   }
 
-  const patch = parsed.data;
+  let patch: StatePatch;
+  const parsed = StatePatchSchema.safeParse(patchInput);
+  if (parsed.success) {
+    patch = parsed.data;
+  } else {
+    // Partial recovery: evaluate each field individually so that an error in one field
+    // (e.g. invalid inventory or clothing structure) does not discard valid world state,
+    // conditions, flags, and memory events.
+    patch = {};
+    const raw = patchInput as Record<string, unknown>;
+    const shape = StatePatchSchema.shape;
+    for (const key of Object.keys(shape) as Array<keyof typeof shape>) {
+      if (key in raw && raw[key] !== undefined) {
+        const fieldResult = shape[key].safeParse(raw[key]);
+        if (fieldResult.success) {
+          (patch as any)[key] = fieldResult.data;
+        } else {
+          const issues = fieldResult.error.issues.map((i) => i.message).join(", ");
+          rejected.push(`statePatch field "${key}" failed validation: ${issues}`);
+        }
+      }
+    }
+  }
 
   for (const entry of patch.worldStateAdd ?? []) {
+    const name = typeof entry === "string" ? entry : entry.name;
+    const description = typeof entry === "string" ? "" : (entry.description ?? "");
     next.worldState.push({
       id: newId("ws"),
-      name: entry.name,
-      description: entry.description
+      name,
+      description
     });
-    applied.push("world state added: " + entry.name);
+    applied.push("world state added: " + name);
   }
 
   for (const nameOrId of patch.worldStateRemove ?? []) {
@@ -684,11 +708,18 @@ export function applyStatePatch(state: Playthrough, patchInput: unknown, charact
   }
 
   for (const memoryDraft of patch.memoryEvents ?? []) {
+    let charId = memoryDraft.characterInstanceId;
+    if (charId) {
+      const found = findCharacter(charId);
+      if (found) {
+        charId = found.id;
+      }
+    }
     next.memoryEvents.push({
       id: newId("mem"),
       playthroughId: next.id,
       branchId: next.branchId,
-      characterInstanceId: memoryDraft.characterInstanceId,
+      characterInstanceId: charId,
       turn: next.turn,
       type: memoryDraft.type,
       summary: memoryDraft.summary,

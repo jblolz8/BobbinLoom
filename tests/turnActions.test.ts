@@ -103,6 +103,45 @@ describe("executeTurn", () => {
     expect(result.state.messages[1].patchInfo).toBeUndefined();
   });
 
+  it("applies resilient memory events, world states, and conditions in executeTurn", async () => {
+    const dir = tempDir();
+    const playthrough = createPlaythroughRecord(dir, "Resilient Turn Test");
+    type TurnArgs = Parameters<MockProvider["generateTurn"]>;
+
+    class ResilientPatchProvider extends MockProvider {
+      async generateTurn(...args: TurnArgs): Promise<ProviderTurn> {
+        const out = await super.generateTurn(...args);
+        return {
+          ...out,
+          turn: {
+            ...out.turn,
+            statePatch: {
+              worldStateAdd: ["🌧️ Sudden Downpour"] as any,
+              playerConditionsAdd: "⚡ Invigorated" as any,
+              memoryEvents: [
+                {
+                  summary: "Player weathered the sudden storm safely",
+                  importance: "2" as any,
+                  tags: "Storm" as any
+                } as any
+              ]
+            }
+          }
+        };
+      }
+    }
+
+    const result = await executeTurn(playthrough, "I seek shelter from the rain.", new ResilientPatchProvider(), false);
+    const assistant = result.state.messages[1];
+    expect(assistant.patchInfo?.applied).toContain("world state added: 🌧️ Sudden Downpour");
+    expect(assistant.patchInfo?.applied).toContain("player condition added: ⚡ Invigorated");
+    expect(assistant.patchInfo?.applied.some(a => a.includes("memory event added"))).toBe(true);
+    expect(result.state.memoryEvents.length).toBeGreaterThan(0);
+    const event = result.state.memoryEvents.find(e => e.summary === "Player weathered the sudden storm safely");
+    expect(event).toBeDefined();
+    expect(event?.turn).toBe(result.state.turn);
+  });
+
   it("substitutes the placeholder when a provider returns an empty narrative", async () => {
     const dir = tempDir();
     const playthrough = createPlaythroughRecord(dir, "Empty Narrative Test");

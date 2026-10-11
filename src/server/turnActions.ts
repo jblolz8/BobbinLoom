@@ -166,6 +166,9 @@ export async function executeTurn(
 
   next.turn += 1;
   const currentTurn = next.turn;
+  for (const event of eventsNeedingEmbedding) {
+    event.turn = currentTurn;
+  }
   // Guard against blank narratives from any provider path — an empty string
   // (or whitespace) must never become an invisible chat message.
   const narrative = assistantTurn.narrative.trim() ? assistantTurn.narrative : "The provider returned an empty response.";

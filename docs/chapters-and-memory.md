@@ -111,10 +111,9 @@ summary text is kept, so the state stays coherent and the next fold recovers.
 
 ## Memory events
 
-The model records memorable events as it plays: a short summary, a type, an importance
-rating, and tags. Tags are what make retrieval work — they carry the character names,
-location ids and quest ids the event belongs to, and the model is instructed to always include
-them.
+The model chronicles the story as it unfolds by recording **1–2 timeline events per turn**: a short summary, a type (`action`, `dialogue`, `discovery`, `combat`, `milestone`), an importance rating (1–5), and relevant tags. These form the chronological Event Timeline displayed in the Journal tab and fuel semantic memory retrieval.
+
+Tags are what make retrieval work — they carry the character names, location ids and quest ids the event belongs to, and the model is instructed to always include them. When a model specifies a character name in `characterInstanceId`, the engine automatically resolves it to the correct character ID, and newly added events are stamped with the executed turn number so the Journal timeline stays synchronized with the narrative.
 
 Events are stored in three places, and older ones rotate down:
 

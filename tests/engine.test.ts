@@ -101,6 +101,113 @@ describe("applyStatePatch", () => {
     expect(result2.state.playerCharacter.conditions).not.toContain("wounded");
     expect(result2.state.playerCharacter.flags).not.toContain("found_secret");
   });
+
+  it("coerces string arrays in worldStateAdd into objects with descriptions", () => {
+    const playthrough = createInitialPlaythrough("World State Coercion Test");
+    const result = applyStatePatch(playthrough, {
+      worldStateAdd: ["🌧️ Heavy Rain", "🚨 Town on Alert"] as any
+    });
+    expect(result.rejected).toEqual([]);
+    const rain = result.state.worldState.find(w => w.name === "🌧️ Heavy Rain");
+    const alert = result.state.worldState.find(w => w.name === "🚨 Town on Alert");
+    expect(rain).toBeDefined();
+    expect(rain?.description).toBe("");
+    expect(alert).toBeDefined();
+    expect(alert?.description).toBe("");
+  });
+
+  it("coerces single strings and aliases for characterConditionsAdd and characterFlagsAdd", () => {
+    const playthrough = createInitialPlaythrough("Char Conditions Coercion Test");
+    const char = playthrough.characters[0];
+
+    // Testing singular 'condition' as string, and singular 'flag' as string
+    const result = applyStatePatch(playthrough, {
+      characterConditionsAdd: [{ characterId: char.id, condition: "🤕 Wounded" } as any],
+      characterFlagsAdd: [{ characterId: char.id, flag: "knows_secret" } as any]
+    });
+    expect(result.rejected).toEqual([]);
+    const updatedChar = result.state.characters.find(c => c.id === char.id);
+    expect(updatedChar?.conditions).toContain("🤕 Wounded");
+    expect(updatedChar?.flags).toContain("knows_secret");
+
+    // Remove with singular aliases
+    const result2 = applyStatePatch(result.state, {
+      characterConditionsRemove: [{ characterId: char.id, condition: "🤕 Wounded" } as any],
+      characterFlagsRemove: [{ characterId: char.id, flag: "knows_secret" } as any]
+    });
+    const updatedChar2 = result2.state.characters.find(c => c.id === char.id);
+    expect(updatedChar2?.conditions).not.toContain("🤕 Wounded");
+    expect(updatedChar2?.flags).not.toContain("knows_secret");
+  });
+
+  it("coerces single string for playerConditionsAdd and playerFlagsAdd", () => {
+    const playthrough = createInitialPlaythrough("Player Coercion Test");
+    const result = applyStatePatch(playthrough, {
+      playerConditionsAdd: "🤕 Bruised" as any,
+      playerFlagsAdd: "🗝️ Key Found" as any
+    });
+    expect(result.rejected).toEqual([]);
+    expect(result.state.playerCharacter.conditions).toContain("🤕 Bruised");
+    expect(result.state.playerCharacter.flags).toContain("🗝️ Key Found");
+  });
+
+  it("resiliently applies valid parts of statePatch when another field fails schema validation", () => {
+    const playthrough = createInitialPlaythrough("Partial Resilience Test");
+    // inventoryAdd has invalid item schema ({ invalidField: true })
+    const result = applyStatePatch(playthrough, {
+      worldStateAdd: [{ name: "🏰 Ancient Keep", description: "Looming walls." }],
+      playerConditionsAdd: ["⚡ Inspired"],
+      inventoryAdd: [{ nonExistentField: 123 }] as any
+    });
+
+    // Valid fields must STILL be applied!
+    expect(result.state.worldState.find(w => w.name === "🏰 Ancient Keep")).toBeDefined();
+    expect(result.state.playerCharacter.conditions).toContain("⚡ Inspired");
+    // Invalid field must be recorded in rejected array with descriptive message
+    expect(result.rejected.length).toBeGreaterThan(0);
+    expect(result.rejected[0]).toContain("inventoryAdd");
+  });
+
+  it("applies memoryEvents with omitted type, string importance, and single string tag", () => {
+    const playthrough = createInitialPlaythrough("Memory Event Resilience Test");
+    const result = applyStatePatch(playthrough, {
+      memoryEvents: [
+        {
+          summary: "Discovered the hidden passage behind the bookcase",
+          importance: "high" as any,
+          tags: "Library" as any
+        } as any
+      ]
+    });
+
+    expect(result.rejected).toEqual([]);
+    expect(result.state.memoryEvents.length).toBe(1);
+    const event = result.state.memoryEvents[0];
+    expect(event.summary).toBe("Discovered the hidden passage behind the bookcase");
+    expect(event.type).toBe("event"); // defaulted
+    expect(event.importance).toBe(4); // "high" coerced to 4
+    expect(event.tags).toEqual(["Library"]); // single string coerced to array
+  });
+
+  it("resolves characterInstanceId by character name in memoryEvents", () => {
+    const playthrough = createInitialPlaythrough("Memory Char Resolution Test");
+    const char = playthrough.characters[0];
+    const result = applyStatePatch(playthrough, {
+      memoryEvents: [
+        {
+          characterInstanceId: char.name, // passed name instead of ID
+          type: "dialogue",
+          summary: "Conversed with the companion",
+          importance: 2,
+          tags: [char.name]
+        }
+      ]
+    });
+
+    expect(result.rejected).toEqual([]);
+    expect(result.state.memoryEvents.length).toBe(1);
+    expect(result.state.memoryEvents[0].characterInstanceId).toBe(char.id); // resolved to ID
+  });
 });
 
 describe("buildMockAssistantTurn", () => {

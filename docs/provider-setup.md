@@ -343,9 +343,7 @@ The provider asks the model to return JSON:
 }
 ```
 
-The engine still validates `statePatch`. The provider does not apply state changes
-directly. If the provider returns invalid JSON, BobbinLoom falls back to showing the
-raw text as narrative and ignores the state patch for that turn.
+The engine validates `statePatch` resiliently: valid operations are applied field-by-field, so a formatting flaw in one field (such as an uncataloged item) does not discard valid world states, conditions, flags, or timeline events. If the provider returns completely invalid JSON, BobbinLoom falls back to showing the raw text as narrative and ignores the state patch for that turn.
 
 ---
 

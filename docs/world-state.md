@@ -51,6 +51,8 @@ Conditions and flags have a complete lifecycle in the engine:
 - **Replace / Update**: `playerConditionsReplace` and `characterConditionsReplace` allow the model to transition evolving conditions (e.g. `{ from: "Bleeding", to: "🩹 Bandaged" }`) in a single patch without piling up obsolete entries.
 - **Resilient matching**: Removals strip emojis, normalize whitespace, match case-insensitively, and convert `snake_case` underscores to spaces. If a condition is stored as `"🤕 Severely Bleeding"`, an AI removal of `["severely bleeding"]` or `["bleeding"]` cleanly matches and removes it.
 - **Model cleanup mandate**: The model is instructed to remove temporary injuries, exhaustion, or passing flags when resolved, preventing status clutter.
+- **Field-by-field resilience**: If a model returns a patch where one field has an error (such as an invalid inventory item or unknown section), the engine isolates the error to that specific field and still applies all valid operations (world states, player conditions, character flags, timeline events) rather than rejecting the entire turn's state patch.
+- **Lenient format coercion**: The engine seamlessly coerces string arrays or singular aliases into canonical schemas (e.g. `worldStateAdd: ["🌧️ Heavy Rain"]` is accepted directly without requiring an explicit object wrapper, and `characterConditionsAdd` accepts singular `condition: "..."`).
 - **Manual control in play**: You have direct control over conditions and flags. In the **Player** tab, you can add, click-to-edit, or delete (`×`) player conditions and flags anytime. In the **Chars** tab, every condition and flag chip on character cards features an instant delete (`×`) button.
 
 ## The cast in play
