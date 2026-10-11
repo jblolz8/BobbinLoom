@@ -137,6 +137,8 @@ export async function executeTurn(
     }
   }
 
+  const existingMemoryEventIds = new Set(playthrough.memoryEvents.map((e) => e.id));
+
   const patchResult = assistantTurn.statePatch
     ? applyStatePatch(playthrough, assistantTurn.statePatch, promptConfig?.characterFormat)
     : { state: playthrough, applied: [], rejected: [], warnings: [] };
@@ -145,29 +147,28 @@ export async function executeTurn(
   const now = new Date().toISOString();
   const assistantMessageId = `msg_${randomUUID()}`;
 
-  // ── Compute embeddings for new memory events ──
-  const eventsNeedingEmbedding = next.memoryEvents.filter(
-    e => !e.embedding || e.embedding.length === 0
-  );
-  if (eventsNeedingEmbedding.length > 0) {
+  next.turn += 1;
+  const currentTurn = next.turn;
+
+  // ── Isolate turn assignment and embeddings strictly to NEW memory events ──
+  const newMemoryEvents = next.memoryEvents.filter((e) => !existingMemoryEventIds.has(e.id));
+  for (const event of newMemoryEvents) {
+    event.turn = currentTurn;
+  }
+
+  if (newMemoryEvents.length > 0) {
     try {
-      const summaries = eventsNeedingEmbedding.map(e => e.summary);
+      const summaries = newMemoryEvents.map((e) => e.summary);
       const embeddings = await provider.embedTexts(summaries);
-      for (let i = 0; i < eventsNeedingEmbedding.length; i++) {
+      for (let i = 0; i < newMemoryEvents.length; i++) {
         if (embeddings[i] && embeddings[i].length > 0) {
-          eventsNeedingEmbedding[i].embedding = embeddings[i];
+          newMemoryEvents[i].embedding = embeddings[i];
         }
       }
     } catch (error) {
       // Embedding failed — events stay unembedded, keyword fallback handles them
       console.error(`executeTurn: embedding computation failed: ${error instanceof Error ? error.message : String(error)}`);
     }
-  }
-
-  next.turn += 1;
-  const currentTurn = next.turn;
-  for (const event of eventsNeedingEmbedding) {
-    event.turn = currentTurn;
   }
   // Guard against blank narratives from any provider path — an empty string
   // (or whitespace) must never become an invisible chat message.

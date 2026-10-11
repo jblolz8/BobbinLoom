@@ -142,6 +142,68 @@ describe("executeTurn", () => {
     expect(event?.turn).toBe(result.state.turn);
   });
 
+  it("preserves historical event turn numbers across consecutive turns without embeddings", async () => {
+    const dir = tempDir();
+    let pt = createPlaythroughRecord(dir, "Multi-Turn Memory Test");
+    type TurnArgs = Parameters<MockProvider["generateTurn"]>;
+
+    class EventStepProvider extends MockProvider {
+      private step: number;
+      constructor(step: number) {
+        super();
+        this.step = step;
+      }
+      async generateTurn(...args: TurnArgs): Promise<ProviderTurn> {
+        const out = await super.generateTurn(...args);
+        return {
+          ...out,
+          turn: {
+            ...out.turn,
+            statePatch: {
+              memoryEvents: [
+                {
+                  summary: `Milestone reached at step ${this.step}`,
+                  type: "milestone",
+                  importance: 3,
+                  tags: ["Progress"]
+                }
+              ]
+            }
+          }
+        };
+      }
+    }
+
+    // Turn 1
+    const res1 = await executeTurn(pt, "Step one", new EventStepProvider(1), false);
+    pt = res1.state;
+    expect(pt.turn).toBe(1);
+    expect(pt.memoryEvents).toHaveLength(1);
+    expect(pt.memoryEvents[0].turn).toBe(1);
+
+    // Turn 2
+    const res2 = await executeTurn(pt, "Step two", new EventStepProvider(2), false);
+    pt = res2.state;
+    expect(pt.turn).toBe(2);
+    expect(pt.memoryEvents).toHaveLength(2);
+    const ev1AtTurn2 = pt.memoryEvents.find(e => e.summary === "Milestone reached at step 1");
+    const ev2AtTurn2 = pt.memoryEvents.find(e => e.summary === "Milestone reached at step 2");
+    expect(ev1AtTurn2?.turn).toBe(1); // Crucial: must NOT be overwritten to 2!
+    expect(ev2AtTurn2?.turn).toBe(2);
+
+    // Turn 3
+    const res3 = await executeTurn(pt, "Step three", new EventStepProvider(3), false);
+    pt = res3.state;
+    expect(pt.turn).toBe(3);
+    expect(pt.memoryEvents).toHaveLength(3);
+    const ev1AtTurn3 = pt.memoryEvents.find(e => e.summary === "Milestone reached at step 1");
+    const ev2AtTurn3 = pt.memoryEvents.find(e => e.summary === "Milestone reached at step 2");
+    const ev3AtTurn3 = pt.memoryEvents.find(e => e.summary === "Milestone reached at step 3");
+    expect(ev1AtTurn3?.turn).toBe(1);
+    expect(ev2AtTurn3?.turn).toBe(2);
+    expect(ev3AtTurn3?.turn).toBe(3);
+  });
+
   it("substitutes the placeholder when a provider returns an empty narrative", async () => {
     const dir = tempDir();
     const playthrough = createPlaythroughRecord(dir, "Empty Narrative Test");

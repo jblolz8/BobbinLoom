@@ -40,3 +40,5 @@ export {
 } from "./contextBudgeting";
 
 export type { ActivatedEntry, LorebookScanOptions } from "./contextBudgeting";
+
+export { repairMemoryEventTurns } from "./memoryEventRepairs";

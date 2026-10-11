@@ -7,7 +7,7 @@ import { migratePlaythrough } from "./dataMigrations";
 import { slugify, uniqueSlug } from "./slugs";
 import { normalizeCreator, normalizeTags } from "../engine/characterCards";
 import type { ParsedCard } from "./characterCards/parseCard";
-import { createBlankPlaythrough, createInitialPlaythrough, createPlaythroughFromSeed, ensureMessageTurns, restoreSnapshotState } from "../engine/engine";
+import { createBlankPlaythrough, createInitialPlaythrough, createPlaythroughFromSeed, ensureMessageTurns, repairMemoryEventTurns, restoreSnapshotState } from "../engine/engine";
 import { loadAppSettings } from "./appSettingsStore";
 import { DEMO_TEMPLATE } from "../engine/demoData";
 import type { CharacterFormat, CharacterTemplate, ImageGenerationSettings, LoadFailure, LorebookFile, LorebookSummary, PlayerPersona, Playthrough, PlaythroughCoverView, PlaythroughListResponse, PlaythroughSummary, PromptModuleSet, PromptPreset, ScenarioSeed, TurnSnapshot } from "../schemas";
@@ -834,7 +834,11 @@ export function getPlaythroughRecord(dir: string, id: string): Playthrough | nul
     console.error(`[store] playthrough ${id} failed validation (${migrated.reason})${backupPath ? ` — quarantined to ${backupPath}` : ""}`);
     return null;
   }
-  return migrated.data;
+  const data = migrated.data;
+  if (repairMemoryEventTurns(data)) {
+    updatePlaythroughRecord(dir, data);
+  }
+  return data;
 }
 
 export function updatePlaythroughRecord(dir: string, playthrough: Playthrough): void {
