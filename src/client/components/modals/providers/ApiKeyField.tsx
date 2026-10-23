@@ -41,11 +41,12 @@ export function ApiKeyField({
     <div>
       <TextInput
         label="API Key"
+        size="sm"
         type={showKey ? "text" : "password"}
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={isKeyCleared ? "Key will be cleared on Save" : "Enter API key"}
-        leftIcon={<Icon name="KeyRound" size={14} />}
+        placeholder={isKeyCleared ? "Cleared on Save" : "Enter API key"}
+        leftIcon={<Icon name="KeyRound" size={13} />}
         rightElement={
           <Button
             type="button"
@@ -54,7 +55,7 @@ export function ApiKeyField({
             onClick={onToggleShowKey}
             disabled={keyBusy}
             isLoading={keyBusy}
-            leftIcon={<Icon name={showKey ? "EyeOff" : "Eye"} size={14} />}
+            leftIcon={<Icon name={showKey ? "EyeOff" : "Eye"} size={13} />}
           >
             {showKey ? "Hide" : "Show"}
           </Button>

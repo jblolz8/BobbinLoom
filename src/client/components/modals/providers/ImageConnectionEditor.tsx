@@ -1,10 +1,11 @@
 import { useEffect, useState, type Dispatch, type FormEvent, type MouseEvent, type SetStateAction } from "react";
-import { Button, Icon, SimpleSelect, SwitchRow, TextInput } from "../../base";
+import { Button, Card, FormGrid, FormSection, Icon, SimpleSelect, SwitchRow, TextInput } from "../../base";
 import type { ImageApiStyle, RegionDirection } from "../../../../schemas";
 import { fetchProviderImageStyles } from "../../../api";
 import type { ModelCapabilities, ProviderConnection, ProviderConnectionPayload, ProviderModelCapabilities } from "../../../api";
 import { CUSTOM_STYLE_OPTION, imageStyleDisplay } from "../../../utils/imageStyleOptions";
 import { ApiKeyField, type ApiKeyFieldProps } from "./ApiKeyField";
+import { EditorActionBar } from "./EditorActionBar";
 
 type EditorStatus = { kind: "ok" | "err"; text: string } | null;
 
@@ -158,15 +159,13 @@ export type ImageConnectionEditorProps = {
    *  Read-only; a model the listing did not describe simply has no entry. */
   modelSpecs: ProviderModelCapabilities;
   /** a1111 only: the WebUI's own sampler and scheduler names, from the same
-   *  probe that filled `models`. They populate the two pickers; when a build
-   *  lists nothing (no such route) those fields fall back to free text, because
-   *  a fork may ship names we were never told.
-   *
-   *  `forgeCouple` is that same probe's answer to "is the Forge Couple
-   *  extension installed?" — present (true) only when the WebUI listed it, so
-   *  an absent value means "not detected", never "switched off". Nothing in
-   *  the region settings below can reach the wire without it. */
-  dialectOptions?: { samplers?: string[]; schedulers?: string[]; forgeCouple?: boolean };
+   *  probe response that filled `models`. Offered as a datalist so a fork's
+   *  custom sampler can still be typed verbatim. */
+  dialectOptions?: {
+    samplers?: string[];
+    schedulers?: string[];
+    forgeCouple?: boolean;
+  };
   modelsStatus: EditorStatus;
   fetchingModels: boolean;
   onFetchModels: () => void;
@@ -180,18 +179,18 @@ export type ImageConnectionEditorProps = {
   onTest: (e: MouseEvent) => void;
   onCancel: () => void;
   onDelete: () => void;
-  /** Every text connection — the candidates for writing this prompt. */
+  /** Text connections available as the Prompt Writer override. */
   textConnections: ProviderConnection[];
 };
 
 /**
- * The image-provider editor. Its fields are its own: endpoint dialect, size or
- * aspect ratio, the Venice pass-throughs, and — the odd one out — the text
- * connection that WRITES the prompt, since an image endpoint cannot compose one.
- * It also shows, read-only, what the provider's own model listing says about the
- * selected model.
+ * The image connection form: Basics (with API style), Model, Image Settings,
+ * and Prompt Writer. Splitting it from the text editor removes the 170 lines of
+ * `{kind === "image" ? … : …}` branches that were hiding inside one JSX tree.
  *
- * State and requests live in `ProviderConnections`, like the text editor.
+ * Notice that Temperature / Max Tokens / Context Window are NOT rendered here —
+ * those belong on the text connection that writes the prompt, and the schema's
+ * required defaults travel on the payload without a UI control.
  */
 export function ImageConnectionEditor({
   mode,
@@ -362,186 +361,156 @@ export function ImageConnectionEditor({
     : capabilityLines(form.model ? modelSpecs[form.model] : undefined);
 
   return (
-    <form className="conn-editor conn-editor-card" onSubmit={onSubmit}>
+    <Card as="form" variant="elevated" padding="md" className="conn-editor" onSubmit={onSubmit}>
       <div className="conn-editor-header">
         <h4>{mode === "create" ? "New Image Provider Connection" : `Edit: ${editing?.label ?? ""}`}</h4>
       </div>
 
-      <div className="conn-section">
-        <h5 className="form-section-title conn-section-title">
-          <Icon name="Plug" size={14} />
-          <span>Connection Basics</span>
-        </h5>
-        <div className="conn-fields-group">
-          <div className="conn-field-group">
-            <span className="field-label-text">API Style</span>
-            <SimpleSelect<ImageApiStyle>
-              size="sm"
-              variant="filled"
-              fullWidth
-              value={form.apiStyle ?? "openai"}
-              onChange={(style) => setForm((f) => ({ ...f, apiStyle: style }))}
-              options={API_STYLE_OPTIONS}
-              aria-label="Image API style"
-            />
-            <p className="conn-field-helper">
-              {a1111
-                ? "Talks to a local AUTOMATIC1111 / Forge WebUI over its own /sdapi/v1 API — the WebUI must be started with --api. Steps, CFG scale, sampler and scheduler go with every request."
-                : "Venice sends negative prompts, seeds and style presets; OpenAI-compatible sends none of them."}
-            </p>
-          </div>
+      <FormSection icon="Plug" title="Connection Basics">
+        <SimpleSelect<ImageApiStyle>
+          label="API Style"
+          size="sm"
+          variant="filled"
+          fullWidth
+          value={form.apiStyle ?? "openai"}
+          onChange={(style) => setForm((f) => ({ ...f, apiStyle: style }))}
+          options={API_STYLE_OPTIONS}
+          aria-label="Image API style"
+          helperText={
+            a1111
+              ? "Talks to a local AUTOMATIC1111 / Forge WebUI over its own /sdapi/v1 API — the WebUI must be started with --api. Steps, CFG scale, sampler and scheduler go with every request."
+              : "Venice sends negative prompts, seeds and style presets; OpenAI-compatible sends none of them."
+          }
+        />
 
-          <div className="conn-fields-row-2">
-            <TextInput
-              label="Name"
-              value={form.label}
-              onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
-              placeholder="e.g. Venice Images"
-            />
+        <FormGrid cols="2-asymmetric">
+          <TextInput
+            label="Name"
+            size="sm"
+            value={form.label}
+            onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
+            placeholder="e.g. Venice Images"
+          />
 
-            <TextInput
-              label="Base URL"
-              value={form.baseUrl}
-              onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))}
-              placeholder="https://api.venice.ai/api/v1"
-              leftIcon={<Icon name="Globe" size={14} />}
-            />
-          </div>
+          <TextInput
+            label="Base URL"
+            size="sm"
+            value={form.baseUrl}
+            onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))}
+            placeholder="https://api.venice.ai/api/v1"
+            leftIcon={<Icon name="Globe" size={13} />}
+          />
+        </FormGrid>
 
-          <ApiKeyField {...apiKey} />
-        </div>
-      </div>
+        <ApiKeyField {...apiKey} />
+      </FormSection>
 
-      <div className="conn-section">
-        <h5 className="form-section-title conn-section-title">
-          <Icon name="Images" size={14} />
-          <span>Model</span>
-        </h5>
-        <div className="conn-fields-group">
-          <div>
-            <TextInput
-              label={a1111 ? "Checkpoint" : "Model ID"}
-              value={form.model}
-              onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
-              placeholder={a1111 ? "e.g. sd_xl_base_1.0.safetensors" : "e.g. flux-dev"}
-              leftIcon={<Icon name="Images" size={14} />}
-              rightElement={
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={onFetchModels}
-                  disabled={fetchingModels || busy || (mode !== "edit" && !form.baseUrl.trim())}
-                  isLoading={fetchingModels}
-                  leftIcon={<Icon name="RefreshCw" size={13} className={fetchingModels ? "animate-spin" : ""} />}
-                >
-                  Fetch models
-                </Button>
-              }
-            />
-            {a1111 && (
-              <p className="conn-field-helper">
-                Leave the checkpoint empty to use whatever the WebUI already has loaded: the request then sends no
-                override at all, and your WebUI's own state is never touched.
-              </p>
-            )}
-            {models.length > 0 && (
-              <div className="base-form-field form-field" style={{ marginTop: "0.5rem" }}>
-                <span className="field-label-text">
-                  {a1111
+      <FormSection icon="Images" title="Model">
+        <div>
+          <TextInput
+            label={a1111 ? "Checkpoint" : "Model ID"}
+            size="sm"
+            value={form.model}
+            onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
+            placeholder={a1111 ? "e.g. sd_xl_base_1.0.safetensors" : "e.g. flux-dev"}
+            leftIcon={<Icon name="Images" size={13} />}
+            helperText={
+              a1111
+                ? "Leave the checkpoint empty to use whatever the WebUI already has loaded: the request then sends no override at all, and your WebUI's own state is never touched."
+                : undefined
+            }
+            rightElement={
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={onFetchModels}
+                disabled={fetchingModels || busy || (mode !== "edit" && !form.baseUrl.trim())}
+                isLoading={fetchingModels}
+                leftIcon={<Icon name="RefreshCw" size={12} className={fetchingModels ? "animate-spin" : ""} />}
+              >
+                Fetch models
+              </Button>
+            }
+          />
+          {models.length > 0 && (
+            <div style={{ marginTop: "0.35rem" }}>
+              <SimpleSelect
+                label={
+                  a1111
                     ? `Select from Fetched Checkpoints (${models.length} available)`
-                    : `Select from Fetched Models (${models.length} available)`}
-                </span>
-                <SimpleSelect
-                  size="sm"
-                  variant="filled"
-                  fullWidth
-                  value={models.includes(form.model) ? form.model : ""}
-                  onChange={(selectedModel) => {
-                    if (selectedModel) {
-                      setForm((f) => ({ ...f, model: selectedModel }));
-                    }
-                  }}
-                  placeholder="-- Select a fetched model --"
-                  options={models.map((m) => ({
-                    value: m,
-                    label: m,
-                    icon: <Icon name="Images" size={13} />,
-                  }))}
-                />
-              </div>
-            )}
-            {modelsStatus && <p className={`conn-status ${modelsStatus.kind}`}>{modelsStatus.text}</p>}
-
-            {/* Read-only capabilities for the model in the field above, read from
-                the provider's OWN listing (the same response that filled the
-                list) — the only place a provider says which sizing parameter a
-                model takes. Nothing renders when the model is unknown to the
-                listing, or when the probe failed. */}
-            {capsLines.length > 0 && (
-              <div className="base-form-field form-field" style={{ marginTop: "0.5rem" }}>
-                <span className="field-label-text">
-                  {a1111 ? "What this WebUI offers" : `What “${form.model}” accepts`}
-                </span>
-                {capsLines.map((line) => (
-                  <p key={line} className="conn-field-helper">{line}</p>
-                ))}
-                <p className="conn-field-helper">
-                  {a1111
-                    ? "Read-only — from the WebUI's own /sdapi/v1 listing."
-                    : "Read-only — from the provider's own model listing."}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="conn-section">
-        <h5 className="form-section-title conn-section-title">
-          <Icon name="Aperture" size={14} />
-          <span>Image Settings</span>
-        </h5>
-        <div className="conn-fields-group">
-
-          <div className="conn-field-group">
-            <span className="field-label-text">Image Size</span>
-            <SimpleSelect
-              size="sm"
-              variant="filled"
-              fullWidth
-              value={form.size ?? "auto"}
-              onChange={(size) => setForm((f) => ({ ...f, size }))}
-              options={sizeOptions.map((s) => ({ value: s, label: s }))}
-              aria-label="Image size"
-            />
-            <p className="conn-field-helper">
-              {a1111
-                ? 'Sent as width/height to the WebUI. "auto" sends no size at all, so the WebUI\'s own default applies.'
-                : 'Sent as width/height. "auto" lets the provider choose.'}
-            </p>
-          </div>
-
-          {/* Aspect Ratio is a Venice sizing parameter (the qwen-image family
-              rejects width/height) and means nothing to the WebUI, so the field
-              is hidden rather than shown-broken for a1111. */}
-          {!a1111 && (
-            <TextInput
-              label="Aspect Ratio"
-              value={form.aspectRatio ?? ""}
-              onChange={(e) => setForm((f) => ({ ...f, aspectRatio: e.target.value }))}
-              placeholder="e.g. 3:2"
-              leftIcon={<Icon name="Ratio" size={14} />}
-              helperText='Used instead of Image Size for models that reject width/height (the Venice qwen-image family). Leave empty to send the size.'
-            />
+                    : `Select from Fetched Models (${models.length} available)`
+                }
+                size="xs"
+                variant="filled"
+                fullWidth
+                value={models.includes(form.model) ? form.model : ""}
+                onChange={(selectedModel) => {
+                  if (selectedModel) {
+                    setForm((f) => ({ ...f, model: selectedModel }));
+                  }
+                }}
+                placeholder="-- Select a fetched model --"
+                options={models.map((m) => ({
+                  value: m,
+                  label: m,
+                  icon: <Icon name="Images" size={12} />,
+                }))}
+              />
+            </div>
           )}
+          {modelsStatus && <p className={`conn-status ${modelsStatus.kind}`}>{modelsStatus.text}</p>}
 
-          <div className="conn-fields-row-2">
-            {/* Style Preset is Venice's `style_preset`; the WebUI has no such
-                parameter, so the whole group is hidden for a1111 rather than
-                shown as a control that would send nothing. */}
-            {!a1111 && (
-            <div className="conn-field-group">
+          {capsLines.length > 0 && (
+            <div className="base-form-field form-field" style={{ marginTop: "0.35rem" }}>
+              <span className="field-label-text">
+                {a1111 ? "What this WebUI offers" : `What “${form.model}” accepts`}
+              </span>
+              {capsLines.map((line) => (
+                <p key={line} className="field-helper-text">{line}</p>
+              ))}
+              <p className="field-helper-text">
+                {a1111
+                  ? "Read-only — from the WebUI's own /sdapi/v1 listing."
+                  : "Read-only — from the provider's own model listing."}
+              </p>
+            </div>
+          )}
+        </div>
+      </FormSection>
+
+      <FormSection icon="Aperture" title="Image Settings">
+        <SimpleSelect
+          label="Image Size"
+          size="sm"
+          variant="filled"
+          fullWidth
+          value={form.size ?? "auto"}
+          onChange={(size) => setForm((f) => ({ ...f, size }))}
+          options={sizeOptions.map((s) => ({ value: s, label: s }))}
+          aria-label="Image size"
+          helperText={
+            a1111
+              ? 'Sent as width/height to the WebUI. "auto" sends no size at all, so the WebUI\'s own default applies.'
+              : 'Sent as width/height. "auto" lets the provider choose.'
+          }
+        />
+
+        {!a1111 && (
+          <TextInput
+            label="Aspect Ratio"
+            size="sm"
+            value={form.aspectRatio ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, aspectRatio: e.target.value }))}
+            placeholder="e.g. 3:2"
+            leftIcon={<Icon name="Ratio" size={13} />}
+            helperText="Used instead of Image Size for models that reject width/height (the Venice qwen-image family). Leave empty to send the size."
+          />
+        )}
+
+        <FormGrid cols="2-asymmetric">
+          {!a1111 && (
+            <div className="base-form-field form-field min-w-0">
               <span className="field-label-text">Style Preset</span>
               {venice ? (
                 <>
@@ -558,12 +527,13 @@ export function ImageConnectionEditor({
                   {styleDisplay.showCustomInput && (
                     <TextInput
                       label="Custom style"
+                      size="sm"
                       value={styleValue}
                       onChange={(e) => setForm((f) => ({ ...f, stylePreset: e.target.value }))}
                       placeholder="The exact value the provider expects"
                     />
                   )}
-                  <div className="base-form-field form-field" style={{ marginTop: "0.5rem" }}>
+                  <div style={{ marginTop: "0.25rem" }}>
                     <Button
                       type="button"
                       variant="secondary"
@@ -571,13 +541,11 @@ export function ImageConnectionEditor({
                       onClick={() => void loadStyles()}
                       disabled={fetchingStyles || (mode !== "edit" && !form.baseUrl.trim())}
                       isLoading={fetchingStyles}
-                      leftIcon={<Icon name="RefreshCw" size={13} className={fetchingStyles ? "animate-spin" : ""} />}
+                      leftIcon={<Icon name="RefreshCw" size={12} className={fetchingStyles ? "animate-spin" : ""} />}
                     >
                       Fetch styles
                     </Button>
                   </div>
-                  {/* The fetch is in flight: say so, rather than leaving the
-                      field bare while the list is unknown. */}
                   {fetchingStyles ? (
                     <p className="conn-status">Loading styles…</p>
                   ) : (
@@ -591,7 +559,7 @@ export function ImageConnectionEditor({
                       a blank value is not sent at all.
                     </p>
                   )}
-                  <p className="conn-field-helper">
+                  <p className="field-helper-text">
                     Venice only. The list is the provider's own (fetched from the keyless <code>/image/styles</code>);
                     values are case-sensitive and title-cased. None sends no <code>style_preset</code>. Venice applies a style
                     preset on only <strong>some</strong> models and publishes no list of which ones — the Models API
@@ -601,324 +569,270 @@ export function ImageConnectionEditor({
                   </p>
                 </>
               ) : (
-                <p className="conn-field-helper">
+                <p className="field-helper-text">
                   Venice only — the OpenAI-compatible dialect has no style parameter, so this is not sent. Switch API
                   Style to Venice to set it.
                 </p>
               )}
             </div>
-            )}
+          )}
 
-            <div className="conn-field-group">
-              <span className="field-label-text">{a1111 ? "Variants (batch size)" : "Variants"}</span>
-              <SimpleSelect
-                size="sm"
-                variant="filled"
-                fullWidth
-                value={String(form.variants ?? 1)}
-                onChange={(variants) => setForm((f) => ({ ...f, variants: Number(variants) }))}
-                options={VARIANT_OPTIONS.map((v) => ({ value: v, label: v }))}
-                aria-label="Image variants"
-              />
-              <p className="conn-field-helper">
-                {a1111
-                  ? "Sent as batch_size: one request renders the whole batch, so 2 takes about twice as long. Each image comes back as its own result."
-                  : "Venice only. Keep at 1 unless you want several results per request."}
-              </p>
-            </div>
-          </div>
+          <SimpleSelect
+            label={a1111 ? "Variants (batch size)" : "Variants"}
+            size="sm"
+            variant="filled"
+            fullWidth
+            value={String(form.variants ?? 1)}
+            onChange={(variants) => setForm((f) => ({ ...f, variants: Number(variants) }))}
+            options={VARIANT_OPTIONS.map((v) => ({ value: v, label: v }))}
+            aria-label="Image variants"
+            helperText={
+              a1111
+                ? "Sent as batch_size: one request renders the whole batch, so 2 takes about twice as long. Each image comes back as its own result."
+                : "Venice only. Keep at 1 unless you want several results per request."
+            }
+          />
+        </FormGrid>
 
-          <div className="conn-fields-row-2">
-            <TextInput
-              label="Seed"
-              type="number"
-              min={0}
-              step={1}
-              value={form.seed === undefined || form.seed === null ? "" : String(form.seed)}
-              onChange={(e) => {
-                // Digits only. An empty field means "let the provider pick" and
-                // is sent as null — NEVER as 0, which the provider reads as a
-                // concrete value rather than "no seed". Null is what CLEARS a
-                // stored seed; an absent field cannot overwrite one.
-                const digits = e.target.value.replace(/\D/g, "");
-                setForm((f) => ({ ...f, seed: digits === "" ? null : Number(digits) }));
-              }}
-              placeholder="Random"
-              leftIcon={<Icon name="Dices" size={14} />}
-              helperText={
-                a1111
-                  ? "Leave empty for a random seed: blank is sent as -1, which this dialect reads as random. 0 is a real seed here (unlike Venice), so typing 0 pins the first image."
-                  : "Leave empty for a random seed. Set a number to make re-rolls comparable — the same seed and prompt reproduce the same image. A seed is only honoured by providers that support one: Venice does, the OpenAI-compatible dialect does not."
-              }
+        <FormGrid cols="2-asymmetric">
+          <TextInput
+            label="Seed"
+            size="sm"
+            type="number"
+            min={0}
+            step={1}
+            value={form.seed === undefined || form.seed === null ? "" : String(form.seed)}
+            onChange={(e) => {
+              const digits = e.target.value.replace(/\D/g, "");
+              setForm((f) => ({ ...f, seed: digits === "" ? null : Number(digits) }));
+            }}
+            placeholder="Random"
+            leftIcon={<Icon name="Dices" size={13} />}
+            helperText={
+              a1111
+                ? "Leave empty for a random seed: blank is sent as -1, which this dialect reads as random. 0 is a real seed here (unlike Venice), so typing 0 pins the first image."
+                : "Leave empty for a random seed. Set a number to make re-rolls comparable — the same seed and prompt reproduce the same image. A seed is only honoured by providers that support one: Venice does, the OpenAI-compatible dialect does not."
+            }
+          />
+        </FormGrid>
+
+        {!a1111 && (
+          <div className="conn-toggle-group">
+            <SwitchRow
+              icon="Shield"
+              title="Safe Mode"
+              description="Ask the provider to blur adult content. Leave off."
+              checked={form.safeMode ?? false}
+              onChange={(e) => setForm((f) => ({ ...f, safeMode: e.target.checked }))}
+            />
+
+            <SwitchRow
+              icon="EyeOff"
+              title="Hide Watermark"
+              description="Venice only. Request results without the Venice watermark."
+              checked={form.hideWatermark ?? false}
+              onChange={(e) => setForm((f) => ({ ...f, hideWatermark: e.target.checked }))}
             />
           </div>
+        )}
+      </FormSection>
 
-          {/* Grouped the way the Chat tab groups its own toggle rows, so the two
-              read as a set rather than two loose boxes in the card. Both are
-              Venice-side pass-throughs (`safe_mode`, `hide_watermark`), so
-              neither is offered for a1111 — the WebUI has no equivalent. */}
-          {!a1111 && (
-            <div className="conn-toggle-group">
-              <SwitchRow
-                icon="Shield"
-                title="Safe Mode"
-                description="Ask the provider to blur adult content. Leave off."
-                checked={form.safeMode ?? false}
-                onChange={(e) => setForm((f) => ({ ...f, safeMode: e.target.checked }))}
-              />
-
-              <SwitchRow
-                icon="EyeOff"
-                title="Hide Watermark"
-                description="Venice only. Request results without the Venice watermark."
-                checked={form.hideWatermark ?? false}
-                onChange={(e) => setForm((f) => ({ ...f, hideWatermark: e.target.checked }))}
-              />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* a1111 sampling controls. Every field is optional on purpose: an empty
-          one is not sent at all, so the WebUI's own default applies — which is
-          exactly what a user who already tuned the WebUI expects. */}
       {a1111 && (
-        <div className="conn-section">
-          <h5 className="form-section-title conn-section-title">
-            <Icon name="SlidersHorizontal" size={14} />
-            <span>Sampling</span>
-          </h5>
-          <div className="conn-fields-group">
-            <div className="conn-fields-row-2">
-              <TextInput
-                label="Steps"
-                type="number"
-                min={1}
-                max={150}
-                step={1}
-                value={form.steps === undefined || form.steps === null ? "" : String(form.steps)}
-                onChange={(e) => setForm((f) => ({ ...f, steps: optionalNumber(e.target.value) }))}
-                placeholder="WebUI default"
-                leftIcon={<Icon name="ListChecks" size={14} />}
-                helperText="1–150 sampling steps. Empty sends no steps."
-              />
-
-              <TextInput
-                label="CFG scale"
-                type="number"
-                min={0}
-                max={30}
-                step={0.5}
-                value={form.cfgScale === undefined || form.cfgScale === null ? "" : String(form.cfgScale)}
-                onChange={(e) => setForm((f) => ({ ...f, cfgScale: optionalNumber(e.target.value) }))}
-                placeholder="WebUI default"
-                leftIcon={<Icon name="Gauge" size={14} />}
-                helperText="How strictly the prompt is followed (0–30). Empty sends no value."
-              />
-            </div>
-
-            {dialectOptions?.samplers?.length ? (
-              <div className="conn-field-group">
-                <span className="field-label-text">Sampler</span>
-                <SimpleSelect
-                  size="sm"
-                  variant="filled"
-                  fullWidth
-                  value={form.sampler ?? ""}
-                  onChange={(sampler) => setForm((f) => ({ ...f, sampler }))}
-                  options={[
-                    { value: "", label: "WebUI default" },
-                    ...(dialectOptions.samplers ?? []).map((name) => ({ value: name, label: name }))
-                  ]}
-                  aria-label="Sampler"
-                />
-                <p className="conn-field-helper">
-                  Sent as sampler_name. The list is the WebUI's own (/sdapi/v1/samplers). "WebUI default" sends
-                  nothing, so whatever your WebUI has selected applies.
-                </p>
-              </div>
-            ) : (
-              <TextInput
-                label="Sampler"
-                value={form.sampler ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, sampler: e.target.value }))}
-                placeholder="e.g. DPM++ 2M"
-                leftIcon={<Icon name="SlidersHorizontal" size={14} />}
-                helperText="Sent as sampler_name. This WebUI did not list its samplers — type exactly what it accepts, or leave empty to send none."
-              />
-            )}
-
-            {dialectOptions?.schedulers?.length ? (
-              <div className="conn-field-group">
-                <span className="field-label-text">Scheduler</span>
-                <SimpleSelect
-                  size="sm"
-                  variant="filled"
-                  fullWidth
-                  value={form.scheduler ?? ""}
-                  onChange={(scheduler) => setForm((f) => ({ ...f, scheduler }))}
-                  options={[
-                    { value: "", label: "WebUI default" },
-                    ...(dialectOptions.schedulers ?? []).map((name) => ({ value: name, label: name }))
-                  ]}
-                  aria-label="Scheduler"
-                />
-                <p className="conn-field-helper">
-                  Sent as scheduler. The list is the WebUI's own (/sdapi/v1/schedulers) — your build reports
-                  "Automatic" as its default, which is what "WebUI default" leaves in place.
-                </p>
-              </div>
-            ) : (
-              <TextInput
-                label="Scheduler"
-                value={form.scheduler ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, scheduler: e.target.value }))}
-                placeholder="e.g. Karras"
-                leftIcon={<Icon name="Aperture" size={14} />}
-                helperText="Sent as scheduler. Empty sends none, so the WebUI's own default applies."
-              />
-            )}
-
+        <FormSection icon="SlidersHorizontal" title="Sampling">
+          <FormGrid cols="2-asymmetric">
             <TextInput
-              label="Timeout (seconds)"
+              label="Steps"
+              size="sm"
               type="number"
               min={1}
+              max={150}
               step={1}
-              value={
-                form.timeoutMs === undefined || form.timeoutMs === null
-                  ? ""
-                  : String(Math.round(form.timeoutMs / 1000))
-              }
-              onChange={(e) => setForm((f) => ({ ...f, timeoutMs: timeoutSecondsToMs(e.target.value) }))}
-              placeholder="600"
-              leftIcon={<Icon name="Timer" size={14} />}
-              helperText="How long one image may take (stored in milliseconds). Empty uses the dialect default — 10 minutes for Automatic1111, since a local render easily outlasts the global 180 s."
+              value={form.steps === undefined || form.steps === null ? "" : String(form.steps)}
+              onChange={(e) => setForm((f) => ({ ...f, steps: optionalNumber(e.target.value) }))}
+              placeholder="WebUI default"
+              leftIcon={<Icon name="ListChecks" size={13} />}
+              helperText="1–150 sampling steps. Empty sends no steps."
             />
 
-            <p className="conn-field-helper">
-              Nothing here is written to the WebUI's settings: the checkpoint travels as a per-request override that
-              the WebUI restores immediately afterwards, and the sampling values live on the request itself.
-            </p>
-          </div>
-        </div>
+            <TextInput
+              label="CFG scale"
+              size="sm"
+              type="number"
+              min={0}
+              max={30}
+              step={0.5}
+              value={form.cfgScale === undefined || form.cfgScale === null ? "" : String(form.cfgScale)}
+              onChange={(e) => setForm((f) => ({ ...f, cfgScale: optionalNumber(e.target.value) }))}
+              placeholder="WebUI default"
+              leftIcon={<Icon name="Gauge" size={13} />}
+              helperText="How strictly the prompt is followed (0–30). Empty sends no value."
+            />
+          </FormGrid>
+
+          {dialectOptions?.samplers?.length ? (
+            <SimpleSelect
+              label="Sampler"
+              size="sm"
+              variant="filled"
+              fullWidth
+              value={form.sampler ?? ""}
+              onChange={(sampler) => setForm((f) => ({ ...f, sampler }))}
+              options={[
+                { value: "", label: "WebUI default" },
+                ...(dialectOptions.samplers ?? []).map((name) => ({ value: name, label: name }))
+              ]}
+              aria-label="Sampler"
+              helperText='Sent as sampler_name. The list is the WebUI&apos;s own (/sdapi/v1/samplers). "WebUI default" sends nothing, so whatever your WebUI has selected applies.'
+            />
+          ) : (
+            <TextInput
+              label="Sampler"
+              size="sm"
+              value={form.sampler ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, sampler: e.target.value }))}
+              placeholder="e.g. DPM++ 2M"
+              leftIcon={<Icon name="SlidersHorizontal" size={13} />}
+              helperText="Sent as sampler_name. This WebUI did not list its samplers — type exactly what it accepts, or leave empty to send none."
+            />
+          )}
+
+          {dialectOptions?.schedulers?.length ? (
+            <SimpleSelect
+              label="Scheduler"
+              size="sm"
+              variant="filled"
+              fullWidth
+              value={form.scheduler ?? ""}
+              onChange={(scheduler) => setForm((f) => ({ ...f, scheduler }))}
+              options={[
+                { value: "", label: "WebUI default" },
+                ...(dialectOptions.schedulers ?? []).map((name) => ({ value: name, label: name }))
+              ]}
+              aria-label="Scheduler"
+              helperText='Sent as scheduler. The list is the WebUI&apos;s own (/sdapi/v1/schedulers) — your build reports "Automatic" as its default, which is what "WebUI default" leaves in place.'
+            />
+          ) : (
+            <TextInput
+              label="Scheduler"
+              size="sm"
+              value={form.scheduler ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, scheduler: e.target.value }))}
+              placeholder="e.g. Karras"
+              leftIcon={<Icon name="Aperture" size={13} />}
+              helperText="Sent as scheduler. Empty sends none, so the WebUI's own default applies."
+            />
+          )}
+
+          <TextInput
+            label="Timeout (seconds)"
+            size="sm"
+            type="number"
+            min={1}
+            step={1}
+            value={
+              form.timeoutMs === undefined || form.timeoutMs === null
+                ? ""
+                : String(Math.round(form.timeoutMs / 1000))
+            }
+            onChange={(e) => {
+              const ms = timeoutSecondsToMs(e.target.value);
+              setForm((f) => ({ ...f, timeoutMs: ms === undefined ? null : ms }));
+            }}
+            placeholder="600"
+            leftIcon={<Icon name="Timer" size={13} />}
+            helperText="How long one image may take (stored in milliseconds). Empty uses the dialect default — 10 minutes for Automatic1111, since a local render easily outlasts the global 180 s."
+          />
+
+          <p className="field-helper-text">
+            Nothing here is written to the WebUI's settings: the checkpoint travels as a per-request override that
+            the WebUI restores immediately afterwards, and the sampling values live on the request itself.
+          </p>
+        </FormSection>
       )}
 
-      {/* Forge Couple regions (a1111 only). These two are stored preferences,
-          not a wire switch: the adapter composes the alwayson payload only when
-          the extension is really installed AND the prompt came back with three
-          or more ` | ` groups — a shared scene plus at least two characters. With no extension — or a scene with one character —
-          the request is exactly the one this editor made before the section
-          existed, which is why the detection line below is never silent. */}
       {a1111 && (
-        <div className="conn-section">
-          <h5 className="form-section-title conn-section-title">
-            <Icon name="LayoutGrid" size={14} />
-            <span>Character Regions</span>
-          </h5>
-          <div className="conn-fields-group">
-            <div className="conn-field-group">
-              <span className="field-label-text">Region direction</span>
-              <SimpleSelect<RegionDirection>
-                size="sm"
-                variant="filled"
-                fullWidth
-                value={form.regionDirection ?? "Horizontal"}
-                onChange={(direction) => setForm((f) => ({ ...f, regionDirection: direction }))}
-                options={REGION_DIRECTION_OPTIONS}
-                aria-label="Region direction"
-              />
-              <p className="conn-field-helper">
+        <FormSection icon="LayoutGrid" title="Character Regions">
+          <SimpleSelect<RegionDirection>
+            label="Region direction"
+            size="sm"
+            variant="filled"
+            fullWidth
+            value={form.regionDirection ?? "Horizontal"}
+            onChange={(direction) => setForm((f) => ({ ...f, regionDirection: direction }))}
+            options={REGION_DIRECTION_OPTIONS}
+            aria-label="Region direction"
+            helperText={
+              <>
                 How the canvas is divided between characters. Horizontal gives each one a column, left to right,
                 in the order they appear in the prompt; Vertical gives each one a band, top to bottom. The
                 geometry travels as the extension's <code>Advanced</code> region mapping, so the split is ours
                 and the WebUI's own settings are never touched.
-              </p>
-            </div>
+              </>
+            }
+          />
 
-            <div className="conn-toggle-group">
-              <SwitchRow
-                icon="Users"
-                title="Regions"
-                description="Give each character its own attention region when the scene has two or more of them, so their traits stop bleeding into one another. A scene with one character has no regions at all, whatever this is set to."
-                checked={form.regionsEnabled ?? true}
-                onChange={(e) => setForm((f) => ({ ...f, regionsEnabled: e.target.checked }))}
-              />
-            </div>
-
-            {forgeCoupleDetected ? (
-              <p className="conn-status ok">
-                Forge Couple detected in this WebUI — with two or more characters in frame, each one gets its
-                own attention region. The regions travel on the request itself; nothing in the WebUI's own
-                settings is changed.
-              </p>
-            ) : forgeCoupleChecked ? (
-              <p className="conn-status warn">
-                Forge Couple is <strong>not installed</strong> in this WebUI, so regions are disabled and renders
-                are unchanged by the two settings above. Install the <strong>Forge Couple</strong> extension
-                (<code>sd-forge-couple</code>) from the WebUI's Extensions tab, restart it, then Fetch models to
-                re-check — a WebUI that has it will say so here.
-              </p>
-            ) : (
-              <p className="conn-status">
-                This WebUI's extension list is not known here yet — Fetch models against it, and this line
-                reports whether Forge Couple is installed. Until it is, regions are disabled and renders are
-                unchanged.
-              </p>
-            )}
-            <p className="conn-field-helper">
-              Read-only detection: the same /sdapi/v1/script-info probe that fills the checkpoint list, run when
-              the connection is opened or Fetch models is pressed. The API rejects the region payload with a 422
-              when the extension is absent, so it is never sent on a guess.
-            </p>
+          <div className="conn-toggle-group">
+            <SwitchRow
+              icon="Users"
+              title="Regions"
+              description="Give each character its own attention region when the scene has two or more of them, so their traits stop bleeding into one another. A scene with one character has no regions at all, whatever this is set to."
+              checked={form.regionsEnabled ?? true}
+              onChange={(e) => setForm((f) => ({ ...f, regionsEnabled: e.target.checked }))}
+            />
           </div>
-        </div>
+
+          {forgeCoupleDetected ? (
+            <p className="conn-status ok">
+              Forge Couple detected in this WebUI — with two or more characters in frame, each one gets its
+              own attention region. The regions travel on the request itself; nothing in the WebUI's own
+              settings is changed.
+            </p>
+          ) : forgeCoupleChecked ? (
+            <p className="conn-status warn">
+              Forge Couple is <strong>not installed</strong> in this WebUI, so regions are disabled and renders
+              are unchanged by the two settings above. Install the <strong>Forge Couple</strong> extension
+              (<code>sd-forge-couple</code>) from the WebUI's Extensions tab, restart it, then Fetch models to
+              re-check — a WebUI that has it will say so here.
+            </p>
+          ) : (
+            <p className="conn-status">
+              This WebUI's extension list is not known here yet — Fetch models against it, and this line
+              reports whether Forge Couple is installed. Until it is, regions are disabled and renders are
+              unchanged.
+            </p>
+          )}
+          <p className="field-helper-text">
+            Read-only detection: the same /sdapi/v1/script-info probe that fills the checkpoint list, run when
+            the connection is opened or Fetch models is pressed. The API rejects the region payload with a 422
+            when the extension is absent, so it is never sent on a guess.
+          </p>
+        </FormSection>
       )}
 
-      <div className="conn-section">
-        <h5 className="form-section-title conn-section-title">
-          <Icon name="Wand2" size={14} />
-          <span>Prompt Writer</span>
-        </h5>
-        <div className="conn-fields-group">
-          <div className="conn-field-group">
-            <span className="field-label-text">Prompt Writer</span>
-            <SimpleSelect
-              size="sm"
-              variant="filled"
-              fullWidth
-              value={promptWriterId}
-              onChange={(id) => setForm((f) => ({ ...f, promptProviderId: id === "" ? null : id }))}
-              options={promptWriterOptions}
-              placeholder="Current active text provider"
-              aria-label="Prompt writer"
-            />
-            <p className="conn-field-helper">
-              The text connection that writes the image prompt. "Current active text provider" follows whichever text
-              connection is active, and falls back to it if the chosen one is deleted.
-            </p>
-          </div>
-        </div>
-      </div>
+      <FormSection icon="Wand2" title="Prompt Writer">
+        <SimpleSelect
+          label="Prompt Writer"
+          size="sm"
+          variant="filled"
+          fullWidth
+          value={promptWriterId}
+          onChange={(id) => setForm((f) => ({ ...f, promptProviderId: id === "" ? null : id }))}
+          options={promptWriterOptions}
+          placeholder="Current active text provider"
+          aria-label="Prompt writer"
+          helperText='The text connection that writes the image prompt. "Current active text provider" follows whichever text connection is active, and falls back to it if the chosen one is deleted.'
+        />
+      </FormSection>
 
       {testStatus && <p className={`conn-status ${testStatus.kind}`}>{testStatus.text}</p>}
-      <div className="settings-actions conn-actions-bar">
-        <div className="actions-left">
-          <Button type="submit" variant="primary" size="sm" disabled={busy || (mode === "edit" && !dirty)} isLoading={busy} leftIcon={<Icon name="Save" size={14} />}>
-            Save
-          </Button>
-          <Button type="button" variant="secondary" size="sm" onClick={onTest} disabled={busy} leftIcon={<Icon name="Activity" size={14} />}>
-            Test connection
-          </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={onCancel} leftIcon={<Icon name="X" size={14} />}>
-            Cancel
-          </Button>
-        </div>
-        {mode === "edit" && (
-          <Button type="button" variant="danger" size="sm" onClick={onDelete} leftIcon={<Icon name="Trash2" size={14} />}>
-            Delete
-          </Button>
-        )}
-      </div>
-    </form>
+      <EditorActionBar
+        mode={mode}
+        busy={busy}
+        dirty={dirty}
+        onTest={onTest}
+        onCancel={onCancel}
+        onDelete={onDelete}
+      />
+    </Card>
   );
 }

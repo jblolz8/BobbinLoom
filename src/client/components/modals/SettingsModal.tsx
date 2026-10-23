@@ -8,19 +8,22 @@ import {
 } from "../../api";
 import { PresetEditor } from "./PresetEditor";
 import { ProviderConnections } from "./ProviderConnections";
+import { ProviderOverridesPanel } from "./providers/ProviderOverridesPanel";
 import { TagTaxonomyPanel } from "../library/TagTaxonomyModal";
 import { AppearanceSettingsPanel } from "./AppearanceSettingsPanel";
+import { InterfaceSettingsPanel } from "./InterfaceSettingsPanel";
 import { ConfirmModal } from "../common/ConfirmModal";
 import { Icon, SwitchRow, Tabs, type TabItem } from "../base";
 
-type SettingsTab = "provider" | "prompts" | "tags" | "chat" | "appearance";
+type SettingsTab = "provider" | "prompts" | "tags" | "chat" | "interface" | "appearance";
 
 const SETTINGS_TABS: TabItem<SettingsTab>[] = [
   { id: "provider", label: "Provider", icon: "Cpu" },
   { id: "prompts", label: "Prompt Configuration", icon: "Sliders" },
   { id: "tags", label: "Tags & Taxonomy", icon: "Tag" },
   { id: "chat", label: "Chat", icon: "MessageSquare" },
-  { id: "appearance", label: "Interface & Appearance", icon: "Palette" },
+  { id: "interface", label: "Interface", icon: "Layout" },
+  { id: "appearance", label: "Theme Appearance", icon: "Palette" },
 ];
 
 const AUTOSCROLL_OPTIONS: Array<{
@@ -49,11 +52,14 @@ const AUTOSCROLL_OPTIONS: Array<{
   }
 ];
 
+type ProviderSubTab = ProviderKind | "overrides";
+
 /** The Provider tab's own tabs: text and image connections are configured
- *  independently and never share a list. */
-const PROVIDER_KIND_TABS: TabItem<ProviderKind>[] = [
+ *  independently, and workflow overrides live in the third sub-tab. */
+const PROVIDER_KIND_TABS: TabItem<ProviderSubTab>[] = [
   { id: "text", label: "Text Providers", icon: "MessageSquare" },
   { id: "image", label: "Image Providers", icon: "Image" },
+  { id: "overrides", label: "Provider Overrides", icon: "Sliders" },
 ];
 
 /** The tab choice and the provider kind are view preferences like any other: they live on the single
@@ -123,7 +129,7 @@ export function SettingsModal(props: SettingsModalProps) {
     setAutoScrollBehavior,
   } = props;
   const [settingsTab, setSettingsTabState] = useState<SettingsTab>(UI_PREFERENCE_DEFAULTS.settingsTab);
-  const [providerKind, setProviderKindState] = useState<ProviderKind>(
+  const [providerKind, setProviderKindState] = useState<ProviderSubTab>(
     UI_PREFERENCE_DEFAULTS.settingsProviderKind
   );
   /** The reader picked a tab: state first so the click feels instant, then the one leaf that changed. */
@@ -134,7 +140,7 @@ export function SettingsModal(props: SettingsModalProps) {
     });
   };
 
-  const setProviderKind = (kind: ProviderKind) => {
+  const setProviderKind = (kind: ProviderSubTab) => {
     setProviderKindState(kind);
     void updateViewPreferences({ ui: { settingsProviderKind: kind } }).catch(() => {
       /* The next read reconciles; a failed write must not break the tabs. */
@@ -153,8 +159,8 @@ export function SettingsModal(props: SettingsModalProps) {
   const [visitedTabs, setVisitedTabs] = useState<Set<SettingsTab>>(
     () => new Set<SettingsTab>([UI_PREFERENCE_DEFAULTS.settingsTab])
   );
-  const [visitedKinds, setVisitedKinds] = useState<Set<ProviderKind>>(
-    () => new Set<ProviderKind>([UI_PREFERENCE_DEFAULTS.settingsProviderKind])
+  const [visitedKinds, setVisitedKinds] = useState<Set<ProviderSubTab>>(
+    () => new Set<ProviderSubTab>([UI_PREFERENCE_DEFAULTS.settingsProviderKind])
   );
 
   /** Reported up from ProviderConnections, which owns the form. Keyed by kind
@@ -225,7 +231,7 @@ export function SettingsModal(props: SettingsModalProps) {
           <div hidden={settingsTab !== "provider"}>
             {visitedTabs.has("provider") && (
               <div className="settings-subtabs">
-                <Tabs<ProviderKind>
+                <Tabs<ProviderSubTab>
                   tabs={PROVIDER_KIND_TABS}
                   activeTab={providerKind}
                   onChange={setProviderKind}
@@ -257,6 +263,11 @@ export function SettingsModal(props: SettingsModalProps) {
                       active={providerKind === "image"}
                       onDirtyChange={handleDirtyChange}
                     />
+                  )}
+                </div>
+                <div hidden={providerKind !== "overrides"}>
+                  {visitedKinds.has("overrides") && (
+                    <ProviderOverridesPanel active={providerKind === "overrides"} />
                   )}
                 </div>
               </div>
@@ -394,6 +405,10 @@ export function SettingsModal(props: SettingsModalProps) {
                 </div>
               </div>
             )}
+          </div>
+
+          <div hidden={settingsTab !== "interface"}>
+            {visitedTabs.has("interface") && <InterfaceSettingsPanel />}
           </div>
 
           <div hidden={settingsTab !== "appearance"}>

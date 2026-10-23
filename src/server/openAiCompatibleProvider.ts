@@ -20,7 +20,7 @@ import type {
   ProposedSectionChange,
   ProviderTurn
 } from "./provider";
-import type { ResolvedProviderConfig } from "./providerConfig";
+import { buildTextSamplingParams, type ResolvedProviderConfig } from "./providerConfig";
 import { buildLorebookContext, lorebookBudgetChars } from "./lorebookContext";
 import { completionValidator, extractJsonPayload, repairRawControlChars } from "./provider/patchParser";
 import { assembleTurnPrompt, renderModules } from "./provider/promptBuilder";
@@ -76,7 +76,8 @@ export class OpenAICompatibleProvider {
       messages,
       temperature: this.config.temperature,
       max_tokens: this.config.maxTokens,
-      response_format: { type: "json_object" }
+
+      ...buildTextSamplingParams(this.config, { includeStop: true, jsonObject: true })
     };
 
     const rawInput = JSON.stringify(body);
@@ -220,9 +221,9 @@ export class OpenAICompatibleProvider {
     const body: Record<string, unknown> = {
       model: this.config.model,
       messages,
-      temperature: 0.8,
+      temperature: this.config.temperature,
       max_tokens: Math.max(4000, this.config.maxTokens),
-      response_format: { type: "json_object" }
+      ...buildTextSamplingParams(this.config, { includeStop: true, jsonObject: true })
     };
 
     const response = await this.executeRequest(body, "/chat/completions", completionValidator, signal);
@@ -367,9 +368,9 @@ export class OpenAICompatibleProvider {
     const body: Record<string, unknown> = {
       model: this.config.model,
       messages,
-      temperature: 0.7,
+      temperature: this.config.temperature ?? 0.7,
       max_tokens: Math.min(4000, this.config.maxTokens),
-      response_format: { type: "json_object" }
+      ...buildTextSamplingParams(this.config, { includeStop: true, jsonObject: true })
     };
 
     const response = await this.executeRequest(body, "/chat/completions", undefined, signal);
@@ -517,9 +518,9 @@ export class OpenAICompatibleProvider {
     const body: Record<string, unknown> = {
       model: this.config.model,
       messages,
-      temperature: 0.7,
+      temperature: this.config.temperature ?? 0.7,
       max_tokens: Math.min(4000, this.config.maxTokens),
-      response_format: { type: "json_object" }
+      ...buildTextSamplingParams(this.config, { includeStop: true, jsonObject: true })
     };
 
     const response = await this.executeRequest(body, "/chat/completions", undefined, signal);
@@ -597,7 +598,8 @@ export class OpenAICompatibleProvider {
         messages,
         temperature: 0.5,
         max_tokens: maxTokens,
-        response_format: { type: "json_object" }
+
+        ...buildTextSamplingParams(this.config, { includeStop: true, jsonObject: true })
       };
 
       const response = await this.executeRequest(bodyWithFormat, "/chat/completions", undefined, signal);
@@ -643,7 +645,8 @@ export class OpenAICompatibleProvider {
       model: this.config.model,
       messages,
       temperature: 0.5,
-      max_tokens: maxTokens
+      max_tokens: maxTokens,
+      ...buildTextSamplingParams(this.config)
     };
 
     const fallbackResponse = await this.executeRequest(bodyFallback, "/chat/completions", undefined, signal);
@@ -773,8 +776,9 @@ export class OpenAICompatibleProvider {
     const body: Record<string, unknown> = {
       model: this.config.model,
       messages,
-      temperature: 0.7,
-      max_tokens: maxTokens
+      temperature: this.config.temperature ?? 0.7,
+      max_tokens: maxTokens,
+      ...buildTextSamplingParams(this.config)
     };
 
     const response = await this.executeRequest(body, "/chat/completions", undefined, signal);
@@ -819,7 +823,8 @@ export class OpenAICompatibleProvider {
       ],
       temperature: 0.3,
       max_tokens: this.config.maxTokens,
-      response_format: { type: "json_object" }
+
+      ...buildTextSamplingParams(this.config, { includeStop: true, jsonObject: true })
     };
 
     const response = await this.executeRequest(body, "/chat/completions", undefined, signal);
@@ -882,7 +887,8 @@ export class OpenAICompatibleProvider {
         { role: "system", content: parts.join("\n") }
       ],
       temperature: 0.3,
-      max_tokens: this.config.maxTokens
+      max_tokens: this.config.maxTokens,
+      ...buildTextSamplingParams(this.config)
     };
 
     const response = await this.executeRequest(body, "/chat/completions", undefined, signal);

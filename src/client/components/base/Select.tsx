@@ -11,6 +11,20 @@ export const SelectSeparator = RadixSelect.Separator;
 export type SelectSize = "xs" | "sm" | "md" | "lg";
 export type SelectVariant = "default" | "filled" | "ghost";
 
+/** Radix Select reserves `""` for "no selection / show placeholder" and refuses
+ *  to select an item whose value is `""`. Mapping empty-string options to this
+ *  internal sentinel lets callers use `""` naturally (e.g. "Follow active"). */
+const EMPTY_VALUE_SENTINEL = "__bl_empty_option__";
+
+function toRadixValue(value: string, hasEmptyOption: boolean): string {
+  if (value === "" && hasEmptyOption) return EMPTY_VALUE_SENTINEL;
+  return value;
+}
+
+function fromRadixValue(value: string): string {
+  return value === EMPTY_VALUE_SENTINEL ? "" : value;
+}
+
 export interface SelectTriggerProps
   extends ComponentPropsWithoutRef<typeof RadixSelect.Trigger> {
   size?: SelectSize;
@@ -127,6 +141,11 @@ export interface SimpleSelectProps<T extends string = string> {
   onChange: (value: T) => void;
   options: Array<SimpleSelectOption<T>>;
   placeholder?: string;
+  label?: ReactNode;
+  labelIcon?: string;
+  helperText?: ReactNode;
+  error?: string;
+  containerClassName?: string;
   size?: SelectSize;
   variant?: SelectVariant;
   disabled?: boolean;
@@ -141,6 +160,11 @@ export function SimpleSelect<T extends string = string>({
   onChange,
   options,
   placeholder,
+  label,
+  labelIcon,
+  helperText,
+  error,
+  containerClassName = "",
   size = "md",
   variant = "default",
   disabled = false,
@@ -149,12 +173,14 @@ export function SimpleSelect<T extends string = string>({
   fullWidth = false,
   "aria-label": ariaLabel,
 }: SimpleSelectProps<T>) {
+  const hasEmptyOption = options.some((o) => o.value === "");
   const selectedOption = options.find((o) => o.value === value);
+  const radixValue = toRadixValue(value, hasEmptyOption);
 
-  return (
+  const selectNode = (
     <Select
-      value={value}
-      onValueChange={(val) => onChange(val as T)}
+      value={radixValue}
+      onValueChange={(val) => onChange(fromRadixValue(val) as T)}
       disabled={disabled}
     >
       <SelectTrigger
@@ -163,7 +189,7 @@ export function SimpleSelect<T extends string = string>({
         variant={variant}
         fullWidth={fullWidth}
         className={className}
-        aria-label={ariaLabel}
+        aria-label={ariaLabel ?? (typeof label === "string" ? label : undefined)}
       >
         <SelectValue placeholder={placeholder}>
           {selectedOption ? (
@@ -177,19 +203,47 @@ export function SimpleSelect<T extends string = string>({
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
-        {options.map((opt) => (
-          <SelectItem
-            key={opt.value}
-            value={opt.value}
-            disabled={opt.disabled}
-            icon={opt.icon}
-            description={opt.description}
-          >
-            {opt.label}
-          </SelectItem>
-        ))}
+        {options.map((opt) => {
+          const itemValue = opt.value === "" ? EMPTY_VALUE_SENTINEL : opt.value;
+          return (
+            <SelectItem
+              key={itemValue}
+              value={itemValue}
+              disabled={opt.disabled}
+              icon={opt.icon}
+              description={opt.description}
+            >
+              {opt.label}
+            </SelectItem>
+          );
+        })}
       </SelectContent>
     </Select>
+  );
+
+  if (!label && !helperText && !error) {
+    return selectNode;
+  }
+
+  return (
+    <div
+      className={`base-form-field form-field ${fullWidth ? "base-form-field--full" : ""} ${disabled ? "base-form-field--disabled" : ""} ${containerClassName}`.trim()}
+    >
+      {label && (
+        <span className="field-label-text flex items-center gap-1.5">
+          {labelIcon && <Icon name={labelIcon} size={12} className="ds-icon-accent shrink-0" />}
+          <span>{label}</span>
+        </span>
+      )}
+      {selectNode}
+      {error ? (
+        <p className="field-error-text" role="alert">
+          {error}
+        </p>
+      ) : helperText ? (
+        <div className="field-helper-text">{helperText}</div>
+      ) : null}
+    </div>
   );
 }
 

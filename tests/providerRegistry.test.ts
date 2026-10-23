@@ -167,6 +167,63 @@ describe("provider registry", () => {
     expect(getRegistry(dir).connections.find((c) => c.id === "seeded")?.seed).toBeUndefined();
   });
 
+  it("carries text sampling, penalty, stop, and jsonMode fields through create, update, and null-clearing", () => {
+    const dir = tempDir();
+    const read = () => (readRegistryFile(dir) as { connections: Array<Record<string, unknown>> }).connections;
+
+    const created = createConnection(
+      dir,
+      connInput({
+        label: "SamplerTest",
+        topP: 0.95,
+        minP: 0.05,
+        topK: 40,
+        frequencyPenalty: 0.3,
+        presencePenalty: 0.4,
+        repetitionPenalty: 1.1,
+        stop: ["Player:", "User:"],
+        jsonMode: "off"
+      })
+    );
+    expect(created.topP).toBe(0.95);
+    expect(created.minP).toBe(0.05);
+    expect(created.topK).toBe(40);
+    expect(created.frequencyPenalty).toBe(0.3);
+    expect(created.presencePenalty).toBe(0.4);
+    expect(created.repetitionPenalty).toBe(1.1);
+    expect(created.stop).toEqual(["Player:", "User:"]);
+    expect(created.jsonMode).toBe("off");
+
+    // Clear fields with explicit null or empty stop array.
+    const cleared = updateConnection(
+      dir,
+      created.id,
+      connInput({
+        label: "SamplerTest",
+        topP: null,
+        minP: null,
+        topK: null,
+        frequencyPenalty: null,
+        presencePenalty: null,
+        repetitionPenalty: null,
+        stop: [],
+        jsonMode: null
+      })
+    );
+    expect(cleared.topP).toBeUndefined();
+    expect(cleared.minP).toBeUndefined();
+    expect(cleared.topK).toBeUndefined();
+    expect(cleared.frequencyPenalty).toBeUndefined();
+    expect(cleared.presencePenalty).toBeUndefined();
+    expect(cleared.repetitionPenalty).toBeUndefined();
+    expect(cleared.stop).toBeUndefined();
+    expect(cleared.jsonMode).toBeUndefined();
+    const row = read().find((c) => c.id === created.id)!;
+    expect("topP" in row).toBe(false);
+    expect("stop" in row).toBe(false);
+    expect("jsonMode" in row).toBe(false);
+  });
+
   it("drops stored keys gracefully when the vault key file is corrupt", () => {
     const dir = tempDir();
     createConnection(dir, connInput({ label: "A", baseUrl: "http://a:1", apiKey: "sk-secret" }));

@@ -31,9 +31,18 @@ export const MarkdownView = React.memo(function MarkdownView({
           case "blockquote":
             return (
               <blockquote key={`block-${index}`} className="message-blockquote">
-                {renderInlineNodes(block.children, `bq-${index}`)}
+                {block.paragraphs && block.paragraphs.length > 1
+                  ? block.paragraphs.map((para, pIdx) => (
+                      <p key={`bq-p-${pIdx}`}>
+                        {renderInlineNodes(para, `bq-${index}-${pIdx}`)}
+                      </p>
+                    ))
+                  : renderInlineNodes(block.children, `bq-${index}`)}
               </blockquote>
             );
+
+          case "hr":
+            return <hr key={`block-${index}`} className="message-hr" />;
 
           case "heading": {
             // A reply's headings are a reader's signposts, not document structure: an h1 in a chat

@@ -78,11 +78,19 @@ export async function requestWithRetry(
         continue;
       }
 
-      if (!jsonFallbackTried && "response_format" in body &&
+      const hasOptionalCapabilities =
+        "response_format" in body ||
+        "min_p" in body ||
+        "top_k" in body ||
+        "repetition_penalty" in body;
+      if (!jsonFallbackTried && hasOptionalCapabilities &&
           (response.status === 400 || response.status === 422 || response.status === 404)) {
         jsonFallbackTried = true;
         const fallbackBody: Record<string, unknown> = { ...body };
         delete fallbackBody.response_format;
+        delete fallbackBody.min_p;
+        delete fallbackBody.top_k;
+        delete fallbackBody.repetition_penalty;
         const fallback = await requestOnce(config, fetchImpl, fallbackBody, path, signal);
         if (fallback.ok) {
           const inspected = await inspect(fallback);

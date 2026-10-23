@@ -15,6 +15,8 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   variant?: BadgeVariant;
   size?: BadgeSize;
   pill?: boolean;
+  /** Truncate overflowing text with an ellipsis inside flex/grid layouts. */
+  truncate?: boolean;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
   children?: React.ReactNode;
@@ -28,6 +30,7 @@ export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
       variant = "neutral",
       size = "sm",
       pill = false,
+      truncate = false,
       leftIcon,
       rightIcon,
       children,
@@ -42,6 +45,7 @@ export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
       `base-badge--${variant}`,
       `base-badge--${size}`,
       pill ? "base-badge--pill" : "",
+      truncate ? "base-badge--truncate" : "",
       className,
     ]
       .filter(Boolean)

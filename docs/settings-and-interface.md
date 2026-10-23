@@ -7,7 +7,7 @@ order: 130
 # Settings & interface
 
 Settings opens from the header and is available from anywhere — the home screen and inside a
-playthrough alike. It has five tabs.
+playthrough alike. It has six tabs.
 
 | Tab | What it holds |
 |---|---|
@@ -15,7 +15,8 @@ playthrough alike. It has five tabs.
 | **Prompt Configuration** | The active preset's turn modules, character-sheet format and image prompt block |
 | **Tags & Taxonomy** | The tag categories and colours the character library uses |
 | **Chat** | The switches that change how the chat behaves and what it displays |
-| **Interface & Appearance** | Theme mode, theme preset, custom colours, avatar shape, cover art, and how the play view moves between panels on a narrow screen |
+| **Interface** | Avatar shape, cover art frame ratio, and how the play view moves between panels on a narrow screen |
+| **Theme Appearance** | Theme mode, self-contained theme preset cards, custom palette tweaks, active token reference, and live story preview |
 
 ## Chat
 
@@ -43,7 +44,7 @@ confirmation's own *Always discard old image* checkbox turns it on for you. Edit
 does not ask and does not replace anything: that is a save, and it leaves the image alone. See
 [Image generation](image-generation.md) → *Editing and re-sending a stored request body*.
 
-## Interface & Appearance
+## Interface & Theme Appearance
 
 - **Mode** — dark, light, or follow the system
 - **Preset** — the theme family, with a live swatch preview of each one

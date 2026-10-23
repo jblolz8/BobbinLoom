@@ -6,7 +6,8 @@ import type {
   PromptConfig,
   ProviderConnection as ProviderConnectionRow,
   ProviderKind,
-  RegionDirection
+  RegionDirection,
+  TextJsonMode
 } from "../../schemas";
 // Type-only, so it is erased at build time and the client bundle never reaches
 // `src/server` at runtime. The capability shape is PRODUCED there; hand-copying
@@ -50,6 +51,15 @@ export type ProviderConnectionPayload = {
   temperature?: number;
   maxTokens?: number;
   contextWindow?: number;
+  // ── optional text sampling & response format controls ──
+  topP?: number | null;
+  minP?: number | null;
+  topK?: number | null;
+  frequencyPenalty?: number | null;
+  presencePenalty?: number | null;
+  repetitionPenalty?: number | null;
+  stop?: string[] | null;
+  jsonMode?: TextJsonMode | null;
   // ── image-only; absent on text rows ──
   /** Dialect for an image connection: `openai` | `venice` | `a1111`
    *  (AUTOMATIC1111 / Forge). The union comes from the schema, so it cannot
@@ -77,7 +87,7 @@ export type ProviderConnectionPayload = {
   scheduler?: string;
   /** Per-connection request timeout in ms (≥1000). Absent = the dialect
    *  default — 10 minutes for a1111, 180 s otherwise. */
-  timeoutMs?: number;
+  timeoutMs?: number | null;
   // ── a1111-only: Forge Couple regions ──
   /** Give each character in frame its own attention region. Absent = ON; the
    *  regions engage when the extension is installed AND the prompt has 2+

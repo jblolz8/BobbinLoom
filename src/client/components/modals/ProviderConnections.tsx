@@ -126,6 +126,15 @@ const formFromConnection = (c: ProviderConnection): ProviderConnectionPayload =>
     : {
         kind: "text",
         label: c.label, baseUrl: c.baseUrl, model: c.model, apiKey: "",
+        timeoutMs: c.timeoutMs,
+        topP: c.topP,
+        minP: c.minP,
+        topK: c.topK,
+        frequencyPenalty: c.frequencyPenalty,
+        presencePenalty: c.presencePenalty,
+        repetitionPenalty: c.repetitionPenalty,
+        stop: c.stop,
+        jsonMode: c.jsonMode,
         temperature: c.temperature, maxTokens: c.maxTokens, contextWindow: c.contextWindow
       };
 
@@ -563,17 +572,28 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
     if (editor.mode === "closed") onDirtyChange?.(kind, false);
   }, [editor.mode, kind, onDirtyChange]);
 
-  /** Image rows carry their endpoint dialect, its safety setting, and a warning
-   *  when the connection's prompt writer no longer exists. */
-  function renderKindTags(c: ProviderConnection) {
-    if (kind !== "image") return null;
+  function renderDetailTags(c: ProviderConnection) {
+    if (kind === "text") {
+      const hasCustomTimeout = typeof c.timeoutMs === "number" && c.timeoutMs > 0;
+      if (!hasCustomTimeout) return null;
+      return (
+        <Badge
+          variant="neutral"
+          size="xs"
+          leftIcon={<Icon name="Timer" size={12} className="ds-icon-muted" />}
+          title="Custom per-request timeout for this connection"
+        >
+          {Math.round(c.timeoutMs! / 1000)}s timeout
+        </Badge>
+      );
+    }
     const style = c.apiStyle ?? "openai";
-    const promptWriterMissing = !!c.promptProviderId && !textConnections.some((t) => t.id === c.promptProviderId);
     return (
       <>
         <Badge
-          className="conn-tag style-tag"
-          leftIcon={<Icon name="Palette" size={13} />}
+          variant="accent"
+          size="xs"
+          leftIcon={<Icon name="Palette" size={12} />}
           title={
             style === "venice"
               ? "Venice endpoint (/image/generate)"
@@ -584,28 +604,99 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
         >
           {style === "venice" ? "Venice" : style === "a1111" ? "Automatic1111" : "OpenAI"}
         </Badge>
-        {/* Safe mode is a provider pass-through with no meaning to a local
-            WebUI, so its badge is not shown for a1111 rather than reading
-            "Safe mode off" on a connection that never had the option. */}
         {style !== "a1111" && (
           <Badge
-            className={`conn-tag ${c.safeMode ? "safe-on" : "safe-off"}`}
-            leftIcon={c.safeMode ? <Icon name="ShieldAlert" size={13} /> : <Icon name="ShieldOff" size={13} />}
+            variant={c.safeMode ? "warning" : "outline"}
+            size="xs"
+            leftIcon={c.safeMode ? <Icon name="ShieldAlert" size={12} /> : <Icon name="ShieldOff" size={12} />}
             title={c.safeMode ? "Safe mode on — the provider blurs adult content" : "Safe mode off — adult content is not blurred"}
           >
             {c.safeMode ? "Safe mode on" : "Safe mode off"}
           </Badge>
         )}
-        {promptWriterMissing && (
-          <Badge
-            className="conn-tag warn-tag"
-            leftIcon={<Icon name="AlertTriangle" size={13} />}
-            title={`Prompt writer "${c.promptProviderId}" no longer exists — the active text provider writes the prompt instead`}
-          >
-            prompt writer missing — using active
-          </Badge>
-        )}
       </>
+    );
+  }
+
+  function renderOverrideTags(c: ProviderConnection) {
+    if (kind === "text") {
+      const isGen = registry?.generationTextProviderId === c.id;
+      const isChapter = registry?.chapterTextProviderId === c.id;
+      const isChar = registry?.characterTextProviderId === c.id;
+      const promptWriterImages = (registry?.connections ?? []).filter(
+        (img) => img.kind === "image" && img.promptProviderId === c.id
+      );
+      if (!isGen && !isChapter && !isChar && promptWriterImages.length === 0) return null;
+      return (
+        <>
+          {isGen && (
+            <Badge
+              variant="accent"
+              size="xs"
+              leftIcon={<Icon name="Sparkles" size={11} />}
+              title="Dedicated provider for New Story scenario and opening turn generation"
+            >
+              New Story
+            </Badge>
+          )}
+          {isChapter && (
+            <Badge
+              variant="accent"
+              size="xs"
+              leftIcon={<Icon name="BookOpen" size={11} />}
+              title="Dedicated provider for Close Chapter summaries and opening turns"
+            >
+              Close Chapter
+            </Badge>
+          )}
+          {isChar && (
+            <Badge
+              variant="accent"
+              size="xs"
+              leftIcon={<Icon name="UserPlus" size={11} />}
+              title="Dedicated provider for Character Creator and NPC sheet generation"
+            >
+              Character Creator
+            </Badge>
+          )}
+          {promptWriterImages.map((img) => (
+            <Badge
+              key={img.id}
+              variant="accent"
+              size="xs"
+              leftIcon={<Icon name="Wand2" size={11} />}
+              title={`Writes scene image prompts for "${img.label}"`}
+            >
+              Image Prompt Writer: {img.label}
+            </Badge>
+          ))}
+        </>
+      );
+    }
+
+    if (!c.promptProviderId) return null;
+    const writer = textConnections.find((t) => t.id === c.promptProviderId);
+    if (!writer) {
+      return (
+        <Badge
+          variant="warning"
+          size="xs"
+          leftIcon={<Icon name="AlertTriangle" size={11} />}
+          title={`Prompt writer "${c.promptProviderId}" no longer exists — the active text provider writes the prompt instead`}
+        >
+          prompt writer missing — using active
+        </Badge>
+      );
+    }
+    return (
+      <Badge
+        variant="accent"
+        size="xs"
+        leftIcon={<Icon name="Wand2" size={11} />}
+        title={`Scene image prompts are written by "${writer.label}"`}
+      >
+        Image Prompt Writer: {writer.label}
+      </Badge>
     );
   }
 
@@ -636,7 +727,8 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
           onRemove={(c) => setPendingDelete(c)}
           onAdd={openCreate}
           emptyLabel={emptyLabel}
-          renderTags={renderKindTags}
+          renderDetailTags={renderDetailTags}
+          renderOverrideTags={renderOverrideTags}
         />
       )}
 

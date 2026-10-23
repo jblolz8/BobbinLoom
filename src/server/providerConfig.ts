@@ -1,4 +1,4 @@
-import type { ImageApiStyle, ProviderConnection } from "../schemas";
+import type { ImageApiStyle, ProviderConnection, TextJsonMode } from "../schemas";
 
 export type ResolvedProviderConfig = {
   providerId: string;
@@ -11,6 +11,14 @@ export type ResolvedProviderConfig = {
   contextWindow: number;
   maxRetries: number;
   timeoutMs: number;
+  topP?: number;
+  minP?: number;
+  topK?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  repetitionPenalty?: number;
+  stop?: string[];
+  jsonMode?: TextJsonMode;
 };
 
 export type PublicProviderConnection = Omit<ProviderConnection, "apiKey"> & {
@@ -30,6 +38,15 @@ export type ProviderConnectionInput = {
   temperature?: number;
   maxTokens?: number;
   contextWindow?: number;
+  timeoutMs?: number | null;
+  topP?: number | null;
+  minP?: number | null;
+  topK?: number | null;
+  frequencyPenalty?: number | null;
+  presencePenalty?: number | null;
+  repetitionPenalty?: number | null;
+  stop?: string[] | null;
+  jsonMode?: TextJsonMode | null;
 };
 
 export function normalizeBaseUrl(baseUrl: string): string {
@@ -97,8 +114,39 @@ export function resolveConnectionConfig(
     maxTokens: conn.maxTokens,
     contextWindow: conn.contextWindow,
     maxRetries: numberFromEnv(env.BOBBINLOOM_MAX_RETRIES, 1),
-    timeoutMs: numberFromEnv(env.BOBBINLOOM_TIMEOUT_MS, 120_000)
+    timeoutMs: conn.timeoutMs ?? numberFromEnv(env.BOBBINLOOM_TIMEOUT_MS, 120_000),
+    ...(conn.topP !== undefined ? { topP: conn.topP } : {}),
+    ...(conn.minP !== undefined ? { minP: conn.minP } : {}),
+    ...(conn.topK !== undefined ? { topK: conn.topK } : {}),
+    ...(conn.frequencyPenalty !== undefined ? { frequencyPenalty: conn.frequencyPenalty } : {}),
+    ...(conn.presencePenalty !== undefined ? { presencePenalty: conn.presencePenalty } : {}),
+    ...(conn.repetitionPenalty !== undefined ? { repetitionPenalty: conn.repetitionPenalty } : {}),
+    ...(conn.stop && conn.stop.length > 0 ? { stop: conn.stop } : {}),
+    ...(conn.jsonMode !== undefined ? { jsonMode: conn.jsonMode } : {}),
   };
+}
+
+/** Builds the optional sampling and structured-output fields for a `/chat/completions`
+ *  request body. Unset parameters are omitted so strict endpoints never see keys
+ *  the user did not configure. */
+export function buildTextSamplingParams(
+  config: ResolvedProviderConfig,
+  options?: { includeStop?: boolean; jsonObject?: boolean }
+): Record<string, unknown> {
+  const params: Record<string, unknown> = {};
+  if (config.topP !== undefined) params.top_p = config.topP;
+  if (config.minP !== undefined) params.min_p = config.minP;
+  if (config.topK !== undefined) params.top_k = config.topK;
+  if (config.frequencyPenalty !== undefined) params.frequency_penalty = config.frequencyPenalty;
+  if (config.presencePenalty !== undefined) params.presence_penalty = config.presencePenalty;
+  if (config.repetitionPenalty !== undefined) params.repetition_penalty = config.repetitionPenalty;
+  if (options?.includeStop && config.stop && config.stop.length > 0) {
+    params.stop = config.stop;
+  }
+  if (options?.jsonObject && config.jsonMode !== "off") {
+    params.response_format = { type: "json_object" };
+  }
+  return params;
 }
 
 export function maskApiKey(apiKey?: string): string | null {

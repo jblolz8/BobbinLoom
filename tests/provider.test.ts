@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createBlankPlaythrough, createInitialPlaythrough, DEFAULT_CHARACTER_FORMAT, NSFW_CHARACTER_FORMAT, parseUserInput } from "../src/engine/engine";
 import { DEMO_TEMPLATE } from "../src/engine/demoData";
 import { OpenAICompatibleProvider, assembleTurnPrompt, extractJsonPayload, repairRawControlChars } from "../src/server/openAiCompatibleProvider";
-import { A1111_DEFAULT_IMAGE_TIMEOUT_MS, normalizeBaseUrl, normalizeImageBaseUrl, resolveConnectionConfig, resolveImageConfig } from "../src/server/providerConfig";
+import { A1111_DEFAULT_IMAGE_TIMEOUT_MS, buildTextSamplingParams, normalizeBaseUrl, normalizeImageBaseUrl, resolveConnectionConfig, resolveImageConfig } from "../src/server/providerConfig";
 import { authHeaders } from "../src/server/httpAuth";
 import type { ResolvedProviderConfig } from "../src/server/providerConfig";
 import { EMPTY_MODULE_SET, PromptConfigSchema, ScenarioSeedSchema } from "../src/schemas";
@@ -201,6 +201,7 @@ describe("image provider config", () => {
     const resolved = resolveConnectionConfig(textConn, {});
     expect(resolved.baseUrl).toBe("https://api.deepseek.com/v1");
     expect(resolved.timeoutMs).toBe(120_000);
+    expect(resolveConnectionConfig({ ...textConn, timeoutMs: 240_000 }, { BOBBINLOOM_TIMEOUT_MS: "45000" }).timeoutMs).toBe(240_000);
   });
 });
 
@@ -1444,5 +1445,69 @@ describe("turn prompt modules + hardcoded tone", () => {
     });
     expect(parsed.modules.turn).toHaveLength(1);
     expect(parsed.modules.turn[0].id).toBe("mod_legacy");
+  });
+
+  it("buildTextSamplingParams only emits configured sampler fields and respects jsonMode off", async () => {
+    expect(buildTextSamplingParams(testConfig({}), { jsonObject: true })).toEqual({
+      response_format: { type: "json_object" }
+    });
+    expect(buildTextSamplingParams(testConfig({ jsonMode: "off" }), { jsonObject: true })).toEqual({});
+    expect(buildTextSamplingParams(testConfig({ jsonMode: "auto" }), { jsonObject: false })).toEqual({});
+
+    const full = buildTextSamplingParams(
+      testConfig({
+        topP: 0.92,
+        minP: 0.05,
+        topK: 40,
+        frequencyPenalty: 0.25,
+        presencePenalty: 0.4,
+        repetitionPenalty: 1.08,
+        stop: ["Player:", "\nUser:"]
+      }),
+      { includeStop: true, jsonObject: true }
+    );
+    expect(full).toEqual({
+      top_p: 0.92,
+      min_p: 0.05,
+      top_k: 40,
+      frequency_penalty: 0.25,
+      presence_penalty: 0.4,
+      repetition_penalty: 1.08,
+      stop: ["Player:", "\nUser:"],
+      response_format: { type: "json_object" }
+    });
+
+    const sentBodies: Array<Record<string, unknown>> = [];
+    let calls = 0;
+    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      calls += 1;
+      sentBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      if (calls === 1) {
+        return new Response("Unrecognized request argument: min_p", { status: 400 });
+      }
+      return jsonResponse({
+        choices: [{ message: { content: JSON.stringify({ narrative: "Recovered!" }) }, finish_reason: "stop" }]
+      });
+    });
+
+    const provider = new OpenAICompatibleProvider(
+      testConfig({ topP: 0.9, minP: 0.05, topK: 40, repetitionPenalty: 1.1, frequencyPenalty: 0.2 }),
+      fetchImpl as unknown as typeof fetch
+    );
+    const { turn } = await provider.generateTurn(
+      parseUserInput("hi"),
+      createInitialPlaythrough("Extended Sampler Fallback"),
+      true,
+      CFG
+    );
+    expect(turn.narrative).toBe("Recovered!");
+    expect(sentBodies[0].min_p).toBe(0.05);
+    expect(sentBodies[0].top_k).toBe(40);
+    expect(sentBodies[0].repetition_penalty).toBe(1.1);
+    expect(sentBodies[1].min_p).toBeUndefined();
+    expect(sentBodies[1].top_k).toBeUndefined();
+    expect(sentBodies[1].repetition_penalty).toBeUndefined();
+    expect(sentBodies[1].top_p).toBe(0.9);
+    expect(sentBodies[1].frequency_penalty).toBe(0.2);
   });
 });

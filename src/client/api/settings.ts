@@ -188,8 +188,8 @@ export const UI_PREFERENCE_DEFAULTS: ResolvedUiPreferences = {
 };
 
 export type ResolvedUiPreferences = {
-  settingsTab: "provider" | "prompts" | "tags" | "chat" | "appearance";
-  settingsProviderKind: "text" | "image";
+  settingsTab: "provider" | "prompts" | "tags" | "chat" | "interface" | "appearance";
+  settingsProviderKind: "text" | "image" | "overrides";
 };
 
 export function resolveUiPreferences(stored?: ViewPreferences): ResolvedUiPreferences {

@@ -280,4 +280,50 @@ describe("parseMarkdown", () => {
     expect(blocks[2].type).toBe("codeBlock");
     expect(blocks[3].type).toBe("list");
   });
+
+  it("parses horizontal rules / scene breaks (---, ***, ___)", () => {
+    const raw = "Scene one ends.\n\n---\n\nScene two begins.\n***\n___";
+    const blocks = parseMarkdown(raw);
+    expect(blocks.map((b) => b.type)).toEqual(["paragraph", "hr", "paragraph", "hr", "hr"]);
+  });
+
+  it("parses multi-paragraph blockquotes separated by blank > lines", () => {
+    const raw = "> First paragraph of letter.\n>\n> Second paragraph of letter.";
+    const blocks = parseMarkdown(raw);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]?.type).toBe("blockquote");
+    if (blocks[0]?.type === "blockquote") {
+      expect(blocks[0].paragraphs).toHaveLength(2);
+      expect(blocks[0].paragraphs?.[0]).toEqual([{ type: "text", value: "First paragraph of letter." }]);
+      expect(blocks[0].paragraphs?.[1]).toEqual([{ type: "text", value: "Second paragraph of letter." }]);
+    }
+  });
+
+  it("parses bold nested inside italics and multiline inline spans", () => {
+    const nested = parseInline("*She slammed the door **hard** behind her.*");
+    expect(nested).toEqual([
+      {
+        type: "italic",
+        children: [
+          { type: "text", value: "She slammed the door " },
+          { type: "bold", children: [{ type: "text", value: "hard" }] },
+          { type: "text", value: " behind her." },
+        ],
+      },
+    ]);
+
+    const multilineQuote = parseInline('"Hello there,\nhow are you?"');
+    expect(multilineQuote).toEqual([
+      {
+        type: "quote",
+        rawOpen: '"',
+        rawClose: '"',
+        children: [
+          { type: "text", value: "Hello there," },
+          { type: "linebreak" },
+          { type: "text", value: "how are you?" },
+        ],
+      },
+    ]);
+  });
 });

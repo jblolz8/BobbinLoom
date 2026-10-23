@@ -24,6 +24,9 @@ import type { ProviderConnectionPayload } from "../api";
  * a baseline captured first would read as dirty the moment the key lands.
  */
 function normalize(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.length === 0 ? null : JSON.stringify(value);
+  }
   return value === undefined || value === null || value === "" ? null : value;
 }
 

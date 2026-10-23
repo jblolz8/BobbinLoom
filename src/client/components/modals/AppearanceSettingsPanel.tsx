@@ -1,63 +1,63 @@
 import { useEffect, useState } from "react";
-import type { AvatarShape, CoverAspect, CustomThemeColors, ThemeMode } from "../../../schemas";
+import type { CustomThemeColors, ThemeMode } from "../../../schemas";
+import { presetCardTokens, themeTokens } from "../../../engine/theme";
 import {
-  applyAvatarShapeTheme,
-  applyCoverAspect,
   applyTheme,
   getAppearanceSettings,
   THEME_PRESETS,
   updateAppearanceSettings,
   type ThemePreset
 } from "../../api";
-import { AvatarBadge, Icon, SwitchRow } from "../base";
+import { AvatarBadge, Icon } from "../base";
 
-const SHAPE_OPTIONS: Array<{
-  id: AvatarShape;
-  title: string;
+const CUSTOMIZABLE_COLOR_TOKENS: Array<{
+  variable: string;
+  label: string;
   desc: string;
-  badgePreviewShape: AvatarShape;
+  defaultDark: string;
+  defaultLight: string;
 }> = [
   {
-    id: "square",
-    title: "Square",
-    desc: "Crisp straight edges with minimal corner softening",
-    badgePreviewShape: "square",
+    variable: "--accent-base",
+    label: "Primary Brand Accent",
+    desc: "Primary action buttons, active tabs, and focus rings",
+    defaultDark: "#2b4b7b",
+    defaultLight: "#2563eb",
   },
   {
-    id: "rounded",
-    title: "Rounded Corner Square",
-    desc: "Balanced modern rounded corners (Default)",
-    badgePreviewShape: "rounded",
+    variable: "--story-quote",
+    label: "Spoken Dialogue Quotes",
+    desc: 'Color of spoken dialogue inside quotation marks ("...")',
+    defaultDark: "#e2b86b",
+    defaultLight: "#b45309",
   },
   {
-    id: "circle",
-    title: "Circle",
-    desc: "Smooth classic circular avatar badges",
-    badgePreviewShape: "circle",
-  },
-];
-
-/** The three cover frame shapes, in the order they are offered. Each previews its own ratio so
- *  the choice reads without knowing what "2:3" looks like. */
-const ASPECT_OPTIONS: Array<{
-  id: CoverAspect;
-  title: string;
-  desc: string;
-}> = [
-  {
-    id: "landscape",
-    title: "Landscape",
-    desc: "16:9 — the widest banner; suits wide renders and keeps a long shelf compact (Default)",
+    variable: "--story-emphasis",
+    label: "Bold & Dramatic Emphasis",
+    desc: "Color of bold narrative beats (**...**)",
+    defaultDark: "#60a5fa",
+    defaultLight: "#1d4ed8",
   },
   {
-    id: "square",
-    title: "1:1 Square",
-    desc: "Square — the shape most image models return, so nothing is cropped",
+    variable: "--story-italic",
+    label: "Italics & Actions",
+    desc: "Color of italic actions and internal thoughts (*...*)",
+    defaultDark: "#d8dee9",
+    defaultLight: "#475569",
   },
   {
-    id: "portrait",
-    title: "Portrait",
-    desc: "2:3 — tallest frame; suits character art",
+    variable: "--story-text",
+    label: "Main Story Prose",
+    desc: "Base narrative text color inside chat messages",
+    defaultDark: "#eceff4",
+    defaultLight: "#0f172a",
+  },
+  {
+    variable: "--ai-accent",
+    label: "AI Assistant Accent",
+    desc: "Brainstorm and AI generation controls",
+    defaultDark: "#a855f7",
+    defaultLight: "#7e22ce",
   },
 ];
 
@@ -451,20 +451,12 @@ const THEME_SHOWCASE_GROUPS: ThemeShowcaseGroup[] = [
 export function AppearanceSettingsPanel() {
   // Initial values are the shipped defaults: the server paints these tokens into the first frame and
   // the GET below fills the controls, so the device cache is gone (it desynced across devices).
-  const [avatarShape, setAvatarShape] = useState<AvatarShape>("rounded");
-
-  const [coverAspect, setCoverAspect] = useState<CoverAspect>("landscape");
-
-  /** The play view's panel swipe. The panel is the switch's owner; the play view reads the same
-   *  setting to decide whether the gesture exists. Nothing is cached locally — see the note on
-   *  `AppearanceSettings.paneSwipeEnabled`. */
-  const [paneSwipeEnabled, setPaneSwipeEnabled] = useState(true);
-
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
 
   const [themePreset, setThemePreset] = useState<string>("default-dark");
 
   const [customColors, setCustomColors] = useState<CustomThemeColors>({});
+  const [showTokenReference, setShowTokenReference] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
@@ -472,18 +464,9 @@ export function AppearanceSettingsPanel() {
   useEffect(() => {
     getAppearanceSettings()
       .then((res) => {
-        if (res.avatarShape) {
-          setAvatarShape(res.avatarShape);
-          applyAvatarShapeTheme(res.avatarShape);
-        }
-        if (res.coverAspect) {
-          setCoverAspect(res.coverAspect);
-          applyCoverAspect(res.coverAspect);
-        }
         if (res.themeMode) setThemeMode(res.themeMode);
         if (res.themePreset) setThemePreset(res.themePreset);
         if (res.customThemeColors) setCustomColors(res.customThemeColors);
-        if (typeof res.paneSwipeEnabled === "boolean") setPaneSwipeEnabled(res.paneSwipeEnabled);
 
         applyTheme({
           themeMode: res.themeMode,
@@ -497,12 +480,9 @@ export function AppearanceSettingsPanel() {
   }, []);
 
   async function persistAppearance(updates: {
-    avatarShape?: AvatarShape;
-    coverAspect?: CoverAspect;
     themeMode?: ThemeMode;
     themePreset?: string;
     customThemeColors?: CustomThemeColors;
-    paneSwipeEnabled?: boolean;
   }) {
     setSaving(true);
     setSaveStatus(null);
@@ -516,23 +496,6 @@ export function AppearanceSettingsPanel() {
     } finally {
       setSaving(false);
     }
-  }
-
-  function handleSelectShape(shape: AvatarShape) {
-    setAvatarShape(shape);
-    applyAvatarShapeTheme(shape);
-    void persistAppearance({ avatarShape: shape });
-  }
-
-  function handleSelectAspect(aspect: CoverAspect) {
-    setCoverAspect(aspect);
-    applyCoverAspect(aspect);
-    void persistAppearance({ coverAspect: aspect });
-  }
-
-  function handleTogglePaneSwipe(enabled: boolean) {
-    setPaneSwipeEnabled(enabled);
-    void persistAppearance({ paneSwipeEnabled: enabled });
   }
 
   function handleSelectMode(mode: ThemeMode) {
@@ -563,6 +526,44 @@ export function AppearanceSettingsPanel() {
       customThemeColors: {},
     });
   }
+
+  const effectiveMode: "dark" | "light" =
+    themeMode === "light"
+      ? "light"
+      : themeMode === "dark"
+        ? "dark"
+        : typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: light)").matches
+          ? "light"
+          : "dark";
+
+  const resolvedTokens = themeTokens(
+    { themePreset, customThemeColors: customColors },
+    effectiveMode
+  );
+
+  function handleCustomColorChange(variable: string, value: string) {
+    const next = { ...customColors, [variable]: value };
+    setCustomColors(next);
+    applyTheme({
+      themeMode,
+      themePreset,
+      customThemeColors: next,
+    });
+    void persistAppearance({ customThemeColors: next });
+  }
+
+  function handleResetCustomColors() {
+    setCustomColors({});
+    applyTheme({
+      themeMode,
+      themePreset,
+      customThemeColors: {},
+    });
+    void persistAppearance({ customThemeColors: {} });
+  }
+
+  const hasCustomOverrides = Object.keys(customColors).some((k) => Boolean(customColors[k]));
+  const totalShowcaseTokens = THEME_SHOWCASE_GROUPS.reduce((sum, g) => sum + g.items.length, 0);
 
 
 
@@ -628,11 +629,13 @@ export function AppearanceSettingsPanel() {
       <div className="theme-presets-grid">
         {THEME_PRESETS.map((preset) => {
           const isSelected = themePreset === preset.id;
+          const cardTokens = presetCardTokens(preset) as React.CSSProperties;
           return (
             <button
               key={preset.id}
               type="button"
               className={`preset-card ${isSelected ? "is-selected" : ""}`}
+              style={cardTokens}
               onClick={() => handleSelectPreset(preset)}
               disabled={saving}
             >
@@ -641,7 +644,67 @@ export function AppearanceSettingsPanel() {
                 <span className="preset-badge">{preset.mode}</span>
               </div>
               <p className="preset-desc">{preset.description}</p>
+              <div className="preset-card-sample" aria-hidden="true">
+                <span className="preset-sample-quote">"Hello,"</span>{" "}
+                <em className="preset-sample-italic">she whispers</em>{" "}
+                <strong className="preset-sample-emphasis">softly.</strong>
+              </div>
             </button>
+          );
+        })}
+      </div>
+
+      {/* ── Custom Color Tweaks Section ── */}
+      <div className="appearance-section-header" style={{ marginTop: "1.75rem" }}>
+        <div>
+          <h3 className="appearance-section-title flex items-center gap-2">
+            <Icon name="Sliders" size={17} />
+            <span>Custom Palette Tweaks</span>
+          </h3>
+          <p className="appearance-section-desc">
+            Fine-tune individual story typography and accent colors on top of the active preset. Switching presets resets custom overrides.
+          </p>
+        </div>
+        {hasCustomOverrides && (
+          <button
+            type="button"
+            className="theme-reset-btn"
+            onClick={handleResetCustomColors}
+            disabled={saving}
+          >
+            <Icon name="RotateCcw" size={13} />
+            <span>Reset Overrides</span>
+          </button>
+        )}
+      </div>
+
+      <div className="custom-color-grid">
+        {CUSTOMIZABLE_COLOR_TOKENS.map((token) => {
+          const fallback = effectiveMode === "light" ? token.defaultLight : token.defaultDark;
+          const rawVal = customColors[token.variable] || resolvedTokens[token.variable] || fallback;
+          const pickerVal = /^#[0-9a-fA-F]{6}$/.test(rawVal.trim()) ? rawVal.trim() : fallback;
+          const isOverridden = Boolean(customColors[token.variable]);
+          return (
+            <div key={token.variable} className="color-item-card">
+              <div className="color-item-info">
+                <span className="color-label">
+                  {token.label}
+                  {isOverridden ? " *" : ""}
+                </span>
+                <span className="color-desc">{token.desc}</span>
+              </div>
+              <div className="color-picker-wrap">
+                <span className="color-hex-label">{pickerVal}</span>
+                <input
+                  type="color"
+                  className="color-input"
+                  value={pickerVal}
+                  onChange={(e) => handleCustomColorChange(token.variable, e.target.value)}
+                  disabled={saving}
+                  aria-label={token.label}
+                />
+              </div>
+            </div>
           );
         })}
       </div>
@@ -650,15 +713,25 @@ export function AppearanceSettingsPanel() {
       <div className="appearance-section-header" style={{ marginTop: "1.75rem" }}>
         <div>
           <h3 className="appearance-section-title flex items-center gap-2">
-            <Icon name="Sliders" size={17} />
+            <Icon name="Layers" size={17} />
             <span>Theme Color Palette (Active Tokens)</span>
           </h3>
           <p className="appearance-section-desc">
-            Live showcase of current theme tokens including default status colors, brand accents, and roleplay surfaces. These adapt in real time when switching Theme Modes or Presets.
+            Live reference of all {totalShowcaseTokens} active theme tokens across status badges, brand accents, and roleplay surfaces.
           </p>
         </div>
+        <button
+          type="button"
+          className="theme-reset-btn"
+          onClick={() => setShowTokenReference((v) => !v)}
+          aria-expanded={showTokenReference}
+        >
+          <Icon name={showTokenReference ? "ChevronUp" : "ChevronDown"} size={13} />
+          <span>{showTokenReference ? "Hide Token Reference" : `Show All Tokens (${totalShowcaseTokens})`}</span>
+        </button>
       </div>
 
+      {showTokenReference && (
       <div className="theme-showcase-container">
         {THEME_SHOWCASE_GROUPS.map((group) => (
           <div key={group.id} className="theme-showcase-group">
@@ -707,123 +780,7 @@ export function AppearanceSettingsPanel() {
           </div>
         ))}
       </div>
-
-      {/* ── Avatar Badge Shape Section ── */}
-      <div className="appearance-section-header" style={{ marginTop: "1.75rem" }}>
-        <div>
-          <h3 className="appearance-section-title flex items-center gap-2">
-            <Icon name="Sparkles" size={17} />
-            <span>Avatar Badge Shape</span>
-          </h3>
-          <p className="appearance-section-desc">
-            Choose the shape for entity identity badges across the Player tab, Main Cast compact roster, Background NPCs, and Persona selectors.
-          </p>
-        </div>
-      </div>
-
-      <div className="avatar-shape-selector-grid">
-        {SHAPE_OPTIONS.map((opt) => {
-          const isSelected = avatarShape === opt.id;
-          return (
-            <button
-              key={opt.id}
-              type="button"
-              className={`shape-option-card ${isSelected ? "is-selected" : ""}`}
-              onClick={() => void handleSelectShape(opt.id)}
-              disabled={saving}
-            >
-              <div className="shape-card-top">
-                <div className="shape-card-preview">
-                  <AvatarBadge
-                    name="Mira"
-                    size="lg"
-                    shape={opt.badgePreviewShape}
-                    className="shape-demo-avatar"
-                  />
-                </div>
-                <div className="shape-radio-indicator">
-                  <span className={`radio-dot ${isSelected ? "checked" : ""}`} />
-                </div>
-              </div>
-
-              <div className="shape-card-body">
-                <strong className="shape-title">{opt.title}</strong>
-                <p className="shape-desc">{opt.desc}</p>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── Cover Art Section ── */}
-      <div className="appearance-section-header" style={{ marginTop: "1.75rem" }}>
-        <div>
-          <h3 className="appearance-section-title flex items-center gap-2">
-            <Icon name="Image" size={17} />
-            <span>Cover Art</span>
-          </h3>
-          <p className="appearance-section-desc">
-            Choose the shape of every cover on the playthrough shelf. A cover fills its frame, so
-            picking the shape that matches the images your stories produce crops the least.
-          </p>
-        </div>
-      </div>
-
-      <div className="avatar-shape-selector-grid">
-        {ASPECT_OPTIONS.map((opt) => {
-          const isSelected = coverAspect === opt.id;
-          return (
-            <button
-              key={opt.id}
-              type="button"
-              className={`shape-option-card ${isSelected ? "is-selected" : ""}`}
-              onClick={() => handleSelectAspect(opt.id)}
-              disabled={saving}
-            >
-              <div className="shape-card-top">
-                <div className="shape-card-preview">
-                  <span className="cover-aspect-preview" data-aspect={opt.id} />
-                </div>
-                <div className="shape-radio-indicator">
-                  <span className={`radio-dot ${isSelected ? "checked" : ""}`} />
-                </div>
-              </div>
-
-              <div className="shape-card-body">
-                <strong className="shape-title">{opt.title}</strong>
-                <p className="shape-desc">{opt.desc}</p>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── Mobile Panels Section ──
-          Offered only where the single-panel layout exists: above the app's breakpoint every panel is
-          already on screen and the tab bar is gone, so the row is hidden by CSS rather than rendered
-          conditionally — the panel keeps one markup path. */}
-      <div className="appearance-section-header pane-swipe-setting" style={{ marginTop: "1.75rem" }}>
-        <div>
-          <h3 className="appearance-section-title flex items-center gap-2">
-            <Icon name="MoveHorizontal" size={17} />
-            <span>Mobile Panels</span>
-          </h3>
-          <p className="appearance-section-desc">
-            How the play view moves between Scene, Chat and Info on a narrow screen.
-          </p>
-        </div>
-      </div>
-
-      <div className="pane-swipe-setting" style={{ marginBottom: "0.5rem" }}>
-        <SwitchRow
-          icon="MoveHorizontal"
-          title="Swipe Between Panels"
-          description="Drag horizontally to move between the panels. The bottom tab bar always works; turn this off if a scroll that drifts sideways keeps pulling a panel with it."
-          checked={paneSwipeEnabled}
-          onChange={(e) => handleTogglePaneSwipe(e.target.checked)}
-          disabled={saving}
-        />
-      </div>
+      )}
 
       {/* ── Live Interactive Story & UI Preview ── */}
       <div className="appearance-live-preview-box" style={{ marginTop: "1.75rem" }}>
@@ -850,6 +807,9 @@ export function AppearanceSettingsPanel() {
               <p>
                 <strong>The ancient loom hums</strong> with subtle resonance as you step forward.
               </p>
+              <blockquote className="message-blockquote">
+                "Every thread remembers the hand that spun it."
+              </blockquote>
             </div>
           </div>
 

@@ -251,13 +251,13 @@ export const ADOPTION_SOURCES: readonly LocalAdoptionSource[] = [
     key: "bobbinloom_settings_tab",
     group: "ui",
     leaf: "settingsTab",
-    parse: oneOf(["provider", "prompts", "tags", "chat", "appearance"])
+    parse: oneOf(["provider", "prompts", "tags", "chat", "interface", "appearance"])
   },
   {
     key: "bobbinloom_settings_provider_kind",
     group: "ui",
     leaf: "settingsProviderKind",
-    parse: oneOf(["text", "image"])
+    parse: oneOf(["text", "image", "overrides"])
   },
   {
     key: "bobbinloom_chapter_stale_dismissed",

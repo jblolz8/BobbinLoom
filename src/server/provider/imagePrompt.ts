@@ -1,7 +1,7 @@
 import type { ImageGenerationSettings } from "../../schemas";
 import { applyInstructionMode } from "../../engine/imageDefaults";
 import { clampChars, composePrompt } from "../imageProvider/shared";
-import type { ResolvedProviderConfig } from "../providerConfig";
+import { buildTextSamplingParams, type ResolvedProviderConfig } from "../providerConfig";
 import { requestWithRetry } from "./openaiClient";
 import { extractJsonPayload } from "./patchParser";
 
@@ -275,10 +275,7 @@ export async function generateImagePrompt(
     // with empty content and `finish_reason: "length"` — which surfaced as the
     // useless "the text provider returned no image prompt".
     max_tokens: config.maxTokens,
-    // Enforce the JSON contract the instruction asks for. Safe on endpoints
-    // without structured output: `requestWithRetry` retries once without this
-    // field on a 400/422/404.
-    response_format: JSON_RESPONSE_FORMAT,
+    ...buildTextSamplingParams(config, { jsonObject: true }),
     messages: [
       // The mode is applied HERE, idempotently: text already in that mode comes back
       // unchanged, so an instruction carrying neither perspective variant (a

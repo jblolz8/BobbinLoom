@@ -176,6 +176,9 @@ export type ImageApiStyle = z.infer<typeof ImageApiStyleSchema>;
 export const RegionDirectionSchema = z.enum(["Horizontal", "Vertical"]);
 export type RegionDirection = z.infer<typeof RegionDirectionSchema>;
 
+export const TextJsonModeSchema = z.enum(["auto", "off"]);
+export type TextJsonMode = z.infer<typeof TextJsonModeSchema>;
+
 export const ProviderConnectionSchema = z.object({
   id: z.string().min(1),
   label: z.string(),
@@ -185,6 +188,15 @@ export const ProviderConnectionSchema = z.object({
   temperature: z.number(),
   maxTokens: z.number(),
   contextWindow: z.number(),
+  // ── optional text sampling & response format controls; omitted on the wire when unset ──
+  topP: z.number().min(0).max(1).optional(),
+  minP: z.number().min(0).max(1).optional(),
+  topK: z.number().int().min(1).optional(),
+  frequencyPenalty: z.number().min(-2).max(2).optional(),
+  presencePenalty: z.number().min(-2).max(2).optional(),
+  repetitionPenalty: z.number().min(0).max(3).optional(),
+  stop: z.array(z.string()).optional(),
+  jsonMode: TextJsonModeSchema.optional(),
   /** Registry v2 discriminator. `.default()` is deliberate and NOT a slip: it
    *  makes `kind` required on the OUTPUT type, so every construction site has
    *  to stamp it and tsc catches the ones that forget. */
@@ -524,8 +536,8 @@ export const ViewPreferencesSchema = z.object({
   /** The Settings dialog's own memory: which tab was open, and which provider kind it was showing. */
   ui: z
     .object({
-      settingsTab: z.enum(["provider", "prompts", "tags", "chat", "appearance"]).optional(),
-      settingsProviderKind: z.enum(["text", "image"]).optional()
+      settingsTab: z.enum(["provider", "prompts", "tags", "chat", "interface", "appearance"]).optional(),
+      settingsProviderKind: z.enum(["text", "image", "overrides"]).optional()
     })
     .optional(),
   /** Chapter id → the stale-summary note's dismissal. UI ephemera that happens to grow; it moves

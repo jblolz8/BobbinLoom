@@ -14,8 +14,9 @@ export type BlockNode =
   | { type: "paragraph"; children: InlineNode[] }
   | { type: "heading"; level: number; children: InlineNode[] }
   | { type: "codeBlock"; code: string; language?: string }
-  | { type: "blockquote"; children: InlineNode[] }
-  | { type: "list"; ordered: boolean; items: InlineNode[][] };
+  | { type: "blockquote"; children: InlineNode[]; paragraphs?: InlineNode[][] }
+  | { type: "list"; ordered: boolean; items: InlineNode[][] }
+  | { type: "hr" };
 
 interface MatchCandidate {
   startIndex: number;
@@ -24,6 +25,12 @@ interface MatchCandidate {
   rawOpen?: string;
   rawClose?: string;
   content: string;
+}
+
+const HR_PATTERN = /^[ \t]*(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/;
+
+export function isHorizontalRule(line: string): boolean {
+  return HR_PATTERN.test(line);
 }
 
 /**
@@ -50,8 +57,8 @@ export function parseInline(text: string): InlineNode[] {
       });
     }
 
-    // 2. Straight Double Quotes: "dialogue"
-    const straightQuoteMatch = /"([^"\n]+)"/.exec(remaining);
+    // 2. Straight Double Quotes: "dialogue" (supports soft line wraps inside a paragraph)
+    const straightQuoteMatch = /"([^"]+)"/.exec(remaining);
     if (straightQuoteMatch && straightQuoteMatch.index !== undefined) {
       candidates.push({
         startIndex: straightQuoteMatch.index,
@@ -63,8 +70,8 @@ export function parseInline(text: string): InlineNode[] {
       });
     }
 
-    // 3. Smart/Curly Double Quotes: “dialogue”
-    const curlyQuoteMatch = /“([^”\n]+)”/.exec(remaining);
+    // 3. Smart/Curly Double Quotes: “dialogue” (supports soft line wraps inside a paragraph)
+    const curlyQuoteMatch = /“([^”]+)”/.exec(remaining);
     if (curlyQuoteMatch && curlyQuoteMatch.index !== undefined) {
       candidates.push({
         startIndex: curlyQuoteMatch.index,
@@ -77,7 +84,7 @@ export function parseInline(text: string): InlineNode[] {
     }
 
     // 4. Bold-Italic: ***text*** or ___text___
-    const boldItalicMatch = /(\*\*\*|___)(?!\s)([^\n]+?)(?<!\s)\1/.exec(remaining);
+    const boldItalicMatch = /(\*\*\*|___)(?!\s)([\s\S]+?)(?<!\s)\1/.exec(remaining);
     if (boldItalicMatch && boldItalicMatch.index !== undefined) {
       candidates.push({
         startIndex: boldItalicMatch.index,
@@ -88,7 +95,7 @@ export function parseInline(text: string): InlineNode[] {
     }
 
     // 5. Bold: **text** or __text__
-    const boldMatch = /(\*\*|__)(?!\s)([^\n]+?)(?<!\s)\1/.exec(remaining);
+    const boldMatch = /(\*\*|__)(?!\s)([\s\S]+?)(?<!\s)\1/.exec(remaining);
     if (boldMatch && boldMatch.index !== undefined) {
       candidates.push({
         startIndex: boldMatch.index,
@@ -99,7 +106,7 @@ export function parseInline(text: string): InlineNode[] {
     }
 
     // 6. Strikethrough: ~~text~~
-    const strikeMatch = /~~(?!\s)([^\n]+?)(?<!\s)~~/.exec(remaining);
+    const strikeMatch = /~~(?!\s)([\s\S]+?)(?<!\s)~~/.exec(remaining);
     if (strikeMatch && strikeMatch.index !== undefined) {
       candidates.push({
         startIndex: strikeMatch.index,
@@ -109,8 +116,8 @@ export function parseInline(text: string): InlineNode[] {
       });
     }
 
-    // 7. Italic: *text* (avoid matching within words for single underscore _word_)
-    const starItalicMatch = /\*(?!\s)([^*\n]+?)(?<!\s)\*/.exec(remaining);
+    // 7. Italic: *text* (allows nested **bold** inside *italic*, and avoids matching ** itself)
+    const starItalicMatch = /(?<!\*)\*(?!\*|\s)((?:[^*]|\*\*)+?)(?<!\s|\*)\*(?!\*)/.exec(remaining);
     if (starItalicMatch && starItalicMatch.index !== undefined) {
       candidates.push({
         startIndex: starItalicMatch.index,
@@ -120,7 +127,7 @@ export function parseInline(text: string): InlineNode[] {
       });
     }
 
-    const underscoreItalicMatch = /(?:^|[\s(])_([^\s_\n]|(?:[^\s_\n][^\n]*?[^\s_\n]))_(?=[\s),.!?:;]|$)/.exec(remaining);
+    const underscoreItalicMatch = /(?:^|[\s(])_([^\s_]|(?:[^\s_](?:[^_]|__)*?[^\s_]))_(?=[\s),.!?:;]|$)/.exec(remaining);
     if (underscoreItalicMatch && underscoreItalicMatch.index !== undefined) {
       // account for leading character if matched via group
       const offset = underscoreItalicMatch[0].startsWith("_") ? 0 : 1;
@@ -260,31 +267,66 @@ export function parseMarkdown(raw: string): BlockNode[] {
       continue;
     }
 
-    // 2. Empty line: skip
+    // 3. Empty line: skip
     if (line.trim().length === 0) {
       i++;
       continue;
     }
 
-    // 3. Blockquote: > text
+    // 4. Horizontal Rule / Scene Break: ---, ***, ___
+    if (isHorizontalRule(line)) {
+      blocks.push({ type: "hr" });
+      i++;
+      continue;
+    }
+
+    // 5. Blockquote: > text (supports multi-paragraph blockquotes separated by blank `>` lines)
     if (line.startsWith(">")) {
       const quoteLines: string[] = [];
       while (i < lines.length && lines[i].startsWith(">")) {
         quoteLines.push(lines[i].replace(/^>\s?/, ""));
         i++;
       }
-      blocks.push({
-        type: "blockquote",
-        children: parseInline(quoteLines.join("\n")),
-      });
+      const rawParagraphs: string[][] = [];
+      let currentPara: string[] = [];
+      for (const qLine of quoteLines) {
+        if (qLine.trim().length === 0) {
+          if (currentPara.length > 0) {
+            rawParagraphs.push(currentPara);
+            currentPara = [];
+          }
+        } else {
+          currentPara.push(qLine);
+        }
+      }
+      if (currentPara.length > 0) {
+        rawParagraphs.push(currentPara);
+      }
+
+      const parsedParagraphs = rawParagraphs.map((p) => parseInline(p.join("\n")));
+      const flatChildren = parseInline(quoteLines.join("\n"));
+
+      blocks.push(
+        parsedParagraphs.length > 1
+          ? {
+              type: "blockquote",
+              children: flatChildren,
+              paragraphs: parsedParagraphs,
+            }
+          : {
+              type: "blockquote",
+              children: flatChildren,
+            }
+      );
       continue;
     }
 
-    // 4. Unordered List: - item, * item, + item
+    // 6. Unordered List: - item, * item, + item
     const ulMatch = line.match(/^([*\-+])\s+(.+)$/);
     if (ulMatch) {
       const items: InlineNode[][] = [];
       while (i < lines.length) {
+        if (isHorizontalRule(lines[i])) break;
         const itemMatch = lines[i].match(/^([*\-+])\s+(.+)$/);
         if (!itemMatch) break;
         items.push(parseInline(itemMatch[2]));
@@ -298,7 +340,7 @@ export function parseMarkdown(raw: string): BlockNode[] {
       continue;
     }
 
-    // 5. Ordered List: 1. item, 2. item
+    // 7. Ordered List: 1. item, 2. item
     const olMatch = line.match(/^(\d+)\.\s+(.+)$/);
     if (olMatch) {
       const items: InlineNode[][] = [];
@@ -316,13 +358,15 @@ export function parseMarkdown(raw: string): BlockNode[] {
       continue;
     }
 
-    // 6. Regular Paragraph: gather lines until empty line or block marker
+    // 8. Regular Paragraph: gather lines until empty line or block marker
     const paraLines: string[] = [];
     while (
       i < lines.length &&
       lines[i].trim().length > 0 &&
       !lines[i].startsWith("```") &&
       !lines[i].startsWith(">") &&
+      !isHorizontalRule(lines[i]) &&
+      !lines[i].match(/^#{1,6}\s+/) &&
       !lines[i].match(/^[*\-+]\s+/) &&
       !lines[i].match(/^\d+\.\s+/)
     ) {

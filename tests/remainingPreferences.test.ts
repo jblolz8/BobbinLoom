@@ -35,6 +35,7 @@ describe("the remaining groups' resolvers", () => {
     expect(resolveProviderPreferences({ providers: { sortByImage: "label" } }).sortByImage).toBe("label");
     expect(resolveNavPreferences({ nav: { showPlayNavTabs: false } }).showPlayNavTabs).toBe(false);
     expect(resolveUiPreferences({ ui: { settingsTab: "tags" } }).settingsTab).toBe("tags");
+    expect(resolveUiPreferences({ ui: { settingsTab: "interface" } }).settingsTab).toBe("interface");
   });
 
   it("keep a group's own leaves out of another group's answer", () => {

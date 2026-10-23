@@ -362,7 +362,7 @@ button {
    so every base button must be excluded here or its own hover is silently
    overridden — which is what painted the overlay controls a theme surface
    colour under a white glyph. Each `.base-btn--*` declares its own hover. */
-button:hover:not(:disabled):not(.base-btn):not(.primary-btn):not(.danger):not(.ai-brainstorm-toggle-btn):not(.suggest-tags-ai-btn):not(.auto-detect-action):not(.crop-auto-detect-btn):not(.tag-regenerate-btn):not(.danger-action):not(.warning-action):not(.import-btn):not(.active) {
+button:hover:not(:disabled):not(.base-btn):not(.primary-btn):not(.danger):not(.ai-brainstorm-toggle-btn):not(.suggest-tags-ai-btn):not(.auto-detect-action):not(.crop-auto-detect-btn):not(.tag-regenerate-btn):not(.danger-action):not(.warning-action):not(.import-btn):not(.active):not(.preset-card) {
   background: var(--bg-surface-hover);
   border-color: var(--border-focus);
 }

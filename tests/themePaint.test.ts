@@ -15,6 +15,7 @@ import {
   THEME_PRESETS,
   avatarBadgeRadius,
   effectiveThemeMode,
+  presetCardTokens,
   themePresetFor,
   themeShapeTokens,
   themeTokens
@@ -256,5 +257,50 @@ describe("injectThemeFirstPaint", () => {
     expect(html).toContain('data-theme="light"');
     expect(html).toContain('<body><div id="root"></div></body>');
     expect(html).not.toContain("<style");
+  });
+});
+
+describe("presetCardTokens and extended preset tokens", () => {
+  it("scopes self-contained surface, text, accent, and story tokens for every preset regardless of active mode", () => {
+    const studioLight = THEME_PRESETS.find((p) => p.id === "default-light")!;
+    const classicDark = THEME_PRESETS.find((p) => p.id === "default-dark")!;
+
+    const lightTokens = presetCardTokens(studioLight);
+    const darkTokens = presetCardTokens(classicDark);
+
+    // Studio Light card carries its own light surface and dark text even when rendered inside a dark page
+    expect(lightTokens["--bg-panel"]).toBe("#ffffff");
+    expect(lightTokens["--bg-surface-elevated"]).toBe("#edf2f7");
+    expect(lightTokens["--text-primary"]).toBe("#0f172a");
+    expect(lightTokens["--accent-base"]).toBe("#2563eb");
+
+    // Classic Dark card carries its own dark surface and light text even when rendered inside a light page
+    expect(darkTokens["--bg-panel"]).toBe("#151923");
+    expect(darkTokens["--bg-surface-elevated"]).toBe("#1c2230");
+    expect(darkTokens["--text-primary"]).toBe("#eceff4");
+    expect(darkTokens["--accent-base"]).toBe("#2b4b7b");
+
+    for (const preset of THEME_PRESETS) {
+      const tokens = presetCardTokens(preset);
+      expect(tokens["--bg-panel"]).toMatch(/^#/);
+      expect(tokens["--bg-surface-elevated"]).toMatch(/^#/);
+      expect(tokens["--border-main"]).toMatch(/^#/);
+      expect(tokens["--text-primary"]).toMatch(/^#/);
+      expect(tokens["--text-secondary"]).toMatch(/^#/);
+      expect(tokens["--accent-base"]).toMatch(/^#/);
+      expect(tokens["--story-quote"]).toMatch(/^#/);
+      expect(tokens["--story-emphasis"]).toMatch(/^#/);
+    }
+  });
+
+  it("includes blockquote, system chat, and timeline tokens on custom palettes", () => {
+    for (const id of ["nord-frost", "warm-parchment", "midnight-purple", "emerald-archive", "amber-hearth", "matcha-cream", "polar-mist"]) {
+      const tokens = themeTokens({ themePreset: id }, "dark");
+      expect(tokens["--story-blockquote-border"], `${id} blockquote border`).toBeTruthy();
+      expect(tokens["--story-blockquote-bg"], `${id} blockquote bg`).toBeTruthy();
+      expect(tokens["--story-blockquote-text"], `${id} blockquote text`).toBeTruthy();
+      expect(tokens["--chat-system-bg"], `${id} chat system bg`).toBeTruthy();
+      expect(tokens["--timeline-node-active-border"], `${id} timeline active border`).toBeTruthy();
+    }
   });
 });

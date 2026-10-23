@@ -50,7 +50,7 @@ export type ProviderConnectionDraft = ProviderConnectionInput & {
   cfgScale?: number;
   sampler?: string;
   scheduler?: string;
-  timeoutMs?: number;
+  timeoutMs?: number | null;
   // ── a1111-only: Forge Couple regions (absent = on, Horizontal) ──
   regionsEnabled?: boolean;
   regionDirection?: RegionDirection;
@@ -308,6 +308,14 @@ export function createConnection(dir: string, input: ProviderConnectionDraft): P
     temperature: input.temperature ?? 0.8,
     maxTokens: input.maxTokens ?? 1200,
     contextWindow: input.contextWindow ?? 32768,
+    topP: input.topP ?? undefined,
+    minP: input.minP ?? undefined,
+    topK: input.topK ?? undefined,
+    frequencyPenalty: input.frequencyPenalty ?? undefined,
+    presencePenalty: input.presencePenalty ?? undefined,
+    repetitionPenalty: input.repetitionPenalty ?? undefined,
+    stop: input.stop && input.stop.length > 0 ? input.stop : undefined,
+    jsonMode: input.jsonMode ?? undefined,
     kind,
     // image-only fields — copied straight off the input when the caller sent them
     apiStyle: input.apiStyle,
@@ -325,7 +333,7 @@ export function createConnection(dir: string, input: ProviderConnectionDraft): P
     cfgScale: input.cfgScale,
     sampler: input.sampler,
     scheduler: input.scheduler,
-    timeoutMs: input.timeoutMs,
+    timeoutMs: input.timeoutMs ?? undefined,
     // Forge Couple regions. `undefined` is meaningful here: an absent
     // regionsEnabled means ON, and an absent direction means Horizontal — the
     // adapter (not this row) owns those defaults.
@@ -352,9 +360,22 @@ export function updateConnection(dir: string, id: string, input: ProviderConnect
   const idx = reg.connections.findIndex((c) => c.id === id);
   if (idx === -1) throw new Error(`Provider not found: ${id}`);
   const cur = reg.connections[idx];
-  // `seed` is pulled OUT of the spread: null is the write-side "clear" signal
-  // and must never reach the persisted row (the schema holds a number only).
-  const { seed, ...rest } = input;
+  // `seed`, `timeoutMs` and optional text sampling fields are pulled OUT of the
+  // spread: null is the write-side "clear" signal and must never reach the
+  // persisted row.
+  const {
+    seed,
+    timeoutMs,
+    topP,
+    minP,
+    topK,
+    frequencyPenalty,
+    presencePenalty,
+    repetitionPenalty,
+    stop,
+    jsonMode,
+    ...rest
+  } = input;
   const next: ProviderConnection = {
     ...cur,
     ...rest,
@@ -374,6 +395,24 @@ export function updateConnection(dir: string, id: string, input: ProviderConnect
   // editor's emptied Seed box has no other way to go back to a random seed.
   if (seed === null) delete next.seed;
   else if (seed !== undefined) next.seed = seed;
+  if (timeoutMs === null) delete next.timeoutMs;
+  else if (timeoutMs !== undefined) next.timeoutMs = timeoutMs;
+  if (topP === null) delete next.topP;
+  else if (topP !== undefined) next.topP = topP;
+  if (minP === null) delete next.minP;
+  else if (minP !== undefined) next.minP = minP;
+  if (topK === null) delete next.topK;
+  else if (topK !== undefined) next.topK = topK;
+  if (frequencyPenalty === null) delete next.frequencyPenalty;
+  else if (frequencyPenalty !== undefined) next.frequencyPenalty = frequencyPenalty;
+  if (presencePenalty === null) delete next.presencePenalty;
+  else if (presencePenalty !== undefined) next.presencePenalty = presencePenalty;
+  if (repetitionPenalty === null) delete next.repetitionPenalty;
+  else if (repetitionPenalty !== undefined) next.repetitionPenalty = repetitionPenalty;
+  if (stop === null || (Array.isArray(stop) && stop.length === 0)) delete next.stop;
+  else if (stop !== undefined) next.stop = stop;
+  if (jsonMode === null) delete next.jsonMode;
+  else if (jsonMode !== undefined) next.jsonMode = jsonMode;
   next.updatedAt = new Date().toISOString();
   reg.connections[idx] = next;
   writeRegistry(dir, reg);
