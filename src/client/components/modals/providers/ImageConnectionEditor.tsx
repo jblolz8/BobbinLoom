@@ -5,9 +5,9 @@ import { fetchProviderImageStyles } from "../../../api";
 import type { ModelCapabilities, ProviderConnection, ProviderConnectionPayload, ProviderModelCapabilities } from "../../../api";
 import { CUSTOM_STYLE_OPTION, imageStyleDisplay } from "../../../utils/imageStyleOptions";
 import { ApiKeyField, type ApiKeyFieldProps } from "./ApiKeyField";
-import { EditorActionBar } from "./EditorActionBar";
+import { EditorActionBar, type EditorFooterStatus } from "./EditorActionBar";
 
-type EditorStatus = { kind: "ok" | "err"; text: string } | null;
+type EditorStatus = EditorFooterStatus;
 
 const API_STYLE_OPTIONS: Array<{ value: ImageApiStyle; label: string }> = [
   { value: "openai", label: "OpenAI-compatible" },
@@ -170,6 +170,8 @@ export type ImageConnectionEditorProps = {
   fetchingModels: boolean;
   onFetchModels: () => void;
   testStatus: EditorStatus;
+  onDismissStatus?: () => void;
+  testingConnection?: boolean;
   busy: boolean;
   /** The form differs from what was loaded/saved. Gates Save in EDIT mode: a
    *  create form is seeded from its own baseline, so gating that too would make a
@@ -205,6 +207,8 @@ export function ImageConnectionEditor({
   fetchingModels,
   onFetchModels,
   testStatus,
+  onDismissStatus,
+  testingConnection = false,
   busy,
   dirty,
   onSubmit,
@@ -459,7 +463,12 @@ export function ImageConnectionEditor({
               />
             </div>
           )}
-          {modelsStatus && <p className={`conn-status ${modelsStatus.kind}`}>{modelsStatus.text}</p>}
+          {modelsStatus && (
+            <div className={`conn-inline-status ${modelsStatus.kind}`}>
+              <Icon name={modelsStatus.kind === "ok" ? "CheckCircle2" : "AlertCircle"} size={12} />
+              <span>{modelsStatus.text}</span>
+            </div>
+          )}
 
           {capsLines.length > 0 && (
             <div className="base-form-field form-field" style={{ marginTop: "0.35rem" }}>
@@ -547,9 +556,17 @@ export function ImageConnectionEditor({
                     </Button>
                   </div>
                   {fetchingStyles ? (
-                    <p className="conn-status">Loading styles…</p>
+                    <div className="conn-inline-status">
+                      <Icon name="Loader2" size={12} className="animate-spin" />
+                      <span>Loading styles…</span>
+                    </div>
                   ) : (
-                    stylesStatus && <p className={`conn-status ${stylesStatus.kind}`}>{stylesStatus.text}</p>
+                    stylesStatus && (
+                      <div className={`conn-inline-status ${stylesStatus.kind}`}>
+                        <Icon name={stylesStatus.kind === "ok" ? "CheckCircle2" : "AlertCircle"} size={12} />
+                        <span>{stylesStatus.text}</span>
+                      </div>
+                    )
                   )}
                   {styleDisplay.showWarning && (
                     <p className="conn-status warn">
@@ -824,11 +841,13 @@ export function ImageConnectionEditor({
         />
       </FormSection>
 
-      {testStatus && <p className={`conn-status ${testStatus.kind}`}>{testStatus.text}</p>}
       <EditorActionBar
         mode={mode}
         busy={busy}
         dirty={dirty}
+        testingConnection={testingConnection}
+        status={testStatus}
+        onDismissStatus={onDismissStatus}
         onTest={onTest}
         onCancel={onCancel}
         onDelete={onDelete}

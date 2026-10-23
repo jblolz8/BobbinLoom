@@ -13,13 +13,13 @@
 
 .modal.settings-modal-wide {
   --shadow-card: none;
-  width: min(740px, 100%);
+  width: min(860px, 95vw);
   height: min(760px, 88vh);
   max-height: 90vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 0.85rem 1.25rem 0.85rem;
+  padding: 0.6rem 0.85rem 0.7rem;
   box-shadow: none;
 }
 
@@ -27,52 +27,18 @@
   box-shadow: none;
 }
 
-.settings-modal-wide .modal-header {
-  flex-shrink: 0;
-  margin-bottom: 0.45rem;
-  align-items: center;
-}
-
-.settings-modal-wide .modal-header h2 {
-  font-size: 1.2rem;
-  line-height: 1.25;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.settings-modal-wide .settings-tabs-wrapper {
-  flex-shrink: 0;
-  margin-bottom: 0.6rem;
-}
-
-.settings-modal-wide .settings-modal-tabs {
-  border-bottom: 1px solid var(--border-main);
-}
-
-.settings-modal-wide .tab {
-  flex: 0 0 auto;
-  white-space: nowrap;
-  padding: 0.35rem 0.75rem;
-  font-size: 0.84rem;
-}
-
-/* Nested kind tabs inside the Provider tab (Text Providers / Image Providers).
-   They sit under the main tab strip as a pill switch, not a second underline. */
-.settings-subtabs {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.settings-modal-wide .settings-provider-tabs {
+.settings-modal-body {
   flex: 1 1 auto;
-  align-self: stretch;
-  max-width: 100%;
-  margin-top: 0.15rem;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  gap: 0.7rem;
+  overflow: hidden;
 }
 
 .settings-tab-content {
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -100,87 +66,38 @@
 }
 
 /* Full-screen mobile layout for the Settings modal below 680px.
-   Uses 100dvh flex column so header & tabs remain pinned while content scrolls smoothly. */
+   Strips backdrop padding so the modal takes up the entire viewport edge-to-edge,
+   and uses a 100dvh flex column so header & tabs remain pinned while content scrolls smoothly. */
 @media (max-width: 680px) {
+  .modal-backdrop.settings-modal-backdrop,
+  .modal-backdrop:has(> .settings-modal-wide) {
+    padding: 0;
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
   .modal.settings-modal-wide {
-    width: 100vw;
+    width: 100%;
+    max-width: 100%;
     height: 100vh;
     height: 100dvh;
     max-height: 100vh;
     max-height: 100dvh;
+    min-height: 0;
+    margin: 0;
     border-radius: 0;
-    padding: 0.65rem 0.75rem 0.5rem;
+    padding: 0.45rem 0.6rem;
     border: none;
     display: flex;
     flex-direction: column;
     overflow: hidden;
   }
-  .settings-modal-wide .modal-header {
-    margin-bottom: 0.4rem;
-    flex-shrink: 0;
-    align-items: center;
+
+  .settings-modal-body {
+    flex-direction: column;
+    gap: 0.4rem;
   }
-  .settings-modal-wide .modal-close-btn {
-    min-height: 30px;
-    padding: 0.25rem 0.55rem;
-    font-size: 0.8rem;
-    border-radius: 6px;
-    background: var(--bg-surface-elevated);
-    border: 1px solid var(--border-light);
-    color: var(--text-primary);
-    cursor: pointer;
-    touch-action: manipulation;
-    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-  }
-  .settings-modal-wide .modal-close-btn:hover {
-    background: var(--bg-surface-hover);
-    border-color: var(--border-focus);
-  }
-  /* Horizontal scrollable tab bar */
-  .settings-modal-wide .settings-tabs {
-    flex-shrink: 0;
-    position: static;
-    display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    margin-left: -0.75rem;
-    margin-right: -0.75rem;
-    padding: 0 0.75rem;
-    background: var(--bg-panel);
-    border-bottom: 1px solid var(--border-main);
-    margin-bottom: 0.45rem;
-    gap: 0.2rem;
-  }
-  .settings-modal-wide .settings-tabs::-webkit-scrollbar {
-    display: none;
-  }
-  .settings-modal-wide .tab {
-    flex: 0 0 auto;
-    white-space: nowrap;
-    text-align: center;
-    padding: 0.35rem 0.65rem;
-    min-height: 32px;
-    font-size: 0.82rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    touch-action: manipulation;
-    color: var(--text-secondary);
-    border-bottom: 2px solid transparent;
-    margin-bottom: -1px;
-    transition: color 0.15s ease, border-color 0.15s ease;
-  }
-  .settings-modal-wide .tab.active {
-    color: var(--accent-highlight, var(--accent-base));
-    border-bottom-color: var(--accent-highlight, var(--accent-base));
-    font-weight: 600;
-  }
-  .settings-modal-wide .tab:hover:not(.active) {
-    color: var(--text-primary);
-  }
+
   .settings-tab-content {
     flex: 1 1 auto;
     min-height: 0;
@@ -378,21 +295,33 @@
 }
 
 /* The provider editors' action bar. Sticky inside .settings-tab-content so
-   Save / Test connection / Cancel / Delete stay reachable on the long image
-   form (five sections, plus three conditional a1111 blocks). */
+   Save / Test connection / Test response / Cancel / Delete stay reachable on
+   long forms, and houses the unified single-line status strip. */
 .conn-actions-bar {
   position: sticky;
   bottom: 0;
   z-index: 5;
   margin: 0 -0.85rem -0.7rem;
-  padding: 0.45rem 0.85rem;
+  padding: 0.4rem 0.85rem;
   border-top: 1px solid var(--border-subtle);
   border-radius: 0 0 10px 10px;
   background: var(--bg-surface-elevated);
   display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.conn-actions-row {
+  display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.55rem;
+  gap: 0.5rem;
+}
+
+.conn-test-response-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
 }
 
 .conn-editor-header {
@@ -456,6 +385,32 @@
   color: var(--status-warning);
 }
 
+.conn-limit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease, background-color 0.12s ease;
+}
+
+.conn-limit-chip strong {
+  color: var(--accent-highlight, var(--accent-base));
+  font-weight: 600;
+}
+
+.conn-limit-chip:hover {
+  color: var(--text-primary);
+  border-color: var(--accent-highlight, var(--accent-base));
+  background: var(--accent-translucent);
+}
+
 .conn-editor label {
   display: flex;
   flex-direction: column;
@@ -504,44 +459,300 @@
 .actions-left {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 
 @media (max-width: 600px) {
-  .conn-actions-bar {
+  .conn-actions-row {
     flex-direction: column;
     align-items: stretch;
-    gap: 0.5rem;
+    gap: 0.45rem;
   }
   .conn-actions-bar .actions-left {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem;
+    gap: 0.35rem;
     width: 100%;
   }
-  .conn-actions-bar .actions-left button {
-    flex: 1 1 calc(50% - 0.4rem);
-    min-height: 38px;
+  .conn-actions-bar .actions-left > button {
+    flex: 1 1 calc(50% - 0.35rem);
+    min-height: 36px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
   }
+  .conn-test-response-group {
+    flex: 1 1 100%;
+    display: flex;
+  }
+  .conn-test-response-group > button:first-child {
+    flex: 1 1 auto;
+    min-height: 36px;
+  }
   .conn-actions-bar button.danger {
     width: 100%;
-    min-height: 38px;
+    min-height: 36px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
   }
 }
 
-.conn-status {
-  margin: 0.5rem 0 0;
-  padding: 0.5rem 0.75rem;
+/* ── Compact Inline Status (e.g. Fetch Models / Styles micro-caption) ── */
+.conn-inline-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: var(--text-secondary);
+  padding: 0.1rem 0.2rem;
+}
+
+.conn-inline-status svg {
+  flex-shrink: 0;
+}
+
+.conn-inline-status.ok {
+  color: var(--status-success);
+}
+
+.conn-inline-status.warn {
+  color: var(--status-warning);
+}
+
+.conn-inline-status.err {
+  color: var(--status-danger);
+}
+
+/* ── Unified Compact Footer Status Strip ── */
+.conn-footer-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.28rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-main);
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.conn-footer-status.ok {
+  color: var(--status-success);
+  border-color: var(--status-success-border);
+  background: var(--status-success-bg);
+}
+
+.conn-footer-status.warn {
+  color: var(--status-warning);
+  border-color: var(--status-warning-border);
+  background: var(--status-warning-bg);
+}
+
+.conn-footer-status.err {
+  color: var(--status-danger);
+  border-color: var(--status-danger-border);
+  background: var(--status-danger-bg);
+}
+
+.conn-footer-status__main {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.conn-footer-status__icon {
+  flex-shrink: 0;
+}
+
+.conn-footer-status__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.conn-footer-status__toggle {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid currentColor;
+  color: inherit;
+  border-radius: 4px;
+  padding: 0.05rem 0.35rem;
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.conn-footer-status__toggle:hover {
+  opacity: 1;
+}
+
+.conn-footer-status__dismiss {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+  padding: 0;
+}
+
+.conn-footer-status__dismiss:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.conn-footer-status__detail {
+  margin: 0;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 110px;
+  overflow-y: auto;
+}
+
+/* ── Global Test Prompt & Test Response Drawer ── */
+.conn-test-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.55rem 0.65rem;
   border-radius: 8px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-panel);
+}
+
+.conn-test-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.conn-test-drawer__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.conn-test-drawer__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.conn-test-drawer__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.conn-test-drawer__close:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface-hover);
+}
+
+.conn-test-drawer__prompt-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.conn-test-drawer__prompt-row > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.conn-test-reply {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface-elevated);
+  font-size: 0.78rem;
+}
+
+.conn-test-reply.ok {
+  border-color: var(--status-success-border);
+}
+
+.conn-test-reply.err {
+  border-color: var(--status-danger-border);
+  background: var(--status-danger-bg);
+}
+
+.conn-test-reply__loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.conn-test-reply__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.conn-test-reply__body {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.conn-test-reply.err .conn-test-reply__body {
+  color: var(--status-danger);
+}
+
+.conn-status {
+  margin: 0.25rem 0 0;
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
   border: 1px solid var(--border-main);
   background: var(--bg-surface-elevated);
   color: var(--text-primary);
+  font-size: 0.76rem;
+  line-height: 1.35;
 }
 .conn-status.ok {
   color: var(--status-success);
@@ -1504,121 +1715,6 @@
   font-size: 0.8rem;
   color: var(--status-success);
   font-weight: 500;
-}
-
-/* ── Tab 4: Chat Settings ── */
-
-.chat-settings-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-}
-
-.chat-settings-intro {
-  margin: 0 0 0.15rem 0;
-  font-size: 0.82rem;
-  color: var(--text-secondary);
-}
-
-.chat-settings-section-title {
-  margin: 0.8rem 0 0.1rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-.chat-settings-section-title:first-of-type {
-  margin-top: 0.5rem;
-}
-
-.chat-settings-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-}
-
-.autoscroll-options-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.5rem;
-}
-
-@media (max-width: 640px) {
-  .autoscroll-options-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.autoscroll-option-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  text-align: left;
-  padding: 0.65rem 0.75rem;
-  border-radius: 6px;
-  background: var(--bg-surface-elevated);
-  border: 1px solid var(--border-main);
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
-  width: 100%;
-}
-
-.autoscroll-option-card:hover {
-  background: var(--bg-surface-hover);
-  border-color: var(--border-light);
-}
-
-.autoscroll-option-card.active {
-  background: var(--accent-translucent);
-  border-color: var(--accent-highlight, var(--accent-base));
-  box-shadow: 0 0 0 1px var(--accent-highlight, var(--accent-base));
-}
-
-.autoscroll-option-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  gap: 0.35rem;
-  margin-bottom: 0.25rem;
-}
-
-.autoscroll-option-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.autoscroll-option-icon {
-  color: var(--accent-highlight, var(--accent-base));
-  flex-shrink: 0;
-}
-
-.autoscroll-option-title {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.autoscroll-badge-active {
-  font-size: 0.68rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 0.08rem 0.35rem;
-  border-radius: 4px;
-  background: var(--accent-base);
-  color: var(--accent-text, #ffffff);
-}
-
-.autoscroll-option-desc {
-  font-size: 0.76rem;
-  line-height: 1.35;
-  color: var(--text-secondary);
-  margin: 0;
 }
 
 /* ── Tabs 5 & 6: Interface & Theme Appearance Settings ── */

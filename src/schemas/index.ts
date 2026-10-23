@@ -179,6 +179,32 @@ export type RegionDirection = z.infer<typeof RegionDirectionSchema>;
 export const TextJsonModeSchema = z.enum(["auto", "off"]);
 export type TextJsonMode = z.infer<typeof TextJsonModeSchema>;
 
+export const TextProviderSourceSchema = z.enum([
+  "openai",
+  "openai_compatible",
+  "deepseek",
+  "openrouter",
+  "moonshot",
+]);
+export type TextProviderSource = z.infer<typeof TextProviderSourceSchema>;
+
+export {
+  DEFAULT_PROVIDER_TEST_PROMPT,
+  OPTIONAL_TEXT_SAMPLER_KEYS,
+  TEXT_PROVIDER_SOURCES,
+  TEXT_PROVIDER_SOURCE_IDS,
+  TEXT_PROVIDER_SOURCE_LIST,
+  TEXT_SAMPLING_PARAMS,
+  getSourceParamSpec,
+  isBuiltInCloudBaseUrl,
+  isParamSupportedBySource,
+  resolveTextProviderSource,
+  type OptionalTextSamplerKey,
+  type TextProviderSourceSpec,
+  type TextSamplingParamKey,
+  type TextSamplingParamSpec,
+} from "../engine/textProviderSources";
+
 export const ProviderConnectionSchema = z.object({
   id: z.string().min(1),
   label: z.string(),
@@ -189,8 +215,10 @@ export const ProviderConnectionSchema = z.object({
   maxTokens: z.number(),
   contextWindow: z.number(),
   // ── optional text sampling & response format controls; omitted on the wire when unset ──
+  textSource: TextProviderSourceSchema.optional(),
   topP: z.number().min(0).max(1).optional(),
   minP: z.number().min(0).max(1).optional(),
+  topA: z.number().min(0).max(1).optional(),
   topK: z.number().int().min(1).optional(),
   frequencyPenalty: z.number().min(-2).max(2).optional(),
   presencePenalty: z.number().min(-2).max(2).optional(),
@@ -266,6 +294,7 @@ export const ProviderRegistryFileSchema = z.object({
    *  preference exists parses untouched. */
   chapterTextProviderId: z.string().nullable().optional(),
   characterTextProviderId: z.string().nullable().optional(),
+  testPrompt: z.string().nullable().optional(),
   connections: z.array(ProviderConnectionSchema)
 });
 export type ProviderRegistryFile = z.infer<typeof ProviderRegistryFileSchema>;

@@ -1,6 +1,12 @@
 import type { FastifyPluginAsync, FastifyPluginOptions } from "fastify";
 import { z } from "zod";
-import { ImageApiStyleSchema, ProviderKindSchema, RegionDirectionSchema, TextJsonModeSchema } from "../../schemas";
+import {
+  ImageApiStyleSchema,
+  ProviderKindSchema,
+  RegionDirectionSchema,
+  TextJsonModeSchema,
+  TextProviderSourceSchema,
+} from "../../schemas";
 import type { ProviderManager } from "../providerManager";
 import { providerManager } from "./helpers";
 
@@ -25,8 +31,10 @@ const ProviderConnectionBody = z.object({
   temperature: z.number().optional(),
   maxTokens: z.number().optional(),
   contextWindow: z.number().optional(),
+  textSource: TextProviderSourceSchema.nullable().optional(),
   topP: z.number().min(0).max(1).nullable().optional(),
   minP: z.number().min(0).max(1).nullable().optional(),
+  topA: z.number().min(0).max(1).nullable().optional(),
   topK: z.number().int().min(1).nullable().optional(),
   frequencyPenalty: z.number().min(-2).max(2).nullable().optional(),
   presencePenalty: z.number().min(-2).max(2).nullable().optional(),
@@ -117,6 +125,28 @@ const GenerationProviderBody = z.object({
   providerId: z.string().nullable()
 });
 
+const TestPromptBody = z.object({
+  testPrompt: z.string().nullable()
+});
+
+const TestResponseBody = z.object({
+  id: z.string().optional(),
+  baseUrl: z.string().optional(),
+  apiKey: z.string().nullable().optional(),
+  model: z.string().default(""),
+  textSource: TextProviderSourceSchema.nullable().optional(),
+  temperature: z.number().optional(),
+  maxTokens: z.number().optional(),
+  topP: z.number().min(0).max(1).nullable().optional(),
+  minP: z.number().min(0).max(1).nullable().optional(),
+  topA: z.number().min(0).max(1).nullable().optional(),
+  topK: z.number().int().min(1).nullable().optional(),
+  frequencyPenalty: z.number().min(-2).max(2).nullable().optional(),
+  presencePenalty: z.number().min(-2).max(2).nullable().optional(),
+  repetitionPenalty: z.number().min(0).max(3).nullable().optional(),
+  prompt: z.string().nullable().optional(),
+});
+
 export const providerRoutes: FastifyPluginAsync<ProviderRoutesOptions> = async (app, options = {}) => {
   const manager = options.manager ?? providerManager;
 
@@ -178,6 +208,17 @@ export const providerRoutes: FastifyPluginAsync<ProviderRoutesOptions> = async (
   app.post("/api/settings/providers/test", async (request) => {
     const body = TestConnectionBody.parse(request.body ?? {});
     return manager.testConnection(body);
+  });
+
+  app.put("/api/settings/providers/test-prompt", async (request, reply) => {
+    const parsedBody = TestPromptBody.safeParse(request.body ?? {});
+    if (!parsedBody.success) return reply.code(400).send({ error: "testPrompt must be a string or null" });
+    return manager.setTestPrompt(parsedBody.data.testPrompt);
+  });
+
+  app.post("/api/settings/providers/test-response", async (request) => {
+    const body = TestResponseBody.parse(request.body ?? {});
+    return manager.testResponse(body);
   });
 
   app.post("/api/settings/providers/models", async (request) => {

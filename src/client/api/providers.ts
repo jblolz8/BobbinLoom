@@ -7,7 +7,8 @@ import type {
   ProviderConnection as ProviderConnectionRow,
   ProviderKind,
   RegionDirection,
-  TextJsonMode
+  TextJsonMode,
+  TextProviderSource
 } from "../../schemas";
 // Type-only, so it is erased at build time and the client bundle never reaches
 // `src/server` at runtime. The capability shape is PRODUCED there; hand-copying
@@ -52,8 +53,10 @@ export type ProviderConnectionPayload = {
   maxTokens?: number;
   contextWindow?: number;
   // ── optional text sampling & response format controls ──
+  textSource?: TextProviderSource | null;
   topP?: number | null;
   minP?: number | null;
+  topA?: number | null;
   topK?: number | null;
   frequencyPenalty?: number | null;
   presencePenalty?: number | null;
@@ -106,8 +109,23 @@ export type ProviderRegistry = {
   generationTextProviderId?: string | null;
   chapterTextProviderId?: string | null;
   characterTextProviderId?: string | null;
+  testPrompt?: string | null;
   connections: ProviderConnection[];
   warnings: string[];
+};
+
+export type ConnectionTestResponseResult = {
+  ok: boolean;
+  status?: number;
+  latencyMs?: number;
+  reply?: string;
+  model?: string;
+  usage?: {
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+  };
+  message?: string;
 };
 
 export type ConnectionTestResult = {
@@ -234,6 +252,38 @@ export function testProviderConnection(p: {
   apiStyle?: ImageApiStyle;
 }): Promise<ConnectionTestResult> {
   return request<ConnectionTestResult>("/api/settings/providers/test", { method: "POST", body: JSON.stringify(p) });
+}
+
+export function setProviderTestPrompt(testPrompt: string | null): Promise<ProviderRegistry> {
+  return request<ProviderRegistry>("/api/settings/providers/test-prompt", {
+    method: "PUT",
+    body: JSON.stringify({ testPrompt }),
+  });
+}
+
+export function testProviderResponse(p: {
+  id?: string;
+  baseUrl?: string;
+  apiKey?: string | null;
+  model: string;
+  textSource?: TextProviderSource | null;
+  temperature?: number;
+  maxTokens?: number;
+  timeoutMs?: number | null;
+  topP?: number | null;
+  minP?: number | null;
+  topA?: number | null;
+  topK?: number | null;
+  frequencyPenalty?: number | null;
+  presencePenalty?: number | null;
+  repetitionPenalty?: number | null;
+  stop?: string[] | null;
+  prompt?: string | null;
+}): Promise<ConnectionTestResponseResult> {
+  return request<ConnectionTestResponseResult>("/api/settings/providers/test-response", {
+    method: "POST",
+    body: JSON.stringify(p),
+  });
 }
 /**
  * Probe `<baseUrl>/models`. `type` narrows the listing on servers that expose

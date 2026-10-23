@@ -1,55 +1,31 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import type { AutoScrollBehavior, ProviderKind } from "../../../schemas";
 import {
   UI_PREFERENCE_DEFAULTS,
   adoptLocalPreferences,
   resolveUiPreferences,
-  updateViewPreferences
+  updateViewPreferences,
 } from "../../api";
+import { isTopDialog, popDialog, pushDialog } from "../../engine/dialogStack";
 import { PresetEditor } from "./PresetEditor";
 import { ProviderConnections } from "./ProviderConnections";
 import { ProviderOverridesPanel } from "./providers/ProviderOverridesPanel";
 import { TagTaxonomyPanel } from "../library/TagTaxonomyModal";
 import { AppearanceSettingsPanel } from "./AppearanceSettingsPanel";
 import { InterfaceSettingsPanel } from "./InterfaceSettingsPanel";
+import { ChatSettingsPanel } from "./ChatSettingsPanel";
 import { ConfirmModal } from "../common/ConfirmModal";
-import { Icon, SwitchRow, Tabs, type TabItem } from "../base";
+import { Button, Header, Stack, Tabs, type TabItem } from "../base";
 
 type SettingsTab = "provider" | "prompts" | "tags" | "chat" | "interface" | "appearance";
 
 const SETTINGS_TABS: TabItem<SettingsTab>[] = [
-  { id: "provider", label: "Provider", icon: "Cpu" },
-  { id: "prompts", label: "Prompt Configuration", icon: "Sliders" },
+  { id: "provider", label: "Providers", icon: "Cpu" },
+  { id: "prompts", label: "Prompts", icon: "Sliders" },
   { id: "tags", label: "Tags & Taxonomy", icon: "Tag" },
   { id: "chat", label: "Chat", icon: "MessageSquare" },
   { id: "interface", label: "Interface", icon: "Layout" },
-  { id: "appearance", label: "Theme Appearance", icon: "Palette" },
-];
-
-const AUTOSCROLL_OPTIONS: Array<{
-  id: AutoScrollBehavior;
-  title: string;
-  desc: string;
-  icon: string;
-}> = [
-  {
-    id: "start",
-    title: "Top of Message",
-    desc: "Auto-scroll to the beginning of the new AI reply so you can read from paragraph 1 (Default)",
-    icon: "ArrowUpToLine"
-  },
-  {
-    id: "bottom",
-    title: "Bottom of Message",
-    desc: "Auto-scroll all the way to the end of the newly generated turn",
-    icon: "ArrowDownToLine"
-  },
-  {
-    id: "none",
-    title: "Off",
-    desc: "Leave the scroll position completely untouched when the response arrives",
-    icon: "Ban"
-  }
+  { id: "appearance", label: "Appearance", icon: "Palette" },
 ];
 
 type ProviderSubTab = ProviderKind | "overrides";
@@ -128,10 +104,17 @@ export function SettingsModal(props: SettingsModalProps) {
     autoScrollBehavior = "start",
     setAutoScrollBehavior,
   } = props;
-  const [settingsTab, setSettingsTabState] = useState<SettingsTab>(UI_PREFERENCE_DEFAULTS.settingsTab);
+
+  const dialogId = useId();
+  const titleId = useId();
+
+  const [settingsTab, setSettingsTabState] = useState<SettingsTab>(
+    UI_PREFERENCE_DEFAULTS.settingsTab
+  );
   const [providerKind, setProviderKindState] = useState<ProviderSubTab>(
     UI_PREFERENCE_DEFAULTS.settingsProviderKind
   );
+
   /** The reader picked a tab: state first so the click feels instant, then the one leaf that changed. */
   const setSettingsTab = (tab: SettingsTab) => {
     setSettingsTabState(tab);
@@ -165,7 +148,10 @@ export function SettingsModal(props: SettingsModalProps) {
 
   /** Reported up from ProviderConnections, which owns the form. Keyed by kind
    *  because both provider instances are mounted at once. */
-  const [dirtyKinds, setDirtyKinds] = useState<Record<ProviderKind, boolean>>({ text: false, image: false });
+  const [dirtyKinds, setDirtyKinds] = useState<Record<ProviderKind, boolean>>({
+    text: false,
+    image: false,
+  });
   const [confirmClose, setConfirmClose] = useState(false);
 
   const dirty = dirtyKinds.text || dirtyKinds.image;
@@ -191,6 +177,7 @@ export function SettingsModal(props: SettingsModalProps) {
   useEffect(() => {
     setVisitedTabs((prev) => (prev.has(settingsTab) ? prev : new Set(prev).add(settingsTab)));
   }, [settingsTab]);
+
   useEffect(() => {
     setVisitedKinds((prev) => (prev.has(providerKind) ? prev : new Set(prev).add(providerKind)));
   }, [providerKind]);
@@ -201,224 +188,173 @@ export function SettingsModal(props: SettingsModalProps) {
     setDirtyKinds((prev) => (prev[kind] === isDirty ? prev : { ...prev, [kind]: isDirty }));
   }, []);
 
-  function requestClose() {
+  const requestClose = useCallback(() => {
     if (dirty) setConfirmClose(true);
     else onClose();
-  }
+  }, [dirty, onClose]);
+
+  // Register on the dialog stack while open so Escape & backdrop clicks dismiss Settings only when
+  // no nested dialog (e.g. ConfirmModal) sits on top of it.
+  useEffect(() => {
+    if (!open) return;
+    pushDialog(dialogId);
+    return () => popDialog(dialogId);
+  }, [open, dialogId]);
+
+  useEffect(() => {
+    if (!open || confirmClose) return;
+    function handleWindowKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      if (!isTopDialog(dialogId)) return;
+      event.preventDefault();
+      requestClose();
+    }
+    window.addEventListener("keydown", handleWindowKeyDown);
+    return () => window.removeEventListener("keydown", handleWindowKeyDown);
+  }, [open, confirmClose, dialogId, requestClose]);
 
   if (!open) return null;
 
   return (
-    <div className="modal-backdrop">
-      <section className="modal settings-modal-wide">
-        <header className="modal-header">
-          <div>
-            <h2>Settings</h2>
-          </div>
-          <button className="flex items-center gap-1 modal-close-btn" onClick={requestClose} aria-label="Close Settings"><Icon name="X" size={14} /> Close</button>
-        </header>
-        <div className="settings-tabs-wrapper">
+    <div
+      className="modal-backdrop settings-modal-backdrop"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !confirmClose && isTopDialog(dialogId)) {
+          requestClose();
+        }
+      }}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="modal settings-modal-wide"
+      >
+        <Header
+          variant="modal"
+          title="Settings"
+          titleId={titleId}
+          bordered
+          actions={
+            <Button
+              variant="ghost"
+              size="sm"
+              iconOnly
+              leftIcon="X"
+              tooltip="Close"
+              tooltipSide="bottom"
+              onClick={requestClose}
+              aria-label="Close Settings"
+            />
+          }
+        />
+
+        <div className="settings-modal-body">
           <Tabs<SettingsTab>
             tabs={SETTINGS_TABS}
             activeTab={settingsTab}
             onChange={setSettingsTab}
-            variant="underline"
+            variant="sidebar"
             size="sm"
-            className="settings-modal-tabs"
+            ariaLabel="Settings categories"
           />
-        </div>
-        <div className="settings-tab-content">
-          <div hidden={settingsTab !== "provider"}>
-            {visitedTabs.has("provider") && (
-              <div className="settings-subtabs">
-                <Tabs<ProviderSubTab>
-                  tabs={PROVIDER_KIND_TABS}
-                  activeTab={providerKind}
-                  onChange={setProviderKind}
-                  variant="pill"
-                  size="sm"
-                  fullWidth
-                  className="settings-provider-tabs"
-                  ariaLabel="Provider kind"
+
+          <div className="settings-tab-content">
+            <div hidden={settingsTab !== "provider"}>
+              {visitedTabs.has("provider") && (
+                <Stack direction="column" align="stretch" gap="xs">
+                  <Tabs<ProviderSubTab>
+                    tabs={PROVIDER_KIND_TABS}
+                    activeTab={providerKind}
+                    onChange={setProviderKind}
+                    variant="segmented"
+                    size="sm"
+                    fullWidth
+                    ariaLabel="Provider kind"
+                  />
+                  {/* Two instances, each pinned to ONE kind. This replaces the old
+                      `key={providerKind}` remount that discarded a half-filled
+                      draft on every kind switch: each editor here only ever holds
+                      its own kind's fields, so the problem that remount guarded
+                      against (a text draft rendered into the image form) cannot
+                      arise. */}
+                  <div hidden={providerKind !== "text"}>
+                    {visitedKinds.has("text") && (
+                      <ProviderConnections
+                        kind="text"
+                        active={providerKind === "text"}
+                        onDirtyChange={handleDirtyChange}
+                      />
+                    )}
+                  </div>
+                  <div hidden={providerKind !== "image"}>
+                    {visitedKinds.has("image") && (
+                      <ProviderConnections
+                        kind="image"
+                        active={providerKind === "image"}
+                        onDirtyChange={handleDirtyChange}
+                      />
+                    )}
+                  </div>
+                  <div hidden={providerKind !== "overrides"}>
+                    {visitedKinds.has("overrides") && (
+                      <ProviderOverridesPanel active={providerKind === "overrides"} />
+                    )}
+                  </div>
+                </Stack>
+              )}
+            </div>
+
+            <div hidden={settingsTab !== "prompts"}>
+              {visitedTabs.has("prompts") && <PresetEditor />}
+            </div>
+
+            <div hidden={settingsTab !== "tags"}>
+              {visitedTabs.has("tags") && <TagTaxonomyPanel />}
+            </div>
+
+            <div hidden={settingsTab !== "chat"}>
+              {visitedTabs.has("chat") && (
+                <ChatSettingsPanel
+                  choicesEnabled={choicesEnabled}
+                  setChoicesEnabled={setChoicesEnabled}
+                  showDebug={showDebug}
+                  setShowDebug={setShowDebug}
+                  showContextUsage={showContextUsage}
+                  setShowContextUsage={setShowContextUsage}
+                  showGenerationTime={showGenerationTime}
+                  setShowGenerationTime={setShowGenerationTime}
+                  showMessageTimestamps={showMessageTimestamps}
+                  setShowMessageTimestamps={setShowMessageTimestamps}
+                  showModelName={showModelName}
+                  setShowModelName={setShowModelName}
+                  showMessageNumbers={showMessageNumbers}
+                  setShowMessageNumbers={setShowMessageNumbers}
+                  imagePromptPreview={imagePromptPreview}
+                  setImagePromptPreview={setImagePromptPreview}
+                  autoImageAfterTurn={autoImageAfterTurn}
+                  setAutoImageAfterTurn={setAutoImageAfterTurn}
+                  alwaysDiscardOldImage={alwaysDiscardOldImage}
+                  setAlwaysDiscardOldImage={setAlwaysDiscardOldImage}
+                  autoScrollBehavior={autoScrollBehavior}
+                  setAutoScrollBehavior={setAutoScrollBehavior}
                 />
-                {/* Two instances, each pinned to ONE kind. This replaces the old
-                    `key={providerKind}` remount that discarded a half-filled
-                    draft on every kind switch: each editor here only ever holds
-                    its own kind's fields, so the problem that remount guarded
-                    against (a text draft rendered into the image form) cannot
-                    arise. */}
-                <div hidden={providerKind !== "text"}>
-                  {visitedKinds.has("text") && (
-                    <ProviderConnections
-                      kind="text"
-                      active={providerKind === "text"}
-                      onDirtyChange={handleDirtyChange}
-                    />
-                  )}
-                </div>
-                <div hidden={providerKind !== "image"}>
-                  {visitedKinds.has("image") && (
-                    <ProviderConnections
-                      kind="image"
-                      active={providerKind === "image"}
-                      onDirtyChange={handleDirtyChange}
-                    />
-                  )}
-                </div>
-                <div hidden={providerKind !== "overrides"}>
-                  {visitedKinds.has("overrides") && (
-                    <ProviderOverridesPanel active={providerKind === "overrides"} />
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
 
-          <div hidden={settingsTab !== "prompts"}>
-            {visitedTabs.has("prompts") && <PresetEditor />}
-          </div>
+            <div hidden={settingsTab !== "interface"}>
+              {visitedTabs.has("interface") && <InterfaceSettingsPanel />}
+            </div>
 
-          <div hidden={settingsTab !== "tags"}>
-            {visitedTabs.has("tags") && <TagTaxonomyPanel />}
-          </div>
-
-          <div hidden={settingsTab !== "chat"}>
-            {visitedTabs.has("chat") && (
-              <div className="chat-settings-group">
-                <p className="chat-settings-intro">
-                  Customize which components and visual indicators appear in the Chat panel.
-                </p>
-
-                <h4 className="chat-settings-section-title">Chat Message</h4>
-                <div className="chat-settings-section">
-                  <SwitchRow
-                    icon="MessageSquare"
-                    title="Show Choices"
-                    description="Display suggested action choice buttons below turn responses"
-                    checked={choicesEnabled}
-                    onChange={(e) => setChoicesEnabled(e.target.checked)}
-                  />
-
-                  <SwitchRow
-                    icon="Clock"
-                    title="Display Response Generation Time"
-                    description="Show generation duration badge on AI responses"
-                    checked={showGenerationTime}
-                    onChange={(e) => setShowGenerationTime?.(e.target.checked)}
-                  />
-
-                  <SwitchRow
-                    iconNode={<Icon name="Calendar" size={15} className="ds-icon-accent" />}
-                    title="Display Chat Message Timestamps"
-                    description="Show timestamps on chat messages"
-                    checked={showMessageTimestamps}
-                    onChange={(e) => setShowMessageTimestamps?.(e.target.checked)}
-                  />
-
-                  <SwitchRow
-                    iconNode={<Icon name="Bot" size={15} className="ds-icon-accent" />}
-                    title="Display AI Model Name"
-                    description="Show model name and provider icon badge on AI responses"
-                    checked={showModelName}
-                    onChange={(e) => setShowModelName?.(e.target.checked)}
-                  />
-
-                  <SwitchRow
-                    icon="Hash"
-                    title="Display Message Numbers"
-                    description="Show #0, #1, #2... numbering on player and AI messages"
-                    checked={showMessageNumbers}
-                    onChange={(e) => setShowMessageNumbers?.(e.target.checked)}
-                  />
-
-                  <SwitchRow
-                    icon="BarChart2"
-                    title="Show Context Usage"
-                    description="Display the Context Meter token and memory usage indicator"
-                    checked={showContextUsage}
-                    onChange={(e) => setShowContextUsage(e.target.checked)}
-                  />
-                </div>
-
-                <h4 className="chat-settings-section-title">Auto-Scroll on AI Reply</h4>
-                <div className="autoscroll-options-grid">
-                  {AUTOSCROLL_OPTIONS.map((opt) => {
-                    const isSelected = autoScrollBehavior === opt.id;
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        className={`autoscroll-option-card ${isSelected ? "active" : ""}`}
-                        onClick={() => setAutoScrollBehavior?.(opt.id)}
-                      >
-                        <div className="autoscroll-option-header">
-                          <div className="autoscroll-option-title-wrap">
-                            <Icon name={opt.icon} size={15} className="autoscroll-option-icon" />
-                            <strong className="autoscroll-option-title">{opt.title}</strong>
-                          </div>
-                          {isSelected && (
-                            <span className="autoscroll-badge-active">Active</span>
-                          )}
-                        </div>
-                        <p className="autoscroll-option-desc">{opt.desc}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <h4 className="chat-settings-section-title">Image Generation</h4>
-                <div className="chat-settings-section">
-                  <SwitchRow
-                    icon="Image"
-                    title="Review Image Prompt Before Generating"
-                    description="Show the prompt the text model wrote before it is sent to the image provider. Off sends it straight through."
-                    checked={imagePromptPreview}
-                    onChange={(e) => setImagePromptPreview?.(e.target.checked)}
-                  />
-
-                  <SwitchRow
-                    icon="Sparkles"
-                    title="Generate Image right after AI Response"
-                    description="Write and render an image for every completed turn. Costs one text call plus a render per turn — a local render takes minutes. With review on, the prompt modal still appears first."
-                    checked={autoImageAfterTurn}
-                    onChange={(e) => setAutoImageAfterTurn?.(e.target.checked)}
-                  />
-
-                  <SwitchRow
-                    icon="RefreshCw"
-                    title="Always Discard Old Image on Re-send"
-                    description="Skip the confirmation when an image's request body is sent again. The new render replaces the image it came from either way; with this off, that replacement is confirmed first."
-                    checked={alwaysDiscardOldImage}
-                    onChange={(e) => setAlwaysDiscardOldImage?.(e.target.checked)}
-                  />
-                </div>
-
-                <h4 className="chat-settings-section-title">Debugging</h4>
-                <div className="chat-settings-section">
-                  <SwitchRow
-                    icon="Wrench"
-                    title="Show Debug Accordion"
-                    description="Display the expandable raw prompt, response, and patch inspector"
-                    checked={showDebug}
-                    onChange={(e) => setShowDebug(e.target.checked)}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div hidden={settingsTab !== "interface"}>
-            {visitedTabs.has("interface") && <InterfaceSettingsPanel />}
-          </div>
-
-          <div hidden={settingsTab !== "appearance"}>
-            {visitedTabs.has("appearance") && <AppearanceSettingsPanel />}
+            <div hidden={settingsTab !== "appearance"}>
+              {visitedTabs.has("appearance") && <AppearanceSettingsPanel />}
+            </div>
           </div>
         </div>
 
         {/* The only way to leave a dirty draft. ConfirmModal renders its own
-            backdrop and this modal has no Escape handler, so the confirm cannot
-            close the Settings modal underneath it. */}
+            backdrop and sits on top of the dialog stack, so Escape or backdrop
+            dismissal cannot close the Settings modal underneath it. */}
         {confirmClose && (
           <ConfirmModal
             title="Discard unsaved changes?"
@@ -426,7 +362,10 @@ export function SettingsModal(props: SettingsModalProps) {
             confirmLabel="Discard changes"
             cancelLabel="Keep editing"
             danger
-            onConfirm={() => { setConfirmClose(false); onClose(); }}
+            onConfirm={() => {
+              setConfirmClose(false);
+              onClose();
+            }}
             onCancel={() => setConfirmClose(false)}
           />
         )}

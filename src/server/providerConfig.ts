@@ -1,4 +1,11 @@
-import type { ImageApiStyle, ProviderConnection, TextJsonMode } from "../schemas";
+import {
+  isParamSupportedBySource,
+  resolveTextProviderSource,
+  type ImageApiStyle,
+  type ProviderConnection,
+  type TextJsonMode,
+  type TextProviderSource,
+} from "../schemas";
 
 export type ResolvedProviderConfig = {
   providerId: string;
@@ -11,8 +18,10 @@ export type ResolvedProviderConfig = {
   contextWindow: number;
   maxRetries: number;
   timeoutMs: number;
+  textSource?: TextProviderSource;
   topP?: number;
   minP?: number;
+  topA?: number;
   topK?: number;
   frequencyPenalty?: number;
   presencePenalty?: number;
@@ -39,8 +48,10 @@ export type ProviderConnectionInput = {
   maxTokens?: number;
   contextWindow?: number;
   timeoutMs?: number | null;
+  textSource?: TextProviderSource | null;
   topP?: number | null;
   minP?: number | null;
+  topA?: number | null;
   topK?: number | null;
   frequencyPenalty?: number | null;
   presencePenalty?: number | null;
@@ -115,8 +126,10 @@ export function resolveConnectionConfig(
     contextWindow: conn.contextWindow,
     maxRetries: numberFromEnv(env.BOBBINLOOM_MAX_RETRIES, 1),
     timeoutMs: conn.timeoutMs ?? numberFromEnv(env.BOBBINLOOM_TIMEOUT_MS, 120_000),
+    ...(conn.textSource !== undefined ? { textSource: conn.textSource } : {}),
     ...(conn.topP !== undefined ? { topP: conn.topP } : {}),
     ...(conn.minP !== undefined ? { minP: conn.minP } : {}),
+    ...(conn.topA !== undefined ? { topA: conn.topA } : {}),
     ...(conn.topK !== undefined ? { topK: conn.topK } : {}),
     ...(conn.frequencyPenalty !== undefined ? { frequencyPenalty: conn.frequencyPenalty } : {}),
     ...(conn.presencePenalty !== undefined ? { presencePenalty: conn.presencePenalty } : {}),
@@ -127,19 +140,35 @@ export function resolveConnectionConfig(
 }
 
 /** Builds the optional sampling and structured-output fields for a `/chat/completions`
- *  request body. Unset parameters are omitted so strict endpoints never see keys
- *  the user did not configure. */
+ *  request body. Unset parameters and parameters unsupported by the connection's
+ *  Chat Completion Source are omitted so strict endpoints never see keys they reject. */
 export function buildTextSamplingParams(
   config: ResolvedProviderConfig,
   options?: { includeStop?: boolean; jsonObject?: boolean }
 ): Record<string, unknown> {
+  const source = resolveTextProviderSource(config.textSource, config.baseUrl);
   const params: Record<string, unknown> = {};
-  if (config.topP !== undefined) params.top_p = config.topP;
-  if (config.minP !== undefined) params.min_p = config.minP;
-  if (config.topK !== undefined) params.top_k = config.topK;
-  if (config.frequencyPenalty !== undefined) params.frequency_penalty = config.frequencyPenalty;
-  if (config.presencePenalty !== undefined) params.presence_penalty = config.presencePenalty;
-  if (config.repetitionPenalty !== undefined) params.repetition_penalty = config.repetitionPenalty;
+  if (config.topP !== undefined && isParamSupportedBySource(source, "topP")) {
+    params.top_p = config.topP;
+  }
+  if (config.minP !== undefined && isParamSupportedBySource(source, "minP")) {
+    params.min_p = config.minP;
+  }
+  if (config.topA !== undefined && isParamSupportedBySource(source, "topA")) {
+    params.top_a = config.topA;
+  }
+  if (config.topK !== undefined && isParamSupportedBySource(source, "topK")) {
+    params.top_k = config.topK;
+  }
+  if (config.frequencyPenalty !== undefined && isParamSupportedBySource(source, "frequencyPenalty")) {
+    params.frequency_penalty = config.frequencyPenalty;
+  }
+  if (config.presencePenalty !== undefined && isParamSupportedBySource(source, "presencePenalty")) {
+    params.presence_penalty = config.presencePenalty;
+  }
+  if (config.repetitionPenalty !== undefined && isParamSupportedBySource(source, "repetitionPenalty")) {
+    params.repetition_penalty = config.repetitionPenalty;
+  }
   if (options?.includeStop && config.stop && config.stop.length > 0) {
     params.stop = config.stop;
   }

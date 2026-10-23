@@ -3,7 +3,7 @@ import { MockProvider } from "./provider";
 import { OpenAICompatibleProvider } from "./openAiCompatibleProvider";
 import { resolveConnectionConfig } from "./providerConfig";
 import type { PublicProviderConnection, ResolvedProviderConfig } from "./providerConfig";
-import type { ImageApiStyle, ProviderConnection } from "../schemas";
+import type { ImageApiStyle, ProviderConnection, TextProviderSource } from "../schemas";
 import {
   activeConnectionOfKind,
   createConnection,
@@ -17,10 +17,18 @@ import {
   setChapterTextProvider as setChapterRegistryTextProvider,
   setGenerationTextProvider as setGenerationRegistryTextProvider,
   setCharacterTextProvider as setCharacterRegistryTextProvider,
+  setProviderTestPrompt,
   testProviderConnection,
+  testProviderResponse,
   updateConnection
 } from "./providerRegistry";
-import type { ModelsProbeResult, ProviderConnectionDraft, PublicProviderRegistry, StylesProbeResult } from "./providerRegistry";
+import type {
+  ModelsProbeResult,
+  ProviderConnectionDraft,
+  PublicProviderRegistry,
+  StylesProbeResult,
+  TestResponseProbeResult,
+} from "./providerRegistry";
 import { createImageProvider, UnconfiguredImageProvider } from "./imageProvider";
 import type { ImageProvider } from "./imageProvider";
 
@@ -190,6 +198,53 @@ export class ProviderManager {
 
   async testConnection(input: { id?: string; baseUrl?: string; apiKey?: string; apiStyle?: ImageApiStyle }) {
     return testProviderConnection(this.resolveProbeTarget(input), this.fetchImpl);
+  }
+
+  setTestPrompt(testPrompt: string | null): PublicProviderRegistry {
+    return setProviderTestPrompt(this.dataDir, testPrompt);
+  }
+
+  async testResponse(input: {
+    id?: string;
+    baseUrl?: string;
+    apiKey?: string | null;
+    model: string;
+    textSource?: TextProviderSource | null;
+    temperature?: number;
+    maxTokens?: number;
+    topP?: number | null;
+    minP?: number | null;
+    topA?: number | null;
+    topK?: number | null;
+    frequencyPenalty?: number | null;
+    presencePenalty?: number | null;
+    repetitionPenalty?: number | null;
+    prompt?: string | null;
+  }): Promise<TestResponseProbeResult> {
+    const reg = getRegistry(this.dataDir);
+    const saved = input.id ? reg.connections.find((c) => c.id === input.id) : undefined;
+    const baseUrl = input.baseUrl?.trim() || saved?.baseUrl || "";
+    const apiKey =
+      input.apiKey === null
+        ? undefined
+        : typeof input.apiKey === "string" && input.apiKey !== ""
+          ? input.apiKey
+          : saved?.apiKey;
+
+    if (input.prompt !== undefined) {
+      setProviderTestPrompt(this.dataDir, input.prompt);
+    }
+    const promptToUse = input.prompt !== undefined ? input.prompt : reg.testPrompt;
+
+    return testProviderResponse(
+      {
+        ...input,
+        baseUrl,
+        apiKey,
+        prompt: promptToUse,
+      },
+      this.fetchImpl
+    );
   }
 
   async fetchModels(input: {

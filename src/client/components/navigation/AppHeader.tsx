@@ -5,9 +5,17 @@ import {
   NAV_PREFERENCE_DEFAULTS,
   adoptLocalPreferences,
   resolveNavPreferences,
-  updateViewPreferences
+  updateViewPreferences,
 } from "../../api";
-import { Button, Icon, Tooltip, ThreadIcon } from "../base";
+import {
+  Badge,
+  Button,
+  Header,
+  Tabs,
+  ThreadIcon,
+  Tooltip,
+  type TabItem,
+} from "../base";
 
 export type AppHeaderProps = {
   view: "home" | "play" | "setup";
@@ -23,6 +31,14 @@ export type AppHeaderProps = {
   onOpenDocs: () => void;
   isMobile?: boolean;
 };
+
+const NAV_TABS: TabItem<HomeTab>[] = [
+  { id: "playthroughs", label: "Playthroughs", icon: "Gamepad2" },
+  { id: "characters", label: "Characters", icon: "Users" },
+  { id: "lorebooks", label: "Lorebooks", icon: "BookMarked" },
+  { id: "personas", label: "Personas", icon: "User" },
+  { id: "docs", label: "Docs", icon: "BookText" },
+];
 
 export function AppHeader({
   view,
@@ -75,144 +91,122 @@ export function AppHeader({
     writeNavPreference({ showPlayNavTabs: next });
   };
 
+  const handleSelectNavTab = (tab: HomeTab) => {
+    if (view === "play") {
+      if (tab === "docs") {
+        onOpenDocs();
+      } else {
+        onOpenModal(tab);
+      }
+      return;
+    }
+    onSelectHomeTab(tab);
+    if (view !== "home") onGoHome();
+  };
+
   // On Desktop/Wide view (!isMobile): Nav tabs are always shown in the center.
   // On Mobile in Play View: Visibility is toggled by the Nav (⋮) button.
   const displayNavTabs = !isMobile || view !== "play" || showPlayNavTabs;
+  const isCompact = isMobile && view === "play";
 
   return (
-    <header className={`top-bar app-unified-header view-${view} ${isMobile && view === "play" ? "is-mobile" : ""}`}>
-      <div className="header-brand-group">
-        <h1 className="header-logo flex items-center gap-2" onClick={onGoHome} style={{ cursor: "pointer" }}>
-          <span className="logo-emoji flex items-center"><ThreadIcon size={22} /></span>
-          <span className="logo-text">BobbinLoom</span>
-        </h1>
+    <Header variant="app" compact={isCompact}>
+      <Header.Brand
+        icon={<ThreadIcon size={22} />}
+        title="BobbinLoom"
+        onClick={onGoHome}
+      >
         {view === "play" && activePlaythroughName ? (
-          <div className="active-playthrough-badge flex items-center gap-1.5" title={`Active playthrough: ${activePlaythroughName}`}>
-            <span className="badge-icon"><Icon name="BookOpen" size={15} /></span>
-            <span className="badge-name">{activePlaythroughName}</span>
-          </div>
+          <Tooltip content={`Active Playthrough: ${activePlaythroughName}`} side="bottom">
+            <Badge
+              variant="accent"
+              size="sm"
+              pill
+              truncate
+              maxWidth={240}
+              leftIcon="BookOpen"
+            >
+              {activePlaythroughName}
+            </Badge>
+          </Tooltip>
         ) : null}
-      </div>
+      </Header.Brand>
 
       {displayNavTabs && (
-        <nav className="header-nav-tabs" aria-label="Main Navigation">
-          <button
-            className={`nav-tab-btn ${view === "home" && activeHomeTab === "playthroughs" ? "active" : ""}`}
-            onClick={() => {
-              if (view === "play") {
-                onOpenModal("playthroughs");
-              } else {
-                onSelectHomeTab("playthroughs");
-                if (view !== "home") onGoHome();
-              }
-            }}
-          >
-            <span className="tab-icon"><Icon name="Gamepad2" size={15} /></span>
-            <span className="tab-label">Playthroughs</span>
-          </button>
-
-          <button
-            className={`nav-tab-btn ${view === "home" && activeHomeTab === "characters" ? "active" : ""}`}
-            onClick={() => {
-              if (view === "play") {
-                onOpenModal("characters");
-              } else {
-                onSelectHomeTab("characters");
-                if (view !== "home") onGoHome();
-              }
-            }}
-          >
-            <span className="tab-icon"><Icon name="Users" size={15} /></span>
-            <span className="tab-label">Characters</span>
-          </button>
-
-          <button
-            className={`nav-tab-btn ${view === "home" && activeHomeTab === "lorebooks" ? "active" : ""}`}
-            onClick={() => {
-              if (view === "play") {
-                onOpenModal("lorebooks");
-              } else {
-                onSelectHomeTab("lorebooks");
-                if (view !== "home") onGoHome();
-              }
-            }}
-          >
-            <span className="tab-icon"><Icon name="BookMarked" size={15} /></span>
-            <span className="tab-label">Lorebooks</span>
-          </button>
-
-          <button
-            className={`nav-tab-btn ${view === "home" && activeHomeTab === "personas" ? "active" : ""}`}
-            onClick={() => {
-              if (view === "play") {
-                onOpenModal("personas");
-              } else {
-                onSelectHomeTab("personas");
-                if (view !== "home") onGoHome();
-              }
-            }}
-          >
-            <span className="tab-icon"><Icon name="User" size={15} /></span>
-            <span className="tab-label">Personas</span>
-          </button>
-
-          <button
-            className={`nav-tab-btn ${view === "home" && activeHomeTab === "docs" ? "active" : ""}`}
-            onClick={() => {
-              if (view === "play") {
-                onOpenDocs();
-              } else {
-                onSelectHomeTab("docs");
-                if (view !== "home") onGoHome();
-              }
-            }}
-          >
-            <span className="tab-icon"><Icon name="BookText" size={15} /></span>
-            <span className="tab-label">Docs</span>
-          </button>
-        </nav>
+        <Header.Nav ariaLabel="Main Navigation">
+          <Tabs
+            tabs={NAV_TABS}
+            activeTab={view === "home" ? activeHomeTab : null}
+            onChange={handleSelectNavTab}
+            variant="segmented"
+            size="sm"
+            allowReselect={view !== "home"}
+            ariaLabel="Main Navigation"
+          />
+        </Header.Nav>
       )}
 
-      <div className="top-actions">
+      <Header.Actions>
         {view === "play" || view === "setup" ? (
-          <Tooltip content="Return to Home" side="bottom">
-            <Button variant="secondary" size="sm" onClick={onGoHome} aria-label="Return to Home">
-              <span className="btn-label flex items-center gap-1.5"><Icon name="Home" size={15} /> Home</span>
-              <span className="btn-icon" aria-hidden="true"><Icon name="Home" size={16} /></span>
-            </Button>
-          </Tooltip>
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon="Home"
+            collapseBelow={isCompact ? "always" : "xs"}
+            tooltip="Return to Home"
+            tooltipSide="bottom"
+            onClick={onGoHome}
+            aria-label="Return to Home"
+          >
+            Home
+          </Button>
         ) : null}
 
         {view !== "setup" ? (
-          <Button variant="primary" size="sm" className="new-playthrough-btn" onClick={onNewPlaythrough}>
-            <span className="btn-label flex items-center gap-1.5"><Icon name="Plus" size={15} /> New Playthrough</span>
-            <span className="btn-icon" aria-hidden="true"><Icon name="Plus" size={16} /></span>
+          <Button
+            variant="primary"
+            size="sm"
+            leftIcon="Plus"
+            collapseBelow={isCompact ? "always" : "xs"}
+            tooltip="New Playthrough"
+            tooltipSide="bottom"
+            onClick={onNewPlaythrough}
+            aria-label="New Playthrough"
+          >
+            New Playthrough
           </Button>
         ) : null}
 
-        <Tooltip content="Settings" side="bottom">
-          <Button variant="secondary" size="sm" className="settings-btn" onClick={onOpenSettings} aria-label="Settings">
-            <span className="btn-label flex items-center gap-1.5"><Icon name="Settings" size={15} /> Settings</span>
-            <span className="btn-icon" aria-hidden="true"><Icon name="Settings" size={16} /></span>
-          </Button>
-        </Tooltip>
+        <Button
+          variant="secondary"
+          size="sm"
+          leftIcon="Settings"
+          collapseBelow={isCompact ? "always" : "sm"}
+          tooltip="Settings"
+          tooltipSide="bottom"
+          onClick={onOpenSettings}
+          aria-label="Settings"
+        >
+          Settings
+        </Button>
 
         {view === "play" && isMobile ? (
-          <Tooltip content={showPlayNavTabs ? "Hide navigation bar" : "Show navigation bar"} side="bottom">
-            <Button
-              variant={showPlayNavTabs ? "secondary" : "ghost"}
-              size="sm"
-              className={`options-toggle-btn ${showPlayNavTabs ? "active" : ""}`}
-              onClick={handleTogglePlayNavTabs}
-              aria-label="Toggle navigation bar"
-              aria-expanded={showPlayNavTabs}
-            >
-              <span className="btn-label flex items-center gap-1.5"><Icon name="MoreVertical" size={15} /> Nav</span>
-              <span className="btn-icon" aria-hidden="true"><Icon name="MoreVertical" size={16} /></span>
-            </Button>
-          </Tooltip>
+          <Button
+            variant={showPlayNavTabs ? "secondary" : "ghost"}
+            size="sm"
+            active={showPlayNavTabs}
+            leftIcon="MoreVertical"
+            collapseBelow="always"
+            tooltip={showPlayNavTabs ? "Hide navigation bar" : "Show navigation bar"}
+            tooltipSide="bottom"
+            onClick={handleTogglePlayNavTabs}
+            aria-label="Toggle navigation bar"
+            aria-expanded={showPlayNavTabs}
+          >
+            Nav
+          </Button>
         ) : null}
-      </div>
-    </header>
+      </Header.Actions>
+    </Header>
   );
 }

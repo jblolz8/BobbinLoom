@@ -1,4 +1,6 @@
 import React from "react";
+import { Icon, type IconName } from "../Icon";
+import "./Badge.css";
 
 export type BadgeVariant =
   | "neutral"
@@ -17,11 +19,30 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   pill?: boolean;
   /** Truncate overflowing text with an ellipsis inside flex/grid layouts. */
   truncate?: boolean;
-  leftIcon?: React.ReactNode;
-  rightIcon?: React.ReactNode;
+  /** Maximum inline width before text truncates (e.g. `240` or `"240px"`). */
+  maxWidth?: number | string;
+  leftIcon?: IconName | React.ReactNode;
+  rightIcon?: IconName | React.ReactNode;
   children?: React.ReactNode;
   className?: string;
   title?: string;
+}
+
+const SIZE_ICON_MAP: Record<BadgeSize, number> = {
+  xs: 12,
+  sm: 14,
+  md: 15,
+};
+
+function renderBadgeIcon(
+  icon: IconName | React.ReactNode | undefined,
+  size: number
+): React.ReactNode {
+  if (!icon) return null;
+  if (typeof icon === "string") {
+    return <Icon name={icon} size={size} />;
+  }
+  return icon;
 }
 
 export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
@@ -31,15 +52,18 @@ export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
       size = "sm",
       pill = false,
       truncate = false,
+      maxWidth,
       leftIcon,
       rightIcon,
       children,
       className = "",
       title,
+      style,
       ...props
     },
     ref
   ) => {
+    const iconSize = SIZE_ICON_MAP[size];
     const classNames = [
       "base-badge",
       `base-badge--${variant}`,
@@ -51,13 +75,23 @@ export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
       .filter(Boolean)
       .join(" ");
 
+    const mergedStyle = maxWidth !== undefined ? { maxWidth, ...style } : style;
+
     return (
-      <span ref={ref} className={classNames} title={title} {...props}>
-        {leftIcon ? <span className="base-badge__icon base-badge__icon--left">{leftIcon}</span> : null}
+      <span ref={ref} className={classNames} title={title} style={mergedStyle} {...props}>
+        {leftIcon ? (
+          <span className="base-badge__icon base-badge__icon--left">
+            {renderBadgeIcon(leftIcon, iconSize)}
+          </span>
+        ) : null}
         {children !== undefined && children !== null ? (
           <span className="base-badge__content">{children}</span>
         ) : null}
-        {rightIcon ? <span className="base-badge__icon base-badge__icon--right">{rightIcon}</span> : null}
+        {rightIcon ? (
+          <span className="base-badge__icon base-badge__icon--right">
+            {renderBadgeIcon(rightIcon, iconSize)}
+          </span>
+        ) : null}
       </span>
     );
   }

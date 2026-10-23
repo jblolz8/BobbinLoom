@@ -1,10 +1,19 @@
 :root {
   color-scheme: dark;
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: var(--font-sans);
+  font-family: var(--font-sans);
   /* The mono stack for code surfaces, so a NEW one reads a token instead of
      re-spelling a family list. (Older rules still carry their own stack inline;
      folding them in would change their fallback order, so that is its own pass.) */
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* ── 0. Shape & Radius Tokens ── */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-pill: 9999px;
 
   /* ── 1. App Canvas & Panels ── */
   --bg-app: #101216;
@@ -155,12 +164,17 @@
   --timeline-node-active-border: #38bdf8;
   --timeline-node-active-glow: rgba(56, 189, 248, 0.3);
 
-  /* ── 13. UI Scrollbars & Shadows ── */
+  /* ── 13. UI Scrollbars, Segmented Bars & Shadows ── */
   --scrollbar-track: transparent;
   --scrollbar-thumb: var(--border-light, #2a3344);
   --scrollbar-thumb-hover: var(--accent-base, #2b4b7b);
   --scrollbar-thumb-active: var(--accent-hover, #345a8a);
   --shadow-card: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --segmented-bg: var(--bg-app);
+  --segmented-border: var(--border-subtle);
+  --segmented-active-bg: var(--bg-surface-elevated);
+  --segmented-active-border: var(--border-subtle);
+  --segmented-active-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 
   /* ── Legacy Aliases (Backwards Compatibility) ── */
   --primary-color: var(--accent-base);
@@ -322,6 +336,11 @@
   --scrollbar-thumb-hover: var(--accent-base, #2563eb);
   --scrollbar-thumb-active: var(--accent-hover, #1d4ed8);
   --shadow-card: 0 4px 14px rgba(0, 0, 0, 0.08);
+  --segmented-bg: var(--bg-app);
+  --segmented-border: var(--border-subtle);
+  --segmented-active-bg: var(--bg-panel);
+  --segmented-active-border: var(--border-subtle);
+  --segmented-active-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 * {
@@ -362,7 +381,7 @@ button {
    so every base button must be excluded here or its own hover is silently
    overridden — which is what painted the overlay controls a theme surface
    colour under a white glyph. Each `.base-btn--*` declares its own hover. */
-button:hover:not(:disabled):not(.base-btn):not(.primary-btn):not(.danger):not(.ai-brainstorm-toggle-btn):not(.suggest-tags-ai-btn):not(.auto-detect-action):not(.crop-auto-detect-btn):not(.tag-regenerate-btn):not(.danger-action):not(.warning-action):not(.import-btn):not(.active):not(.preset-card) {
+button:hover:not(:disabled):not(.base-btn):not(.base-tab):not(.base-card):not(.primary-btn):not(.danger):not(.ai-brainstorm-toggle-btn):not(.suggest-tags-ai-btn):not(.auto-detect-action):not(.crop-auto-detect-btn):not(.tag-regenerate-btn):not(.danger-action):not(.warning-action):not(.import-btn):not(.active):not(.preset-card) {
   background: var(--bg-surface-hover);
   border-color: var(--border-focus);
 }

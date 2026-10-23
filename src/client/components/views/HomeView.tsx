@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Playthrough } from "../../../schemas";
 import { getPlaythrough, type Persona } from "../../api";
+import { Header } from "../base";
 import { PlaythroughLibrary } from "../library/PlaythroughLibrary";
 import { CharacterLibrary } from "../library/CharacterLibrary";
 import { LorebookLibrary } from "../library/LorebookLibrary";
@@ -43,18 +44,20 @@ export function HomeView({
 
       {activeTab === "characters" ? (
         <section className="home-workspace-page">
-          <div className="workspace-header-title">
-            <h2>Character Library</h2>
-            <p>Manage character templates for scenario generation and story casts.</p>
-          </div>
+          <Header
+            variant="page"
+            title="Character Library"
+            subtitle="Manage character templates for scenario generation and story casts."
+          />
           <CharacterLibrary />
         </section>
       ) : activeTab === "lorebooks" ? (
         <section className="home-workspace-page">
-          <div className="workspace-header-title">
-            <h2>Lorebook Library</h2>
-            <p>Manage World Info lorebooks for prompt context injection.</p>
-          </div>
+          <Header
+            variant="page"
+            title="Lorebook Library"
+            subtitle="Manage World Info lorebooks for prompt context injection."
+          />
           <LorebookLibrary />
         </section>
       ) : activeTab === "docs" ? (
@@ -63,10 +66,11 @@ export function HomeView({
         </section>
       ) : activeTab === "personas" ? (
         <section className="home-workspace-page">
-          <div className="workspace-header-title">
-            <h2>Persona Manager</h2>
-            <p>Manage player character personas and initial clothing states.</p>
-          </div>
+          <Header
+            variant="page"
+            title="Persona Manager"
+            subtitle="Manage player character personas and initial clothing states."
+          />
           <PersonaLibrary onPersonasChanged={onPersonasChanged} />
         </section>
       ) : (

@@ -1,0 +1,46 @@
+/* ==========================================================================
+   Base Stack (.base-stack)
+   ========================================================================== */
+.base-stack {
+  display: flex;
+  box-sizing: border-box;
+}
+
+.base-stack--inline {
+  display: inline-flex;
+}
+
+.base-stack--row {
+  flex-direction: row;
+}
+
+.base-stack--column {
+  flex-direction: column;
+}
+
+.base-stack--align-start    { align-items: flex-start; }
+.base-stack--align-center   { align-items: center; }
+.base-stack--align-end      { align-items: flex-end; }
+.base-stack--align-stretch  { align-items: stretch; }
+.base-stack--align-baseline { align-items: baseline; }
+
+.base-stack--justify-start   { justify-content: flex-start; }
+.base-stack--justify-center  { justify-content: center; }
+.base-stack--justify-end     { justify-content: flex-end; }
+.base-stack--justify-between { justify-content: space-between; }
+
+.base-stack--gap-none { gap: 0; }
+.base-stack--gap-2xs  { gap: 0.2rem; }
+.base-stack--gap-xs   { gap: 0.35rem; }
+.base-stack--gap-sm   { gap: 0.5rem; }
+.base-stack--gap-md   { gap: 0.75rem; }
+.base-stack--gap-lg   { gap: 1rem; }
+
+.base-stack--wrap {
+  flex-wrap: wrap;
+}
+
+.base-stack--flex-1 {
+  flex: 1 1 auto;
+  min-width: 0;
+}

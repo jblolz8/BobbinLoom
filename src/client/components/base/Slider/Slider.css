@@ -1,0 +1,174 @@
+/* ==========================================================================
+   Base Slider (.base-slider)
+   ========================================================================== */
+.base-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.base-slider--active {
+  border-color: var(--border-main);
+  background: var(--bg-surface-elevated);
+}
+
+.base-slider:hover:not(.base-slider--disabled) {
+  border-color: var(--border-light);
+}
+
+.base-slider--disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.base-slider__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  min-height: 18px;
+}
+
+.base-slider .base-slider__label {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  margin: 0;
+}
+
+.base-slider--active .base-slider__label {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.base-slider__range {
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.base-slider__reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.08rem 0.35rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.66rem;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease, background-color 0.12s ease;
+}
+
+.base-slider__reset:hover {
+  color: var(--text-primary);
+  border-color: var(--border-focus, var(--accent-base));
+  background: var(--bg-surface-hover);
+}
+
+.base-slider__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.base-slider__track {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--accent-base) 0%,
+    var(--accent-base) var(--slider-fill, 50%),
+    var(--border-main) var(--slider-fill, 50%),
+    var(--border-main) 100%
+  );
+  outline: none;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.base-slider--unset .base-slider__track {
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--text-muted) 45%, transparent) 0%,
+    color-mix(in srgb, var(--text-muted) 45%, transparent) var(--slider-fill, 50%),
+    var(--border-subtle) var(--slider-fill, 50%),
+    var(--border-subtle) 100%
+  );
+}
+
+.base-slider__track::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--accent-highlight, var(--accent-base));
+  border: 2px solid var(--bg-panel);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  cursor: grab;
+  transition: transform 0.1s ease, background-color 0.15s ease;
+}
+
+.base-slider--unset .base-slider__track::-webkit-slider-thumb {
+  background: var(--text-secondary);
+}
+
+.base-slider__track::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  background: var(--accent-highlight, var(--accent-base));
+}
+
+.base-slider__track::-webkit-slider-thumb:active {
+  cursor: grabbing;
+}
+
+.base-slider__track::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--accent-highlight, var(--accent-base));
+  border: 2px solid var(--bg-panel);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  cursor: grab;
+  transition: transform 0.1s ease, background-color 0.15s ease;
+}
+
+.base-slider--unset .base-slider__track::-moz-range-thumb {
+  background: var(--text-secondary);
+}
+
+.base-slider .base-slider__number {
+  width: 68px;
+  flex: 0 0 68px;
+  height: 26px;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.76rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

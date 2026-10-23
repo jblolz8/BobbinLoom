@@ -1,0 +1,67 @@
+/* ==========================================================================
+   Base Card (.base-card)
+   ========================================================================== */
+.base-card {
+  border-radius: 10px;
+  border: 1px solid var(--border-main);
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+  container-type: inline-size;
+}
+
+button.base-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.base-card--elevated {
+  background: var(--bg-surface-elevated);
+}
+
+.base-card--panel {
+  background: var(--bg-panel);
+  border-color: var(--border-subtle);
+  border-radius: 7px;
+}
+
+.base-card--active {
+  background: var(--accent-translucent);
+  border-color: var(--accent-highlight, var(--accent-base));
+  border-left: 3.5px solid var(--accent-highlight, var(--accent-base));
+}
+
+.base-card--hoverable:hover {
+  border-color: var(--border-focus);
+  background: var(--bg-surface-hover);
+}
+
+.base-card--active.base-card--hoverable:hover {
+  border-color: var(--accent-highlight, var(--accent-base));
+  background: var(--accent-translucent);
+}
+
+.base-card--pad-none {
+  padding: 0;
+}
+
+.base-card--pad-xs {
+  padding: 0.4rem 0.65rem;
+}
+
+.base-card--pad-sm {
+  padding: 0.55rem 0.75rem;
+}
+
+.base-card--pad-md {
+  padding: 0.7rem 0.85rem;
+}
+
+.base-card--pad-lg {
+  padding: 0.95rem 1.1rem;
+}

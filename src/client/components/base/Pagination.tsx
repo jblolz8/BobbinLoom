@@ -9,11 +9,11 @@ import {
   totalPagesFor,
   type PageSize
 } from "../../engine/pagination";
-import { Button } from "./Button";
+import { Button } from "./Button/Button";
 import { Icon } from "./Icon";
 import { SimpleSelect } from "./Select";
 import { TextInput } from "./TextInput";
-import { Tooltip } from "./Tooltip";
+import { Tooltip } from "./Tooltip/Tooltip";
 
 export type PaginationProps = {
   page: number;

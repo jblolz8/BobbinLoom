@@ -1,0 +1,261 @@
+/* ==========================================================================
+   Base Button (.base-btn)
+   ========================================================================== */
+.base-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Kept for buttons that hang their own children off themselves. NOTE: this
+     loads after views.css and modals.css, so a surface that absolutely
+     positions a base button must out-specify it — `.base-btn.<surface-class>`
+     — or the button silently becomes a flow item instead. */
+  position: relative;
+  font-family: inherit;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  vertical-align: middle;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  user-select: none;
+  text-decoration: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  box-sizing: border-box;
+}
+
+.base-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg-panel), 0 0 0 4px var(--accent-base);
+}
+
+.base-btn:disabled,
+.base-btn[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Button Variants */
+.base-btn--primary {
+  background-color: var(--accent-base);
+  color: var(--accent-text, #ffffff);
+  border: 1px solid var(--accent-base);
+}
+
+.base-btn--primary:hover:not(:disabled) {
+  background-color: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: var(--accent-text, #ffffff);
+}
+
+.base-btn--secondary {
+  background-color: var(--bg-surface-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
+}
+
+.base-btn--secondary:hover:not(:disabled) {
+  background-color: var(--bg-surface-hover);
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+}
+
+.base-btn--ghost {
+  background-color: transparent;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+}
+
+.base-btn--ghost:hover:not(:disabled) {
+  background-color: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+
+.base-btn--outline {
+  background-color: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-main);
+}
+
+.base-btn--outline:hover:not(:disabled) {
+  background-color: var(--bg-surface-hover);
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+}
+
+.base-btn--danger {
+  background-color: var(--btn-danger-bg);
+  color: var(--btn-danger-text);
+  border: 1px solid var(--btn-danger-border);
+}
+
+.base-btn--danger:hover:not(:disabled) {
+  background-color: var(--btn-danger-hover);
+  border-color: var(--btn-danger-border);
+  color: var(--btn-danger-text);
+}
+
+.base-btn--warning {
+  background-color: var(--btn-warning-bg, var(--status-warning-bg));
+  color: var(--btn-warning-text, var(--status-warning));
+  border: 1px solid var(--btn-warning-border, var(--status-warning-border));
+}
+
+.base-btn--warning:hover:not(:disabled) {
+  background-color: var(--btn-warning-hover, var(--status-warning-bg));
+  border-color: var(--btn-warning-border, var(--status-warning-border));
+  color: var(--btn-warning-text, var(--status-warning));
+}
+
+.base-btn--ai {
+  background-color: var(--ai-accent);
+  color: #ffffff;
+  border: 1px solid var(--ai-accent);
+}
+
+.base-btn--ai:hover:not(:disabled) {
+  background-color: var(--ai-accent-hover);
+  border-color: var(--ai-accent-hover);
+  color: #ffffff;
+}
+
+/* Button Sizes */
+.base-btn--xs {
+  height: 22px;
+  padding: 2px 7px;
+  font-size: 0.72rem;
+  gap: 3px;
+}
+
+.base-btn--sm {
+  height: 28px;
+  padding: 3px 9px;
+  font-size: 0.78rem;
+  gap: 5px;
+}
+
+.base-btn--md {
+  height: 32px;
+  padding: 5px 12px;
+  font-size: 0.84rem;
+  gap: 6px;
+}
+
+.base-btn--lg {
+  height: 38px;
+  padding: 7px 16px;
+  font-size: 0.94rem;
+  gap: 8px;
+}
+
+/* Square Icon-Only Buttons */
+.base-btn--icon.base-btn--xs {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+}
+
+.base-btn--icon.base-btn--sm {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+}
+
+.base-btn--icon.base-btn--md {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+
+.base-btn--icon.base-btn--lg {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+}
+
+/* Round Icon-Only Buttons */
+.base-btn--icon.base-btn--round {
+  border-radius: 999px;
+}
+
+/* Full Width */
+.base-btn--full-width {
+  width: 100%;
+}
+
+/* Toggled / Active State */
+.base-btn--active.base-btn--secondary,
+.base-btn--active.base-btn--ghost,
+.base-btn--active.base-btn--outline {
+  background-color: var(--bg-surface-hover);
+  color: var(--text-primary);
+  border-color: var(--border-focus);
+}
+
+/* Responsive Label Collapsing */
+.base-btn--collapse-always {
+  aspect-ratio: 1;
+  padding: 0;
+  gap: 0;
+}
+
+.base-btn--collapse-always .base-btn__label {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .base-btn--collapse-md {
+    aspect-ratio: 1;
+    padding: 0;
+    gap: 0;
+  }
+  .base-btn--collapse-md .base-btn__label {
+    display: none;
+  }
+}
+
+@media (max-width: 540px) {
+  .base-btn--collapse-sm {
+    aspect-ratio: 1;
+    padding: 0;
+    gap: 0;
+  }
+  .base-btn--collapse-sm .base-btn__label {
+    display: none;
+  }
+}
+
+@media (max-width: 360px) {
+  .base-btn--collapse-xs {
+    aspect-ratio: 1;
+    padding: 0;
+    gap: 0;
+  }
+  .base-btn--collapse-xs .base-btn__label {
+    display: none;
+  }
+}
+
+/* Loading Spinner */
+.base-btn__spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  animation: base-btn-spin 0.8s linear infinite;
+}
+
+@keyframes base-btn-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.base-btn__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}

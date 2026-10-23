@@ -1,11 +1,23 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { atomicWriteJson, backupFile, quarantineFile } from "./persistence";
-import { maskApiKey, normalizeBaseUrl, normalizeImageBaseUrl } from "./providerConfig";
+import { buildTextSamplingParams, maskApiKey, normalizeBaseUrl, normalizeImageBaseUrl } from "./providerConfig";
 import { authHeaders } from "./httpAuth";
 import { detectForgeCouple } from "./imageProvider/shared";
-import { ProviderConnectionSchema, ProviderRegistryFileSchema } from "../schemas";
-import type { ImageApiStyle, ProviderConnection, ProviderKind, ProviderRegistryFile, RegionDirection } from "../schemas";
+import {
+  DEFAULT_PROVIDER_TEST_PROMPT,
+  ProviderConnectionSchema,
+  ProviderRegistryFileSchema,
+  resolveTextProviderSource,
+} from "../schemas";
+import type {
+  ImageApiStyle,
+  ProviderConnection,
+  ProviderKind,
+  ProviderRegistryFile,
+  RegionDirection,
+  TextProviderSource,
+} from "../schemas";
 import type { ProviderConnectionInput, PublicProviderConnection } from "./providerConfig";
 import { decryptApiKey, encryptApiKey, loadOrCreateVaultKey } from "./keyVault";
 
@@ -20,6 +32,8 @@ export type ProviderRegistry = {
    *  above, and it is remembered separately because a chapter is its own user action. */
   chapterTextProviderId?: string | null;
   characterTextProviderId?: string | null;
+  /** Global prompt used by "Test response" across all text connections; null/absent uses DEFAULT_PROVIDER_TEST_PROMPT. */
+  testPrompt?: string | null;
   connections: ProviderConnection[];
 };
 
@@ -158,6 +172,7 @@ function readRegistry(dir: string): ReadResult {
           generationTextProviderId: parsed.generationTextProviderId ?? null,
           chapterTextProviderId: parsed.chapterTextProviderId ?? null,
           characterTextProviderId: parsed.characterTextProviderId ?? null,
+          testPrompt: parsed.testPrompt ?? null,
           connections: decryptConnections(parsed.connections, vaultKey),
         },
         warnings,
@@ -171,6 +186,7 @@ function readRegistry(dir: string): ReadResult {
         generationTextProviderId: file.data.generationTextProviderId ?? null,
         chapterTextProviderId: file.data.chapterTextProviderId ?? null,
         characterTextProviderId: file.data.characterTextProviderId ?? null,
+        testPrompt: file.data.testPrompt ?? null,
         connections: decryptConnections(file.data.connections, vaultKey),
       },
       warnings,
@@ -208,6 +224,10 @@ function readRegistry(dir: string): ReadResult {
       typeof rawObj.characterTextProviderId === "string" || rawObj.characterTextProviderId === null
         ? rawObj.characterTextProviderId
         : null,
+    testPrompt:
+      typeof rawObj.testPrompt === "string" || rawObj.testPrompt === null
+        ? rawObj.testPrompt
+        : null,
     connections: kept,   // ProviderConnectionSchema now defaults every kept row to kind: "text"
   };
   const backup = backupFile(path);
@@ -227,6 +247,7 @@ function readRegistry(dir: string): ReadResult {
       generationTextProviderId: salvaged.generationTextProviderId ?? null,
       chapterTextProviderId: salvaged.chapterTextProviderId ?? null,
       characterTextProviderId: salvaged.characterTextProviderId ?? null,
+      testPrompt: salvaged.testPrompt ?? null,
       connections: decryptConnections(salvaged.connections, vaultKey),
     },
     warnings,
@@ -243,6 +264,7 @@ function writeRegistry(dir: string, reg: ProviderRegistry): void {
     generationTextProviderId: reg.generationTextProviderId ?? null,
     chapterTextProviderId: reg.chapterTextProviderId ?? null,
     characterTextProviderId: reg.characterTextProviderId ?? null,
+    testPrompt: reg.testPrompt ?? null,
     connections: reg.connections.map((c) =>
       c.apiKey ? { ...c, apiKey: encryptApiKey(c.apiKey, vaultKey) } : c
     ),
@@ -260,6 +282,7 @@ export function seedRegistry(dir: string): ProviderRegistry {
     generationTextProviderId: null,
     chapterTextProviderId: null,
     characterTextProviderId: null,
+    testPrompt: null,
     connections: []
   };
   writeRegistry(dir, reg);
@@ -285,6 +308,7 @@ export function listConnections(dir: string): PublicProviderRegistry {
     generationTextProviderId: reg.generationTextProviderId ?? null,
     chapterTextProviderId: reg.chapterTextProviderId ?? null,
     characterTextProviderId: reg.characterTextProviderId ?? null,
+    testPrompt: reg.testPrompt ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings,
   };
@@ -308,8 +332,10 @@ export function createConnection(dir: string, input: ProviderConnectionDraft): P
     temperature: input.temperature ?? 0.8,
     maxTokens: input.maxTokens ?? 1200,
     contextWindow: input.contextWindow ?? 32768,
+    textSource: input.textSource ?? undefined,
     topP: input.topP ?? undefined,
     minP: input.minP ?? undefined,
+    topA: input.topA ?? undefined,
     topK: input.topK ?? undefined,
     frequencyPenalty: input.frequencyPenalty ?? undefined,
     presencePenalty: input.presencePenalty ?? undefined,
@@ -366,8 +392,10 @@ export function updateConnection(dir: string, id: string, input: ProviderConnect
   const {
     seed,
     timeoutMs,
+    textSource,
     topP,
     minP,
+    topA,
     topK,
     frequencyPenalty,
     presencePenalty,
@@ -397,10 +425,14 @@ export function updateConnection(dir: string, id: string, input: ProviderConnect
   else if (seed !== undefined) next.seed = seed;
   if (timeoutMs === null) delete next.timeoutMs;
   else if (timeoutMs !== undefined) next.timeoutMs = timeoutMs;
+  if (textSource === null) delete next.textSource;
+  else if (textSource !== undefined) next.textSource = textSource;
   if (topP === null) delete next.topP;
   else if (topP !== undefined) next.topP = topP;
   if (minP === null) delete next.minP;
   else if (minP !== undefined) next.minP = minP;
+  if (topA === null) delete next.topA;
+  else if (topA !== undefined) next.topA = topA;
   if (topK === null) delete next.topK;
   else if (topK !== undefined) next.topK = topK;
   if (frequencyPenalty === null) delete next.frequencyPenalty;
@@ -462,6 +494,7 @@ export function deleteConnection(dir: string, id: string): PublicProviderRegistr
     generationTextProviderId: reg.generationTextProviderId ?? null,
     chapterTextProviderId: reg.chapterTextProviderId ?? null,
     characterTextProviderId: reg.characterTextProviderId ?? null,
+    testPrompt: reg.testPrompt ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings: [],
   };
@@ -487,6 +520,7 @@ export function setActiveConnection(dir: string, id: string): PublicProviderRegi
     generationTextProviderId: reg.generationTextProviderId ?? null,
     chapterTextProviderId: reg.chapterTextProviderId ?? null,
     characterTextProviderId: reg.characterTextProviderId ?? null,
+    testPrompt: reg.testPrompt ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings: [],
   };
@@ -509,6 +543,7 @@ export function setGenerationTextProvider(dir: string, id: string | null): Publi
     generationTextProviderId: reg.generationTextProviderId ?? null,
     chapterTextProviderId: reg.chapterTextProviderId ?? null,
     characterTextProviderId: reg.characterTextProviderId ?? null,
+    testPrompt: reg.testPrompt ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings: [],
   };
@@ -528,6 +563,7 @@ export function setChapterTextProvider(dir: string, id: string | null): PublicPr
     generationTextProviderId: reg.generationTextProviderId ?? null,
     chapterTextProviderId: reg.chapterTextProviderId ?? null,
     characterTextProviderId: reg.characterTextProviderId ?? null,
+    testPrompt: reg.testPrompt ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings: [],
   };
@@ -547,6 +583,25 @@ export function setCharacterTextProvider(dir: string, id: string | null): Public
     generationTextProviderId: reg.generationTextProviderId ?? null,
     chapterTextProviderId: reg.chapterTextProviderId ?? null,
     characterTextProviderId: reg.characterTextProviderId ?? null,
+    testPrompt: reg.testPrompt ?? null,
+    connections: reg.connections.map(toPublicConnection),
+    warnings: [],
+  };
+}
+
+/** Remember the global test prompt used by "Test response" across all text connections. */
+export function setProviderTestPrompt(dir: string, testPrompt: string | null): PublicProviderRegistry {
+  const reg = getRegistry(dir);
+  const trimmed = testPrompt?.trim() ?? "";
+  reg.testPrompt = trimmed ? trimmed : null;
+  writeRegistry(dir, reg);
+  return {
+    activeTextProviderId: reg.activeTextProviderId,
+    activeImageProviderId: reg.activeImageProviderId,
+    generationTextProviderId: reg.generationTextProviderId ?? null,
+    chapterTextProviderId: reg.chapterTextProviderId ?? null,
+    characterTextProviderId: reg.characterTextProviderId ?? null,
+    testPrompt: reg.testPrompt ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings: [],
   };
@@ -572,6 +627,12 @@ export type ModelCapabilities = {
   /** Whatever the model's `resolution` field publishes, flattened to plain
    *  tier strings. */
   resolutions?: string[];
+  /** Text models: maximum context window reported by the provider's `/models` endpoint
+   *  (`context_length`, `max_model_len`, `n_ctx`, `top_provider.context_length`, or `model_spec.availableContextTokens`). */
+  contextLength?: number;
+  /** Text models: maximum output / completion tokens reported by the provider's `/models` endpoint
+   *  (`top_provider.max_completion_tokens`, `max_completion_tokens`, `max_output_tokens`). */
+  maxCompletionTokens?: number;
 };
 
 /** Per-model capabilities, keyed by the model id the same listing returned. */
@@ -707,9 +768,34 @@ function parseModels(bodyText: string): { models: string[]; modelSpecs: Provider
       const spec = row.model_spec && typeof row.model_spec === "object"
         ? (row.model_spec as Record<string, unknown>)
         : null;
-      const caps = parseCapabilities(spec?.constraints);
+      const topProvider = row.top_provider && typeof row.top_provider === "object"
+        ? (row.top_provider as Record<string, unknown>)
+        : null;
+      const caps = parseCapabilities(spec?.constraints) ?? {};
+
+      const contextLength =
+        numberOrUndefined(row.context_length) ??
+        numberOrUndefined(topProvider?.context_length) ??
+        numberOrUndefined(row.max_model_len) ??
+        numberOrUndefined(row.n_ctx) ??
+        numberOrUndefined(row.context_window) ??
+        numberOrUndefined(row.max_context_length) ??
+        numberOrUndefined(spec?.availableContextTokens);
+      if (contextLength !== undefined && contextLength > 0) {
+        caps.contextLength = Math.round(contextLength);
+      }
+
+      const maxCompletionTokens =
+        numberOrUndefined(topProvider?.max_completion_tokens) ??
+        numberOrUndefined(row.max_completion_tokens) ??
+        numberOrUndefined(row.max_output_tokens) ??
+        numberOrUndefined(spec?.maxCompletionTokens);
+      if (maxCompletionTokens !== undefined && maxCompletionTokens > 0) {
+        caps.maxCompletionTokens = Math.round(maxCompletionTokens);
+      }
+
       // First mention wins: a duplicate id is the same model twice.
-      if (caps && !modelSpecs[row.id]) modelSpecs[row.id] = caps;
+      if (Object.keys(caps).length > 0 && !modelSpecs[row.id]) modelSpecs[row.id] = caps;
     }
     return {
       models: [...new Set(ids)].sort((a, b) => a.localeCompare(b)),
@@ -907,6 +993,192 @@ export async function testProviderConnection(
   const { models: _models, modelSpecs: _modelSpecs, dialectOptions: _dialectOptions, ...result } =
     await probeProviderModels(input, fetchImpl);
   return result;
+}
+
+export type TestResponseProbeInput = {
+  baseUrl: string;
+  apiKey?: string;
+  model: string;
+  textSource?: TextProviderSource | null;
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number | null;
+  minP?: number | null;
+  topA?: number | null;
+  topK?: number | null;
+  frequencyPenalty?: number | null;
+  presencePenalty?: number | null;
+  repetitionPenalty?: number | null;
+  prompt?: string | null;
+};
+
+export type TestResponseProbeResult = {
+  ok: boolean;
+  status?: number;
+  latencyMs?: number;
+  reply?: string;
+  model?: string;
+  usage?: {
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+  };
+  message?: string;
+};
+
+/** Extract a concise human-readable error message from a failed HTTP body, while keeping raw detail if available. */
+function summarizeErrorBody(rawBody: string): string {
+  const trimmed = rawBody.trim();
+  if (!trimmed) return "";
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+    if (parsed.error && typeof parsed.error === "object") {
+      const errObj = parsed.error as Record<string, unknown>;
+      if (typeof errObj.message === "string" && errObj.message.trim()) {
+        return errObj.message.trim();
+      }
+    }
+    if (typeof parsed.error === "string" && parsed.error.trim()) {
+      return parsed.error.trim();
+    }
+    if (typeof parsed.message === "string" && parsed.message.trim()) {
+      return parsed.message.trim();
+    }
+    if (typeof parsed.detail === "string" && parsed.detail.trim()) {
+      return parsed.detail.trim();
+    }
+  } catch {
+    // Plain text error body
+  }
+  return trimmed.slice(0, 400);
+}
+
+/** Send a live chat completion test prompt using the connection's (or draft's) model and sampling parameters. */
+export async function testProviderResponse(
+  input: TestResponseProbeInput,
+  fetchImpl: typeof fetch = fetch
+): Promise<TestResponseProbeResult> {
+  const base = normalizeBaseUrl(input.baseUrl);
+  const model = input.model.trim();
+  if (!base) {
+    return { ok: false, message: "Base URL is required." };
+  }
+  if (!model) {
+    return { ok: false, message: "Model ID is required to test a response." };
+  }
+
+  const resolvedSource = resolveTextProviderSource(input.textSource, base);
+  const samplingParams = buildTextSamplingParams(
+    {
+      providerId: "test",
+      label: "Test",
+      baseUrl: base,
+      apiKey: input.apiKey ?? "",
+      model,
+      temperature: input.temperature ?? 0.8,
+      maxTokens: input.maxTokens ?? 256,
+      contextWindow: 32768,
+      maxRetries: 0,
+      timeoutMs: 30_000,
+      textSource: resolvedSource,
+      ...(input.topP != null ? { topP: input.topP } : {}),
+      ...(input.minP != null ? { minP: input.minP } : {}),
+      ...(input.topA != null ? { topA: input.topA } : {}),
+      ...(input.topK != null ? { topK: input.topK } : {}),
+      ...(input.frequencyPenalty != null ? { frequencyPenalty: input.frequencyPenalty } : {}),
+      ...(input.presencePenalty != null ? { presencePenalty: input.presencePenalty } : {}),
+      ...(input.repetitionPenalty != null ? { repetitionPenalty: input.repetitionPenalty } : {}),
+    },
+    { includeStop: false, jsonObject: false }
+  );
+
+  const promptText = input.prompt?.trim() || DEFAULT_PROVIDER_TEST_PROMPT;
+  const body: Record<string, unknown> = {
+    model,
+    messages: [{ role: "user", content: promptText }],
+    temperature: input.temperature ?? 0.8,
+    max_tokens: Math.min(Math.max(input.maxTokens ?? 256, 16), 512),
+    ...samplingParams,
+  };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  const start = Date.now();
+  try {
+    const res = await fetchImpl(`${base}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders(input.apiKey),
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const latencyMs = Date.now() - start;
+    const rawText = await res.text();
+    if (!res.ok) {
+      return {
+        ok: false,
+        status: res.status,
+        latencyMs,
+        message: summarizeErrorBody(rawText) || `HTTP ${res.status}`,
+      };
+    }
+
+    let parsed: {
+      model?: string;
+      choices?: Array<{
+        message?: {
+          content?: string | null;
+          reasoning_content?: string | null;
+        };
+      }>;
+      usage?: {
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        total_tokens?: number;
+      };
+    } = {};
+    try {
+      parsed = JSON.parse(rawText) as typeof parsed;
+    } catch {
+      return {
+        ok: false,
+        status: res.status,
+        latencyMs,
+        message: "Provider returned non-JSON response body.",
+      };
+    }
+
+    const msg = parsed.choices?.[0]?.message;
+    const reply = (msg?.content?.trim() || msg?.reasoning_content?.trim() || "").slice(0, 1200);
+    const usage = parsed.usage
+      ? {
+          ...(typeof parsed.usage.prompt_tokens === "number" ? { promptTokens: parsed.usage.prompt_tokens } : {}),
+          ...(typeof parsed.usage.completion_tokens === "number"
+            ? { completionTokens: parsed.usage.completion_tokens }
+            : {}),
+          ...(typeof parsed.usage.total_tokens === "number" ? { totalTokens: parsed.usage.total_tokens } : {}),
+        }
+      : undefined;
+
+    return {
+      ok: true,
+      status: res.status,
+      latencyMs,
+      reply: reply || "(Empty reply)",
+      model: typeof parsed.model === "string" ? parsed.model : model,
+      ...(usage && Object.keys(usage).length > 0 ? { usage } : {}),
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      latencyMs: Date.now() - start,
+      message: e instanceof Error ? e.message : String(e),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /** Fetch the model list from an OpenAI-compatible server: GET <base>/models

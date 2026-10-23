@@ -7,7 +7,7 @@ export interface TextInputProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, "size"> {
   label?: string;
   error?: string;
-  helperText?: string;
+  helperText?: ReactNode;
   leftIcon?: ReactNode;
   leftElement?: ReactNode;
   rightElement?: ReactNode;

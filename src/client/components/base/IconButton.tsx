@@ -1,5 +1,5 @@
 import { forwardRef } from "react";
-import { Button, type ButtonProps, type ButtonSize } from "./Button";
+import { Button, type ButtonProps, type ButtonSize } from "./Button/Button";
 import { Icon } from "./Icon";
 
 export type IconButtonVariant = "ghost" | "secondary" | "overlay" | "danger";

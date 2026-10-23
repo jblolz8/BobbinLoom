@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
-import { Icon, type IconName } from "./Icon";
+import { Icon, type IconName } from "../Icon";
+import "./Tabs.css";
 
 export type TabItem<T extends string = string> = {
   id: T;
@@ -10,14 +11,18 @@ export type TabItem<T extends string = string> = {
   title?: string;
 };
 
+export type TabsVariant = "underline" | "pill" | "enclosed" | "segmented" | "sidebar";
+
 export type TabsProps<T extends string = string> = {
   tabs: TabItem<T>[];
-  activeTab: T;
+  activeTab?: T | null;
   onChange: (tabId: T) => void;
-  variant?: "underline" | "pill" | "enclosed";
+  variant?: TabsVariant;
   size?: "sm" | "md";
   fullWidth?: boolean;
   sticky?: boolean;
+  /** Invoke `onChange` even when clicking the already-active tab. */
+  allowReselect?: boolean;
   className?: string;
   ariaLabel?: string;
 };
@@ -30,6 +35,7 @@ export function Tabs<T extends string = string>({
   size = "md",
   fullWidth = false,
   sticky = false,
+  allowReselect = false,
   className = "",
   ariaLabel,
 }: TabsProps<T>) {
@@ -70,6 +76,7 @@ export function Tabs<T extends string = string>({
     <div
       className={containerClasses}
       role="tablist"
+      aria-orientation={variant === "sidebar" ? "vertical" : undefined}
       aria-label={ariaLabel}
       ref={tabsRef}
     >
@@ -95,7 +102,7 @@ export function Tabs<T extends string = string>({
             title={tab.title}
             className={tabClasses}
             onClick={() => {
-              if (!tab.disabled && !isActive) {
+              if (!tab.disabled && (allowReselect || !isActive)) {
                 onChange(tab.id);
               }
             }}
@@ -103,7 +110,13 @@ export function Tabs<T extends string = string>({
             {tab.icon && (
               <Icon
                 name={tab.icon}
-                size={size === "sm" ? 14 : 16}
+                size={
+                  variant === "segmented" || variant === "sidebar"
+                    ? 15
+                    : size === "sm"
+                      ? 14
+                      : 16
+                }
                 className="base-tab__icon"
               />
             )}

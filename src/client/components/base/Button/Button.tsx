@@ -1,5 +1,7 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
-import { Icon } from "./Icon";
+import { Icon, type IconName } from "../Icon";
+import { Tooltip, type TooltipProps } from "../Tooltip/Tooltip";
+import "./Button.css";
 
 export type ButtonVariant =
   | "primary"
@@ -14,6 +16,9 @@ export type ButtonVariant =
 
 export type ButtonSize = "xs" | "sm" | "md" | "lg";
 
+/** Viewport threshold below which the button hides its text label and becomes an icon button. */
+export type ButtonCollapseBreakpoint = "xs" | "sm" | "md" | "always";
+
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
@@ -22,8 +27,16 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   round?: boolean;
   fullWidth?: boolean;
   isLoading?: boolean;
-  leftIcon?: ReactNode;
-  rightIcon?: ReactNode;
+  /** Highlights the button as toggled/active using theme surface tokens. */
+  active?: boolean;
+  /** Hides the button label below the specified viewport breakpoint (requires leftIcon or rightIcon). */
+  collapseBelow?: ButtonCollapseBreakpoint;
+  /** Optional tooltip content. When paired with `collapseBelow`, only shows in the icon-only state by default. */
+  tooltip?: ReactNode;
+  /** Placement side for `tooltip` (defaults to `"top"`). */
+  tooltipSide?: TooltipProps["side"];
+  leftIcon?: IconName | ReactNode;
+  rightIcon?: IconName | ReactNode;
 }
 
 const SIZE_ICON_MAP: Record<ButtonSize, number> = {
@@ -32,6 +45,14 @@ const SIZE_ICON_MAP: Record<ButtonSize, number> = {
   md: 16,
   lg: 18,
 };
+
+function renderButtonIcon(icon: IconName | ReactNode | undefined, size: number): ReactNode {
+  if (!icon) return null;
+  if (typeof icon === "string") {
+    return <Icon name={icon} size={size} />;
+  }
+  return icon;
+}
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   {
@@ -43,6 +64,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     round = false,
     fullWidth = false,
     isLoading = false,
+    active = false,
+    collapseBelow,
+    tooltip,
+    tooltipSide = "top",
     leftIcon,
     rightIcon,
     disabled = false,
@@ -61,13 +86,15 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     iconOnly ? "base-btn--icon" : "",
     round ? "base-btn--round" : "",
     fullWidth ? "base-btn--full-width" : "",
+    active ? "base-btn--active" : "",
+    collapseBelow ? `base-btn--collapse-${collapseBelow}` : "",
     isLoading ? "is-loading" : "",
     className,
   ]
     .filter(Boolean)
     .join(" ");
 
-  return (
+  const buttonElement = (
     <button
       ref={ref}
       type={type}
@@ -82,7 +109,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
           <Icon name="Loader2" size={iconSize} />
         </span>
       ) : leftIcon ? (
-        <span className="base-btn__icon base-btn__icon--left">{leftIcon}</span>
+        <span className="base-btn__icon base-btn__icon--left">
+          {renderButtonIcon(leftIcon, iconSize)}
+        </span>
       ) : null}
 
       {children !== undefined && children !== null ? (
@@ -90,10 +119,22 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ) : null}
 
       {!isLoading && rightIcon ? (
-        <span className="base-btn__icon base-btn__icon--right">{rightIcon}</span>
+        <span className="base-btn__icon base-btn__icon--right">
+          {renderButtonIcon(rightIcon, iconSize)}
+        </span>
       ) : null}
     </button>
   );
+
+  if (tooltip) {
+    return (
+      <Tooltip content={tooltip} side={tooltipSide} collapseBelow={collapseBelow}>
+        {buttonElement}
+      </Tooltip>
+    );
+  }
+
+  return buttonElement;
 });
 
 export default Button;

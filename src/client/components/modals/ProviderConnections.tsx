@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Icon } from "../base";
 import type {
   ConnectionModelsResult,
+  ConnectionTestResponseResult,
   ConnectionTestResult,
   ProviderConnection,
   ProviderConnectionPayload,
@@ -16,7 +17,9 @@ import {
   getProviderApiKey,
   listProviderConnections,
   setActiveProviderConnection,
+  setProviderTestPrompt,
   testProviderConnection,
+  testProviderResponse,
   updateProviderConnection
 } from "../../api";
 import {
@@ -25,7 +28,14 @@ import {
   resolveProviderPreferences,
   updateViewPreferences
 } from "../../api";
-import type { ImageApiStyle, ProviderKind, ViewPreferences } from "../../../schemas";
+import {
+  DEFAULT_PROVIDER_TEST_PROMPT,
+  TEXT_PROVIDER_SOURCES,
+  resolveTextProviderSource,
+  type ImageApiStyle,
+  type ProviderKind,
+  type ViewPreferences,
+} from "../../../schemas";
 import { ApiKeyField, type ApiKeyFieldProps } from "./providers/ApiKeyField";
 import { ImageConnectionEditor } from "./providers/ImageConnectionEditor";
 import {
@@ -90,6 +100,7 @@ const emptyForm = (kind: ProviderKind): ProviderConnectionPayload =>
     : {
         kind: "text",
         label: "", baseUrl: "", model: "", apiKey: "",
+        textSource: "openai_compatible",
         temperature: 0.8, maxTokens: 1200, contextWindow: 32768
       };
 
@@ -126,9 +137,11 @@ const formFromConnection = (c: ProviderConnection): ProviderConnectionPayload =>
     : {
         kind: "text",
         label: c.label, baseUrl: c.baseUrl, model: c.model, apiKey: "",
+        textSource: resolveTextProviderSource(c.textSource, c.baseUrl),
         timeoutMs: c.timeoutMs,
         topP: c.topP,
         minP: c.minP,
+        topA: c.topA,
         topK: c.topK,
         frequencyPenalty: c.frequencyPenalty,
         presencePenalty: c.presencePenalty,
@@ -175,6 +188,11 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
   const [showKey, setShowKey] = useState(false);
   const [keyBusy, setKeyBusy] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [testingResponse, setTestingResponse] = useState(false);
+  const [testDrawerOpen, setTestDrawerOpen] = useState(false);
+  const [testPrompt, setTestPrompt] = useState<string>(DEFAULT_PROVIDER_TEST_PROMPT);
+  const [testResponseResult, setTestResponseResult] = useState<ConnectionTestResponseResult | null>(null);
   const [status, setStatus] = useState<EditorStatus>(null);
   const [test, setTest] = useState<EditorStatus>(null);
   const [models, setModels] = useState<string[]>([]);
@@ -294,13 +312,18 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
   // instance holds its own registry snapshot.
   useEffect(() => {
     if (!active) return;
-    listProviderConnections().then(setRegistry).catch((e) =>
-      setStatus({ kind: "err", text: e instanceof Error ? e.message : String(e) }));
+    listProviderConnections()
+      .then((r) => {
+        setRegistry(r);
+        setTestPrompt(r.testPrompt?.trim() ? r.testPrompt : DEFAULT_PROVIDER_TEST_PROMPT);
+      })
+      .catch((e) => setStatus({ kind: "err", text: e instanceof Error ? e.message : String(e) }));
   }, [active]);
 
   async function reload() {
     const r = await listProviderConnections();
     setRegistry(r);
+    setTestPrompt(r.testPrompt?.trim() ? r.testPrompt : DEFAULT_PROVIDER_TEST_PROMPT);
     return r;
   }
 
@@ -311,6 +334,9 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
     setModels([]); setModelSpecs({}); setDialectOptions({}); setModelsStatus(null);
     setShowKey(false);
     setStatus(null); setTest(null);
+    setTestResponseResult(null);
+    setTestingConnection(false);
+    setTestingResponse(false);
     setEditor({ mode: "create" });
   }
 
@@ -320,6 +346,9 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
     setBaseline(seeded);
     setModels([]); setModelSpecs({}); setDialectOptions({}); setModelsStatus(null);
     setShowKey(false); setStatus(null); setTest(null);
+    setTestResponseResult(null);
+    setTestingConnection(false);
+    setTestingResponse(false);
     setEditor({ mode: "edit", connection: c });
     void loadModels({ id: c.id });
 
@@ -465,10 +494,15 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
 
   async function testCurrent(e: React.MouseEvent) {
     e.preventDefault();
+    setStatus(null);
     setTest(null);
     const target = probeTarget();
-    if (!target.id && !target.baseUrl?.trim()) return;
-    setTest({ kind: "ok", text: "Testing…" });
+    if (!target.id && !target.baseUrl?.trim()) {
+      setTest({ kind: "err", text: "Enter a Base URL first." });
+      return;
+    }
+    setTestingConnection(true);
+    setTest({ kind: "ok", text: "Testing connection…" });
     try {
       const r: ConnectionTestResult = await testProviderConnection(target);
       setTest(r.ok
@@ -477,6 +511,74 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
       if (r.ok) void loadModels(target);
     } catch (err) {
       setTest({ kind: "err", text: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setTestingConnection(false);
+    }
+  }
+
+  async function saveGlobalTestPrompt(promptToSave: string) {
+    const cleaned = promptToSave.trim();
+    const persisted = !cleaned || cleaned === DEFAULT_PROVIDER_TEST_PROMPT ? null : cleaned;
+    try {
+      const r = await setProviderTestPrompt(persisted);
+      setRegistry(r);
+    } catch {
+      /* Non-blocking background persistence */
+    }
+  }
+
+  async function testResponseCurrent(e: React.MouseEvent) {
+    e.preventDefault();
+    if (kind !== "text") return;
+    setStatus(null);
+    setTest(null);
+    setTestDrawerOpen(true);
+
+    const apiKeyToSend =
+      editor.mode === "edit"
+        ? form.apiKey !== undefined && form.apiKey !== ""
+          ? form.apiKey ?? undefined
+          : undefined
+        : form.apiKey || undefined;
+
+    setTestingResponse(true);
+    try {
+      const r = await testProviderResponse({
+        id: editor.mode === "edit" ? editor.connection.id : undefined,
+        baseUrl: form.baseUrl.trim(),
+        apiKey: apiKeyToSend,
+        model: form.model.trim(),
+        textSource: form.textSource,
+        prompt: testPrompt.trim() || DEFAULT_PROVIDER_TEST_PROMPT,
+        temperature: form.temperature,
+        maxTokens: form.maxTokens,
+        timeoutMs: form.timeoutMs,
+        topP: form.topP,
+        minP: form.minP,
+        topA: form.topA,
+        topK: form.topK,
+        frequencyPenalty: form.frequencyPenalty,
+        presencePenalty: form.presencePenalty,
+        repetitionPenalty: form.repetitionPenalty,
+        stop: form.stop,
+      });
+      setTestResponseResult(r);
+      setTest(
+        r.ok
+          ? { kind: "ok", text: `Response received (${r.latencyMs ?? "?"}ms).` }
+          : {
+              kind: "err",
+              text: r.message
+                ? `Response failed${r.status ? ` (${r.status})` : ""}: ${r.message}`
+                : "Response test failed.",
+            }
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setTestResponseResult({ ok: false, message });
+      setTest({ kind: "err", text: message });
+    } finally {
+      setTestingResponse(false);
     }
   }
 
@@ -574,17 +676,30 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
 
   function renderDetailTags(c: ProviderConnection) {
     if (kind === "text") {
+      const sourceId = resolveTextProviderSource(c.textSource, c.baseUrl);
+      const sourceSpec = TEXT_PROVIDER_SOURCES[sourceId];
       const hasCustomTimeout = typeof c.timeoutMs === "number" && c.timeoutMs > 0;
-      if (!hasCustomTimeout) return null;
       return (
-        <Badge
-          variant="neutral"
-          size="xs"
-          leftIcon={<Icon name="Timer" size={12} className="ds-icon-muted" />}
-          title="Custom per-request timeout for this connection"
-        >
-          {Math.round(c.timeoutMs! / 1000)}s timeout
-        </Badge>
+        <>
+          <Badge
+            variant="accent"
+            size="xs"
+            leftIcon="MessageSquare"
+            title={sourceSpec.description}
+          >
+            {sourceSpec.label}
+          </Badge>
+          {hasCustomTimeout && (
+            <Badge
+              variant="neutral"
+              size="xs"
+              leftIcon={<Icon name="Timer" size={12} className="ds-icon-muted" />}
+              title="Custom per-request timeout for this connection"
+            >
+              {Math.round(c.timeoutMs! / 1000)}s timeout
+            </Badge>
+          )}
+        </>
       );
     }
     const style = c.apiStyle ?? "openai";
@@ -704,9 +819,35 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
     ? "No image providers yet. Add one to generate images for an assistant message."
     : "No connections yet. Add one to start generating.";
 
+  const editorFooterStatus = test ?? status;
+  const clearEditorStatuses = () => {
+    setTest(null);
+    setStatus(null);
+  };
+
   return (
     <div className="connections">
-      {status && <p className={`conn-status ${status.kind}`}>{status.text}</p>}
+      {!editable && status && (
+        <div className={`conn-footer-status ${status.kind}`} role="status" aria-live="polite">
+          <div className="conn-footer-status__main">
+            <Icon
+              name={status.kind === "ok" ? "CheckCircle2" : "AlertCircle"}
+              size={13}
+              className="conn-footer-status__icon"
+            />
+            <span className="conn-footer-status__text">{status.text}</span>
+            <button
+              type="button"
+              className="conn-footer-status__dismiss"
+              onClick={() => setStatus(null)}
+              aria-label="Dismiss status"
+              title="Dismiss"
+            >
+              <Icon name="X" size={12} />
+            </button>
+          </div>
+        </div>
+      )}
       {registry && registry.warnings.length > 0 && (
         <div className="conn-warnings">
           {registry.warnings.map((w, i) => <p key={i}>{w}</p>)}
@@ -745,7 +886,9 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
           modelsStatus={modelsStatus}
           fetchingModels={fetchingModels}
           onFetchModels={() => void loadModels(probeTarget())}
-          testStatus={test}
+          testStatus={editorFooterStatus}
+          onDismissStatus={clearEditorStatuses}
+          testingConnection={testingConnection}
           busy={busy}
           dirty={dirty}
           onSubmit={save}
@@ -762,14 +905,26 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
           setForm={setForm}
           apiKey={apiKeyProps}
           models={models}
+          modelSpecs={modelSpecs}
           modelsStatus={modelsStatus}
           fetchingModels={fetchingModels}
           onFetchModels={() => void loadModels(probeTarget())}
-          testStatus={test}
+          testStatus={editorFooterStatus}
+          onDismissStatus={clearEditorStatuses}
+          testingConnection={testingConnection}
+          testingResponse={testingResponse}
+          testDrawerOpen={testDrawerOpen}
+          onToggleTestDrawer={() => setTestDrawerOpen((v) => !v)}
+          testPrompt={testPrompt}
+          onTestPromptChange={setTestPrompt}
+          onSaveTestPrompt={(p) => void saveGlobalTestPrompt(p)}
+          testResponseResult={testResponseResult}
+          onClearTestResponse={() => setTestResponseResult(null)}
           busy={busy}
           dirty={dirty}
           onSubmit={save}
           onTest={(e) => void testCurrent(e)}
+          onTestResponse={(e) => void testResponseCurrent(e)}
           onCancel={requestCloseEditor}
           onDelete={() => { if (editor.mode === "edit") setPendingDelete(editor.connection); }}
         />
