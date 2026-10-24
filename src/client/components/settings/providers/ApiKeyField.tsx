@@ -1,4 +1,4 @@
-import { Button, Icon, TextInput } from "../../base";
+import { Button, Icon, Stack, StatusMessage, TextInput } from "../../base";
 
 /**
  * The API-key field block: masked input, reveal/hide toggle, and the
@@ -38,9 +38,10 @@ export function ApiKeyField({
   onRestoreKey
 }: ApiKeyFieldProps) {
   return (
-    <div>
+    <Stack direction="column" align="stretch" gap="2xs">
       <TextInput
         label="API Key"
+        tooltip="Your provider API key. Stored encrypted in your local vault; leave blank for local servers that do not require authentication."
         size="sm"
         type={showKey ? "text" : "password"}
         value={value ?? ""}
@@ -55,33 +56,31 @@ export function ApiKeyField({
             onClick={onToggleShowKey}
             disabled={keyBusy}
             isLoading={keyBusy}
-            leftIcon={<Icon name={showKey ? "EyeOff" : "Eye"} size={13} />}
+            leftIcon={showKey ? "EyeOff" : "Eye"}
           >
             {showKey ? "Hide" : "Show"}
           </Button>
         }
       />
       {isKeyCleared ? (
-        <div className="conn-key-status-row">
-          <span className="conn-key-warning-status">
-            <Icon name="AlertTriangle" size={13} />
-            <span>Key marked for removal on Save</span>
-          </span>
-          <Button type="button" variant="ghost" size="xs" onClick={onRestoreKey} leftIcon={<Icon name="RotateCcw" size={12} />}>
+        <Stack direction="row" align="center" justify="between" gap="xs">
+          <StatusMessage variant="inline" tone="warn" icon="AlertTriangle">
+            Key marked for removal on Save
+          </StatusMessage>
+          <Button type="button" variant="ghost" size="xs" onClick={onRestoreKey} leftIcon="RotateCcw">
             Undo
           </Button>
-        </div>
+        </Stack>
       ) : isStoredKeyActive ? (
-        <div className="conn-key-status-row">
-          <span className="conn-key-vault-status">
-            <Icon name="LockKeyhole" size={13} />
-            <span>Stored in encrypted vault</span>
-          </span>
-          <Button type="button" variant="ghost" size="xs" onClick={onClearKey} leftIcon={<Icon name="Trash2" size={12} />}>
+        <Stack direction="row" align="center" justify="between" gap="xs">
+          <StatusMessage variant="inline" tone="neutral" icon="LockKeyhole">
+            Stored in encrypted vault
+          </StatusMessage>
+          <Button type="button" variant="ghost" size="xs" onClick={onClearKey} leftIcon="Trash2">
             Clear stored key
           </Button>
-        </div>
+        </Stack>
       ) : null}
-    </div>
+    </Stack>
   );
 }

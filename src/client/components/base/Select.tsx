@@ -1,6 +1,8 @@
 import { forwardRef, type ComponentPropsWithoutRef, type ElementRef, type ReactNode } from "react";
 import * as RadixSelect from "@radix-ui/react-select";
+import { Badge } from "./Badge/Badge";
 import { Icon } from "./Icon";
+import { TooltipIcon } from "./Tooltip/Tooltip";
 
 export const Select = RadixSelect.Root;
 export const SelectGroup = RadixSelect.Group;
@@ -30,6 +32,7 @@ export interface SelectTriggerProps
   size?: SelectSize;
   variant?: SelectVariant;
   fullWidth?: boolean;
+  dirty?: boolean;
 }
 
 export const SelectTrigger = forwardRef<
@@ -42,6 +45,7 @@ export const SelectTrigger = forwardRef<
     size = "md",
     variant = "default",
     fullWidth = true,
+    dirty = false,
     ...props
   },
   ref
@@ -49,7 +53,7 @@ export const SelectTrigger = forwardRef<
   return (
     <RadixSelect.Trigger
       ref={ref}
-      className={`base-select-trigger base-select-trigger--${size} base-select-trigger--${variant} ${fullWidth ? "base-select-trigger--full" : ""} ${className}`.trim()}
+      className={`base-select-trigger base-select-trigger--${size} base-select-trigger--${variant} ${fullWidth ? "base-select-trigger--full" : ""} ${dirty ? "base-select-trigger--dirty" : ""} ${className}`.trim()}
       {...props}
     >
       <span className="base-select-trigger__value">{children}</span>
@@ -143,8 +147,11 @@ export interface SimpleSelectProps<T extends string = string> {
   placeholder?: string;
   label?: ReactNode;
   labelIcon?: string;
+  tooltip?: ReactNode;
   helperText?: ReactNode;
   error?: string;
+  dirty?: boolean;
+  rightElement?: ReactNode;
   containerClassName?: string;
   size?: SelectSize;
   variant?: SelectVariant;
@@ -162,8 +169,11 @@ export function SimpleSelect<T extends string = string>({
   placeholder,
   label,
   labelIcon,
+  tooltip,
   helperText,
   error,
+  dirty = false,
+  rightElement,
   containerClassName = "",
   size = "md",
   variant = "default",
@@ -188,6 +198,7 @@ export function SimpleSelect<T extends string = string>({
         size={size}
         variant={variant}
         fullWidth={fullWidth}
+        dirty={dirty}
         className={className}
         aria-label={ariaLabel ?? (typeof label === "string" ? label : undefined)}
       >
@@ -221,8 +232,17 @@ export function SimpleSelect<T extends string = string>({
     </Select>
   );
 
+  const controlNode = rightElement ? (
+    <div className={`field-input-row field-input-row--${size} has-action has-right-action`}>
+      {selectNode}
+      <div className="field-input-action field-input-action--right">{rightElement}</div>
+    </div>
+  ) : (
+    selectNode
+  );
+
   if (!label && !helperText && !error) {
-    return selectNode;
+    return controlNode;
   }
 
   return (
@@ -230,12 +250,18 @@ export function SimpleSelect<T extends string = string>({
       className={`base-form-field form-field ${fullWidth ? "base-form-field--full" : ""} ${disabled ? "base-form-field--disabled" : ""} ${containerClassName}`.trim()}
     >
       {label && (
-        <span className="field-label-text flex items-center gap-1.5">
+        <span className="field-label-text">
           {labelIcon && <Icon name={labelIcon} size={12} className="ds-icon-accent shrink-0" />}
           <span>{label}</span>
+          {tooltip && <TooltipIcon content={tooltip} />}
+          {dirty && (
+            <Badge variant="warning" size="xs">
+              Modified
+            </Badge>
+          )}
         </span>
       )}
-      {selectNode}
+      {controlNode}
       {error ? (
         <p className="field-error-text" role="alert">
           {error}

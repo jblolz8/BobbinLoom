@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
+import { Badge } from "./Badge/Badge";
 import { Icon, type IconName } from "./Icon";
 import { Switch, type SwitchProps } from "./Switch";
+import { TooltipIcon } from "./Tooltip/Tooltip";
 
 export interface SwitchRowProps
   extends Pick<SwitchProps, "checked" | "disabled" | "onChange"> {
@@ -9,7 +11,10 @@ export interface SwitchRowProps
   /** Optional leading icon node (e.g. a colored <Icon>) overriding `icon`. */
   iconNode?: ReactNode;
   title: ReactNode;
+  /** Optional info tooltip trigger icon rendered beside the title. */
+  tooltip?: ReactNode;
   description?: ReactNode;
+  dirty?: boolean;
   className?: string;
 }
 
@@ -27,14 +32,16 @@ export function SwitchRow({
   icon,
   iconNode,
   title,
+  tooltip,
   description,
+  dirty = false,
   checked,
   onChange,
   disabled,
   className = "",
 }: SwitchRowProps) {
   return (
-    <label className={`base-toggle-row ${disabled ? "base-toggle-row--disabled" : ""} ${className}`.trim()}>
+    <label className={`base-toggle-row ${dirty ? "base-toggle-row--dirty" : ""} ${disabled ? "base-toggle-row--disabled" : ""} ${className}`.trim()}>
       <div className="base-toggle-row__main">
         {(iconNode || icon) && (
           <div className="base-toggle-row__icon" aria-hidden="true">
@@ -42,7 +49,15 @@ export function SwitchRow({
           </div>
         )}
         <div className="base-toggle-row__info">
-          <span className="base-toggle-row__title">{title}</span>
+          <span className="base-toggle-row__title">
+            <span>{title}</span>
+            {tooltip && <TooltipIcon content={tooltip} />}
+            {dirty && (
+              <Badge variant="warning" size="xs">
+                Modified
+              </Badge>
+            )}
+          </span>
           {description && <span className="base-toggle-row__desc">{description}</span>}
         </div>
       </div>

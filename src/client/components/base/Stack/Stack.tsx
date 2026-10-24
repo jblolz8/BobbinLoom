@@ -1,5 +1,4 @@
 import { forwardRef, type ElementType, type HTMLAttributes, type ReactNode } from "react";
-import "./Stack.css";
 
 export type StackDirection = "row" | "column";
 export type StackAlign = "start" | "center" | "end" | "stretch" | "baseline";
@@ -15,6 +14,7 @@ export interface StackProps extends HTMLAttributes<HTMLElement> {
   wrap?: boolean;
   inline?: boolean;
   flex1?: boolean;
+  sticky?: boolean;
   children?: ReactNode;
 }
 
@@ -28,6 +28,7 @@ export const Stack = forwardRef<HTMLElement, StackProps>(function Stack(
     wrap = false,
     inline = false,
     flex1 = false,
+    sticky = false,
     className = "",
     children,
     ...props
@@ -43,6 +44,7 @@ export const Stack = forwardRef<HTMLElement, StackProps>(function Stack(
     `base-stack--gap-${gap}`,
     wrap ? "base-stack--wrap" : "",
     flex1 ? "base-stack--flex-1" : "",
+    sticky ? "base-stack--sticky" : "",
     className,
   ]
     .filter(Boolean)

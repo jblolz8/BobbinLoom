@@ -2,9 +2,28 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as RadixTooltip from "@radix-ui/react-tooltip";
 import { describe, expect, it } from "vitest";
-import { Badge, Button, Header, Stack, Text } from "../src/client/components/base";
-import { ChatSettingsPanel } from "../src/client/components/modals/ChatSettingsPanel";
-import { TextConnectionEditor } from "../src/client/components/modals/providers/TextConnectionEditor";
+import {
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  DragGhost,
+  DragHandle,
+  Header,
+  SimpleSelect,
+  Slider,
+  Stack,
+  SwitchRow,
+  Text,
+  TextArea,
+  TextInput,
+} from "../src/client/components/base";
+import { SettingsModal } from "../src/client/components/modals/SettingsModal";
+import { ChatSettingsPanel } from "../src/client/components/settings/ChatSettingsPanel";
+import { formatEqual, imageEqual, PresetEditor, promptConfigDiffers } from "../src/client/components/settings/PresetEditor";
+import { ProviderConnectionCard } from "../src/client/components/settings/providers/ProviderConnectionList";
+import { ImageConnectionEditor } from "../src/client/components/settings/providers/ImageConnectionEditor";
+import { TextConnectionEditor } from "../src/client/components/settings/providers/TextConnectionEditor";
 import { AppHeader } from "../src/client/components/navigation/AppHeader";
 import { buildTextSamplingParams, resolveConnectionConfig } from "../src/server/providerConfig";
 import { testProviderResponse } from "../src/server/providerRegistry";
@@ -30,8 +49,9 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
       )
     );
 
-    expect(html).toContain("base-header base-header--app");
+    expect(html).toContain("base-header base-header--app app-header");
     expect(html).toContain("base-header__brand");
+    expect(html).toContain('<h1 class="base-header__logo"><button type="button" class="base-header__logo-btn">');
     expect(html).toContain("base-header__nav");
     expect(html).toContain("base-tabs--segmented");
     expect(html).toContain("base-header__actions");
@@ -149,6 +169,35 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
     expect(html).not.toContain("chat-settings-section");
   });
 
+  it("renders SettingsModal using Modal, Modal.Body, Modal.Content, and Tabs.Panel primitives without legacy layout classes", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(SettingsModal, {
+          open: true,
+          onClose: noop,
+          choicesEnabled: true,
+          setChoicesEnabled: noop,
+          showDebug: false,
+          setShowDebug: noop,
+          showContextUsage: true,
+          setShowContextUsage: noop,
+        })
+      )
+    );
+
+    expect(html).toContain("base-modal-backdrop base-modal-backdrop--fullscreen-mobile");
+    expect(html).toContain("base-modal base-modal--wide base-modal--fullscreen-mobile");
+    expect(html).toContain("base-modal__body base-modal__body--split");
+    expect(html).toContain("base-modal__content");
+    expect(html).toContain('role="tabpanel"');
+    expect(html).toContain("base-tab-panel");
+    expect(html).not.toContain("settings-modal-wide");
+    expect(html).not.toContain("settings-modal-body");
+    expect(html).not.toContain("settings-tab-content");
+  });
+
   it("renders TextConnectionEditor with source-filtered Slider controls and model capability chips", () => {
     const apiKeyProps = {
       value: "",
@@ -163,37 +212,48 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
     };
 
     const deepseekHtml = renderToStaticMarkup(
-      createElement(TextConnectionEditor, {
-        mode: "create",
-        editing: null,
-        form: {
-          kind: "text",
-          label: "DeepSeek Cloud",
-          baseUrl: "https://api.deepseek.com/v1",
-          model: "deepseek-chat",
-          textSource: "deepseek",
-          temperature: 0.8,
-          maxTokens: 2048,
-          contextWindow: 65536,
-        },
-        setForm: noop as never,
-        apiKey: apiKeyProps,
-        models: ["deepseek-chat"],
-        modelSpecs: {},
-        modelsStatus: null,
-        fetchingModels: false,
-        onFetchModels: noop,
-        testStatus: null,
-        busy: false,
-        dirty: false,
-        onSubmit: noop as never,
-        onTest: noop as never,
-        onCancel: noop,
-        onDelete: noop,
-      })
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(TextConnectionEditor, {
+          mode: "create",
+          editing: null,
+          form: {
+            kind: "text",
+            label: "DeepSeek Cloud",
+            baseUrl: "https://api.deepseek.com/v1",
+            model: "deepseek-chat",
+            textSource: "deepseek",
+            temperature: 0.8,
+            maxTokens: 2048,
+            contextWindow: 65536,
+          },
+          setForm: noop as never,
+          apiKey: apiKeyProps,
+          models: ["deepseek-chat"],
+          modelSpecs: {},
+          modelsStatus: null,
+          fetchingModels: false,
+          onFetchModels: noop,
+          testStatus: null,
+          busy: false,
+          dirty: false,
+          onSubmit: noop as never,
+          onTest: noop as never,
+          onCancel: noop,
+          onDelete: noop,
+        })
+      )
     );
 
     expect(deepseekHtml).toContain("base-slider");
+    expect(deepseekHtml).toContain("base-tooltip-icon");
+    expect(deepseekHtml).toContain('aria-label="Context Window slider"');
+    expect(deepseekHtml).toContain('aria-label="Max Response Tokens slider"');
+    expect(deepseekHtml).toContain("Default (32,768)");
+    expect(deepseekHtml).toContain("Default (1,200)");
+    expect(deepseekHtml).not.toContain("Stop Sequences");
+    expect(deepseekHtml).not.toContain("Timeout (s)");
     expect(deepseekHtml).toContain('aria-label="Temperature slider"');
     expect(deepseekHtml).toContain('aria-label="Top P slider"');
     expect(deepseekHtml).toContain('aria-label="Frequency Penalty slider"');
@@ -205,41 +265,45 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
     expect(deepseekHtml).not.toContain('aria-label="Repetition Penalty slider"');
 
     const openrouterHtml = renderToStaticMarkup(
-      createElement(TextConnectionEditor, {
-        mode: "edit",
-        editing: null,
-        form: {
-          kind: "text",
-          label: "OpenRouter",
-          baseUrl: "https://openrouter.ai/api/v1",
-          model: "anthropic/claude-3.7-sonnet",
-          textSource: "openrouter",
-          temperature: 0.8,
-          topA: 0.1,
-          minP: 0.05,
-          maxTokens: 4096,
-          contextWindow: 128000,
-        },
-        setForm: noop as never,
-        apiKey: apiKeyProps,
-        models: ["anthropic/claude-3.7-sonnet"],
-        modelSpecs: {
-          "anthropic/claude-3.7-sonnet": {
-            contextLength: 200000,
-            maxCompletionTokens: 16384,
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(TextConnectionEditor, {
+          mode: "edit",
+          editing: null,
+          form: {
+            kind: "text",
+            label: "OpenRouter",
+            baseUrl: "https://openrouter.ai/api/v1",
+            model: "anthropic/claude-3.7-sonnet",
+            textSource: "openrouter",
+            temperature: 0.8,
+            topA: 0.1,
+            minP: 0.05,
+            maxTokens: 4096,
+            contextWindow: 128000,
           },
-        },
-        modelsStatus: null,
-        fetchingModels: false,
-        onFetchModels: noop,
-        testStatus: null,
-        busy: false,
-        dirty: false,
-        onSubmit: noop as never,
-        onTest: noop as never,
-        onCancel: noop,
-        onDelete: noop,
-      })
+          setForm: noop as never,
+          apiKey: apiKeyProps,
+          models: ["anthropic/claude-3.7-sonnet"],
+          modelSpecs: {
+            "anthropic/claude-3.7-sonnet": {
+              contextLength: 200000,
+              maxCompletionTokens: 16384,
+            },
+          },
+          modelsStatus: null,
+          fetchingModels: false,
+          onFetchModels: noop,
+          testStatus: null,
+          busy: false,
+          dirty: false,
+          onSubmit: noop as never,
+          onTest: noop as never,
+          onCancel: noop,
+          onDelete: noop,
+        })
+      )
     );
 
     expect(openrouterHtml).toContain("Top K");
@@ -308,55 +372,59 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
     };
 
     const html = renderToStaticMarkup(
-      createElement(TextConnectionEditor, {
-        mode: "edit",
-        editing: null,
-        form: {
-          kind: "text",
-          label: "DeepSeek Cloud",
-          baseUrl: "https://api.deepseek.com/v1",
-          model: "deepseek-chat",
-          textSource: "deepseek",
-          temperature: 0.7,
-          maxTokens: 1200,
-          contextWindow: 65536,
-        },
-        setForm: noop as never,
-        apiKey: apiKeyProps,
-        models: ["deepseek-chat"],
-        modelSpecs: {},
-        modelsStatus: { kind: "ok", text: "1 model loaded." },
-        fetchingModels: false,
-        onFetchModels: noop,
-        testStatus: { kind: "ok", text: "Response received (312ms)." },
-        onDismissStatus: noop,
-        testDrawerOpen: true,
-        onToggleTestDrawer: noop,
-        testPrompt: "Say hello in one sentence.",
-        onTestPromptChange: noop,
-        onSaveTestPrompt: noop,
-        testResponseResult: {
-          ok: true,
-          latencyMs: 312,
-          model: "deepseek-chat",
-          reply: "Hello! Systems are online and ready.",
-          usage: {
-            promptTokens: 12,
-            completionTokens: 8,
-            totalTokens: 20,
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(TextConnectionEditor, {
+          mode: "edit",
+          editing: null,
+          form: {
+            kind: "text",
+            label: "DeepSeek Cloud",
+            baseUrl: "https://api.deepseek.com/v1",
+            model: "deepseek-chat",
+            textSource: "deepseek",
+            temperature: 0.7,
+            maxTokens: 1200,
+            contextWindow: 65536,
           },
-        },
-        busy: false,
-        dirty: false,
-        onSubmit: noop as never,
-        onTest: noop as never,
-        onTestResponse: noop as never,
-        onCancel: noop,
-        onDelete: noop,
-      })
+          setForm: noop as never,
+          apiKey: apiKeyProps,
+          models: ["deepseek-chat"],
+          modelSpecs: {},
+          modelsStatus: { kind: "ok", text: "1 model loaded." },
+          fetchingModels: false,
+          onFetchModels: noop,
+          testStatus: { kind: "ok", text: "Response received (312ms)." },
+          onDismissStatus: noop,
+          testDrawerOpen: true,
+          onToggleTestDrawer: noop,
+          testPrompt: "Say hello in one sentence.",
+          onTestPromptChange: noop,
+          onSaveTestPrompt: noop,
+          testResponseResult: {
+            ok: true,
+            latencyMs: 312,
+            model: "deepseek-chat",
+            reply: "Hello! Systems are online and ready.",
+            usage: {
+              promptTokens: 12,
+              completionTokens: 8,
+              totalTokens: 20,
+            },
+          },
+          busy: false,
+          dirty: false,
+          onSubmit: noop as never,
+          onTest: noop as never,
+          onTestResponse: noop as never,
+          onCancel: noop,
+          onDelete: noop,
+        })
+      )
     );
 
-    expect(html).toContain("conn-inline-status ok");
+    expect(html).toContain("base-status base-status--inline base-status--ok");
     expect(html).toContain("1 model loaded.");
     expect(html).toContain("conn-test-drawer");
     expect(html).toContain("Test Response Prompt");
@@ -364,7 +432,7 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
     expect(html).toContain("Hello! Systems are online and ready.");
     expect(html).toContain("312ms");
     expect(html).toContain("12 in · 8 out");
-    expect(html).toContain("conn-footer-status ok");
+    expect(html).toContain("base-status base-status--banner base-status--ok");
     expect(html).toContain("Response received (312ms).");
     expect(html).toContain("Test response");
   });
@@ -413,5 +481,347 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
       completionTokens: 5,
       totalTokens: 19,
     });
+  });
+
+  it("renders ProviderConnectionCard with full-width header, source badge, action row with timestamp, and natural wrapping spec chips", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(ProviderConnectionCard, {
+          connection: {
+            id: "conn-1",
+            kind: "text",
+            label: "OpenRouter — Claude 3.7 Sonnet",
+            baseUrl: "https://openrouter.ai/api/v1",
+            model: "anthropic/claude-3.7-sonnet",
+            hasApiKey: true,
+            apiKeyMasked: "••••9a",
+            temperature: 0.8,
+            maxTokens: 2048,
+            contextWindow: 128000,
+          },
+          isActive: true,
+          sortBy: "lastActiveAt",
+          onActivate: noop,
+          onEdit: noop,
+          onDuplicate: noop,
+          onRemove: noop,
+          headerTags: createElement(Badge, { variant: "info", size: "xs", leftIcon: "MessageSquare" }, "OpenRouter"),
+          detailTags: createElement(Badge, { variant: "neutral", size: "xs", leftIcon: "Timer" }, "120s timeout"),
+          overrideTags: createElement(Badge, { variant: "accent", size: "xs", leftIcon: "Sparkles" }, "New Story"),
+        })
+      )
+    );
+
+    expect(html).toContain("OpenRouter — Claude 3.7 Sonnet");
+    expect(html).toContain("OpenRouter");
+    expect(html).toContain("Active now");
+    expect(html).toContain("https://openrouter.ai/api/v1");
+    expect(html).toContain("anthropic/claude-3.7-sonnet");
+    expect(html).toContain("••••9a");
+    expect(html).toContain("120s timeout");
+    expect(html).toContain("New Story");
+    expect(html).not.toContain("base-form-grid");
+  });
+
+  it("renders ImageConnectionEditor with vertical connection stack, SimpleSelect rightElement, SwitchRow tooltip, and A1111 Slider controls", () => {
+    const apiKeyProps = {
+      value: "",
+      onChange: noop,
+      showKey: false,
+      onToggleShowKey: noop,
+      keyBusy: false,
+      isKeyCleared: false,
+      isStoredKeyActive: false,
+      onClearKey: noop,
+      onRestoreKey: noop,
+    };
+
+    const veniceHtml = renderToStaticMarkup(
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(ImageConnectionEditor, {
+          mode: "create",
+          editing: null,
+          form: {
+            kind: "image",
+            label: "Venice Images",
+            baseUrl: "https://api.venice.ai/api/v1",
+            model: "flux-dev",
+            apiStyle: "venice",
+            temperature: 0.7,
+            maxTokens: 1200,
+            contextWindow: 32768,
+            size: "1024x1024",
+            variants: 1,
+            safeMode: false,
+            hideWatermark: true,
+          },
+          setForm: noop as never,
+          apiKey: apiKeyProps,
+          models: ["flux-dev"],
+          modelSpecs: {
+            "flux-dev": {
+              promptCharacterLimit: 1500,
+              aspectRatios: ["1:1", "3:2"],
+            },
+          },
+          modelsStatus: null,
+          fetchingModels: false,
+          onFetchModels: noop,
+          testStatus: null,
+          busy: false,
+          dirty: false,
+          onSubmit: noop as never,
+          onTest: noop as never,
+          onCancel: noop,
+          onDelete: noop,
+          textConnections: [],
+        })
+      )
+    );
+
+    expect(veniceHtml).toContain("API Style &amp; Connection");
+    expect(veniceHtml).toContain("Connection Name");
+    expect(veniceHtml).toContain("Style Preset");
+    expect(veniceHtml).toContain("Fetch styles");
+    expect(veniceHtml).toContain("Hide Watermark");
+    expect(veniceHtml).toContain("base-tooltip-icon");
+    expect(veniceHtml).toContain("Prompt limit: 1500 characters.");
+    expect(veniceHtml).not.toContain('aria-label="Steps slider"');
+
+    const a1111Html = renderToStaticMarkup(
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(ImageConnectionEditor, {
+          mode: "edit",
+          editing: null,
+          form: {
+            kind: "image",
+            label: "Local Forge SDXL",
+            baseUrl: "http://127.0.0.1:7860",
+            model: "sd_xl_base_1.0.safetensors",
+            apiStyle: "a1111",
+            temperature: 0.7,
+            maxTokens: 1200,
+            contextWindow: 32768,
+            steps: 28,
+            cfgScale: 6.5,
+          },
+          setForm: noop as never,
+          apiKey: apiKeyProps,
+          models: ["sd_xl_base_1.0.safetensors"],
+          modelSpecs: {},
+          dialectOptions: {
+            samplers: ["DPM++ 2M", "Euler a"],
+            schedulers: ["Automatic", "Karras"],
+            forgeCouple: true,
+          },
+          modelsStatus: { kind: "ok", text: "1 checkpoint loaded." },
+          fetchingModels: false,
+          onFetchModels: noop,
+          testStatus: null,
+          busy: false,
+          dirty: false,
+          onSubmit: noop as never,
+          onTest: noop as never,
+          onCancel: noop,
+          onDelete: noop,
+          textConnections: [],
+        })
+      )
+    );
+
+    expect(a1111Html).toContain("Checkpoint");
+    expect(a1111Html).toContain('aria-label="Steps slider"');
+    expect(a1111Html).toContain('aria-label="CFG scale slider"');
+    expect(a1111Html).toContain("Forge Couple detected in this WebUI");
+    expect(a1111Html).not.toContain("Style Preset");
+    expect(a1111Html).not.toContain("Hide Watermark");
+  });
+
+  it("renders PresetEditor and drag-and-drop Card / DragHandle / Checkbox / TextArea primitives without legacy settings.css classes", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(
+          Stack,
+          { direction: "column", gap: "sm" },
+          createElement(PresetEditor),
+          createElement(
+            Card,
+            { variant: "elevated", padding: "xs", dragging: true, dropTarget: true },
+            createElement(Checkbox, {
+              label: "Core Rules",
+              tooltip: "Always sent at the top of the prompt.",
+              checked: true,
+              onChange: noop,
+            }),
+            createElement(DragHandle),
+            createElement(TextArea, {
+              label: "Expected Content",
+              tooltip: "One line per bullet.",
+              value: "Example bullet",
+              onChange: noop,
+            })
+          ),
+          createElement(DragGhost, { x: 120, y: 240, name: "Core Rules" })
+        )
+      )
+    );
+
+    expect(html).toContain("base-stack--sticky");
+    expect(html).toContain("Prompt Preset");
+    expect(html).toContain("Turn Prompt Modules");
+    expect(html).toContain("base-card--dragging");
+    expect(html).toContain("base-card--drop-target");
+    expect(html).toContain("base-drag-handle");
+    expect(html).toContain("base-drag-ghost");
+    expect(html).toContain("Core Rules");
+    expect(html).toContain("base-tooltip-icon");
+    expect(html).not.toContain("prompt-config-sticky");
+    expect(html).not.toContain("preset-bar");
+    expect(html).not.toContain("module-group");
+  });
+
+  it("compares CharacterFormatConfig and ImagePromptSettings independent of object property key order", () => {
+    const formatFromZod = {
+      intro: "Follow this layout.",
+      closingRule: "End with tags.",
+      sections: [
+        {
+          name: "Sexual Capabilities",
+          order: 110,
+          instruction: "Only include when relevant.",
+          examples: ["Item 1", "Item 2"],
+          exampleBody: "- Item 1\n- Item 2",
+          inline: false,
+        },
+      ],
+    };
+
+    const formatFromRawJson = {
+      closingRule: "End with tags.",
+      intro: "Follow this layout.",
+      sections: [
+        {
+          name: "Sexual Capabilities",
+          order: 110,
+          instruction: "Only include when relevant.",
+          examples: ["Item 1", "Item 2"],
+          inline: false,
+          exampleBody: "- Item 1\n- Item 2",
+        },
+      ],
+    };
+
+    expect(formatEqual(formatFromZod, formatFromRawJson)).toBe(true);
+
+    const imageA = {
+      instruction: "Describe the scene.",
+      instructionMode: "scene" as const,
+      positivePrefix: "masterpiece",
+      negativePrefix: "blurry",
+      promptCharacterLimit: 1000,
+      includeState: true,
+      includeCast: true,
+      historyMessages: 6,
+      includePreviousAnswer: true,
+    };
+
+    const imageB = {
+      includePreviousAnswer: true,
+      historyMessages: 6,
+      includeCast: true,
+      includeState: true,
+      promptCharacterLimit: 1000,
+      negativePrefix: "blurry",
+      positivePrefix: "masterpiece",
+      instructionMode: "scene" as const,
+      instruction: "Describe the scene.",
+    };
+
+    expect(imageEqual(imageA, imageB)).toBe(true);
+    expect(
+      promptConfigDiffers(
+        { modules: { turn: [] }, characterFormat: formatFromZod, imageGeneration: imageA },
+        {
+          id: "default-nsfw",
+          name: "Default NSFW",
+          readonly: true,
+          modules: { turn: [] },
+          characterFormat: formatFromRawJson,
+          imageGeneration: imageB,
+        }
+      )
+    ).toBe(false);
+  });
+
+  it("renders dirty warning highlights and Modified badges on Card, TextInput, TextArea, SimpleSelect, Slider, SwitchRow, and Checkbox", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(
+          Stack,
+          { direction: "column", gap: "sm" },
+          createElement(
+            Card,
+            { variant: "elevated", padding: "xs", dirty: true },
+            createElement(Checkbox, {
+              label: "Core Rules",
+              checked: true,
+              dirty: true,
+              onChange: noop,
+            }),
+            createElement(TextInput, {
+              label: "Heading",
+              value: "Modified Heading",
+              dirty: true,
+              onChange: noop,
+            }),
+            createElement(TextArea, {
+              label: "Intro",
+              value: "Modified intro",
+              dirty: true,
+              onChange: noop,
+            }),
+            createElement(SimpleSelect, {
+              label: "Prompt Style",
+              value: "natural",
+              dirty: true,
+              onChange: noop,
+              options: [{ value: "natural", label: "Natural" }],
+            }),
+            createElement(Slider, {
+              label: "Word Budget",
+              value: 80,
+              min: 20,
+              max: 200,
+              dirty: true,
+              onChange: noop,
+            }),
+            createElement(SwitchRow, {
+              title: "Enable Scene Image Prompts",
+              checked: true,
+              dirty: true,
+              onChange: noop,
+            })
+          )
+        )
+      )
+    );
+
+    expect(html).toContain("base-card--dirty");
+    expect(html).toContain("base-form-input--dirty");
+    expect(html).toContain("base-select-trigger--dirty");
+    expect(html).toContain("base-slider--dirty");
+    expect(html).toContain("base-toggle-row--dirty");
+    expect(html).toContain("base-badge base-badge--warning base-badge--xs");
+    expect(html).toContain("Modified");
   });
 });

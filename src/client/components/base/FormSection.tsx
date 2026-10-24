@@ -1,9 +1,11 @@
 import { type HTMLAttributes, type ReactNode } from "react";
 import { Icon } from "./Icon";
+import { TooltipIcon } from "./Tooltip/Tooltip";
 
 export interface SectionHeaderProps {
   icon?: string;
   title: ReactNode;
+  tooltip?: ReactNode;
   description?: ReactNode;
   badge?: ReactNode;
   action?: ReactNode;
@@ -13,6 +15,7 @@ export interface SectionHeaderProps {
 export function SectionHeader({
   icon,
   title,
+  tooltip,
   description,
   badge,
   action,
@@ -24,6 +27,7 @@ export function SectionHeader({
         <h5 className="base-form-section-title">
           {icon && <Icon name={icon} size={13} />}
           <span>{title}</span>
+          {tooltip && <TooltipIcon content={tooltip} />}
           {badge}
         </h5>
         {action && <div className="base-section-header__action">{action}</div>}
@@ -36,6 +40,7 @@ export function SectionHeader({
 export interface FormSectionProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   icon?: string;
   title: ReactNode;
+  tooltip?: ReactNode;
   description?: ReactNode;
   badge?: ReactNode;
   action?: ReactNode;
@@ -47,6 +52,7 @@ export interface FormSectionProps extends Omit<HTMLAttributes<HTMLElement>, "tit
 export function FormSection({
   icon,
   title,
+  tooltip,
   description,
   badge,
   action,
@@ -66,6 +72,7 @@ export function FormSection({
           <span className="base-form-section-title">
             {icon && <Icon name={icon} size={13} />}
             <span>{title}</span>
+            {tooltip && <TooltipIcon content={tooltip} />}
             {badge}
           </span>
           <Icon name="ChevronDown" size={13} className="base-form-section__chevron" />
@@ -83,6 +90,7 @@ export function FormSection({
       <SectionHeader
         icon={icon}
         title={title}
+        tooltip={tooltip}
         description={description}
         badge={badge}
         action={action}

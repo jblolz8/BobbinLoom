@@ -1,12 +1,18 @@
 import { forwardRef, type InputHTMLAttributes, type ReactNode } from "react";
+import { Badge } from "./Badge/Badge";
+import { Icon, type IconName } from "./Icon";
+import { TooltipIcon } from "./Tooltip/Tooltip";
 
 export type TextInputVariant = "default" | "filled" | "ghost";
 export type TextInputSize = "sm" | "md" | "lg";
 
 export interface TextInputProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, "size"> {
-  label?: string;
+  label?: ReactNode;
+  labelIcon?: IconName;
+  tooltip?: ReactNode;
   error?: string;
+  dirty?: boolean;
   helperText?: ReactNode;
   leftIcon?: ReactNode;
   leftElement?: ReactNode;
@@ -20,7 +26,10 @@ export interface TextInputProps
 export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function TextInput(
   {
     label,
+    labelIcon,
+    tooltip,
     error,
+    dirty = false,
     helperText,
     leftIcon,
     leftElement,
@@ -37,7 +46,7 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function T
   },
   ref
 ) {
-  const inputId = id || (label ? `input-${label.toLowerCase().replace(/\s+/g, "-")}` : undefined);
+  const inputId = id || (typeof label === "string" ? `input-${label.toLowerCase().replace(/\s+/g, "-")}` : undefined);
   const errorId = inputId && error ? `${inputId}-error` : undefined;
   const helperId = inputId && helperText && !error ? `${inputId}-helper` : undefined;
   const describedBy = errorId || helperId || undefined;
@@ -47,7 +56,18 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function T
       className={`base-form-field form-field ${fullWidth ? "base-form-field--full" : ""} ${disabled ? "base-form-field--disabled" : ""} ${containerClassName}`.trim()}
       htmlFor={inputId}
     >
-      {label && <span className="field-label-text">{label}</span>}
+      {label && (
+        <span className="field-label-text">
+          {labelIcon && <Icon name={labelIcon} size={12} className="ds-icon-accent shrink-0" />}
+          <span>{label}</span>
+          {tooltip && <TooltipIcon content={tooltip} />}
+          {dirty && (
+            <Badge variant="warning" size="xs">
+              Modified
+            </Badge>
+          )}
+        </span>
+      )}
       <div
         className={`field-input-row field-input-row--${size} ${leftElement ? "has-left-action" : ""} ${rightElement ? "has-action has-right-action" : ""}`.trim()}
       >
@@ -65,7 +85,7 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function T
             disabled={disabled}
             aria-invalid={!!error}
             aria-describedby={describedBy}
-            className={`base-form-input form-input base-form-input--${variant} base-form-input--${size} ${error ? "base-form-input--error has-error" : ""} ${className}`.trim()}
+            className={`base-form-input form-input base-form-input--${variant} base-form-input--${size} ${dirty ? "base-form-input--dirty" : ""} ${error ? "base-form-input--error has-error" : ""} ${className}`.trim()}
             {...inputProps}
           />
         </div>

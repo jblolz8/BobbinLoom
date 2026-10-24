@@ -1,9 +1,11 @@
 @import "tailwindcss";
 @import "./styles/variables.css";
+@import "./styles/components.css";
+@import "./components/navigation/AppHeader.css";
+@import "./components/settings/ProviderConnectionsPanel.css";
 @import "./styles/views.css";
 @import "./styles/library.css";
 @import "./styles/play-panels.css";
 @import "./styles/modals.css";
 @import "./styles/settings.css";
-@import "./styles/components.css";
 @import "./styles/docs.css";

@@ -1,24 +1,29 @@
-import { useEffect, useId, useState, type ChangeEvent } from "react";
+import { useEffect, useId, useState, type ChangeEvent, type ReactNode } from "react";
+import { Badge } from "../Badge/Badge";
 import { Icon } from "../Icon";
+import { TooltipIcon } from "../Tooltip/Tooltip";
 
 export interface SliderProps {
   label: string;
   rangeHint?: string;
   description?: string;
+  /** Optional extra control (e.g. a "Model max" button) rendered on the right of the slider header. */
+  headerExtra?: ReactNode;
   value: number | null | undefined;
   onChange: (value: number | null | undefined) => void;
   min: number;
   max: number;
-  /** Optional upper bound for the range slider track when the numeric input allows larger numbers (e.g. Top K). */
+  /** Optional upper bound for the range slider track when the numeric input allows larger numbers (e.g. Top K, Context Window). */
   sliderMax?: number;
   step?: number;
-  /** Resting position of the slider thumb when `value` is unset (`null` or `undefined`). */
+  /** Resting position of the slider thumb when `value` is unset (`null` or `undefined`), and the target value restored by Reset when `clearable` is false. */
   defaultPreview?: number;
   /** When true, emptying the number box or clicking Reset sets the value to `clearedValue` ("Default"). */
   clearable?: boolean;
   /** Value emitted when cleared (`null` by default so PATCH/PUT payloads clear stored values). */
   clearedValue?: null | undefined;
   integer?: boolean;
+  dirty?: boolean;
   disabled?: boolean;
   className?: string;
 }
@@ -27,6 +32,7 @@ export function Slider({
   label,
   rangeHint,
   description,
+  headerExtra,
   value,
   onChange,
   min,
@@ -37,6 +43,7 @@ export function Slider({
   clearable = false,
   clearedValue = null,
   integer = false,
+  dirty = false,
   disabled = false,
   className = "",
 }: SliderProps) {
@@ -94,13 +101,25 @@ export function Slider({
   }
 
   function handleReset() {
-    setDraft("");
-    onChange(clearable ? clearedValue : fallbackValue);
+    if (clearable) {
+      setDraft("");
+      onChange(clearedValue);
+    } else {
+      setDraft(String(fallbackValue));
+      onChange(fallbackValue);
+    }
   }
+
+  const canReset =
+    !disabled &&
+    (clearable
+      ? isSet
+      : defaultPreview !== undefined && isSet && value !== defaultPreview);
 
   const rootClasses = [
     "base-slider",
     isSet ? "base-slider--active" : "base-slider--unset",
+    dirty ? "base-slider--dirty" : "",
     disabled ? "base-slider--disabled" : "",
     className,
   ]
@@ -108,23 +127,40 @@ export function Slider({
     .join(" ");
 
   return (
-    <div className={rootClasses} title={description}>
+    <div className={rootClasses}>
       <div className="base-slider__header">
         <label htmlFor={id} className="base-slider__label">
           <span>{label}</span>
           {rangeHint && <span className="base-slider__range">({rangeHint})</span>}
+          {description && <TooltipIcon content={description} />}
+          {dirty && (
+            <Badge variant="warning" size="xs">
+              Modified
+            </Badge>
+          )}
         </label>
-        {clearable && isSet && !disabled && (
-          <button
-            type="button"
-            className="base-slider__reset"
-            onClick={handleReset}
-            title="Reset to provider default (omit from request)"
-            aria-label={`Reset ${label} to default`}
-          >
-            <Icon name="RotateCcw" size={11} />
-            <span>Default</span>
-          </button>
+        {(headerExtra || canReset) && (
+          <div className="base-slider__actions">
+            {headerExtra}
+            {canReset && (
+              <button
+                type="button"
+                className="base-slider__reset"
+                onClick={handleReset}
+                title={
+                  clearable
+                    ? "Reset to provider default (omit from request)"
+                    : `Reset to default (${fallbackValue.toLocaleString()})`
+                }
+                aria-label={`Reset ${label} to default`}
+              >
+                <Icon name="RotateCcw" size={11} />
+                <span>
+                  {clearable ? "Default" : `Default (${fallbackValue.toLocaleString()})`}
+                </span>
+              </button>
+            )}
+          </div>
         )}
       </div>
 

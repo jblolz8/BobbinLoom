@@ -1,16 +1,22 @@
 import { forwardRef, type InputHTMLAttributes, type ReactNode } from "react";
+import { Badge } from "./Badge/Badge";
+import { TooltipIcon } from "./Tooltip/Tooltip";
 
 export interface CheckboxProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, "type"> {
   label?: ReactNode;
+  tooltip?: ReactNode;
   description?: ReactNode;
+  dirty?: boolean;
   containerClassName?: string;
 }
 
 export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Checkbox(
   {
     label,
+    tooltip,
     description,
+    dirty = false,
     containerClassName = "",
     className = "",
     id,
@@ -35,6 +41,12 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
         {...inputProps}
       />
       {label && <span>{label}</span>}
+      {tooltip && <TooltipIcon content={tooltip} />}
+      {dirty && (
+        <Badge variant="warning" size="xs">
+          Modified
+        </Badge>
+      )}
       {description && <span className="checkbox-description">{description}</span>}
     </label>
   );

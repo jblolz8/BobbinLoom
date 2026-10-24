@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Badge, Icon } from "../base";
+import { Badge, Stack, StatusMessage, Text } from "../base";
 import type {
   ConnectionModelsResult,
   ConnectionTestResponseResult,
@@ -161,7 +161,7 @@ const formFromConnection = (c: ProviderConnection): ProviderConnectionPayload =>
  * lazily-read sort preference is then the new kind's, and a half-filled editor
  * from the other kind cannot linger.
  */
-export type ProviderConnectionsProps = {
+export type ProviderConnectionsPanelProps = {
   kind: ProviderKind;
   /** True when this kind's list is the visible one. Gates the fetch so the two
    *  mounted instances do not both load on open, and refreshes this list after
@@ -171,7 +171,13 @@ export type ProviderConnectionsProps = {
   onDirtyChange?: (kind: ProviderKind, dirty: boolean) => void;
 };
 
-export function ProviderConnections({ kind, active = true, onDirtyChange }: ProviderConnectionsProps) {
+export type ProviderConnectionsProps = ProviderConnectionsPanelProps;
+
+export function ProviderConnectionsPanel({
+  kind,
+  active = true,
+  onDirtyChange,
+}: ProviderConnectionsPanelProps) {
   const [registry, setRegistry] = useState<ProviderRegistry | null>(null);
   const [editor, setEditor] = useState<EditorState>({ mode: "closed" });
   const [form, setForm] = useState<ProviderConnectionPayload>(() => emptyForm(kind));
@@ -674,62 +680,66 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
     if (editor.mode === "closed") onDirtyChange?.(kind, false);
   }, [editor.mode, kind, onDirtyChange]);
 
-  function renderDetailTags(c: ProviderConnection) {
+  function renderHeaderTags(c: ProviderConnection) {
     if (kind === "text") {
       const sourceId = resolveTextProviderSource(c.textSource, c.baseUrl);
       const sourceSpec = TEXT_PROVIDER_SOURCES[sourceId];
-      const hasCustomTimeout = typeof c.timeoutMs === "number" && c.timeoutMs > 0;
       return (
-        <>
-          <Badge
-            variant="accent"
-            size="xs"
-            leftIcon="MessageSquare"
-            title={sourceSpec.description}
-          >
-            {sourceSpec.label}
-          </Badge>
-          {hasCustomTimeout && (
-            <Badge
-              variant="neutral"
-              size="xs"
-              leftIcon={<Icon name="Timer" size={12} className="ds-icon-muted" />}
-              title="Custom per-request timeout for this connection"
-            >
-              {Math.round(c.timeoutMs! / 1000)}s timeout
-            </Badge>
-          )}
-        </>
+        <Badge
+          variant="info"
+          size="xs"
+          leftIcon="MessageSquare"
+          title={sourceSpec.description}
+        >
+          {sourceSpec.label}
+        </Badge>
       );
     }
     const style = c.apiStyle ?? "openai";
     return (
-      <>
+      <Badge
+        variant="info"
+        size="xs"
+        leftIcon="Palette"
+        title={
+          style === "venice"
+            ? "Venice endpoint (/image/generate)"
+            : style === "a1111"
+              ? "Local AUTOMATIC1111 / Forge WebUI (/sdapi/v1)"
+              : "OpenAI-compatible endpoint (/images/generations)"
+        }
+      >
+        {style === "venice" ? "Venice" : style === "a1111" ? "Automatic1111" : "OpenAI"}
+      </Badge>
+    );
+  }
+
+  function renderDetailTags(c: ProviderConnection) {
+    if (kind === "text") {
+      const hasCustomTimeout = typeof c.timeoutMs === "number" && c.timeoutMs > 0;
+      if (!hasCustomTimeout) return null;
+      return (
         <Badge
-          variant="accent"
+          variant="neutral"
           size="xs"
-          leftIcon={<Icon name="Palette" size={12} />}
-          title={
-            style === "venice"
-              ? "Venice endpoint (/image/generate)"
-              : style === "a1111"
-                ? "Local AUTOMATIC1111 / Forge WebUI (/sdapi/v1)"
-                : "OpenAI-compatible endpoint (/images/generations)"
-          }
+          leftIcon="Timer"
+          title="Custom per-request timeout for this connection"
         >
-          {style === "venice" ? "Venice" : style === "a1111" ? "Automatic1111" : "OpenAI"}
+          {Math.round(c.timeoutMs! / 1000)}s timeout
         </Badge>
-        {style !== "a1111" && (
-          <Badge
-            variant={c.safeMode ? "warning" : "outline"}
-            size="xs"
-            leftIcon={c.safeMode ? <Icon name="ShieldAlert" size={12} /> : <Icon name="ShieldOff" size={12} />}
-            title={c.safeMode ? "Safe mode on — the provider blurs adult content" : "Safe mode off — adult content is not blurred"}
-          >
-            {c.safeMode ? "Safe mode on" : "Safe mode off"}
-          </Badge>
-        )}
-      </>
+      );
+    }
+    const style = c.apiStyle ?? "openai";
+    if (style === "a1111") return null;
+    return (
+      <Badge
+        variant={c.safeMode ? "warning" : "outline"}
+        size="xs"
+        leftIcon={c.safeMode ? "ShieldAlert" : "ShieldOff"}
+        title={c.safeMode ? "Safe mode on — the provider blurs adult content" : "Safe mode off — adult content is not blurred"}
+      >
+        {c.safeMode ? "Safe mode on" : "Safe mode off"}
+      </Badge>
     );
   }
 
@@ -748,7 +758,7 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
             <Badge
               variant="accent"
               size="xs"
-              leftIcon={<Icon name="Sparkles" size={11} />}
+              leftIcon="Sparkles"
               title="Dedicated provider for New Story scenario and opening turn generation"
             >
               New Story
@@ -758,7 +768,7 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
             <Badge
               variant="accent"
               size="xs"
-              leftIcon={<Icon name="BookOpen" size={11} />}
+              leftIcon="BookOpen"
               title="Dedicated provider for Close Chapter summaries and opening turns"
             >
               Close Chapter
@@ -768,7 +778,7 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
             <Badge
               variant="accent"
               size="xs"
-              leftIcon={<Icon name="UserPlus" size={11} />}
+              leftIcon="UserPlus"
               title="Dedicated provider for Character Creator and NPC sheet generation"
             >
               Character Creator
@@ -779,7 +789,7 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
               key={img.id}
               variant="accent"
               size="xs"
-              leftIcon={<Icon name="Wand2" size={11} />}
+              leftIcon="Wand2"
               title={`Writes scene image prompts for "${img.label}"`}
             >
               Image Prompt Writer: {img.label}
@@ -796,7 +806,7 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
         <Badge
           variant="warning"
           size="xs"
-          leftIcon={<Icon name="AlertTriangle" size={11} />}
+          leftIcon="AlertTriangle"
           title={`Prompt writer "${c.promptProviderId}" no longer exists — the active text provider writes the prompt instead`}
         >
           prompt writer missing — using active
@@ -807,7 +817,7 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
       <Badge
         variant="accent"
         size="xs"
-        leftIcon={<Icon name="Wand2" size={11} />}
+        leftIcon="Wand2"
         title={`Scene image prompts are written by "${writer.label}"`}
       >
         Image Prompt Writer: {writer.label}
@@ -826,32 +836,22 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
   };
 
   return (
-    <div className="connections">
+    <Stack direction="column" align="stretch" gap="sm">
       {!editable && status && (
-        <div className={`conn-footer-status ${status.kind}`} role="status" aria-live="polite">
-          <div className="conn-footer-status__main">
-            <Icon
-              name={status.kind === "ok" ? "CheckCircle2" : "AlertCircle"}
-              size={13}
-              className="conn-footer-status__icon"
-            />
-            <span className="conn-footer-status__text">{status.text}</span>
-            <button
-              type="button"
-              className="conn-footer-status__dismiss"
-              onClick={() => setStatus(null)}
-              aria-label="Dismiss status"
-              title="Dismiss"
-            >
-              <Icon name="X" size={12} />
-            </button>
-          </div>
-        </div>
+        <StatusMessage variant="banner" tone={status.kind} onDismiss={() => setStatus(null)}>
+          {status.text}
+        </StatusMessage>
       )}
       {registry && registry.warnings.length > 0 && (
-        <div className="conn-warnings">
-          {registry.warnings.map((w, i) => <p key={i}>{w}</p>)}
-        </div>
+        <StatusMessage variant="banner" tone="warn">
+          <Stack direction="column" align="stretch" gap="2xs">
+            {registry.warnings.map((w, i) => (
+              <Text key={i} as="p" size="sm" tone="inherit">
+                {w}
+              </Text>
+            ))}
+          </Stack>
+        </StatusMessage>
       )}
 
       {!editable && (
@@ -868,6 +868,7 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
           onRemove={(c) => setPendingDelete(c)}
           onAdd={openCreate}
           emptyLabel={emptyLabel}
+          renderHeaderTags={renderHeaderTags}
           renderDetailTags={renderDetailTags}
           renderOverrideTags={renderOverrideTags}
         />
@@ -955,6 +956,8 @@ export function ProviderConnections({ kind, active = true, onDirtyChange }: Prov
           onCancel={() => setPendingDelete(null)}
         />
       )}
-    </div>
+    </Stack>
   );
 }
+
+export const ProviderConnections = ProviderConnectionsPanel;

@@ -1,5 +1,4 @@
 import { forwardRef, type ElementType, type HTMLAttributes, type ReactNode } from "react";
-import "./Text.css";
 
 export type TextElement =
   | "span"
@@ -47,6 +46,7 @@ export type TextAlign = "left" | "center" | "right";
 
 export interface TextProps extends HTMLAttributes<HTMLElement> {
   as?: TextElement;
+  htmlFor?: string;
   variant?: TextVariant;
   size?: TextSize;
   tone?: TextTone;

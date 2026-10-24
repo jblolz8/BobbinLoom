@@ -1,5 +1,5 @@
-import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
-import { Button, Icon } from "../../base";
+import { type MouseEvent, type ReactNode } from "react";
+import { Button, Stack, StatusMessage } from "../../base";
 
 export type EditorFooterStatus = {
   kind: "ok" | "err" | "warn";
@@ -24,22 +24,6 @@ export type EditorActionBarProps = {
   onDelete: () => void;
 };
 
-function splitStatusSummary(status: NonNullable<EditorFooterStatus>): {
-  summary: string;
-  detail?: string;
-} {
-  if (status.detail) {
-    return { summary: status.text, detail: status.detail };
-  }
-  const trimmed = status.text.trim();
-  if (trimmed.length <= 96 && !trimmed.includes("\n")) {
-    return { summary: trimmed };
-  }
-  const firstLine = trimmed.split("\n")[0].trim();
-  const summary = firstLine.length > 96 ? `${firstLine.slice(0, 93)}…` : firstLine;
-  return { summary, detail: trimmed };
-}
-
 export function EditorActionBar({
   mode,
   busy,
@@ -56,62 +40,31 @@ export function EditorActionBar({
   onCancel,
   onDelete,
 }: EditorActionBarProps) {
-  const [expandedDetail, setExpandedDetail] = useState(false);
-
-  useEffect(() => {
-    setExpandedDetail(false);
-  }, [status?.text, status?.detail, status?.kind]);
-
   const anyBusy = busy || testingConnection || testingResponse;
-  const parsedStatus = status ? splitStatusSummary(status) : null;
 
   return (
     <div className="conn-actions-bar">
       {drawerContent}
-      {status && parsedStatus && (
-        <div className={`conn-footer-status ${status.kind}`} role="status" aria-live="polite">
-          <div className="conn-footer-status__main">
-            <Icon
-              name={
-                status.kind === "ok"
-                  ? "CheckCircle2"
-                  : status.kind === "warn"
-                    ? "AlertTriangle"
-                    : "AlertCircle"
-              }
-              size={13}
-              className="conn-footer-status__icon"
-            />
-            <span className="conn-footer-status__text">{parsedStatus.summary}</span>
-            {parsedStatus.detail && (
-              <button
-                type="button"
-                className="conn-footer-status__toggle"
-                onClick={() => setExpandedDetail((v) => !v)}
-              >
-                {expandedDetail ? "Hide" : "Details"}
-              </button>
-            )}
-            {onDismissStatus && (
-              <button
-                type="button"
-                className="conn-footer-status__dismiss"
-                onClick={onDismissStatus}
-                aria-label="Dismiss status"
-                title="Dismiss"
-              >
-                <Icon name="X" size={12} />
-              </button>
-            )}
-          </div>
-          {parsedStatus.detail && expandedDetail && (
-            <pre className="conn-footer-status__detail">{parsedStatus.detail}</pre>
-          )}
-        </div>
+      {status && (
+        <StatusMessage
+          variant="banner"
+          tone={status.kind}
+          detail={status.detail}
+          autoCollapseDetail
+          onDismiss={onDismissStatus}
+        >
+          {status.text}
+        </StatusMessage>
       )}
 
-      <div className="conn-actions-row">
-        <div className="actions-left">
+      <Stack
+        direction="row"
+        align="center"
+        justify="between"
+        gap="sm"
+        className="conn-actions-row"
+      >
+        <Stack direction="row" align="center" gap="xs" wrap className="conn-actions-left">
           <Button
             type="submit"
             variant="primary"
@@ -134,7 +87,13 @@ export function EditorActionBar({
             Test connection
           </Button>
           {onTestResponse && (
-            <div className="conn-test-response-group">
+            <Stack
+              direction="row"
+              align="center"
+              gap="2xs"
+              inline
+              className="conn-test-response-group"
+            >
               <Button
                 type="button"
                 variant="secondary"
@@ -158,7 +117,7 @@ export function EditorActionBar({
                   leftIcon={testDrawerOpen ? "ChevronDown" : "SlidersHorizontal"}
                 />
               )}
-            </div>
+            </Stack>
           )}
           <Button
             type="button"
@@ -169,7 +128,7 @@ export function EditorActionBar({
           >
             Cancel
           </Button>
-        </div>
+        </Stack>
         {mode === "edit" && (
           <Button
             type="button"
@@ -181,7 +140,7 @@ export function EditorActionBar({
             Delete
           </Button>
         )}
-      </div>
+      </Stack>
     </div>
   );
 }

@@ -110,7 +110,7 @@ export function AppHeader({
   const isCompact = isMobile && view === "play";
 
   return (
-    <Header variant="app" compact={isCompact}>
+    <Header variant="app" compact={isCompact} className="app-header">
       <Header.Brand
         icon={<ThreadIcon size={22} />}
         title="BobbinLoom"
@@ -141,7 +141,6 @@ export function AppHeader({
             variant="segmented"
             size="sm"
             allowReselect={view !== "home"}
-            ariaLabel="Main Navigation"
           />
         </Header.Nav>
       )}
@@ -156,7 +155,6 @@ export function AppHeader({
             tooltip="Return to Home"
             tooltipSide="bottom"
             onClick={onGoHome}
-            aria-label="Return to Home"
           >
             Home
           </Button>
@@ -171,7 +169,6 @@ export function AppHeader({
             tooltip="New Playthrough"
             tooltipSide="bottom"
             onClick={onNewPlaythrough}
-            aria-label="New Playthrough"
           >
             New Playthrough
           </Button>
@@ -185,7 +182,6 @@ export function AppHeader({
           tooltip="Settings"
           tooltipSide="bottom"
           onClick={onOpenSettings}
-          aria-label="Settings"
         >
           Settings
         </Button>

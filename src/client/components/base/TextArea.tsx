@@ -1,12 +1,16 @@
-import { forwardRef, useEffect, useRef, type TextareaHTMLAttributes } from "react";
+import { forwardRef, useEffect, useRef, type ReactNode, type TextareaHTMLAttributes } from "react";
+import { Badge } from "./Badge/Badge";
+import { TooltipIcon } from "./Tooltip/Tooltip";
 
 export type TextAreaVariant = "default" | "filled" | "ghost";
 export type TextAreaSize = "sm" | "md" | "lg";
 
 export interface TextAreaProps
   extends Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "size"> {
-  label?: string;
+  label?: ReactNode;
+  tooltip?: ReactNode;
   error?: string;
+  dirty?: boolean;
   helperText?: string;
   size?: TextAreaSize;
   variant?: TextAreaVariant;
@@ -23,7 +27,9 @@ export interface TextAreaProps
 export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function TextArea(
   {
     label,
+    tooltip,
     error,
+    dirty = false,
     helperText,
     size = "md",
     variant = "default",
@@ -42,7 +48,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
   },
   forwardedRef
 ) {
-  const textareaId = id || (label ? `textarea-${label.toLowerCase().replace(/\s+/g, "-")}` : undefined);
+  const textareaId = id || (typeof label === "string" ? `textarea-${label.toLowerCase().replace(/\s+/g, "-")}` : undefined);
   const errorId = textareaId && error ? `${textareaId}-error` : undefined;
   const helperId = textareaId && helperText && !error ? `${textareaId}-helper` : undefined;
   const describedBy = errorId || helperId || undefined;
@@ -92,7 +98,15 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
     >
       {label && (
         <div className="field-label-row flex items-center justify-between">
-          <span className="field-label-text">{label}</span>
+          <span className="field-label-text">
+            <span>{label}</span>
+            {tooltip && <TooltipIcon content={tooltip} />}
+            {dirty && (
+              <Badge variant="warning" size="xs">
+                Modified
+              </Badge>
+            )}
+          </span>
           {characterCount !== undefined && (
             <span className="field-counter-text">
               {characterCount}
@@ -110,7 +124,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
           value={value}
           aria-invalid={!!error}
           aria-describedby={describedBy}
-          className={`base-form-input base-form-textarea form-input base-form-input--${variant} base-form-input--${size} ${error ? "base-form-input--error has-error" : ""} ${className}`.trim()}
+          className={`base-form-input base-form-textarea form-input base-form-input--${variant} base-form-input--${size} ${dirty ? "base-form-input--dirty" : ""} ${error ? "base-form-input--error has-error" : ""} ${className}`.trim()}
           {...textareaProps}
         />
       </div>

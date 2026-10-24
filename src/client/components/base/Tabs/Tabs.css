@@ -267,3 +267,10 @@
     gap: 0.3rem;
   }
 }
+
+/* Tab Panel (.base-tab-panel)
+   Explicitly hides inactive panels so class rules setting `display` on the panel
+   cannot override the UA `[hidden]` stylesheet. */
+.base-tab-panel[hidden] {
+  display: none;
+}

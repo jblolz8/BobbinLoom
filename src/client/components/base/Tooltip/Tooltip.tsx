@@ -1,6 +1,6 @@
 import { isValidElement, useEffect, useState, type ReactElement, type ReactNode } from "react";
 import * as RadixTooltip from "@radix-ui/react-tooltip";
-import "./Tooltip.css";
+import { Icon, type IconName } from "../Icon";
 
 export type TooltipCollapseBreakpoint = "xs" | "sm" | "md" | "always";
 
@@ -132,6 +132,44 @@ export function Tooltip({
         </RadixTooltip.Content>
       </RadixTooltip.Portal>
     </RadixTooltip.Root>
+  );
+}
+
+export interface TooltipIconProps {
+  content: ReactNode;
+  icon?: IconName;
+  size?: number;
+  side?: "top" | "right" | "bottom" | "left";
+  align?: "start" | "center" | "end";
+  ariaLabel?: string;
+  className?: string;
+}
+
+export function TooltipIcon({
+  content,
+  icon = "HelpCircle",
+  size = 13,
+  side = "top",
+  align = "center",
+  ariaLabel = "More information",
+  className = "",
+}: TooltipIconProps) {
+  if (!content) return null;
+  return (
+    <Tooltip content={content} side={side} align={align} delayDuration={150}>
+      <span
+        role="img"
+        tabIndex={0}
+        aria-label={ariaLabel}
+        className={`base-tooltip-icon ${className}`.trim()}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+      >
+        <Icon name={icon} size={size} />
+      </span>
+    </Tooltip>
   );
 }
 

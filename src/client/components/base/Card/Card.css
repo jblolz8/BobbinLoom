@@ -65,3 +65,63 @@ button.base-card {
 .base-card--pad-lg {
   padding: 0.95rem 1.1rem;
 }
+
+/* Unsaved / modified warning state */
+.base-card--dirty {
+  border-color: var(--status-warning-border, var(--status-warning));
+  border-left: 3.5px solid var(--status-warning);
+}
+
+/* Reorderable drag-and-drop states */
+.base-card--dragging {
+  opacity: 0.45;
+}
+
+.base-card--drop-target {
+  outline: 2px dashed var(--accent-base);
+  outline-offset: 2px;
+}
+
+.base-drag-handle {
+  cursor: grab;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  padding: 0.15rem 0.25rem;
+  user-select: none;
+  border-radius: 4px;
+  touch-action: none;
+  transition: color 0.12s ease, background-color 0.12s ease;
+}
+
+.base-drag-handle:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface-hover);
+}
+
+.base-drag-handle:active {
+  cursor: grabbing;
+}
+
+.base-drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  transform: translate(-50%, -140%);
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--accent-base);
+  color: var(--text-primary);
+  padding: 0.4rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  box-shadow: var(--shadow-card);
+  z-index: 1200;
+  white-space: nowrap;
+  max-width: 60vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.base-drag-ghost__name {
+  font-weight: 600;
+}

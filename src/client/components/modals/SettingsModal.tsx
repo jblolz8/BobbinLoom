@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { AutoScrollBehavior, ProviderKind } from "../../../schemas";
 import {
   UI_PREFERENCE_DEFAULTS,
@@ -6,16 +6,15 @@ import {
   resolveUiPreferences,
   updateViewPreferences,
 } from "../../api";
-import { isTopDialog, popDialog, pushDialog } from "../../engine/dialogStack";
-import { PresetEditor } from "./PresetEditor";
-import { ProviderConnections } from "./ProviderConnections";
-import { ProviderOverridesPanel } from "./providers/ProviderOverridesPanel";
+import { PresetEditor } from "../settings/PresetEditor";
+import { ProviderConnectionsPanel } from "../settings/ProviderConnectionsPanel";
+import { ProviderOverridesPanel } from "../settings/ProviderOverridesPanel";
 import { TagTaxonomyPanel } from "../library/TagTaxonomyModal";
-import { AppearanceSettingsPanel } from "./AppearanceSettingsPanel";
-import { InterfaceSettingsPanel } from "./InterfaceSettingsPanel";
-import { ChatSettingsPanel } from "./ChatSettingsPanel";
+import { AppearanceSettingsPanel } from "../settings/AppearanceSettingsPanel";
+import { InterfaceSettingsPanel } from "../settings/InterfaceSettingsPanel";
+import { ChatSettingsPanel } from "../settings/ChatSettingsPanel";
 import { ConfirmModal } from "../common/ConfirmModal";
-import { Button, Header, Stack, Tabs, type TabItem } from "../base";
+import { Button, Header, Modal, Stack, Tabs, type TabItem } from "../base";
 
 type SettingsTab = "provider" | "prompts" | "tags" | "chat" | "interface" | "appearance";
 
@@ -105,7 +104,6 @@ export function SettingsModal(props: SettingsModalProps) {
     setAutoScrollBehavior,
   } = props;
 
-  const dialogId = useId();
   const titleId = useId();
 
   const [settingsTab, setSettingsTabState] = useState<SettingsTab>(
@@ -115,8 +113,13 @@ export function SettingsModal(props: SettingsModalProps) {
     UI_PREFERENCE_DEFAULTS.settingsProviderKind
   );
 
+  /** Set the moment the reader picks a tab or provider kind so the initial server read never overwrites their choice. */
+  const settingsTabTouchedRef = useRef(false);
+  const providerKindTouchedRef = useRef(false);
+
   /** The reader picked a tab: state first so the click feels instant, then the one leaf that changed. */
   const setSettingsTab = (tab: SettingsTab) => {
+    settingsTabTouchedRef.current = true;
     setSettingsTabState(tab);
     void updateViewPreferences({ ui: { settingsTab: tab } }).catch(() => {
       /* The next read reconciles; a failed write must not break the tabs. */
@@ -124,6 +127,7 @@ export function SettingsModal(props: SettingsModalProps) {
   };
 
   const setProviderKind = (kind: ProviderSubTab) => {
+    providerKindTouchedRef.current = true;
     setProviderKindState(kind);
     void updateViewPreferences({ ui: { settingsProviderKind: kind } }).catch(() => {
       /* The next read reconciles; a failed write must not break the tabs. */
@@ -164,8 +168,12 @@ export function SettingsModal(props: SettingsModalProps) {
       const { preferences } = await adoptLocalPreferences();
       if (cancelled) return;
       const resolved = resolveUiPreferences(preferences);
-      setSettingsTabState(resolved.settingsTab);
-      setProviderKindState(resolved.settingsProviderKind);
+      if (!settingsTabTouchedRef.current) {
+        setSettingsTabState(resolved.settingsTab);
+      }
+      if (!providerKindTouchedRef.current) {
+        setProviderKindState(resolved.settingsProviderKind);
+      }
     })().catch(() => {
       /* A failed read leaves the defaults on screen; nothing is written, so nothing is lost. */
     });
@@ -193,183 +201,154 @@ export function SettingsModal(props: SettingsModalProps) {
     else onClose();
   }, [dirty, onClose]);
 
-  // Register on the dialog stack while open so Escape & backdrop clicks dismiss Settings only when
-  // no nested dialog (e.g. ConfirmModal) sits on top of it.
-  useEffect(() => {
-    if (!open) return;
-    pushDialog(dialogId);
-    return () => popDialog(dialogId);
-  }, [open, dialogId]);
-
-  useEffect(() => {
-    if (!open || confirmClose) return;
-    function handleWindowKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      if (!isTopDialog(dialogId)) return;
-      event.preventDefault();
-      requestClose();
-    }
-    window.addEventListener("keydown", handleWindowKeyDown);
-    return () => window.removeEventListener("keydown", handleWindowKeyDown);
-  }, [open, confirmClose, dialogId, requestClose]);
-
-  if (!open) return null;
-
   return (
-    <div
-      className="modal-backdrop settings-modal-backdrop"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !confirmClose && isTopDialog(dialogId)) {
-          requestClose();
-        }
-      }}
+    <Modal
+      open={open}
+      onClose={requestClose}
+      dismissDisabled={confirmClose}
+      size="wide"
+      fullScreenMobile
+      ariaLabelledBy={titleId}
     >
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className="modal settings-modal-wide"
-      >
-        <Header
-          variant="modal"
-          title="Settings"
-          titleId={titleId}
-          bordered
-          actions={
-            <Button
-              variant="ghost"
-              size="sm"
-              iconOnly
-              leftIcon="X"
-              tooltip="Close"
-              tooltipSide="bottom"
-              onClick={requestClose}
-              aria-label="Close Settings"
-            />
-          }
+      <Header
+        variant="modal"
+        title="Settings"
+        titleId={titleId}
+        bordered
+        actions={
+          <Button
+            variant="ghost"
+            size="sm"
+            iconOnly
+            leftIcon="X"
+            tooltip="Close"
+            tooltipSide="bottom"
+            onClick={requestClose}
+            aria-label="Close Settings"
+          />
+        }
+      />
+
+      <Modal.Body layout="split">
+        <Tabs<SettingsTab>
+          tabs={SETTINGS_TABS}
+          activeTab={settingsTab}
+          onChange={setSettingsTab}
+          variant="sidebar"
+          size="sm"
+          ariaLabel="Settings categories"
         />
 
-        <div className="settings-modal-body">
-          <Tabs<SettingsTab>
-            tabs={SETTINGS_TABS}
-            activeTab={settingsTab}
-            onChange={setSettingsTab}
-            variant="sidebar"
-            size="sm"
-            ariaLabel="Settings categories"
-          />
-
-          <div className="settings-tab-content">
-            <div hidden={settingsTab !== "provider"}>
-              {visitedTabs.has("provider") && (
-                <Stack direction="column" align="stretch" gap="xs">
-                  <Tabs<ProviderSubTab>
-                    tabs={PROVIDER_KIND_TABS}
-                    activeTab={providerKind}
-                    onChange={setProviderKind}
-                    variant="segmented"
-                    size="sm"
-                    fullWidth
-                    ariaLabel="Provider kind"
-                  />
-                  {/* Two instances, each pinned to ONE kind. This replaces the old
-                      `key={providerKind}` remount that discarded a half-filled
-                      draft on every kind switch: each editor here only ever holds
-                      its own kind's fields, so the problem that remount guarded
-                      against (a text draft rendered into the image form) cannot
-                      arise. */}
-                  <div hidden={providerKind !== "text"}>
-                    {visitedKinds.has("text") && (
-                      <ProviderConnections
-                        kind="text"
-                        active={providerKind === "text"}
-                        onDirtyChange={handleDirtyChange}
-                      />
-                    )}
-                  </div>
-                  <div hidden={providerKind !== "image"}>
-                    {visitedKinds.has("image") && (
-                      <ProviderConnections
-                        kind="image"
-                        active={providerKind === "image"}
-                        onDirtyChange={handleDirtyChange}
-                      />
-                    )}
-                  </div>
-                  <div hidden={providerKind !== "overrides"}>
-                    {visitedKinds.has("overrides") && (
-                      <ProviderOverridesPanel active={providerKind === "overrides"} />
-                    )}
-                  </div>
-                </Stack>
-              )}
-            </div>
-
-            <div hidden={settingsTab !== "prompts"}>
-              {visitedTabs.has("prompts") && <PresetEditor />}
-            </div>
-
-            <div hidden={settingsTab !== "tags"}>
-              {visitedTabs.has("tags") && <TagTaxonomyPanel />}
-            </div>
-
-            <div hidden={settingsTab !== "chat"}>
-              {visitedTabs.has("chat") && (
-                <ChatSettingsPanel
-                  choicesEnabled={choicesEnabled}
-                  setChoicesEnabled={setChoicesEnabled}
-                  showDebug={showDebug}
-                  setShowDebug={setShowDebug}
-                  showContextUsage={showContextUsage}
-                  setShowContextUsage={setShowContextUsage}
-                  showGenerationTime={showGenerationTime}
-                  setShowGenerationTime={setShowGenerationTime}
-                  showMessageTimestamps={showMessageTimestamps}
-                  setShowMessageTimestamps={setShowMessageTimestamps}
-                  showModelName={showModelName}
-                  setShowModelName={setShowModelName}
-                  showMessageNumbers={showMessageNumbers}
-                  setShowMessageNumbers={setShowMessageNumbers}
-                  imagePromptPreview={imagePromptPreview}
-                  setImagePromptPreview={setImagePromptPreview}
-                  autoImageAfterTurn={autoImageAfterTurn}
-                  setAutoImageAfterTurn={setAutoImageAfterTurn}
-                  alwaysDiscardOldImage={alwaysDiscardOldImage}
-                  setAlwaysDiscardOldImage={setAlwaysDiscardOldImage}
-                  autoScrollBehavior={autoScrollBehavior}
-                  setAutoScrollBehavior={setAutoScrollBehavior}
+        <Modal.Content>
+          <Tabs.Panel active={settingsTab === "provider"}>
+            {visitedTabs.has("provider") && (
+              <Stack direction="column" align="stretch" gap="xs">
+                <Tabs<ProviderSubTab>
+                  tabs={PROVIDER_KIND_TABS}
+                  activeTab={providerKind}
+                  onChange={setProviderKind}
+                  variant="segmented"
+                  size="sm"
+                  fullWidth
+                  ariaLabel="Provider kind"
                 />
-              )}
-            </div>
+                {/* Two instances, each pinned to ONE kind. This replaces the old
+                    `key={providerKind}` remount that discarded a half-filled
+                    draft on every kind switch: each editor here only ever holds
+                    its own kind's fields, so the problem that remount guarded
+                    against (a text draft rendered into the image form) cannot
+                    arise. */}
+                <Tabs.Panel active={providerKind === "text"}>
+                  {visitedKinds.has("text") && (
+                    <ProviderConnectionsPanel
+                      kind="text"
+                      active={providerKind === "text"}
+                      onDirtyChange={handleDirtyChange}
+                    />
+                  )}
+                </Tabs.Panel>
+                <Tabs.Panel active={providerKind === "image"}>
+                  {visitedKinds.has("image") && (
+                    <ProviderConnectionsPanel
+                      kind="image"
+                      active={providerKind === "image"}
+                      onDirtyChange={handleDirtyChange}
+                    />
+                  )}
+                </Tabs.Panel>
+                <Tabs.Panel active={providerKind === "overrides"}>
+                  {visitedKinds.has("overrides") && (
+                    <ProviderOverridesPanel active={providerKind === "overrides"} />
+                  )}
+                </Tabs.Panel>
+              </Stack>
+            )}
+          </Tabs.Panel>
 
-            <div hidden={settingsTab !== "interface"}>
-              {visitedTabs.has("interface") && <InterfaceSettingsPanel />}
-            </div>
+          <Tabs.Panel active={settingsTab === "prompts"}>
+            {visitedTabs.has("prompts") && <PresetEditor />}
+          </Tabs.Panel>
 
-            <div hidden={settingsTab !== "appearance"}>
-              {visitedTabs.has("appearance") && <AppearanceSettingsPanel />}
-            </div>
-          </div>
-        </div>
+          <Tabs.Panel active={settingsTab === "tags"}>
+            {visitedTabs.has("tags") && <TagTaxonomyPanel />}
+          </Tabs.Panel>
 
-        {/* The only way to leave a dirty draft. ConfirmModal renders its own
-            backdrop and sits on top of the dialog stack, so Escape or backdrop
-            dismissal cannot close the Settings modal underneath it. */}
-        {confirmClose && (
-          <ConfirmModal
-            title="Discard unsaved changes?"
-            message="Your edits to this provider connection have not been saved."
-            confirmLabel="Discard changes"
-            cancelLabel="Keep editing"
-            danger
-            onConfirm={() => {
-              setConfirmClose(false);
-              onClose();
-            }}
-            onCancel={() => setConfirmClose(false)}
-          />
-        )}
-      </section>
-    </div>
+          <Tabs.Panel active={settingsTab === "chat"}>
+            {visitedTabs.has("chat") && (
+              <ChatSettingsPanel
+                choicesEnabled={choicesEnabled}
+                setChoicesEnabled={setChoicesEnabled}
+                showDebug={showDebug}
+                setShowDebug={setShowDebug}
+                showContextUsage={showContextUsage}
+                setShowContextUsage={setShowContextUsage}
+                showGenerationTime={showGenerationTime}
+                setShowGenerationTime={setShowGenerationTime}
+                showMessageTimestamps={showMessageTimestamps}
+                setShowMessageTimestamps={setShowMessageTimestamps}
+                showModelName={showModelName}
+                setShowModelName={setShowModelName}
+                showMessageNumbers={showMessageNumbers}
+                setShowMessageNumbers={setShowMessageNumbers}
+                imagePromptPreview={imagePromptPreview}
+                setImagePromptPreview={setImagePromptPreview}
+                autoImageAfterTurn={autoImageAfterTurn}
+                setAutoImageAfterTurn={setAutoImageAfterTurn}
+                alwaysDiscardOldImage={alwaysDiscardOldImage}
+                setAlwaysDiscardOldImage={setAlwaysDiscardOldImage}
+                autoScrollBehavior={autoScrollBehavior}
+                setAutoScrollBehavior={setAutoScrollBehavior}
+              />
+            )}
+          </Tabs.Panel>
+
+          <Tabs.Panel active={settingsTab === "interface"}>
+            {visitedTabs.has("interface") && <InterfaceSettingsPanel />}
+          </Tabs.Panel>
+
+          <Tabs.Panel active={settingsTab === "appearance"}>
+            {visitedTabs.has("appearance") && <AppearanceSettingsPanel />}
+          </Tabs.Panel>
+        </Modal.Content>
+      </Modal.Body>
+
+      {/* The only way to leave a dirty draft. ConfirmModal renders its own
+          backdrop and sits on top of the dialog stack, so Escape or backdrop
+          dismissal cannot close the Settings modal underneath it. */}
+      {confirmClose && (
+        <ConfirmModal
+          title="Discard unsaved changes?"
+          message="Your edits to this provider connection have not been saved."
+          confirmLabel="Discard changes"
+          cancelLabel="Keep editing"
+          danger
+          onConfirm={() => {
+            setConfirmClose(false);
+            onClose();
+          }}
+          onCancel={() => setConfirmClose(false)}
+        />
+      )}
+    </Modal>
   );
 }

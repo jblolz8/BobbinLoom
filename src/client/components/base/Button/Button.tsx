@@ -1,7 +1,6 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { Icon, type IconName } from "../Icon";
 import { Tooltip, type TooltipProps } from "../Tooltip/Tooltip";
-import "./Button.css";
 
 export type ButtonVariant =
   | "primary"
@@ -78,6 +77,15 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 ) {
   const isActuallyDisabled = disabled || isLoading;
   const iconSize = SIZE_ICON_MAP[size];
+  const resolvedAriaLabel =
+    props["aria-label"] ??
+    (collapseBelow || iconOnly
+      ? typeof tooltip === "string"
+        ? tooltip
+        : typeof children === "string"
+          ? children
+          : undefined
+      : undefined);
 
   const classNames = [
     "base-btn",
@@ -102,6 +110,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       disabled={isActuallyDisabled}
       aria-busy={isLoading ? "true" : undefined}
       aria-disabled={isActuallyDisabled ? "true" : undefined}
+      aria-label={resolvedAriaLabel}
       {...props}
     >
       {isLoading ? (

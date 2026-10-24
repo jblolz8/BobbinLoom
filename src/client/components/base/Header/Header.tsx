@@ -2,12 +2,10 @@ import {
   forwardRef,
   type ElementType,
   type HTMLAttributes,
-  type KeyboardEvent,
   type ReactNode,
 } from "react";
 import { Icon, type IconName } from "../Icon";
 import { Text, type TextElement } from "../Text/Text";
-import "./Header.css";
 
 export type HeaderVariant = "app" | "page" | "modal" | "panel" | "section";
 
@@ -74,13 +72,16 @@ export const HeaderBrand = forwardRef<HTMLDivElement, HeaderBrandProps>(function
 ) {
   const isInteractive = typeof onClick === "function";
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLHeadingElement>) => {
-    if (!onClick) return;
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      onClick();
-    }
-  };
+  const logoContent = (
+    <>
+      {icon && <span className="base-header__logo-icon">{icon}</span>}
+      {title && (
+        <Text as="span" className="base-header__logo-text" weight="bold" tone="primary">
+          {title}
+        </Text>
+      )}
+    </>
+  );
 
   return (
     <div
@@ -89,23 +90,13 @@ export const HeaderBrand = forwardRef<HTMLDivElement, HeaderBrandProps>(function
       {...props}
     >
       {(icon || title) && (
-        <h1
-          className={[
-            "base-header__logo",
-            isInteractive ? "base-header__logo--clickable" : "",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          onClick={onClick}
-          onKeyDown={isInteractive ? handleKeyDown : undefined}
-          role={isInteractive ? "button" : undefined}
-          tabIndex={isInteractive ? 0 : undefined}
-        >
-          {icon && <span className="base-header__logo-icon">{icon}</span>}
-          {title && (
-            <Text as="span" className="base-header__logo-text" weight="bold" tone="primary">
-              {title}
-            </Text>
+        <h1 className="base-header__logo">
+          {isInteractive ? (
+            <button type="button" className="base-header__logo-btn" onClick={onClick}>
+              {logoContent}
+            </button>
+          ) : (
+            logoContent
           )}
         </h1>
       )}

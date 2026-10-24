@@ -60,3 +60,21 @@
     transform: scale(1);
   }
 }
+
+.base-tooltip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  cursor: help;
+  line-height: 0;
+  flex-shrink: 0;
+  border-radius: 999px;
+  transition: color 0.15s ease;
+  outline: none;
+}
+
+.base-tooltip-icon:hover,
+.base-tooltip-icon:focus-visible {
+  color: var(--accent-highlight, var(--accent-base));
+}

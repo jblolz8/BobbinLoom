@@ -5,10 +5,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  /* Kept for buttons that hang their own children off themselves. NOTE: this
-     loads after views.css and modals.css, so a surface that absolutely
-     positions a base button must out-specify it — `.base-btn.<surface-class>`
-     — or the button silently becomes a flow item instead. */
+  /* Kept for buttons that hang their own children off themselves. */
   position: relative;
   font-family: inherit;
   font-weight: 500;
