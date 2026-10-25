@@ -341,6 +341,24 @@ export function applyTheme(settings: {
   }
 
   const activeAccent = tokens["--accent-base"] || (effectiveMode === "light" ? "#2563eb" : "#2b4b7b");
+  // Once live inline tokens are on `document.documentElement.style`, retire `#theme-first-paint`
+  // (preserving the shape tokens on `root.style` if they were not already inline) so switching back
+  // to a minimal preset like `default-dark` or `default-light` never falls through to stale first-paint rules.
+  const firstPaintStyle = document.getElementById("theme-first-paint");
+  if (firstPaintStyle) {
+    if (!style.getPropertyValue("--avatar-badge-radius")) {
+      style.setProperty("--avatar-badge-radius", avatarBadgeRadius(currentAvatarShape()));
+    }
+    const coverAttr = root.getAttribute("data-cover-aspect");
+    if (
+      !style.getPropertyValue("--cover-art-aspect") &&
+      (coverAttr === "portrait" || coverAttr === "square" || coverAttr === "landscape")
+    ) {
+      style.setProperty("--cover-art-aspect", COVER_ASPECT_VALUES[coverAttr]);
+    }
+    firstPaintStyle.remove();
+  }
+
   updateFavicon(activeAccent, effectiveMode === "light");
 }
 

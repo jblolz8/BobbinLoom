@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# BobbinLoom — production start (verify deps + client build, then serve)
+# BobbinLoom — build the client bundle, start the production server, and open the default browser.
 # Works on Windows (git-bash/MSYS), Linux, macOS, and Termux (Android).
 # Serves UI + API on 127.0.0.1:8787 by default (localhost only); set HOST=0.0.0.0 in .env for LAN/VPN access.
-# Usage: ./start.sh [--force|-f] [--rebuild|-r] [--reinstall] [--no-install] [--no-build] [--check]
-#   Dependencies and the client bundle are checked first and only rebuilt when
-#   something actually changed. Use ./update.sh to force the whole refresh.
 
 cd "$(dirname "$0")" || exit 1
 
@@ -24,34 +21,49 @@ if [ -n "$NODE_MAJOR" ] && [ "$NODE_MAJOR" -lt 18 ] 2>/dev/null; then
 fi
 
 # ------------------------------------------------------------------
-# 1. --check is a dry run: report the decisions and stop. Nothing is
-#    touched — no port kill, no build, no server.
+# 1. Read PORT / HOST from .env (if present) and stop any previous
+#    instance on that port BEFORE rebuilding
 # ------------------------------------------------------------------
-case " $* " in
-    *" --check "*) node scripts/ensure-ready.mjs "$@"; exit 0 ;;
-esac
+APP_HOST="127.0.0.1"
+APP_PORT="8787"
+if [ -f .env ]; then
+    ENV_HOST=$(grep -E '^[[:space:]]*HOST=' .env | tail -n 1 | cut -d'=' -f2- | tr -d '\r"'\''')
+    ENV_PORT=$(grep -E '^[[:space:]]*PORT=' .env | tail -n 1 | cut -d'=' -f2- | tr -d '\r"'\''')
+    [ -n "$ENV_HOST" ] && APP_HOST="$ENV_HOST"
+    [ -n "$ENV_PORT" ] && APP_PORT="$ENV_PORT"
+fi
 
-# ------------------------------------------------------------------
-# 2. Stop any previous instance on port 8787 BEFORE rebuilding: a running
-#    server can hold dist/ open on Windows, which fails the bundle swap.
-# ------------------------------------------------------------------
 if command -v fuser >/dev/null 2>&1; then
-    fuser -k 8787/tcp >/dev/null 2>&1 || true
+    fuser -k "${APP_PORT}/tcp" >/dev/null 2>&1 || true
 elif command -v lsof >/dev/null 2>&1; then
-    for pid in $(lsof -ti tcp:8787 2>/dev/null); do kill "$pid" 2>/dev/null || true; done
+    for pid in $(lsof -ti "tcp:${APP_PORT}" 2>/dev/null); do kill "$pid" 2>/dev/null || true; done
 else
     # Termux fallback (procps ships pkill)
     pkill -f "tsx src/server/index.ts" 2>/dev/null || true
 fi
 
 # ------------------------------------------------------------------
-# 3. Install dependencies / build the client, but only if stale
+# 2. Fresh-clone safeguard: install dependencies if node_modules is missing
 # ------------------------------------------------------------------
-echo "Checking dependencies and the client build..."
-node scripts/ensure-ready.mjs "$@" || {
+if [ ! -d node_modules ]; then
     echo
-    echo "[FAIL] The project could not be prepared — see the message above."
-    echo "       Nothing was started."
+    echo "First-time setup: node_modules not found, installing dependencies..."
+    npm install || {
+        echo
+        echo "[FAIL] npm install failed. Check your network connection or run ./update.sh."
+        exit 1
+    }
+fi
+
+# ------------------------------------------------------------------
+# 3. Build the client bundle
+# ------------------------------------------------------------------
+echo
+echo "Building client bundle..."
+npm run build || {
+    echo
+    echo "[FAIL] Client build failed — see the output above."
+    echo "       Server was not started."
     exit 1
 }
 
@@ -62,15 +74,16 @@ node scripts/ensure-ready.mjs "$@" || {
 [ -f data/prompt-presets.json ] || echo "[WARN] data/prompt-presets.json not found — presets won't load."
 
 # ------------------------------------------------------------------
-# 5. Start the server
+# 5. Start the server and open the default browser once ready
 # ------------------------------------------------------------------
 echo
 echo "============================================"
 echo "  BobbinLoom is starting"
-echo "  http://localhost:8787   (this device)"
-echo "  Network access: set HOST=0.0.0.0 in .env, then use <LAN-IP>:8787"
+echo "  http://localhost:${APP_PORT}   (bound to ${APP_HOST}:${APP_PORT})"
+echo "  (Use ./toggle_listen_server.sh to toggle LAN/VPN access)"
+echo "  Opening default browser..."
 echo "  Press Ctrl+C to stop."
 echo "============================================"
 echo
 
-exec npm start
+OPEN_BROWSER=1 exec npm start

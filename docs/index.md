@@ -19,8 +19,9 @@ Node.js 20 or newer is the only requirement.
 
 | Mode | Command | What happens |
 |---|---|---|
-| Launcher | `start.bat` (Windows) / `./start.sh` | Checks dependencies and the client build, fixes what's stale, then serves |
-| Update | `update.bat` / `./update.sh` | Same, but forces both a dependency install and a client rebuild |
+| Launcher | `start.bat` (Windows) / `./start.sh` | Builds the client bundle (`npm run build`), starts the server (`npm start`), and opens the default browser |
+| Update | `update.bat` / `./update.sh` | Pulls the latest changes (`git pull --ff-only`) and installs/updates dependencies (`npm install`) |
+| Toggle Listen Server | `toggle_listen_server.bat` / `./toggle_listen_server.sh` | Interactively creates, edits, or removes `.env` to toggle LAN/VPN listen mode (`0.0.0.0:8787` by default) |
 | Development | `npm run dev` | API on `:8787` (tsx watch) plus the Vite dev UI on `:5173` with hot reload |
 | Production | `npm run build && npm start` | Vite builds to `dist/`, then one Fastify server serves the UI and the API on a single port |
 

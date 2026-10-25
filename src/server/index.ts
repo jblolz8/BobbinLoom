@@ -2,7 +2,9 @@ import "dotenv/config";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
+import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { networkInterfaces } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -77,7 +79,55 @@ async function main(): Promise<void> {
   const port = Number(process.env.PORT ?? 8787);
   const host = process.env.HOST ?? "127.0.0.1";
   await app.listen({ port, host });
-  console.log(`BobbinLoom listening on http://${host}:${port}`);
+  const browserHost = host === "0.0.0.0" || host === "::" ? "localhost" : host;
+  const localUrl = `http://${browserHost}:${port}`;
+  console.log(`BobbinLoom listening on ${localUrl}`);
+  if (host === "0.0.0.0" || host === "::") {
+    for (const ip of getLanIpv4Addresses()) {
+      console.log(`  LAN access: http://${ip}:${port}`);
+    }
+  }
+
+  if (process.env.OPEN_BROWSER === "1" || process.argv.includes("--open")) {
+    openDefaultBrowser(localUrl);
+  }
+}
+
+function getLanIpv4Addresses(): string[] {
+  const urls: string[] = [];
+  try {
+    const nets = networkInterfaces();
+    for (const entries of Object.values(nets)) {
+      if (!entries) continue;
+      for (const net of entries) {
+        if (net.family === "IPv4" && !net.internal && net.address) {
+          urls.push(net.address);
+        }
+      }
+    }
+  } catch {
+    /* Ignore interface query errors */
+  }
+  return urls;
+}
+
+function openDefaultBrowser(url: string): void {
+  try {
+    const child =
+      process.platform === "win32"
+        ? spawn("cmd", ["/c", "start", "", url], { detached: true, stdio: "ignore" })
+        : process.platform === "darwin"
+          ? spawn("open", [url], { detached: true, stdio: "ignore" })
+          : process.env.TERMUX_VERSION
+            ? spawn("termux-open-url", [url], { detached: true, stdio: "ignore" })
+            : spawn("xdg-open", [url], { detached: true, stdio: "ignore" });
+    child.on("error", () => {
+      /* Ignore browser launch errors on headless systems */
+    });
+    child.unref();
+  } catch {
+    /* Ignore browser launch errors on headless systems */
+  }
 }
 
 main().catch((error) => {

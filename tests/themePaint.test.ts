@@ -186,12 +186,12 @@ describe("themeShapeTokens and avatarBadgeRadius", () => {
 });
 
 describe("themeFirstPaint", () => {
-  it("names the scheme, the shape and the aspect, and paints one :root block", () => {
+  it("names the scheme, the shape and the aspect, and paints one :root[data-theme] block", () => {
     const { attributes, markup } = themeFirstPaint(settings());
 
     expect(attributes).toBe('data-theme="light" data-avatar-shape="circle" data-cover-aspect="square"');
     expect(markup).toContain('<style id="theme-first-paint">');
-    expect(markup.match(/:root\{/g)).toHaveLength(1);
+    expect(markup.match(/:root\[data-theme\]\{/g)).toHaveLength(1);
     expect(markup).toContain("--avatar-badge-radius:50%");
     expect(markup).toContain("--cover-art-aspect:1 / 1");
     expect(markup).toContain("--text-primary:#0f172a");
@@ -214,7 +214,7 @@ describe("themeFirstPaint", () => {
     );
 
     expect(attributes).toBe('data-theme="dark" data-avatar-shape="rounded" data-cover-aspect="landscape"');
-    expect(markup.match(/:root\{/g)).toHaveLength(2);
+    expect(markup.match(/:root\[data-theme\]\{/g)).toHaveLength(2);
 
     const [base, media] = markup.split("@media (prefers-color-scheme: light)");
     expect(media).toBeTruthy();

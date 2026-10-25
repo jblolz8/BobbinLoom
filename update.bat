@@ -1,10 +1,7 @@
 @echo off
 setlocal
 title BobbinLoom Update
-REM BobbinLoom — unconditional update: pull from origin, install dependencies, rebuild the
-REM client. Use this when you want this device current. start.bat does the install/build
-REM automatically, but only when it detects something changed, and it never touches the
-REM network — pulling is what update.* is for.
+REM BobbinLoom — pull the latest changes from git and install/update npm dependencies.
 
 cd /d "%~dp0"
 
@@ -16,16 +13,36 @@ if %ERRORLEVEL% neq 0 (
     goto :eof
 )
 
-echo Updating BobbinLoom (pull + dependencies + client build)...
+echo Updating BobbinLoom...
 echo.
-call node scripts\ensure-ready.mjs --pull --force
+
+REM ------------------------------------------------------------------
+REM 1. Pull latest changes from git
+REM ------------------------------------------------------------------
+where git >nul 2>nul
+if %ERRORLEVEL% neq 0 (
+    echo [WARN] git not found in PATH — skipping git pull.
+) else (
+    echo Pulling latest changes from git...
+    git pull --ff-only
+    if %ERRORLEVEL% neq 0 (
+        echo.
+        echo [FAIL] git pull failed — see the message above.
+        echo        Resolve any local branch changes or connectivity issues and re-run.
+        pause
+        goto :eof
+    )
+)
+
+REM ------------------------------------------------------------------
+REM 2. Install / update dependencies
+REM ------------------------------------------------------------------
+echo.
+echo Installing dependencies...
+call npm install
 if %ERRORLEVEL% neq 0 (
     echo.
-    echo [FAIL] The update did not finish cleanly — see the message above.
-    echo        If it was the PULL that could not happen (offline, local commits, or edits
-    echo        in the way of the incoming ones), the install and build still ran for the
-    echo        tree already on disk, so this device is usable but behind origin. Sort the
-    echo        repository out and re-run.
+    echo [FAIL] npm install failed — see the message above.
     pause
     goto :eof
 )
@@ -33,7 +50,7 @@ if %ERRORLEVEL% neq 0 (
 echo.
 echo ============================================
 echo   Update complete.
-echo   Run start.bat (or start.sh) to serve.
+echo   Run start.bat (or start.sh) to build and launch.
 echo ============================================
 echo.
 pause

@@ -4,12 +4,10 @@ A local-first AI-Roleplay Story Engine. Story-first characters with thin runtime
 
 ## Run
 
-- **Windows:** double-click `start.bat`, then open the printed URL.
-- **Linux / macOS / Android (Termux):** `./start.sh`
-- **After pulling changes, or on a new device:** `update.bat` / `./update.sh` — installs dependencies and rebuilds the client unconditionally.
-- **Flags (either start script):** `--force` (install + rebuild), `--rebuild`, `--reinstall`, `--no-install`, `--no-build`, `--check` (print the decisions and exit without serving).
-
-Both start scripts check dependencies and the client build first, and only redo that work when something actually changed — so a normal launch is instant, while a launch after a `git pull` repairs itself. The check lives in `scripts/ensure-ready.mjs` so `cmd.exe` and bash cannot drift apart.
+- **Windows:** double-click `start.bat` — builds the client bundle, starts the server, and opens the default browser automatically.
+- **Linux / macOS / Android (Termux):** `./start.sh` — builds the client bundle, starts the server, and opens the default browser automatically.
+- **To pull updates and install dependencies:** `update.bat` / `./update.sh` — runs `git pull --ff-only` and `npm install`.
+- **To toggle LAN / network listen mode (`.env`):** `toggle_listen_server.bat` / `./toggle_listen_server.sh` — creates, edits, or removes `.env` (`HOST` and `PORT`, defaulting to `0.0.0.0:8787` on Enter).
 - **Dev:** `npm run dev` — API server on port 8787 (see `.env.example`), Vite client on its default port.
 
 ## Documentation

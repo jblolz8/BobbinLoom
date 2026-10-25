@@ -58,9 +58,12 @@ export function themeFirstPaint(settings: AppSettings): { attributes: string; ma
     .map(([name, value]) => `${name}="${escapeAttribute(value)}"`)
     .join(" ");
 
+  // `:root[data-theme]` (specificity 0,2,0) outranks both `:root` (0,1,0) and `[data-theme="light"]` (0,1,0)
+  // in `variables.css` regardless of `<head>` stylesheet order (including Vite dev mode, which appends
+  // `<style>` tags dynamically after `#theme-first-paint`).
   const blocks = system
-    ? `:root{${declarations(settings, "dark")}}@media (prefers-color-scheme: light){:root{${declarations(settings, "light")}}}`
-    : `:root{${declarations(settings, baseMode)}}`;
+    ? `:root[data-theme]{${declarations(settings, "dark")}}@media (prefers-color-scheme: light){:root[data-theme]{${declarations(settings, "light")}}}`
+    : `:root[data-theme]{${declarations(settings, baseMode)}}`;
 
   return {
     attributes,
