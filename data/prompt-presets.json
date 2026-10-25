@@ -69,11 +69,7 @@
           "name": "Species",
           "order": 1,
           "instruction": "The character's species, ancestry, or type of being. One short value — this world is not limited to humans, so name what she is.",
-          "examples": [
-            "Human",
-            "Anthro Fox",
-            "Slimegirl"
-          ],
+          "examples": ["Human", "Anthro Fox", "Slimegirl"],
           "exampleBody": "",
           "inline": true
         },
@@ -81,11 +77,7 @@
           "name": "Gender",
           "order": 2,
           "instruction": "The character's gender identity or presentation. One short value.",
-          "examples": [
-            "Male",
-            "Female",
-            "Androgynous"
-          ],
+          "examples": ["Male", "Female", "Androgynous"],
           "exampleBody": "",
           "inline": true
         },
@@ -302,11 +294,7 @@
           "name": "Species",
           "order": 1,
           "instruction": "The character's species, ancestry, or type of being. One short value — this world is not limited to humans, so name what she is.",
-          "examples": [
-            "Human",
-            "Anthro Fox",
-            "Slimegirl"
-          ],
+          "examples": ["Human", "Anthro Fox", "Slimegirl"],
           "exampleBody": "",
           "inline": true
         },
@@ -314,11 +302,7 @@
           "name": "Gender",
           "order": 2,
           "instruction": "The character's gender identity or presentation. One short value.",
-          "examples": [
-            "Male",
-            "Female",
-            "Androgynous"
-          ],
+          "examples": ["Male", "Female", "Androgynous"],
           "exampleBody": "",
           "inline": true
         },

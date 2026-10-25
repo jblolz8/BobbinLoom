@@ -1,19 +1,60 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import type { CharacterTemplate, LorebookSummary, ViewPreferences } from "../../../schemas";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
+import type {
+  CharacterTemplate,
+  LorebookSummary,
+  ViewPreferences,
+} from "../../../schemas";
 import type { Persona, ResolvedSetupPreferences } from "../../api";
 import {
   SETUP_PREFERENCE_DEFAULTS,
   adoptLocalPreferences,
   getTagTaxonomy,
   resolveSetupPreferences,
-  updateViewPreferences
+  updateViewPreferences,
 } from "../../api";
-import { listProviderConnections, setGenerationTextProvider, setCharacterTextProvider, type ProviderConnection } from "../../api/providers";
-import { AvatarBadge, Button, CharacterAvatar, Icon, Pagination, SearchBar, SimpleSelect, SwitchRow, TagChip, TextArea, TextInput } from "../base";
+import {
+  listProviderConnections,
+  setGenerationTextProvider,
+  setCharacterTextProvider,
+  type ProviderConnection,
+} from "../../api/providers";
+import {
+  AvatarBadge,
+  Button,
+  CharacterAvatar,
+  Icon,
+  Pagination,
+  SearchBar,
+  SimpleSelect,
+  SwitchRow,
+  TagChip,
+  TextArea,
+  TextInput,
+} from "../base";
 import { usePagination } from "../../hooks/usePagination";
 import type { ViewMode } from "../library/CharacterLibrary";
-import { cardBadgeLabel, displayTitle, entryKind, filterLibraryEntries, groupByLineage, getGroupCreatedAt, getGroupUpdatedAt, type CharacterSortOption, type SortDirection } from "../../../engine/characterCards";
-import { groupTagsByCategory, sortTags, type TagTaxonomyConfig } from "../../../engine/tagTaxonomy";
+import {
+  cardBadgeLabel,
+  displayTitle,
+  entryKind,
+  filterLibraryEntries,
+  groupByLineage,
+  getGroupCreatedAt,
+  getGroupUpdatedAt,
+  type CharacterSortOption,
+  type SortDirection,
+} from "../../../engine/characterCards";
+import {
+  groupTagsByCategory,
+  sortTags,
+  type TagTaxonomyConfig,
+} from "../../../engine/tagTaxonomy";
 
 export type SetupFormState = {
   name: string;
@@ -112,10 +153,14 @@ export function SetupView(props: SetupViewProps) {
   // connection list and the remembered choice, so the modal reads it on open: a fresh session
   // must open on the saved choice rather than on the default slot. Mirrors the Image Provider
   // editor's "Prompt Writer" control, down to the dangling-id row.
-  const [textConnections, setTextConnections] = useState<ProviderConnection[]>([]);
+  const [textConnections, setTextConnections] = useState<ProviderConnection[]>(
+    [],
+  );
   const [activeTextProviderId, setActiveTextProviderId] = useState("");
   const [characterProviderId, setCharacterProviderId] = useState("");
-  const [providerChoiceError, setProviderChoiceError] = useState<string | null>(null);
+  const [providerChoiceError, setProviderChoiceError] = useState<string | null>(
+    null,
+  );
   // Held in a ref so the registry read depends on `open` ALONE: the parent passes a fresh
   // callback every render, and re-running the effect would refetch on every keystroke.
   const onSetupFormChangeRef = useRef(onSetupFormChange);
@@ -127,13 +172,18 @@ export function SetupView(props: SetupViewProps) {
     listProviderConnections()
       .then((registry) => {
         if (cancelled) return;
-        setTextConnections(registry.connections.filter((c) => c.kind === "text"));
+        setTextConnections(
+          registry.connections.filter((c) => c.kind === "text"),
+        );
         setActiveTextProviderId(registry.activeTextProviderId);
         setCharacterProviderId(registry.characterTextProviderId ?? "");
         const stored = registry.generationTextProviderId ?? "";
         // Adopt the remembered choice into the form so the generate request carries the
         // connection the user actually sees selected.
-        if (stored) onSetupFormChangeRef.current((f) => (f.providerId === "" ? { ...f, providerId: stored } : f));
+        if (stored)
+          onSetupFormChangeRef.current((f) =>
+            f.providerId === "" ? { ...f, providerId: stored } : f,
+          );
       })
       .catch(() => {
         /* the list degrades to the default slot; generation still falls back server-side */
@@ -148,20 +198,29 @@ export function SetupView(props: SetupViewProps) {
       { value: "", label: "Current active text provider" },
       ...textConnections.map((c) => ({
         value: c.id,
-        label: `${c.label}${c.model ? ` — ${c.model}` : ""}${c.id === activeTextProviderId ? " (active)" : ""}`
-      }))
+        label: `${c.label}${c.model ? ` — ${c.model}` : ""}${c.id === activeTextProviderId ? " (active)" : ""}`,
+      })),
     ];
     // A saved choice whose connection no longer exists stays visible and re-selectable; the
     // server falls back to the active connection for it (never a failed generation).
-    if (setupForm.providerId && !textConnections.some((c) => c.id === setupForm.providerId)) {
-      options.push({ value: setupForm.providerId, label: `${setupForm.providerId} (not found)` });
+    if (
+      setupForm.providerId &&
+      !textConnections.some((c) => c.id === setupForm.providerId)
+    ) {
+      options.push({
+        value: setupForm.providerId,
+        label: `${setupForm.providerId} (not found)`,
+      });
     }
     return options;
   }, [textConnections, activeTextProviderId, setupForm.providerId]);
 
   const textProviderLabel = useMemo(() => {
     if (!setupForm.providerId) return "Active connection";
-    return textConnections.find((c) => c.id === setupForm.providerId)?.label ?? `${setupForm.providerId} (not found)`;
+    return (
+      textConnections.find((c) => c.id === setupForm.providerId)?.label ??
+      `${setupForm.providerId} (not found)`
+    );
   }, [setupForm.providerId, textConnections]);
 
   const characterProviderOptions = useMemo(() => {
@@ -169,11 +228,17 @@ export function SetupView(props: SetupViewProps) {
       { value: "", label: "Current active text provider" },
       ...textConnections.map((c) => ({
         value: c.id,
-        label: `${c.label}${c.model ? ` - ${c.model}` : ""}${c.id === activeTextProviderId ? " (active)" : ""}`
-      }))
+        label: `${c.label}${c.model ? ` - ${c.model}` : ""}${c.id === activeTextProviderId ? " (active)" : ""}`,
+      })),
     ];
-    if (characterProviderId && !textConnections.some((c) => c.id === characterProviderId)) {
-      options.push({ value: characterProviderId, label: `${characterProviderId} (not found)` });
+    if (
+      characterProviderId &&
+      !textConnections.some((c) => c.id === characterProviderId)
+    ) {
+      options.push({
+        value: characterProviderId,
+        label: `${characterProviderId} (not found)`,
+      });
     }
     return options;
   }, [textConnections, activeTextProviderId, characterProviderId]);
@@ -182,7 +247,9 @@ export function SetupView(props: SetupViewProps) {
     setCharacterProviderId(id);
     setProviderChoiceError(null);
     setCharacterTextProvider(id === "" ? null : id).catch(() =>
-      setProviderChoiceError("Could not remember that choice - it will still be used for this generation.")
+      setProviderChoiceError(
+        "Could not remember that choice - it will still be used for this generation.",
+      ),
     );
   };
 
@@ -192,15 +259,21 @@ export function SetupView(props: SetupViewProps) {
     // Persist immediately: the choice has to survive closing the modal, and it is what the
     // NEXT New Playthrough opens on.
     setGenerationTextProvider(id === "" ? null : id).catch(() =>
-      setProviderChoiceError("Could not remember that choice — it will still be used for this generation.")
+      setProviderChoiceError(
+        "Could not remember that choice — it will still be used for this generation.",
+      ),
     );
   };
 
   const [activeTab, setActiveTab] = useState<SetupStepTab>("persona");
-  const [castSearch, setCastSearchState] = useState(SETUP_PREFERENCE_DEFAULTS.castSearch);
-  const [sortBy, setSortByState] = useState<CharacterSortOption>(SETUP_PREFERENCE_DEFAULTS.castSortBy);
+  const [castSearch, setCastSearchState] = useState(
+    SETUP_PREFERENCE_DEFAULTS.castSearch,
+  );
+  const [sortBy, setSortByState] = useState<CharacterSortOption>(
+    SETUP_PREFERENCE_DEFAULTS.castSortBy,
+  );
   const [sortDirection, setSortDirectionState] = useState<SortDirection>(
-    SETUP_PREFERENCE_DEFAULTS.castSortDir
+    SETUP_PREFERENCE_DEFAULTS.castSortDir,
   );
 
   /** Set the moment the reader changes any of these, so a read that lands later never overwrites what
@@ -223,7 +296,8 @@ export function SetupView(props: SetupViewProps) {
 
   const setSortBy = (option: CharacterSortOption) => {
     // The direction follows the field: dates read newest-first, names A to Z.
-    const nextDir: SortDirection = option === "createdAt" || option === "updatedAt" ? "desc" : "asc";
+    const nextDir: SortDirection =
+      option === "createdAt" || option === "updatedAt" ? "desc" : "asc";
     setSortByState(option);
     setSortDirectionState(nextDir);
     writeSetupPreference({ castSortBy: option, castSortDir: nextDir });
@@ -235,9 +309,10 @@ export function SetupView(props: SetupViewProps) {
     writeSetupPreference({ castSortDir: nextDir });
   };
 
-  const [taxonomyConfig, setTaxonomyConfig] = useState<TagTaxonomyConfig | null>(null);
+  const [taxonomyConfig, setTaxonomyConfig] =
+    useState<TagTaxonomyConfig | null>(null);
   const [showTagFilters, setShowTagFiltersState] = useState<boolean>(
-    SETUP_PREFERENCE_DEFAULTS.showTagFilters
+    SETUP_PREFERENCE_DEFAULTS.showTagFilters,
   );
 
   const setShowTagFilters = (val: boolean) => {
@@ -245,7 +320,9 @@ export function SetupView(props: SetupViewProps) {
     writeSetupPreference({ showTagFilters: val });
   };
 
-  const [viewMode, setViewModeState] = useState<ViewMode>(SETUP_PREFERENCE_DEFAULTS.castViewMode);
+  const [viewMode, setViewModeState] = useState<ViewMode>(
+    SETUP_PREFERENCE_DEFAULTS.castViewMode,
+  );
 
   const setViewMode = (mode: ViewMode) => {
     setViewModeState(mode);
@@ -325,7 +402,9 @@ export function SetupView(props: SetupViewProps) {
   function isTagActive(tag: string): boolean {
     const raw = tag.toLowerCase();
     const norm = raw.replace(/\s+/g, "_");
-    return activeFilterTags.some((t) => t === norm || t === raw || t.replace(/_/g, " ") === raw);
+    return activeFilterTags.some(
+      (t) => t === norm || t === raw || t.replace(/_/g, " ") === raw,
+    );
   }
 
   function toggleTag(tag: string) {
@@ -370,7 +449,7 @@ export function SetupView(props: SetupViewProps) {
   const castPager = usePagination({
     items: castGroups,
     persistAs: "setupCast",
-    resetDeps: [open, castSearch, sortBy, sortDirection]
+    resetDeps: [open, castSearch, sortBy, sortDirection],
   });
   const paginatedCastGroups = castPager.pageItems;
 
@@ -409,13 +488,22 @@ export function SetupView(props: SetupViewProps) {
     }
   }
 
-  function handleStepperKeyDown(e: KeyboardEvent<HTMLButtonElement>, tab: SetupStepTab) {
+  function handleStepperKeyDown(
+    e: KeyboardEvent<HTMLButtonElement>,
+    tab: SetupStepTab,
+  ) {
     const idx = SETUP_STEP_ORDER.indexOf(tab);
     let next: SetupStepTab | null = null;
-    if (e.key === "ArrowRight") next = SETUP_STEP_ORDER[(idx + 1) % SETUP_STEP_ORDER.length];
-    else if (e.key === "ArrowLeft") next = SETUP_STEP_ORDER[(idx + SETUP_STEP_ORDER.length - 1) % SETUP_STEP_ORDER.length];
+    if (e.key === "ArrowRight")
+      next = SETUP_STEP_ORDER[(idx + 1) % SETUP_STEP_ORDER.length];
+    else if (e.key === "ArrowLeft")
+      next =
+        SETUP_STEP_ORDER[
+          (idx + SETUP_STEP_ORDER.length - 1) % SETUP_STEP_ORDER.length
+        ];
     else if (e.key === "Home") next = SETUP_STEP_ORDER[0];
-    else if (e.key === "End") next = SETUP_STEP_ORDER[SETUP_STEP_ORDER.length - 1];
+    else if (e.key === "End")
+      next = SETUP_STEP_ORDER[SETUP_STEP_ORDER.length - 1];
     if (next && next !== tab) {
       e.preventDefault();
       setActiveTab(next);
@@ -432,7 +520,8 @@ export function SetupView(props: SetupViewProps) {
           <div>
             <h2>Create New Playthrough</h2>
             <p className="setup-subtitle">
-              Configure your character persona, starting cast, and world setting.
+              Configure your character persona, starting cast, and world
+              setting.
             </p>
           </div>
           <button
@@ -442,7 +531,8 @@ export function SetupView(props: SetupViewProps) {
             disabled={generating}
             title="Close setup"
           >
-            <Icon name="X" size={16} /> <span className="close-btn-label">Close</span>
+            <Icon name="X" size={16} />{" "}
+            <span className="close-btn-label">Close</span>
           </button>
         </header>
 
@@ -450,13 +540,18 @@ export function SetupView(props: SetupViewProps) {
         {generating ? (
           <div className="setup-generating-view">
             <div className="setup-generating-icon-wrap">
-              <Icon name="Sparkles" size={38} className="generating-sparkle-anim" />
+              <Icon
+                name="Sparkles"
+                size={38}
+                className="generating-sparkle-anim"
+              />
             </div>
             <h3>Weaving Your Playthrough...</h3>
             <p className="setup-generating-subtitle">
-              {genProgressPhase || (setupForm.openingMode === "fleshedOut"
-                ? "Generating world scenario, characters, and writing the opening scene (2-stage narrative)…"
-                : "Generating starting scenario, character state, and initial scene…")}
+              {genProgressPhase ||
+                (setupForm.openingMode === "fleshedOut"
+                  ? "Generating world scenario, characters, and writing the opening scene (2-stage narrative)…"
+                  : "Generating starting scenario, character state, and initial scene…")}
             </p>
             <div className="setup-shimmer-bar-wrap">
               <div className="setup-shimmer-bar" />
@@ -465,7 +560,9 @@ export function SetupView(props: SetupViewProps) {
             <div className="setup-generating-summary-box">
               <div className="generating-summary-row">
                 <span className="summary-label">Persona:</span>
-                <strong className="summary-val">{selectedPersona?.name || "None"}</strong>
+                <strong className="summary-val">
+                  {selectedPersona?.name || "None"}
+                </strong>
               </div>
               <div className="generating-summary-row">
                 <span className="summary-label">Starting Cast:</span>
@@ -490,7 +587,9 @@ export function SetupView(props: SetupViewProps) {
               <div className="generating-summary-row">
                 <span className="summary-label">Opening Mode:</span>
                 <strong className="summary-val">
-                  {setupForm.openingMode === "fleshedOut" ? "Fleshed-out opening" : "Quick start"}
+                  {setupForm.openingMode === "fleshedOut"
+                    ? "Fleshed-out opening"
+                    : "Quick start"}
                 </strong>
               </div>
             </div>
@@ -509,7 +608,11 @@ export function SetupView(props: SetupViewProps) {
         ) : (
           <>
             {/* ── Wizard Step Tabs ── */}
-            <nav className="setup-wizard-tabs" aria-label="Setup Steps" role="tablist">
+            <nav
+              className="setup-wizard-tabs"
+              aria-label="Setup Steps"
+              role="tablist"
+            >
               <button
                 type="button"
                 role="tab"
@@ -523,7 +626,9 @@ export function SetupView(props: SetupViewProps) {
                 <span className="setup-tab-num">1</span>
                 <span className="setup-tab-label">Persona</span>
                 {selectedPersona ? (
-                  <span className="setup-tab-badge active">{selectedPersona.name}</span>
+                  <span className="setup-tab-badge active">
+                    {selectedPersona.name}
+                  </span>
                 ) : null}
               </button>
 
@@ -539,7 +644,9 @@ export function SetupView(props: SetupViewProps) {
               >
                 <span className="setup-tab-num">2</span>
                 <span className="setup-tab-label">Cast</span>
-                <span className={`setup-tab-badge ${selectedCastCount > 0 ? "active" : ""}`}>
+                <span
+                  className={`setup-tab-badge ${selectedCastCount > 0 ? "active" : ""}`}
+                >
                   {selectedCastCount} Selected
                 </span>
               </button>
@@ -557,7 +664,9 @@ export function SetupView(props: SetupViewProps) {
                 <span className="setup-tab-num">3</span>
                 <span className="setup-tab-label">Setting &amp; Story</span>
                 {selectedLorebookCount > 0 ? (
-                  <span className="setup-tab-badge active">{selectedLorebookCount} Lorebooks</span>
+                  <span className="setup-tab-badge active">
+                    {selectedLorebookCount} Lorebooks
+                  </span>
                 ) : null}
               </button>
             </nav>
@@ -566,19 +675,32 @@ export function SetupView(props: SetupViewProps) {
             <div className="setup-step-body">
               {/* ════════ TAB 1: PERSONA ════════ */}
               {activeTab === "persona" && (
-                <div className="setup-persona-tab" role="tabpanel" id="setup-panel-persona" aria-labelledby="setup-tab-persona">
+                <div
+                  className="setup-persona-tab"
+                  role="tabpanel"
+                  id="setup-panel-persona"
+                  aria-labelledby="setup-tab-persona"
+                >
                   <div className="setup-section-intro">
                     <h3>Choose Your Persona</h3>
                     <p className="setup-section-hint">
-                      Select the identity and perspective your player character will take during the story.
+                      Select the identity and perspective your player character
+                      will take during the story.
                     </p>
                   </div>
 
                   {personas.length === 0 ? (
                     <div className="setup-empty-card">
-                      <Icon name="User" size={32} className="setup-empty-icon" />
+                      <Icon
+                        name="User"
+                        size={32}
+                        className="setup-empty-icon"
+                      />
                       <p className="empty-title">No personas found</p>
-                      <p className="empty-subtitle">Create a persona in Persona Manager to define your protagonist&apos;s name and traits.</p>
+                      <p className="empty-subtitle">
+                        Create a persona in Persona Manager to define your
+                        protagonist&apos;s name and traits.
+                      </p>
                     </div>
                   ) : (
                     <div className="setup-persona-grid">
@@ -599,14 +721,33 @@ export function SetupView(props: SetupViewProps) {
                             }}
                           >
                             <div className="persona-card-header">
-                              <AvatarBadge icon="User" name={p.name} size="sm" />
+                              <AvatarBadge
+                                icon="User"
+                                name={p.name}
+                                size="sm"
+                              />
                               <div className="persona-card-title-wrap">
                                 <strong className="persona-card-name">
                                   {p.name}
-                                  {p.isDefault ? <span className="persona-star-badge" title="Default Persona">★</span> : null}
+                                  {p.isDefault ? (
+                                    <span
+                                      className="persona-star-badge"
+                                      title="Default Persona"
+                                    >
+                                      ★
+                                    </span>
+                                  ) : null}
                                 </strong>
                                 <span className="persona-selection-indicator">
-                                  {isSelected ? <Icon name="CheckCircle2" size={18} className="ds-icon-accent" /> : <div className="selection-circle-empty" />}
+                                  {isSelected ? (
+                                    <Icon
+                                      name="CheckCircle2"
+                                      size={18}
+                                      className="ds-icon-accent"
+                                    />
+                                  ) : (
+                                    <div className="selection-circle-empty" />
+                                  )}
                                 </span>
                               </div>
                             </div>
@@ -623,12 +764,21 @@ export function SetupView(props: SetupViewProps) {
 
               {/* ════════ TAB 2: CAST ════════ */}
               {activeTab === "cast" && (
-                <div className="setup-cast-tab" role="tabpanel" id="setup-panel-cast" aria-labelledby="setup-tab-cast">
+                <div
+                  className="setup-cast-tab"
+                  role="tabpanel"
+                  id="setup-panel-cast"
+                  aria-labelledby="setup-tab-cast"
+                >
                   {/* Selected Cast Shelf Tray */}
                   <div className="setup-selected-cast-tray">
                     <div className="selected-cast-tray-header">
                       <div className="flex items-center gap-2">
-                        <Icon name="UserCheck" size={15} className="ds-icon-accent" />
+                        <Icon
+                          name="UserCheck"
+                          size={15}
+                          className="ds-icon-accent"
+                        />
                         <h4>Selected Cast ({selectedCastCount})</h4>
                       </div>
                       {selectedCastCount > 0 ? (
@@ -645,14 +795,20 @@ export function SetupView(props: SetupViewProps) {
 
                     {selectedCastTemplates.length === 0 ? (
                       <p className="selected-cast-empty-hint">
-                        No characters selected yet. Click cards below to add them to your starting party, or proceed solo.
+                        No characters selected yet. Click cards below to add
+                        them to your starting party, or proceed solo.
                       </p>
                     ) : (
                       <div className="selected-cast-scroll">
                         {selectedCastTemplates.map((t) => (
                           <div key={t.id} className="selected-cast-chip">
                             <CharacterAvatar template={t} variant="chip" />
-                            <span className="selected-cast-name" title={displayTitle(t)}>{displayTitle(t)}</span>
+                            <span
+                              className="selected-cast-name"
+                              title={displayTitle(t)}
+                            >
+                              {displayTitle(t)}
+                            </span>
                             <button
                               type="button"
                               className="selected-cast-remove"
@@ -669,7 +825,9 @@ export function SetupView(props: SetupViewProps) {
 
                   {/* Visual Divider */}
                   <div className="setup-section-divider">
-                    <span className="divider-label">Available Character Library</span>
+                    <span className="divider-label">
+                      Available Character Library
+                    </span>
                   </div>
 
                   {/* Cast Library Toolbar */}
@@ -693,7 +851,12 @@ export function SetupView(props: SetupViewProps) {
                         title="Toggle tag taxonomy filter cloud"
                       >
                         <Icon name="Tag" size={13} />
-                        <span>Filter Tags {allTagCounts.length > 0 ? `(${allTagCounts.length})` : ""}</span>
+                        <span>
+                          Filter Tags{" "}
+                          {allTagCounts.length > 0
+                            ? `(${allTagCounts.length})`
+                            : ""}
+                        </span>
                       </button>
 
                       <button
@@ -707,14 +870,30 @@ export function SetupView(props: SetupViewProps) {
                       </button>
 
                       {/* Sort Controls */}
-                      <div className="library-sort-control-group setup-cast-sort-group" role="group" aria-label="Sort cast">
+                      <div
+                        className="library-sort-control-group setup-cast-sort-group"
+                        role="group"
+                        aria-label="Sort cast"
+                      >
                         <SimpleSelect<CharacterSortOption>
                           value={sortBy}
                           onChange={(val) => setSortBy(val)}
                           options={[
-                            { value: "name", label: "Name", icon: <Icon name="ArrowUpDown" size={12} /> },
-                            { value: "createdAt", label: "Created Date", icon: <Icon name="ArrowUpDown" size={12} /> },
-                            { value: "updatedAt", label: "Updated Date", icon: <Icon name="ArrowUpDown" size={12} /> },
+                            {
+                              value: "name",
+                              label: "Name",
+                              icon: <Icon name="ArrowUpDown" size={12} />,
+                            },
+                            {
+                              value: "createdAt",
+                              label: "Created Date",
+                              icon: <Icon name="ArrowUpDown" size={12} />,
+                            },
+                            {
+                              value: "updatedAt",
+                              label: "Updated Date",
+                              icon: <Icon name="ArrowUpDown" size={12} />,
+                            },
                           ]}
                           size="xs"
                           variant="ghost"
@@ -726,19 +905,31 @@ export function SetupView(props: SetupViewProps) {
                           onClick={toggleSortDirection}
                           title={
                             sortBy === "name"
-                              ? (sortDirection === "asc" ? "Sort A to Z (click for Z to A)" : "Sort Z to A (click for A to Z)")
-                              : (sortDirection === "desc" ? "Newest first (click for Oldest first)" : "Oldest first (click for Newest first)")
+                              ? sortDirection === "asc"
+                                ? "Sort A to Z (click for Z to A)"
+                                : "Sort Z to A (click for A to Z)"
+                              : sortDirection === "desc"
+                                ? "Newest first (click for Oldest first)"
+                                : "Oldest first (click for Newest first)"
                           }
                           aria-label="Toggle sort order"
                         >
                           <Icon
-                            name={sortDirection === "asc" ? "ArrowUpNarrowWide" : "ArrowDownWideNarrow"}
+                            name={
+                              sortDirection === "asc"
+                                ? "ArrowUpNarrowWide"
+                                : "ArrowDownWideNarrow"
+                            }
                             size={13}
                           />
                           <span className="sort-dir-label">
                             {sortBy === "name"
-                              ? (sortDirection === "asc" ? "A-Z" : "Z-A")
-                              : (sortDirection === "desc" ? "Newest" : "Oldest")}
+                              ? sortDirection === "asc"
+                                ? "A-Z"
+                                : "Z-A"
+                              : sortDirection === "desc"
+                                ? "Newest"
+                                : "Oldest"}
                           </span>
                         </button>
                       </div>
@@ -776,7 +967,9 @@ export function SetupView(props: SetupViewProps) {
                   {/* Active Filter Chips Bar */}
                   {activeFilterTags.length > 0 && (
                     <div className="setup-active-filters-bar">
-                      <span className="active-filters-label">Active filters:</span>
+                      <span className="active-filters-label">
+                        Active filters:
+                      </span>
                       {activeFilterTags.map((tag) => (
                         <TagChip
                           key={tag}
@@ -803,12 +996,17 @@ export function SetupView(props: SetupViewProps) {
                   {showTagFilters && groupedTagCategories.length > 0 && (
                     <div className="setup-cast-tags-panel">
                       <div className="setup-cast-tags-header">
-                        <span className="tags-panel-title">Click a tag to filter the cast:</span>
+                        <span className="tags-panel-title">
+                          Click a tag to filter the cast:
+                        </span>
                       </div>
                       <div className="setup-cast-tags-cloud">
                         {groupedTagCategories.map((group) => (
                           <div key={group.id} className="setup-cast-tag-group">
-                            <span className="setup-cast-tag-cat-label" style={{ color: group.color }}>
+                            <span
+                              className="setup-cast-tag-cat-label"
+                              style={{ color: group.color }}
+                            >
                               {group.label}
                             </span>
                             <div className="setup-cast-tag-chips">
@@ -836,15 +1034,31 @@ export function SetupView(props: SetupViewProps) {
                   {/* Character Cards Display */}
                   {castLibrary.length === 0 ? (
                     <div className="setup-empty-card">
-                      <Icon name="Users" size={32} className="setup-empty-icon" />
+                      <Icon
+                        name="Users"
+                        size={32}
+                        className="setup-empty-icon"
+                      />
                       <p className="empty-title">No characters in library</p>
-                      <p className="empty-subtitle">You can start a fresh adventure without starting cast, or create characters in the Character Library.</p>
+                      <p className="empty-subtitle">
+                        You can start a fresh adventure without starting cast,
+                        or create characters in the Character Library.
+                      </p>
                     </div>
                   ) : filteredCast.length === 0 ? (
                     <div className="setup-empty-card">
-                      <Icon name="SearchX" size={28} className="setup-empty-icon" />
-                      <p className="empty-title">No characters match &ldquo;{castSearch}&rdquo;</p>
-                      <Button variant="secondary" size="sm" onClick={() => {
+                      <Icon
+                        name="SearchX"
+                        size={28}
+                        className="setup-empty-icon"
+                      />
+                      <p className="empty-title">
+                        No characters match &ldquo;{castSearch}&rdquo;
+                      </p>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
                           setCastSearch("");
                         }}
                       >
@@ -859,52 +1073,87 @@ export function SetupView(props: SetupViewProps) {
                           {paginatedCastGroups.map((group) => {
                             const latest = group.versions[0];
                             const isCcv2 = latest.format === "ccv2";
-                            const isSelected = selectedCastIds.includes(latest.id);
+                            const isSelected = selectedCastIds.includes(
+                              latest.id,
+                            );
                             const badge = cardBadgeLabel(latest);
 
                             return (
                               <div
                                 key={group.key}
                                 className={`card-portrait setup-cast-card ${isSelected ? "selected" : ""} ${isCcv2 ? "cast-disabled" : ""}`}
-                                onClick={!isCcv2 ? () => onToggleCastId(latest.id) : undefined}
+                                onClick={
+                                  !isCcv2
+                                    ? () => onToggleCastId(latest.id)
+                                    : undefined
+                                }
                                 role="checkbox"
                                 aria-checked={isSelected}
                                 tabIndex={!isCcv2 ? 0 : -1}
                                 onKeyDown={(e) => {
-                                  if (!isCcv2 && (e.key === "Enter" || e.key === " ")) {
+                                  if (
+                                    !isCcv2 &&
+                                    (e.key === "Enter" || e.key === " ")
+                                  ) {
                                     e.preventDefault();
                                     onToggleCastId(latest.id);
                                   }
                                 }}
                               >
                                 <div className="card-portrait-image-wrap">
-                                  <CharacterAvatar template={latest} variant="portrait" />
-                                  <div className={`card-selection-badge ${isSelected ? "checked" : ""}`}>
-                                    {isSelected ? <Icon name="Check" size={13} strokeWidth={3} /> : null}
+                                  <CharacterAvatar
+                                    template={latest}
+                                    variant="portrait"
+                                  />
+                                  <div
+                                    className={`card-selection-badge ${isSelected ? "checked" : ""}`}
+                                  >
+                                    {isSelected ? (
+                                      <Icon
+                                        name="Check"
+                                        size={13}
+                                        strokeWidth={3}
+                                      />
+                                    ) : null}
                                   </div>
                                 </div>
 
                                 <div className="card-portrait-body">
                                   <div className="card-portrait-title-row">
-                                    <strong className="card-portrait-title" title={displayTitle(latest)}>
+                                    <strong
+                                      className="card-portrait-title"
+                                      title={displayTitle(latest)}
+                                    >
                                       {displayTitle(latest)}
                                     </strong>
                                     {group.versions.length > 1 ? (
-                                      <span className="version-count">({group.versions.length} v)</span>
+                                      <span className="version-count">
+                                        ({group.versions.length} v)
+                                      </span>
                                     ) : null}
                                   </div>
 
                                   {latest.creator?.trim() ? (
-                                    <span className="card-creator-tag">by {latest.creator.trim()}</span>
+                                    <span className="card-creator-tag">
+                                      by {latest.creator.trim()}
+                                    </span>
                                   ) : null}
 
                                   {isCcv2 ? (
-                                    <span className="cast-warn">Convert to BL in library to select</span>
+                                    <span className="cast-warn">
+                                      Convert to BL in library to select
+                                    </span>
                                   ) : null}
 
                                   {(latest.tags ?? []).length > 0 ? (
-                                    <div className="tag-chips" onClick={(e) => e.stopPropagation()}>
-                                      {sortTags(latest.tags ?? [], taxonomyConfig).map((tag) => {
+                                    <div
+                                      className="tag-chips"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {sortTags(
+                                        latest.tags ?? [],
+                                        taxonomyConfig,
+                                      ).map((tag) => {
                                         const active = isTagActive(tag);
                                         return (
                                           <TagChip
@@ -925,17 +1174,41 @@ export function SetupView(props: SetupViewProps) {
 
                                   <div className="card-portrait-footer">
                                     <div className="card-portrait-badges">
-                                      {badge === "ccv2" ? <span className="ccv2-badge">CCv2</span> : null}
-                                      {badge === "ccv2bl" ? <span className="ccv2bl-badge">CCv2 / BL</span> : null}
-                                      <span className="version-badge">v{latest.cardVersion ?? String(latest.version)}</span>
-                                      {sortBy === "createdAt" && getGroupCreatedAt(group) ? (
-                                        <span className="card-timestamp-badge" title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}>
-                                          <Icon name="Calendar" size={10} /> {formatCastDate(getGroupCreatedAt(group))}
+                                      {badge === "ccv2" ? (
+                                        <span className="ccv2-badge">CCv2</span>
+                                      ) : null}
+                                      {badge === "ccv2bl" ? (
+                                        <span className="ccv2bl-badge">
+                                          CCv2 / BL
                                         </span>
                                       ) : null}
-                                      {sortBy === "updatedAt" && getGroupUpdatedAt(group) ? (
-                                        <span className="card-timestamp-badge" title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}>
-                                          <Icon name="Clock" size={10} /> {formatCastDate(getGroupUpdatedAt(group))}
+                                      <span className="version-badge">
+                                        v
+                                        {latest.cardVersion ??
+                                          String(latest.version)}
+                                      </span>
+                                      {sortBy === "createdAt" &&
+                                      getGroupCreatedAt(group) ? (
+                                        <span
+                                          className="card-timestamp-badge"
+                                          title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}
+                                        >
+                                          <Icon name="Calendar" size={10} />{" "}
+                                          {formatCastDate(
+                                            getGroupCreatedAt(group),
+                                          )}
+                                        </span>
+                                      ) : null}
+                                      {sortBy === "updatedAt" &&
+                                      getGroupUpdatedAt(group) ? (
+                                        <span
+                                          className="card-timestamp-badge"
+                                          title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}
+                                        >
+                                          <Icon name="Clock" size={10} />{" "}
+                                          {formatCastDate(
+                                            getGroupUpdatedAt(group),
+                                          )}
                                         </span>
                                       ) : null}
                                     </div>
@@ -953,62 +1226,120 @@ export function SetupView(props: SetupViewProps) {
                           {paginatedCastGroups.map((group) => {
                             const latest = group.versions[0];
                             const isCcv2 = latest.format === "ccv2";
-                            const isSelected = selectedCastIds.includes(latest.id);
+                            const isSelected = selectedCastIds.includes(
+                              latest.id,
+                            );
                             const badge = cardBadgeLabel(latest);
 
                             return (
                               <div
                                 key={group.key}
                                 className={`card-list-row setup-cast-card ${isSelected ? "selected" : ""} ${isCcv2 ? "cast-disabled" : ""}`}
-                                onClick={!isCcv2 ? () => onToggleCastId(latest.id) : undefined}
+                                onClick={
+                                  !isCcv2
+                                    ? () => onToggleCastId(latest.id)
+                                    : undefined
+                                }
                                 role="checkbox"
                                 aria-checked={isSelected}
                                 tabIndex={!isCcv2 ? 0 : -1}
                                 onKeyDown={(e) => {
-                                  if (!isCcv2 && (e.key === "Enter" || e.key === " ")) {
+                                  if (
+                                    !isCcv2 &&
+                                    (e.key === "Enter" || e.key === " ")
+                                  ) {
                                     e.preventDefault();
                                     onToggleCastId(latest.id);
                                   }
                                 }}
                               >
-                                <CharacterAvatar template={latest} variant="list" />
+                                <CharacterAvatar
+                                  template={latest}
+                                  variant="list"
+                                />
                                 <div className="card-list-content">
                                   <div className="card-list-header-row">
                                     <div className="card-list-title-wrap">
-                                      <strong className="card-list-title">{displayTitle(latest)}</strong>
-                                      {badge === "ccv2" ? <span className="ccv2-badge">CCv2</span> : null}
-                                      {badge === "ccv2bl" ? <span className="ccv2bl-badge">CCv2 / BL</span> : null}
-                                      <span className="version-badge">v{latest.cardVersion ?? String(latest.version)}</span>
-                                      {group.versions.length > 1 ? (
-                                        <span className="version-count">({group.versions.length} v)</span>
+                                      <strong className="card-list-title">
+                                        {displayTitle(latest)}
+                                      </strong>
+                                      {badge === "ccv2" ? (
+                                        <span className="ccv2-badge">CCv2</span>
                                       ) : null}
-                                      {latest.creator?.trim() ? (
-                                        <span className="card-creator-tag">by {latest.creator.trim()}</span>
-                                      ) : null}
-                                      {sortBy === "createdAt" && getGroupCreatedAt(group) ? (
-                                        <span className="card-timestamp-tag" title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}>
-                                          <Icon name="Calendar" size={11} /> {formatCastDate(getGroupCreatedAt(group))}
+                                      {badge === "ccv2bl" ? (
+                                        <span className="ccv2bl-badge">
+                                          CCv2 / BL
                                         </span>
                                       ) : null}
-                                      {sortBy === "updatedAt" && getGroupUpdatedAt(group) ? (
-                                        <span className="card-timestamp-tag" title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}>
-                                          <Icon name="Clock" size={11} /> {formatCastDate(getGroupUpdatedAt(group))}
+                                      <span className="version-badge">
+                                        v
+                                        {latest.cardVersion ??
+                                          String(latest.version)}
+                                      </span>
+                                      {group.versions.length > 1 ? (
+                                        <span className="version-count">
+                                          ({group.versions.length} v)
+                                        </span>
+                                      ) : null}
+                                      {latest.creator?.trim() ? (
+                                        <span className="card-creator-tag">
+                                          by {latest.creator.trim()}
+                                        </span>
+                                      ) : null}
+                                      {sortBy === "createdAt" &&
+                                      getGroupCreatedAt(group) ? (
+                                        <span
+                                          className="card-timestamp-tag"
+                                          title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}
+                                        >
+                                          <Icon name="Calendar" size={11} />{" "}
+                                          {formatCastDate(
+                                            getGroupCreatedAt(group),
+                                          )}
+                                        </span>
+                                      ) : null}
+                                      {sortBy === "updatedAt" &&
+                                      getGroupUpdatedAt(group) ? (
+                                        <span
+                                          className="card-timestamp-tag"
+                                          title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}
+                                        >
+                                          <Icon name="Clock" size={11} />{" "}
+                                          {formatCastDate(
+                                            getGroupUpdatedAt(group),
+                                          )}
                                         </span>
                                       ) : null}
                                     </div>
 
-                                    <div className={`card-selection-badge ${isSelected ? "checked" : ""}`}>
-                                      {isSelected ? <Icon name="Check" size={13} strokeWidth={3} /> : null}
+                                    <div
+                                      className={`card-selection-badge ${isSelected ? "checked" : ""}`}
+                                    >
+                                      {isSelected ? (
+                                        <Icon
+                                          name="Check"
+                                          size={13}
+                                          strokeWidth={3}
+                                        />
+                                      ) : null}
                                     </div>
                                   </div>
 
                                   {isCcv2 ? (
-                                    <span className="cast-warn">Convert to BL in library to select</span>
+                                    <span className="cast-warn">
+                                      Convert to BL in library to select
+                                    </span>
                                   ) : null}
 
                                   {(latest.tags ?? []).length > 0 ? (
-                                    <div className="tag-chips" onClick={(e) => e.stopPropagation()}>
-                                      {sortTags(latest.tags ?? [], taxonomyConfig).map((tag) => {
+                                    <div
+                                      className="tag-chips"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {sortTags(
+                                        latest.tags ?? [],
+                                        taxonomyConfig,
+                                      ).map((tag) => {
                                         const active = isTagActive(tag);
                                         return (
                                           <TagChip
@@ -1039,47 +1370,92 @@ export function SetupView(props: SetupViewProps) {
                           {paginatedCastGroups.map((group) => {
                             const latest = group.versions[0];
                             const isCcv2 = latest.format === "ccv2";
-                            const isSelected = selectedCastIds.includes(latest.id);
+                            const isSelected = selectedCastIds.includes(
+                              latest.id,
+                            );
                             const badge = cardBadgeLabel(latest);
 
                             return (
                               <div
                                 key={group.key}
                                 className={`card-grid-item setup-cast-card ${isSelected ? "selected" : ""} ${isCcv2 ? "cast-disabled" : ""}`}
-                                onClick={!isCcv2 ? () => onToggleCastId(latest.id) : undefined}
+                                onClick={
+                                  !isCcv2
+                                    ? () => onToggleCastId(latest.id)
+                                    : undefined
+                                }
                                 role="checkbox"
                                 aria-checked={isSelected}
                                 tabIndex={!isCcv2 ? 0 : -1}
                                 onKeyDown={(e) => {
-                                  if (!isCcv2 && (e.key === "Enter" || e.key === " ")) {
+                                  if (
+                                    !isCcv2 &&
+                                    (e.key === "Enter" || e.key === " ")
+                                  ) {
                                     e.preventDefault();
                                     onToggleCastId(latest.id);
                                   }
                                 }}
                               >
                                 <div className="card-grid-thumb-wrap">
-                                  <CharacterAvatar template={latest} variant="grid" />
-                                  <div className={`card-selection-badge ${isSelected ? "checked" : ""}`}>
-                                    {isSelected ? <Icon name="Check" size={13} strokeWidth={3} /> : null}
+                                  <CharacterAvatar
+                                    template={latest}
+                                    variant="grid"
+                                  />
+                                  <div
+                                    className={`card-selection-badge ${isSelected ? "checked" : ""}`}
+                                  >
+                                    {isSelected ? (
+                                      <Icon
+                                        name="Check"
+                                        size={13}
+                                        strokeWidth={3}
+                                      />
+                                    ) : null}
                                   </div>
                                 </div>
                                 <div className="card-grid-body">
-                                  <strong className="card-grid-title" title={displayTitle(latest)}>
+                                  <strong
+                                    className="card-grid-title"
+                                    title={displayTitle(latest)}
+                                  >
                                     {displayTitle(latest)}
                                   </strong>
                                   <div className="card-grid-footer">
                                     <div className="card-grid-badges">
-                                      {badge === "ccv2" ? <span className="ccv2-badge">CCv2</span> : null}
-                                      {badge === "ccv2bl" ? <span className="ccv2bl-badge">CCv2 / BL</span> : null}
-                                      <span className="version-badge">v{latest.cardVersion ?? String(latest.version)}</span>
-                                      {sortBy === "createdAt" && getGroupCreatedAt(group) ? (
-                                        <span className="card-grid-timestamp" title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}>
-                                          {formatCastDate(getGroupCreatedAt(group))}
+                                      {badge === "ccv2" ? (
+                                        <span className="ccv2-badge">CCv2</span>
+                                      ) : null}
+                                      {badge === "ccv2bl" ? (
+                                        <span className="ccv2bl-badge">
+                                          CCv2 / BL
                                         </span>
                                       ) : null}
-                                      {sortBy === "updatedAt" && getGroupUpdatedAt(group) ? (
-                                        <span className="card-grid-timestamp" title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}>
-                                          {formatCastDate(getGroupUpdatedAt(group))}
+                                      <span className="version-badge">
+                                        v
+                                        {latest.cardVersion ??
+                                          String(latest.version)}
+                                      </span>
+                                      {sortBy === "createdAt" &&
+                                      getGroupCreatedAt(group) ? (
+                                        <span
+                                          className="card-grid-timestamp"
+                                          title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}
+                                        >
+                                          {formatCastDate(
+                                            getGroupCreatedAt(group),
+                                          )}
+                                        </span>
+                                      ) : null}
+                                      {sortBy === "updatedAt" &&
+                                      getGroupUpdatedAt(group) ? (
+                                        <span
+                                          className="card-grid-timestamp"
+                                          title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}
+                                        >
+                                          {formatCastDate(
+                                            getGroupUpdatedAt(group),
+                                          )}
                                         </span>
                                       ) : null}
                                     </div>
@@ -1108,11 +1484,17 @@ export function SetupView(props: SetupViewProps) {
 
               {/* ════════ TAB 3: SETTING & STORY ════════ */}
               {activeTab === "setting" && (
-                <div className="setup-setting-tab" role="tabpanel" id="setup-panel-setting" aria-labelledby="setup-tab-setting">
+                <div
+                  className="setup-setting-tab"
+                  role="tabpanel"
+                  id="setup-panel-setting"
+                  aria-labelledby="setup-tab-setting"
+                >
                   <div className="setup-section-intro">
                     <h3>Setting, Lore &amp; Generation</h3>
                     <p className="setup-section-hint">
-                      Describe your world, select lorebooks, and choose how the opening scene should be written.
+                      Describe your world, select lorebooks, and choose how the
+                      opening scene should be written.
                     </p>
                   </div>
 
@@ -1122,19 +1504,23 @@ export function SetupView(props: SetupViewProps) {
                       <div>
                         <h4>Lorebooks</h4>
                         <span className="field-hint">
-                          World Info lorebooks are automatically scanned for keyword matches each turn.
+                          World Info lorebooks are automatically scanned for
+                          keyword matches each turn.
                         </span>
                       </div>
                     </div>
 
                     {lorebookLibrary.length === 0 ? (
                       <p className="persona-empty">
-                        No lorebooks imported yet. Import lorebooks in the Lorebook Manager or proceed without world info.
+                        No lorebooks imported yet. Import lorebooks in the
+                        Lorebook Manager or proceed without world info.
                       </p>
                     ) : (
                       <div className="setup-lorebook-grid">
                         {lorebookLibrary.map((lb) => {
-                          const isSelected = selectedLorebookIds.includes(lb.id);
+                          const isSelected = selectedLorebookIds.includes(
+                            lb.id,
+                          );
                           return (
                             <div
                               key={lb.id}
@@ -1152,12 +1538,29 @@ export function SetupView(props: SetupViewProps) {
                             >
                               <div className="lorebook-card-header">
                                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                                  <Icon name="BookOpen" size={14} className={isSelected ? "ds-icon-accent" : "ds-icon-muted"} />
-                                  <strong className="lorebook-name" title={lb.name}>{lb.name}</strong>
+                                  <Icon
+                                    name="BookOpen"
+                                    size={14}
+                                    className={
+                                      isSelected
+                                        ? "ds-icon-accent"
+                                        : "ds-icon-muted"
+                                    }
+                                  />
+                                  <strong
+                                    className="lorebook-name"
+                                    title={lb.name}
+                                  >
+                                    {lb.name}
+                                  </strong>
                                 </div>
                                 <span className="lorebook-selection-indicator">
                                   {isSelected ? (
-                                    <Icon name="CheckCircle2" size={17} className="ds-icon-accent" />
+                                    <Icon
+                                      name="CheckCircle2"
+                                      size={17}
+                                      className="ds-icon-accent"
+                                    />
                                   ) : (
                                     <div className="selection-circle-empty" />
                                   )}
@@ -1178,7 +1581,12 @@ export function SetupView(props: SetupViewProps) {
                     <TextInput
                       label="Playthrough Name"
                       value={setupForm.name}
-                      onChange={(e) => onSetupFormChange((f) => ({ ...f, name: e.target.value }))}
+                      onChange={(e) =>
+                        onSetupFormChange((f) => ({
+                          ...f,
+                          name: e.target.value,
+                        }))
+                      }
                       placeholder="e.g. Dragon's Rest"
                     />
 
@@ -1186,7 +1594,12 @@ export function SetupView(props: SetupViewProps) {
                       label="World Setting &amp; Starting Scenario"
                       helperText="Describe the world, tone, genre, factions, and initial situation. The AI uses this to craft your scenario."
                       value={setupForm.setting}
-                      onChange={(e) => onSetupFormChange((f) => ({ ...f, setting: e.target.value }))}
+                      onChange={(e) =>
+                        onSetupFormChange((f) => ({
+                          ...f,
+                          setting: e.target.value,
+                        }))
+                      }
                       rows={4}
                       autoGrow
                       autoGrowMax={240}
@@ -1195,17 +1608,28 @@ export function SetupView(props: SetupViewProps) {
 
                     {cardSettings.length > 0 ? (
                       <div className="scenario-select-field">
-                        <span className="field-hint">…or use an existing setting from an imported card</span>
+                        <span className="field-hint">
+                          …or use an existing setting from an imported card
+                        </span>
                         <SimpleSelect
                           value=""
                           placeholder="Choose a card scenario…"
                           fullWidth
                           size="md"
-                          options={cardSettings.map((s) => ({ value: s.scenario, label: s.title }))}
+                          options={cardSettings.map((s) => ({
+                            value: s.scenario,
+                            label: s.title,
+                          }))}
                           onChange={(scenario) => {
                             if (!scenario) return;
-                            const picked = cardSettings.find((s) => s.scenario === scenario);
-                            if (picked) onSetupFormChange((f) => ({ ...f, setting: picked.scenario }));
+                            const picked = cardSettings.find(
+                              (s) => s.scenario === scenario,
+                            );
+                            if (picked)
+                              onSetupFormChange((f) => ({
+                                ...f,
+                                setting: picked.scenario,
+                              }));
                           }}
                           aria-label="Choose a card scenario"
                         />
@@ -1216,28 +1640,47 @@ export function SetupView(props: SetupViewProps) {
                     <div className="opening-mode-picker">
                       <span className="field-label">Opening Style</span>
                       <div className="opening-mode-options">
-                        <label className={`opening-mode-option ${setupForm.openingMode === "quick" ? "selected" : ""}`}>
+                        <label
+                          className={`opening-mode-option ${setupForm.openingMode === "quick" ? "selected" : ""}`}
+                        >
                           <input
                             type="radio"
                             name="openingMode"
                             checked={setupForm.openingMode === "quick"}
-                            onChange={() => onSetupFormChange((f) => ({ ...f, openingMode: "quick" }))}
+                            onChange={() =>
+                              onSetupFormChange((f) => ({
+                                ...f,
+                                openingMode: "quick",
+                              }))
+                            }
                           />
                           <div>
                             <strong>Quick start</strong>
-                            <span className="opening-mode-sub">Scenario + short opening · 1 call · faster</span>
+                            <span className="opening-mode-sub">
+                              Scenario + short opening · 1 call · faster
+                            </span>
                           </div>
                         </label>
-                        <label className={`opening-mode-option ${setupForm.openingMode === "fleshedOut" ? "selected" : ""}`}>
+                        <label
+                          className={`opening-mode-option ${setupForm.openingMode === "fleshedOut" ? "selected" : ""}`}
+                        >
                           <input
                             type="radio"
                             name="openingMode"
                             checked={setupForm.openingMode === "fleshedOut"}
-                            onChange={() => onSetupFormChange((f) => ({ ...f, openingMode: "fleshedOut" }))}
+                            onChange={() =>
+                              onSetupFormChange((f) => ({
+                                ...f,
+                                openingMode: "fleshedOut",
+                              }))
+                            }
                           />
                           <div>
                             <strong>Fleshed-out opening</strong>
-                            <span className="opening-mode-sub">Generate, then write rich first scene · 2 calls · immersive</span>
+                            <span className="opening-mode-sub">
+                              Generate, then write rich first scene · 2 calls ·
+                              immersive
+                            </span>
                           </div>
                         </label>
                       </div>
@@ -1249,7 +1692,13 @@ export function SetupView(props: SetupViewProps) {
                       title="Allow AI to invent additional characters"
                       description="Let the story introduce new characters organically as events unfold, or restrict encounters strictly to your selected cast."
                       checked={setupForm.allowAdditionalCharacters}
-                      onChange={() => onSetupFormChange((f) => ({ ...f, allowAdditionalCharacters: !f.allowAdditionalCharacters }))}
+                      onChange={() =>
+                        onSetupFormChange((f) => ({
+                          ...f,
+                          allowAdditionalCharacters:
+                            !f.allowAdditionalCharacters,
+                        }))
+                      }
                     />
 
                     {/* Generate Initial Choices */}
@@ -1258,7 +1707,12 @@ export function SetupView(props: SetupViewProps) {
                       title="Generate Initial Choices"
                       description="Provide 3 suggested action choices at the end of the opening scene to kickstart gameplay."
                       checked={setupForm.generateOpeningChoices}
-                      onChange={() => onSetupFormChange((f) => ({ ...f, generateOpeningChoices: !f.generateOpeningChoices }))}
+                      onChange={() =>
+                        onSetupFormChange((f) => ({
+                          ...f,
+                          generateOpeningChoices: !f.generateOpeningChoices,
+                        }))
+                      }
                     />
                   </div>
 
@@ -1268,7 +1722,8 @@ export function SetupView(props: SetupViewProps) {
                       <div>
                         <h4>Text Provider - Playthrough Creation</h4>
                         <span className="field-hint">
-                          Writes the world and the opening scene. Later turns follow the active connection.
+                          Writes the world and the opening scene. Later turns
+                          follow the active connection.
                         </span>
                       </div>
                     </div>
@@ -1283,7 +1738,10 @@ export function SetupView(props: SetupViewProps) {
                       placeholder="Current active text provider"
                       aria-label="Text provider for Playthrough Creation"
                     />
-                    <p className="field-hint">Falls back to the active connection if the chosen one is deleted.</p>
+                    <p className="field-hint">
+                      Falls back to the active connection if the chosen one is
+                      deleted.
+                    </p>
                   </div>
 
                   {/* Character Flesh Out Provider Section */}
@@ -1292,7 +1750,8 @@ export function SetupView(props: SetupViewProps) {
                       <div>
                         <h4>Text Provider - Character Flesh Out</h4>
                         <span className="field-hint">
-                          Builds detailed character sheets during scenario generation and mid-turn automation.
+                          Builds detailed character sheets during scenario
+                          generation and mid-turn automation.
                         </span>
                       </div>
                     </div>
@@ -1307,7 +1766,11 @@ export function SetupView(props: SetupViewProps) {
                       placeholder="Current active text provider"
                       aria-label="Text provider for Character Flesh Out"
                     />
-                    {providerChoiceError && <p className="error-box setup-error">{providerChoiceError}</p>}
+                    {providerChoiceError && (
+                      <p className="error-box setup-error">
+                        {providerChoiceError}
+                      </p>
+                    )}
                   </div>
 
                   {/* Error Box if previous attempt failed */}
@@ -1315,10 +1778,20 @@ export function SetupView(props: SetupViewProps) {
                     <div className="error-box setup-error">
                       <p>{genError}</p>
                       <div className="flex items-center gap-2 mt-2">
-                        <Button variant="secondary" size="sm" onClick={onGenerate} leftIcon={<Icon name="RotateCcw" size={14} />}>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={onGenerate}
+                          leftIcon={<Icon name="RotateCcw" size={14} />}
+                        >
                           Retry
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={onStartBlank} leftIcon={<Icon name="FilePlus" size={14} />}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={onStartBlank}
+                          leftIcon={<Icon name="FilePlus" size={14} />}
+                        >
                           Use Start Blank Instead
                         </Button>
                       </div>
@@ -1345,10 +1818,18 @@ export function SetupView(props: SetupViewProps) {
 
               {activeTab === "cast" && (
                 <div className="setup-footer-row flex items-center justify-between w-full">
-                  <Button variant="secondary" onClick={() => setActiveTab("persona")} leftIcon={<Icon name="ArrowLeft" size={14} />}>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setActiveTab("persona")}
+                    leftIcon={<Icon name="ArrowLeft" size={14} />}
+                  >
                     Back: Persona
                   </Button>
-                  <Button variant="primary" onClick={() => setActiveTab("setting")} rightIcon={<Icon name="ArrowRight" size={15} />}>
+                  <Button
+                    variant="primary"
+                    onClick={() => setActiveTab("setting")}
+                    rightIcon={<Icon name="ArrowRight" size={15} />}
+                  >
                     Next: Setting &amp; Story
                   </Button>
                 </div>
@@ -1356,7 +1837,11 @@ export function SetupView(props: SetupViewProps) {
 
               {activeTab === "setting" && (
                 <div className="setup-footer-row flex items-center justify-between w-full">
-                  <Button variant="secondary" onClick={() => setActiveTab("cast")} leftIcon={<Icon name="ArrowLeft" size={14} />}>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setActiveTab("cast")}
+                    leftIcon={<Icon name="ArrowLeft" size={14} />}
+                  >
                     Back: Cast
                   </Button>
 

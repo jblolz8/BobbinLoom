@@ -3,16 +3,24 @@ import type { CharacterTemplate } from "../../../schemas";
 import { getCharacterAvatarUrl } from "../../api";
 import { displayTitle } from "../../../engine/characterCards";
 
-export type CharacterAvatarVariant = "portrait" | "list" | "grid" | "chip" | "cover-tile" | "custom";
+export type CharacterAvatarVariant =
+  | "portrait"
+  | "list"
+  | "grid"
+  | "chip"
+  | "cover-tile"
+  | "custom";
 
 export type CharacterAvatarProps = {
-  template: CharacterTemplate | (Pick<CharacterTemplate, "id"> & {
-    name?: string;
-    cardVersion?: number;
-    version?: number;
-    avatarUpdatedAt?: number;
-    format?: string;
-  });
+  template:
+    | CharacterTemplate
+    | (Pick<CharacterTemplate, "id"> & {
+        name?: string;
+        cardVersion?: number;
+        version?: number;
+        avatarUpdatedAt?: number;
+        format?: string;
+      });
   variant?: CharacterAvatarVariant;
   type?: "portrait" | "profile" | "original";
   className?: string;
@@ -59,7 +67,10 @@ export function CharacterAvatar({
   }
 
   const combinedClass = [variantClass, className].filter(Boolean).join(" ");
-  const fallbackLetter = displayTitle(template as CharacterTemplate).charAt(0).toUpperCase() || "?";
+  const fallbackLetter =
+    displayTitle(template as CharacterTemplate)
+      .charAt(0)
+      .toUpperCase() || "?";
 
   // Reset fallback if template or avatar timestamp changes
   useEffect(() => {
@@ -83,7 +94,11 @@ export function CharacterAvatar({
   return (
     <img
       className={`library-avatar ${combinedClass}`}
-      src={getCharacterAvatarUrl(template.id, effectiveType, template.avatarUpdatedAt)}
+      src={getCharacterAvatarUrl(
+        template.id,
+        effectiveType,
+        template.avatarUpdatedAt,
+      )}
       alt={alt ?? displayTitle(template as CharacterTemplate)}
       style={style}
       onError={() => setFailed(true)}

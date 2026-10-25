@@ -8,7 +8,12 @@ import { LorebookLibrary } from "../library/LorebookLibrary";
 import { PersonaLibrary } from "../library/PersonaLibrary";
 import { DocsView } from "./DocsView";
 
-export type HomeTab = "playthroughs" | "characters" | "lorebooks" | "personas" | "docs";
+export type HomeTab =
+  | "playthroughs"
+  | "characters"
+  | "lorebooks"
+  | "personas"
+  | "docs";
 
 export type HomeViewProps = {
   activeTab: HomeTab;

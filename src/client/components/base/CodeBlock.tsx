@@ -47,7 +47,7 @@ export function CodeBlock({
   maxHeight,
   tone = "default",
   className = "",
-  copyTitle = "Copy code to clipboard"
+  copyTitle = "Copy code to clipboard",
 }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
   const headerText = label ?? language ?? "";
@@ -60,10 +60,16 @@ export function CodeBlock({
   }
 
   return (
-    <div className={`code-block tone-${tone}${className ? ` ${className}` : ""}`}>
+    <div
+      className={`code-block tone-${tone}${className ? ` ${className}` : ""}`}
+    >
       {showHeader ? (
         <div className="code-block-header">
-          {headerText ? <span className="code-lang-label">{headerText}</span> : <span />}
+          {headerText ? (
+            <span className="code-lang-label">{headerText}</span>
+          ) : (
+            <span />
+          )}
           <div className="code-block-actions">
             {headerExtra}
             {showCopy ? (

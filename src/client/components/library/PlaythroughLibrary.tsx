@@ -1,16 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LoadFailure, Playthrough } from "../../../schemas";
-import { listPlaythroughs, renamePlaythrough, type PlaythroughSummary } from "../../api";
+import {
+  listPlaythroughs,
+  renamePlaythrough,
+  type PlaythroughSummary,
+} from "../../api";
 import {
   LIBRARY_PREFERENCE_DEFAULTS,
   adoptLocalPreferences,
   resolveLibraryPreferences,
-  updateViewPreferences
+  updateViewPreferences,
 } from "../../api";
 import type { ResolvedLibraryPreferences } from "../../api";
 import type { ViewPreferences } from "../../../schemas";
 import { useServerPagination } from "../../hooks/useServerPagination";
-import { Badge, Button, CoverArt, Icon, Pagination, SearchBar, SimpleSelect, Spinner } from "../base";
+import {
+  Badge,
+  Button,
+  CoverArt,
+  Icon,
+  Pagination,
+  SearchBar,
+  SimpleSelect,
+  Spinner,
+} from "../base";
 import { PlaythroughActionsMenu } from "../common/PlaythroughActionsMenu";
 import { RenameModal } from "../common/RenameModal";
 
@@ -38,10 +51,13 @@ export type PlaythroughLibraryProps = {
 
 /** Shared with the home screen's pager: one page size per device, whichever surface is open. */
 
-export const PLAYTHROUGH_SORT_OPTIONS: { value: PlaythroughSortOption; label: string }[] = [
+export const PLAYTHROUGH_SORT_OPTIONS: {
+  value: PlaythroughSortOption;
+  label: string;
+}[] = [
   { value: "updatedAt", label: "Updated Date" },
   { value: "name", label: "Name" },
-  { value: "turn", label: "Turn" }
+  { value: "turn", label: "Turn" },
 ];
 
 function formatDate(iso: string): string {
@@ -81,7 +97,7 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
     onClose,
     onCurrentDeleted,
     onCurrentRenamed,
-    onError
+    onError,
   } = props;
 
   const [playthroughs, setPlaythroughs] = useState<PlaythroughSummary[]>([]);
@@ -90,20 +106,23 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
   const [loadFailures, setLoadFailures] = useState<LoadFailure[]>([]);
   const [failuresDismissed, setFailuresDismissed] = useState(false);
   // Which card is being renamed, and the dialog's own state. The draft lives in the dialog.
-  const [renameTarget, setRenameTarget] = useState<{ id: string; name: string } | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [renameSaving, setRenameSaving] = useState(false);
   const [renameError, setRenameError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [prefsReady, setPrefsReady] = useState(false);
   const [viewMode, setViewModeState] = useState<PlaythroughViewMode>(
-    LIBRARY_PREFERENCE_DEFAULTS.playthroughViewMode
+    LIBRARY_PREFERENCE_DEFAULTS.playthroughViewMode,
   );
   const [sortBy, setSortByState] = useState<PlaythroughSortOption>(
-    LIBRARY_PREFERENCE_DEFAULTS.playthroughSortBy
+    LIBRARY_PREFERENCE_DEFAULTS.playthroughSortBy,
   );
   const [sortDir, setSortDirState] = useState<"asc" | "desc">(
-    LIBRARY_PREFERENCE_DEFAULTS.playthroughSortDir
+    LIBRARY_PREFERENCE_DEFAULTS.playthroughSortDir,
   );
 
   /** Debounce search input to avoid firing requests on every keystroke. */
@@ -141,7 +160,8 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
       const { preferences } = await adoptLocalPreferences();
       if (cancelled) return;
       if (!prefsTouchedRef.current) {
-        const resolved: ResolvedLibraryPreferences = resolveLibraryPreferences(preferences);
+        const resolved: ResolvedLibraryPreferences =
+          resolveLibraryPreferences(preferences);
         setViewModeState(resolved.playthroughViewMode);
         setSortByState(resolved.playthroughSortBy);
         setSortDirState(resolved.playthroughSortDir);
@@ -160,7 +180,7 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
   const pager = useServerPagination({
     totalItems: totalPlaythroughs,
     persistAs: "home",
-    resetDeps: [debouncedSearch, sortBy, sortDir]
+    resetDeps: [debouncedSearch, sortBy, sortDir],
   });
 
   const activeRequestRef = useRef(0);
@@ -195,12 +215,16 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
       const requestId = ++activeRequestRef.current;
       setIsFetching(true);
       try {
-        const { playthroughs: list, failures, total } = await listPlaythroughs({
+        const {
+          playthroughs: list,
+          failures,
+          total,
+        } = await listPlaythroughs({
           page: pager.page,
           pageSize: pager.pageSize,
           search: debouncedSearch,
           sortBy,
-          sortDir
+          sortDir,
         });
         if (requestId !== activeRequestRef.current) return;
         pageCacheRef.current.set(cacheKey, { list, total, failures });
@@ -219,9 +243,18 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
         }
       }
     },
-    [pager.page, pager.pageSize, pager.isReady, debouncedSearch, sortBy, sortDir, prefsReady, onError]
+    [
+      pager.page,
+      pager.pageSize,
+      pager.isReady,
+      debouncedSearch,
+      sortBy,
+      sortDir,
+      prefsReady,
+      onError,
+    ],
   );
-  
+
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -281,7 +314,9 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
         initialValue={name}
         isSaving={renameSaving}
         errorMessage={renameError}
-        onSave={(next) => { void submitRename(id, next); }}
+        onSave={(next) => {
+          void submitRename(id, next);
+        }}
         onCancel={() => setRenameTarget(null)}
       />
     );
@@ -379,7 +414,9 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
       ) : (
         <>
           {paginationElement}
-          <div className={`playthrough-shelf-content ${isFetching ? "is-fetching" : ""}`}>
+          <div
+            className={`playthrough-shelf-content ${isFetching ? "is-fetching" : ""}`}
+          >
             {viewMode === "grid" ? (
               <div className="playthrough-grid">
                 {playthroughs.map((p) => (
@@ -398,7 +435,9 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
                           type="button"
                           className="playthrough-card-open"
                           onClick={() => openCard(p.id)}
-                          aria-current={p.id === currentPlaythroughId ? "true" : undefined}
+                          aria-current={
+                            p.id === currentPlaythroughId ? "true" : undefined
+                          }
                         >
                           {p.name}
                         </button>
@@ -407,21 +446,28 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
                         {p.id === currentPlaythroughId ? currentBadge : null}
                         {actionsMenu(p)}
                       </div>
-                      {renameTarget?.id === p.id ? renameDialog(p.id, p.name) : null}
+                      {renameTarget?.id === p.id
+                        ? renameDialog(p.id, p.name)
+                        : null}
                     </div>
                     <div className="playthrough-card-meta">
-
                       <span>Turn {p.turn}</span>
                       <span className="inline-flex items-center gap-1">
                         <Icon name="User" size={14} /> {p.castCount}{" "}
                         {p.castCount === 1 ? "character" : "characters"}
                       </span>
                     </div>
-                    <p className="playthrough-card-updated">Updated {formatDate(p.updatedAt)}</p>
+                    <p className="playthrough-card-updated">
+                      Updated {formatDate(p.updatedAt)}
+                    </p>
                     {p.visibleMessageCount > 0 ? (
-                      <p className="playthrough-card-preview">{p.lastMessagePreview}…</p>
+                      <p className="playthrough-card-preview">
+                        {p.lastMessagePreview}…
+                      </p>
                     ) : (
-                      <p className="playthrough-card-preview">No messages yet.</p>
+                      <p className="playthrough-card-preview">
+                        No messages yet.
+                      </p>
                     )}
                   </article>
                 ))}
@@ -443,30 +489,41 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
                             type="button"
                             className="playthrough-row-open"
                             onClick={() => openCard(p.id)}
-                            aria-current={p.id === currentPlaythroughId ? "true" : undefined}
+                            aria-current={
+                              p.id === currentPlaythroughId ? "true" : undefined
+                            }
                           >
                             {p.name}
                           </button>
                         </strong>
                         {p.id === currentPlaythroughId ? currentBadge : null}
-                        {renameTarget?.id === p.id ? renameDialog(p.id, p.name) : null}
+                        {renameTarget?.id === p.id
+                          ? renameDialog(p.id, p.name)
+                          : null}
                       </div>
                       <div className="playthrough-card-meta">
-
                         <span>Turn {p.turn}</span>
                         <span className="inline-flex items-center gap-1">
                           <Icon name="User" size={14} /> {p.castCount}{" "}
                           {p.castCount === 1 ? "character" : "characters"}
                         </span>
-                        <span className="playthrough-row-updated">Updated {formatDate(p.updatedAt)}</span>
+                        <span className="playthrough-row-updated">
+                          Updated {formatDate(p.updatedAt)}
+                        </span>
                       </div>
                       {p.visibleMessageCount > 0 ? (
-                        <p className="playthrough-card-preview">{p.lastMessagePreview}…</p>
+                        <p className="playthrough-card-preview">
+                          {p.lastMessagePreview}…
+                        </p>
                       ) : (
-                        <p className="playthrough-card-preview">No messages yet.</p>
+                        <p className="playthrough-card-preview">
+                          No messages yet.
+                        </p>
                       )}
                     </div>
-                    <div className="playthrough-row-actions">{actionsMenu(p)}</div>
+                    <div className="playthrough-row-actions">
+                      {actionsMenu(p)}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -482,7 +539,9 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
     loadFailures.length > 0 && !failuresDismissed ? (
       <div className="load-failure-banner">
         <div className="load-failure-banner-header">
-          <span>{loadFailures.length} playthrough(s) couldn&apos;t be loaded</span>
+          <span>
+            {loadFailures.length} playthrough(s) couldn&apos;t be loaded
+          </span>
           <button
             className="load-failure-dismiss"
             onClick={() => setFailuresDismissed(true)}
@@ -497,7 +556,12 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
             {loadFailures.map((f) => (
               <li key={f.id}>
                 <strong>{f.name}</strong> — {f.reason}
-                {f.backupPath ? <span className="load-failure-backup"> (backup: {f.backupPath})</span> : null}
+                {f.backupPath ? (
+                  <span className="load-failure-backup">
+                    {" "}
+                    (backup: {f.backupPath})
+                  </span>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -509,7 +573,11 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
     <div className="library-toolbar playthrough-library-toolbar">
       <div className="library-toolbar-actions">
         {onNewPlaythrough ? (
-          <Button variant="primary" onClick={onNewPlaythrough} leftIcon={<Icon name="Plus" size={15} />}>
+          <Button
+            variant="primary"
+            onClick={onNewPlaythrough}
+            leftIcon={<Icon name="Plus" size={15} />}
+          >
             New Playthrough
           </Button>
         ) : null}
@@ -524,14 +592,18 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
         containerClassName="library-search-wrapper"
       />
 
-      <div className="library-sort-control-group" role="group" aria-label="Sort playthroughs">
+      <div
+        className="library-sort-control-group"
+        role="group"
+        aria-label="Sort playthroughs"
+      >
         <SimpleSelect<PlaythroughSortOption>
           value={sortBy}
           onChange={setSortBy}
           options={PLAYTHROUGH_SORT_OPTIONS.map((option) => ({
             value: option.value,
             label: option.label,
-            icon: <Icon name="ArrowUpDown" size={12} />
+            icon: <Icon name="ArrowUpDown" size={12} />,
           }))}
           size="xs"
           variant="ghost"
@@ -552,7 +624,12 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
           }
           aria-label="Toggle sort order"
         >
-          <Icon name={sortDir === "asc" ? "ArrowUpNarrowWide" : "ArrowDownWideNarrow"} size={14} />
+          <Icon
+            name={
+              sortDir === "asc" ? "ArrowUpNarrowWide" : "ArrowDownWideNarrow"
+            }
+            size={14}
+          />
         </button>
       </div>
 

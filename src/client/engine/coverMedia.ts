@@ -34,7 +34,9 @@ export type CoverMediaItem = {
  *   branches and their images should relate is unresolved.
  */
 export function buildCoverMedia(playthrough: Playthrough): CoverMediaItem[] {
-  const chapterNameById = new Map(playthrough.chapters.map((chapter) => [chapter.id, chapter.name]));
+  const chapterNameById = new Map(
+    playthrough.chapters.map((chapter) => [chapter.id, chapter.name]),
+  );
   const items: CoverMediaItem[] = [];
   const seen = new Set<string>();
 
@@ -54,7 +56,7 @@ export function buildCoverMedia(playthrough: Playthrough): CoverMediaItem[] {
         ...(chapterId ? { chapterId } : {}),
         ...(chapterId && chapterNameById.has(chapterId)
           ? { chapterName: chapterNameById.get(chapterId) }
-          : {})
+          : {}),
       });
     }
   }
@@ -78,7 +80,10 @@ export type CoverMediaGroup = {
  * section of its own to belong to, so it lands in the running group rather than under a heading
  * naming a chapter that no longer exists.
  */
-export function groupCoverMedia(media: CoverMediaItem[], chapters: Chapter[]): CoverMediaGroup[] {
+export function groupCoverMedia(
+  media: CoverMediaItem[],
+  chapters: Chapter[],
+): CoverMediaGroup[] {
   const byId = new Map<string, CoverMediaItem[]>();
   const running: CoverMediaItem[] = [];
 
@@ -92,7 +97,9 @@ export function groupCoverMedia(media: CoverMediaItem[], chapters: Chapter[]): C
     byId.set(item.chapterId, bucket);
   }
 
-  const groups: CoverMediaGroup[] = [{ chapterId: null, name: "Current chapter", items: running }];
+  const groups: CoverMediaGroup[] = [
+    { chapterId: null, name: "Current chapter", items: running },
+  ];
   for (const chapter of [...chapters].reverse()) {
     const items = byId.get(chapter.id);
     if (!items || items.length === 0) continue;

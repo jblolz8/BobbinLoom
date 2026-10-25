@@ -14,14 +14,18 @@ import {
   COVER_ASPECT_VALUES,
   THEME_PRESETS,
   avatarBadgeRadius,
+  clampWorkspaceWidthPercent,
   counterpartPresetId,
   effectiveThemeMode,
   presetCardTokens,
   themePresetFor,
   themeShapeTokens,
-  themeTokens
+  themeTokens,
 } from "../src/engine/theme";
-import { injectThemeFirstPaint, themeFirstPaint } from "../src/server/themeFirstPaint";
+import {
+  injectThemeFirstPaint,
+  themeFirstPaint,
+} from "../src/server/themeFirstPaint";
 
 const SHELL = `<!doctype html><html lang="en"><head></head><body></body></html>`;
 
@@ -33,11 +37,17 @@ function settings(overrides: Record<string, unknown> = {}): AppSettings {
     coverAspect: "square",
     themeMode: "light",
     themePreset: "default-light",
-    ...overrides
+    ...overrides,
   });
 }
 
-const TYPOGRAPHY = ["--story-text", "--text-primary", "--chat-ai-text", "--chat-user-text", "--story-emphasis"];
+const TYPOGRAPHY = [
+  "--story-text",
+  "--text-primary",
+  "--chat-ai-text",
+  "--chat-user-text",
+  "--story-emphasis",
+];
 
 describe("effectiveThemeMode", () => {
   it('follows the device preference on "system", both ways', () => {
@@ -61,8 +71,11 @@ describe("themeTokens", () => {
 
   it("lets a custom colour override the preset's", () => {
     const tokens = themeTokens(
-      { themePreset: "nord-frost", customThemeColors: { "--bg-app": "#123456", "--chat-ai-bg": "#abcdef" } },
-      "dark"
+      {
+        themePreset: "nord-frost",
+        customThemeColors: { "--bg-app": "#123456", "--chat-ai-bg": "#abcdef" },
+      },
+      "dark",
     );
 
     expect(tokens["--bg-app"]).toBe("#123456");
@@ -73,8 +86,11 @@ describe("themeTokens", () => {
   it("derives the translucent accent, the highlight and the focus ring from a custom --accent-base", () => {
     // default-dark ships no accent at all, so every accent token here is a derivation.
     const tokens = themeTokens(
-      { themePreset: "default-dark", customThemeColors: { "--accent-base": "#123456" } },
-      "dark"
+      {
+        themePreset: "default-dark",
+        customThemeColors: { "--accent-base": "#123456" },
+      },
+      "dark",
     );
 
     expect(tokens["--accent-base"]).toBe("#123456");
@@ -86,8 +102,11 @@ describe("themeTokens", () => {
 
   it("derives --ai-accent-translucent from a custom --ai-accent", () => {
     const tokens = themeTokens(
-      { themePreset: "default-dark", customThemeColors: { "--ai-accent": "#ff0000" } },
-      "dark"
+      {
+        themePreset: "default-dark",
+        customThemeColors: { "--ai-accent": "#ff0000" },
+      },
+      "dark",
     );
 
     expect(tokens["--ai-accent-translucent"]).toBe("rgba(255, 0, 0, 0.14)");
@@ -97,8 +116,11 @@ describe("themeTokens", () => {
     // nord-frost and emerald-archive spell out both accents and both focus values; the reader replacing
     // --accent-base must not drag them off the preset's palette.
     const tokens = themeTokens(
-      { themePreset: "nord-frost", customThemeColors: { "--accent-base": "#123456" } },
-      "dark"
+      {
+        themePreset: "nord-frost",
+        customThemeColors: { "--accent-base": "#123456" },
+      },
+      "dark",
     );
 
     expect(tokens["--accent-translucent"]).toBe("rgba(136, 192, 208, 0.16)");
@@ -106,8 +128,11 @@ describe("themeTokens", () => {
     expect(tokens["--input-focus-ring"]).toBe("rgba(136, 192, 208, 0.25)");
 
     const emerald = themeTokens(
-      { themePreset: "emerald-archive", customThemeColors: { "--ai-accent": "#ff0000" } },
-      "dark"
+      {
+        themePreset: "emerald-archive",
+        customThemeColors: { "--ai-accent": "#ff0000" },
+      },
+      "dark",
     );
 
     expect(emerald["--ai-accent-translucent"]).toBe("rgba(52, 211, 153, 0.16)");
@@ -115,7 +140,13 @@ describe("themeTokens", () => {
 
   it("fills in the story, interface and chat typography a preset leaves out, per scheme", () => {
     // No shipped preset omits these, so the fallback branch is only reachable with a bare one.
-    THEME_PRESETS.push({ id: "test-bare", name: "Bare", description: "", mode: "dark", colors: {} });
+    THEME_PRESETS.push({
+      id: "test-bare",
+      name: "Bare",
+      description: "",
+      mode: "dark",
+      colors: {},
+    });
     try {
       const dark = themeTokens({ themePreset: "test-bare" }, "dark");
       const light = themeTokens({ themePreset: "test-bare" }, "light");
@@ -132,7 +163,10 @@ describe("themeTokens", () => {
 
   it("is pure: the same input gives equal values and the preset is left untouched", () => {
     const presetColorsBefore = JSON.stringify(THEME_PRESETS[0].colors);
-    const input = { themePreset: THEME_PRESETS[0].id, customThemeColors: { "--accent-base": "#123456" } };
+    const input = {
+      themePreset: THEME_PRESETS[0].id,
+      customThemeColors: { "--accent-base": "#123456" },
+    };
 
     const first = themeTokens(input, "dark");
     const second = themeTokens(input, "dark");
@@ -140,13 +174,17 @@ describe("themeTokens", () => {
     expect(second).toEqual(first);
     expect(JSON.stringify(THEME_PRESETS[0].colors)).toBe(presetColorsBefore);
     // A copy, not the preset's own map — the server spreads these straight into CSS.
-    expect(themeTokens({ themePreset: THEME_PRESETS[0].id }, "dark")).not.toBe(THEME_PRESETS[0].colors);
+    expect(themeTokens({ themePreset: THEME_PRESETS[0].id }, "dark")).not.toBe(
+      THEME_PRESETS[0].colors,
+    );
   });
 });
 
 describe("themePresetFor", () => {
   it("returns the chosen preset, whatever the mode", () => {
-    expect(themePresetFor("dark", "midnight-purple").id).toBe("midnight-purple");
+    expect(themePresetFor("dark", "midnight-purple").id).toBe(
+      "midnight-purple",
+    );
     expect(themePresetFor("light", "nord-frost").id).toBe("nord-frost");
   });
 
@@ -166,23 +204,39 @@ describe("themeShapeTokens and avatarBadgeRadius", () => {
     expect(avatarBadgeRadius("rounded")).toBe("8px");
   });
 
-  it("defaults to the rounded badge and the landscape frame", () => {
+  it("defaults to the rounded badge, the landscape frame, and 80% workspace width", () => {
     expect(themeShapeTokens({})).toEqual({
       "--avatar-badge-radius": avatarBadgeRadius("rounded"),
-      "--cover-art-aspect": COVER_ASPECT_VALUES.landscape
+      "--cover-art-aspect": COVER_ASPECT_VALUES.landscape,
+      "--workspace-max-width": "80%",
     });
     expect(themeShapeTokens({})).toEqual({
       "--avatar-badge-radius": "8px",
-      "--cover-art-aspect": "16 / 9"
+      "--cover-art-aspect": "16 / 9",
+      "--workspace-max-width": "80%",
     });
   });
 
-  it("carries the chosen shape and aspect when there is one", () => {
-    expect(themeShapeTokens({ avatarShape: "square", coverAspect: "portrait" })).toEqual({
+  it("carries the chosen shape, aspect, and clamped workspace width when provided", () => {
+    expect(
+      themeShapeTokens({
+        avatarShape: "square",
+        coverAspect: "portrait",
+        workspaceWidthPercent: 92,
+      }),
+    ).toEqual({
       "--avatar-badge-radius": "2px",
-      "--cover-art-aspect": "2 / 3"
+      "--cover-art-aspect": "2 / 3",
+      "--workspace-max-width": "92%",
     });
-    expect(themeShapeTokens({ avatarShape: "circle", coverAspect: "square" })["--cover-art-aspect"]).toBe("1 / 1");
+    expect(
+      themeShapeTokens({ avatarShape: "circle", coverAspect: "square" })[
+        "--cover-art-aspect"
+      ],
+    ).toBe("1 / 1");
+    expect(clampWorkspaceWidthPercent(30)).toBe(50);
+    expect(clampWorkspaceWidthPercent(120)).toBe(100);
+    expect(clampWorkspaceWidthPercent(undefined)).toBe(80);
   });
 });
 
@@ -190,11 +244,14 @@ describe("themeFirstPaint", () => {
   it("names the scheme, the shape and the aspect, and paints one :root[data-theme] block", () => {
     const { attributes, markup } = themeFirstPaint(settings());
 
-    expect(attributes).toBe('data-theme="light" data-avatar-shape="circle" data-cover-aspect="square"');
+    expect(attributes).toBe(
+      'data-theme="light" data-avatar-shape="circle" data-cover-aspect="square"',
+    );
     expect(markup).toContain('<style id="theme-first-paint">');
     expect(markup.match(/:root\[data-theme\]\{/g)).toHaveLength(1);
     expect(markup).toContain("--avatar-badge-radius:50%");
     expect(markup).toContain("--cover-art-aspect:1 / 1");
+    expect(markup).toContain("--workspace-max-width:80%");
     expect(markup).toContain("--text-primary:#0f172a");
     // A fixed scheme needs neither the media query nor the attribute script.
     expect(markup).not.toContain("@media");
@@ -202,7 +259,9 @@ describe("themeFirstPaint", () => {
   });
 
   it("paints the dark base when the reader has never chosen a mode", () => {
-    const { attributes, markup } = themeFirstPaint(settings({ themeMode: undefined, themePreset: undefined }));
+    const { attributes, markup } = themeFirstPaint(
+      settings({ themeMode: undefined, themePreset: undefined }),
+    );
 
     expect(attributes).toContain('data-theme="dark"');
     expect(markup).toContain("--text-primary:#eceff4");
@@ -211,10 +270,17 @@ describe("themeFirstPaint", () => {
   it('ships both schemes plus the attribute script for themeMode "system"', () => {
     // No preset, so each scheme resolves its own default and the two blocks are distinguishable.
     const { attributes, markup } = themeFirstPaint(
-      settings({ themeMode: "system", themePreset: undefined, avatarShape: "rounded", coverAspect: "landscape" })
+      settings({
+        themeMode: "system",
+        themePreset: undefined,
+        avatarShape: "rounded",
+        coverAspect: "landscape",
+      }),
     );
 
-    expect(attributes).toBe('data-theme="dark" data-avatar-shape="rounded" data-cover-aspect="landscape"');
+    expect(attributes).toBe(
+      'data-theme="dark" data-avatar-shape="rounded" data-cover-aspect="landscape"',
+    );
     expect(markup.match(/:root\[data-theme\]\{/g)).toHaveLength(2);
 
     const [base, media] = markup.split("@media (prefers-color-scheme: light)");
@@ -224,8 +290,10 @@ describe("themeFirstPaint", () => {
     expect(media).toContain("--text-primary:#0f172a");
     expect(media).toContain("--avatar-badge-radius:8px");
     expect(base).toContain("--avatar-badge-radius:8px");
-    expect(markup).toContain('<script>(function(){try{if(window.matchMedia');
-    expect(markup).toContain('document.documentElement.setAttribute("data-theme","light")');
+    expect(markup).toContain("<script>(function(){try{if(window.matchMedia");
+    expect(markup).toContain(
+      'document.documentElement.setAttribute("data-theme","light")',
+    );
   });
 });
 
@@ -235,10 +303,12 @@ describe("injectThemeFirstPaint", () => {
 
     expect(html.match(/<html/g)).toHaveLength(1);
     expect(html).toContain(
-      '<html lang="en" data-theme="light" data-avatar-shape="circle" data-cover-aspect="square">'
+      '<html lang="en" data-theme="light" data-avatar-shape="circle" data-cover-aspect="square">',
     );
     expect(html.indexOf('<style id="theme-first-paint">')).toBeGreaterThan(-1);
-    expect(html.indexOf('<style id="theme-first-paint">')).toBeLessThan(html.indexOf("</head>"));
+    expect(html.indexOf('<style id="theme-first-paint">')).toBeLessThan(
+      html.indexOf("</head>"),
+    );
     expect(html.match(/<\/head>/g)).toHaveLength(1);
     expect(html.startsWith("<!doctype html>")).toBe(true);
     expect(html).toContain("<body></body>");
@@ -295,13 +365,34 @@ describe("presetCardTokens and extended preset tokens", () => {
   });
 
   it("includes blockquote, system chat, and timeline tokens on custom palettes", () => {
-    for (const id of ["nord-frost", "warm-parchment", "midnight-purple", "emerald-archive", "amber-hearth", "matcha-cream", "polar-mist", "sakura-blossom"]) {
+    for (const id of [
+      "nord-frost",
+      "warm-parchment",
+      "midnight-purple",
+      "emerald-archive",
+      "amber-hearth",
+      "matcha-cream",
+      "polar-mist",
+      "sakura-blossom",
+    ]) {
       const tokens = themeTokens({ themePreset: id }, "dark");
-      expect(tokens["--story-blockquote-border"], `${id} blockquote border`).toBeTruthy();
-      expect(tokens["--story-blockquote-bg"], `${id} blockquote bg`).toBeTruthy();
-      expect(tokens["--story-blockquote-text"], `${id} blockquote text`).toBeTruthy();
+      expect(
+        tokens["--story-blockquote-border"],
+        `${id} blockquote border`,
+      ).toBeTruthy();
+      expect(
+        tokens["--story-blockquote-bg"],
+        `${id} blockquote bg`,
+      ).toBeTruthy();
+      expect(
+        tokens["--story-blockquote-text"],
+        `${id} blockquote text`,
+      ).toBeTruthy();
       expect(tokens["--chat-system-bg"], `${id} chat system bg`).toBeTruthy();
-      expect(tokens["--timeline-node-active-border"], `${id} timeline active border`).toBeTruthy();
+      expect(
+        tokens["--timeline-node-active-border"],
+        `${id} timeline active border`,
+      ).toBeTruthy();
     }
   });
 

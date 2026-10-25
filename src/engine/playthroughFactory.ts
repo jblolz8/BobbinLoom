@@ -12,10 +12,15 @@ import {
   ImageGenerationSettings,
   TurnSnapshot,
   AssistantTurn,
-  ChatMessage
+  ChatMessage,
 } from "../schemas";
 import { parseClothingFromContent } from "./characterSections";
-import { DEMO_TEMPLATE, ITEMS, STARTER_INVENTORY, STARTER_WORLD_STATE } from "./demoData";
+import {
+  DEMO_TEMPLATE,
+  ITEMS,
+  STARTER_INVENTORY,
+  STARTER_WORLD_STATE,
+} from "./demoData";
 
 function newId(prefix: string): string {
   const cryptoObj = globalThis.crypto as Crypto | undefined;
@@ -40,15 +45,12 @@ export function parseUserInput(raw: string): ParsedUserInput {
     if (match[1].trim()) spokenText.push(match[1].trim());
   }
 
-  const actionText = raw
-    .replace(quotePattern, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  const actionText = raw.replace(quotePattern, " ").replace(/\s+/g, " ").trim();
 
   return {
     raw,
     actionText,
-    spokenText
+    spokenText,
   };
 }
 
@@ -56,7 +58,7 @@ export function instantiateTemplate(
   template: CharacterTemplate,
   playthroughId: string,
   branchId: string,
-  memorySummary = `${template.name} has not formed a strong opinion of the player yet.`
+  memorySummary = `${template.name} has not formed a strong opinion of the player yet.`,
 ): CharacterInstance {
   const createdAt = nowIso();
   return {
@@ -71,23 +73,28 @@ export function instantiateTemplate(
     memorySummary,
     conditions: [],
     flags: [],
-    clothing: template.startingClothing.length > 0 ? clone(template.startingClothing) : parseClothingFromContent(template.content),
+    clothing:
+      template.startingClothing.length > 0
+        ? clone(template.startingClothing)
+        : parseClothingFromContent(template.content),
     createdAt,
-    updatedAt: createdAt
+    updatedAt: createdAt,
   };
 }
 
 export function createInitialPlaythrough(
   name: string,
   persona?: PlayerPersona,
-  cast?: CharacterTemplate[]
+  cast?: CharacterTemplate[],
 ): Playthrough {
   const createdAt = nowIso();
   const playthroughId = newId("play");
   const branchId = newId("branch");
 
   const castTemplates = cast ?? [DEMO_TEMPLATE];
-  const characters = castTemplates.map((t) => instantiateTemplate(t, playthroughId, branchId));
+  const characters = castTemplates.map((t) =>
+    instantiateTemplate(t, playthroughId, branchId),
+  );
 
   const p = persona ?? {
     id: "persona_default",
@@ -129,7 +136,7 @@ export function createInitialPlaythrough(
     storyMetaSummaries: [],
     currentChapterStartedAtTurn: 1,
     createdAt,
-    updatedAt: createdAt
+    updatedAt: createdAt,
   };
 }
 
@@ -138,30 +145,42 @@ export function createPlaythroughFromSeed(
   seed: ScenarioSeed,
   persona?: PlayerPersona,
   cast?: CharacterTemplate[],
-  includeOpening = true
+  includeOpening = true,
 ): Playthrough {
   const createdAt = nowIso();
   const playthroughId = newId("play");
   const branchId = newId("branch");
 
   const castTemplates = cast ?? [];
-  const castNames = new Set(castTemplates.map((t) => t.name.trim().toLowerCase()));
+  const castNames = new Set(
+    castTemplates.map((t) => t.name.trim().toLowerCase()),
+  );
 
   let characters: CharacterInstance[];
   let characterTemplates: CharacterTemplate[];
 
   if (castTemplates.length === 0) {
     const template: CharacterTemplate = {
-      id: newId("tmpl"), name: seed.character.name, version: 1,
-      content: seed.character.content, summary: "", startingClothing: [],
+      id: newId("tmpl"),
+      name: seed.character.name,
+      version: 1,
+      content: seed.character.content,
+      summary: "",
+      startingClothing: [],
     };
     characters = [instantiateTemplate(template, playthroughId, branchId)];
     characterTemplates = [template];
   } else {
-    const lead = castTemplates.find((t) => t.name.trim().toLowerCase() === seed.character.name.trim().toLowerCase())
-      ?? castTemplates[0];
+    const lead =
+      castTemplates.find(
+        (t) =>
+          t.name.trim().toLowerCase() ===
+          seed.character.name.trim().toLowerCase(),
+      ) ?? castTemplates[0];
     const ordered = [lead, ...castTemplates.filter((t) => t.id !== lead.id)];
-    characters = ordered.map((t) => instantiateTemplate(t, playthroughId, branchId));
+    characters = ordered.map((t) =>
+      instantiateTemplate(t, playthroughId, branchId),
+    );
     characterTemplates = clone(ordered);
   }
 
@@ -183,7 +202,7 @@ export function createPlaythroughFromSeed(
         flags: [],
         clothing: [],
         createdAt,
-        updatedAt: createdAt
+        updatedAt: createdAt,
       };
       characters.push(inst);
     }
@@ -194,12 +213,13 @@ export function createPlaythroughFromSeed(
     name: si.name,
     type: si.type,
     description: si.description,
-    stackable: si.type === "consumable" || si.type === "misc" || si.quantity > 1
+    stackable:
+      si.type === "consumable" || si.type === "misc" || si.quantity > 1,
   }));
 
   const inventory = seed.items.map((si) => ({
     itemId: si.id,
-    quantity: si.quantity
+    quantity: si.quantity,
   }));
 
   return {
@@ -208,7 +228,11 @@ export function createPlaythroughFromSeed(
     name,
     branchId,
     turn: 0,
-    worldState: seed.startingWorldState.map((ws, i) => ({ id: `ws_${i}`, name: ws.name, description: ws.description })),
+    worldState: seed.startingWorldState.map((ws, i) => ({
+      id: `ws_${i}`,
+      name: ws.name,
+      description: ws.description,
+    })),
     playerCharacter: (() => {
       const p = persona ?? {
         id: "persona_default",
@@ -235,29 +259,40 @@ export function createPlaythroughFromSeed(
     inventory,
     itemCatalog: items,
     memoryEvents: [],
-    messages: includeOpening && seed.openingText?.trim()
-      ? [{ id: newId("msg"), role: "assistant", content: seed.openingText.trim(), createdAt, turn: 0 }]
-      : [],
+    messages:
+      includeOpening && seed.openingText?.trim()
+        ? [
+            {
+              id: newId("msg"),
+              role: "assistant",
+              content: seed.openingText.trim(),
+              createdAt,
+              turn: 0,
+            },
+          ]
+        : [],
     snapshots: {},
     lorebookIds: [],
     chapters: [],
     storyMetaSummaries: [],
     currentChapterStartedAtTurn: 1,
     createdAt,
-    updatedAt: createdAt
+    updatedAt: createdAt,
   };
 }
 
 export function createBlankPlaythrough(
   name: string,
   persona?: PlayerPersona,
-  cast: CharacterTemplate[] = []
+  cast: CharacterTemplate[] = [],
 ): Playthrough {
   const createdAt = nowIso();
   const playthroughId = newId("play");
   const branchId = newId("branch");
 
-  const characters = cast.map((t) => instantiateTemplate(t, playthroughId, branchId));
+  const characters = cast.map((t) =>
+    instantiateTemplate(t, playthroughId, branchId),
+  );
 
   const p = persona ?? {
     id: "persona_default",
@@ -299,7 +334,7 @@ export function createBlankPlaythrough(
     storyMetaSummaries: [],
     currentChapterStartedAtTurn: 1,
     createdAt,
-    updatedAt: createdAt
+    updatedAt: createdAt,
   };
 }
 
@@ -327,7 +362,10 @@ export function takeTurnSnapshot(playthrough: Playthrough): TurnSnapshot {
  * Restores a playthrough's world state from a pre-turn snapshot, in place.
  * Snapshots hold no message content, so restoring never touches the message list.
  */
-export function restoreSnapshotState(target: Playthrough, snapshot: TurnSnapshot | undefined): void {
+export function restoreSnapshotState(
+  target: Playthrough,
+  snapshot: TurnSnapshot | undefined,
+): void {
   if (!snapshot) return;
   target.turn = snapshot.turn;
   target.worldState = clone(snapshot.worldState);
@@ -340,7 +378,9 @@ export function restoreSnapshotState(target: Playthrough, snapshot: TurnSnapshot
   // memoryLayers were being captured by takeTurnSnapshot but never restored,
   // so a reverted branch kept the latest layers in its Journal. Restore them
   // so the branch's memory view matches its branch point.
-  target.memoryLayers = snapshot.memoryLayers ? clone(snapshot.memoryLayers) : target.memoryLayers;
+  target.memoryLayers = snapshot.memoryLayers
+    ? clone(snapshot.memoryLayers)
+    : target.memoryLayers;
   target.lorebookIds = snapshot.lorebookIds ?? [];
   target.lorebookTimingStates = snapshot.lorebookTimingStates
     ? clone(snapshot.lorebookTimingStates)
@@ -350,7 +390,8 @@ export function restoreSnapshotState(target: Playthrough, snapshot: TurnSnapshot
     : undefined;
   target.chapters = clone(snapshot.chapters ?? []);
   target.storyMetaSummaries = clone(snapshot.storyMetaSummaries ?? []);
-  target.currentChapterStartedAtTurn = snapshot.currentChapterStartedAtTurn ?? 1;
+  target.currentChapterStartedAtTurn =
+    snapshot.currentChapterStartedAtTurn ?? 1;
 }
 
 /**
@@ -368,7 +409,7 @@ export function ensureMessageTurns(messages: ChatMessage[]): void {
         currentTurn += 1;
         msg.turn = currentTurn;
       } else if (msg.role === "assistant") {
-        msg.turn = (i === 0 && currentTurn === 0) ? 0 : currentTurn;
+        msg.turn = i === 0 && currentTurn === 0 ? 0 : currentTurn;
       } else {
         msg.turn = currentTurn;
       }
@@ -379,15 +420,20 @@ export function ensureMessageTurns(messages: ChatMessage[]): void {
 export function buildMockAssistantTurn(
   input: ParsedUserInput,
   state: Playthrough,
-  choicesEnabled: boolean
+  choicesEnabled: boolean,
 ): AssistantTurn {
-  const spoken = input.spokenText.length > 0 ? ` You said, "${input.spokenText[0]}"` : "";
+  const spoken =
+    input.spokenText.length > 0 ? ` You said, "${input.spokenText[0]}"` : "";
   const narrative = `The room settles around your decision.${spoken} Mira watches you carefully, weighing whether your action was impulse or intent.`;
 
   return {
     narrative,
     choices: choicesEnabled
-      ? ["Ask Mira what she wants", "Check your inventory", "Look around the room"]
+      ? [
+          "Ask Mira what she wants",
+          "Check your inventory",
+          "Look around the room",
+        ]
       : undefined,
     statePatch: {
       memoryEvents: [
@@ -395,9 +441,9 @@ export function buildMockAssistantTurn(
           type: "conversation",
           summary: `Player acted: ${input.raw.slice(0, 80)}`,
           importance: 1,
-          tags: ["turn"]
-        }
-      ]
-    }
+          tags: ["turn"],
+        },
+      ],
+    },
   };
 }

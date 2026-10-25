@@ -2,10 +2,10 @@
    Two panes: the page nav on the left, the rendered page on the right. Both
    scroll independently, so the nav stays put while a long page scrolls. */
 
-.docs-workspace-page {
-  /* The other workspace pages cap at 1100px and scroll as a whole; docs read
-     better wide, and the panes own their own scrolling. */
-  max-width: none;
+.docs-workspace-page,
+.home-workspace-page.docs-workspace-page {
+  /* Shares `--workspace-max-width` from `.home-workspace-page`; the inner
+     `.docs-view` panes own their own scrolling and padding. */
   overflow: hidden;
   padding: 0;
 }
@@ -193,7 +193,8 @@
 .doc-markdown blockquote {
   margin: 0.75rem 0;
   padding: 0.5rem 0.9rem;
-  border-left: 3px solid var(--story-blockquote-border, var(--accent-highlight, var(--accent-base)));
+  border-left: 3px solid
+    var(--story-blockquote-border, var(--accent-highlight, var(--accent-base)));
   background: var(--story-blockquote-bg, var(--bg-surface));
   border-radius: 0 6px 6px 0;
   color: var(--story-blockquote-text, var(--text-muted));

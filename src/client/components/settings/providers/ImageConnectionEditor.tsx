@@ -1,4 +1,11 @@
-import { useEffect, useState, type Dispatch, type FormEvent, type MouseEvent, type SetStateAction } from "react";
+import {
+  useEffect,
+  useState,
+  type Dispatch,
+  type FormEvent,
+  type MouseEvent,
+  type SetStateAction,
+} from "react";
 import {
   Button,
   Card,
@@ -16,8 +23,16 @@ import {
 } from "../../base";
 import type { ImageApiStyle, RegionDirection } from "../../../../schemas";
 import { fetchProviderImageStyles } from "../../../api";
-import type { ModelCapabilities, ProviderConnection, ProviderConnectionPayload, ProviderModelCapabilities } from "../../../api";
-import { CUSTOM_STYLE_OPTION, imageStyleDisplay } from "../../../utils/imageStyleOptions";
+import type {
+  ModelCapabilities,
+  ProviderConnection,
+  ProviderConnectionPayload,
+  ProviderModelCapabilities,
+} from "../../../api";
+import {
+  CUSTOM_STYLE_OPTION,
+  imageStyleDisplay,
+} from "../../../utils/imageStyleOptions";
 import { ApiKeyField, type ApiKeyFieldProps } from "./ApiKeyField";
 import { EditorActionBar, type EditorFooterStatus } from "./EditorActionBar";
 
@@ -26,16 +41,19 @@ type EditorStatus = EditorFooterStatus;
 const API_STYLE_OPTIONS: Array<{ value: ImageApiStyle; label: string }> = [
   { value: "openai", label: "OpenAI-compatible" },
   { value: "venice", label: "Venice" },
-  { value: "a1111", label: "Automatic1111 / Forge (local)" }
+  { value: "a1111", label: "Automatic1111 / Forge (local)" },
 ];
 
 /** Forge Couple ‘direction’, in the extension’s own spelling: Horizontal
  *  maps left→right, Vertical top→bottom, and the value goes on the wire
  *  verbatim. The labels spell out the geometry because the words alone do not
  *  say which way the blocks run. */
-const REGION_DIRECTION_OPTIONS: Array<{ value: RegionDirection; label: string }> = [
+const REGION_DIRECTION_OPTIONS: Array<{
+  value: RegionDirection;
+  label: string;
+}> = [
   { value: "Horizontal", label: "Horizontal — left to right" },
-  { value: "Vertical", label: "Vertical — top to bottom" }
+  { value: "Vertical", label: "Vertical — top to bottom" },
 ];
 
 /** A numeric field's raw text as a number, or `undefined` when the field is
@@ -54,7 +72,9 @@ function optionalNumber(raw: string): number | undefined {
  *  to 1 s rather than round-tripping to an invalid stored value. */
 function timeoutSecondsToMs(raw: string): number | undefined {
   const seconds = optionalNumber(raw);
-  return seconds === undefined ? undefined : Math.max(1, Math.round(seconds)) * 1000;
+  return seconds === undefined
+    ? undefined
+    : Math.max(1, Math.round(seconds)) * 1000;
 }
 
 /** The Style Preset select's fetched list plus its status line. One state so the
@@ -84,11 +104,21 @@ function readCachedStyles(cacheKey: string | null): string[] | null {
 }
 
 function stylesLoadedStatus(styles: string[]): EditorStatus {
-  return { kind: "ok", text: `${styles.length} style${styles.length === 1 ? "" : "s"} loaded.` };
+  return {
+    kind: "ok",
+    text: `${styles.length} style${styles.length === 1 ? "" : "s"} loaded.`,
+  };
 }
 
 /** OpenAI's image size enum; "auto" lets the provider pick. */
-const IMAGE_SIZE_OPTIONS = ["auto", "1024x1024", "1536x1024", "1024x1536", "1024x1792", "1792x1024"];
+const IMAGE_SIZE_OPTIONS = [
+  "auto",
+  "1024x1024",
+  "1536x1024",
+  "1024x1536",
+  "1024x1792",
+  "1792x1024",
+];
 
 const VARIANT_OPTIONS = ["1", "2", "3", "4"];
 
@@ -110,21 +140,28 @@ function capabilityLines(caps: ModelCapabilities | undefined): string[] {
 
   if (caps.steps) {
     const parts: string[] = [];
-    if (caps.steps.default !== undefined) parts.push(`${caps.steps.default} default`);
+    if (caps.steps.default !== undefined)
+      parts.push(`${caps.steps.default} default`);
     if (caps.steps.max !== undefined) parts.push(`up to ${caps.steps.max}`);
     if (parts.length) lines.push(`Steps: ${parts.join(", ")}.`);
   }
 
   const ratios = caps.aspectRatios?.length ? caps.aspectRatios.join(", ") : "";
-  const defaultRatio = caps.defaultAspectRatio ? ` (default ${caps.defaultAspectRatio})` : "";
+  const defaultRatio = caps.defaultAspectRatio
+    ? ` (default ${caps.defaultAspectRatio})`
+    : "";
   const divisor = caps.widthHeightDivisor;
   if (divisor !== undefined && ratios) {
-    lines.push(`Sizing: width/height in multiples of ${divisor}, or aspect_ratio from ${ratios}${defaultRatio}.`);
+    lines.push(
+      `Sizing: width/height in multiples of ${divisor}, or aspect_ratio from ${ratios}${defaultRatio}.`,
+    );
   } else if (divisor !== undefined) {
-    lines.push(`Sizing: this model takes width/height, in multiples of ${divisor}.`);
+    lines.push(
+      `Sizing: this model takes width/height, in multiples of ${divisor}.`,
+    );
   } else if (ratios) {
     lines.push(
-      `Sizing: this model takes aspect_ratio, one of ${ratios}${defaultRatio} — it does not take width/height, so set Aspect Ratio above (Image Size is then not sent).`
+      `Sizing: this model takes aspect_ratio, one of ${ratios}${defaultRatio} — it does not take width/height, so set Aspect Ratio above (Image Size is then not sent).`,
     );
   }
 
@@ -151,14 +188,16 @@ function dialectCapabilityLines(counts: {
   lines.push(
     counts.checkpoints > 0
       ? `${counts.checkpoints} checkpoint${counts.checkpoints === 1 ? "" : "s"} listed by the WebUI.`
-      : "No checkpoints listed yet — Fetch models reads the WebUI's own list."
+      : "No checkpoints listed yet — Fetch models reads the WebUI's own list.",
   );
   lines.push(
     counts.samplers > 0 || counts.schedulers > 0
       ? `${counts.samplers} samplers and ${counts.schedulers} schedulers listed by the WebUI — they fill the Sampler and Scheduler pickers below.`
-      : "The WebUI did not list its samplers/schedulers (an older build has no such route) — the names are free text, so type exactly what your build accepts."
+      : "The WebUI did not list its samplers/schedulers (an older build has no such route) — the names are free text, so type exactly what your build accepts.",
   );
-  lines.push("Steps, CFG scale, sampler and scheduler are sent per request; an empty field is not sent at all, so the WebUI's own default applies.");
+  lines.push(
+    "Steps, CFG scale, sampler and scheduler are sent per request; an empty field is not sent at all, so the WebUI's own default applies.",
+  );
   return lines;
 }
 
@@ -229,24 +268,28 @@ export function ImageConnectionEditor({
   onTest,
   onCancel,
   onDelete,
-  textConnections
+  textConnections,
 }: ImageConnectionEditorProps) {
   // A custom size typed into providers.json by hand stays selectable instead of
   // silently reading as "nothing selected".
-  const sizeOptions = form.size && !IMAGE_SIZE_OPTIONS.includes(form.size)
-    ? [...IMAGE_SIZE_OPTIONS, form.size]
-    : IMAGE_SIZE_OPTIONS;
+  const sizeOptions =
+    form.size && !IMAGE_SIZE_OPTIONS.includes(form.size)
+      ? [...IMAGE_SIZE_OPTIONS, form.size]
+      : IMAGE_SIZE_OPTIONS;
 
   // "" is the "follow the active text provider" slot (the server stores it as
   // null). A dangling id stays visible so it can be re-pointed, rather than
   // showing an empty select.
   const promptWriterOptions = [
     { value: "", label: "Current active text provider" },
-    ...textConnections.map((c) => ({ value: c.id, label: c.label }))
+    ...textConnections.map((c) => ({ value: c.id, label: c.label })),
   ];
   const promptWriterId = form.promptProviderId ?? "";
   if (promptWriterId && !textConnections.some((c) => c.id === promptWriterId)) {
-    promptWriterOptions.push({ value: promptWriterId, label: `${promptWriterId} (not found)` });
+    promptWriterOptions.push({
+      value: promptWriterId,
+      label: `${promptWriterId} (not found)`,
+    });
   }
 
   // ── Style Preset ──
@@ -266,13 +309,16 @@ export function ImageConnectionEditor({
   const forgeCoupleDetected = dialectOptions?.forgeCouple === true;
   // The probe answers at least once per opened connection (its status line is
   // what says so); before that, or after a failed probe, we simply do not know.
-  const forgeCoupleChecked = modelsStatus !== null && modelsStatus.kind === "ok";
+  const forgeCoupleChecked =
+    modelsStatus !== null && modelsStatus.kind === "ok";
   const styleValue = form.stylePreset ?? "";
   // Seeded from the session cache so a re-opened connection paints its stored
   // value as a real option on the FIRST frame — no re-fetch, nothing to flash.
   const [styleList, setStyleList] = useState<StyleListState>(() => {
     const cached = readCachedStyles(styleCacheKey());
-    return cached ? { styles: cached, status: stylesLoadedStatus(cached) } : { styles: [], status: null };
+    return cached
+      ? { styles: cached, status: stylesLoadedStatus(cached) }
+      : { styles: [], status: null };
   });
   const { styles, status: stylesStatus } = styleList;
   const [fetchingStyles, setFetchingStyles] = useState(false);
@@ -286,7 +332,11 @@ export function ImageConnectionEditor({
   // Its invariant: the select's value is always one of its own options, and a
   // non-empty stored value never renders as Custom… until a loaded list proves
   // it absent.
-  const styleDisplay = imageStyleDisplay({ value: styleValue, styles, customRequested: customStyle });
+  const styleDisplay = imageStyleDisplay({
+    value: styleValue,
+    styles,
+    customRequested: customStyle,
+  });
 
   /** Cache key for the styles list: the provider's base URL, falling back to
    *  the saved connection's when the probe targets it by id. */
@@ -299,14 +349,20 @@ export function ImageConnectionEditor({
   /** Target for the styles probe: a saved connection uses its STORED key unless
    *  the form's base URL or key were edited, in which case the draft is probed
    *  instead (same rule as the model list). */
-  function styleProbeTarget(): { id?: string; baseUrl?: string; apiKey?: string } | null {
+  function styleProbeTarget(): {
+    id?: string;
+    baseUrl?: string;
+    apiKey?: string;
+  } | null {
     if (mode === "edit" && editing) {
       const baseUrlChanged = form.baseUrl.trim() !== editing.baseUrl;
-      const apiKeyChanged = typeof form.apiKey === "string" && form.apiKey !== "";
+      const apiKeyChanged =
+        typeof form.apiKey === "string" && form.apiKey !== "";
       if (!baseUrlChanged && !apiKeyChanged) return { id: editing.id };
     }
     const baseUrl = form.baseUrl.trim();
-    const apiKey = typeof form.apiKey === "string" && form.apiKey ? form.apiKey : undefined;
+    const apiKey =
+      typeof form.apiKey === "string" && form.apiKey ? form.apiKey : undefined;
     if (baseUrl) return { baseUrl, apiKey };
     return apiKey ? { apiKey } : null;
   }
@@ -314,7 +370,13 @@ export function ImageConnectionEditor({
   async function loadStyles() {
     const target = styleProbeTarget();
     if (!target) {
-      setStyleList({ styles: [], status: { kind: "err", text: "Set a Base URL first (or save the connection)." } });
+      setStyleList({
+        styles: [],
+        status: {
+          kind: "err",
+          text: "Set a Base URL first (or save the connection).",
+        },
+      });
       return;
     }
     const cacheKey = styleCacheKey();
@@ -324,17 +386,32 @@ export function ImageConnectionEditor({
       const r = await fetchProviderImageStyles(target);
       // Only a SUCCESSFUL, non-empty list is worth caching: an empty one means
       // "not fetched", and caching it would suppress the fetch for the session.
-      if (r.ok && r.styles.length > 0 && cacheKey) imageStyleCache.set(cacheKey, r.styles);
+      if (r.ok && r.styles.length > 0 && cacheKey)
+        imageStyleCache.set(cacheKey, r.styles);
       setStyleList({
         styles: r.styles,
         status: r.ok
           ? r.styles.length
             ? stylesLoadedStatus(r.styles)
-            : { kind: "err", text: "Connected, but the provider listed no styles — use Custom… to type one." }
-          : { kind: "err", text: r.message ? `Failed (${r.status ?? ""}): ${r.message}` : "Failed to load styles." }
+            : {
+                kind: "err",
+                text: "Connected, but the provider listed no styles — use Custom… to type one.",
+              }
+          : {
+              kind: "err",
+              text: r.message
+                ? `Failed (${r.status ?? ""}): ${r.message}`
+                : "Failed to load styles.",
+            },
       });
     } catch (err) {
-      setStyleList({ styles: [], status: { kind: "err", text: err instanceof Error ? err.message : String(err) } });
+      setStyleList({
+        styles: [],
+        status: {
+          kind: "err",
+          text: err instanceof Error ? err.message : String(err),
+        },
+      });
     } finally {
       setFetchingStyles(false);
     }
@@ -374,17 +451,27 @@ export function ImageConnectionEditor({
     ? dialectCapabilityLines({
         checkpoints: models.length,
         samplers: dialectOptions?.samplers?.length ?? 0,
-        schedulers: dialectOptions?.schedulers?.length ?? 0
+        schedulers: dialectOptions?.schedulers?.length ?? 0,
       })
     : capabilityLines(form.model ? modelSpecs[form.model] : undefined);
 
   return (
-    <Card as="form" variant="elevated" padding="md" className="conn-editor" onSubmit={onSubmit}>
+    <Card
+      as="form"
+      variant="elevated"
+      padding="md"
+      className="conn-editor"
+      onSubmit={onSubmit}
+    >
       <Stack direction="column" align="stretch" gap="sm">
         <Header
           variant="panel"
           bordered
-          title={mode === "create" ? "New Image Provider Connection" : `Edit: ${editing?.label ?? ""}`}
+          title={
+            mode === "create"
+              ? "New Image Provider Connection"
+              : `Edit: ${editing?.label ?? ""}`
+          }
         />
 
         <FormSection icon="Plug" title="API Style & Connection">
@@ -417,8 +504,12 @@ export function ImageConnectionEditor({
               tooltip="A friendly display name to identify this image provider in your list."
               size="sm"
               value={form.label}
-              onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
-              placeholder={a1111 ? "e.g. Local Forge SDXL" : "e.g. Venice Images"}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, label: e.target.value }))
+              }
+              placeholder={
+                a1111 ? "e.g. Local Forge SDXL" : "e.g. Venice Images"
+              }
             />
 
             <TextInput
@@ -430,8 +521,12 @@ export function ImageConnectionEditor({
               }
               size="sm"
               value={form.baseUrl}
-              onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))}
-              placeholder={a1111 ? "http://127.0.0.1:7860" : "https://api.venice.ai/api/v1"}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, baseUrl: e.target.value }))
+              }
+              placeholder={
+                a1111 ? "http://127.0.0.1:7860" : "https://api.venice.ai/api/v1"
+              }
               leftIcon={<Icon name="Globe" size={13} />}
               rightElement={
                 venice && form.baseUrl !== "https://api.venice.ai/api/v1" ? (
@@ -439,7 +534,12 @@ export function ImageConnectionEditor({
                     type="button"
                     variant="secondary"
                     size="sm"
-                    onClick={() => setForm((f) => ({ ...f, baseUrl: "https://api.venice.ai/api/v1" }))}
+                    onClick={() =>
+                      setForm((f) => ({
+                        ...f,
+                        baseUrl: "https://api.venice.ai/api/v1",
+                      }))
+                    }
                     title="Reset to default Venice endpoint"
                   >
                     Default
@@ -459,8 +559,12 @@ export function ImageConnectionEditor({
               }
               size="sm"
               value={form.model}
-              onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
-              placeholder={a1111 ? "e.g. sd_xl_base_1.0.safetensors" : "e.g. flux-dev"}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, model: e.target.value }))
+              }
+              placeholder={
+                a1111 ? "e.g. sd_xl_base_1.0.safetensors" : "e.g. flux-dev"
+              }
               leftIcon={<Icon name="Images" size={13} />}
               rightElement={
                 <Button
@@ -468,7 +572,11 @@ export function ImageConnectionEditor({
                   variant="secondary"
                   size="sm"
                   onClick={onFetchModels}
-                  disabled={fetchingModels || busy || (mode !== "edit" && !form.baseUrl.trim())}
+                  disabled={
+                    fetchingModels ||
+                    busy ||
+                    (mode !== "edit" && !form.baseUrl.trim())
+                  }
                   isLoading={fetchingModels}
                   leftIcon="RefreshCw"
                 >
@@ -509,8 +617,16 @@ export function ImageConnectionEditor({
             {capsLines.length > 0 && (
               <Card variant="panel" padding="xs">
                 <Stack direction="column" align="stretch" gap="2xs">
-                  <Text as="span" variant="label" size="xs" weight="semibold" tone="primary">
-                    {a1111 ? "What this WebUI offers" : `What “${form.model}” accepts`}
+                  <Text
+                    as="span"
+                    variant="label"
+                    size="xs"
+                    weight="semibold"
+                    tone="primary"
+                  >
+                    {a1111
+                      ? "What this WebUI offers"
+                      : `What “${form.model}” accepts`}
                   </Text>
                   {capsLines.map((line) => (
                     <Text key={line} as="p" size="2xs" tone="secondary">
@@ -553,7 +669,9 @@ export function ImageConnectionEditor({
                   tooltip="Used instead of Image Size for models that reject width/height (such as the Venice qwen-image family). Leave empty to send the Image Size."
                   size="sm"
                   value={form.aspectRatio ?? ""}
-                  onChange={(e) => setForm((f) => ({ ...f, aspectRatio: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, aspectRatio: e.target.value }))
+                  }
                   placeholder="e.g. 3:2"
                   leftIcon={<Icon name="Ratio" size={13} />}
                 />
@@ -579,7 +697,10 @@ export function ImageConnectionEditor({
                       variant="secondary"
                       size="sm"
                       onClick={() => void loadStyles()}
-                      disabled={fetchingStyles || (mode !== "edit" && !form.baseUrl.trim())}
+                      disabled={
+                        fetchingStyles ||
+                        (mode !== "edit" && !form.baseUrl.trim())
+                      }
                       isLoading={fetchingStyles}
                       leftIcon="RefreshCw"
                     >
@@ -592,7 +713,9 @@ export function ImageConnectionEditor({
                     label="Custom style"
                     size="sm"
                     value={styleValue}
-                    onChange={(e) => setForm((f) => ({ ...f, stylePreset: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, stylePreset: e.target.value }))
+                    }
                     placeholder="The exact value the provider expects"
                   />
                 )}
@@ -609,10 +732,14 @@ export function ImageConnectionEditor({
                 )}
                 {styleDisplay.showWarning && (
                   <StatusMessage variant="banner" tone="warn">
-                    Warning: “{styleValue}” is not one of the styles this provider lists, so generating with it fails
-                    with a 400 (Invalid style requested)
-                    {styleDisplay.suggestion ? ` — did you mean “${styleDisplay.suggestion}”?` : ""}. Pick a listed value, or None —
-                    a blank value is not sent at all.
+                    Warning: “{styleValue}” is not one of the styles this
+                    provider lists, so generating with it fails with a 400
+                    (Invalid style requested)
+                    {styleDisplay.suggestion
+                      ? ` — did you mean “${styleDisplay.suggestion}”?`
+                      : ""}
+                    . Pick a listed value, or None — a blank value is not sent
+                    at all.
                   </StatusMessage>
                 )}
               </Stack>
@@ -630,7 +757,9 @@ export function ImageConnectionEditor({
                 variant="filled"
                 fullWidth
                 value={String(form.variants ?? 1)}
-                onChange={(variants) => setForm((f) => ({ ...f, variants: Number(variants) }))}
+                onChange={(variants) =>
+                  setForm((f) => ({ ...f, variants: Number(variants) }))
+                }
                 options={VARIANT_OPTIONS.map((v) => ({ value: v, label: v }))}
                 aria-label="Image variants"
               />
@@ -646,10 +775,17 @@ export function ImageConnectionEditor({
                 type="number"
                 min={0}
                 step={1}
-                value={form.seed === undefined || form.seed === null ? "" : String(form.seed)}
+                value={
+                  form.seed === undefined || form.seed === null
+                    ? ""
+                    : String(form.seed)
+                }
                 onChange={(e) => {
                   const digits = e.target.value.replace(/\D/g, "");
-                  setForm((f) => ({ ...f, seed: digits === "" ? null : Number(digits) }));
+                  setForm((f) => ({
+                    ...f,
+                    seed: digits === "" ? null : Number(digits),
+                  }));
                 }}
                 placeholder="Random"
                 leftIcon={<Icon name="Dices" size={13} />}
@@ -664,7 +800,9 @@ export function ImageConnectionEditor({
                   tooltip="Ask the provider to blur or filter adult content when supported."
                   description="Ask the provider to blur adult content. Leave off."
                   checked={form.safeMode ?? false}
-                  onChange={(e) => setForm((f) => ({ ...f, safeMode: e.target.checked }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, safeMode: e.target.checked }))
+                  }
                 />
 
                 {venice && (
@@ -674,7 +812,12 @@ export function ImageConnectionEditor({
                     tooltip="Venice-specific option (hide_watermark) to omit the Venice watermark from generated images."
                     description="Request results without the Venice watermark."
                     checked={form.hideWatermark ?? false}
-                    onChange={(e) => setForm((f) => ({ ...f, hideWatermark: e.target.checked }))}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        hideWatermark: e.target.checked,
+                      }))
+                    }
                   />
                 )}
               </Stack>
@@ -701,7 +844,9 @@ export function ImageConnectionEditor({
                   integer
                   clearable
                   clearedValue={undefined}
-                  onChange={(val) => setForm((f) => ({ ...f, steps: val ?? undefined }))}
+                  onChange={(val) =>
+                    setForm((f) => ({ ...f, steps: val ?? undefined }))
+                  }
                 />
 
                 <Slider
@@ -714,7 +859,9 @@ export function ImageConnectionEditor({
                   defaultPreview={7}
                   clearable
                   clearedValue={undefined}
-                  onChange={(val) => setForm((f) => ({ ...f, cfgScale: val ?? undefined }))}
+                  onChange={(val) =>
+                    setForm((f) => ({ ...f, cfgScale: val ?? undefined }))
+                  }
                 />
               </FormGrid>
 
@@ -730,7 +877,10 @@ export function ImageConnectionEditor({
                     onChange={(sampler) => setForm((f) => ({ ...f, sampler }))}
                     options={[
                       { value: "", label: "WebUI default" },
-                      ...(dialectOptions.samplers ?? []).map((name) => ({ value: name, label: name }))
+                      ...(dialectOptions.samplers ?? []).map((name) => ({
+                        value: name,
+                        label: name,
+                      })),
                     ]}
                     aria-label="Sampler"
                   />
@@ -740,7 +890,9 @@ export function ImageConnectionEditor({
                     tooltip="Sent as sampler_name. This WebUI did not list its samplers — type exactly what it accepts, or leave empty to send none."
                     size="sm"
                     value={form.sampler ?? ""}
-                    onChange={(e) => setForm((f) => ({ ...f, sampler: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, sampler: e.target.value }))
+                    }
                     placeholder="e.g. DPM++ 2M"
                     leftIcon={<Icon name="SlidersHorizontal" size={13} />}
                   />
@@ -754,10 +906,15 @@ export function ImageConnectionEditor({
                     variant="filled"
                     fullWidth
                     value={form.scheduler ?? ""}
-                    onChange={(scheduler) => setForm((f) => ({ ...f, scheduler }))}
+                    onChange={(scheduler) =>
+                      setForm((f) => ({ ...f, scheduler }))
+                    }
                     options={[
                       { value: "", label: "WebUI default" },
-                      ...(dialectOptions.schedulers ?? []).map((name) => ({ value: name, label: name }))
+                      ...(dialectOptions.schedulers ?? []).map((name) => ({
+                        value: name,
+                        label: name,
+                      })),
                     ]}
                     aria-label="Scheduler"
                   />
@@ -767,7 +924,9 @@ export function ImageConnectionEditor({
                     tooltip="Sent as scheduler. Empty sends none, so the WebUI's own default applies."
                     size="sm"
                     value={form.scheduler ?? ""}
-                    onChange={(e) => setForm((f) => ({ ...f, scheduler: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, scheduler: e.target.value }))
+                    }
                     placeholder="e.g. Karras"
                     leftIcon={<Icon name="Aperture" size={13} />}
                   />
@@ -788,7 +947,10 @@ export function ImageConnectionEditor({
                 }
                 onChange={(e) => {
                   const ms = timeoutSecondsToMs(e.target.value);
-                  setForm((f) => ({ ...f, timeoutMs: ms === undefined ? null : ms }));
+                  setForm((f) => ({
+                    ...f,
+                    timeoutMs: ms === undefined ? null : ms,
+                  }));
                 }}
                 placeholder="600"
                 leftIcon={<Icon name="Timer" size={13} />}
@@ -811,7 +973,9 @@ export function ImageConnectionEditor({
                 variant="filled"
                 fullWidth
                 value={form.regionDirection ?? "Horizontal"}
-                onChange={(direction) => setForm((f) => ({ ...f, regionDirection: direction }))}
+                onChange={(direction) =>
+                  setForm((f) => ({ ...f, regionDirection: direction }))
+                }
                 options={REGION_DIRECTION_OPTIONS}
                 aria-label="Region direction"
               />
@@ -822,27 +986,33 @@ export function ImageConnectionEditor({
                 tooltip="A scene with one character has no regions at all, whatever this is set to."
                 description="Give each character its own attention region when the scene has two or more of them, preventing traits from bleeding into one another."
                 checked={form.regionsEnabled ?? true}
-                onChange={(e) => setForm((f) => ({ ...f, regionsEnabled: e.target.checked }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, regionsEnabled: e.target.checked }))
+                }
               />
 
               {forgeCoupleDetected ? (
                 <StatusMessage variant="banner" tone="ok">
-                  Forge Couple detected in this WebUI — with two or more characters in frame, each one gets its
-                  own attention region. The regions travel on the request itself; nothing in the WebUI's own
-                  settings is changed.
+                  Forge Couple detected in this WebUI — with two or more
+                  characters in frame, each one gets its own attention region.
+                  The regions travel on the request itself; nothing in the
+                  WebUI's own settings is changed.
                 </StatusMessage>
               ) : forgeCoupleChecked ? (
                 <StatusMessage variant="banner" tone="warn">
-                  Forge Couple is <strong>not installed</strong> in this WebUI, so regions are disabled and renders
-                  are unchanged by the two settings above. Install the <strong>Forge Couple</strong> extension
-                  (<code>sd-forge-couple</code>) from the WebUI's Extensions tab, restart it, then Fetch models to
-                  re-check — a WebUI that has it will say so here.
+                  Forge Couple is <strong>not installed</strong> in this WebUI,
+                  so regions are disabled and renders are unchanged by the two
+                  settings above. Install the <strong>Forge Couple</strong>{" "}
+                  extension (<code>sd-forge-couple</code>) from the WebUI's
+                  Extensions tab, restart it, then Fetch models to re-check — a
+                  WebUI that has it will say so here.
                 </StatusMessage>
               ) : (
                 <StatusMessage variant="banner" tone="neutral">
-                  This WebUI's extension list is not known here yet — Fetch models against it, and this line
-                  reports whether Forge Couple is installed. Until it is, regions are disabled and renders are
-                  unchanged.
+                  This WebUI's extension list is not known here yet — Fetch
+                  models against it, and this line reports whether Forge Couple
+                  is installed. Until it is, regions are disabled and renders
+                  are unchanged.
                 </StatusMessage>
               )}
             </Stack>
@@ -857,7 +1027,12 @@ export function ImageConnectionEditor({
             variant="filled"
             fullWidth
             value={promptWriterId}
-            onChange={(id) => setForm((f) => ({ ...f, promptProviderId: id === "" ? null : id }))}
+            onChange={(id) =>
+              setForm((f) => ({
+                ...f,
+                promptProviderId: id === "" ? null : id,
+              }))
+            }
             options={promptWriterOptions}
             placeholder="Current active text provider"
             aria-label="Prompt writer"

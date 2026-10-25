@@ -48,8 +48,16 @@ export function ImageViewer({ image, onClose }: ImageViewerProps) {
   }
 
   return (
-    <div className="modal-backdrop image-viewer-backdrop" onMouseDown={handleBackdropMouseDown}>
-      <section className="image-viewer" role="dialog" aria-modal="true" aria-label="Image viewer">
+    <div
+      className="modal-backdrop image-viewer-backdrop"
+      onMouseDown={handleBackdropMouseDown}
+    >
+      <section
+        className="image-viewer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Image viewer"
+      >
         <IconButton
           ref={closeRef}
           className="image-viewer-close"
@@ -61,8 +69,15 @@ export function ImageViewer({ image, onClose }: ImageViewerProps) {
           title="Close (Esc)"
           onClick={onClose}
         />
-        <img className="image-viewer-image" src={image.src} alt={image.alt} title={image.title} />
-        {image.caption ? <p className="image-viewer-caption">{image.caption}</p> : null}
+        <img
+          className="image-viewer-image"
+          src={image.src}
+          alt={image.alt}
+          title={image.title}
+        />
+        {image.caption ? (
+          <p className="image-viewer-caption">{image.caption}</p>
+        ) : null}
       </section>
     </div>
   );

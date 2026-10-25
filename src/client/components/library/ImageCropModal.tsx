@@ -28,7 +28,10 @@ export function ImageCropModal({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
-  const [offset, setOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [offset, setOffset] = useState<{ x: number; y: number }>({
+    x: 0,
+    y: 0,
+  });
   const [isDragging, setIsDragging] = useState(false);
 
   const activeShape: AvatarShape = avatarShape ?? currentAvatarShape();
@@ -68,7 +71,10 @@ export function ImageCropModal({
     const img = imageRef.current;
     if (!img) return null;
 
-    const baseScale = Math.max(VIEWPORT_SIZE / img.naturalWidth, VIEWPORT_SIZE / img.naturalHeight);
+    const baseScale = Math.max(
+      VIEWPORT_SIZE / img.naturalWidth,
+      VIEWPORT_SIZE / img.naturalHeight,
+    );
     const currentScale = baseScale * zoom;
 
     const scaledW = img.naturalWidth * currentScale;
@@ -114,7 +120,11 @@ export function ImageCropModal({
     }
 
     // Helper to draw scaled image to canvas
-    const drawToCanvas = (canvas: HTMLCanvasElement | null, size: number, clipCircle = false) => {
+    const drawToCanvas = (
+      canvas: HTMLCanvasElement | null,
+      size: number,
+      clipCircle = false,
+    ) => {
       if (!canvas) return;
       canvas.width = size;
       canvas.height = size;
@@ -128,10 +138,22 @@ export function ImageCropModal({
         ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
         ctx.closePath();
         ctx.clip();
-        ctx.drawImage(img, drawX * ratio, drawY * ratio, scaledW * ratio, scaledH * ratio);
+        ctx.drawImage(
+          img,
+          drawX * ratio,
+          drawY * ratio,
+          scaledW * ratio,
+          scaledH * ratio,
+        );
         ctx.restore();
       } else {
-        ctx.drawImage(img, drawX * ratio, drawY * ratio, scaledW * ratio, scaledH * ratio);
+        ctx.drawImage(
+          img,
+          drawX * ratio,
+          drawY * ratio,
+          scaledW * ratio,
+          scaledH * ratio,
+        );
       }
     };
 
@@ -175,14 +197,19 @@ export function ImageCropModal({
   function handleWheel(e: React.WheelEvent) {
     e.preventDefault();
     const delta = e.deltaY < 0 ? 0.1 : -0.1;
-    setZoom((z) => Math.min(4.0, Math.max(1.0, Number((z + delta).toFixed(2)))));
+    setZoom((z) =>
+      Math.min(4.0, Math.max(1.0, Number((z + delta).toFixed(2)))),
+    );
   }
 
   // Touch handlers for mobile
   function handleTouchStart(e: React.TouchEvent) {
     if (e.touches.length === 1) {
       setIsDragging(true);
-      dragStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      dragStartRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+      };
       initialOffsetRef.current = { ...offset };
       touchDistanceRef.current = null;
     } else if (e.touches.length === 2) {
@@ -206,7 +233,9 @@ export function ImageCropModal({
       const dy = e.touches[0].clientY - e.touches[1].clientY;
       const newDist = Math.hypot(dx, dy);
       const factor = newDist / touchDistanceRef.current;
-      setZoom((z) => Math.min(4.0, Math.max(1.0, Number((z * factor).toFixed(2)))));
+      setZoom((z) =>
+        Math.min(4.0, Math.max(1.0, Number((z * factor).toFixed(2)))),
+      );
       touchDistanceRef.current = newDist;
     }
   }
@@ -231,7 +260,13 @@ export function ImageCropModal({
     if (!ctx) return;
 
     const ratio = outSize / VIEWPORT_SIZE;
-    ctx.drawImage(img, drawX * ratio, drawY * ratio, scaledW * ratio, scaledH * ratio);
+    ctx.drawImage(
+      img,
+      drawX * ratio,
+      drawY * ratio,
+      scaledW * ratio,
+      scaledH * ratio,
+    );
 
     const dataUrl = outCanvas.toDataURL("image/png");
     const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
@@ -268,7 +303,10 @@ export function ImageCropModal({
         if (e.target === e.currentTarget && !loading) onClose();
       }}
     >
-      <section className="modal image-crop-modal" aria-labelledby="crop-modal-title">
+      <section
+        className="modal image-crop-modal"
+        aria-labelledby="crop-modal-title"
+      >
         <header className="modal-header">
           <div className="crop-modal-title-wrap">
             <span className="crop-modal-icon-badge">
@@ -276,7 +314,9 @@ export function ImageCropModal({
             </span>
             <div>
               <h3 id="crop-modal-title">Crop 1:1 Profile Avatar</h3>
-              <p className="modal-subtitle">Drag to frame face, scroll or slide to zoom: {characterName}</p>
+              <p className="modal-subtitle">
+                Drag to frame face, scroll or slide to zoom: {characterName}
+              </p>
             </div>
           </div>
           <button
@@ -318,7 +358,10 @@ export function ImageCropModal({
                   onTouchMove={handleTouchMove}
                   onTouchEnd={handleTouchEnd}
                 >
-                  <canvas ref={viewportCanvasRef} className="crop-viewport-canvas" />
+                  <canvas
+                    ref={viewportCanvasRef}
+                    className="crop-viewport-canvas"
+                  />
 
                   {/* Corner framing brackets */}
                   <div className="crop-bracket corner-tl" />
@@ -340,7 +383,11 @@ export function ImageCropModal({
                   <button
                     type="button"
                     className="zoom-step-btn"
-                    onClick={() => setZoom((z) => Math.max(1.0, Number((z - 0.1).toFixed(2))))}
+                    onClick={() =>
+                      setZoom((z) =>
+                        Math.max(1.0, Number((z - 0.1).toFixed(2))),
+                      )
+                    }
                     title="Zoom Out"
                   >
                     <Icon name="Minus" size={12} />
@@ -357,7 +404,11 @@ export function ImageCropModal({
                   <button
                     type="button"
                     className="zoom-step-btn"
-                    onClick={() => setZoom((z) => Math.min(4.0, Number((z + 0.1).toFixed(2))))}
+                    onClick={() =>
+                      setZoom((z) =>
+                        Math.min(4.0, Number((z + 0.1).toFixed(2))),
+                      )
+                    }
                     title="Zoom In"
                   >
                     <Icon name="Plus" size={12} />
@@ -371,7 +422,13 @@ export function ImageCropModal({
                     onClick={handleAutoDetect}
                     disabled={!imageLoaded || detecting || loading}
                     title="Auto-detect face and center crop"
-                    leftIcon={<Icon name="Sparkles" size={12} className={detecting ? "sparkle-pulse" : ""} />}
+                    leftIcon={
+                      <Icon
+                        name="Sparkles"
+                        size={12}
+                        className={detecting ? "sparkle-pulse" : ""}
+                      />
+                    }
                   >
                     Auto-Detect
                   </Button>
@@ -396,7 +453,10 @@ export function ImageCropModal({
                   {/* Primary Active Preference Preview */}
                   <div className="preview-item main-preview">
                     <div className="preview-thumb-wrap global is-active-shape">
-                      <canvas ref={activePreviewCanvasRef} className="preview-canvas" />
+                      <canvas
+                        ref={activePreviewCanvasRef}
+                        className="preview-canvas"
+                      />
                     </div>
                     <span className="preview-caption">
                       Active: {activeShape}
@@ -405,23 +465,41 @@ export function ImageCropModal({
 
                   {/* Tri-Shape Comparative Preview */}
                   <div className="preview-shapes-row">
-                    <div className={`mini-preview-item ${activeShape === "square" ? "is-selected" : ""}`} title="Square Avatar">
+                    <div
+                      className={`mini-preview-item ${activeShape === "square" ? "is-selected" : ""}`}
+                      title="Square Avatar"
+                    >
                       <div className="preview-thumb-wrap square mini">
-                        <canvas ref={squarePreviewCanvasRef} className="preview-canvas" />
+                        <canvas
+                          ref={squarePreviewCanvasRef}
+                          className="preview-canvas"
+                        />
                       </div>
                       <span className="preview-sub-caption">Square</span>
                     </div>
 
-                    <div className={`mini-preview-item ${activeShape === "rounded" ? "is-selected" : ""}`} title="Rounded Avatar">
+                    <div
+                      className={`mini-preview-item ${activeShape === "rounded" ? "is-selected" : ""}`}
+                      title="Rounded Avatar"
+                    >
                       <div className="preview-thumb-wrap rounded mini">
-                        <canvas ref={roundedPreviewCanvasRef} className="preview-canvas" />
+                        <canvas
+                          ref={roundedPreviewCanvasRef}
+                          className="preview-canvas"
+                        />
                       </div>
                       <span className="preview-sub-caption">Rounded</span>
                     </div>
 
-                    <div className={`mini-preview-item ${activeShape === "circle" ? "is-selected" : ""}`} title="Circle Avatar">
+                    <div
+                      className={`mini-preview-item ${activeShape === "circle" ? "is-selected" : ""}`}
+                      title="Circle Avatar"
+                    >
                       <div className="preview-thumb-wrap circle mini">
-                        <canvas ref={circlePreviewCanvasRef} className="preview-canvas" />
+                        <canvas
+                          ref={circlePreviewCanvasRef}
+                          className="preview-canvas"
+                        />
                       </div>
                       <span className="preview-sub-caption">Circle</span>
                     </div>

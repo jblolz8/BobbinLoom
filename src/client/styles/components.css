@@ -63,7 +63,9 @@
   user-select: none;
   outline: none;
   text-align: left;
-  transition: background-color 0.12s ease, color 0.12s ease;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
   box-sizing: border-box;
 }
 
@@ -223,7 +225,7 @@
 .field-input-row .base-form-input,
 .field-input-row .form-input,
 .field-input-row input,
-.field-input-row>.base-select-trigger {
+.field-input-row > .base-select-trigger {
   flex: 1;
   min-width: 0;
   width: 100%;
@@ -280,7 +282,10 @@
   color: var(--input-text);
   background-color: var(--input-bg);
   border: 1px solid var(--input-border);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .base-form-input::placeholder,
@@ -446,7 +451,10 @@ textarea.base-form-input--lg,
   background-repeat: no-repeat;
   background-position: right 0.65rem center;
   background-size: 13px 13px;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .base-form-select:hover:not(:focus):not(:disabled),
@@ -490,7 +498,10 @@ textarea.base-form-input--lg,
   outline: none;
   text-align: left;
   line-height: 1.3;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .base-select-trigger--full {
@@ -652,7 +663,9 @@ textarea.base-form-input--lg,
   user-select: none;
   outline: none;
   box-sizing: border-box;
-  transition: background-color 0.12s ease, color 0.12s ease;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
 }
 
 .base-select-item[data-highlighted] {
@@ -891,7 +904,6 @@ textarea.base-form-input--lg,
 }
 
 @media (max-width: 640px) {
-
   .base-form-grid--cols-2,
   .base-form-grid--cols-2-asymmetric {
     grid-template-columns: minmax(0, 1fr);
@@ -904,7 +916,6 @@ textarea.base-form-input--lg,
 }
 
 @media (max-width: 420px) {
-
   .base-form-grid--cols-3,
   .base-form-grid--cols-4 {
     grid-template-columns: minmax(0, 1fr);
@@ -985,7 +996,9 @@ textarea.base-form-input--lg,
   flex-shrink: 0;
   border-radius: 20px;
   background-color: var(--border-light);
-  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;
+  transition:
+    background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.2s ease;
 }
 
 .base-switch__slider::before {
@@ -1001,21 +1014,21 @@ textarea.base-form-input--lg,
   transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.base-switch__input:checked+.base-switch__slider {
+.base-switch__input:checked + .base-switch__slider {
   background-color: var(--accent-base);
   box-shadow: 0 0 8px color-mix(in srgb, var(--accent-base) 35%, transparent);
 }
 
-.base-switch__input:checked+.base-switch__slider::before {
+.base-switch__input:checked + .base-switch__slider::before {
   transform: translateX(16px);
 }
 
-.base-switch__input:focus-visible+.base-switch__slider {
+.base-switch__input:focus-visible + .base-switch__slider {
   outline: 2px solid var(--accent-highlight, var(--accent-base));
   outline-offset: 2px;
 }
 
-.base-switch__input:disabled+.base-switch__slider {
+.base-switch__input:disabled + .base-switch__slider {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -1041,7 +1054,9 @@ textarea.base-form-input--lg,
   border: 1px solid var(--border-main);
   border-radius: 7px;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
   user-select: none;
 }
 
@@ -1134,7 +1149,11 @@ textarea.base-form-input--lg,
   background-color: var(--input-bg);
   border: 1.5px solid var(--border-light);
   color: transparent;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .base-toggle-row:hover .base-toggle-row__checkbox-box {
@@ -1148,7 +1167,8 @@ textarea.base-form-input--lg,
   box-shadow: 0 0 8px color-mix(in srgb, var(--accent-base) 30%, transparent);
 }
 
-.base-toggle-row__checkbox-input:focus-visible + .base-toggle-row__checkbox-box {
+.base-toggle-row__checkbox-input:focus-visible
+  + .base-toggle-row__checkbox-box {
   outline: 2px solid var(--accent-highlight, var(--accent-base));
   outline-offset: 2px;
 }
@@ -1181,7 +1201,11 @@ textarea.base-form-input--lg,
   position: absolute;
   border: 1.5px solid var(--accent-highlight, var(--accent-base));
   border-radius: 4px;
-  background: color-mix(in srgb, var(--accent-base) 16%, var(--bg-surface-elevated));
+  background: color-mix(
+    in srgb,
+    var(--accent-base) 16%,
+    var(--bg-surface-elevated)
+  );
 }
 
 .cover-aspect-preview[data-aspect="landscape"]::before {
@@ -1470,7 +1494,9 @@ textarea.base-form-input--lg,
        can carry its own offset, and the transform alone left a sliver of the
        closed drawer on screen at that edge. */
     visibility: hidden;
-    transition: transform 0.18s ease, visibility 0.18s;
+    transition:
+      transform 0.18s ease,
+      visibility 0.18s;
   }
 
   .side-nav.is-open {

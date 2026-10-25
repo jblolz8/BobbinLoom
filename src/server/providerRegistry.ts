@@ -1,7 +1,12 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { atomicWriteJson, backupFile, quarantineFile } from "./persistence";
-import { buildTextSamplingParams, maskApiKey, normalizeBaseUrl, normalizeImageBaseUrl } from "./providerConfig";
+import {
+  buildTextSamplingParams,
+  maskApiKey,
+  normalizeBaseUrl,
+  normalizeImageBaseUrl,
+} from "./providerConfig";
 import { authHeaders } from "./httpAuth";
 import { detectForgeCouple } from "./imageProvider/shared";
 import {
@@ -18,7 +23,10 @@ import type {
   RegionDirection,
   TextProviderSource,
 } from "../schemas";
-import type { ProviderConnectionInput, PublicProviderConnection } from "./providerConfig";
+import type {
+  ProviderConnectionInput,
+  PublicProviderConnection,
+} from "./providerConfig";
 import { decryptApiKey, encryptApiKey, loadOrCreateVaultKey } from "./keyVault";
 
 export type ProviderRegistry = {
@@ -73,9 +81,13 @@ export type ProviderConnectionDraft = ProviderConnectionInput & {
 /** Connections of one kind, and the active one among them. The kind filter is
  *  mandatory — the old `?? connections[0]` fallback would hand a text turn an
  *  image endpoint (and vice versa). */
-export function activeConnectionOfKind(reg: ProviderRegistry, kind: ProviderKind): ProviderConnection | null {
+export function activeConnectionOfKind(
+  reg: ProviderRegistry,
+  kind: ProviderKind,
+): ProviderConnection | null {
   const of = reg.connections.filter((c) => c.kind === kind);
-  const wanted = kind === "text" ? reg.activeTextProviderId : reg.activeImageProviderId;
+  const wanted =
+    kind === "text" ? reg.activeTextProviderId : reg.activeImageProviderId;
   return of.find((c) => c.id === wanted) ?? of[0] ?? null;
 }
 
@@ -84,7 +96,10 @@ function registryPath(dir: string): string {
 }
 
 /** Decrypt stored api keys into memory; unreadable keys are dropped. */
-function decryptConnections(connections: ProviderConnection[], vaultKey: Buffer): ProviderConnection[] {
+function decryptConnections(
+  connections: ProviderConnection[],
+  vaultKey: Buffer,
+): ProviderConnection[] {
   return connections.map((c) => {
     if (!c.apiKey) return c;
     const decrypted = decryptApiKey(c.apiKey, vaultKey);
@@ -102,24 +117,33 @@ function migrateToV2(raw: Record<string, unknown>): Record<string, unknown> {
   return {
     schemaVersion: 2,
     activeTextProviderId:
-      typeof raw.activeTextProviderId === "string" ? raw.activeTextProviderId
-      : typeof raw.activeProviderId === "string" ? raw.activeProviderId : "",
-    activeImageProviderId: typeof raw.activeImageProviderId === "string" ? raw.activeImageProviderId : "",
+      typeof raw.activeTextProviderId === "string"
+        ? raw.activeTextProviderId
+        : typeof raw.activeProviderId === "string"
+          ? raw.activeProviderId
+          : "",
+    activeImageProviderId:
+      typeof raw.activeImageProviderId === "string"
+        ? raw.activeImageProviderId
+        : "",
     // A v1 file cannot carry this preference, but a hand-edited or downgraded file might:
     // pass it through rather than silently dropping the user's choice.
-    ...(typeof raw.generationTextProviderId === "string" || raw.generationTextProviderId === null
+    ...(typeof raw.generationTextProviderId === "string" ||
+    raw.generationTextProviderId === null
       ? { generationTextProviderId: raw.generationTextProviderId }
       : {}),
-    ...(typeof raw.chapterTextProviderId === "string" || raw.chapterTextProviderId === null
+    ...(typeof raw.chapterTextProviderId === "string" ||
+    raw.chapterTextProviderId === null
       ? { chapterTextProviderId: raw.chapterTextProviderId }
       : {}),
-    ...(typeof raw.characterTextProviderId === "string" || raw.characterTextProviderId === null
+    ...(typeof raw.characterTextProviderId === "string" ||
+    raw.characterTextProviderId === null
       ? { characterTextProviderId: raw.characterTextProviderId }
       : {}),
     connections: connections.map((c) =>
       c && typeof c === "object" && !Array.isArray(c)
         ? { kind: "text", ...(c as Record<string, unknown>) }
-        : c
+        : c,
     ),
   };
 }
@@ -143,7 +167,9 @@ function readRegistry(dir: string): ReadResult {
   } catch {
     const backup = quarantineFile(path, "registry unreadable");
     const label = backup ? `quarantined to ${backup}` : "quarantine failed";
-    warnings.push(`providers.json was unreadable (${label}) — starting with an empty registry.`);
+    warnings.push(
+      `providers.json was unreadable (${label}) — starting with an empty registry.`,
+    );
     console.warn(`[providers] unreadable — ${label}`);
     return { registry: null, warnings };
   }
@@ -156,11 +182,16 @@ function readRegistry(dir: string): ReadResult {
     // activeTextProviderId defaults to ""), which would SILENTLY lose the active
     // id — so migrate from the RAW object, never from the parse output. A v2
     // file (schemaVersion 2 + the slot present) passes straight through.
-    if (rawObj.schemaVersion !== 2 || typeof rawObj.activeTextProviderId !== "string") {
+    if (
+      rawObj.schemaVersion !== 2 ||
+      typeof rawObj.activeTextProviderId !== "string"
+    ) {
       const backup = backupFile(path);
       const migrated = migrateToV2(rawObj);
       atomicWriteJson(path, migrated);
-      warnings.push(`providers.json migrated to the versioned format (previous file archived to ${backup ?? "?"}).`);
+      warnings.push(
+        `providers.json migrated to the versioned format (previous file archived to ${backup ?? "?"}).`,
+      );
       console.warn(`[providers] → v2; archived ${backup ?? "?"}`);
       // Re-parse what we just wrote so the returned registry is validated + typed.
       const parsed = ProviderRegistryFileSchema.parse(migrated);
@@ -195,7 +226,9 @@ function readRegistry(dir: string): ReadResult {
 
   // Schema-invalid but parseable — salvage valid connections.
   const rawObj = (raw ?? {}) as Record<string, unknown>;
-  const rawConns = Array.isArray(rawObj.connections) ? (rawObj.connections as unknown[]) : [];
+  const rawConns = Array.isArray(rawObj.connections)
+    ? (rawObj.connections as unknown[])
+    : [];
   const kept: ProviderConnection[] = [];
   let dropped = 0;
   for (const c of rawConns) {
@@ -204,31 +237,39 @@ function readRegistry(dir: string): ReadResult {
     else dropped += 1;
   }
   const rawActive =
-    typeof rawObj.activeTextProviderId === "string" ? rawObj.activeTextProviderId
-    : typeof rawObj.activeProviderId === "string" ? rawObj.activeProviderId : "";
+    typeof rawObj.activeTextProviderId === "string"
+      ? rawObj.activeTextProviderId
+      : typeof rawObj.activeProviderId === "string"
+        ? rawObj.activeProviderId
+        : "";
   const keptText = kept.filter((c) => c.kind === "text");
   const salvaged: ProviderRegistry = {
-    activeTextProviderId: keptText.some((c) => c.id === rawActive) ? rawActive : (keptText[0]?.id ?? ""),
+    activeTextProviderId: keptText.some((c) => c.id === rawActive)
+      ? rawActive
+      : (keptText[0]?.id ?? ""),
     activeImageProviderId: "",
     // The file failed validation, so the parse output is not trustworthy here — read the
     // preference off the raw object, like the active id above.
     generationTextProviderId:
-      typeof rawObj.generationTextProviderId === "string" || rawObj.generationTextProviderId === null
+      typeof rawObj.generationTextProviderId === "string" ||
+      rawObj.generationTextProviderId === null
         ? rawObj.generationTextProviderId
         : null,
     chapterTextProviderId:
-      typeof rawObj.chapterTextProviderId === "string" || rawObj.chapterTextProviderId === null
+      typeof rawObj.chapterTextProviderId === "string" ||
+      rawObj.chapterTextProviderId === null
         ? rawObj.chapterTextProviderId
         : null,
     characterTextProviderId:
-      typeof rawObj.characterTextProviderId === "string" || rawObj.characterTextProviderId === null
+      typeof rawObj.characterTextProviderId === "string" ||
+      rawObj.characterTextProviderId === null
         ? rawObj.characterTextProviderId
         : null,
     testPrompt:
       typeof rawObj.testPrompt === "string" || rawObj.testPrompt === null
         ? rawObj.testPrompt
         : null,
-    connections: kept,   // ProviderConnectionSchema now defaults every kept row to kind: "text"
+    connections: kept, // ProviderConnectionSchema now defaults every kept row to kind: "text"
   };
   const backup = backupFile(path);
   const sealed: ProviderRegistryFile = { schemaVersion: 2, ...salvaged };
@@ -236,9 +277,11 @@ function readRegistry(dir: string): ReadResult {
   warnings.push(
     dropped > 0
       ? `providers.json had ${dropped} invalid connection${dropped === 1 ? "" : "s"} — dropped; the ${kept.length} valid one${kept.length === 1 ? "" : "s"} were kept (original archived to ${backup ?? "?"}).`
-      : `providers.json was invalid — the readable connections were recovered (original archived to ${backup ?? "?"}).`
+      : `providers.json was invalid — the readable connections were recovered (original archived to ${backup ?? "?"}).`,
   );
-  console.warn(`[providers] salvaged ${kept.length} connection(s), dropped ${dropped}; archived ${backup ?? "?"}`);
+  console.warn(
+    `[providers] salvaged ${kept.length} connection(s), dropped ${dropped}; archived ${backup ?? "?"}`,
+  );
   const vaultKey = loadOrCreateVaultKey(dir);
   return {
     registry: {
@@ -266,7 +309,7 @@ function writeRegistry(dir: string, reg: ProviderRegistry): void {
     characterTextProviderId: reg.characterTextProviderId ?? null,
     testPrompt: reg.testPrompt ?? null,
     connections: reg.connections.map((c) =>
-      c.apiKey ? { ...c, apiKey: encryptApiKey(c.apiKey, vaultKey) } : c
+      c.apiKey ? { ...c, apiKey: encryptApiKey(c.apiKey, vaultKey) } : c,
     ),
   };
   atomicWriteJson(registryPath(dir), sealed);
@@ -283,7 +326,7 @@ export function seedRegistry(dir: string): ProviderRegistry {
     chapterTextProviderId: null,
     characterTextProviderId: null,
     testPrompt: null,
-    connections: []
+    connections: [],
   };
   writeRegistry(dir, reg);
   return reg;
@@ -294,9 +337,15 @@ export function getRegistry(dir: string): ProviderRegistry {
   return readRegistry(dir).registry ?? seedRegistry(dir);
 }
 
-export function toPublicConnection(c: ProviderConnection): PublicProviderConnection {
+export function toPublicConnection(
+  c: ProviderConnection,
+): PublicProviderConnection {
   const { apiKey, ...rest } = c;
-  return { ...rest, hasApiKey: Boolean(apiKey), apiKeyMasked: maskApiKey(apiKey) };
+  return {
+    ...rest,
+    hasApiKey: Boolean(apiKey),
+    apiKeyMasked: maskApiKey(apiKey),
+  };
 }
 
 export function listConnections(dir: string): PublicProviderRegistry {
@@ -314,11 +363,18 @@ export function listConnections(dir: string): PublicProviderRegistry {
   };
 }
 
-export function createConnection(dir: string, input: ProviderConnectionDraft): PublicProviderConnection {
+export function createConnection(
+  dir: string,
+  input: ProviderConnectionDraft,
+): PublicProviderConnection {
   const reg = getRegistry(dir);
-  const id = (input.id ?? input.label).trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "_") ||
-    `conn_${Date.now()}`;
-  if (reg.connections.some((c) => c.id === id)) throw new Error(`Provider id already exists: ${id}`);
+  const id =
+    (input.id ?? input.label)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "_") || `conn_${Date.now()}`;
+  if (reg.connections.some((c) => c.id === id))
+    throw new Error(`Provider id already exists: ${id}`);
   const kind: ProviderKind = input.kind ?? "text";
   const now = new Date().toISOString();
   const conn: ProviderConnection = {
@@ -366,14 +422,18 @@ export function createConnection(dir: string, input: ProviderConnectionDraft): P
     regionsEnabled: input.regionsEnabled,
     regionDirection: input.regionDirection,
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
   };
-  if (typeof input.apiKey === "string" && input.apiKey.trim()) conn.apiKey = input.apiKey.trim();
+  if (typeof input.apiKey === "string" && input.apiKey.trim())
+    conn.apiKey = input.apiKey.trim();
   reg.connections.push(conn);
   // Auto-activate only when THIS kind has no active connection yet — adding a
   // text connection must never steal (or be stolen by) the image slot.
-  const activeKey = kind === "text" ? "activeTextProviderId" : "activeImageProviderId";
-  if (!reg.connections.some((c) => c.kind === kind && c.id === reg[activeKey])) {
+  const activeKey =
+    kind === "text" ? "activeTextProviderId" : "activeImageProviderId";
+  if (
+    !reg.connections.some((c) => c.kind === kind && c.id === reg[activeKey])
+  ) {
     reg[activeKey] = id;
     conn.lastActiveAt = now;
   }
@@ -381,7 +441,11 @@ export function createConnection(dir: string, input: ProviderConnectionDraft): P
   return toPublicConnection(conn);
 }
 
-export function updateConnection(dir: string, id: string, input: ProviderConnectionDraft): PublicProviderConnection {
+export function updateConnection(
+  dir: string,
+  id: string,
+  input: ProviderConnectionDraft,
+): PublicProviderConnection {
   const reg = getRegistry(dir);
   const idx = reg.connections.findIndex((c) => c.id === id);
   if (idx === -1) throw new Error(`Provider not found: ${id}`);
@@ -418,7 +482,8 @@ export function updateConnection(dir: string, id: string, input: ProviderConnect
     apiKey: input.apiKey ?? cur.apiKey,
   };
   if (input.apiKey === null) delete next.apiKey;
-  else if (typeof input.apiKey === "string" && input.apiKey.trim()) next.apiKey = input.apiKey.trim();
+  else if (typeof input.apiKey === "string" && input.apiKey.trim())
+    next.apiKey = input.apiKey.trim();
   // null clears a stored seed — an absent field cannot overwrite one, so the
   // editor's emptied Seed box has no other way to go back to a random seed.
   if (seed === null) delete next.seed;
@@ -436,12 +501,16 @@ export function updateConnection(dir: string, id: string, input: ProviderConnect
   if (topK === null) delete next.topK;
   else if (topK !== undefined) next.topK = topK;
   if (frequencyPenalty === null) delete next.frequencyPenalty;
-  else if (frequencyPenalty !== undefined) next.frequencyPenalty = frequencyPenalty;
+  else if (frequencyPenalty !== undefined)
+    next.frequencyPenalty = frequencyPenalty;
   if (presencePenalty === null) delete next.presencePenalty;
-  else if (presencePenalty !== undefined) next.presencePenalty = presencePenalty;
+  else if (presencePenalty !== undefined)
+    next.presencePenalty = presencePenalty;
   if (repetitionPenalty === null) delete next.repetitionPenalty;
-  else if (repetitionPenalty !== undefined) next.repetitionPenalty = repetitionPenalty;
-  if (stop === null || (Array.isArray(stop) && stop.length === 0)) delete next.stop;
+  else if (repetitionPenalty !== undefined)
+    next.repetitionPenalty = repetitionPenalty;
+  if (stop === null || (Array.isArray(stop) && stop.length === 0))
+    delete next.stop;
   else if (stop !== undefined) next.stop = stop;
   if (jsonMode === null) delete next.jsonMode;
   else if (jsonMode !== undefined) next.jsonMode = jsonMode;
@@ -451,7 +520,10 @@ export function updateConnection(dir: string, id: string, input: ProviderConnect
   return toPublicConnection(next);
 }
 
-export function duplicateConnection(dir: string, id: string): PublicProviderConnection {
+export function duplicateConnection(
+  dir: string,
+  id: string,
+): PublicProviderConnection {
   const reg = getRegistry(dir);
   const source = reg.connections.find((c) => c.id === id);
   if (!source) throw new Error(`Provider not found: ${id}`);
@@ -466,21 +538,25 @@ export function duplicateConnection(dir: string, id: string): PublicProviderConn
 
   const now = new Date().toISOString();
   const copy: ProviderConnection = {
-    ...source,            // carries apiKey + headers server-side
+    ...source, // carries apiKey + headers server-side
     id: newId,
     label: `${source.label} (copy)`,
-    readonly: false,      // the copy is always editable
+    readonly: false, // the copy is always editable
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
   };
   reg.connections.push(copy);
   writeRegistry(dir, reg);
   return toPublicConnection(copy);
 }
 
-export function deleteConnection(dir: string, id: string): PublicProviderRegistry {
+export function deleteConnection(
+  dir: string,
+  id: string,
+): PublicProviderRegistry {
   const reg = getRegistry(dir);
-  if (!reg.connections.some((c) => c.id === id)) throw new Error(`Provider not found: ${id}`);
+  if (!reg.connections.some((c) => c.id === id))
+    throw new Error(`Provider not found: ${id}`);
   reg.connections = reg.connections.filter((c) => c.id !== id);
   // Deleting the active connection is allowed — the app falls back to the mock
   // provider until another connection is added (createConnection re-activates).
@@ -503,7 +579,10 @@ export function deleteConnection(dir: string, id: string): PublicProviderRegistr
 /** Activate a connection in the slot matching its KIND (a text connection can
  *  never take the image slot). Returns the full public registry so the client
  *  can replace its state in one call instead of activate-then-reload. */
-export function setActiveConnection(dir: string, id: string): PublicProviderRegistry {
+export function setActiveConnection(
+  dir: string,
+  id: string,
+): PublicProviderRegistry {
   const reg = getRegistry(dir);
   const conn = reg.connections.find((c) => c.id === id);
   if (!conn) throw new Error(`Provider not found: ${id}`);
@@ -533,7 +612,10 @@ export function setActiveConnection(dir: string, id: string): PublicProviderRegi
  *  preference, and resolution already falls back to the active connection, so a
  *  deleted connection must not make the field unsaveable (the dropdown shows it as
  *  "(not found)" so it can be re-pointed). */
-export function setGenerationTextProvider(dir: string, id: string | null): PublicProviderRegistry {
+export function setGenerationTextProvider(
+  dir: string,
+  id: string | null,
+): PublicProviderRegistry {
   const reg = getRegistry(dir);
   reg.generationTextProviderId = id;
   writeRegistry(dir, reg);
@@ -553,7 +635,10 @@ export function setGenerationTextProvider(dir: string, id: string | null): Publi
  *  `null` means "follow whichever connection is active". Accepts a dangling id for the same
  *  reason the generation preference does: it is a preference, resolution falls back at use
  *  time, and refusing the write would leave a stale choice unsaveable. */
-export function setChapterTextProvider(dir: string, id: string | null): PublicProviderRegistry {
+export function setChapterTextProvider(
+  dir: string,
+  id: string | null,
+): PublicProviderRegistry {
   const reg = getRegistry(dir);
   reg.chapterTextProviderId = id;
   writeRegistry(dir, reg);
@@ -573,7 +658,10 @@ export function setChapterTextProvider(dir: string, id: string | null): PublicPr
  *  `null` means "follow whichever connection is active". Accepts a dangling id for the same
  *  reason the generation preference does: it is a preference, resolution falls back at use
  *  time, and refusing the write would leave a stale choice unsaveable. */
-export function setCharacterTextProvider(dir: string, id: string | null): PublicProviderRegistry {
+export function setCharacterTextProvider(
+  dir: string,
+  id: string | null,
+): PublicProviderRegistry {
   const reg = getRegistry(dir);
   reg.characterTextProviderId = id;
   writeRegistry(dir, reg);
@@ -590,7 +678,10 @@ export function setCharacterTextProvider(dir: string, id: string | null): Public
 }
 
 /** Remember the global test prompt used by "Test response" across all text connections. */
-export function setProviderTestPrompt(dir: string, testPrompt: string | null): PublicProviderRegistry {
+export function setProviderTestPrompt(
+  dir: string,
+  testPrompt: string | null,
+): PublicProviderRegistry {
   const reg = getRegistry(dir);
   const trimmed = testPrompt?.trim() ?? "";
   reg.testPrompt = trimmed ? trimmed : null;
@@ -659,19 +750,26 @@ export type ModelsProbeResult = {
    *  installed?" (`/sdapi/v1/script-info`, cached). Present-and-true only when
    *  the WebUI listed it; an absent key is "not detected" — which is what turns
    *  character regions on in the editor, so it must never be guessed. */
-  dialectOptions?: { samplers?: string[]; schedulers?: string[]; forgeCouple?: boolean };
+  dialectOptions?: {
+    samplers?: string[];
+    schedulers?: string[];
+    forgeCouple?: boolean;
+  };
 };
 
 /** A finite number, or nothing (a string, null, NaN and Infinity all mean the
  *  provider said nothing usable). */
 function numberOrUndefined(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 /** A string, or an array of them, deduped and trimmed. Anything else — or an
  *  empty result — is absent. */
 function stringsOrUndefined(value: unknown): string[] | undefined {
-  const list = typeof value === "string" ? [value] : Array.isArray(value) ? value : null;
+  const list =
+    typeof value === "string" ? [value] : Array.isArray(value) ? value : null;
   if (!list) return undefined;
   const trimmed = list
     .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
@@ -686,9 +784,12 @@ function stringsOrUndefined(value: unknown): string[] | undefined {
 function collectStrings(value: unknown, depth = 0): string[] {
   if (depth > 3) return [];
   if (typeof value === "string") return value.trim() ? [value.trim()] : [];
-  if (Array.isArray(value)) return value.flatMap((entry) => collectStrings(entry, depth + 1));
+  if (Array.isArray(value))
+    return value.flatMap((entry) => collectStrings(entry, depth + 1));
   if (value && typeof value === "object") {
-    return Object.values(value as Record<string, unknown>).flatMap((entry) => collectStrings(entry, depth + 1));
+    return Object.values(value as Record<string, unknown>).flatMap((entry) =>
+      collectStrings(entry, depth + 1),
+    );
   }
   return [];
 }
@@ -699,31 +800,41 @@ function parseSteps(value: unknown): ModelStepRange | undefined {
     const only = numberOrUndefined(value);
     return only === undefined ? undefined : { default: only };
   }
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return undefined;
   const raw = value as Record<string, unknown>;
   const steps: ModelStepRange = {
     default: numberOrUndefined(raw.default),
-    max: numberOrUndefined(raw.max)
+    max: numberOrUndefined(raw.max),
   };
-  return steps.default === undefined && steps.max === undefined ? undefined : steps;
+  return steps.default === undefined && steps.max === undefined
+    ? undefined
+    : steps;
 }
 
 /** One model's `model_spec.constraints`, tolerant by construction: each field
  *  is carried only when the provider actually published a usable value, and a
  *  constraints object that says nothing usable maps to `null`. */
 function parseCapabilities(constraints: unknown): ModelCapabilities | null {
-  if (!constraints || typeof constraints !== "object" || Array.isArray(constraints)) return null;
+  if (
+    !constraints ||
+    typeof constraints !== "object" ||
+    Array.isArray(constraints)
+  )
+    return null;
   const raw = constraints as Record<string, unknown>;
   const caps: ModelCapabilities = {};
 
   const promptCharacterLimit = numberOrUndefined(raw.promptCharacterLimit);
-  if (promptCharacterLimit !== undefined) caps.promptCharacterLimit = promptCharacterLimit;
+  if (promptCharacterLimit !== undefined)
+    caps.promptCharacterLimit = promptCharacterLimit;
 
   const steps = parseSteps(raw.steps);
   if (steps) caps.steps = steps;
 
   const widthHeightDivisor = numberOrUndefined(raw.widthHeightDivisor);
-  if (widthHeightDivisor !== undefined) caps.widthHeightDivisor = widthHeightDivisor;
+  if (widthHeightDivisor !== undefined)
+    caps.widthHeightDivisor = widthHeightDivisor;
 
   const aspectRatios = stringsOrUndefined(raw.aspectRatios);
   if (aspectRatios) caps.aspectRatios = aspectRatios;
@@ -743,7 +854,10 @@ function parseCapabilities(constraints: unknown): ModelCapabilities | null {
  *  `modelSpecs` is the per-model capability map read from the SAME response, so
  *  showing a model's constraints costs no second request. A model with no
  *  `model_spec` maps to nothing — never to an empty capability object. */
-function parseModels(bodyText: string): { models: string[]; modelSpecs: ProviderModelCapabilities } {
+function parseModels(bodyText: string): {
+  models: string[];
+  modelSpecs: ProviderModelCapabilities;
+} {
   try {
     const parsed = JSON.parse(bodyText) as unknown;
     let raw: unknown[] = [];
@@ -765,12 +879,14 @@ function parseModels(bodyText: string): { models: string[]; modelSpecs: Provider
       const row = entry as Record<string, unknown>;
       if (typeof row.id !== "string" || !row.id) continue;
       ids.push(row.id);
-      const spec = row.model_spec && typeof row.model_spec === "object"
-        ? (row.model_spec as Record<string, unknown>)
-        : null;
-      const topProvider = row.top_provider && typeof row.top_provider === "object"
-        ? (row.top_provider as Record<string, unknown>)
-        : null;
+      const spec =
+        row.model_spec && typeof row.model_spec === "object"
+          ? (row.model_spec as Record<string, unknown>)
+          : null;
+      const topProvider =
+        row.top_provider && typeof row.top_provider === "object"
+          ? (row.top_provider as Record<string, unknown>)
+          : null;
       const caps = parseCapabilities(spec?.constraints) ?? {};
 
       const contextLength =
@@ -795,11 +911,12 @@ function parseModels(bodyText: string): { models: string[]; modelSpecs: Provider
       }
 
       // First mention wins: a duplicate id is the same model twice.
-      if (Object.keys(caps).length > 0 && !modelSpecs[row.id]) modelSpecs[row.id] = caps;
+      if (Object.keys(caps).length > 0 && !modelSpecs[row.id])
+        modelSpecs[row.id] = caps;
     }
     return {
       models: [...new Set(ids)].sort((a, b) => a.localeCompare(b)),
-      modelSpecs
+      modelSpecs,
     };
   } catch {
     return { models: [], modelSpecs: {} };
@@ -821,10 +938,16 @@ function parseModels(bodyText: string): { models: string[]; modelSpecs: Provider
  *  connection shares no path, no list shape and no auth rule with the
  *  OpenAI-compatible probe, so it is routed to its own implementation. */
 async function probeProviderModels(
-  input: { baseUrl: string; apiKey?: string; type?: string; apiStyle?: ImageApiStyle },
-  fetchImpl: typeof fetch = fetch
+  input: {
+    baseUrl: string;
+    apiKey?: string;
+    type?: string;
+    apiStyle?: ImageApiStyle;
+  },
+  fetchImpl: typeof fetch = fetch,
 ): Promise<ModelsProbeResult> {
-  if ((input.apiStyle ?? "openai") === "a1111") return probeA1111Models(input, fetchImpl);
+  if ((input.apiStyle ?? "openai") === "a1111")
+    return probeA1111Models(input, fetchImpl);
   const base = normalizeImageBaseUrl(input.baseUrl, input.apiStyle);
   const query = input.type ? `?type=${encodeURIComponent(input.type)}` : "";
   const controller = new AbortController();
@@ -834,18 +957,36 @@ async function probeProviderModels(
     const res = await fetchImpl(`${base}/models${query}`, {
       method: "GET",
       headers: authHeaders(input.apiKey, input.apiStyle),
-      signal: controller.signal
+      signal: controller.signal,
     });
     const latencyMs = Date.now() - start;
     if (res.ok) {
       // One parse serves both halves: the id list and the per-model
       // capabilities, so the UI never needs a second request for them.
-      return { ok: true, status: res.status, latencyMs, ...parseModels(await res.text()) };
+      return {
+        ok: true,
+        status: res.status,
+        latencyMs,
+        ...parseModels(await res.text()),
+      };
     }
     // A failed probe says nothing about any model: an EMPTY map, not an error.
-    return { ok: false, status: res.status, message: (await res.text()).slice(0, 300), latencyMs, models: [], modelSpecs: {} };
+    return {
+      ok: false,
+      status: res.status,
+      message: (await res.text()).slice(0, 300),
+      latencyMs,
+      models: [],
+      modelSpecs: {},
+    };
   } catch (e) {
-    return { ok: false, message: e instanceof Error ? e.message : String(e), latencyMs: Date.now() - start, models: [], modelSpecs: {} };
+    return {
+      ok: false,
+      message: e instanceof Error ? e.message : String(e),
+      latencyMs: Date.now() - start,
+      models: [],
+      modelSpecs: {},
+    };
   } finally {
     clearTimeout(timeout);
   }
@@ -870,7 +1011,10 @@ function parseA1111Checkpoints(bodyText: string): string[] {
 /** Parse `GET /sdapi/v1/samplers` and `/schedulers` → `[{name, aliases, …}]`.
  *  Tolerant of a bare string array too, so a fork that answers with names only
  *  still populates the list. */
-function parseA1111Names(bodyText: string, keys: string[] = ["name"]): string[] {
+function parseA1111Names(
+  bodyText: string,
+  keys: string[] = ["name"],
+): string[] {
   try {
     const parsed = JSON.parse(bodyText) as unknown;
     if (!Array.isArray(parsed)) return [];
@@ -898,12 +1042,16 @@ function parseA1111Names(bodyText: string, keys: string[] = ["name"]): string[] 
 async function fetchA1111Names(
   url: string,
   headers: Record<string, string>,
-  fetchImpl: typeof fetch
+  fetchImpl: typeof fetch,
 ): Promise<string[] | undefined> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5_000);
   try {
-    const res = await fetchImpl(url, { method: "GET", headers, signal: controller.signal });
+    const res = await fetchImpl(url, {
+      method: "GET",
+      headers,
+      signal: controller.signal,
+    });
     if (!res.ok) return undefined;
     const names = parseA1111Names(await res.text());
     return names.length ? names : undefined;
@@ -923,7 +1071,7 @@ async function fetchA1111Names(
  *  adapter (`user:pass` → Basic, anything else → Bearer). */
 async function probeA1111Models(
   input: { baseUrl: string; apiKey?: string },
-  fetchImpl: typeof fetch
+  fetchImpl: typeof fetch,
 ): Promise<ModelsProbeResult> {
   const base = normalizeImageBaseUrl(input.baseUrl, "a1111");
   const headers = authHeaders(input.apiKey, "a1111");
@@ -934,7 +1082,7 @@ async function probeA1111Models(
     const res = await fetchImpl(`${base}/sdapi/v1/sd-models`, {
       method: "GET",
       headers,
-      signal: controller.signal
+      signal: controller.signal,
     });
     const latencyMs = Date.now() - start;
     if (!res.ok) {
@@ -942,10 +1090,11 @@ async function probeA1111Models(
       return {
         ok: false,
         status: res.status,
-        message: res.status === 404 ? `${body} — ${A1111_API_MISSING_HINT}` : body,
+        message:
+          res.status === 404 ? `${body} — ${A1111_API_MISSING_HINT}` : body,
         latencyMs,
         models: [],
-        modelSpecs: {}
+        modelSpecs: {},
       };
     }
     const models = parseA1111Checkpoints(await res.text());
@@ -956,7 +1105,7 @@ async function probeA1111Models(
     const [samplers, schedulers, forgeCouple] = await Promise.all([
       fetchA1111Names(`${base}/sdapi/v1/samplers`, headers, fetchImpl),
       fetchA1111Names(`${base}/sdapi/v1/schedulers`, headers, fetchImpl),
-      detectForgeCouple(base, { fetchImpl, headers })
+      detectForgeCouple(base, { fetchImpl, headers }),
     ]);
     const dialectOptions: NonNullable<ModelsProbeResult["dialectOptions"]> = {};
     if (samplers) dialectOptions.samplers = samplers;
@@ -973,10 +1122,18 @@ async function probeA1111Models(
       // An A1111 listing publishes no `model_spec` constraints, so the map is
       // empty — the same answer as a provider that publishes none.
       modelSpecs: {},
-      ...(samplers || schedulers || dialectOptions.forgeCouple ? { dialectOptions } : {})
+      ...(samplers || schedulers || dialectOptions.forgeCouple
+        ? { dialectOptions }
+        : {}),
     };
   } catch (e) {
-    return { ok: false, message: e instanceof Error ? e.message : String(e), latencyMs: Date.now() - start, models: [], modelSpecs: {} };
+    return {
+      ok: false,
+      message: e instanceof Error ? e.message : String(e),
+      latencyMs: Date.now() - start,
+      models: [],
+      modelSpecs: {},
+    };
   } finally {
     clearTimeout(timeout);
   }
@@ -985,13 +1142,22 @@ async function probeA1111Models(
 /** Cheap reachability + auth check: GET <base>/models. No token-generating call. */
 export async function testProviderConnection(
   input: { baseUrl: string; apiKey?: string; apiStyle?: ImageApiStyle },
-  fetchImpl: typeof fetch = fetch
-): Promise<{ ok: boolean; status?: number; message?: string; latencyMs?: number }> {
+  fetchImpl: typeof fetch = fetch,
+): Promise<{
+  ok: boolean;
+  status?: number;
+  message?: string;
+  latencyMs?: number;
+}> {
   // The probe answers {ok, models, modelSpecs, dialectOptions, status, message,
   // latencyMs}; a reachability check wants none of the listing, so all of it is
   // stripped — models, modelSpecs and the dialect's own option lists.
-  const { models: _models, modelSpecs: _modelSpecs, dialectOptions: _dialectOptions, ...result } =
-    await probeProviderModels(input, fetchImpl);
+  const {
+    models: _models,
+    modelSpecs: _modelSpecs,
+    dialectOptions: _dialectOptions,
+    ...result
+  } = await probeProviderModels(input, fetchImpl);
   return result;
 }
 
@@ -1056,7 +1222,7 @@ function summarizeErrorBody(rawBody: string): string {
 /** Send a live chat completion test prompt using the connection's (or draft's) model and sampling parameters. */
 export async function testProviderResponse(
   input: TestResponseProbeInput,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
 ): Promise<TestResponseProbeResult> {
   const base = normalizeBaseUrl(input.baseUrl);
   const model = input.model.trim();
@@ -1085,11 +1251,17 @@ export async function testProviderResponse(
       ...(input.minP != null ? { minP: input.minP } : {}),
       ...(input.topA != null ? { topA: input.topA } : {}),
       ...(input.topK != null ? { topK: input.topK } : {}),
-      ...(input.frequencyPenalty != null ? { frequencyPenalty: input.frequencyPenalty } : {}),
-      ...(input.presencePenalty != null ? { presencePenalty: input.presencePenalty } : {}),
-      ...(input.repetitionPenalty != null ? { repetitionPenalty: input.repetitionPenalty } : {}),
+      ...(input.frequencyPenalty != null
+        ? { frequencyPenalty: input.frequencyPenalty }
+        : {}),
+      ...(input.presencePenalty != null
+        ? { presencePenalty: input.presencePenalty }
+        : {}),
+      ...(input.repetitionPenalty != null
+        ? { repetitionPenalty: input.repetitionPenalty }
+        : {}),
     },
-    { includeStop: false, jsonObject: false }
+    { includeStop: false, jsonObject: false },
   );
 
   const promptText = input.prompt?.trim() || DEFAULT_PROVIDER_TEST_PROMPT;
@@ -1151,14 +1323,22 @@ export async function testProviderResponse(
     }
 
     const msg = parsed.choices?.[0]?.message;
-    const reply = (msg?.content?.trim() || msg?.reasoning_content?.trim() || "").slice(0, 1200);
+    const reply = (
+      msg?.content?.trim() ||
+      msg?.reasoning_content?.trim() ||
+      ""
+    ).slice(0, 1200);
     const usage = parsed.usage
       ? {
-          ...(typeof parsed.usage.prompt_tokens === "number" ? { promptTokens: parsed.usage.prompt_tokens } : {}),
+          ...(typeof parsed.usage.prompt_tokens === "number"
+            ? { promptTokens: parsed.usage.prompt_tokens }
+            : {}),
           ...(typeof parsed.usage.completion_tokens === "number"
             ? { completionTokens: parsed.usage.completion_tokens }
             : {}),
-          ...(typeof parsed.usage.total_tokens === "number" ? { totalTokens: parsed.usage.total_tokens } : {}),
+          ...(typeof parsed.usage.total_tokens === "number"
+            ? { totalTokens: parsed.usage.total_tokens }
+            : {}),
         }
       : undefined;
 
@@ -1186,8 +1366,13 @@ export async function testProviderResponse(
  *  checkpoints), or from an A1111 WebUI's own `/sdapi/v1/sd-models` when
  *  `apiStyle` says so. */
 export async function fetchProviderModels(
-  input: { baseUrl: string; apiKey?: string; type?: string; apiStyle?: ImageApiStyle },
-  fetchImpl: typeof fetch = fetch
+  input: {
+    baseUrl: string;
+    apiKey?: string;
+    type?: string;
+    apiStyle?: ImageApiStyle;
+  },
+  fetchImpl: typeof fetch = fetch,
 ): Promise<ModelsProbeResult> {
   return probeProviderModels(input, fetchImpl);
 }
@@ -1240,9 +1425,11 @@ function parseStylePresets(bodyText: string): string[] {
  *  correct behind a proxy that requires one). */
 export async function fetchProviderImageStyles(
   input: { baseUrl?: string; apiKey?: string },
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
 ): Promise<StylesProbeResult> {
-  const base = normalizeBaseUrl(input.baseUrl?.trim() || VENICE_DEFAULT_BASE_URL);
+  const base = normalizeBaseUrl(
+    input.baseUrl?.trim() || VENICE_DEFAULT_BASE_URL,
+  );
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   const start = Date.now();
@@ -1250,17 +1437,33 @@ export async function fetchProviderImageStyles(
     const res = await fetchImpl(`${base}/image/styles`, {
       method: "GET",
       headers: {
-        ...(input.apiKey ? { Authorization: `Bearer ${input.apiKey}` } : {})
+        ...(input.apiKey ? { Authorization: `Bearer ${input.apiKey}` } : {}),
       },
-      signal: controller.signal
+      signal: controller.signal,
     });
     const latencyMs = Date.now() - start;
     if (res.ok) {
-      return { ok: true, status: res.status, latencyMs, styles: parseStylePresets(await res.text()) };
+      return {
+        ok: true,
+        status: res.status,
+        latencyMs,
+        styles: parseStylePresets(await res.text()),
+      };
     }
-    return { ok: false, status: res.status, message: (await res.text()).slice(0, 300), latencyMs, styles: [] };
+    return {
+      ok: false,
+      status: res.status,
+      message: (await res.text()).slice(0, 300),
+      latencyMs,
+      styles: [],
+    };
   } catch (e) {
-    return { ok: false, message: e instanceof Error ? e.message : String(e), latencyMs: Date.now() - start, styles: [] };
+    return {
+      ok: false,
+      message: e instanceof Error ? e.message : String(e),
+      latencyMs: Date.now() - start,
+      styles: [],
+    };
   } finally {
     clearTimeout(timeout);
   }

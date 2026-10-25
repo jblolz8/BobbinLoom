@@ -1,9 +1,19 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import type { TokenUsage } from "../../api";
 import { deriveMeterTotals } from "../../utils/meterTotals";
 
-const SEGMENTS: Array<{ key: keyof TokenUsage["breakdown"]; label: string; color: string }> = [
+const SEGMENTS: Array<{
+  key: keyof TokenUsage["breakdown"];
+  label: string;
+  color: string;
+}> = [
   { key: "modules", label: "Modules", color: "#4a90d9" },
   { key: "outputFormat", label: "Output Format", color: "#6b7280" },
   { key: "lorebook", label: "Lorebook", color: "#8b5cf6" },
@@ -35,12 +45,21 @@ interface ActiveSegment {
   topY: number;
 }
 
-export function ContextMeter({ tokenUsage }: { tokenUsage: TokenUsage | null }) {
+export function ContextMeter({
+  tokenUsage,
+}: {
+  tokenUsage: TokenUsage | null;
+}) {
   const meterRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
-  const [activeSegment, setActiveSegment] = useState<ActiveSegment | null>(null);
+  const [activeSegment, setActiveSegment] = useState<ActiveSegment | null>(
+    null,
+  );
   const [isPinned, setIsPinned] = useState(false);
-  const [clampedPos, setClampedPos] = useState<{ left: number; arrowOffset: number } | null>(null);
+  const [clampedPos, setClampedPos] = useState<{
+    left: number;
+    arrowOffset: number;
+  } | null>(null);
 
   // Synchronously clamp tooltip position to prevent viewport bleeding (especially on far-left)
   useLayoutEffect(() => {
@@ -55,12 +74,18 @@ export function ContextMeter({ tokenUsage }: { tokenUsage: TokenUsage | null }) 
 
     const minCenterX = padding + halfWidth;
     const maxCenterX = window.innerWidth - padding - halfWidth;
-    const clampedCenterX = Math.max(minCenterX, Math.min(activeSegment.centerX, maxCenterX));
+    const clampedCenterX = Math.max(
+      minCenterX,
+      Math.min(activeSegment.centerX, maxCenterX),
+    );
 
     // Calculate how much the arrow needs to shift from the tooltip center to align with the segment center
     const rawArrowOffset = activeSegment.centerX - clampedCenterX;
     const maxArrowOffset = halfWidth - 10;
-    const arrowOffset = Math.max(-maxArrowOffset, Math.min(rawArrowOffset, maxArrowOffset));
+    const arrowOffset = Math.max(
+      -maxArrowOffset,
+      Math.min(rawArrowOffset, maxArrowOffset),
+    );
 
     setClampedPos({
       left: clampedCenterX,
@@ -96,7 +121,7 @@ export function ContextMeter({ tokenUsage }: { tokenUsage: TokenUsage | null }) 
       key: string,
       label: string,
       value: number,
-      segPct: string
+      segPct: string,
     ) => {
       // Only scrub on hover if not actively pinned
       if (isPinned) return;
@@ -105,7 +130,7 @@ export function ContextMeter({ tokenUsage }: { tokenUsage: TokenUsage | null }) 
       const topY = rect.top - 7;
       setActiveSegment({ key, label, value, segPct, centerX, topY });
     },
-    [isPinned]
+    [isPinned],
   );
 
   const handleSegmentClick = useCallback(
@@ -114,7 +139,7 @@ export function ContextMeter({ tokenUsage }: { tokenUsage: TokenUsage | null }) 
       key: string,
       label: string,
       value: number,
-      segPct: string
+      segPct: string,
     ) => {
       e.stopPropagation();
       const rect = e.currentTarget.getBoundingClientRect();
@@ -130,7 +155,7 @@ export function ContextMeter({ tokenUsage }: { tokenUsage: TokenUsage | null }) 
         setIsPinned(true);
       }
     },
-    [isPinned, activeSegment]
+    [isPinned, activeSegment],
   );
 
   const handleBarLeave = useCallback(() => {
@@ -153,7 +178,12 @@ export function ContextMeter({ tokenUsage }: { tokenUsage: TokenUsage | null }) 
   const pct = Math.min(100, (total / contextWindow) * 100);
   const remainingPct = Math.max(0, 100 - pct);
 
-  const statusClass = pct >= 95 ? "status-danger" : pct >= 85 ? "status-warning" : "status-normal";
+  const statusClass =
+    pct >= 95
+      ? "status-danger"
+      : pct >= 85
+        ? "status-warning"
+        : "status-normal";
 
   return (
     <div className="context-meter" ref={meterRef}>
@@ -173,9 +203,15 @@ export function ContextMeter({ tokenUsage }: { tokenUsage: TokenUsage | null }) 
               key={key}
               className={`context-meter-segment${isSelected ? " is-hovered" : ""}${isPinned && isSelected ? " is-pinned" : ""}`}
               style={{ width: `${widthPct}%`, backgroundColor: color }}
-              onPointerEnter={(e) => handleSegmentHover(e, key, label, scaledValue, segPct)}
-              onPointerMove={(e) => handleSegmentHover(e, key, label, scaledValue, segPct)}
-              onClick={(e) => handleSegmentClick(e, key, label, scaledValue, segPct)}
+              onPointerEnter={(e) =>
+                handleSegmentHover(e, key, label, scaledValue, segPct)
+              }
+              onPointerMove={(e) =>
+                handleSegmentHover(e, key, label, scaledValue, segPct)
+              }
+              onClick={(e) =>
+                handleSegmentClick(e, key, label, scaledValue, segPct)
+              }
             />
           );
         })}
@@ -183,14 +219,39 @@ export function ContextMeter({ tokenUsage }: { tokenUsage: TokenUsage | null }) 
           <div
             className={`context-meter-segment free-space${activeSegment?.key === "freeSpace" ? " is-hovered" : ""}${isPinned && activeSegment?.key === "freeSpace" ? " is-pinned" : ""}`}
             style={{ width: `${(remaining / contextWindow) * 100}%` }}
-            onPointerEnter={(e) => handleSegmentHover(e, "freeSpace", "Free Space", remaining, formatPct(remainingPct))}
-            onPointerMove={(e) => handleSegmentHover(e, "freeSpace", "Free Space", remaining, formatPct(remainingPct))}
-            onClick={(e) => handleSegmentClick(e, "freeSpace", "Free Space", remaining, formatPct(remainingPct))}
+            onPointerEnter={(e) =>
+              handleSegmentHover(
+                e,
+                "freeSpace",
+                "Free Space",
+                remaining,
+                formatPct(remainingPct),
+              )
+            }
+            onPointerMove={(e) =>
+              handleSegmentHover(
+                e,
+                "freeSpace",
+                "Free Space",
+                remaining,
+                formatPct(remainingPct),
+              )
+            }
+            onClick={(e) =>
+              handleSegmentClick(
+                e,
+                "freeSpace",
+                "Free Space",
+                remaining,
+                formatPct(remainingPct),
+              )
+            }
           />
         ) : null}
       </div>
 
-      {typeof document !== "undefined" && activeSegment &&
+      {typeof document !== "undefined" &&
+        activeSegment &&
         createPortal(
           <div
             ref={tooltipRef}
@@ -205,7 +266,8 @@ export function ContextMeter({ tokenUsage }: { tokenUsage: TokenUsage | null }) 
               zIndex: 99999,
             }}
           >
-            {activeSegment.label}: {formatTokens(activeSegment.value)} tokens ({activeSegment.segPct} of context)
+            {activeSegment.label}: {formatTokens(activeSegment.value)} tokens (
+            {activeSegment.segPct} of context)
             <svg
               className="base-tooltip-arrow context-meter-portal-arrow"
               width={8}
@@ -221,11 +283,12 @@ export function ContextMeter({ tokenUsage }: { tokenUsage: TokenUsage | null }) 
               <polygon points="0,0 4,4 8,0" />
             </svg>
           </div>,
-          document.body
+          document.body,
         )}
 
       <span className={`context-meter-label ${statusClass}`}>
-        {formatTokens(total)}/{formatTokens(contextWindow)} tokens ({formatPct(pct)} of context)
+        {formatTokens(total)}/{formatTokens(contextWindow)} tokens (
+        {formatPct(pct)} of context)
         {remaining > 0 ? ` · ${formatTokens(remaining)} remaining` : " · full"}
         {measured ? " · measured" : ""}
       </span>

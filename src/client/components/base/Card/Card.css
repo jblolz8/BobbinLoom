@@ -5,7 +5,9 @@
   border-radius: 10px;
   border: 1px solid var(--border-main);
   box-sizing: border-box;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
 }
 
 button.base-card {
@@ -91,7 +93,9 @@ button.base-card {
   user-select: none;
   border-radius: 4px;
   touch-action: none;
-  transition: color 0.12s ease, background-color 0.12s ease;
+  transition:
+    color 0.12s ease,
+    background-color 0.12s ease;
 }
 
 .base-drag-handle:hover {

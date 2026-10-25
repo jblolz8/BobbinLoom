@@ -3,7 +3,8 @@ import { extractCharaPayload } from "../src/server/characterCards/pngText";
 import { makePng } from "./helpers/pngBuilder";
 
 describe("extractCharaPayload (PNG tEXt/iTXt `chara` extractor)", () => {
-  const payload = '{"spec":"chara_card_v2","data":{"name":"Mira","description":"Hi"}}';
+  const payload =
+    '{"spec":"chara_card_v2","data":{"name":"Mira","description":"Hi"}}';
 
   it("returns the payload stored under the `chara` keyword in a tEXt chunk", () => {
     expect(extractCharaPayload(makePng(payload))).toBe(payload);
@@ -24,7 +25,9 @@ describe("extractCharaPayload (PNG tEXt/iTXt `chara` extractor)", () => {
   });
 
   it("returns null when the `chara` keyword is missing", () => {
-    expect(extractCharaPayload(makePng("some other text", "tEXt", "description"))).toBeNull();
+    expect(
+      extractCharaPayload(makePng("some other text", "tEXt", "description")),
+    ).toBeNull();
   });
 
   it("returns null when the chunk data is truncated (cut mid-chunk)", () => {

@@ -68,8 +68,13 @@ export function normalizeBaseUrl(baseUrl: string): string {
 
 /** A1111 is served from the WebUI root (/sdapi/v1/...), NOT from an
  *  OpenAI-style /v1 prefix — appending one turns every path into /v1/sdapi/... */
-export function normalizeImageBaseUrl(baseUrl: string, apiStyle: ImageApiStyle = "openai"): string {
-  return apiStyle === "a1111" ? baseUrl.trim().replace(/\/+$/, "") : normalizeBaseUrl(baseUrl);
+export function normalizeImageBaseUrl(
+  baseUrl: string,
+  apiStyle: ImageApiStyle = "openai",
+): string {
+  return apiStyle === "a1111"
+    ? baseUrl.trim().replace(/\/+$/, "")
+    : normalizeBaseUrl(baseUrl);
 }
 
 /** A local WebUI rendering a 1024x1024 SDXL batch at 30 steps takes minutes,
@@ -78,7 +83,10 @@ export function normalizeImageBaseUrl(baseUrl: string, apiStyle: ImageApiStyle =
  *  does BOBBINLOOM_IMAGE_TIMEOUT_MS. */
 export const A1111_DEFAULT_IMAGE_TIMEOUT_MS = 600_000;
 
-export function numberFromEnv(value: string | undefined, fallback: number): number {
+export function numberFromEnv(
+  value: string | undefined,
+  fallback: number,
+): number {
   if (!value) return fallback;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -95,15 +103,18 @@ export function numberFromEnv(value: string | undefined, fallback: number): numb
  *  everything else, and text providers keep calling it directly. */
 export function resolveImageConfig(
   conn: ProviderConnection,
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
 ): ResolvedProviderConfig {
   const apiStyle = conn.apiStyle ?? "openai";
-  const dialectDefault = apiStyle === "a1111" ? A1111_DEFAULT_IMAGE_TIMEOUT_MS : 180_000;
+  const dialectDefault =
+    apiStyle === "a1111" ? A1111_DEFAULT_IMAGE_TIMEOUT_MS : 180_000;
   return {
     ...resolveConnectionConfig(conn, env),
     baseUrl: normalizeImageBaseUrl(conn.baseUrl, apiStyle),
-    timeoutMs: conn.timeoutMs ?? numberFromEnv(env.BOBBINLOOM_IMAGE_TIMEOUT_MS, dialectDefault),
-    maxRetries: numberFromEnv(env.BOBBINLOOM_IMAGE_MAX_RETRIES, 1)
+    timeoutMs:
+      conn.timeoutMs ??
+      numberFromEnv(env.BOBBINLOOM_IMAGE_TIMEOUT_MS, dialectDefault),
+    maxRetries: numberFromEnv(env.BOBBINLOOM_IMAGE_MAX_RETRIES, 1),
   };
 }
 
@@ -113,7 +124,7 @@ export function resolveImageConfig(
  *  by the registry read path). */
 export function resolveConnectionConfig(
   conn: ProviderConnection,
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
 ): ResolvedProviderConfig {
   return {
     providerId: conn.id,
@@ -125,15 +136,22 @@ export function resolveConnectionConfig(
     maxTokens: conn.maxTokens,
     contextWindow: conn.contextWindow,
     maxRetries: numberFromEnv(env.BOBBINLOOM_MAX_RETRIES, 1),
-    timeoutMs: conn.timeoutMs ?? numberFromEnv(env.BOBBINLOOM_TIMEOUT_MS, 120_000),
+    timeoutMs:
+      conn.timeoutMs ?? numberFromEnv(env.BOBBINLOOM_TIMEOUT_MS, 120_000),
     ...(conn.textSource !== undefined ? { textSource: conn.textSource } : {}),
     ...(conn.topP !== undefined ? { topP: conn.topP } : {}),
     ...(conn.minP !== undefined ? { minP: conn.minP } : {}),
     ...(conn.topA !== undefined ? { topA: conn.topA } : {}),
     ...(conn.topK !== undefined ? { topK: conn.topK } : {}),
-    ...(conn.frequencyPenalty !== undefined ? { frequencyPenalty: conn.frequencyPenalty } : {}),
-    ...(conn.presencePenalty !== undefined ? { presencePenalty: conn.presencePenalty } : {}),
-    ...(conn.repetitionPenalty !== undefined ? { repetitionPenalty: conn.repetitionPenalty } : {}),
+    ...(conn.frequencyPenalty !== undefined
+      ? { frequencyPenalty: conn.frequencyPenalty }
+      : {}),
+    ...(conn.presencePenalty !== undefined
+      ? { presencePenalty: conn.presencePenalty }
+      : {}),
+    ...(conn.repetitionPenalty !== undefined
+      ? { repetitionPenalty: conn.repetitionPenalty }
+      : {}),
     ...(conn.stop && conn.stop.length > 0 ? { stop: conn.stop } : {}),
     ...(conn.jsonMode !== undefined ? { jsonMode: conn.jsonMode } : {}),
   };
@@ -144,7 +162,7 @@ export function resolveConnectionConfig(
  *  Chat Completion Source are omitted so strict endpoints never see keys they reject. */
 export function buildTextSamplingParams(
   config: ResolvedProviderConfig,
-  options?: { includeStop?: boolean; jsonObject?: boolean }
+  options?: { includeStop?: boolean; jsonObject?: boolean },
 ): Record<string, unknown> {
   const source = resolveTextProviderSource(config.textSource, config.baseUrl);
   const params: Record<string, unknown> = {};
@@ -160,13 +178,22 @@ export function buildTextSamplingParams(
   if (config.topK !== undefined && isParamSupportedBySource(source, "topK")) {
     params.top_k = config.topK;
   }
-  if (config.frequencyPenalty !== undefined && isParamSupportedBySource(source, "frequencyPenalty")) {
+  if (
+    config.frequencyPenalty !== undefined &&
+    isParamSupportedBySource(source, "frequencyPenalty")
+  ) {
     params.frequency_penalty = config.frequencyPenalty;
   }
-  if (config.presencePenalty !== undefined && isParamSupportedBySource(source, "presencePenalty")) {
+  if (
+    config.presencePenalty !== undefined &&
+    isParamSupportedBySource(source, "presencePenalty")
+  ) {
     params.presence_penalty = config.presencePenalty;
   }
-  if (config.repetitionPenalty !== undefined && isParamSupportedBySource(source, "repetitionPenalty")) {
+  if (
+    config.repetitionPenalty !== undefined &&
+    isParamSupportedBySource(source, "repetitionPenalty")
+  ) {
     params.repetition_penalty = config.repetitionPenalty;
   }
   if (options?.includeStop && config.stop && config.stop.length > 0) {

@@ -1,4 +1,9 @@
-import { type Dispatch, type FormEvent, type MouseEvent, type SetStateAction } from "react";
+import {
+  type Dispatch,
+  type FormEvent,
+  type MouseEvent,
+  type SetStateAction,
+} from "react";
 import {
   Badge,
   Button,
@@ -36,7 +41,11 @@ import {
 import { ApiKeyField, type ApiKeyFieldProps } from "./ApiKeyField";
 import { EditorActionBar, type EditorFooterStatus } from "./EditorActionBar";
 
-type EditorStatus = { kind: "ok" | "err" | "warn"; text: string; detail?: string } | null;
+type EditorStatus = {
+  kind: "ok" | "err" | "warn";
+  text: string;
+  detail?: string;
+} | null;
 
 const SOURCE_OPTIONS = TEXT_PROVIDER_SOURCE_LIST.map((src) => ({
   value: src.id,
@@ -110,15 +119,20 @@ export function TextConnectionEditor({
   onCancel,
   onDelete,
 }: TextConnectionEditorProps) {
-  const currentSource: TextProviderSource = resolveTextProviderSource(form.textSource, form.baseUrl);
+  const currentSource: TextProviderSource = resolveTextProviderSource(
+    form.textSource,
+    form.baseUrl,
+  );
   const sourceSpec = TEXT_PROVIDER_SOURCES[currentSource];
   const tempSpec = getSourceParamSpec(currentSource, "temperature");
 
   const supportedOptionalSamplers = OPTIONAL_TEXT_SAMPLER_KEYS.filter((key) =>
-    isParamSupportedBySource(currentSource, key)
+    isParamSupportedBySource(currentSource, key),
   );
 
-  const activeSamplerCount = supportedOptionalSamplers.filter((key) => form[key] != null).length;
+  const activeSamplerCount = supportedOptionalSamplers.filter(
+    (key) => form[key] != null,
+  ).length;
 
   const selectedModelCaps = form.model ? modelSpecs[form.model] : undefined;
   const reportedContextLength = selectedModelCaps?.contextLength;
@@ -138,14 +152,20 @@ export function TextConnectionEditor({
       }
       // Clamp temperature if the new source has a stricter ceiling (e.g. Moonshot AI 0–1).
       const nextTempSpec = getSourceParamSpec(nextSource, "temperature");
-      if (typeof next.temperature === "number" && next.temperature > nextTempSpec.max) {
+      if (
+        typeof next.temperature === "number" &&
+        next.temperature > nextTempSpec.max
+      ) {
         next.temperature = nextTempSpec.max;
       }
       return next;
     });
   }
 
-  function handleSamplerChange(key: OptionalTextSamplerKey, nextVal: number | null | undefined) {
+  function handleSamplerChange(
+    key: OptionalTextSamplerKey,
+    nextVal: number | null | undefined,
+  ) {
     setForm((prev) => ({
       ...prev,
       [key]: nextVal === undefined ? null : nextVal,
@@ -154,18 +174,30 @@ export function TextConnectionEditor({
 
   const showResetBaseUrl =
     Boolean(sourceSpec.defaultBaseUrl) &&
-    form.baseUrl.trim().replace(/\/+$/, "") !== sourceSpec.defaultBaseUrl.replace(/\/+$/, "");
+    form.baseUrl.trim().replace(/\/+$/, "") !==
+      sourceSpec.defaultBaseUrl.replace(/\/+$/, "");
 
-  const isDrawerVisible = testDrawerOpen || Boolean(testResponseResult) || testingResponse;
+  const isDrawerVisible =
+    testDrawerOpen || Boolean(testResponseResult) || testingResponse;
   const isPromptModified = testPrompt.trim() !== DEFAULT_PROVIDER_TEST_PROMPT;
 
   return (
-    <Card as="form" variant="elevated" padding="md" className="conn-editor" onSubmit={onSubmit}>
+    <Card
+      as="form"
+      variant="elevated"
+      padding="md"
+      className="conn-editor"
+      onSubmit={onSubmit}
+    >
       <Stack direction="column" align="stretch" gap="sm">
         <Header
           variant="panel"
           bordered
-          title={mode === "create" ? "New Text Provider Connection" : `Edit: ${editing?.label ?? ""}`}
+          title={
+            mode === "create"
+              ? "New Text Provider Connection"
+              : `Edit: ${editing?.label ?? ""}`
+          }
         />
 
         <FormSection icon="Plug" title="Chat Completion Source & Connection">
@@ -188,7 +220,9 @@ export function TextConnectionEditor({
               tooltip="A friendly display name to identify this connection in your provider list."
               size="sm"
               value={form.label}
-              onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, label: e.target.value }))
+              }
               placeholder={`e.g. ${sourceSpec.label}`}
             />
 
@@ -197,7 +231,9 @@ export function TextConnectionEditor({
               tooltip="The root OpenAI-compatible API endpoint (e.g. https://openrouter.ai/api/v1 or http://localhost:1234/v1)."
               size="sm"
               value={form.baseUrl}
-              onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, baseUrl: e.target.value }))
+              }
               placeholder={sourceSpec.baseUrlPlaceholder}
               leftIcon={<Icon name="Globe" size={13} />}
               rightElement={
@@ -207,7 +243,12 @@ export function TextConnectionEditor({
                     variant="ghost"
                     size="xs"
                     leftIcon="RotateCcw"
-                    onClick={() => setForm((f) => ({ ...f, baseUrl: sourceSpec.defaultBaseUrl }))}
+                    onClick={() =>
+                      setForm((f) => ({
+                        ...f,
+                        baseUrl: sourceSpec.defaultBaseUrl,
+                      }))
+                    }
                     title={`Reset to default ${sourceSpec.label} URL (${sourceSpec.defaultBaseUrl})`}
                   >
                     Default
@@ -224,7 +265,9 @@ export function TextConnectionEditor({
                 tooltip="The model identifier sent in chat completion requests. Click Fetch to query available models from the server."
                 size="sm"
                 value={form.model}
-                onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, model: e.target.value }))
+                }
                 placeholder={sourceSpec.modelPlaceholder}
                 leftIcon={<Icon name="Cpu" size={13} />}
                 rightElement={
@@ -233,7 +276,11 @@ export function TextConnectionEditor({
                     variant="secondary"
                     size="sm"
                     onClick={onFetchModels}
-                    disabled={fetchingModels || busy || (mode !== "edit" && !form.baseUrl.trim())}
+                    disabled={
+                      fetchingModels ||
+                      busy ||
+                      (mode !== "edit" && !form.baseUrl.trim())
+                    }
                     isLoading={fetchingModels}
                     leftIcon="RefreshCw"
                   >
@@ -286,7 +333,11 @@ export function TextConnectionEditor({
               description="Total token budget for prompt assembly (system modules, lorebooks, character state, and chat history). Defaults to 32,768 tokens."
               min={2048}
               max={2000000}
-              sliderMax={reportedContextLength ? Math.max(65536, reportedContextLength) : 131072}
+              sliderMax={
+                reportedContextLength
+                  ? Math.max(65536, reportedContextLength)
+                  : 131072
+              }
               step={1024}
               defaultPreview={32768}
               integer
@@ -294,7 +345,8 @@ export function TextConnectionEditor({
               onChange={(val) =>
                 setForm((f) => ({
                   ...f,
-                  contextWindow: val === null || val === undefined ? undefined : val,
+                  contextWindow:
+                    val === null || val === undefined ? undefined : val,
                 }))
               }
               headerExtra={
@@ -304,10 +356,16 @@ export function TextConnectionEditor({
                     variant="outline"
                     size="xs"
                     className="conn-limit-chip"
-                    onClick={() => setForm((f) => ({ ...f, contextWindow: reportedContextLength }))}
+                    onClick={() =>
+                      setForm((f) => ({
+                        ...f,
+                        contextWindow: reportedContextLength,
+                      }))
+                    }
                     title="Click to apply the model's reported context window"
                   >
-                    Model max context: <strong>{reportedContextLength.toLocaleString()}</strong>
+                    Model max context:{" "}
+                    <strong>{reportedContextLength.toLocaleString()}</strong>
                   </Button>
                 ) : undefined
               }
@@ -319,7 +377,9 @@ export function TextConnectionEditor({
               description="Maximum tokens reserved for the assistant's completion on each turn. Defaults to 1,200 tokens."
               min={128}
               max={131072}
-              sliderMax={reportedMaxOutput ? Math.max(4096, reportedMaxOutput) : 8192}
+              sliderMax={
+                reportedMaxOutput ? Math.max(4096, reportedMaxOutput) : 8192
+              }
               step={64}
               defaultPreview={1200}
               integer
@@ -327,7 +387,8 @@ export function TextConnectionEditor({
               onChange={(val) =>
                 setForm((f) => ({
                   ...f,
-                  maxTokens: val === null || val === undefined ? undefined : val,
+                  maxTokens:
+                    val === null || val === undefined ? undefined : val,
                 }))
               }
               headerExtra={
@@ -337,10 +398,13 @@ export function TextConnectionEditor({
                     variant="outline"
                     size="xs"
                     className="conn-limit-chip"
-                    onClick={() => setForm((f) => ({ ...f, maxTokens: reportedMaxOutput }))}
+                    onClick={() =>
+                      setForm((f) => ({ ...f, maxTokens: reportedMaxOutput }))
+                    }
                     title="Click to apply the model's reported maximum completion tokens"
                   >
-                    Model max output: <strong>{reportedMaxOutput.toLocaleString()}</strong>
+                    Model max output:{" "}
+                    <strong>{reportedMaxOutput.toLocaleString()}</strong>
                   </Button>
                 ) : undefined
               }
@@ -355,7 +419,8 @@ export function TextConnectionEditor({
             fullWidth
             value={form.jsonMode === "off" ? "off" : "auto"}
             onChange={(val) => {
-              const nextMode: TextJsonMode | null = val === "off" ? "off" : null;
+              const nextMode: TextJsonMode | null =
+                val === "off" ? "off" : null;
               setForm((f) => ({ ...f, jsonMode: nextMode }));
             }}
             options={[
@@ -397,7 +462,8 @@ export function TextConnectionEditor({
               onChange={(val) =>
                 setForm((f) => ({
                   ...f,
-                  temperature: val === null || val === undefined ? undefined : val,
+                  temperature:
+                    val === null || val === undefined ? undefined : val,
                 }))
               }
             />
@@ -437,10 +503,24 @@ export function TextConnectionEditor({
             isDrawerVisible ? (
               <Card variant="panel" padding="xs" className="conn-test-drawer">
                 <Stack direction="column" align="stretch" gap="xs">
-                  <Stack direction="row" align="center" justify="between" gap="xs">
+                  <Stack
+                    direction="row"
+                    align="center"
+                    justify="between"
+                    gap="xs"
+                  >
                     <Stack direction="row" align="center" gap="2xs">
-                      <Icon name="MessageSquare" size={13} className="ds-icon-accent" />
-                      <Text as="span" size="xs" weight="semibold" tone="primary">
+                      <Icon
+                        name="MessageSquare"
+                        size={13}
+                        className="ds-icon-accent"
+                      />
+                      <Text
+                        as="span"
+                        size="xs"
+                        weight="semibold"
+                        tone="primary"
+                      >
                         Test Response Prompt
                       </Text>
                       <Badge variant="neutral" size="xs">
@@ -513,12 +593,13 @@ export function TextConnectionEditor({
                     <Card
                       variant="elevated"
                       padding="xs"
-                      className={`conn-test-reply ${testingResponse
-                        ? "loading"
-                        : testResponseResult?.ok
-                          ? "ok"
-                          : "err"
-                        }`}
+                      className={`conn-test-reply ${
+                        testingResponse
+                          ? "loading"
+                          : testResponseResult?.ok
+                            ? "ok"
+                            : "err"
+                      }`}
                     >
                       {testingResponse ? (
                         <StatusMessage variant="inline" loading>
@@ -527,39 +608,70 @@ export function TextConnectionEditor({
                       ) : (
                         testResponseResult && (
                           <Stack direction="column" align="stretch" gap="2xs">
-                            <Stack direction="row" align="center" gap="2xs" wrap>
+                            <Stack
+                              direction="row"
+                              align="center"
+                              gap="2xs"
+                              wrap
+                            >
                               <Badge
-                                variant={testResponseResult.ok ? "success" : "danger"}
+                                variant={
+                                  testResponseResult.ok ? "success" : "danger"
+                                }
                                 size="xs"
-                                leftIcon={testResponseResult.ok ? "CheckCircle2" : "AlertCircle"}
+                                leftIcon={
+                                  testResponseResult.ok
+                                    ? "CheckCircle2"
+                                    : "AlertCircle"
+                                }
                               >
                                 {testResponseResult.ok
                                   ? "Reply"
                                   : `Failed${testResponseResult.status ? ` (${testResponseResult.status})` : ""}`}
                               </Badge>
-                              {typeof testResponseResult.latencyMs === "number" && (
-                                <Badge variant="neutral" size="xs" leftIcon="Timer">
+                              {typeof testResponseResult.latencyMs ===
+                                "number" && (
+                                <Badge
+                                  variant="neutral"
+                                  size="xs"
+                                  leftIcon="Timer"
+                                >
                                   {testResponseResult.latencyMs}ms
                                 </Badge>
                               )}
                               {testResponseResult.model && (
-                                <Badge variant="outline" size="xs" leftIcon="Cpu">
+                                <Badge
+                                  variant="outline"
+                                  size="xs"
+                                  leftIcon="Cpu"
+                                >
                                   {testResponseResult.model}
                                 </Badge>
                               )}
                               {testResponseResult.usage &&
-                                (testResponseResult.usage.promptTokens !== undefined ||
-                                  testResponseResult.usage.completionTokens !== undefined) && (
-                                  <Badge variant="neutral" size="xs" leftIcon="Hash">
-                                    {testResponseResult.usage.promptTokens ?? "?"} in ·{" "}
-                                    {testResponseResult.usage.completionTokens ?? "?"} out
+                                (testResponseResult.usage.promptTokens !==
+                                  undefined ||
+                                  testResponseResult.usage.completionTokens !==
+                                    undefined) && (
+                                  <Badge
+                                    variant="neutral"
+                                    size="xs"
+                                    leftIcon="Hash"
+                                  >
+                                    {testResponseResult.usage.promptTokens ??
+                                      "?"}{" "}
+                                    in ·{" "}
+                                    {testResponseResult.usage
+                                      .completionTokens ?? "?"}{" "}
+                                    out
                                   </Badge>
                                 )}
                             </Stack>
                             <div className="conn-test-reply__body">
                               {testResponseResult.ok
                                 ? testResponseResult.reply || "(Empty response)"
-                                : testResponseResult.message || "Request failed."}
+                                : testResponseResult.message ||
+                                  "Request failed."}
                             </div>
                           </Stack>
                         )

@@ -21,12 +21,19 @@ const entries = new Map<string, ImageProgressSnapshot>();
 
 /** Record the latest readout for a connection. Called from the adapter's
  *  `onProgress` while a generation is in flight. */
-export function publishImageProgress(connectionId: string, progress: ImageProgress): void {
+export function publishImageProgress(
+  connectionId: string,
+  progress: ImageProgress,
+): void {
   if (!connectionId) return;
-  const snapshot: ImageProgressSnapshot = { active: true, progress: progress.progress };
+  const snapshot: ImageProgressSnapshot = {
+    active: true,
+    progress: progress.progress,
+  };
   if (progress.step !== undefined) snapshot.step = progress.step;
   if (progress.steps !== undefined) snapshot.steps = progress.steps;
-  if (progress.etaSeconds !== undefined) snapshot.etaSeconds = progress.etaSeconds;
+  if (progress.etaSeconds !== undefined)
+    snapshot.etaSeconds = progress.etaSeconds;
   entries.set(connectionId, snapshot);
 }
 

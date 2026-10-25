@@ -1,10 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { cleanStateAfterSave, isConnectionDirty } from "../src/client/utils/connectionDraft";
+import {
+  cleanStateAfterSave,
+  isConnectionDirty,
+} from "../src/client/utils/connectionDraft";
 import type { ProviderConnectionPayload } from "../src/client/api";
 
 /** The shape the predicate actually sees: one flat payload, image-only fields
  *  simply absent on a text row. */
-function textForm(overrides: Partial<ProviderConnectionPayload> = {}): ProviderConnectionPayload {
+function textForm(
+  overrides: Partial<ProviderConnectionPayload> = {},
+): ProviderConnectionPayload {
   return {
     kind: "text",
     label: "Local LM Studio",
@@ -14,7 +19,7 @@ function textForm(overrides: Partial<ProviderConnectionPayload> = {}): ProviderC
     temperature: 0.8,
     maxTokens: 1200,
     contextWindow: 32768,
-    ...overrides
+    ...overrides,
   };
 }
 
@@ -24,27 +29,47 @@ describe("isConnectionDirty", () => {
   });
 
   it("is true when a single field changes", () => {
-    expect(isConnectionDirty(textForm({ model: "llama-4" }), textForm())).toBe(true);
+    expect(isConnectionDirty(textForm({ model: "llama-4" }), textForm())).toBe(
+      true,
+    );
   });
 
-  it("treats undefined, null and \"\" as the same absence", () => {
+  it('treats undefined, null and "" as the same absence', () => {
     const baseline = textForm({ apiKey: null });
     expect(isConnectionDirty(textForm({ apiKey: "" }), baseline)).toBe(false);
-    expect(isConnectionDirty(textForm({ apiKey: undefined }), baseline)).toBe(false);
+    expect(isConnectionDirty(textForm({ apiKey: undefined }), baseline)).toBe(
+      false,
+    );
   });
 
   it("does NOT collapse a real 0 into absence", () => {
-    expect(isConnectionDirty(textForm({ maxTokens: 0 }), textForm())).toBe(true);
+    expect(isConnectionDirty(textForm({ maxTokens: 0 }), textForm())).toBe(
+      true,
+    );
   });
 
   it("reports a changed api key as dirty", () => {
-    expect(isConnectionDirty(textForm({ apiKey: "sk-other" }), textForm())).toBe(true);
+    expect(
+      isConnectionDirty(textForm({ apiKey: "sk-other" }), textForm()),
+    ).toBe(true);
   });
 
   it("compares image-only fields", () => {
-    const base = textForm({ kind: "image", aspectRatio: "3:2", stylePreset: "Anime" });
-    const same = textForm({ kind: "image", aspectRatio: "3:2", stylePreset: "Anime" });
-    const changed = textForm({ kind: "image", aspectRatio: "3:2", stylePreset: "Cinematic" });
+    const base = textForm({
+      kind: "image",
+      aspectRatio: "3:2",
+      stylePreset: "Anime",
+    });
+    const same = textForm({
+      kind: "image",
+      aspectRatio: "3:2",
+      stylePreset: "Anime",
+    });
+    const changed = textForm({
+      kind: "image",
+      aspectRatio: "3:2",
+      stylePreset: "Cinematic",
+    });
     expect(isConnectionDirty(same, base)).toBe(false);
     expect(isConnectionDirty(changed, base)).toBe(true);
   });
@@ -63,7 +88,11 @@ describe("isConnectionDirty", () => {
 describe("cleanStateAfterSave", () => {
   it("produces a state the form is NOT dirty against — the whole point of it", () => {
     const form = textForm({ label: "Renamed" });
-    const clean = cleanStateAfterSave(textForm({ label: "Renamed" }), form, true);
+    const clean = cleanStateAfterSave(
+      textForm({ label: "Renamed" }),
+      form,
+      true,
+    );
 
     // Against itself, and against the form that was just saved: both clean, so
     // closing the editor (and the modal) stops asking to discard stored work.
@@ -101,8 +130,14 @@ describe("cleanStateAfterSave", () => {
   });
 
   it("takes every other field from the stored row, so the form snaps to what was saved", () => {
-    const form = textForm({ label: "Renamed", baseUrl: "http://localhost:9999/v1" });
-    const stored = textForm({ label: "Renamed", baseUrl: "http://localhost:9999/v1" });
+    const form = textForm({
+      label: "Renamed",
+      baseUrl: "http://localhost:9999/v1",
+    });
+    const stored = textForm({
+      label: "Renamed",
+      baseUrl: "http://localhost:9999/v1",
+    });
     const clean = cleanStateAfterSave(stored, form, true);
 
     expect(clean.label).toBe("Renamed");

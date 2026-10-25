@@ -1,9 +1,19 @@
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, readFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  readFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { saveToLibraryAction } from "../src/server/stateActions";
-import { createPlaythroughRecord, getPlaythroughRecord, updatePlaythroughRecord } from "../src/server/store";
+import {
+  createPlaythroughRecord,
+  getPlaythroughRecord,
+  updatePlaythroughRecord,
+} from "../src/server/store";
 import type { CharacterTemplate } from "../src/schemas";
 
 const tempDirs: string[] = [];
@@ -28,9 +38,15 @@ function readLibrary(libDir: string): CharacterTemplate[] {
     .filter((e) => e.isDirectory() && !e.name.endsWith(".bak"))
     .map((e) => e.name);
   for (const folder of folders) {
-    const files = readdirSync(join(libDir, folder)).filter((f) => f.endsWith(".json"));
+    const files = readdirSync(join(libDir, folder)).filter((f) =>
+      f.endsWith(".json"),
+    );
     for (const file of files) {
-      out.push(JSON.parse(readFileSync(join(libDir, folder, file), "utf8")) as CharacterTemplate);
+      out.push(
+        JSON.parse(
+          readFileSync(join(libDir, folder, file), "utf8"),
+        ) as CharacterTemplate,
+      );
     }
   }
   return out;
@@ -50,7 +66,13 @@ describe("saveToLibraryAction — update mode", () => {
     const playthrough = createPlaythroughRecord(dir, "Lib First Save");
     const mira = playthrough.characters[0];
 
-    const result = saveToLibraryAction(dir, playthrough.id, mira.id, "update", libDir);
+    const result = saveToLibraryAction(
+      dir,
+      playthrough.id,
+      mira.id,
+      "update",
+      libDir,
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -74,7 +96,13 @@ describe("saveToLibraryAction — update mode", () => {
     stored.characters[0].name = "Mira the Bold";
     updatePlaythroughRecord(dir, stored);
 
-    const result = saveToLibraryAction(dir, playthrough.id, mira.id, "update", libDir);
+    const result = saveToLibraryAction(
+      dir,
+      playthrough.id,
+      mira.id,
+      "update",
+      libDir,
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -98,7 +126,13 @@ describe("saveToLibraryAction — newVersion mode", () => {
     stored.characters[0].name = "Mira v2";
     updatePlaythroughRecord(dir, stored);
 
-    const v2 = saveToLibraryAction(dir, playthrough.id, mira.id, "newVersion", libDir);
+    const v2 = saveToLibraryAction(
+      dir,
+      playthrough.id,
+      mira.id,
+      "newVersion",
+      libDir,
+    );
     expect(v2.ok).toBe(true);
     if (!v2.ok) return;
 
@@ -107,7 +141,13 @@ describe("saveToLibraryAction — newVersion mode", () => {
     expect(v2.template.lineageId).toBe("char_mira");
     expect(v2.template.name).toBe("Mira v2");
 
-    const v3 = saveToLibraryAction(dir, playthrough.id, mira.id, "newVersion", libDir);
+    const v3 = saveToLibraryAction(
+      dir,
+      playthrough.id,
+      mira.id,
+      "newVersion",
+      libDir,
+    );
     expect(v3.ok).toBe(true);
     if (!v3.ok) return;
     expect(v3.template.version).toBe(3);
@@ -117,7 +157,9 @@ describe("saveToLibraryAction — newVersion mode", () => {
     const library = readLibrary(libDir);
     expect(library).toHaveLength(3);
     // Whole family shares the lineage
-    expect(library.every((t) => (t.lineageId ?? t.id) === "char_mira")).toBe(true);
+    expect(library.every((t) => (t.lineageId ?? t.id) === "char_mira")).toBe(
+      true,
+    );
   });
 
   it("409s when no library copy exists yet", () => {
@@ -126,7 +168,13 @@ describe("saveToLibraryAction — newVersion mode", () => {
     const playthrough = createPlaythroughRecord(dir, "Lib No Copy");
     const mira = playthrough.characters[0];
 
-    const result = saveToLibraryAction(dir, playthrough.id, mira.id, "newVersion", libDir);
+    const result = saveToLibraryAction(
+      dir,
+      playthrough.id,
+      mira.id,
+      "newVersion",
+      libDir,
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.status).toBe(409);
@@ -146,11 +194,19 @@ describe("saveToLibraryAction — clothing & summary persistence", () => {
       { slot: "Top", name: "Silk blouse", state: "torn" },
       { slot: "Feet", name: "Travel boots", state: "wet" },
     ];
-    const tpl = stored.characterTemplates.find((t) => t.id === mira.templateId)!;
+    const tpl = stored.characterTemplates.find(
+      (t) => t.id === mira.templateId,
+    )!;
     tpl.summary = "A guarded swordswoman";
     updatePlaythroughRecord(dir, stored);
 
-    const result = saveToLibraryAction(dir, playthrough.id, mira.id, "update", libDir);
+    const result = saveToLibraryAction(
+      dir,
+      playthrough.id,
+      mira.id,
+      "update",
+      libDir,
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -159,7 +215,9 @@ describe("saveToLibraryAction — clothing & summary persistence", () => {
       { slot: "Top", name: "Silk blouse" },
       { slot: "Feet", name: "Travel boots" },
     ]);
-    expect(result.template.startingClothing.every((c) => c.state === undefined)).toBe(true);
+    expect(
+      result.template.startingClothing.every((c) => c.state === undefined),
+    ).toBe(true);
   });
 
   it("derives summary from content when the local template summary is empty", () => {
@@ -169,14 +227,24 @@ describe("saveToLibraryAction — clothing & summary persistence", () => {
     const mira = playthrough.characters[0];
 
     const stored = getPlaythroughRecord(dir, playthrough.id)!;
-    const tpl = stored.characterTemplates.find((t) => t.id === mira.templateId)!;
+    const tpl = stored.characterTemplates.find(
+      (t) => t.id === mira.templateId,
+    )!;
     tpl.summary = "";
     updatePlaythroughRecord(dir, stored);
 
-    const result = saveToLibraryAction(dir, playthrough.id, mira.id, "update", libDir);
+    const result = saveToLibraryAction(
+      dir,
+      playthrough.id,
+      mira.id,
+      "update",
+      libDir,
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.template.summary).toBe("Disciplined, guarded, fair, and direct.");
+    expect(result.template.summary).toBe(
+      "Disciplined, guarded, fair, and direct.",
+    );
   });
 });

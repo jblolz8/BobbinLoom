@@ -1,7 +1,14 @@
 import { useMemo, useState } from "react";
 import type { CharacterInstance } from "../../../schemas";
 import type { CharacterEditPayload } from "../../api/characters";
-import { Button, Icon, SwitchRow, TagInput, TextArea, TextInput } from "../base";
+import {
+  Button,
+  Icon,
+  SwitchRow,
+  TagInput,
+  TextArea,
+  TextInput,
+} from "../base";
 import { Dialog } from "../base/Dialog";
 import { ConfirmModal } from "../common/ConfirmModal";
 
@@ -30,7 +37,7 @@ export function SimpleCharacterEditor({
   inScene,
   onSave,
   onFleshOut,
-  onClose
+  onClose,
 }: SimpleCharacterEditorProps) {
   const [form, setForm] = useState<FormState>(() => ({
     name: character.name || "",
@@ -41,7 +48,7 @@ export function SimpleCharacterEditor({
     memorySummary: character.memorySummary || "",
     conditions: [...(character.conditions || [])],
     flags: [...(character.flags || [])],
-    inScene
+    inScene,
   }));
 
   const [saving, setSaving] = useState(false);
@@ -57,7 +64,8 @@ export function SimpleCharacterEditor({
       form.towardPlayer.trim() !== (character.towardPlayer || "").trim() ||
       form.memorySummary.trim() !== (character.memorySummary || "").trim() ||
       form.inScene !== inScene ||
-      JSON.stringify(form.conditions) !== JSON.stringify(character.conditions ?? []) ||
+      JSON.stringify(form.conditions) !==
+        JSON.stringify(character.conditions ?? []) ||
       JSON.stringify(form.flags) !== JSON.stringify(character.flags ?? [])
     );
   }, [form, character, inScene]);
@@ -88,7 +96,7 @@ export function SimpleCharacterEditor({
         memorySummary: form.memorySummary.trim() || undefined,
         conditions: form.conditions,
         flags: form.flags,
-        inScene: form.inScene
+        inScene: form.inScene,
       });
       if (andClose) {
         onClose();
@@ -120,18 +128,26 @@ export function SimpleCharacterEditor({
               variant="primary"
               isLoading={saving}
               disabled={saving || !isDirty}
-              onClick={() => { void handleSave(true); }}
+              onClick={() => {
+                void handleSave(true);
+              }}
             >
               Save & Close
             </Button>
             <Button
               variant="secondary"
               disabled={saving || !isDirty}
-              onClick={() => { void handleSave(false); }}
+              onClick={() => {
+                void handleSave(false);
+              }}
             >
               Save
             </Button>
-            <Button variant="secondary" disabled={saving} onClick={handleRequestClose}>
+            <Button
+              variant="secondary"
+              disabled={saving}
+              onClick={handleRequestClose}
+            >
               Cancel
             </Button>
           </>
@@ -148,7 +164,8 @@ export function SimpleCharacterEditor({
                   <strong>Flesh Out into Full Sheet</strong>
                 </div>
                 <p>
-                  Use the Character Manager to expand this character with a full sheet format, backstory, appearance, and dialogue style.
+                  Use the Character Manager to expand this character with a full
+                  sheet format, backstory, appearance, and dialogue style.
                 </p>
               </div>
               <Button
@@ -165,26 +182,34 @@ export function SimpleCharacterEditor({
           ) : null}
 
           <section className="simple-char-editor-section">
-            <h4 className="simple-char-editor-section-title">Identity & Story Role</h4>
+            <h4 className="simple-char-editor-section-title">
+              Identity & Story Role
+            </h4>
             <div className="simple-char-editor-fields">
               <TextInput
                 label="Name"
                 value={form.name}
                 required
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, name: e.target.value }))
+                }
                 placeholder="Character name"
               />
               <TextInput
                 label="Story Role"
                 value={form.storyRole}
-                onChange={(e) => setForm((f) => ({ ...f, storyRole: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, storyRole: e.target.value }))
+                }
                 placeholder="e.g. Village Elder, Mercenary, Tavern Keeper"
                 helperText="Their narrative role or occupation in the story"
               />
               <TextArea
                 label="Description"
                 value={form.description}
-                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, description: e.target.value }))
+                }
                 rows={3}
                 autoGrow
                 autoGrowMax={180}
@@ -195,7 +220,9 @@ export function SimpleCharacterEditor({
           </section>
 
           <section className="simple-char-editor-section">
-            <h4 className="simple-char-editor-section-title">Presence & Scene State</h4>
+            <h4 className="simple-char-editor-section-title">
+              Presence & Scene State
+            </h4>
             <div className="simple-char-editor-fields">
               <SwitchRow
                 icon="Users"
@@ -206,20 +233,26 @@ export function SimpleCharacterEditor({
                     : "Off-Screen: This character is currently elsewhere or in the background."
                 }
                 checked={form.inScene}
-                onChange={(e) => setForm((f) => ({ ...f, inScene: e.target.checked }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, inScene: e.target.checked }))
+                }
               />
               <div className="simple-char-editor-row">
                 <TextInput
                   label="Mood"
                   value={form.mood}
-                  onChange={(e) => setForm((f) => ({ ...f, mood: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, mood: e.target.value }))
+                  }
                   placeholder="e.g. cautious, cheerful, brooding"
                   helperText="Current emotional demeanor"
                 />
                 <TextInput
                   label="Toward Player"
                   value={form.towardPlayer}
-                  onChange={(e) => setForm((f) => ({ ...f, towardPlayer: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, towardPlayer: e.target.value }))
+                  }
                   placeholder="e.g. friendly, skeptical, hostile"
                   helperText="Attitude toward the protagonist"
                 />
@@ -233,7 +266,9 @@ export function SimpleCharacterEditor({
               <TextArea
                 label="Memory Summary"
                 value={form.memorySummary}
-                onChange={(e) => setForm((f) => ({ ...f, memorySummary: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, memorySummary: e.target.value }))
+                }
                 rows={3}
                 autoGrow
                 autoGrowMax={180}
@@ -244,7 +279,9 @@ export function SimpleCharacterEditor({
           </section>
 
           <section className="simple-char-editor-section">
-            <h4 className="simple-char-editor-section-title">Conditions & Flags</h4>
+            <h4 className="simple-char-editor-section-title">
+              Conditions & Flags
+            </h4>
             <div className="simple-char-editor-fields">
               <label className="editor-field">
                 <span className="editor-field-label">Conditions</span>

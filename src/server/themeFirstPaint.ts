@@ -17,7 +17,12 @@
  * Both sides compile through `src/engine/theme.ts`, which is what keeps this frame and the hydrated frame
  * identical: a difference between them is worse than the flash this replaced.
  */
-import { effectiveThemeMode, themeRootAttributes, themeShapeTokens, themeTokens } from "../engine/theme";
+import {
+  effectiveThemeMode,
+  themeRootAttributes,
+  themeShapeTokens,
+  themeTokens,
+} from "../engine/theme";
 import type { AppSettings } from "../schemas";
 
 /** Sets the mode attribute from the OS preference, for the one case the server cannot resolve. */
@@ -28,10 +33,17 @@ const SYSTEM_MODE_SCRIPT =
 function declarations(settings: AppSettings, mode: "dark" | "light"): string {
   const tokens = {
     ...themeTokens(
-      { themePreset: settings.themePreset, customThemeColors: settings.customThemeColors },
-      mode
+      {
+        themePreset: settings.themePreset,
+        customThemeColors: settings.customThemeColors,
+      },
+      mode,
     ),
-    ...themeShapeTokens({ avatarShape: settings.avatarShape, coverAspect: settings.coverAspect })
+    ...themeShapeTokens({
+      avatarShape: settings.avatarShape,
+      coverAspect: settings.coverAspect,
+      workspaceWidthPercent: settings.workspaceWidthPercent,
+    }),
   };
   return Object.entries(tokens)
     .map(([property, value]) => `${property}:${value};`)
@@ -39,11 +51,17 @@ function declarations(settings: AppSettings, mode: "dark" | "light"): string {
 }
 
 function escapeAttribute(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
 }
 
 /** The `<style>` block and the root attributes for this instance's settings. */
-export function themeFirstPaint(settings: AppSettings): { attributes: string; markup: string } {
+export function themeFirstPaint(settings: AppSettings): {
+  attributes: string;
+  markup: string;
+} {
   const mode = settings.themeMode ?? "dark";
   const system = mode === "system";
   const baseMode = system ? "dark" : effectiveThemeMode(mode, false);
@@ -52,8 +70,8 @@ export function themeFirstPaint(settings: AppSettings): { attributes: string; ma
     themeRootAttributes({
       mode: baseMode,
       avatarShape: settings.avatarShape,
-      coverAspect: settings.coverAspect
-    })
+      coverAspect: settings.coverAspect,
+    }),
   )
     .map(([name, value]) => `${name}="${escapeAttribute(value)}"`)
     .join(" ");
@@ -67,7 +85,7 @@ export function themeFirstPaint(settings: AppSettings): { attributes: string; ma
 
   return {
     attributes,
-    markup: `<style id="theme-first-paint">${blocks}</style>${system ? SYSTEM_MODE_SCRIPT : ""}`
+    markup: `<style id="theme-first-paint">${blocks}</style>${system ? SYSTEM_MODE_SCRIPT : ""}`,
   };
 }
 
@@ -75,9 +93,15 @@ export function themeFirstPaint(settings: AppSettings): { attributes: string; ma
  * The shell with the theme painted in. Applied per request rather than cached at startup: the settings can
  * change while the server runs, and the shell is a couple of kilobytes.
  */
-export function injectThemeFirstPaint(html: string, settings: AppSettings): string {
+export function injectThemeFirstPaint(
+  html: string,
+  settings: AppSettings,
+): string {
   const paint = themeFirstPaint(settings);
   return html
-    .replace(/<html([^>]*)>/, (_match, existing: string) => `<html${existing} ${paint.attributes}>`)
+    .replace(
+      /<html([^>]*)>/,
+      (_match, existing: string) => `<html${existing} ${paint.attributes}>`,
+    )
     .replace("</head>", `    ${paint.markup}\n  </head>`);
 }

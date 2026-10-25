@@ -2,8 +2,15 @@ import type { TurnProvider } from "./provider";
 import { MockProvider } from "./provider";
 import { OpenAICompatibleProvider } from "./openAiCompatibleProvider";
 import { resolveConnectionConfig } from "./providerConfig";
-import type { PublicProviderConnection, ResolvedProviderConfig } from "./providerConfig";
-import type { ImageApiStyle, ProviderConnection, TextProviderSource } from "../schemas";
+import type {
+  PublicProviderConnection,
+  ResolvedProviderConfig,
+} from "./providerConfig";
+import type {
+  ImageApiStyle,
+  ProviderConnection,
+  TextProviderSource,
+} from "../schemas";
 import {
   activeConnectionOfKind,
   createConnection,
@@ -20,7 +27,7 @@ import {
   setProviderTestPrompt,
   testProviderConnection,
   testProviderResponse,
-  updateConnection
+  updateConnection,
 } from "./providerRegistry";
 import type {
   ModelsProbeResult,
@@ -29,14 +36,17 @@ import type {
   StylesProbeResult,
   TestResponseProbeResult,
 } from "./providerRegistry";
-import { createImageProvider, UnconfiguredImageProvider } from "./imageProvider";
+import {
+  createImageProvider,
+  UnconfiguredImageProvider,
+} from "./imageProvider";
 import type { ImageProvider } from "./imageProvider";
 
 export class ProviderManager {
   constructor(
     private readonly dataDir: string,
     private readonly env: NodeJS.ProcessEnv = process.env,
-    private readonly fetchImpl: typeof fetch = fetch
+    private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
   /** The active TEXT connection, or null when no text connection is configured.
@@ -57,7 +67,9 @@ export class ProviderManager {
    *  `imageConnection`, and the reason a deleted choice degrades instead of failing. */
   textConnection(id?: string): ProviderConnection | null {
     if (id) {
-      const explicit = getRegistry(this.dataDir).connections.find((c) => c.id === id && c.kind === "text");
+      const explicit = getRegistry(this.dataDir).connections.find(
+        (c) => c.id === id && c.kind === "text",
+      );
       if (explicit) return explicit;
     }
     return this.activeTextConnection();
@@ -94,7 +106,9 @@ export class ProviderManager {
   getProvider(id?: string): TurnProvider {
     const conn = this.textConnection(id);
     if (!conn) return new MockProvider(); // no text connection configured yet
-    return new OpenAICompatibleProvider(resolveConnectionConfig(conn, this.env));
+    return new OpenAICompatibleProvider(
+      resolveConnectionConfig(conn, this.env),
+    );
   }
 
   /** The chosen connection's budget. Must take the same id as `getProvider`: budgeting
@@ -127,7 +141,9 @@ export class ProviderManager {
    *  whatever is active now would post a body nothing ever composed to an
    *  endpoint that never asked for it, usually without an error. */
   imageConnectionById(id: string): ProviderConnection | null {
-    const explicit = getRegistry(this.dataDir).connections.find((c) => c.id === id && c.kind === "image");
+    const explicit = getRegistry(this.dataDir).connections.find(
+      (c) => c.id === id && c.kind === "image",
+    );
     return explicit ?? null;
   }
 
@@ -144,10 +160,14 @@ export class ProviderManager {
    *  promptProviderId when it still resolves to a text connection, else the
    *  active text connection. null ⇒ no text provider available (the route turns
    *  that into a 400). */
-  resolveImagePromptConfig(imageConn: ProviderConnection | null): ResolvedProviderConfig | null {
+  resolveImagePromptConfig(
+    imageConn: ProviderConnection | null,
+  ): ResolvedProviderConfig | null {
     const reg = getRegistry(this.dataDir);
     if (imageConn?.promptProviderId) {
-      const writer = reg.connections.find((c) => c.id === imageConn.promptProviderId && c.kind === "text");
+      const writer = reg.connections.find(
+        (c) => c.id === imageConn.promptProviderId && c.kind === "text",
+      );
       if (writer) return resolveConnectionConfig(writer, this.env);
     }
     const active = activeConnectionOfKind(reg, "text");
@@ -161,7 +181,10 @@ export class ProviderManager {
   createConnection(input: ProviderConnectionDraft): PublicProviderConnection {
     return createConnection(this.dataDir, input);
   }
-  updateConnection(id: string, input: ProviderConnectionDraft): PublicProviderConnection {
+  updateConnection(
+    id: string,
+    input: ProviderConnectionDraft,
+  ): PublicProviderConnection {
     return updateConnection(this.dataDir, id, input);
   }
   duplicateConnection(id: string): PublicProviderConnection {
@@ -190,14 +213,31 @@ export class ProviderManager {
       const reg = getRegistry(this.dataDir);
       const conn = reg.connections.find((c) => c.id === input.id);
       if (!conn) throw new Error(`Provider not found: ${input.id}`);
-      return { baseUrl: conn.baseUrl, apiKey: conn.apiKey, apiStyle: conn.apiStyle };
+      return {
+        baseUrl: conn.baseUrl,
+        apiKey: conn.apiKey,
+        apiStyle: conn.apiStyle,
+      };
     }
-    if (!input.baseUrl) throw new Error("baseUrl is required when no connection id is given");
-    return { baseUrl: input.baseUrl, apiKey: input.apiKey, apiStyle: input.apiStyle };
+    if (!input.baseUrl)
+      throw new Error("baseUrl is required when no connection id is given");
+    return {
+      baseUrl: input.baseUrl,
+      apiKey: input.apiKey,
+      apiStyle: input.apiStyle,
+    };
   }
 
-  async testConnection(input: { id?: string; baseUrl?: string; apiKey?: string; apiStyle?: ImageApiStyle }) {
-    return testProviderConnection(this.resolveProbeTarget(input), this.fetchImpl);
+  async testConnection(input: {
+    id?: string;
+    baseUrl?: string;
+    apiKey?: string;
+    apiStyle?: ImageApiStyle;
+  }) {
+    return testProviderConnection(
+      this.resolveProbeTarget(input),
+      this.fetchImpl,
+    );
   }
 
   setTestPrompt(testPrompt: string | null): PublicProviderRegistry {
@@ -222,7 +262,9 @@ export class ProviderManager {
     prompt?: string | null;
   }): Promise<TestResponseProbeResult> {
     const reg = getRegistry(this.dataDir);
-    const saved = input.id ? reg.connections.find((c) => c.id === input.id) : undefined;
+    const saved = input.id
+      ? reg.connections.find((c) => c.id === input.id)
+      : undefined;
     const baseUrl = input.baseUrl?.trim() || saved?.baseUrl || "";
     const apiKey =
       input.apiKey === null
@@ -234,7 +276,8 @@ export class ProviderManager {
     if (input.prompt !== undefined) {
       setProviderTestPrompt(this.dataDir, input.prompt);
     }
-    const promptToUse = input.prompt !== undefined ? input.prompt : reg.testPrompt;
+    const promptToUse =
+      input.prompt !== undefined ? input.prompt : reg.testPrompt;
 
     return testProviderResponse(
       {
@@ -243,7 +286,7 @@ export class ProviderManager {
         apiKey,
         prompt: promptToUse,
       },
-      this.fetchImpl
+      this.fetchImpl,
     );
   }
 
@@ -254,7 +297,10 @@ export class ProviderManager {
     type?: string;
     apiStyle?: ImageApiStyle;
   }): Promise<ModelsProbeResult> {
-    return fetchProviderModels({ ...this.resolveProbeTarget(input), type: input.type }, this.fetchImpl);
+    return fetchProviderModels(
+      { ...this.resolveProbeTarget(input), type: input.type },
+      this.fetchImpl,
+    );
   }
 
   /** Probe the provider's image style list (`GET <baseUrl>/image/styles`).
@@ -263,11 +309,21 @@ export class ProviderManager {
    *  OPTIONAL: the endpoint is keyless and has a documented default host, so
    *  the probe's own fallback applies when the caller has none. An unknown id
    *  still throws (the route turns that into a 500, like the models probe). */
-  async fetchImageStyles(input: { id?: string; baseUrl?: string; apiKey?: string }): Promise<StylesProbeResult> {
+  async fetchImageStyles(input: {
+    id?: string;
+    baseUrl?: string;
+    apiKey?: string;
+  }): Promise<StylesProbeResult> {
     if (input.id) {
-      return fetchProviderImageStyles(this.resolveProbeTarget({ id: input.id }), this.fetchImpl);
+      return fetchProviderImageStyles(
+        this.resolveProbeTarget({ id: input.id }),
+        this.fetchImpl,
+      );
     }
-    return fetchProviderImageStyles({ baseUrl: input.baseUrl, apiKey: input.apiKey }, this.fetchImpl);
+    return fetchProviderImageStyles(
+      { baseUrl: input.baseUrl, apiKey: input.apiKey },
+      this.fetchImpl,
+    );
   }
 
   /** Full stored key for a connection — used only for on-demand reveal in the UI. */

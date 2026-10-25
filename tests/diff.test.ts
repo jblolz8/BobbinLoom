@@ -41,7 +41,13 @@ describe("computeLineDiff", () => {
 
   it("terminates when old is longer than new (no infinite loop regression)", () => {
     const result = computeLineDiff("x\ny\nz", "a\nb");
-    expect(result.map((l) => l.type)).toEqual(["removed", "removed", "removed", "added", "added"]);
+    expect(result.map((l) => l.type)).toEqual([
+      "removed",
+      "removed",
+      "removed",
+      "added",
+      "added",
+    ]);
   });
 });
 
@@ -56,14 +62,18 @@ describe("computeTwoPaneDiff", () => {
 
   it("handles a pure insertion (added line, no removed neighbor)", () => {
     const rows = computeTwoPaneDiff("A\nC", "A\nB\nC");
-    const inserted = rows.find((r) => r.left === null && r.right?.content === "B");
+    const inserted = rows.find(
+      (r) => r.left === null && r.right?.content === "B",
+    );
     expect(inserted).toBeDefined();
     expect(inserted!.right!.type).toBe("added");
   });
 
   it("handles a pure deletion (removed line, no added neighbor)", () => {
     const rows = computeTwoPaneDiff("A\nX\nC", "A\nC");
-    const deleted = rows.find((r) => r.right === null && r.left?.content === "X");
+    const deleted = rows.find(
+      (r) => r.right === null && r.left?.content === "X",
+    );
     expect(deleted).toBeDefined();
     expect(deleted!.left!.type).toBe("removed");
   });
@@ -71,16 +81,22 @@ describe("computeTwoPaneDiff", () => {
   it("returns identical left+right for identical text", () => {
     const rows = computeTwoPaneDiff("a\nb", "a\nb");
     expect(rows).toHaveLength(2);
-    expect(rows.every((r) => r.left?.type === "same" && r.right?.type === "same")).toBe(true);
+    expect(
+      rows.every((r) => r.left?.type === "same" && r.right?.type === "same"),
+    ).toBe(true);
   });
 
   it("handles empty old text (all added)", () => {
     const rows = computeTwoPaneDiff("", "x\ny");
-    expect(rows.every((r) => r.left === null && r.right?.type === "added")).toBe(true);
+    expect(
+      rows.every((r) => r.left === null && r.right?.type === "added"),
+    ).toBe(true);
   });
 
   it("handles empty new text (all removed)", () => {
     const rows = computeTwoPaneDiff("x\ny", "");
-    expect(rows.every((r) => r.right === null && r.left?.type === "removed")).toBe(true);
+    expect(
+      rows.every((r) => r.right === null && r.left?.type === "removed"),
+    ).toBe(true);
   });
 });

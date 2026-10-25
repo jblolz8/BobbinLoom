@@ -21,7 +21,12 @@ export function Icon({
   ...props
 }: IconProps) {
   // Access the icon component by name from LucideIcons
-  const IconComponent = (LucideIcons as unknown as Record<string, React.ComponentType<LucideIcons.LucideProps>>)[name];
+  const IconComponent = (
+    LucideIcons as unknown as Record<
+      string,
+      React.ComponentType<LucideIcons.LucideProps>
+    >
+  )[name];
 
   if (!IconComponent) {
     console.warn(`[Icon] Icon "${name}" not found in lucide-react.`);

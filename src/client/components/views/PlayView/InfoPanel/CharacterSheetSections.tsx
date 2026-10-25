@@ -4,9 +4,12 @@ import {
   PHYSICAL_SECTION_HEADERS,
   pickSections,
   isStubSection,
-  type ContentSection
+  type ContentSection,
 } from "../../../../../engine/characterSections";
-import { latestChange, type SectionChange } from "../../../../engine/sheetProvenance";
+import {
+  latestChange,
+  type SectionChange,
+} from "../../../../engine/sheetProvenance";
 import { Tooltip } from "../../../base";
 
 type CharacterSheetSectionsProps = {
@@ -24,11 +27,11 @@ export function CharacterSheetSections({
   content,
   headers,
   marks,
-  renderSectionExtra
+  renderSectionExtra,
 }: CharacterSheetSectionsProps) {
   const sections = useMemo(
     () => pickSections(content, headers ?? PHYSICAL_SECTION_HEADERS),
-    [content, headers]
+    [content, headers],
   );
 
   /** The log spells the header the way the patch did, so the match is case-insensitive. */
@@ -48,11 +51,17 @@ export function CharacterSheetSections({
     <div className="char-sheet-sections">
       {sections.map((section, i) => {
         const stub = isStubSection(section);
-        const lines = section.body.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+        const lines = section.body
+          .split("\n")
+          .map((l) => l.trim())
+          .filter((l) => l.length > 0);
         const changes = changesFor(section.header);
         const latest = latestChange(changes ?? undefined);
         return (
-          <section className="char-sheet-section" key={`${section.header}-${i}`}>
+          <section
+            className="char-sheet-section"
+            key={`${section.header}-${i}`}
+          >
             <h4>
               {section.header}
               {latest ? (
@@ -68,11 +77,17 @@ export function CharacterSheetSections({
                   }
                 >
                   {/* The story grew this section; the turn is the anchor back to the exchange that did it. */}
-                  <span className="sheet-mark">changed · turn {latest.turn}</span>
+                  <span className="sheet-mark">
+                    changed · turn {latest.turn}
+                  </span>
                 </Tooltip>
               ) : null}
             </h4>
-            {stub ? <p className="sheet-stub">(not established)</p> : renderSheetBody(lines)}
+            {stub ? (
+              <p className="sheet-stub">(not established)</p>
+            ) : (
+              renderSheetBody(lines)
+            )}
             {renderSectionExtra?.(section)}
           </section>
         );
@@ -88,14 +103,19 @@ function renderSheetBody(lines: string[]): ReactNode[] {
     if (bullets.length === 0) return;
     out.push(
       <ul key={`ul-${out.length}`} className="sheet-bullets">
-        {bullets.map((b, i) => <li key={i}>{b.replace(/^-\s*/, "")}</li>)}
-      </ul>
+        {bullets.map((b, i) => (
+          <li key={i}>{b.replace(/^-\s*/, "")}</li>
+        ))}
+      </ul>,
     );
     bullets = [];
   };
   for (const line of lines) {
     if (line.startsWith("- ")) bullets.push(line);
-    else { flush(); out.push(<p key={`p-${out.length}`}>{line}</p>); }
+    else {
+      flush();
+      out.push(<p key={`p-${out.length}`}>{line}</p>);
+    }
   }
   flush();
   return out;

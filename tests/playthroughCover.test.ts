@@ -18,7 +18,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { ParsedCard } from "../src/server/characterCards/parseCard";
 import { createBlankPlaythrough } from "../src/engine/playthroughFactory";
 import type { CharacterTemplate, Playthrough } from "../src/schemas";
-import { COVER_COLLAGE_LIMIT, resolvePlaythroughCover } from "../src/server/coverResolver";
+import {
+  COVER_COLLAGE_LIMIT,
+  resolvePlaythroughCover,
+} from "../src/server/coverResolver";
 import { saveImageBytes, sweepOrphanImages } from "../src/server/imageStore";
 import { ProviderManager } from "../src/server/providerManager";
 import { imageRoutes } from "../src/server/routes/images";
@@ -30,9 +33,14 @@ import {
   listPlaythroughRecords,
   resolveCharacterPortraits,
   setPlaythroughCoverRecord,
-  updatePlaythroughRecord
+  updatePlaythroughRecord,
 } from "../src/server/store";
-import { cleanupTempDirs, pngBytes, tempDir, writePlaythroughWithImages } from "./helpers/imageFixtures";
+import {
+  cleanupTempDirs,
+  pngBytes,
+  tempDir,
+  writePlaythroughWithImages,
+} from "./helpers/imageFixtures";
 
 afterEach(cleanupTempDirs);
 
@@ -55,7 +63,7 @@ function harness(): {
     dataDir,
     imagesDir,
     manager: new ProviderManager(settingsDir),
-    settingsDir
+    settingsDir,
   });
   return { app, root, dataDir, imagesDir, charactersDir };
 }
@@ -81,16 +89,27 @@ function card(name: string): ParsedCard {
     creator: "test",
     creatorNotes: "",
     tags: [],
-    characterVersion: "1"
+    characterVersion: "1",
   };
 }
 
 /** A character with art: an imported CCv2 card whose PNG is the portrait fallback. */
-function characterWithArt(charactersDir: string, name: string): CharacterTemplate {
-  return importCharacterCard(card(name), pngBytes(`card-${name}`), "png", charactersDir).record;
+function characterWithArt(
+  charactersDir: string,
+  name: string,
+): CharacterTemplate {
+  return importCharacterCard(
+    card(name),
+    pngBytes(`card-${name}`),
+    "png",
+    charactersDir,
+  ).record;
 }
 
-function coverOf(playthrough: Playthrough, opts: { imagesDir: string; charactersDir?: string }) {
+function coverOf(
+  playthrough: Playthrough,
+  opts: { imagesDir: string; charactersDir?: string },
+) {
   return resolvePlaythroughCover(playthrough, opts);
 }
 
@@ -100,20 +119,26 @@ describe("resolvePlaythroughCover", () => {
     const latest = storeImage(imagesDir, "latest");
     const manual = storeImage(imagesDir, "manual");
     const pt = writePlaythroughWithImages(dataDir, "Picked", [[latest]], {
-      cover: { file: manual, updatedAt: "2026-02-01T00:00:00.000Z" }
+      cover: { file: manual, updatedAt: "2026-02-01T00:00:00.000Z" },
     });
 
-    expect(coverOf(pt, { imagesDir })).toEqual({ source: "manual", file: manual });
+    expect(coverOf(pt, { imagesDir })).toEqual({
+      source: "manual",
+      file: manual,
+    });
   });
 
   it("falls through when the manual pick's file is gone", () => {
     const { dataDir, imagesDir } = harness();
     const latest = storeImage(imagesDir, "latest");
     const pt = writePlaythroughWithImages(dataDir, "Stale", [[latest]], {
-      cover: { file: missingFile("ab"), updatedAt: "2026-02-01T00:00:00.000Z" }
+      cover: { file: missingFile("ab"), updatedAt: "2026-02-01T00:00:00.000Z" },
     });
 
-    expect(coverOf(pt, { imagesDir })).toEqual({ source: "latest", file: latest });
+    expect(coverOf(pt, { imagesDir })).toEqual({
+      source: "latest",
+      file: latest,
+    });
   });
 
   it("takes the newest visible message's LAST image", () => {
@@ -121,28 +146,49 @@ describe("resolvePlaythroughCover", () => {
     const first = storeImage(imagesDir, "first");
     const older = storeImage(imagesDir, "older");
     const newest = storeImage(imagesDir, "newest");
-    const pt = writePlaythroughWithImages(dataDir, "Newest", [[first], [older], [newest, first]]);
+    const pt = writePlaythroughWithImages(dataDir, "Newest", [
+      [first],
+      [older],
+      [newest, first],
+    ]);
 
-    expect(coverOf(pt, { imagesDir })).toEqual({ source: "latest", file: first });
+    expect(coverOf(pt, { imagesDir })).toEqual({
+      source: "latest",
+      file: first,
+    });
   });
 
   it("ignores images on hidden messages", () => {
     const { dataDir, imagesDir } = harness();
     const visible = storeImage(imagesDir, "visible");
     const hidden = storeImage(imagesDir, "hidden");
-    const pt = writePlaythroughWithImages(dataDir, "Hidden", [[visible], [], [hidden]]);
+    const pt = writePlaythroughWithImages(dataDir, "Hidden", [
+      [visible],
+      [],
+      [hidden],
+    ]);
     pt.messages[2].hidden = true;
     updatePlaythroughRecord(dataDir, pt);
 
-    expect(coverOf(pt, { imagesDir })).toEqual({ source: "latest", file: visible });
+    expect(coverOf(pt, { imagesDir })).toEqual({
+      source: "latest",
+      file: visible,
+    });
   });
 
   it("keeps walking back when a newer image's file is missing on disk", () => {
     const { dataDir, imagesDir } = harness();
     const present = storeImage(imagesDir, "present");
-    const pt = writePlaythroughWithImages(dataDir, "Walk", [[present], [], [missingFile("cd")]]);
+    const pt = writePlaythroughWithImages(dataDir, "Walk", [
+      [present],
+      [],
+      [missingFile("cd")],
+    ]);
 
-    expect(coverOf(pt, { imagesDir })).toEqual({ source: "latest", file: present });
+    expect(coverOf(pt, { imagesDir })).toEqual({
+      source: "latest",
+      file: present,
+    });
   });
 
   it("builds a collage from the PRESENT cast, in cast order, skipping characters with no art", () => {
@@ -150,13 +196,20 @@ describe("resolvePlaythroughCover", () => {
     const aria = characterWithArt(charactersDir, "Aria");
     const bran = characterWithArt(charactersDir, "Bran");
     const cyn = createCharacterTemplateRecord("Cyn", charactersDir); // BL-native: no art
-    const pt = createBlankPlaythrough("Cast Story", undefined, [aria, bran, cyn]);
+    const pt = createBlankPlaythrough("Cast Story", undefined, [
+      aria,
+      bran,
+      cyn,
+    ]);
     updatePlaythroughRecord(dataDir, pt);
 
     expect(coverOf(pt, { imagesDir, charactersDir })).toEqual({
       source: "cast",
       characterCount: 2,
-      characters: [{ id: aria.id, name: "Aria" }, { id: bran.id, name: "Bran" }]
+      characters: [
+        { id: aria.id, name: "Aria" },
+        { id: bran.id, name: "Bran" },
+      ],
     });
   });
 
@@ -171,20 +224,22 @@ describe("resolvePlaythroughCover", () => {
     expect(coverOf(pt, { imagesDir, charactersDir })).toEqual({
       source: "cast",
       characterCount: 1,
-      characters: [{ id: aria.id, name: "Aria" }]
+      characters: [{ id: aria.id, name: "Aria" }],
     });
   });
 
   it(`caps the collage at ${COVER_COLLAGE_LIMIT} characters`, () => {
     const { dataDir, imagesDir, charactersDir } = harness();
     const cast = ["One", "Two", "Three", "Four", "Five"].map((name) =>
-      characterWithArt(charactersDir, name)
+      characterWithArt(charactersDir, name),
     );
     const pt = createBlankPlaythrough("Crowd", undefined, cast);
     updatePlaythroughRecord(dataDir, pt);
 
     const cover = coverOf(pt, { imagesDir, charactersDir });
-    expect(cover?.characters?.map((c) => c.id)).toEqual(cast.slice(0, COVER_COLLAGE_LIMIT).map((t) => t.id));
+    expect(cover?.characters?.map((c) => c.id)).toEqual(
+      cast.slice(0, COVER_COLLAGE_LIMIT).map((t) => t.id),
+    );
     // The card says "+N" for the rest, so the count travels BEFORE the cap.
     expect(cover?.characterCount).toBe(cast.length);
   });
@@ -204,10 +259,12 @@ describe("resolveCharacterPortraits", () => {
     const cyn = createCharacterTemplateRecord("Cyn", charactersDir);
     const bran = characterWithArt(charactersDir, "Bran");
 
-    expect(resolveCharacterPortraits([aria.id, cyn.id, bran.id, "char_missing"], charactersDir)).toEqual([
-      { id: aria.id },
-      { id: bran.id }
-    ]);
+    expect(
+      resolveCharacterPortraits(
+        [aria.id, cyn.id, bran.id, "char_missing"],
+        charactersDir,
+      ),
+    ).toEqual([{ id: aria.id }, { id: bran.id }]);
   });
 });
 
@@ -245,7 +302,7 @@ describe("the cover routes", () => {
     const res = await h.app.inject({
       method: "POST",
       url: `/api/playthroughs/${pt.id}/cover`,
-      payload: { file }
+      payload: { file },
     });
 
     expect(res.statusCode).toBe(200);
@@ -253,10 +310,13 @@ describe("the cover routes", () => {
     expect(body.cover?.file).toBe(file);
     expect(body.updatedAt).toBe(before);
 
-    const list = await h.app.inject({ method: "GET", url: "/api/playthroughs" });
-    const listed = (list.json() as { playthroughs: { id: string; cover: unknown }[] }).playthroughs.find(
-      (p) => p.id === pt.id
-    );
+    const list = await h.app.inject({
+      method: "GET",
+      url: "/api/playthroughs",
+    });
+    const listed = (
+      list.json() as { playthroughs: { id: string; cover: unknown }[] }
+    ).playthroughs.find((p) => p.id === pt.id);
     expect(listed?.cover).toEqual({ source: "manual", file });
   });
 
@@ -267,7 +327,7 @@ describe("the cover routes", () => {
     const res = await h.app.inject({
       method: "POST",
       url: `/api/playthroughs/${pt.id}/cover`,
-      payload: { file: missingFile("ef") }
+      payload: { file: missingFile("ef") },
     });
 
     expect(res.statusCode).toBe(400);
@@ -281,7 +341,7 @@ describe("the cover routes", () => {
     const res = await h.app.inject({
       method: "POST",
       url: `/api/playthroughs/${pt.id}/cover`,
-      payload: { file: "../data/images/secret.png" }
+      payload: { file: "../data/images/secret.png" },
     });
 
     expect(res.statusCode).toBe(400);
@@ -294,7 +354,7 @@ describe("the cover routes", () => {
     const res = await h.app.inject({
       method: "POST",
       url: "/api/playthroughs/play_nope/cover",
-      payload: { file }
+      payload: { file },
     });
 
     expect(res.statusCode).toBe(404);
@@ -305,17 +365,23 @@ describe("the cover routes", () => {
     const latest = storeImage(h.imagesDir, "latest");
     const manual = storeImage(h.imagesDir, "manual");
     const pt = writePlaythroughWithImages(h.dataDir, "Cleared", [[latest]], {
-      cover: { file: manual, updatedAt: "2026-02-01T00:00:00.000Z" }
+      cover: { file: manual, updatedAt: "2026-02-01T00:00:00.000Z" },
     });
 
-    const res = await h.app.inject({ method: "DELETE", url: `/api/playthroughs/${pt.id}/cover` });
+    const res = await h.app.inject({
+      method: "DELETE",
+      url: `/api/playthroughs/${pt.id}/cover`,
+    });
     expect(res.statusCode).toBe(200);
     expect((res.json() as Playthrough).cover).toBeUndefined();
 
-    const list = await h.app.inject({ method: "GET", url: "/api/playthroughs" });
-    const listed = (list.json() as { playthroughs: { id: string; cover: unknown }[] }).playthroughs.find(
-      (p) => p.id === pt.id
-    );
+    const list = await h.app.inject({
+      method: "GET",
+      url: "/api/playthroughs",
+    });
+    const listed = (
+      list.json() as { playthroughs: { id: string; cover: unknown }[] }
+    ).playthroughs.find((p) => p.id === pt.id);
     expect(listed?.cover).toEqual({ source: "latest", file: latest });
   });
 });
@@ -325,7 +391,7 @@ describe("the sweep counts cover references", () => {
     const { dataDir, imagesDir } = harness();
     const file = storeImage(imagesDir, "cover-only");
     const pt = writePlaythroughWithImages(dataDir, "CoverOnly", [], {
-      cover: { file, updatedAt: "2026-02-01T00:00:00.000Z" }
+      cover: { file, updatedAt: "2026-02-01T00:00:00.000Z" },
     });
 
     sweepOrphanImages(listPlaythroughRecords(dataDir).playthroughs, imagesDir);
@@ -343,13 +409,13 @@ describe("removing the image that IS the cover", () => {
     const h = harness();
     const file = storeImage(h.imagesDir, "worn");
     const pt = writePlaythroughWithImages(h.dataDir, "Worn", [[file]], {
-      cover: { file, updatedAt: "2026-02-01T00:00:00.000Z" }
+      cover: { file, updatedAt: "2026-02-01T00:00:00.000Z" },
     });
     const messageId = pt.messages[0].id;
 
     const res = await h.app.inject({
       method: "DELETE",
-      url: `/api/playthroughs/${pt.id}/messages/${messageId}/images/${file}`
+      url: `/api/playthroughs/${pt.id}/messages/${messageId}/images/${file}`,
     });
 
     expect(res.statusCode).toBe(200);
@@ -364,12 +430,12 @@ describe("removing the image that IS the cover", () => {
     const worn = storeImage(h.imagesDir, "worn");
     const kept = storeImage(h.imagesDir, "kept");
     const pt = writePlaythroughWithImages(h.dataDir, "Unrelated", [[worn]], {
-      cover: { file: kept, updatedAt: "2026-02-01T00:00:00.000Z" }
+      cover: { file: kept, updatedAt: "2026-02-01T00:00:00.000Z" },
     });
 
     await h.app.inject({
       method: "DELETE",
-      url: `/api/playthroughs/${pt.id}/messages/${pt.messages[0].id}/images/${worn}`
+      url: `/api/playthroughs/${pt.id}/messages/${pt.messages[0].id}/images/${worn}`,
     });
 
     expect(getPlaythroughRecord(h.dataDir, pt.id)?.cover?.file).toBe(kept);

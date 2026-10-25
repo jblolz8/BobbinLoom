@@ -51,7 +51,8 @@ export function AvatarBadge({
   const initialLetter = name ? name.trim().charAt(0).toUpperCase() : null;
   const isInteractive = typeof onClick === "function";
 
-  const shapeClass = shape === "global" ? "avatar-shape-global" : `avatar-shape-${shape}`;
+  const shapeClass =
+    shape === "global" ? "avatar-shape-global" : `avatar-shape-${shape}`;
   const sizeClass = typeof size === "string" ? `avatar-size-${size}` : "";
 
   return (
@@ -80,7 +81,10 @@ export function AvatarBadge({
           <Icon name={icon} size={Math.max(12, Math.round(sizePx * 0.52))} />
         </div>
       ) : initialLetter ? (
-        <div className="avatar-badge-fallback is-letter" style={{ fontSize: `${Math.max(10, Math.round(sizePx * 0.44))}px` }}>
+        <div
+          className="avatar-badge-fallback is-letter"
+          style={{ fontSize: `${Math.max(10, Math.round(sizePx * 0.44))}px` }}
+        >
           {initialLetter}
         </div>
       ) : (

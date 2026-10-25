@@ -7,15 +7,24 @@ import {
   scanLorebooks,
   takeTurnSnapshot,
   restoreSnapshotState,
-  updateTimingStates
+  updateTimingStates,
 } from "../engine/engine";
-import { planDeletion, planRevert, retryAnchorMessageId, type RevertAnchor } from "../engine/chapterRevert";
+import {
+  planDeletion,
+  planRevert,
+  retryAnchorMessageId,
+  type RevertAnchor,
+} from "../engine/chapterRevert";
 import type { Playthrough, PromptConfig, ScenarioSeed } from "../schemas";
 import type { EntryTimingState, LorebookEntry, TurnSnapshot } from "../schemas";
 import type { TurnProvider } from "./provider";
 import type { PromptUsageBreakdown } from "./provider";
 import type { MeasuredUsage } from "./provider";
-import { getLorebook, getPlaythroughRecord, updatePlaythroughRecord } from "./store";
+import {
+  getLorebook,
+  getPlaythroughRecord,
+  updatePlaythroughRecord,
+} from "./store";
 import { buildFleshOutStoryContext } from "./stateActions";
 import { ensureAllSections } from "../engine/characterFormat";
 import { seedMemorySummary } from "../engine/characterSections";
@@ -93,19 +102,36 @@ export async function executeTurn(
   suggestedChoicesEnabled: boolean,
   contextWindow: number = 65536,
   options?: TurnOptions,
-  promptConfig?: PromptConfig
+  promptConfig?: PromptConfig,
 ): Promise<TurnExecution> {
   const snapshot = takeTurnSnapshot(playthrough);
   const parsedInput = parseUserInput(input);
   const startTime = performance.now();
-  const { turn: assistantTurn, promptUsage, measuredUsage, model, rawInput, rawOutput, finishReason } = await provider.generateTurn(parsedInput, playthrough, suggestedChoicesEnabled, promptConfig ?? { modules: { turn: [] } }, options?.signal);
+  const {
+    turn: assistantTurn,
+    promptUsage,
+    measuredUsage,
+    model,
+    rawInput,
+    rawOutput,
+    finishReason,
+  } = await provider.generateTurn(
+    parsedInput,
+    playthrough,
+    suggestedChoicesEnabled,
+    promptConfig ?? { modules: { turn: [] } },
+    options?.signal,
+  );
   const durationMs = Math.round(performance.now() - startTime);
 
   const charProvider = options?.characterProvider ?? provider;
   if (assistantTurn.statePatch?.characterFleshOut) {
-    const { characterId, content: presetContent } = assistantTurn.statePatch.characterFleshOut;
+    const { characterId, content: presetContent } =
+      assistantTurn.statePatch.characterFleshOut;
     const character = playthrough.characters.find(
-      (c) => c.id === characterId || c.name.toLowerCase() === characterId.toLowerCase()
+      (c) =>
+        c.id === characterId ||
+        c.name.toLowerCase() === characterId.toLowerCase(),
     );
     if (character && !character.templateId) {
       try {
@@ -114,20 +140,25 @@ export async function executeTurn(
           const context = buildFleshOutStoryContext(
             playthrough,
             character,
-            options?.contextWindow ?? contextWindow
+            options?.contextWindow ?? contextWindow,
           );
           content = await charProvider.generateCharacterSheet(
-            { name: character.name, description: character.description ?? "", storyRole: character.storyRole },
+            {
+              name: character.name,
+              description: character.description ?? "",
+              storyRole: character.storyRole,
+            },
             context,
             options?.signal,
-            promptConfig?.characterFormat
+            promptConfig?.characterFormat,
           );
         }
         content = ensureAllSections(content, promptConfig?.characterFormat);
         const memorySummary = seedMemorySummary(character.name, content);
         assistantTurn.statePatch.characterFleshOut.characterId = character.id;
         assistantTurn.statePatch.characterFleshOut.content = content;
-        assistantTurn.statePatch.characterFleshOut.memorySummary = memorySummary;
+        assistantTurn.statePatch.characterFleshOut.memorySummary =
+          memorySummary;
       } catch (error) {
         console.warn(`Failed to flesh out character ${character.name}`, error);
         delete assistantTurn.statePatch.characterFleshOut;
@@ -137,10 +168,16 @@ export async function executeTurn(
     }
   }
 
-  const existingMemoryEventIds = new Set(playthrough.memoryEvents.map((e) => e.id));
+  const existingMemoryEventIds = new Set(
+    playthrough.memoryEvents.map((e) => e.id),
+  );
 
   const patchResult = assistantTurn.statePatch
-    ? applyStatePatch(playthrough, assistantTurn.statePatch, promptConfig?.characterFormat)
+    ? applyStatePatch(
+        playthrough,
+        assistantTurn.statePatch,
+        promptConfig?.characterFormat,
+      )
     : { state: playthrough, applied: [], rejected: [], warnings: [] };
 
   const next = patchResult.state;
@@ -151,7 +188,9 @@ export async function executeTurn(
   const currentTurn = next.turn;
 
   // ── Isolate turn assignment and embeddings strictly to NEW memory events ──
-  const newMemoryEvents = next.memoryEvents.filter((e) => !existingMemoryEventIds.has(e.id));
+  const newMemoryEvents = next.memoryEvents.filter(
+    (e) => !existingMemoryEventIds.has(e.id),
+  );
   for (const event of newMemoryEvents) {
     event.turn = currentTurn;
   }
@@ -167,12 +206,16 @@ export async function executeTurn(
       }
     } catch (error) {
       // Embedding failed — events stay unembedded, keyword fallback handles them
-      console.error(`executeTurn: embedding computation failed: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(
+        `executeTurn: embedding computation failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
   // Guard against blank narratives from any provider path — an empty string
   // (or whitespace) must never become an invisible chat message.
-  const narrative = assistantTurn.narrative.trim() ? assistantTurn.narrative : "The provider returned an empty response.";
+  const narrative = assistantTurn.narrative.trim()
+    ? assistantTurn.narrative
+    : "The provider returned an empty response.";
   next.messages.push(
     {
       id: `msg_${randomUUID()}`,
@@ -180,7 +223,7 @@ export async function executeTurn(
       content: input,
       createdAt: now,
       turn: currentTurn,
-      ...(options?.hideUserMessage ? { hidden: true } : {})
+      ...(options?.hideUserMessage ? { hidden: true } : {}),
     },
     {
       id: assistantMessageId,
@@ -195,13 +238,22 @@ export async function executeTurn(
       // prompt (stateless by design), so without this the only view of it is the
       // transient Debug panel.
       ...(assistantTurn.statePatch
-        ? { patchInfo: { applied: patchResult.applied, rejected: patchResult.rejected, warnings: patchResult.warnings } }
+        ? {
+            patchInfo: {
+              applied: patchResult.applied,
+              rejected: patchResult.rejected,
+              warnings: patchResult.warnings,
+            },
+          }
         : {}),
       ...(model ? { model } : {}),
-      ...(options?.chapterOpening ? { chapterOpening: true } : {})
-    }
+      ...(options?.chapterOpening ? { chapterOpening: true } : {}),
+    },
   );
-  next.snapshots = { ...(next.snapshots ?? {}), [assistantMessageId]: snapshot };
+  next.snapshots = {
+    ...(next.snapshots ?? {}),
+    [assistantMessageId]: snapshot,
+  };
   next.updatedAt = now;
 
   // ── Update lorebook timing states ──
@@ -216,8 +268,8 @@ export async function executeTurn(
     }
     if (allEntries.length > 0) {
       const scanMessages = next.messages
-        .filter(m => !m.hidden)
-        .map(m => ({ role: m.role, content: m.content }));
+        .filter((m) => !m.hidden)
+        .map((m) => ({ role: m.role, content: m.content }));
       const previousStates = new Map<number, EntryTimingState>();
       if (next.lorebookTimingStates) {
         for (const [key, ts] of Object.entries(next.lorebookTimingStates)) {
@@ -227,11 +279,20 @@ export async function executeTurn(
       const scanned = scanLorebooks({
         messages: scanMessages,
         entries: allEntries,
-        lorebookDefaults: { scanDepth: 2, caseSensitive: false, matchWholeWords: false },
+        lorebookDefaults: {
+          scanDepth: 2,
+          caseSensitive: false,
+          matchWholeWords: false,
+        },
         timingStates: previousStates,
         currentMessageIndex: scanMessages.length,
       });
-      const newTiming = updateTimingStates(allEntries, scanned, previousStates, scanMessages.length);
+      const newTiming = updateTimingStates(
+        allEntries,
+        scanned,
+        previousStates,
+        scanMessages.length,
+      );
       // Convert Map back to record for JSON serialization
       const timingRecord: Record<string, EntryTimingState> = {};
       for (const [uid, ts] of newTiming) {
@@ -248,13 +309,15 @@ export async function executeTurn(
   Object.assign(next, {
     memoryEvents: rotated.memoryEvents,
     memoryLayers: rotated.memoryLayers,
-    updatedAt: rotated.updatedAt
+    updatedAt: rotated.updatedAt,
   });
 
   // ── Token usage: real measurement from the provider, or fixed fallback estimate ──
   const castPresence = {
-    present: next.characters.filter((c) => next.activeCharacters.includes(c.id)).length,
-    absent: next.characters.filter((c) => !next.activeCharacters.includes(c.id)).length,
+    present: next.characters.filter((c) => next.activeCharacters.includes(c.id))
+      .length,
+    absent: next.characters.filter((c) => !next.activeCharacters.includes(c.id))
+      .length,
   };
   const tokenUsage: TokenUsage = promptUsage
     ? {
@@ -262,7 +325,7 @@ export async function executeTurn(
         contextWindow,
         breakdown: promptUsage.breakdown,
         castPresence,
-        ...(measuredUsage ? { measured: measuredUsage } : {})
+        ...(measuredUsage ? { measured: measuredUsage } : {}),
       }
     : estimateTokenUsageFallback(next, input, contextWindow, promptConfig);
 
@@ -270,7 +333,9 @@ export async function executeTurn(
   // turn's budget maths self-corrects. Only a real measurement updates it —
   // a MockProvider turn leaves any existing ratio untouched.
   if (measuredUsage && promptUsage && promptUsage.estimated > 0) {
-    next.tokenCalibration = clampCalibration(measuredUsage.promptTokens / promptUsage.estimated);
+    next.tokenCalibration = clampCalibration(
+      measuredUsage.promptTokens / promptUsage.estimated,
+    );
   }
 
   return {
@@ -293,41 +358,61 @@ export async function executeTurn(
  * Rough chars/4 estimate used only when the provider doesn't supply a real
  * measurement (e.g. MockProvider, which assembles no prompt).
  */
-function estimateTokenUsageFallback(state: Playthrough, input: string, contextWindow: number, promptConfig?: PromptConfig): TokenUsage {
+function estimateTokenUsageFallback(
+  state: Playthrough,
+  input: string,
+  contextWindow: number,
+  promptConfig?: PromptConfig,
+): TokenUsage {
   const est = (text: string) => Math.ceil(text.length / 4);
 
   const moduleContent = Object.values(promptConfig?.modules ?? {})
     .flat()
     .filter((m) => m.enabled)
     .sort((a, b) => a.order - b.order)
-    .map((m) => m.content).join("\n\n");
+    .map((m) => m.content)
+    .join("\n\n");
 
   // Output format instructions are ~1800 chars of JSON guidance
   const outputFormatChars = 1800;
 
-  const stateChars = state.characters.reduce((sum, c) => {
-    const tpl = state.characterTemplates.find((t) => t.id === c.templateId);
-    const present = state.activeCharacters.includes(c.id);
-    return sum + (present
-      ? c.name.length + (tpl?.content.length ?? c.description?.length ?? 300) + 80      // full sheet + runtime state
-      : Math.min(c.name.length + c.memorySummary.length + 160, 260)); // one-liner, capped
-  }, 0)
-    + state.inventory.reduce((sum, i) => sum + i.itemId.length + 20, 0)
-    + (state.worldState ?? []).reduce((sum, ws) => sum + ws.name.length + ws.description.length + 40, 0)
-    + 200; // player + flags overhead
+  const stateChars =
+    state.characters.reduce((sum, c) => {
+      const tpl = state.characterTemplates.find((t) => t.id === c.templateId);
+      const present = state.activeCharacters.includes(c.id);
+      return (
+        sum +
+        (present
+          ? c.name.length +
+            (tpl?.content.length ?? c.description?.length ?? 300) +
+            80 // full sheet + runtime state
+          : Math.min(c.name.length + c.memorySummary.length + 160, 260))
+      ); // one-liner, capped
+    }, 0) +
+    state.inventory.reduce((sum, i) => sum + i.itemId.length + 20, 0) +
+    (state.worldState ?? []).reduce(
+      (sum, ws) => sum + ws.name.length + ws.description.length + 40,
+      0,
+    ) +
+    200; // player + flags overhead
 
   const chatHistory = state.messages
-    .filter(m => !m.hidden)
+    .filter((m) => !m.hidden)
     .slice(-12)
-    .map(m => m.content).join("\n");
+    .map((m) => m.content)
+    .join("\n");
 
-  const memoryText = state.memoryEvents.map(e => e.summary).join("\n");
+  const memoryText = state.memoryEvents.map((e) => e.summary).join("\n");
   const memoryLayersText = [
     ...(state.memoryLayers?.recent ?? []),
     ...(state.memoryLayers?.compressed ?? []),
-  ].map(e => e.summary).join("\n");
+  ]
+    .map((e) => e.summary)
+    .join("\n");
 
-  const storySoFarText = (state.chapters ?? []).map(ch => ch.fullSummary).join("\n\n");
+  const storySoFarText = (state.chapters ?? [])
+    .map((ch) => ch.fullSummary)
+    .join("\n\n");
 
   const breakdown: TokenBreakdown = {
     modules: est(moduleContent),
@@ -346,8 +431,12 @@ function estimateTokenUsageFallback(state: Playthrough, input: string, contextWi
     contextWindow,
     breakdown,
     castPresence: {
-      present: state.characters.filter((c) => state.activeCharacters.includes(c.id)).length,
-      absent: state.characters.filter((c) => !state.activeCharacters.includes(c.id)).length,
+      present: state.characters.filter((c) =>
+        state.activeCharacters.includes(c.id),
+      ).length,
+      absent: state.characters.filter(
+        (c) => !state.activeCharacters.includes(c.id),
+      ).length,
     },
   };
 }
@@ -375,29 +464,41 @@ export async function retryAssistantTurn(
   signal?: AbortSignal,
   promptConfig?: PromptConfig,
   imagesDir: string = defaultImagesDir(dataDir),
-  characterProvider?: TurnProvider
+  characterProvider?: TurnProvider,
 ): Promise<RetryOutcome> {
   const playthrough = getPlaythroughRecord(dataDir, playthroughId);
   if (!playthrough) {
     return { ok: false, status: 404, error: "Playthrough not found" };
   }
 
-  const assistantIndex = playthrough.messages.findIndex((message) => message.id === assistantMessageId);
+  const assistantIndex = playthrough.messages.findIndex(
+    (message) => message.id === assistantMessageId,
+  );
   if (assistantIndex === -1) {
     return { ok: false, status: 404, error: "Message not found" };
   }
   if (playthrough.messages[assistantIndex].role !== "assistant") {
-    return { ok: false, status: 400, error: "Only assistant responses can be retried" };
+    return {
+      ok: false,
+      status: 400,
+      error: "Only assistant responses can be retried",
+    };
   }
 
   // The anchor and the plan come from the ENGINE rather than from a walk of this function's own: the
   // confirmation dialog computes the same two things from the same record, and that is the only
   // reason the count it shows can be trusted to be the count that goes.
   const anchorId = retryAnchorMessageId(playthrough, assistantMessageId);
-  const anchor = anchorId ? playthrough.messages.find((message) => message.id === anchorId) : undefined;
+  const anchor = anchorId
+    ? playthrough.messages.find((message) => message.id === anchorId)
+    : undefined;
   const plan = anchorId ? planDeletion(playthrough, anchorId) : null;
   if (!anchor || !plan) {
-    return { ok: false, status: 400, error: "No user message exists before this response" };
+    return {
+      ok: false,
+      status: 400,
+      error: "No user message exists before this response",
+    };
   }
 
   const userInput = anchor.content;
@@ -410,7 +511,7 @@ export async function retryAssistantTurn(
   const retryOptions: TurnOptions = {
     chapterOpening: originalAssistant.chapterOpening ?? false,
     hideUserMessage: originalUser.hidden ?? false,
-    characterProvider
+    characterProvider,
   };
 
   // The SAME delete-and-rewind `truncateChat` and `revertAction` use: inclusive from the plan's cut,
@@ -428,7 +529,7 @@ export async function retryAssistantTurn(
     suggestedChoicesEnabled,
     contextWindow,
     { ...retryOptions, ...(signal ? { signal } : {}) },
-    promptConfig
+    promptConfig,
   );
 
   // Client cancelled — drop the regenerated turn without persisting it.
@@ -454,14 +555,16 @@ export function editChatMessage(
   dataDir: string,
   playthroughId: string,
   messageId: string,
-  content: string
+  content: string,
 ): EditOutcome {
   const playthrough = getPlaythroughRecord(dataDir, playthroughId);
   if (!playthrough) {
     return { ok: false, status: 404, error: "Playthrough not found" };
   }
 
-  const message = playthrough.messages.find((candidate) => candidate.id === messageId);
+  const message = playthrough.messages.find(
+    (candidate) => candidate.id === messageId,
+  );
   if (!message) {
     return { ok: false, status: 404, error: "Message not found" };
   }
@@ -498,20 +601,26 @@ function defaultImagesDir(dataDir: string): string {
  */
 function deleteFrom(playthrough: Playthrough, index: number): Playthrough {
   const deletedBlock = playthrough.messages.slice(index);
-  const targetAssistant = deletedBlock.find((message) => message.role === "assistant");
-  const snapshot = targetAssistant ? playthrough.snapshots?.[targetAssistant.id] : undefined;
+  const targetAssistant = deletedBlock.find(
+    (message) => message.role === "assistant",
+  );
+  const snapshot = targetAssistant
+    ? playthrough.snapshots?.[targetAssistant.id]
+    : undefined;
 
   // Inclusive delete: keep messages[0..index-1]; drop the message and everything after.
   const next: Playthrough = {
     ...playthrough,
-    messages: playthrough.messages.slice(0, index)
+    messages: playthrough.messages.slice(0, index),
   };
   restoreSnapshotState(next, snapshot);
 
   // Permanently drop snapshots belonging to messages that no longer exist.
   const liveMessageIds = new Set(next.messages.map((message) => message.id));
   next.snapshots = Object.fromEntries(
-    Object.entries(next.snapshots ?? {}).filter(([messageId]) => liveMessageIds.has(messageId))
+    Object.entries(next.snapshots ?? {}).filter(([messageId]) =>
+      liveMessageIds.has(messageId),
+    ),
   );
   next.updatedAt = new Date().toISOString();
   return next;
@@ -525,14 +634,16 @@ export function truncateChat(
   dataDir: string,
   playthroughId: string,
   messageId: string,
-  imagesDir: string = defaultImagesDir(dataDir)
+  imagesDir: string = defaultImagesDir(dataDir),
 ): EditOutcome {
   const playthrough = getPlaythroughRecord(dataDir, playthroughId);
   if (!playthrough) {
     return { ok: false, status: 404, error: "Playthrough not found" };
   }
 
-  const index = playthrough.messages.findIndex((message) => message.id === messageId);
+  const index = playthrough.messages.findIndex(
+    (message) => message.id === messageId,
+  );
   if (index === -1) {
     return { ok: false, status: 404, error: "Message not found" };
   }
@@ -563,7 +674,7 @@ export function revertAction(
   dataDir: string,
   playthroughId: string,
   anchor: RevertAnchor,
-  imagesDir: string = defaultImagesDir(dataDir)
+  imagesDir: string = defaultImagesDir(dataDir),
 ): EditOutcome {
   const playthrough = getPlaythroughRecord(dataDir, playthroughId);
   if (!playthrough) {
@@ -575,7 +686,8 @@ export function revertAction(
     return {
       ok: false,
       status: 400,
-      error: "That is not an archived chapter or response, so there is nothing to revert to"
+      error:
+        "That is not an archived chapter or response, so there is nothing to revert to",
     };
   }
 
@@ -602,9 +714,14 @@ export function revertAction(
   // Runs AFTER the restore on purpose: a chapter-level revert restores the state as
   // the chapter ENDED, which still contains the chapter record this revert is
   // un-closing — so the record has to be filtered out here, not assumed absent.
-  next.chapters = (next.chapters ?? []).filter((chapter) => !dropped.has(chapter.id));
+  next.chapters = (next.chapters ?? []).filter(
+    (chapter) => !dropped.has(chapter.id),
+  );
   next.storyMetaSummaries = (next.storyMetaSummaries ?? [])
-    .map((meta) => ({ ...meta, chapterIds: meta.chapterIds.filter((id) => !dropped.has(id)) }))
+    .map((meta) => ({
+      ...meta,
+      chapterIds: meta.chapterIds.filter((id) => !dropped.has(id)),
+    }))
     // A meta left with nothing folded into it is only dead weight in the prompt.
     .filter((meta) => meta.chapterIds.length > 0);
   next.currentChapterStartedAtTurn = plan.currentChapterStartedAtTurn;
@@ -616,12 +733,13 @@ export function revertAction(
   // not — so the events the deleted turns recorded are pruned by turn instead.
   if (plan.approximate) {
     next.turn = plan.keptTailTurn;
-    const survive = <T extends { turn: number }>(event: T) => event.turn <= plan.keptTailTurn;
+    const survive = <T extends { turn: number }>(event: T) =>
+      event.turn <= plan.keptTailTurn;
     next.memoryEvents = next.memoryEvents.filter(survive);
     if (next.memoryLayers) {
       next.memoryLayers = {
         recent: next.memoryLayers.recent.filter(survive),
-        compressed: next.memoryLayers.compressed.filter(survive)
+        compressed: next.memoryLayers.compressed.filter(survive),
       };
     }
   }
@@ -645,21 +763,32 @@ export function revertAction(
 }
 
 /** Persist has already happened for both callers — this is the best-effort half. */
-function sweepAfterDeleteForward(dataDir: string, playthroughId: string, imagesDir: string): void {
+function sweepAfterDeleteForward(
+  dataDir: string,
+  playthroughId: string,
+  imagesDir: string,
+): void {
   try {
     sweepOrphansInDataDir(dataDir, imagesDir);
   } catch (error) {
-    console.warn(`[images] orphan sweep after deleting forward in playthrough ${playthroughId} failed:`, error);
+    console.warn(
+      `[images] orphan sweep after deleting forward in playthrough ${playthroughId} failed:`,
+      error,
+    );
   }
 }
 
-export function buildOpeningPrompt(scenarioDescription: string | undefined, seed: ScenarioSeed): string {
+export function buildOpeningPrompt(
+  scenarioDescription: string | undefined,
+  seed: ScenarioSeed,
+): string {
   const parts: string[] = [];
-  if (scenarioDescription?.trim()) parts.push(`World context: ${scenarioDescription.trim()}`);
+  if (scenarioDescription?.trim())
+    parts.push(`World context: ${scenarioDescription.trim()}`);
   parts.push(
     "Introduce the scene to the player character. Establish the atmosphere and immediate surroundings. " +
-    "Write in second person. Do not take actions on behalf of the player. " +
-    "End by presenting the current moment as an invitation for the player to act."
+      "Write in second person. Do not take actions on behalf of the player. " +
+      "End by presenting the current moment as an invitation for the player to act.",
   );
   return parts.join("\n\n");
 }

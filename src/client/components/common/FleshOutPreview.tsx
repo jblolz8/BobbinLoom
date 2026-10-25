@@ -15,7 +15,7 @@ export function FleshOutPreview({
   busy,
   onConfirm,
   onRegenerate,
-  onCancel
+  onCancel,
 }: FleshOutPreviewProps) {
   return (
     <div
@@ -28,7 +28,9 @@ export function FleshOutPreview({
         <header className="modal-header">
           <div>
             <h2>Flesh Out &quot;{character.name}&quot;?</h2>
-            <p>Review the generated detailed character sheet before committing.</p>
+            <p>
+              Review the generated detailed character sheet before committing.
+            </p>
           </div>
           <div className="modal-header-actions">
             <button type="button" onClick={onCancel} disabled={busy}>

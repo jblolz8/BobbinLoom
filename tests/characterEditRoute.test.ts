@@ -5,7 +5,10 @@ import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 import { afterEach, describe, expect, it } from "vitest";
 import { characterRoutes } from "../src/server/routes/characters";
-import { createPlaythroughRecord, getPlaythroughRecord } from "../src/server/store";
+import {
+  createPlaythroughRecord,
+  getPlaythroughRecord,
+} from "../src/server/store";
 import { applyStatePatch } from "../src/engine/engine";
 import type { Playthrough } from "../src/schemas";
 
@@ -32,7 +35,13 @@ describe("PUT /api/playthroughs/:id/characters/:characterId", () => {
 
     // Add a simple character via state action
     const patched = applyStatePatch(pt, {
-      characterAddSimple: [{ name: "Old Bartender", description: "Grumpy guy", storyRole: "Tavern keeper" }]
+      characterAddSimple: [
+        {
+          name: "Old Bartender",
+          description: "Grumpy guy",
+          storyRole: "Tavern keeper",
+        },
+      ],
     });
     pt = patched.state;
     const { updatePlaythroughRecord } = await import("../src/server/store");
@@ -53,15 +62,19 @@ describe("PUT /api/playthroughs/:id/characters/:characterId", () => {
         towardPlayer: "welcoming",
         memorySummary: "Met the adventurer yesterday.",
         conditions: ["Drunk"],
-        flags: ["Gave Free Drink"]
-      }
+        flags: ["Gave Free Drink"],
+      },
     });
 
     expect(res.statusCode).toBe(200);
     const updatedPt = res.json() as Playthrough;
-    const updatedChar = updatedPt.characters.find((c) => c.id === simpleChar.id)!;
+    const updatedChar = updatedPt.characters.find(
+      (c) => c.id === simpleChar.id,
+    )!;
     expect(updatedChar.name).toBe("Barnaby the Barkeep");
-    expect(updatedChar.description).toBe("A warm and friendly dwarf serving ale.");
+    expect(updatedChar.description).toBe(
+      "A warm and friendly dwarf serving ale.",
+    );
     expect(updatedChar.storyRole).toBe("Tavern Owner");
     expect(updatedChar.mood).toBe("cheerful");
     expect(updatedChar.towardPlayer).toBe("welcoming");
@@ -71,9 +84,13 @@ describe("PUT /api/playthroughs/:id/characters/:characterId", () => {
 
     // Reload from store to verify persistence
     const reloaded = getPlaythroughRecord(h.dataDir, pt.id);
-    const reloadedChar = reloaded?.characters.find((c) => c.id === simpleChar.id)!;
+    const reloadedChar = reloaded?.characters.find(
+      (c) => c.id === simpleChar.id,
+    )!;
     expect(reloadedChar.name).toBe("Barnaby the Barkeep");
-    expect(reloadedChar.description).toBe("A warm and friendly dwarf serving ale.");
+    expect(reloadedChar.description).toBe(
+      "A warm and friendly dwarf serving ale.",
+    );
     expect(reloadedChar.storyRole).toBe("Tavern Owner");
     expect(reloadedChar.mood).toBe("cheerful");
     expect(reloadedChar.conditions).toEqual(["Drunk"]);
@@ -92,8 +109,8 @@ describe("PUT /api/playthroughs/:id/characters/:characterId", () => {
       method: "PUT",
       url: `/api/playthroughs/${pt.id}/characters/${char.id}`,
       payload: {
-        inScene: false
-      }
+        inScene: false,
+      },
     });
 
     expect(res1.statusCode).toBe(200);
@@ -109,8 +126,8 @@ describe("PUT /api/playthroughs/:id/characters/:characterId", () => {
       method: "PUT",
       url: `/api/playthroughs/${pt.id}/characters/${char.id}`,
       payload: {
-        inScene: true
-      }
+        inScene: true,
+      },
     });
 
     expect(res2.statusCode).toBe(200);
@@ -132,8 +149,8 @@ describe("PUT /api/playthroughs/:id/characters/:characterId", () => {
       url: `/api/playthroughs/${pt.id}/characters/${char.id}`,
       payload: {
         name: "Mira Vance",
-        mood: "determined"
-      }
+        mood: "determined",
+      },
     });
 
     expect(res.statusCode).toBe(200);
@@ -142,18 +159,27 @@ describe("PUT /api/playthroughs/:id/characters/:characterId", () => {
     expect(updatedChar.name).toBe("Mira Vance");
     expect(updatedChar.mood).toBe("determined");
 
-    const updatedTpl = body.characterTemplates.find((t) => t.id === char.templateId)!;
+    const updatedTpl = body.characterTemplates.find(
+      (t) => t.id === char.templateId,
+    )!;
     expect(updatedTpl.name).toBe("Mira Vance");
 
     // Check storage persistence
     const reloaded = getPlaythroughRecord(h.dataDir, pt.id);
-    expect(reloaded?.characters.find((c) => c.id === char.id)?.name).toBe("Mira Vance");
-    expect(reloaded?.characterTemplates.find((t) => t.id === char.templateId)?.name).toBe("Mira Vance");
+    expect(reloaded?.characters.find((c) => c.id === char.id)?.name).toBe(
+      "Mira Vance",
+    );
+    expect(
+      reloaded?.characterTemplates.find((t) => t.id === char.templateId)?.name,
+    ).toBe("Mira Vance");
   });
 
   it("edits template-backed character storyRole, summary, description, and inScene", async () => {
     const h = harness();
-    const pt = createPlaythroughRecord(h.dataDir, "Detailed Char Role & Presence Test");
+    const pt = createPlaythroughRecord(
+      h.dataDir,
+      "Detailed Char Role & Presence Test",
+    );
     const char = pt.characters[0];
     expect(char.templateId).toBeDefined();
 
@@ -165,27 +191,36 @@ describe("PUT /api/playthroughs/:id/characters/:characterId", () => {
         summary: "A stalwart ally guarding the eastern gate.",
         description: "A stalwart ally guarding the eastern gate.",
         inScene: false,
-      }
+      },
     });
 
     expect(res.statusCode).toBe(200);
     const body = res.json() as Playthrough;
     const updatedChar = body.characters.find((c) => c.id === char.id)!;
     expect(updatedChar.storyRole).toBe("Trusted Confidante");
-    expect(updatedChar.description).toBe("A stalwart ally guarding the eastern gate.");
+    expect(updatedChar.description).toBe(
+      "A stalwart ally guarding the eastern gate.",
+    );
     expect(body.activeCharacters).not.toContain(char.id);
 
-    const updatedTpl = body.characterTemplates.find((t) => t.id === char.templateId)!;
-    expect(updatedTpl.summary).toBe("A stalwart ally guarding the eastern gate.");
+    const updatedTpl = body.characterTemplates.find(
+      (t) => t.id === char.templateId,
+    )!;
+    expect(updatedTpl.summary).toBe(
+      "A stalwart ally guarding the eastern gate.",
+    );
 
     // Check storage persistence
     const reloaded = getPlaythroughRecord(h.dataDir, pt.id);
     const reloadedChar = reloaded?.characters.find((c) => c.id === char.id)!;
     expect(reloadedChar.storyRole).toBe("Trusted Confidante");
-    expect(reloadedChar.description).toBe("A stalwart ally guarding the eastern gate.");
-    expect(reloaded?.activeCharacters).not.toContain(char.id);
-    expect(reloaded?.characterTemplates.find((t) => t.id === char.templateId)?.summary).toBe(
-      "A stalwart ally guarding the eastern gate."
+    expect(reloadedChar.description).toBe(
+      "A stalwart ally guarding the eastern gate.",
     );
+    expect(reloaded?.activeCharacters).not.toContain(char.id);
+    expect(
+      reloaded?.characterTemplates.find((t) => t.id === char.templateId)
+        ?.summary,
+    ).toBe("A stalwart ally guarding the eastern gate.");
   });
 });

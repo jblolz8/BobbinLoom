@@ -92,7 +92,10 @@ export type DeletionFacts = {
  * messages earlier (see below), so callers read `truncationIndex` back off the result rather than
  * trusting the index they passed.
  */
-function deletionFromIndex(playthrough: Playthrough, index: number): DeletionPlan {
+function deletionFromIndex(
+  playthrough: Playthrough,
+  index: number,
+): DeletionPlan {
   const messages = playthrough.messages;
 
   // A synthetic instruction left dangling at the cut — the hidden user message of a turn whose
@@ -109,14 +112,17 @@ function deletionFromIndex(playthrough: Playthrough, index: number): DeletionPla
   }
 
   const deletedBlock = messages.slice(truncationIndex);
-  const restorePoint = deletedBlock.find((message) => message.role === "assistant");
+  const restorePoint = deletedBlock.find(
+    (message) => message.role === "assistant",
+  );
   const keptTail = messages[truncationIndex - 1];
 
   return {
     truncationIndex,
     restorePointMessageId: restorePoint?.id ?? null,
-    approximate: restorePoint !== undefined && !playthrough.snapshots?.[restorePoint.id],
-    keptTailTurn: keptTail?.turn ?? 0
+    approximate:
+      restorePoint !== undefined && !playthrough.snapshots?.[restorePoint.id],
+    keptTailTurn: keptTail?.turn ?? 0,
   };
 }
 
@@ -127,8 +133,13 @@ function deletionFromIndex(playthrough: Playthrough, index: number): DeletionPla
  * live chat's own delete action), while a retry REQUIRES one, so the rule belongs to each caller
  * rather than here.
  */
-export function planDeletion(playthrough: Playthrough, messageId: string): DeletionPlan | null {
-  const index = playthrough.messages.findIndex((message) => message.id === messageId);
+export function planDeletion(
+  playthrough: Playthrough,
+  messageId: string,
+): DeletionPlan | null {
+  const index = playthrough.messages.findIndex(
+    (message) => message.id === messageId,
+  );
   if (index === -1) return null;
   return deletionFromIndex(playthrough, index);
 }
@@ -143,13 +154,16 @@ export function planDeletion(playthrough: Playthrough, messageId: string): Delet
  */
 export function retryAnchorMessageId(
   playthrough: Playthrough,
-  assistantMessageId: string
+  assistantMessageId: string,
 ): string | null {
-  const index = playthrough.messages.findIndex((message) => message.id === assistantMessageId);
+  const index = playthrough.messages.findIndex(
+    (message) => message.id === assistantMessageId,
+  );
   if (index === -1) return null;
   if (playthrough.messages[index].role !== "assistant") return null;
   for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
-    if (playthrough.messages[cursor].role === "user") return playthrough.messages[cursor].id;
+    if (playthrough.messages[cursor].role === "user")
+      return playthrough.messages[cursor].id;
   }
   return null;
 }
@@ -161,7 +175,10 @@ export function retryAnchorMessageId(
  * surviving messages return to the running chapter, its summary record is discarded), discard
  * every message from the truncation point on, and rewind the world to the end of the kept region.
  */
-export function planRevert(playthrough: Playthrough, anchor: RevertAnchor): RevertPlan | null {
+export function planRevert(
+  playthrough: Playthrough,
+  anchor: RevertAnchor,
+): RevertPlan | null {
   const chapters = playthrough.chapters ?? [];
   const messages = playthrough.messages;
 
@@ -170,7 +187,9 @@ export function planRevert(playthrough: Playthrough, anchor: RevertAnchor): Reve
   let truncationIndex: number;
 
   if (anchor.kind === "chapter") {
-    chapterIndex = chapters.findIndex((chapter) => chapter.id === anchor.chapterId);
+    chapterIndex = chapters.findIndex(
+      (chapter) => chapter.id === anchor.chapterId,
+    );
     if (chapterIndex === -1) return null;
     const chapter = chapters[chapterIndex];
 
@@ -195,7 +214,9 @@ export function planRevert(playthrough: Playthrough, anchor: RevertAnchor): Reve
     if (lastIndex === -1) return null;
     truncationIndex = lastIndex + 1;
   } else {
-    truncationIndex = messages.findIndex((message) => message.id === anchor.messageId);
+    truncationIndex = messages.findIndex(
+      (message) => message.id === anchor.messageId,
+    );
     if (truncationIndex === -1) return null;
     const chapterId = messages[truncationIndex].chapterId;
     // Only an archived message is a revert anchor. Truncating the running chapter is the live
@@ -210,7 +231,9 @@ export function planRevert(playthrough: Playthrough, anchor: RevertAnchor): Reve
   const deletion = deletionFromIndex(playthrough, truncationIndex);
   const cut = deletion.truncationIndex;
 
-  const droppedChapterIds = chapters.slice(chapterIndex).map((chapter) => chapter.id);
+  const droppedChapterIds = chapters
+    .slice(chapterIndex)
+    .map((chapter) => chapter.id);
   const dropped = new Set(droppedChapterIds);
 
   // A surviving message still tagged with a dropped chapter becomes live again. Read from the
@@ -221,7 +244,8 @@ export function planRevert(playthrough: Playthrough, anchor: RevertAnchor): Reve
   for (let index = 0; index < cut; index += 1) {
     const chapterId = messages[index].chapterId;
     if (!chapterId || !dropped.has(chapterId)) continue;
-    if (!unarchivedChapterIds.includes(chapterId)) unarchivedChapterIds.push(chapterId);
+    if (!unarchivedChapterIds.includes(chapterId))
+      unarchivedChapterIds.push(chapterId);
     runningChapterId = chapterId;
   }
 
@@ -238,7 +262,7 @@ export function planRevert(playthrough: Playthrough, anchor: RevertAnchor): Reve
     unarchivedChapterIds,
     droppedChapterIds,
     runningChapterId,
-    currentChapterStartedAtTurn
+    currentChapterStartedAtTurn,
   };
 }
 
@@ -259,7 +283,7 @@ export function planRevert(playthrough: Playthrough, anchor: RevertAnchor): Reve
  */
 export function describeDeletion(
   plan: DeletionPlan & { droppedChapterIds?: string[] },
-  playthrough: Playthrough
+  playthrough: Playthrough,
 ): DeletionFacts {
   const deleted = playthrough.messages.slice(plan.truncationIndex);
   const surviving = new Set<string>();
@@ -280,7 +304,7 @@ export function describeDeletion(
     images: doomed.size,
     chapters: plan.droppedChapterIds?.length ?? 0,
     approximate: plan.approximate,
-    ...sheetReversion(plan, playthrough)
+    ...sheetReversion(plan, playthrough),
   };
 }
 
@@ -297,19 +321,30 @@ export function describeDeletion(
  */
 function sheetReversion(
   plan: DeletionPlan & { droppedChapterIds?: string[] },
-  playthrough: Playthrough
-): { sheetsRewound: string[]; sheetsRemoved: string[]; sheetsRestored: string[] } {
+  playthrough: Playthrough,
+): {
+  sheetsRewound: string[];
+  sheetsRemoved: string[];
+  sheetsRestored: string[];
+} {
   const empty = { sheetsRewound: [], sheetsRemoved: [], sheetsRestored: [] };
   if (!plan.restorePointMessageId) return empty;
   const snapshot = playthrough.snapshots?.[plan.restorePointMessageId];
   if (!snapshot) return empty;
 
   const atRestorePoint = new Map(
-    (snapshot.characterTemplates ?? []).map((template) => [template.id, template])
+    (snapshot.characterTemplates ?? []).map((template) => [
+      template.id,
+      template,
+    ]),
   );
   // The cast the restore point held, for the sheet that is gone now.
-  const castAtRestorePoint = new Set((snapshot.characters ?? []).map((character) => character.templateId));
-  const stillHere = new Set(playthrough.characterTemplates.map((template) => template.id));
+  const castAtRestorePoint = new Set(
+    (snapshot.characters ?? []).map((character) => character.templateId),
+  );
+  const stillHere = new Set(
+    playthrough.characterTemplates.map((template) => template.id),
+  );
 
   const sheetsRewound: string[] = [];
   const sheetsRemoved: string[] = [];
@@ -317,20 +352,26 @@ function sheetReversion(
 
   for (const template of playthrough.characterTemplates) {
     const before = atRestorePoint.get(template.id);
-    const instance = playthrough.characters.find((character) => character.templateId === template.id);
+    const instance = playthrough.characters.find(
+      (character) => character.templateId === template.id,
+    );
     const name = instance?.name ?? template.name ?? template.id;
 
     if (!before) {
       if (!sheetsRemoved.includes(name)) sheetsRemoved.push(name);
       continue;
     }
-    if (before.content !== template.content || before.summary !== template.summary) {
+    if (
+      before.content !== template.content ||
+      before.summary !== template.summary
+    ) {
       if (!sheetsRewound.includes(name)) sheetsRewound.push(name);
     }
   }
 
   for (const template of snapshot.characterTemplates ?? []) {
-    if (stillHere.has(template.id) || !castAtRestorePoint.has(template.id)) continue;
+    if (stillHere.has(template.id) || !castAtRestorePoint.has(template.id))
+      continue;
     const name = template.name ?? template.id;
     if (!sheetsRestored.includes(name)) sheetsRestored.push(name);
   }
@@ -363,6 +404,8 @@ export function toRevertAnchor(target: RevertTarget): RevertAnchor {
  */
 export type RevertRequestAnchor = { kind: "chapter" | "message"; id: string };
 
-export function toRevertRequestAnchor(target: RevertTarget): RevertRequestAnchor {
+export function toRevertRequestAnchor(
+  target: RevertTarget,
+): RevertRequestAnchor {
   return { kind: target.kind, id: target.id };
 }

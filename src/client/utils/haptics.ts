@@ -3,7 +3,10 @@
  * Uses the Web Vibration API with safe feature detection and error handling.
  */
 export function triggerHaptic(durationMs = 8): void {
-  if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+  if (
+    typeof navigator !== "undefined" &&
+    typeof navigator.vibrate === "function"
+  ) {
     try {
       navigator.vibrate(durationMs);
     } catch {

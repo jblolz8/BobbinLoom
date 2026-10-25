@@ -10,7 +10,12 @@ export type TabItem<T extends string = string> = {
   title?: string;
 };
 
-export type TabsVariant = "underline" | "pill" | "enclosed" | "segmented" | "sidebar";
+export type TabsVariant =
+  | "underline"
+  | "pill"
+  | "enclosed"
+  | "segmented"
+  | "sidebar";
 
 export type TabsProps<T extends string = string> = {
   tabs: TabItem<T>[];
@@ -31,22 +36,21 @@ export interface TabPanelProps extends React.HTMLAttributes<HTMLDivElement> {
   children?: React.ReactNode;
 }
 
-export const TabPanel = React.forwardRef<HTMLDivElement, TabPanelProps>(function TabPanel(
-  { active, className = "", children, ...props },
-  ref
-) {
-  return (
-    <div
-      ref={ref}
-      role="tabpanel"
-      hidden={!active}
-      className={["base-tab-panel", className].filter(Boolean).join(" ")}
-      {...props}
-    >
-      {children}
-    </div>
-  );
-});
+export const TabPanel = React.forwardRef<HTMLDivElement, TabPanelProps>(
+  function TabPanel({ active, className = "", children, ...props }, ref) {
+    return (
+      <div
+        ref={ref}
+        role="tabpanel"
+        hidden={!active}
+        className={["base-tab-panel", className].filter(Boolean).join(" ")}
+        {...props}
+      >
+        {children}
+      </div>
+    );
+  },
+);
 
 function TabsRoot<T extends string = string>({
   tabs,

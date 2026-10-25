@@ -15,7 +15,12 @@ import { imageRoutes } from "../src/server/routes/images";
 import { playthroughRoutes } from "../src/server/routes/playthroughs";
 import { getPlaythroughRecord } from "../src/server/store";
 import { truncateChat } from "../src/server/turnActions";
-import { cleanupTempDirs, pngBytes, tempDir, writePlaythroughWithImages } from "./helpers/imageFixtures";
+import {
+  cleanupTempDirs,
+  pngBytes,
+  tempDir,
+  writePlaythroughWithImages,
+} from "./helpers/imageFixtures";
 
 afterEach(cleanupTempDirs);
 
@@ -34,7 +39,7 @@ function harness() {
     dataDir,
     imagesDir,
     manager: new ProviderManager(settingsDir),
-    settingsDir
+    settingsDir,
   });
   return { app, root, settingsDir, dataDir, imagesDir };
 }
@@ -58,7 +63,11 @@ function deletePlaythrough(app: FastifyInstance, id: string) {
 describe("DELETE /api/playthroughs/:id sweeps the image store", () => {
   it("removes an image that only the deleted playthrough referenced", async () => {
     const h = harness();
-    const only = saveImageBytes(pngBytes("solo"), "image/png", h.imagesDir).file;
+    const only = saveImageBytes(
+      pngBytes("solo"),
+      "image/png",
+      h.imagesDir,
+    ).file;
     const pt = writePlaythroughWithImages(h.dataDir, "Solo", [[only]]);
     expect(storedFiles(h.imagesDir)).toEqual([only]);
 
@@ -73,8 +82,16 @@ describe("DELETE /api/playthroughs/:id sweeps the image store", () => {
   it("keeps an image that another playthrough still references", async () => {
     const h = harness();
     // Identical bytes → one file on disk shared by both records.
-    const shared = saveImageBytes(pngBytes("shared"), "image/png", h.imagesDir).file;
-    const orphan = saveImageBytes(pngBytes("orphan-b"), "image/png", h.imagesDir).file;
+    const shared = saveImageBytes(
+      pngBytes("shared"),
+      "image/png",
+      h.imagesDir,
+    ).file;
+    const orphan = saveImageBytes(
+      pngBytes("orphan-b"),
+      "image/png",
+      h.imagesDir,
+    ).file;
     const doomed = writePlaythroughWithImages(h.dataDir, "Doomed", [[shared]]);
     const keeper = writePlaythroughWithImages(h.dataDir, "Keeper", [[shared]]);
 
@@ -85,24 +102,43 @@ describe("DELETE /api/playthroughs/:id sweeps the image store", () => {
     // the whole store — not just the two obvious files.
     expect(storedFiles(h.imagesDir)).toEqual([shared]);
     // The surviving record keeps its reference (and its bytes).
-    expect(getPlaythroughRecord(h.dataDir, keeper.id)?.messages[0].images?.[0].file).toBe(shared);
+    expect(
+      getPlaythroughRecord(h.dataDir, keeper.id)?.messages[0].images?.[0].file,
+    ).toBe(shared);
   });
 
   it("keeps an image that a surviving timeline branch still references", async () => {
     const h = harness();
-    const branchFile = saveImageBytes(pngBytes("branch"), "image/png", h.imagesDir).file;
-    const orphan = saveImageBytes(pngBytes("orphan-c"), "image/png", h.imagesDir).file;
-    const parent = writePlaythroughWithImages(h.dataDir, "Parent", [[branchFile]]);
+    const branchFile = saveImageBytes(
+      pngBytes("branch"),
+      "image/png",
+      h.imagesDir,
+    ).file;
+    const orphan = saveImageBytes(
+      pngBytes("orphan-c"),
+      "image/png",
+      h.imagesDir,
+    ).file;
+    const parent = writePlaythroughWithImages(h.dataDir, "Parent", [
+      [branchFile],
+    ]);
     // A timeline branch is EXCLUDED from the default playthrough list — the
     // sweep has to ask for branches explicitly or this file dies with the parent.
-    const branch = writePlaythroughWithImages(h.dataDir, "Branch", [[branchFile]], { isTimelineBranch: true });
+    const branch = writePlaythroughWithImages(
+      h.dataDir,
+      "Branch",
+      [[branchFile]],
+      { isTimelineBranch: true },
+    );
 
     const res = await deletePlaythrough(h.app, parent.id);
 
     expect(res.statusCode).toBe(200);
     expect(storedFiles(h.imagesDir)).toEqual([branchFile]);
     expect(storedFiles(h.imagesDir)).not.toContain(orphan);
-    expect(getPlaythroughRecord(h.dataDir, branch.id)?.messages[0].images?.[0].file).toBe(branchFile);
+    expect(
+      getPlaythroughRecord(h.dataDir, branch.id)?.messages[0].images?.[0].file,
+    ).toBe(branchFile);
   });
 
   it("still reports the delete as successful when the sweep fails", async () => {
@@ -132,17 +168,37 @@ describe("truncateChat sweeps the image store", () => {
    *  here — nothing points at the real `data/`. */
   function truncHarness() {
     const root = tempDir("bobbinloom-truncate-");
-    return { root, dataDir: join(root, "playthroughs"), imagesDir: join(root, "images") };
+    return {
+      root,
+      dataDir: join(root, "playthroughs"),
+      imagesDir: join(root, "images"),
+    };
   }
 
   it("removes an image only the truncated messages referenced and keeps a surviving message's image", () => {
     const h = truncHarness();
-    const kept = saveImageBytes(pngBytes("kept"), "image/png", h.imagesDir).file;
-    const truncated = saveImageBytes(pngBytes("truncated"), "image/png", h.imagesDir).file;
-    const orphan = saveImageBytes(pngBytes("orphan-d"), "image/png", h.imagesDir).file;
+    const kept = saveImageBytes(
+      pngBytes("kept"),
+      "image/png",
+      h.imagesDir,
+    ).file;
+    const truncated = saveImageBytes(
+      pngBytes("truncated"),
+      "image/png",
+      h.imagesDir,
+    ).file;
+    const orphan = saveImageBytes(
+      pngBytes("orphan-d"),
+      "image/png",
+      h.imagesDir,
+    ).file;
 
     // msg0 (assistant, kept) · msg1 (user) · msg2 (assistant, truncated away).
-    const pt = writePlaythroughWithImages(h.dataDir, "Trunc", [[kept], [], [truncated]]);
+    const pt = writePlaythroughWithImages(h.dataDir, "Trunc", [
+      [kept],
+      [],
+      [truncated],
+    ]);
     const survivorId = pt.messages[0].id;
     const cutoffId = pt.messages[2].id;
 
@@ -153,28 +209,54 @@ describe("truncateChat sweeps the image store", () => {
     // unrelated orphan are both gone — proof the sweep scanned the store.
     expect(storedFiles(h.imagesDir)).toEqual([kept]);
     const stored = getPlaythroughRecord(h.dataDir, pt.id);
-    expect(stored?.messages.map((m) => m.id)).toEqual([survivorId, pt.messages[1].id]);
+    expect(stored?.messages.map((m) => m.id)).toEqual([
+      survivorId,
+      pt.messages[1].id,
+    ]);
     expect(stored?.messages[0].images?.[0].file).toBe(kept);
   });
 
   it("never collects a file another playthrough still references", () => {
     const h = truncHarness();
     // Same bytes → the SAME file on disk, referenced by both records.
-    const shared = saveImageBytes(pngBytes("shared-trunc"), "image/png", h.imagesDir).file;
+    const shared = saveImageBytes(
+      pngBytes("shared-trunc"),
+      "image/png",
+      h.imagesDir,
+    ).file;
     const keeper = writePlaythroughWithImages(h.dataDir, "Keeper", [[shared]]);
-    const pt = writePlaythroughWithImages(h.dataDir, "Trunc2", [[], [], [shared]]);
+    const pt = writePlaythroughWithImages(h.dataDir, "Trunc2", [
+      [],
+      [],
+      [shared],
+    ]);
 
-    const result = truncateChat(h.dataDir, pt.id, pt.messages[2].id, h.imagesDir);
+    const result = truncateChat(
+      h.dataDir,
+      pt.id,
+      pt.messages[2].id,
+      h.imagesDir,
+    );
 
     expect(result.ok).toBe(true);
     expect(storedFiles(h.imagesDir)).toEqual([shared]);
-    expect(getPlaythroughRecord(h.dataDir, keeper.id)?.messages[0].images?.[0].file).toBe(shared);
+    expect(
+      getPlaythroughRecord(h.dataDir, keeper.id)?.messages[0].images?.[0].file,
+    ).toBe(shared);
   });
 
   it("defaults the sweep to the store beside the data dir, never the real one", () => {
     const h = truncHarness();
-    const inStore = saveImageBytes(pngBytes("sibling"), "image/png", h.imagesDir).file;
-    const pt = writePlaythroughWithImages(h.dataDir, "Sibling", [[], [], [inStore]]);
+    const inStore = saveImageBytes(
+      pngBytes("sibling"),
+      "image/png",
+      h.imagesDir,
+    ).file;
+    const pt = writePlaythroughWithImages(h.dataDir, "Sibling", [
+      [],
+      [],
+      [inStore],
+    ]);
 
     // No imagesDir argument: the sweep must find `<root>/images` on its own.
     const result = truncateChat(h.dataDir, pt.id, pt.messages[2].id);
@@ -211,9 +293,21 @@ describe("POST /api/settings/images/sweep", () => {
 
   it("returns the number of unreferenced files it removed, then no-ops", async () => {
     const h = harness();
-    const referenced = saveImageBytes(pngBytes("referenced"), "image/png", h.imagesDir).file;
-    const orphanA = saveImageBytes(pngBytes("orphan-e1"), "image/png", h.imagesDir).file;
-    const orphanB = saveImageBytes(pngBytes("orphan-e2"), "image/png", h.imagesDir).file;
+    const referenced = saveImageBytes(
+      pngBytes("referenced"),
+      "image/png",
+      h.imagesDir,
+    ).file;
+    const orphanA = saveImageBytes(
+      pngBytes("orphan-e1"),
+      "image/png",
+      h.imagesDir,
+    ).file;
+    const orphanB = saveImageBytes(
+      pngBytes("orphan-e2"),
+      "image/png",
+      h.imagesDir,
+    ).file;
     writePlaythroughWithImages(h.dataDir, "Keeper", [[referenced]]);
 
     const first = await sweep(h.app);
@@ -249,7 +343,7 @@ describe("POST /api/settings/images/sweep", () => {
       dataDir: h.dataDir,
       imagesDir: brokenImagesDir(h.root),
       manager: new ProviderManager(h.settingsDir),
-      settingsDir: h.settingsDir
+      settingsDir: h.settingsDir,
     });
 
     const res = await sweep(app);
@@ -267,7 +361,11 @@ describe("DELETE /api/playthroughs/:id/messages/:messageId/images/:file", () => 
     const root = tempDir("bobbinloom-per-image-");
     const settingsDir = join(root, "settings");
     const dataDir = join(root, "playthroughs");
-    const stored = saveImageBytes(pngBytes("per-image"), "image/png", join(root, "images")).file;
+    const stored = saveImageBytes(
+      pngBytes("per-image"),
+      "image/png",
+      join(root, "images"),
+    ).file;
     const pt = writePlaythroughWithImages(dataDir, "PerImage", [[stored]]);
 
     const app = Fastify();
@@ -275,21 +373,25 @@ describe("DELETE /api/playthroughs/:id/messages/:messageId/images/:file", () => 
       dataDir,
       imagesDir: brokenImagesDir(root),
       manager: new ProviderManager(settingsDir),
-      settingsDir
+      settingsDir,
     });
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     try {
       const res = await app.inject({
         method: "DELETE",
-        url: `/api/playthroughs/${pt.id}/messages/${pt.messages[0].id}/images/${stored}`
+        url: `/api/playthroughs/${pt.id}/messages/${pt.messages[0].id}/images/${stored}`,
       });
 
       expect(res.statusCode).toBe(200);
-      const body = res.json() as { playthrough: { messages: { images?: unknown[] }[] } };
+      const body = res.json() as {
+        playthrough: { messages: { images?: unknown[] }[] };
+      };
       expect(body.playthrough.messages[0].images ?? []).toHaveLength(0);
       // Persisted, not merely echoed back in the response.
-      expect(getPlaythroughRecord(dataDir, pt.id)?.messages[0].images ?? []).toHaveLength(0);
+      expect(
+        getPlaythroughRecord(dataDir, pt.id)?.messages[0].images ?? [],
+      ).toHaveLength(0);
       expect(warn).toHaveBeenCalled();
     } finally {
       warn.mockRestore();

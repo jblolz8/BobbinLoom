@@ -5,8 +5,13 @@ import { AvatarBadge, Badge, Button, Icon, TextInput } from "../../../base";
 import { ConfirmModal } from "../../../common/ConfirmModal";
 import { editPlayer } from "../../../../api";
 
-function getItemDef(ref: InventoryRef, catalog: Item[] | undefined): { name: string; type: string; description?: string } {
-  const def = catalog?.find((i) => i.id === ref.itemId) ?? ITEMS.find((i) => i.id === ref.itemId);
+function getItemDef(
+  ref: InventoryRef,
+  catalog: Item[] | undefined,
+): { name: string; type: string; description?: string } {
+  const def =
+    catalog?.find((i) => i.id === ref.itemId) ??
+    ITEMS.find((i) => i.id === ref.itemId);
   return {
     name: def?.name ?? ref.itemId,
     type: def?.type ?? "misc",
@@ -35,19 +40,28 @@ function getItemIconName(type: string): string {
 
 export function PlayerTab({
   playthrough,
-  onPlaythroughChange
+  onPlaythroughChange,
 }: {
   playthrough: Playthrough;
   onPlaythroughChange?: (updated: Playthrough) => void;
 }) {
   const pc = playthrough.playerCharacter;
-  const inventoryCount = playthrough.inventory.reduce((sum, item) => sum + item.quantity, 0);
+  const inventoryCount = playthrough.inventory.reduce(
+    (sum, item) => sum + item.quantity,
+    0,
+  );
 
-  const [editingCondition, setEditingCondition] = useState<{ index: number; value: string } | null>(null);
+  const [editingCondition, setEditingCondition] = useState<{
+    index: number;
+    value: string;
+  } | null>(null);
   const [isAddingCondition, setIsAddingCondition] = useState(false);
   const [newConditionValue, setNewConditionValue] = useState("");
 
-  const [editingFlag, setEditingFlag] = useState<{ index: number; value: string } | null>(null);
+  const [editingFlag, setEditingFlag] = useState<{
+    index: number;
+    value: string;
+  } | null>(null);
   const [isAddingFlag, setIsAddingFlag] = useState(false);
   const [newFlagValue, setNewFlagValue] = useState("");
 
@@ -58,7 +72,9 @@ export function PlayerTab({
     const updatedConditions = pc.conditions.filter((_, i) => i !== index);
     setActionLoading(true);
     try {
-      const updated = await editPlayer(playthrough.id, { conditions: updatedConditions });
+      const updated = await editPlayer(playthrough.id, {
+        conditions: updatedConditions,
+      });
       onPlaythroughChange(updated);
     } finally {
       setActionLoading(false);
@@ -66,12 +82,19 @@ export function PlayerTab({
   }
 
   async function handleSaveEditCondition() {
-    if (!onPlaythroughChange || !editingCondition || !editingCondition.value.trim()) return;
+    if (
+      !onPlaythroughChange ||
+      !editingCondition ||
+      !editingCondition.value.trim()
+    )
+      return;
     const updatedConditions = [...pc.conditions];
     updatedConditions[editingCondition.index] = editingCondition.value.trim();
     setActionLoading(true);
     try {
-      const updated = await editPlayer(playthrough.id, { conditions: updatedConditions });
+      const updated = await editPlayer(playthrough.id, {
+        conditions: updatedConditions,
+      });
       onPlaythroughChange(updated);
       setEditingCondition(null);
     } finally {
@@ -84,7 +107,9 @@ export function PlayerTab({
     const updatedConditions = [...pc.conditions, newConditionValue.trim()];
     setActionLoading(true);
     try {
-      const updated = await editPlayer(playthrough.id, { conditions: updatedConditions });
+      const updated = await editPlayer(playthrough.id, {
+        conditions: updatedConditions,
+      });
       onPlaythroughChange(updated);
       setIsAddingCondition(false);
       setNewConditionValue("");
@@ -107,7 +132,8 @@ export function PlayerTab({
   }
 
   async function handleSaveEditFlag() {
-    if (!onPlaythroughChange || !editingFlag || !editingFlag.value.trim()) return;
+    if (!onPlaythroughChange || !editingFlag || !editingFlag.value.trim())
+      return;
     const currentFlags = [...(pc.flags ?? [])];
     currentFlags[editingFlag.index] = editingFlag.value.trim();
     setActionLoading(true);
@@ -142,7 +168,9 @@ export function PlayerTab({
           <AvatarBadge name={pc.name} icon="User" size="md" />
           <div>
             <h3 className="player-name">{pc.name}</h3>
-            {pc.description ? <p className="player-desc">{pc.description}</p> : null}
+            {pc.description ? (
+              <p className="player-desc">{pc.description}</p>
+            ) : null}
           </div>
         </div>
 
@@ -150,13 +178,17 @@ export function PlayerTab({
           <div className="player-meta-grid">
             {pc.bodyType ? (
               <div className="player-meta-item">
-                <span className="meta-label"><Icon name="Activity" size={12} /> Body</span>
+                <span className="meta-label">
+                  <Icon name="Activity" size={12} /> Body
+                </span>
                 <span className="meta-val">{pc.bodyType}</span>
               </div>
             ) : null}
             {pc.appearance ? (
               <div className="player-meta-item">
-                <span className="meta-label"><Icon name="Eye" size={12} /> Appearance</span>
+                <span className="meta-label">
+                  <Icon name="Eye" size={12} /> Appearance
+                </span>
                 <span className="meta-val">{pc.appearance}</span>
               </div>
             ) : null}
@@ -173,7 +205,9 @@ export function PlayerTab({
                 <div key={i} className="clothing-chip">
                   <span className="clothing-slot">{c.slot}:</span>
                   <span className="clothing-name">{c.name}</span>
-                  {c.state ? <span className="clothing-state">({c.state})</span> : null}
+                  {c.state ? (
+                    <span className="clothing-state">({c.state})</span>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -188,12 +222,17 @@ export function PlayerTab({
             <Icon name="Zap" size={15} /> Conditions
           </span>
           <div className="flex items-center gap-1.5">
-            <Badge variant="neutral" size="xs" pill>{pc.conditions.length}</Badge>
+            <Badge variant="neutral" size="xs" pill>
+              {pc.conditions.length}
+            </Badge>
             {onPlaythroughChange ? (
               <Button
                 variant="ghost"
                 size="xs"
-                onClick={() => { setIsAddingCondition(true); setNewConditionValue(""); }}
+                onClick={() => {
+                  setIsAddingCondition(true);
+                  setNewConditionValue("");
+                }}
                 disabled={actionLoading}
                 leftIcon={<Icon name="Plus" size={12} />}
               >
@@ -205,20 +244,35 @@ export function PlayerTab({
         {pc.conditions.length > 0 ? (
           <div className="conditions-grid">
             {pc.conditions.map((c, i) => (
-              <div key={i} className="condition-chip group flex items-center justify-between">
+              <div
+                key={i}
+                className="condition-chip group flex items-center justify-between"
+              >
                 <div
                   className="flex items-center gap-1.5 min-w-0 cursor-pointer flex-1"
-                  onClick={() => onPlaythroughChange && setEditingCondition({ index: i, value: c })}
-                  title={onPlaythroughChange ? "Click to edit condition" : undefined}
+                  onClick={() =>
+                    onPlaythroughChange &&
+                    setEditingCondition({ index: i, value: c })
+                  }
+                  title={
+                    onPlaythroughChange ? "Click to edit condition" : undefined
+                  }
                 >
-                  <Icon name="Activity" size={14} className="condition-icon shrink-0" />
+                  <Icon
+                    name="Activity"
+                    size={14}
+                    className="condition-icon shrink-0"
+                  />
                   <span className="condition-text truncate">{c}</span>
                 </div>
                 {onPlaythroughChange ? (
                   <button
                     type="button"
                     className="chip-remove-btn"
-                    onClick={(e) => { e.stopPropagation(); handleRemoveCondition(i); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveCondition(i);
+                    }}
                     disabled={actionLoading}
                     title="Remove condition"
                     aria-label={`Remove condition ${c}`}
@@ -244,12 +298,17 @@ export function PlayerTab({
             <Icon name="Bookmark" size={15} /> Player Flags
           </span>
           <div className="flex items-center gap-1.5">
-            <Badge variant="neutral" size="xs" pill>{(pc.flags ?? []).length}</Badge>
+            <Badge variant="neutral" size="xs" pill>
+              {(pc.flags ?? []).length}
+            </Badge>
             {onPlaythroughChange ? (
               <Button
                 variant="ghost"
                 size="xs"
-                onClick={() => { setIsAddingFlag(true); setNewFlagValue(""); }}
+                onClick={() => {
+                  setIsAddingFlag(true);
+                  setNewFlagValue("");
+                }}
                 disabled={actionLoading}
                 leftIcon={<Icon name="Plus" size={12} />}
               >
@@ -261,20 +320,33 @@ export function PlayerTab({
         {(pc.flags ?? []).length > 0 ? (
           <div className="flags-chip-grid">
             {(pc.flags ?? []).map((f, i) => (
-              <div key={i} className="flag-chip group flex items-center justify-between">
+              <div
+                key={i}
+                className="flag-chip group flex items-center justify-between"
+              >
                 <div
                   className="flex items-center gap-1.5 min-w-0 cursor-pointer flex-1"
-                  onClick={() => onPlaythroughChange && setEditingFlag({ index: i, value: f })}
+                  onClick={() =>
+                    onPlaythroughChange &&
+                    setEditingFlag({ index: i, value: f })
+                  }
                   title={onPlaythroughChange ? "Click to edit flag" : undefined}
                 >
-                  <Icon name="Bookmark" size={11} className="flag-icon shrink-0" />
+                  <Icon
+                    name="Bookmark"
+                    size={11}
+                    className="flag-icon shrink-0"
+                  />
                   <span className="flag-text truncate">{f}</span>
                 </div>
                 {onPlaythroughChange ? (
                   <button
                     type="button"
                     className="chip-remove-btn"
-                    onClick={(e) => { e.stopPropagation(); handleRemoveFlag(i); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveFlag(i);
+                    }}
                     disabled={actionLoading}
                     title="Remove flag"
                     aria-label={`Remove flag ${f}`}
@@ -299,7 +371,9 @@ export function PlayerTab({
           <span className="flex items-center gap-1.5">
             <Icon name="Package" size={15} /> Inventory
           </span>
-          <Badge variant="neutral" size="xs" pill>{inventoryCount}</Badge>
+          <Badge variant="neutral" size="xs" pill>
+            {inventoryCount}
+          </Badge>
         </h3>
         {playthrough.inventory.length > 0 ? (
           <div className="inventory-grid">
@@ -315,10 +389,14 @@ export function PlayerTab({
                       </span>
                       <strong className="item-name">{def.name}</strong>
                     </div>
-                    <Badge variant="accent" size="xs">x{item.quantity}</Badge>
+                    <Badge variant="accent" size="xs">
+                      x{item.quantity}
+                    </Badge>
                   </div>
                   <div className="inventory-card-meta">
-                    <Badge variant="outline" size="xs">{def.type}</Badge>
+                    <Badge variant="outline" size="xs">
+                      {def.type}
+                    </Badge>
                   </div>
                   {def.description ? (
                     <p className="item-desc">{def.description}</p>
@@ -373,7 +451,12 @@ export function PlayerTab({
             <TextInput
               label="Condition"
               value={editingCondition.value}
-              onChange={(e) => setEditingCondition({ ...editingCondition, value: e.target.value })}
+              onChange={(e) =>
+                setEditingCondition({
+                  ...editingCondition,
+                  value: e.target.value,
+                })
+              }
               disabled={actionLoading}
               autoFocus
             />
@@ -419,7 +502,9 @@ export function PlayerTab({
             <TextInput
               label="Player Flag"
               value={editingFlag.value}
-              onChange={(e) => setEditingFlag({ ...editingFlag, value: e.target.value })}
+              onChange={(e) =>
+                setEditingFlag({ ...editingFlag, value: e.target.value })
+              }
               disabled={actionLoading}
               autoFocus
             />

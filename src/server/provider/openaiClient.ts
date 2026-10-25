@@ -2,7 +2,10 @@ import type { ResolvedProviderConfig } from "../providerConfig";
 
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 
-export function linkExternalAbort(external: AbortSignal | undefined, internal: AbortController): () => void {
+export function linkExternalAbort(
+  external: AbortSignal | undefined,
+  internal: AbortController,
+): () => void {
   if (!external) return () => {};
   if (external.aborted) {
     internal.abort();
@@ -18,10 +21,13 @@ export async function requestOnce(
   fetchImpl: typeof fetch,
   body: Record<string, unknown>,
   path: string = "/chat/completions",
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<Response> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.timeoutMs ?? 60_000);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    config.timeoutMs ?? 60_000,
+  );
   const unlink = linkExternalAbort(signal, controller);
 
   try {
@@ -29,10 +35,10 @@ export async function requestOnce(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${config.apiKey}`
+        Authorization: `Bearer ${config.apiKey}`,
       },
       body: JSON.stringify(body),
-      signal: controller.signal
+      signal: controller.signal,
     });
   } finally {
     clearTimeout(timeout);
@@ -46,18 +52,23 @@ export async function requestWithRetry(
   body: Record<string, unknown>,
   path: string = "/chat/completions",
   validate?: (text: string) => string | null,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<Response> {
   const maxRetries = config.maxRetries ?? 1;
   let attempt = 0;
   let lastError: unknown = null;
   let jsonFallbackTried = false;
 
-  const inspect = async (response: Response): Promise<{ response: Response; acceptable: boolean }> => {
+  const inspect = async (
+    response: Response,
+  ): Promise<{ response: Response; acceptable: boolean }> => {
     if (!validate) return { response, acceptable: true };
     const text = await response.text();
     const problem = validate(text);
-    const reWrapped = new Response(text, { status: 200, headers: { "Content-Type": "application/json" } });
+    const reWrapped = new Response(text, {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
     if (problem === null) return { response: reWrapped, acceptable: true };
     lastError = new Error(problem);
     return { response: reWrapped, acceptable: false };
@@ -83,15 +94,26 @@ export async function requestWithRetry(
         "min_p" in body ||
         "top_k" in body ||
         "repetition_penalty" in body;
-      if (!jsonFallbackTried && hasOptionalCapabilities &&
-          (response.status === 400 || response.status === 422 || response.status === 404)) {
+      if (
+        !jsonFallbackTried &&
+        hasOptionalCapabilities &&
+        (response.status === 400 ||
+          response.status === 422 ||
+          response.status === 404)
+      ) {
         jsonFallbackTried = true;
         const fallbackBody: Record<string, unknown> = { ...body };
         delete fallbackBody.response_format;
         delete fallbackBody.min_p;
         delete fallbackBody.top_k;
         delete fallbackBody.repetition_penalty;
-        const fallback = await requestOnce(config, fetchImpl, fallbackBody, path, signal);
+        const fallback = await requestOnce(
+          config,
+          fetchImpl,
+          fallbackBody,
+          path,
+          signal,
+        );
         if (fallback.ok) {
           const inspected = await inspect(fallback);
           if (inspected.acceptable) return inspected.response;

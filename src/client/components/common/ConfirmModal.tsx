@@ -51,7 +51,7 @@ export function ConfirmActions({
   secondaryActions,
   onConfirm,
   onCancel,
-  cancelRef
+  cancelRef,
 }: ConfirmActionsProps) {
   return (
     <div className="settings-actions">
@@ -64,7 +64,12 @@ export function ConfirmActions({
         {confirmLabel}
       </Button>
       {secondaryActions}
-      <Button ref={cancelRef} variant="secondary" onClick={onCancel} disabled={isLoading}>
+      <Button
+        ref={cancelRef}
+        variant="secondary"
+        onClick={onCancel}
+        disabled={isLoading}
+      >
         {cancelLabel}
       </Button>
     </div>

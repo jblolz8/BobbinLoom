@@ -21,14 +21,27 @@ export interface PromptConfigState {
  *  legitimately omit `characterFormat`/`imageGeneration` (read sites default
  *  them), so those fields stay absent rather than being half-filled. */
 export function promptConfigFromPreset(preset: {
-  modules: { turn: { id: string; name: string; description: string; content: string; order: number; enabled: boolean }[] };
+  modules: {
+    turn: {
+      id: string;
+      name: string;
+      description: string;
+      content: string;
+      order: number;
+      enabled: boolean;
+    }[];
+  };
   characterFormat?: PromptConfig["characterFormat"];
   imageGeneration?: PromptConfig["imageGeneration"];
 }): PromptConfig {
   return {
     modules: { turn: preset.modules.turn.map((m) => ({ ...m })) },
-    ...(preset.characterFormat ? { characterFormat: JSON.parse(JSON.stringify(preset.characterFormat)) } : {}),
-    ...(preset.imageGeneration ? { imageGeneration: JSON.parse(JSON.stringify(preset.imageGeneration)) } : {}),
+    ...(preset.characterFormat
+      ? { characterFormat: JSON.parse(JSON.stringify(preset.characterFormat)) }
+      : {}),
+    ...(preset.imageGeneration
+      ? { imageGeneration: JSON.parse(JSON.stringify(preset.imageGeneration)) }
+      : {}),
   };
 }
 
@@ -45,7 +58,9 @@ export function loadPromptConfig(dataDir: string): PromptConfigState {
     return { activePresetId, promptConfig: settings.promptConfig };
   }
   const presets = loadPresets();
-  const preset = presets.find((p) => p.id === activePresetId) ?? presets.find((p) => p.id === "default");
+  const preset =
+    presets.find((p) => p.id === activePresetId) ??
+    presets.find((p) => p.id === "default");
   const promptConfig: PromptConfig = preset
     ? promptConfigFromPreset(preset)
     : { modules: { turn: [] } };
@@ -56,7 +71,7 @@ export function loadPromptConfig(dataDir: string): PromptConfigState {
 export function persistPromptConfig(
   dataDir: string,
   activePresetId: string,
-  promptConfig: PromptConfig
+  promptConfig: PromptConfig,
 ): PromptConfigState {
   saveAppSettings(dataDir, { activePresetId, promptConfig });
   return { activePresetId, promptConfig };

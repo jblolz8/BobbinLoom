@@ -1,5 +1,14 @@
 import { buildMockAssistantTurn } from "../engine/engine";
-import type { AssistantTurn, CharacterFormat, ClothingItem, ParsedUserInput, Playthrough, PromptConfig, ScenarioPreferences, ScenarioSeed } from "../schemas";
+import type {
+  AssistantTurn,
+  CharacterFormat,
+  ClothingItem,
+  ParsedUserInput,
+  Playthrough,
+  PromptConfig,
+  ScenarioPreferences,
+  ScenarioSeed,
+} from "../schemas";
 
 /** Per-segment token estimates (chars/4) of the prompt actually sent to the model. */
 export type PromptUsageBreakdown = {
@@ -25,7 +34,12 @@ export type ChapterCompactionInput = {
    *  fullSummary directly and never calls the provider. */
   priorSummary: string | null;
   chapterTranscriptions: { name: string; fullSummary: string }[];
-  importantEvents: { type: string; summary: string; importance: number; turn: number }[];
+  importantEvents: {
+    type: string;
+    summary: string;
+    importance: number;
+    turn: number;
+  }[];
 };
 
 /** Most-recent chapters injected verbatim into STORY SO FAR; older ones fold into
@@ -67,24 +81,30 @@ export interface TurnProvider {
     state: Playthrough,
     choicesEnabled: boolean,
     promptConfig: PromptConfig,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<ProviderTurn>;
 
   generateScenarioSeed(
     preferences: ScenarioPreferences,
     lorebookIds?: string[],
     signal?: AbortSignal,
-    format?: CharacterFormat
+    format?: CharacterFormat,
   ): Promise<ScenarioSeed>;
 
   /** Summarize a chapter transcript into { name, shortDescription, fullSummary }. */
-  summarizeChapter(transcript: string, signal?: AbortSignal): Promise<{ name: string; shortDescription: string; fullSummary: string }>;
+  summarizeChapter(
+    transcript: string,
+    signal?: AbortSignal,
+  ): Promise<{ name: string; shortDescription: string; fullSummary: string }>;
 
   /** Consolidate older chapter summaries into / on top of the single rolling
    *  meta-summary. `priorSummary` is the existing meta-summary text (null when
    *  this is the very first fold-after-seed — though the seed itself promotes a
    *  chapter directly with no provider call). Returns the new rolling summary. */
-  compactStorySoFar(input: ChapterCompactionInput, signal?: AbortSignal): Promise<{ summary: string }>;
+  compactStorySoFar(
+    input: ChapterCompactionInput,
+    signal?: AbortSignal,
+  ): Promise<{ summary: string }>;
 
   /** Compute embedding vectors for one or more texts. Returns vectors in input
    *  order. Returns empty array when embeddings are unsupported (mock) or the
@@ -96,10 +116,15 @@ export interface TurnProvider {
    *  (the text blob of the preset's sections). `format` is the target character
    *  format (defaults to the shipped Default format when omitted). */
   generateCharacterSheet(
-    npc: { name: string; description: string; disposition?: string; storyRole?: string },
+    npc: {
+      name: string;
+      description: string;
+      disposition?: string;
+      storyRole?: string;
+    },
     storyContext: string,
     signal?: AbortSignal,
-    format?: CharacterFormat
+    format?: CharacterFormat,
   ): Promise<string>;
 
   /** Refine an existing character sheet draft based on targeted user feedback and
@@ -110,7 +135,7 @@ export interface TurnProvider {
     feedback: string,
     storyContext: string,
     signal?: AbortSignal,
-    format?: CharacterFormat
+    format?: CharacterFormat,
   ): Promise<string>;
 
   /** Restructure an existing sheet into a target character format: ensure every
@@ -120,21 +145,27 @@ export interface TurnProvider {
     currentContent: string,
     format: CharacterFormat,
     signal?: AbortSignal,
-    feedback?: string
+    feedback?: string,
   ): Promise<string>;
 
   /** Suggest a list of relevant tags for a character based on its sheet, notes,
    *  and the existing library taxonomy. */
   suggestCharacterTags(
-    character: { name: string; content: string; creatorNotes?: string; currentTags?: string[]; guidance?: string },
+    character: {
+      name: string;
+      content: string;
+      creatorNotes?: string;
+      currentTags?: string[];
+      guidance?: string;
+    },
     libraryTags: string[],
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<string[]>;
 
   /** Interactive brainstorming and refinement session for character cards. */
   brainstormCharacter(
     input: CharacterBrainstormInput,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<CharacterBrainstormOutput>;
 
   /** Generate a brand-new character (simple NPC or detailed character) from a user concept/prompt and story context. */
@@ -145,7 +176,7 @@ export interface TurnProvider {
       storyContext: string;
       format?: CharacterFormat;
     },
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<{
     name: string;
     storyRole: string;
@@ -205,45 +236,107 @@ export class MockProvider implements TurnProvider {
     state: Playthrough,
     choicesEnabled: boolean,
     _promptConfig: PromptConfig,
-    _signal?: AbortSignal
+    _signal?: AbortSignal,
   ): Promise<ProviderTurn> {
     return { turn: buildMockAssistantTurn(input, state, choicesEnabled) };
   }
 
-  async generateScenarioSeed(_preferences: ScenarioPreferences, _lorebookIds?: string[], _signal?: AbortSignal, _format?: CharacterFormat): Promise<ScenarioSeed> {
-    throw new Error("Scenario generation is not available with the Mock provider. Switch to a real provider in Settings.");
+  async generateScenarioSeed(
+    _preferences: ScenarioPreferences,
+    _lorebookIds?: string[],
+    _signal?: AbortSignal,
+    _format?: CharacterFormat,
+  ): Promise<ScenarioSeed> {
+    throw new Error(
+      "Scenario generation is not available with the Mock provider. Switch to a real provider in Settings.",
+    );
   }
 
-  async summarizeChapter(_transcript: string, _signal?: AbortSignal): Promise<{ name: string; shortDescription: string; fullSummary: string }> {
-    throw new Error("Chapter summarization is not available with the Mock provider. Switch to a real provider in Settings.");
+  async summarizeChapter(
+    _transcript: string,
+    _signal?: AbortSignal,
+  ): Promise<{ name: string; shortDescription: string; fullSummary: string }> {
+    throw new Error(
+      "Chapter summarization is not available with the Mock provider. Switch to a real provider in Settings.",
+    );
   }
 
-  async compactStorySoFar(_input: ChapterCompactionInput, _signal?: AbortSignal): Promise<{ summary: string }> {
-    throw new Error("Chapter compaction is not available with the Mock provider. Switch to a real provider in Settings.");
+  async compactStorySoFar(
+    _input: ChapterCompactionInput,
+    _signal?: AbortSignal,
+  ): Promise<{ summary: string }> {
+    throw new Error(
+      "Chapter compaction is not available with the Mock provider. Switch to a real provider in Settings.",
+    );
   }
 
   async embedTexts(_texts: string[]): Promise<number[][]> {
     return []; // mock doesn't support embeddings
   }
 
-  async generateCharacterSheet(_npc: { name: string; description: string; disposition?: string; storyRole?: string }, _storyContext: string, _signal?: AbortSignal, _format?: CharacterFormat): Promise<string> {
-    throw new Error("Character sheet generation is not available with the Mock provider. Switch to a real provider in Settings.");
+  async generateCharacterSheet(
+    _npc: {
+      name: string;
+      description: string;
+      disposition?: string;
+      storyRole?: string;
+    },
+    _storyContext: string,
+    _signal?: AbortSignal,
+    _format?: CharacterFormat,
+  ): Promise<string> {
+    throw new Error(
+      "Character sheet generation is not available with the Mock provider. Switch to a real provider in Settings.",
+    );
   }
 
-  async refineCharacterSheet(_currentContent: string, _originalCardContent: string, _feedback: string, _storyContext: string, _signal?: AbortSignal, _format?: CharacterFormat): Promise<string> {
-    throw new Error("Character sheet refinement is not available with the Mock provider. Switch to a real provider in Settings.");
+  async refineCharacterSheet(
+    _currentContent: string,
+    _originalCardContent: string,
+    _feedback: string,
+    _storyContext: string,
+    _signal?: AbortSignal,
+    _format?: CharacterFormat,
+  ): Promise<string> {
+    throw new Error(
+      "Character sheet refinement is not available with the Mock provider. Switch to a real provider in Settings.",
+    );
   }
 
-  async reformatCharacterSheet(_currentContent: string, _format: CharacterFormat, _signal?: AbortSignal, _feedback?: string): Promise<string> {
-    throw new Error("Character sheet reformatting is not available with the Mock provider. Switch to a real provider in Settings.");
+  async reformatCharacterSheet(
+    _currentContent: string,
+    _format: CharacterFormat,
+    _signal?: AbortSignal,
+    _feedback?: string,
+  ): Promise<string> {
+    throw new Error(
+      "Character sheet reformatting is not available with the Mock provider. Switch to a real provider in Settings.",
+    );
   }
 
-  async suggestCharacterTags(_character: { name: string; content: string; creatorNotes?: string; currentTags?: string[]; guidance?: string }, _libraryTags: string[], _signal?: AbortSignal): Promise<string[]> {
-    throw new Error("Tag suggestion is not available with the Mock provider. Switch to a real provider in Settings.");
+  async suggestCharacterTags(
+    _character: {
+      name: string;
+      content: string;
+      creatorNotes?: string;
+      currentTags?: string[];
+      guidance?: string;
+    },
+    _libraryTags: string[],
+    _signal?: AbortSignal,
+  ): Promise<string[]> {
+    throw new Error(
+      "Tag suggestion is not available with the Mock provider. Switch to a real provider in Settings.",
+    );
   }
 
-  async brainstormCharacter(_input: CharacterBrainstormInput, _signal?: AbortSignal): Promise<CharacterBrainstormOutput> {
-    throw new Error("Character brainstorming is not available with the Mock provider. Switch to a real provider in Settings.");
+  async brainstormCharacter(
+    _input: CharacterBrainstormInput,
+    _signal?: AbortSignal,
+  ): Promise<CharacterBrainstormOutput> {
+    throw new Error(
+      "Character brainstorming is not available with the Mock provider. Switch to a real provider in Settings.",
+    );
   }
 
   async generateNewCharacter(
@@ -253,7 +346,7 @@ export class MockProvider implements TurnProvider {
       storyContext: string;
       format?: CharacterFormat;
     },
-    _signal?: AbortSignal
+    _signal?: AbortSignal,
   ): Promise<{
     name: string;
     storyRole: string;
@@ -263,6 +356,8 @@ export class MockProvider implements TurnProvider {
     clothing?: ClothingItem[];
     sheetContent?: string;
   }> {
-    throw new Error("Character generation is not available with the Mock provider. Switch to a real provider in Settings.");
+    throw new Error(
+      "Character generation is not available with the Mock provider. Switch to a real provider in Settings.",
+    );
   }
 }

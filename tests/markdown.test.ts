@@ -1,12 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { parseInline, parseMarkdown, type InlineNode } from "../src/client/utils/markdown";
+import {
+  parseInline,
+  parseMarkdown,
+  type InlineNode,
+} from "../src/client/utils/markdown";
 
 describe("parseMarkdown headings", () => {
   it("reads a heading with its level and inline content", () => {
     const blocks = parseMarkdown("## Two directions\n\nbody text");
     expect(blocks[0]).toMatchObject({ type: "heading", level: 2 });
     expect(blocks[0]?.type === "heading" ? blocks[0].children : []).toEqual([
-      { type: "text", value: "Two directions" }
+      { type: "text", value: "Two directions" },
     ]);
     expect(blocks[1]?.type).toBe("paragraph");
   });
@@ -91,7 +95,10 @@ describe("parseInline", () => {
     const nodes = parseInline("This is ***super important*** text.");
     expect(nodes).toEqual([
       { type: "text", value: "This is " },
-      { type: "boldItalic", children: [{ type: "text", value: "super important" }] },
+      {
+        type: "boldItalic",
+        children: [{ type: "text", value: "super important" }],
+      },
       { type: "text", value: " text." },
     ]);
   });
@@ -284,18 +291,29 @@ describe("parseMarkdown", () => {
   it("parses horizontal rules / scene breaks (---, ***, ___)", () => {
     const raw = "Scene one ends.\n\n---\n\nScene two begins.\n***\n___";
     const blocks = parseMarkdown(raw);
-    expect(blocks.map((b) => b.type)).toEqual(["paragraph", "hr", "paragraph", "hr", "hr"]);
+    expect(blocks.map((b) => b.type)).toEqual([
+      "paragraph",
+      "hr",
+      "paragraph",
+      "hr",
+      "hr",
+    ]);
   });
 
   it("parses multi-paragraph blockquotes separated by blank > lines", () => {
-    const raw = "> First paragraph of letter.\n>\n> Second paragraph of letter.";
+    const raw =
+      "> First paragraph of letter.\n>\n> Second paragraph of letter.";
     const blocks = parseMarkdown(raw);
     expect(blocks).toHaveLength(1);
     expect(blocks[0]?.type).toBe("blockquote");
     if (blocks[0]?.type === "blockquote") {
       expect(blocks[0].paragraphs).toHaveLength(2);
-      expect(blocks[0].paragraphs?.[0]).toEqual([{ type: "text", value: "First paragraph of letter." }]);
-      expect(blocks[0].paragraphs?.[1]).toEqual([{ type: "text", value: "Second paragraph of letter." }]);
+      expect(blocks[0].paragraphs?.[0]).toEqual([
+        { type: "text", value: "First paragraph of letter." },
+      ]);
+      expect(blocks[0].paragraphs?.[1]).toEqual([
+        { type: "text", value: "Second paragraph of letter." },
+      ]);
     }
   });
 

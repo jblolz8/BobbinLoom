@@ -1,6 +1,13 @@
 import { useMemo, useState } from "react";
 import type { Playthrough } from "../../../schemas";
-import { describeDeletion, planDeletion, planRevert, retryAnchorMessageId, toRevertAnchor, type RevertTarget } from "../../../engine/chapterRevert";
+import {
+  describeDeletion,
+  planDeletion,
+  planRevert,
+  retryAnchorMessageId,
+  toRevertAnchor,
+  type RevertTarget,
+} from "../../../engine/chapterRevert";
 import { duplicatePlaythrough } from "../../api";
 import { Button } from "../base";
 import { ConfirmModal } from "./ConfirmModal";
@@ -46,10 +53,14 @@ export function RevertConfirmModal({
   mode = "revert",
   isLoading = false,
   onConfirm,
-  onCancel
+  onCancel,
 }: RevertConfirmModalProps) {
-  const [backupState, setBackupState] = useState<{ kind: "idle" | "saving" | "done" | "error"; name?: string; error?: string }>({
-    kind: "idle"
+  const [backupState, setBackupState] = useState<{
+    kind: "idle" | "saving" | "done" | "error";
+    name?: string;
+    error?: string;
+  }>({
+    kind: "idle",
   });
   const isRetry = mode === "retry";
 
@@ -64,9 +75,12 @@ export function RevertConfirmModal({
             return anchorId ? planDeletion(playthrough, anchorId) : null;
           })()
         : planRevert(playthrough, toRevertAnchor(target)),
-    [playthrough, target, isRetry]
+    [playthrough, target, isRetry],
   );
-  const facts = useMemo(() => (plan ? describeDeletion(plan, playthrough) : null), [plan, playthrough]);
+  const facts = useMemo(
+    () => (plan ? describeDeletion(plan, playthrough) : null),
+    [plan, playthrough],
+  );
 
   async function handleBackup() {
     setBackupState({ kind: "saving" });
@@ -74,7 +88,10 @@ export function RevertConfirmModal({
       const copy = await duplicatePlaythrough(playthrough.id);
       setBackupState({ kind: "done", name: copy.name });
     } catch (error) {
-      setBackupState({ kind: "error", error: error instanceof Error ? error.message : String(error) });
+      setBackupState({
+        kind: "error",
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -99,22 +116,25 @@ export function RevertConfirmModal({
           {facts ? (
             <ul className="revert-facts">
               <li>
-                <strong>{facts.messages}</strong> message{facts.messages === 1 ? "" : "s"} deleted
+                <strong>{facts.messages}</strong> message
+                {facts.messages === 1 ? "" : "s"} deleted
               </li>
               <li>
-                <strong>{facts.turns}</strong> turn{facts.turns === 1 ? "" : "s"} discarded
+                <strong>{facts.turns}</strong> turn
+                {facts.turns === 1 ? "" : "s"} discarded
               </li>
               {/* A retry only ever anchors a live message, so it drops no chapter record: an "0
                   chapter records" line would be noise dressed up as a fact. */}
               {isRetry ? null : (
                 <li>
-                  <strong>{facts.chapters}</strong> chapter record{facts.chapters === 1 ? "" : "s"} discarded
+                  <strong>{facts.chapters}</strong> chapter record
+                  {facts.chapters === 1 ? "" : "s"} discarded
                 </li>
               )}
               {facts.images > 0 ? (
                 <li>
-                  <strong>{facts.images}</strong> image{facts.images === 1 ? "" : "s"} left unreferenced and
-                  removed
+                  <strong>{facts.images}</strong> image
+                  {facts.images === 1 ? "" : "s"} left unreferenced and removed
                 </li>
               ) : null}
               {/* The sheet is part of the state a restore point holds, so a revert that can rewind says
@@ -124,22 +144,24 @@ export function RevertConfirmModal({
               {facts.sheetsRewound.length > 0 ? (
                 <li>
                   <strong>{facts.sheetsRewound.length}</strong> character sheet
-                  {facts.sheetsRewound.length === 1 ? "" : "s"} rewound to this point —{" "}
-                  {facts.sheetsRewound.join(", ")}
+                  {facts.sheetsRewound.length === 1 ? "" : "s"} rewound to this
+                  point — {facts.sheetsRewound.join(", ")}
                 </li>
               ) : null}
               {facts.sheetsRemoved.length > 0 ? (
                 <li>
                   <strong>{facts.sheetsRemoved.length}</strong> character
-                  {facts.sheetsRemoved.length === 1 ? "" : "s"} added after this point, sheet and all —{" "}
-                  {facts.sheetsRemoved.join(", ")}
+                  {facts.sheetsRemoved.length === 1 ? "" : "s"} added after this
+                  point, sheet and all — {facts.sheetsRemoved.join(", ")}
                 </li>
               ) : null}
               {facts.sheetsRestored.length > 0 ? (
                 <li>
                   <strong>{facts.sheetsRestored.length}</strong> character
-                  {facts.sheetsRestored.length === 1 ? "" : "s"} gone since this point come
-                  {facts.sheetsRestored.length === 1 ? "s" : ""} back — {facts.sheetsRestored.join(", ")}
+                  {facts.sheetsRestored.length === 1 ? "" : "s"} gone since this
+                  point come
+                  {facts.sheetsRestored.length === 1 ? "s" : ""} back —{" "}
+                  {facts.sheetsRestored.join(", ")}
                 </li>
               ) : null}
             </ul>
@@ -158,7 +180,9 @@ export function RevertConfirmModal({
           </p>
         </>
       }
-      confirmLabel={isRetry ? "Retry this response" : isLoading ? "Reverting…" : "Revert"}
+      confirmLabel={
+        isRetry ? "Retry this response" : isLoading ? "Reverting…" : "Revert"
+      }
       danger
       isLoading={isLoading}
       confirmDisabled={!plan}
@@ -168,7 +192,9 @@ export function RevertConfirmModal({
           variant="secondary"
           disabled={backupState.kind === "saving" || isLoading}
           isLoading={backupState.kind === "saving"}
-          onClick={() => { void handleBackup(); }}
+          onClick={() => {
+            void handleBackup();
+          }}
         >
           {backupState.kind === "saving" ? "Copying…" : "Duplicate as backup"}
         </Button>
@@ -181,17 +207,23 @@ export function RevertConfirmModal({
           is the only place it appears. */}
       {target.kind === "message" && !isRetry ? (
         <blockquote className="retry-preview">
-          {target.label.length > 200 ? `${target.label.slice(0, 200)}…` : target.label}
+          {target.label.length > 200
+            ? `${target.label.slice(0, 200)}…`
+            : target.label}
         </blockquote>
       ) : null}
 
       {/* The backup's outcome is an ordinary line of the body: the ACTION belongs in the action row
           beside the confirm, but a status note in a row of buttons reads as one more button. */}
       {backupState.kind === "done" ? (
-        <p className="revert-backup-note">Saved as “{backupState.name}” — it is on the shelf.</p>
+        <p className="revert-backup-note">
+          Saved as “{backupState.name}” — it is on the shelf.
+        </p>
       ) : null}
       {backupState.kind === "error" ? (
-        <p className="revert-backup-note error">Copy failed: {backupState.error}</p>
+        <p className="revert-backup-note error">
+          Copy failed: {backupState.error}
+        </p>
       ) : null}
     </ConfirmModal>
   );

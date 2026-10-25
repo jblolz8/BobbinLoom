@@ -1,5 +1,8 @@
 import { useMemo } from "react";
-import { resolveTagStyle, type TagTaxonomyConfig } from "../../../engine/tagTaxonomy";
+import {
+  resolveTagStyle,
+  type TagTaxonomyConfig,
+} from "../../../engine/tagTaxonomy";
 
 export type TagChipProps = {
   tag: string;
@@ -28,7 +31,10 @@ export function TagChip({
   title,
   showCategoryTooltip = true,
 }: TagChipProps) {
-  const style = useMemo(() => resolveTagStyle(tag, userConfig), [tag, userConfig]);
+  const style = useMemo(
+    () => resolveTagStyle(tag, userConfig),
+    [tag, userConfig],
+  );
 
   const defaultTitle = useMemo(() => {
     if (title) return title;
@@ -45,13 +51,19 @@ export function TagChip({
     className: `color-tag-chip size-${size} cat-${style.categoryId} ${active ? "active" : ""} ${isInteractive ? "interactive" : ""} ${className}`,
     style: {
       "--tag-text": darkColors.text,
-      "--tag-bg": active ? (darkColors.glow || darkColors.bg) : darkColors.bg,
+      "--tag-bg": active ? darkColors.glow || darkColors.bg : darkColors.bg,
       "--tag-border": active ? darkColors.text : darkColors.border,
-      "--tag-glow": active ? `0 0 8px ${darkColors.glow || darkColors.border}` : "none",
+      "--tag-glow": active
+        ? `0 0 8px ${darkColors.glow || darkColors.border}`
+        : "none",
       "--tag-text-light": lightColors.text,
-      "--tag-bg-light": active ? (lightColors.glow || lightColors.bg) : lightColors.bg,
+      "--tag-bg-light": active
+        ? lightColors.glow || lightColors.bg
+        : lightColors.bg,
       "--tag-border-light": active ? lightColors.text : lightColors.border,
-      "--tag-glow-light": active ? `0 0 8px ${lightColors.glow || lightColors.border}` : "none",
+      "--tag-glow-light": active
+        ? `0 0 8px ${lightColors.glow || lightColors.border}`
+        : "none",
     } as React.CSSProperties,
     title: defaultTitle,
     onClick: isInteractive ? onClick : undefined,
@@ -62,11 +74,11 @@ export function TagChip({
       {style.namespace ? (
         <span className="tag-namespace-prefix">{style.namespace}:</span>
       ) : null}
-      <span className="tag-value-text">{style.value || style.displayLabel}</span>
+      <span className="tag-value-text">
+        {style.value || style.displayLabel}
+      </span>
       {count !== undefined ? (
-        <span className="tag-count-indicator">
-          {count}
-        </span>
+        <span className="tag-count-indicator">{count}</span>
       ) : null}
       {onRemove && !disabled ? (
         <button
@@ -93,9 +105,5 @@ export function TagChip({
     );
   }
 
-  return (
-    <span {...elementProps}>
-      {content}
-    </span>
-  );
+  return <span {...elementProps}>{content}</span>;
 }

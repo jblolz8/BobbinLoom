@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { createInitialPlaythrough } from "../src/engine/engine";
-import { rotateMemoryEvents, MEMORY_ROTATION_THRESHOLD } from "../src/engine/contextBudgeting";
+import {
+  rotateMemoryEvents,
+  MEMORY_ROTATION_THRESHOLD,
+} from "../src/engine/contextBudgeting";
 
-function withEvents(state: ReturnType<typeof createInitialPlaythrough>, count: number) {
+function withEvents(
+  state: ReturnType<typeof createInitialPlaythrough>,
+  count: number,
+) {
   for (let i = 0; i < count; i++) {
     state.memoryEvents.push({
       id: `mem_${i}`,
@@ -13,7 +19,7 @@ function withEvents(state: ReturnType<typeof createInitialPlaythrough>, count: n
       importance: 1,
       tags: [],
       turn: i,
-      createdAt: "2026-01-01T00:00:00.000Z"
+      createdAt: "2026-01-01T00:00:00.000Z",
     });
   }
   return state;
@@ -33,21 +39,30 @@ describe("rotateMemoryEvents", () => {
   });
 
   it("moves live events into the compressed layer once the threshold is crossed", () => {
-    const state = withEvents(createInitialPlaythrough("Rotate"), MEMORY_ROTATION_THRESHOLD + 5);
+    const state = withEvents(
+      createInitialPlaythrough("Rotate"),
+      MEMORY_ROTATION_THRESHOLD + 5,
+    );
     const next = rotateMemoryEvents(state);
     expect(next.memoryEvents).toHaveLength(0);
     expect(next.memoryLayers?.compressed.length).toBeGreaterThan(0);
   });
 
   it("never touches messages", () => {
-    const state = withEvents(createInitialPlaythrough("Rotate"), MEMORY_ROTATION_THRESHOLD + 5);
+    const state = withEvents(
+      createInitialPlaythrough("Rotate"),
+      MEMORY_ROTATION_THRESHOLD + 5,
+    );
     const before = state.messages.map((m) => ({ ...m }));
     const next = rotateMemoryEvents(state);
     expect(next.messages).toEqual(before);
   });
 
   it("caps retained compressed events", () => {
-    const state = withEvents(createInitialPlaythrough("Rotate"), MEMORY_ROTATION_THRESHOLD * 4);
+    const state = withEvents(
+      createInitialPlaythrough("Rotate"),
+      MEMORY_ROTATION_THRESHOLD * 4,
+    );
     const next = rotateMemoryEvents(state);
     expect(next.memoryLayers!.compressed.length).toBeLessThanOrEqual(50);
   });

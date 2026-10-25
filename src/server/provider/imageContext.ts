@@ -1,4 +1,9 @@
-import type { ChatMessage, ImageInstructionMode, Playthrough, PlayerCharacter } from "../../schemas";
+import type {
+  ChatMessage,
+  ImageInstructionMode,
+  Playthrough,
+  PlayerCharacter,
+} from "../../schemas";
 import { isStubSection, pickSections } from "../../engine/characterSections";
 import { expandMacros, expandUserMacro } from "../../engine/macros";
 import { clampChars } from "../imageProvider/shared";
@@ -36,7 +41,8 @@ const CAST_IDENTITY_CHARS = 600;
  *  may also describe ear-tufts "acting as hair" under `[Appearance]`'s Ears
  *  bullet, and matching any line containing "hair" would headline the wrong
  *  feature. */
-const HAIR_LABEL = /^[-*\u2022]?\s*hair(\s+(style|colour|color|length|type))?\s*:\s*(.+)$/i;
+const HAIR_LABEL =
+  /^[-*\u2022]?\s*hair(\s+(style|colour|color|length|type))?\s*:\s*(.+)$/i;
 
 /** The hair line's own ceiling — a headline, not a description. */
 const HAIR_LINE_CHARS = 120;
@@ -44,7 +50,12 @@ const HAIR_LINE_CHARS = 120;
 /** The sheet sections that describe what a camera sees and that the scene does
  *  not change. Deliberately NOT `Clothing`: the character INSTANCE's clothing is
  *  the authoritative current state and already rides on the line above. */
-const CAST_IDENTITY_SECTIONS = ["Species", "Gender", "Body", "Appearance"] as const;
+const CAST_IDENTITY_SECTIONS = [
+  "Species",
+  "Gender",
+  "Body",
+  "Appearance",
+] as const;
 
 /** How much of the player's own description the camera line carries. The first
  *  sentence is enough for gender and pronouns (which the character-count tag and
@@ -102,7 +113,9 @@ export function buildImageStateBlock(playthrough: Playthrough): string {
   // The player's conditions are on camera (restrained, handcuffed, wounded) and
   // their clothing is not sent at all.
   if (playthrough.playerCharacter.conditions.length > 0) {
-    lines.push(`Player visible state: ${playthrough.playerCharacter.conditions.join(", ")}`);
+    lines.push(
+      `Player visible state: ${playthrough.playerCharacter.conditions.join(", ")}`,
+    );
   }
 
   return lines.join("\n");
@@ -159,7 +172,7 @@ function playerIdentity(player: PlayerCharacter): string {
  *  line has to reword that instruction's Scene passage too. */
 export function buildImageCastBlock(
   playthrough: Playthrough,
-  mode: ImageInstructionMode = "pov"
+  mode: ImageInstructionMode = "pov",
 ): string {
   const lines: string[] = [];
 
@@ -173,7 +186,9 @@ export function buildImageCastBlock(
     const clothing = player.clothing.length
       ? `wearing ${player.clothing.map((item) => item.name).join(", ")}`
       : "clothing unspecified";
-    const conditions = player.conditions.length ? `, ${player.conditions.join(", ")}` : "";
+    const conditions = player.conditions.length
+      ? `, ${player.conditions.join(", ")}`
+      : "";
     lines.push(`${player.name} — ${clothing}${conditions}`);
     const identity = playerIdentity(player);
     if (identity) lines.push(`${player.name}'s sheet — ${identity}`);
@@ -181,11 +196,14 @@ export function buildImageCastBlock(
     const player = playthrough.playerCharacter;
     lines.push(
       "THE CAMERA (the player — the scene is seen through this person; never tag their stored " +
-      "appearance or clothing, and never give them a \" | \" group):"
+        'appearance or clothing, and never give them a " | " group):',
     );
     const description = expandPlayerText(player, player.description);
     const firstSentence = description.trim().split(". ")[0] ?? "";
-    const cameraNote = clampChars(firstSentence || description.trim(), CAMERA_DESCRIPTION_CHARS);
+    const cameraNote = clampChars(
+      firstSentence || description.trim(),
+      CAMERA_DESCRIPTION_CHARS,
+    );
     lines.push(`${player.name}${cameraNote ? ` — ${cameraNote}` : ""}`);
   }
 
@@ -195,24 +213,35 @@ export function buildImageCastBlock(
     const clothing = character.clothing.length
       ? `wearing ${character.clothing.map((item) => item.name).join(", ")}`
       : "clothing unspecified";
-    const conditions = character.conditions.length ? `, ${character.conditions.join(", ")}` : "";
+    const conditions = character.conditions.length
+      ? `, ${character.conditions.join(", ")}`
+      : "";
     // `mood` is a stored slug (`overwhelmed_content`); a reader — and a tag
     // writer — should not have to decode an identifier.
     const mood = character.mood.replace(/_/g, " ").trim() || "unspecified mood";
     lines.push(`${character.name} — ${clothing}, ${mood}${conditions}`);
     // templateId first; a character with a stale/unset id still gets an identity
     // when a template carries the same name.
-    const template = playthrough.characterTemplates.find((t) => t.id === character.templateId)
-      ?? playthrough.characterTemplates.find((t) => t.name === character.name);
+    const template =
+      playthrough.characterTemplates.find(
+        (t) => t.id === character.templateId,
+      ) ??
+      playthrough.characterTemplates.find((t) => t.name === character.name);
     // Hair headline first, then the full identity line: the identity budget can
     // trim the sheet line, it cannot touch this one.
     // Sheet-derived: exactly ONE owner, so both macros resolve here — the same rule
     // the turn prompt's sheet renderer uses.
     const playerName = playthrough.playerCharacter.name;
     const hair = template ? castHair(template.content) : "";
-    if (hair) lines.push(`${character.name}'s hair — ${expandMacros(hair, character.name, playerName)}`);
+    if (hair)
+      lines.push(
+        `${character.name}'s hair — ${expandMacros(hair, character.name, playerName)}`,
+      );
     const identity = template ? castIdentity(template.content) : "";
-    if (identity) lines.push(`${character.name}'s sheet — ${expandMacros(identity, character.name, playerName)}`);
+    if (identity)
+      lines.push(
+        `${character.name}'s sheet — ${expandMacros(identity, character.name, playerName)}`,
+      );
   }
 
   return lines.join("\n");
@@ -244,7 +273,7 @@ export type ImageHistoryBlock = { text: string; messageIds: string[] };
 export function buildImageHistoryBlock(
   playthrough: Playthrough,
   message: ChatMessage,
-  count: number
+  count: number,
 ): ImageHistoryBlock {
   const empty: ImageHistoryBlock = { text: "", messageIds: [] };
   if (count <= 0) return empty;
@@ -262,7 +291,10 @@ export function buildImageHistoryBlock(
 
   // Whole OLD messages go first: half a sentence of an older beat is worse than
   // not having it, and the nearest beats are the ones that carry continuity.
-  let chars = newestFirst.reduce((total, entry) => total + entry.content.length, 0);
+  let chars = newestFirst.reduce(
+    (total, entry) => total + entry.content.length,
+    0,
+  );
   while (newestFirst.length > 1 && chars > IMAGE_HISTORY_CHARS) {
     chars -= newestFirst[newestFirst.length - 1].content.length;
     newestFirst.pop();
@@ -272,15 +304,16 @@ export function buildImageHistoryBlock(
     // A single message over the whole budget keeps its TAIL: the end of an earlier
     // message is the state it left the scene in, which is the part the writer
     // needs. Everything else above is dropped whole, never cut mid-sentence.
-    const body = entry.content.length > IMAGE_HISTORY_CHARS
-      ? `…[earlier text omitted] ${entry.content.trim().slice(-IMAGE_HISTORY_CHARS)}`
-      : entry.content.trim();
+    const body =
+      entry.content.length > IMAGE_HISTORY_CHARS
+        ? `…[earlier text omitted] ${entry.content.trim().slice(-IMAGE_HISTORY_CHARS)}`
+        : entry.content.trim();
     return `${entry.role === "user" ? "User" : "Assistant"}: ${body}`;
   });
 
   return {
     text: [IMAGE_HISTORY_HEADER, ...lines].join("\n"),
-    messageIds: newestFirst.map((entry) => entry.id)
+    messageIds: newestFirst.map((entry) => entry.id),
   };
 }
 
@@ -294,7 +327,7 @@ export function buildImageHistoryBlock(
  *  answer, are skipped silently. */
 export function previousWriterAnswer(
   playthrough: Playthrough,
-  message: ChatMessage
+  message: ChatMessage,
 ): { prompt: string; negative?: string } | undefined {
   const index = playthrough.messages.findIndex((m) => m.id === message.id);
   if (index < 0) return undefined;

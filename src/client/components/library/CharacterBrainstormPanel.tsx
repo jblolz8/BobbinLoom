@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon, ModelBadge, TextArea } from "../base";
 import { MarkdownView } from "../common/MarkdownView";
-import type { ProposedSectionChange, CharacterBrainstormResult } from "../../api";
+import type {
+  ProposedSectionChange,
+  CharacterBrainstormResult,
+} from "../../api";
 
 export type BrainstormChatMessage = {
   id: string;
@@ -29,7 +32,10 @@ export type CharacterBrainstormPanelProps = {
   onRevertAndRetry: (messageId: string) => void;
   onRegenerate: (messageId: string) => void;
   onApplySection: (section: ProposedSectionChange, messageId: string) => void;
-  onApplyAll: (proposed: CharacterBrainstormResult["proposedChanges"], messageId: string) => void;
+  onApplyAll: (
+    proposed: CharacterBrainstormResult["proposedChanges"],
+    messageId: string,
+  ) => void;
   onClearChat: () => void;
   onClose: () => void;
   loading: boolean;
@@ -58,7 +64,10 @@ export function CharacterBrainstormPanel({
   const [inputText, setInputText] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
-  const [copyState, setCopyState] = useState<{ id: string; ok: boolean } | null>(null);
+  const [copyState, setCopyState] = useState<{
+    id: string;
+    ok: boolean;
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const copyTimerRef = useRef<number | null>(null);
@@ -69,9 +78,10 @@ export function CharacterBrainstormPanel({
 
   useEffect(
     () => () => {
-      if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+      if (copyTimerRef.current !== null)
+        window.clearTimeout(copyTimerRef.current);
     },
-    []
+    [],
   );
 
   function handleSend() {
@@ -98,7 +108,8 @@ export function CharacterBrainstormPanel({
       ok = false;
     }
     setCopyState({ id: message.id, ok });
-    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+    if (copyTimerRef.current !== null)
+      window.clearTimeout(copyTimerRef.current);
     copyTimerRef.current = window.setTimeout(() => setCopyState(null), 1600);
   }
 
@@ -114,7 +125,8 @@ export function CharacterBrainstormPanel({
     onEditMessage(messageId, text);
   }
 
-  const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant")?.id ?? null;
+  const lastAssistantId =
+    [...messages].reverse().find((m) => m.role === "assistant")?.id ?? null;
 
   return (
     <div className="character-brainstorm-panel">
@@ -141,7 +153,9 @@ export function CharacterBrainstormPanel({
             aria-label="AI Brainstorm Assistant settings"
           >
             <Icon name="Settings" size={14} />
-            {includeOriginalCcv2 ? <span className="brainstorm-settings-dot" aria-hidden="true" /> : null}
+            {includeOriginalCcv2 ? (
+              <span className="brainstorm-settings-dot" aria-hidden="true" />
+            ) : null}
           </button>
 
           {messages.length > 0 ? (
@@ -179,17 +193,29 @@ export function CharacterBrainstormPanel({
               </span>
               <h3>Brainstorm &amp; Refine</h3>
               <p>
-                Ask for creative ideas, personality tweaks, backstory expansion, or surgical section edits.
-                Proposed changes can be applied directly to your character sheet with one click.
+                Ask for creative ideas, personality tweaks, backstory expansion,
+                or surgical section edits. Proposed changes can be applied
+                directly to your character sheet with one click.
               </p>
             </div>
           </div>
         ) : (
-          <div className="brainstorm-thread" role="log" aria-live="polite" aria-label="Brainstorm conversation">
+          <div
+            className="brainstorm-thread"
+            role="log"
+            aria-live="polite"
+            aria-label="Brainstorm conversation"
+          >
             {messages.map((msg) => (
-              <div key={msg.id} className={`brainstorm-message-row ${msg.role}`}>
+              <div
+                key={msg.id}
+                className={`brainstorm-message-row ${msg.role}`}
+              >
                 <div className="brainstorm-avatar-icon">
-                  <Icon name={msg.role === "user" ? "User" : "Sparkles"} size={14} />
+                  <Icon
+                    name={msg.role === "user" ? "User" : "Sparkles"}
+                    size={14}
+                  />
                 </div>
                 <div className="brainstorm-bubble">
                   {editingId === msg.id ? (
@@ -210,13 +236,20 @@ export function CharacterBrainstormPanel({
                         >
                           <Icon name="Check" size={12} /> Save
                         </button>
-                        <button type="button" className="brainstorm-edit-cancel" onClick={() => setEditingId(null)}>
+                        <button
+                          type="button"
+                          className="brainstorm-edit-cancel"
+                          onClick={() => setEditingId(null)}
+                        >
                           Cancel
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <MarkdownView content={msg.content} className="brainstorm-markdown" />
+                    <MarkdownView
+                      content={msg.content}
+                      className="brainstorm-markdown"
+                    />
                   )}
 
                   {/* Proposed Changes Card */}
@@ -224,72 +257,110 @@ export function CharacterBrainstormPanel({
                     <div className="brainstorm-proposal-card">
                       <div className="proposal-card-header">
                         <span className="proposal-badge">
-                          <Icon name="Sliders" size={12} /> Proposed Sheet Updates
+                          <Icon name="Sliders" size={12} /> Proposed Sheet
+                          Updates
                         </span>
                       </div>
 
                       {/* Sections */}
-                      {msg.proposedChanges.sections && msg.proposedChanges.sections.length > 0 && (
-                        <div className="proposal-sections-list">
-                          {msg.proposedChanges.sections.map((sec, sIdx) => {
-                            const isApplied = !!msg.appliedChanges?.[`section:${sec.header.toLowerCase()}`] || !!msg.appliedChanges?.all;
-                            return (
-                              <div key={`${sec.header}-${sIdx}`} className="proposal-section-item">
-                                <div className="proposal-section-header">
-                                  <span className="proposal-section-tag">[{sec.header}]</span>
-                                  {msg.newSections?.includes(sec.header) ? (
-                                    <span className="proposal-new-tag" title="This section is not part of the format — applying it adds it to the end of the sheet">
-                                      New section
+                      {msg.proposedChanges.sections &&
+                        msg.proposedChanges.sections.length > 0 && (
+                          <div className="proposal-sections-list">
+                            {msg.proposedChanges.sections.map((sec, sIdx) => {
+                              const isApplied =
+                                !!msg.appliedChanges?.[
+                                  `section:${sec.header.toLowerCase()}`
+                                ] || !!msg.appliedChanges?.all;
+                              return (
+                                <div
+                                  key={`${sec.header}-${sIdx}`}
+                                  className="proposal-section-item"
+                                >
+                                  <div className="proposal-section-header">
+                                    <span className="proposal-section-tag">
+                                      [{sec.header}]
                                     </span>
-                                  ) : null}
-                                  <button
-                                    type="button"
-                                    className={`proposal-apply-btn ${isApplied ? "applied" : ""}`}
-                                    onClick={() => onApplySection(sec, msg.id)}
-                                    disabled={isApplied}
-                                    title={isApplied ? "Section applied to draft" : `Apply [${sec.header}] to sheet`}
-                                  >
-                                    <Icon name={isApplied ? "Check" : "Plus"} size={11} />
-                                    {isApplied ? "Applied" : `Apply [${sec.header}]`}
-                                  </button>
+                                    {msg.newSections?.includes(sec.header) ? (
+                                      <span
+                                        className="proposal-new-tag"
+                                        title="This section is not part of the format — applying it adds it to the end of the sheet"
+                                      >
+                                        New section
+                                      </span>
+                                    ) : null}
+                                    <button
+                                      type="button"
+                                      className={`proposal-apply-btn ${isApplied ? "applied" : ""}`}
+                                      onClick={() =>
+                                        onApplySection(sec, msg.id)
+                                      }
+                                      disabled={isApplied}
+                                      title={
+                                        isApplied
+                                          ? "Section applied to draft"
+                                          : `Apply [${sec.header}] to sheet`
+                                      }
+                                    >
+                                      <Icon
+                                        name={isApplied ? "Check" : "Plus"}
+                                        size={11}
+                                      />
+                                      {isApplied
+                                        ? "Applied"
+                                        : `Apply [${sec.header}]`}
+                                    </button>
+                                  </div>
+                                  <pre className="proposal-section-preview">
+                                    {sec.body}
+                                  </pre>
                                 </div>
-                                <pre className="proposal-section-preview">{sec.body}</pre>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                              );
+                            })}
+                          </div>
+                        )}
 
                       {/* Rename: the proposal the card used to drop on the floor */}
                       {msg.proposedChanges.name && (
                         <div className="proposal-field-block">
-                          <span className="proposal-field-label">Character name:</span>
+                          <span className="proposal-field-label">
+                            Character name:
+                          </span>
                           <div className="proposal-name-row">
-                            <span className="proposal-name-value">{msg.proposedChanges.name}</span>
-                            <span className="proposal-name-current">currently &ldquo;{characterName || "unnamed"}&rdquo;</span>
+                            <span className="proposal-name-value">
+                              {msg.proposedChanges.name}
+                            </span>
+                            <span className="proposal-name-current">
+                              currently &ldquo;{characterName || "unnamed"}
+                              &rdquo;
+                            </span>
                           </div>
                         </div>
                       )}
 
                       {/* Tags */}
-                      {msg.proposedChanges.tags && msg.proposedChanges.tags.length > 0 && (
-                        <div className="proposal-tags-block">
-                          <span className="proposal-field-label">Tags:</span>
-                          <div className="proposal-tags-list">
-                            {msg.proposedChanges.tags.map((tag) => (
-                              <span key={tag} className="proposal-tag-chip">
-                                {tag}
-                              </span>
-                            ))}
+                      {msg.proposedChanges.tags &&
+                        msg.proposedChanges.tags.length > 0 && (
+                          <div className="proposal-tags-block">
+                            <span className="proposal-field-label">Tags:</span>
+                            <div className="proposal-tags-list">
+                              {msg.proposedChanges.tags.map((tag) => (
+                                <span key={tag} className="proposal-tag-chip">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
 
                       {/* Creator Notes */}
                       {msg.proposedChanges.creatorNotes && (
                         <div className="proposal-notes-block">
-                          <span className="proposal-field-label">Creator Notes:</span>
-                          <p className="proposal-notes-preview">{msg.proposedChanges.creatorNotes}</p>
+                          <span className="proposal-field-label">
+                            Creator Notes:
+                          </span>
+                          <p className="proposal-notes-preview">
+                            {msg.proposedChanges.creatorNotes}
+                          </p>
                         </div>
                       )}
 
@@ -300,12 +371,15 @@ export function CharacterBrainstormPanel({
                           <div className="proposal-full-header">
                             <Icon name="TriangleAlert" size={13} />
                             <span>
-                              Rewrites the <strong>entire sheet</strong> — the current content is replaced
+                              Rewrites the <strong>entire sheet</strong> — the
+                              current content is replaced
                             </span>
                           </div>
                           <details className="proposal-full-details">
                             <summary>Preview the rewritten sheet</summary>
-                            <pre className="proposal-section-preview">{msg.proposedChanges.fullContent}</pre>
+                            <pre className="proposal-section-preview">
+                              {msg.proposedChanges.fullContent}
+                            </pre>
                           </details>
                         </div>
                       )}
@@ -316,24 +390,38 @@ export function CharacterBrainstormPanel({
                           <Icon name="AlertCircle" size={12} />
                           <span>
                             Not on this sheet, so left out:{" "}
-                            {msg.unmappedHeaders.map((header) => `[${header}]`).join(", ")}
+                            {msg.unmappedHeaders
+                              .map((header) => `[${header}]`)
+                              .join(", ")}
                           </span>
                         </div>
                       ) : null}
 
                       {/* Apply All Action */}
-                      {((msg.proposedChanges.sections && msg.proposedChanges.sections.length > 1) ||
-                        (msg.proposedChanges.sections && msg.proposedChanges.sections.length > 0 &&
-                          (msg.proposedChanges.tags || msg.proposedChanges.creatorNotes))) && (
+                      {((msg.proposedChanges.sections &&
+                        msg.proposedChanges.sections.length > 1) ||
+                        (msg.proposedChanges.sections &&
+                          msg.proposedChanges.sections.length > 0 &&
+                          (msg.proposedChanges.tags ||
+                            msg.proposedChanges.creatorNotes))) && (
                         <div className="proposal-card-footer">
                           <button
                             type="button"
                             className={`proposal-apply-all-btn ${msg.appliedChanges?.all ? "applied" : ""}`}
-                            onClick={() => onApplyAll(msg.proposedChanges, msg.id)}
+                            onClick={() =>
+                              onApplyAll(msg.proposedChanges, msg.id)
+                            }
                             disabled={!!msg.appliedChanges?.all}
                           >
-                            <Icon name={msg.appliedChanges?.all ? "CheckCheck" : "Check"} size={13} />
-                            {msg.appliedChanges?.all ? "All Changes Applied" : "Apply All Proposed Changes"}
+                            <Icon
+                              name={
+                                msg.appliedChanges?.all ? "CheckCheck" : "Check"
+                              }
+                              size={13}
+                            />
+                            {msg.appliedChanges?.all
+                              ? "All Changes Applied"
+                              : "Apply All Proposed Changes"}
                           </button>
                         </div>
                       )}
@@ -346,11 +434,24 @@ export function CharacterBrainstormPanel({
                       <button
                         type="button"
                         className="brainstorm-msg-action"
-                        onClick={() => { void handleCopy(msg); }}
+                        onClick={() => {
+                          void handleCopy(msg);
+                        }}
                         title="Copy this message"
                       >
-                        <Icon name={copyState?.id === msg.id && copyState.ok ? "Check" : "Copy"} size={11} />
-                        {copyState?.id === msg.id ? (copyState.ok ? "Copied" : "Copy failed") : "Copy"}
+                        <Icon
+                          name={
+                            copyState?.id === msg.id && copyState.ok
+                              ? "Check"
+                              : "Copy"
+                          }
+                          size={11}
+                        />
+                        {copyState?.id === msg.id
+                          ? copyState.ok
+                            ? "Copied"
+                            : "Copy failed"
+                          : "Copy"}
                       </button>
 
                       {msg.role === "user" ? (

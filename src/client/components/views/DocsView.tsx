@@ -16,8 +16,22 @@
  *  Below 768px the page list becomes a drawer over the content; above it the same
  *  control collapses the column instead.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { getDoc, listDocs, searchDocs, type DocPage, type DocPageMeta, type DocSearchResult } from "../../api";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  getDoc,
+  listDocs,
+  searchDocs,
+  type DocPage,
+  type DocPageMeta,
+  type DocSearchResult,
+} from "../../api";
 import { MIN_QUERY_LENGTH } from "../../../engine/docsSearch";
 import { Icon, IconButton, SearchBar, SideNav } from "../base";
 import { renderDocMarkdown } from "../../utils/docsMarkdown";
@@ -30,7 +44,9 @@ export type DocsViewProps = {
 
 /** Group the ordered page list by section, preserving the order sections first
  *  appear in — the nav reads top-to-bottom the same way the index does. */
-function groupBySection(pages: DocPageMeta[]): Array<{ section: string; pages: DocPageMeta[] }> {
+function groupBySection(
+  pages: DocPageMeta[],
+): Array<{ section: string; pages: DocPageMeta[] }> {
   const groups: Array<{ section: string; pages: DocPageMeta[] }> = [];
   for (const page of pages) {
     const section = page.section || "Other";
@@ -57,7 +73,7 @@ function splitSnippet(snippet: string, needle: string): ReactNode[] {
     parts.push(
       <mark className="doc-search-hit" key={key}>
         {snippet.slice(at, at + pin.length)}
-      </mark>
+      </mark>,
     );
     key += 1;
     from = at + pin.length;
@@ -91,10 +107,21 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
       .then((loaded) => {
         if (cancelled) return;
         setPages(loaded);
-        setActiveSlug((current) => current ?? loaded.find((p) => p.slug === "index")?.slug ?? loaded[0]?.slug ?? null);
+        setActiveSlug(
+          (current) =>
+            current ??
+            loaded.find((p) => p.slug === "index")?.slug ??
+            loaded[0]?.slug ??
+            null,
+        );
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Could not load the documentation list");
+        if (!cancelled)
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Could not load the documentation list",
+          );
       });
     return () => {
       cancelled = true;
@@ -113,7 +140,11 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
       .catch((err: unknown) => {
         if (cancelled) return;
         setPage(null);
-        setError(err instanceof Error ? err.message : "Could not load that documentation page");
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Could not load that documentation page",
+        );
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -172,7 +203,9 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
       if (nav.narrow) nav.closeDrawer();
       if (slug === activeSlug) {
         const container = contentRef.current;
-        const target = anchor ? container?.querySelector(`[id="${CSS.escape(anchor)}"]`) : null;
+        const target = anchor
+          ? container?.querySelector(`[id="${CSS.escape(anchor)}"]`)
+          : null;
         if (target) target.scrollIntoView({ block: "start" });
         else container?.scrollTo({ top: 0 });
         return;
@@ -180,7 +213,7 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
       pendingAnchor.current = anchor ?? null;
       setActiveSlug(slug);
     },
-    [activeSlug]
+    [activeSlug],
   );
 
   /** Cross-page links in the docs are markdown links; intercept them here so a
@@ -189,12 +222,19 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
    *  control's "copied" state is a DOM attribute rather than React state). */
   const handleContentClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
-      const copyButton = (event.target as HTMLElement).closest("[data-copy-code]");
+      const copyButton = (event.target as HTMLElement).closest(
+        "[data-copy-code]",
+      );
       if (copyButton) {
-        const code = copyButton.closest(".code-block")?.querySelector("code")?.textContent ?? "";
+        const code =
+          copyButton.closest(".code-block")?.querySelector("code")
+            ?.textContent ?? "";
         void navigator.clipboard.writeText(code);
         copyButton.setAttribute("data-copied", "true");
-        window.setTimeout(() => copyButton.removeAttribute("data-copied"), 2000);
+        window.setTimeout(
+          () => copyButton.removeAttribute("data-copied"),
+          2000,
+        );
         return;
       }
 
@@ -205,7 +245,7 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
       const [file, anchor] = target.split("#");
       openDoc(file.replace(/\.md$/i, ""), anchor);
     },
-    [openDoc]
+    [openDoc],
   );
 
   // Escape closes the drawer first, then the dialog — closing the whole viewer
@@ -229,14 +269,23 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
   }, [nav.drawerOpen, nav.closeDrawer, onClose, variant]);
 
   const renderedMarkdown = useMemo(
-    () => (page ? renderDocMarkdown(page.markdown, searching ? { highlight: needle } : {}) : ""),
-    [page, needle, searching]
+    () =>
+      page
+        ? renderDocMarkdown(
+            page.markdown,
+            searching ? { highlight: needle } : {},
+          )
+        : "",
+    [page, needle, searching],
   );
 
   /** Counted from the rendered HTML, never from the server's total: the chip must
    *  not claim a highlight the reader cannot see (a phrase split by inline markup
    *  is found by the raw-markdown search but is not one text run to mark). */
-  const hitCount = useMemo(() => (renderedMarkdown.match(/class="doc-search-hit"/g) ?? []).length, [renderedMarkdown]);
+  const hitCount = useMemo(
+    () => (renderedMarkdown.match(/class="doc-search-hit"/g) ?? []).length,
+    [renderedMarkdown],
+  );
 
   const groups = useMemo(() => groupBySection(pages), [pages]);
   const viewClass = `docs-view docs-view-${variant}`;
@@ -253,7 +302,10 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
         }
         sections={groups.map((group) => ({
           label: group.section,
-          items: group.pages.map((page) => ({ id: page.slug, label: page.title }))
+          items: group.pages.map((page) => ({
+            id: page.slug,
+            label: page.title,
+          })),
         }))}
         activeId={activeSlug ?? undefined}
         onSelect={openDoc}
@@ -268,15 +320,22 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
         }
         listOverride={
           searching ? (
-            <div className="side-nav-list docs-search-results" aria-live="polite">
+            <div
+              className="side-nav-list docs-search-results"
+              aria-live="polite"
+            >
               <span className="side-nav-group-label">
-                {results ? `${results.total} ${results.total === 1 ? "match" : "matches"} in ${results.pages.length} ${results.pages.length === 1 ? "page" : "pages"}` : "Searching…"}
+                {results
+                  ? `${results.total} ${results.total === 1 ? "match" : "matches"} in ${results.pages.length} ${results.pages.length === 1 ? "page" : "pages"}`
+                  : "Searching…"}
               </span>
               {results?.pages.map((entry) => (
                 <div className="docs-search-page" key={entry.slug}>
                   <button
                     className={`side-nav-item docs-search-page-title ${entry.slug === activeSlug ? "active" : ""}`}
-                    onClick={() => openDoc(entry.slug, entry.hits[0]?.anchor ?? undefined)}
+                    onClick={() =>
+                      openDoc(entry.slug, entry.hits[0]?.anchor ?? undefined)
+                    }
                   >
                     <span>{entry.title}</span>
                     <span className="docs-search-count">{entry.count}</span>
@@ -285,16 +344,26 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
                     <button
                       className="docs-search-hit"
                       key={`${entry.slug}-${index}`}
-                      onClick={() => openDoc(entry.slug, hit.anchor ?? undefined)}
+                      onClick={() =>
+                        openDoc(entry.slug, hit.anchor ?? undefined)
+                      }
                     >
-                      {hit.heading ? <span className="docs-search-hit-heading">{hit.heading}</span> : null}
-                      <span className="docs-search-hit-snippet">{splitSnippet(hit.snippet, needle)}</span>
+                      {hit.heading ? (
+                        <span className="docs-search-hit-heading">
+                          {hit.heading}
+                        </span>
+                      ) : null}
+                      <span className="docs-search-hit-snippet">
+                        {splitSnippet(hit.snippet, needle)}
+                      </span>
                     </button>
                   ))}
                 </div>
               ))}
               {results && results.pages.length === 0 ? (
-                <p className="side-nav-empty">No page or paragraph matches “{needle}”.</p>
+                <p className="side-nav-empty">
+                  No page or paragraph matches “{needle}”.
+                </p>
               ) : null}
             </div>
           ) : undefined
@@ -324,21 +393,36 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
           {searching ? (
             <span className="docs-hit-chip">
               {hitCount} highlighted
-              <IconButton icon="X" size="xs" variant="ghost" label="Clear the search" onClick={() => setQuery("")} />
+              <IconButton
+                icon="X"
+                size="xs"
+                variant="ghost"
+                label="Clear the search"
+                onClick={() => setQuery("")}
+              />
             </span>
           ) : null}
           <span className="docs-toolbar-spacer" />
           {variant === "overlay" && onClose ? (
-            <IconButton icon="X" label="Close documentation" size="md" onClick={onClose} />
+            <IconButton
+              icon="X"
+              label="Close documentation"
+              size="md"
+              onClick={onClose}
+            />
           ) : null}
         </div>
         {error ? <pre className="error-box">{error}</pre> : null}
-        {!error && loading && !page ? <p className="docs-loading">Loading…</p> : null}
+        {!error && loading && !page ? (
+          <p className="docs-loading">Loading…</p>
+        ) : null}
         {!error && page ? (
           <>
             <header className="docs-page-header">
               <h1>{page.title}</h1>
-              {page.section ? <span className="docs-page-section">{page.section}</span> : null}
+              {page.section ? (
+                <span className="docs-page-section">{page.section}</span>
+              ) : null}
             </header>
             <div
               className="doc-markdown"

@@ -35,7 +35,7 @@ const SIZE_ICON_MAP: Record<BadgeSize, number> = {
 
 function renderBadgeIcon(
   icon: IconName | React.ReactNode | undefined,
-  size: number
+  size: number,
 ): React.ReactNode {
   if (!icon) return null;
   if (typeof icon === "string") {
@@ -60,7 +60,7 @@ export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
       style,
       ...props
     },
-    ref
+    ref,
   ) => {
     const iconSize = SIZE_ICON_MAP[size];
     const classNames = [
@@ -77,7 +77,13 @@ export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
     const mergedStyle = maxWidth !== undefined ? { maxWidth, ...style } : style;
 
     return (
-      <span ref={ref} className={classNames} title={title} style={mergedStyle} {...props}>
+      <span
+        ref={ref}
+        className={classNames}
+        title={title}
+        style={mergedStyle}
+        {...props}
+      >
         {leftIcon ? (
           <span className="base-badge__icon base-badge__icon--left">
             {renderBadgeIcon(leftIcon, iconSize)}
@@ -93,7 +99,7 @@ export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
         ) : null}
       </span>
     );
-  }
+  },
 );
 
 Badge.displayName = "Badge";

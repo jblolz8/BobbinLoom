@@ -19,21 +19,36 @@ import { imageRoutes } from "../src/server/routes/images";
 import { getPlaythroughRecord } from "../src/server/store";
 import { saveAppSettings } from "../src/server/appSettingsStore";
 import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../src/engine/imageDefaults";
-import { cleanupTempDirs, pngBytes, tempDir, writePlaythroughWithImages } from "./helpers/imageFixtures";
+import {
+  cleanupTempDirs,
+  pngBytes,
+  tempDir,
+  writePlaythroughWithImages,
+} from "./helpers/imageFixtures";
 
 afterEach(cleanupTempDirs);
 
 const API_KEY = "sk-provenance-sentinel-9f3a2b7c";
 const PNG_A = pngBytes("request-provenance-a");
 const PNG_B = pngBytes("request-provenance-b");
-const TEXT_ANSWER = '{"prompt": "a woman in the rain", "negative_prompt": "blurry"}';
+const TEXT_ANSWER =
+  '{"prompt": "a woman in the rain", "negative_prompt": "blurry"}';
 
 /** Any of these inside a stored request is a leak. The sentinel is the exact
  *  key the stub fetch sees in the Authorization header. */
-const CREDENTIAL_MARKERS = ["authorization", "bearer", "apikey", "api_key", API_KEY];
+const CREDENTIAL_MARKERS = [
+  "authorization",
+  "bearer",
+  "apikey",
+  "api_key",
+  API_KEY,
+];
 
 function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 /** Any credential marker inside a stored string is a leak. Shared by every
@@ -43,7 +58,9 @@ function expectNoCredentialMarkers(text: string, label: string): void {
   expect(typeof text, `${label} must be a stored string`).toBe("string");
   const lower = text.toLowerCase();
   for (const marker of CREDENTIAL_MARKERS) {
-    expect(lower, `${label} leaked "${marker}"`).not.toContain(marker.toLowerCase());
+    expect(lower, `${label} leaked "${marker}"`).not.toContain(
+      marker.toLowerCase(),
+    );
   }
 }
 
@@ -53,23 +70,32 @@ function expectBodyOnly(request: string): void {
   expectNoCredentialMarkers(request, "stored request");
 }
 
-type Captured = { url: string; body: Record<string, unknown>; headers: Record<string, string> };
+type Captured = {
+  url: string;
+  body: Record<string, unknown>;
+  headers: Record<string, string>;
+};
 
 /** Records the URL, parsed body and headers of every outgoing call. */
-function stubFetch(respond: (call: number) => Response): { fetchImpl: typeof fetch; calls: Captured[] } {
+function stubFetch(respond: (call: number) => Response): {
+  fetchImpl: typeof fetch;
+  calls: Captured[];
+} {
   const calls: Captured[] = [];
   const fetchImpl = (async (url: any, init: any) => {
     calls.push({
       url: String(url),
       body: init?.body ? JSON.parse(init.body) : {},
-      headers: { ...(init?.headers ?? {}) }
+      headers: { ...(init?.headers ?? {}) },
     });
     return respond(calls.length);
   }) as unknown as typeof fetch;
   return { fetchImpl, calls };
 }
 
-function testConfig(overrides: Partial<ResolvedProviderConfig> = {}): ResolvedProviderConfig {
+function testConfig(
+  overrides: Partial<ResolvedProviderConfig> = {},
+): ResolvedProviderConfig {
   return {
     providerId: "venice_images",
     label: "Venice Images",
@@ -81,11 +107,13 @@ function testConfig(overrides: Partial<ResolvedProviderConfig> = {}): ResolvedPr
     contextWindow: 32768,
     maxRetries: 0,
     timeoutMs: 180_000,
-    ...overrides
+    ...overrides,
   };
 }
 
-function imageConn(overrides: Partial<ProviderConnection> = {}): ProviderConnection {
+function imageConn(
+  overrides: Partial<ProviderConnection> = {},
+): ProviderConnection {
   return {
     id: "venice_images",
     label: "Venice Images",
@@ -95,16 +123,29 @@ function imageConn(overrides: Partial<ProviderConnection> = {}): ProviderConnect
     maxTokens: 1200,
     contextWindow: 32768,
     kind: "image",
-    ...overrides
+    ...overrides,
   };
 }
 
 describe("stored image request — the adapters", () => {
   it("stores the Venice body verbatim, style_preset included, and no credential", async () => {
-    const { fetchImpl, calls } = stubFetch(() => jsonResponse({ id: "gen", images: [PNG_A.toString("base64")], timing: { total: 5 } }));
-    const provider = new VeniceImageProvider(testConfig(), imageConn({ stylePreset: "Anime", size: "1024x1024" }), fetchImpl);
+    const { fetchImpl, calls } = stubFetch(() =>
+      jsonResponse({
+        id: "gen",
+        images: [PNG_A.toString("base64")],
+        timing: { total: 5 },
+      }),
+    );
+    const provider = new VeniceImageProvider(
+      testConfig(),
+      imageConn({ stylePreset: "Anime", size: "1024x1024" }),
+      fetchImpl,
+    );
 
-    const result = await provider.generateImage({ prompt: "a scene", negativePrompt: "blurry" });
+    const result = await provider.generateImage({
+      prompt: "a scene",
+      negativePrompt: "blurry",
+    });
 
     // The call DID carry the key in its headers, so a header leak would show.
     expect(calls[0].headers.Authorization).toBe(`Bearer ${API_KEY}`);
@@ -112,13 +153,28 @@ describe("stored image request — the adapters", () => {
     // Stored === sent, byte for byte.
     expect(result.rawRequest).toBe(JSON.stringify(calls[0].body));
     expect(JSON.parse(result.rawRequest)).toEqual(calls[0].body);
-    expect((JSON.parse(result.rawRequest) as Record<string, unknown>).style_preset).toBe("Anime");
+    expect(
+      (JSON.parse(result.rawRequest) as Record<string, unknown>).style_preset,
+    ).toBe("Anime");
     expectBodyOnly(result.rawRequest);
   });
 
   it("stores the OpenAI-compatible body verbatim and no credential", async () => {
-    const { fetchImpl, calls } = stubFetch(() => jsonResponse({ created: 1, data: [{ b64_json: PNG_A.toString("base64") }] }));
-    const provider = new OpenAIImagesProvider(testConfig(), imageConn({ apiStyle: "openai", stylePreset: "Anime", size: "1024x1024" }), fetchImpl);
+    const { fetchImpl, calls } = stubFetch(() =>
+      jsonResponse({
+        created: 1,
+        data: [{ b64_json: PNG_A.toString("base64") }],
+      }),
+    );
+    const provider = new OpenAIImagesProvider(
+      testConfig(),
+      imageConn({
+        apiStyle: "openai",
+        stylePreset: "Anime",
+        size: "1024x1024",
+      }),
+      fetchImpl,
+    );
 
     const result = await provider.generateImage({ prompt: "a scene" });
 
@@ -130,8 +186,18 @@ describe("stored image request — the adapters", () => {
   });
 
   it("stores the body, never the response payload", async () => {
-    const { fetchImpl } = stubFetch(() => jsonResponse({ id: "gen", images: [PNG_A.toString("base64")], timing: { total: 5 } }));
-    const provider = new VeniceImageProvider(testConfig(), imageConn(), fetchImpl);
+    const { fetchImpl } = stubFetch(() =>
+      jsonResponse({
+        id: "gen",
+        images: [PNG_A.toString("base64")],
+        timing: { total: 5 },
+      }),
+    );
+    const provider = new VeniceImageProvider(
+      testConfig(),
+      imageConn(),
+      fetchImpl,
+    );
     const result = await provider.generateImage({ prompt: "a scene" });
     expect(result.rawRequest).not.toContain(PNG_A.toString("base64"));
   });
@@ -149,17 +215,28 @@ function routeHarness() {
     calls.push({
       url: String(url),
       body: init?.body ? JSON.parse(init.body) : {},
-      headers: { ...(init?.headers ?? {}) }
+      headers: { ...(init?.headers ?? {}) },
     });
     const href = String(url);
-    if (href.includes("/chat/completions")) return jsonResponse({ choices: [{ message: { content: TEXT_ANSWER } }] });
+    if (href.includes("/chat/completions"))
+      return jsonResponse({ choices: [{ message: { content: TEXT_ANSWER } }] });
     if (href.includes("/image/generate")) {
-      return jsonResponse({ id: "gen_1", images: [PNG_A.toString("base64"), PNG_B.toString("base64")], timing: { total: 1234 } });
+      return jsonResponse({
+        id: "gen_1",
+        images: [PNG_A.toString("base64"), PNG_B.toString("base64")],
+        timing: { total: 1234 },
+      });
     }
     return new Response("not found", { status: 404 });
   }) as unknown as typeof fetch;
 
-  createConnection(settingsDir, { label: "Local Text", baseUrl: "http://localhost:1234/v1", model: "text-model", kind: "text", apiKey: API_KEY });
+  createConnection(settingsDir, {
+    label: "Local Text",
+    baseUrl: "http://localhost:1234/v1",
+    model: "text-model",
+    kind: "text",
+    apiKey: API_KEY,
+  });
   createConnection(settingsDir, {
     label: "Venice Images",
     baseUrl: "https://api.venice.ai/api/v1",
@@ -168,22 +245,37 @@ function routeHarness() {
     apiStyle: "venice",
     stylePreset: "Anime",
     size: "1024x1024",
-    apiKey: API_KEY
+    apiKey: API_KEY,
   });
 
   // The image prompt config is global now; seed THIS harness's settings dir with
   // the shipped defaults so no real data/user-settings.json is consulted.
   saveAppSettings(settingsDir, {
     activePresetId: "default",
-    promptConfig: { modules: { turn: [] }, imageGeneration: DEFAULT_IMAGE_GENERATION_SETTINGS }
+    promptConfig: {
+      modules: { turn: [] },
+      imageGeneration: DEFAULT_IMAGE_GENERATION_SETTINGS,
+    },
   });
 
   const manager = new ProviderManager(settingsDir, {}, fetchImpl);
   const app = Fastify();
-  app.register(imageRoutes, { dataDir, imagesDir, settingsDir, manager, fetchImpl });
+  app.register(imageRoutes, {
+    dataDir,
+    imagesDir,
+    settingsDir,
+    manager,
+    fetchImpl,
+  });
 
   const playthrough = writePlaythroughWithImages(dataDir, "Run", [[], [], []]);
-  return { app, dataDir, calls, playthroughId: playthrough.id, messageId: playthrough.messages[2].id };
+  return {
+    app,
+    dataDir,
+    calls,
+    playthroughId: playthrough.id,
+    messageId: playthrough.messages[2].id,
+  };
 }
 
 describe("stored image request — the route", () => {
@@ -192,11 +284,13 @@ describe("stored image request — the route", () => {
     const res = await h.app.inject({
       method: "POST",
       url: `/api/playthroughs/${h.playthroughId}/messages/${h.messageId}/image`,
-      payload: {}
+      payload: {},
     });
     expect(res.statusCode).toBe(200);
 
-    const imageCall = h.calls.find((call) => call.url.includes("/image/generate"));
+    const imageCall = h.calls.find((call) =>
+      call.url.includes("/image/generate"),
+    );
     expect(imageCall, "the image call must have happened").toBeDefined();
     expect(imageCall!.headers.Authorization).toBe(`Bearer ${API_KEY}`);
 
@@ -213,8 +307,11 @@ describe("stored image request — the route", () => {
     expect(refs[0].request).toBe(refs[1].request);
 
     // It survives the round trip to disk, on both refs.
-    const stored = getPlaythroughRecord(h.dataDir, h.playthroughId)!.messages[2].images!;
-    expect(stored.map((ref) => ref.request)).toEqual(refs.map((ref: { request?: string }) => ref.request));
+    const stored = getPlaythroughRecord(h.dataDir, h.playthroughId)!.messages[2]
+      .images!;
+    expect(stored.map((ref) => ref.request)).toEqual(
+      refs.map((ref: { request?: string }) => ref.request),
+    );
   });
 
   it("stores a RE-SENT body verbatim, with no credential and no text call", async () => {
@@ -226,14 +323,18 @@ describe("stored image request — the route", () => {
     const res = await h.app.inject({
       method: "POST",
       url: `/api/playthroughs/${h.playthroughId}/messages/${h.messageId}/image`,
-      payload: { rawRequest: raw, imageProviderId: "venice_images" }
+      payload: { rawRequest: raw, imageProviderId: "venice_images" },
     });
     expect(res.statusCode).toBe(200);
 
-    const imageCall = h.calls.find((call) => call.url.includes("/image/generate"))!;
+    const imageCall = h.calls.find((call) =>
+      call.url.includes("/image/generate"),
+    )!;
     expect(imageCall.headers.Authorization).toBe(`Bearer ${API_KEY}`);
     // No text call ran: this path never asks the model for a prompt.
-    expect(h.calls.some((call) => call.url.includes("/chat/completions"))).toBe(false);
+    expect(h.calls.some((call) => call.url.includes("/chat/completions"))).toBe(
+      false,
+    );
 
     const refs = res.json().playthrough.messages[2].images;
     expect(refs).toHaveLength(2);
@@ -249,11 +350,13 @@ describe("stored image request — the route", () => {
     const res = await h.app.inject({
       method: "POST",
       url: `/api/playthroughs/${h.playthroughId}/messages/${h.messageId}/image`,
-      payload: {}
+      payload: {},
     });
     expect(res.statusCode).toBe(200);
 
-    const textCall = h.calls.find((call) => call.url.includes("/chat/completions"));
+    const textCall = h.calls.find((call) =>
+      call.url.includes("/chat/completions"),
+    );
     expect(textCall, "the prompt call must have happened").toBeDefined();
     // The text connection carries a key in this harness, so the text call DID
     // send it — a header leak into the stored provenance would show up below.
@@ -265,7 +368,9 @@ describe("stored image request — the route", () => {
       // Body only, exactly the body the text call sent…
       expect(JSON.parse(ref.promptRequest)).toEqual(textCall!.body);
       // …and the provider's own response envelope, nothing around it.
-      expect(JSON.parse(ref.promptResponse).choices[0].message.content).toBe(TEXT_ANSWER);
+      expect(JSON.parse(ref.promptResponse).choices[0].message.content).toBe(
+        TEXT_ANSWER,
+      );
       expectNoCredentialMarkers(ref.promptRequest, "stored promptRequest");
       expectNoCredentialMarkers(ref.promptResponse, "stored promptResponse");
     }
@@ -273,9 +378,14 @@ describe("stored image request — the route", () => {
     expect(refs[0].promptRequest).toBe(refs[1].promptRequest);
     expect(refs[0].promptResponse).toBe(refs[1].promptResponse);
 
-    const stored = getPlaythroughRecord(h.dataDir, h.playthroughId)!.messages[2].images!;
-    expect(stored.map((ref) => ref.promptRequest)).toEqual(refs.map((ref: { promptRequest?: string }) => ref.promptRequest));
-    expect(stored.map((ref) => ref.promptResponse)).toEqual(refs.map((ref: { promptResponse?: string }) => ref.promptResponse));
+    const stored = getPlaythroughRecord(h.dataDir, h.playthroughId)!.messages[2]
+      .images!;
+    expect(stored.map((ref) => ref.promptRequest)).toEqual(
+      refs.map((ref: { promptRequest?: string }) => ref.promptRequest),
+    );
+    expect(stored.map((ref) => ref.promptResponse)).toEqual(
+      refs.map((ref: { promptResponse?: string }) => ref.promptResponse),
+    );
   });
 });
 
@@ -285,13 +395,16 @@ describe("stored image request — the schema", () => {
     prompt: "a prompt",
     providerId: "venice_images",
     model: "image-model",
-    createdAt: "2026-01-01T00:00:00.000Z"
+    createdAt: "2026-01-01T00:00:00.000Z",
   };
 
   it("parses a ref stored before the field existed, and keeps it when present", () => {
     expect(MessageImageSchema.parse(legacyRef)).not.toHaveProperty("request");
 
-    const withRequest = MessageImageSchema.parse({ ...legacyRef, request: '{"model":"image-model"}' });
+    const withRequest = MessageImageSchema.parse({
+      ...legacyRef,
+      request: '{"model":"image-model"}',
+    });
     expect(withRequest.request).toBe('{"model":"image-model"}');
 
     // The message around it parses too — additive, not breaking.
@@ -300,7 +413,7 @@ describe("stored image request — the schema", () => {
       role: "assistant",
       content: "x",
       createdAt: "2026-01-01T00:00:00.000Z",
-      images: [legacyRef, { ...legacyRef, request: '{"model":"image-model"}' }]
+      images: [legacyRef, { ...legacyRef, request: '{"model":"image-model"}' }],
     });
     expect(message.images).toHaveLength(2);
     expect(message.images![0].request).toBeUndefined();
@@ -308,7 +421,12 @@ describe("stored image request — the schema", () => {
   });
 
   it("rejects a non-string request", () => {
-    expect(() => MessageImageSchema.parse({ ...legacyRef, request: { model: "image-model" } })).toThrow();
+    expect(() =>
+      MessageImageSchema.parse({
+        ...legacyRef,
+        request: { model: "image-model" },
+      }),
+    ).toThrow();
   });
 
   it("parses a ref stored before the prompt-call fields existed, and keeps them when present", () => {
@@ -319,14 +437,23 @@ describe("stored image request — the schema", () => {
     const withPromptCall = MessageImageSchema.parse({
       ...legacyRef,
       promptRequest: '{"model":"text-model"}',
-      promptResponse: '{"choices":[{"message":{"content":"{}"}}]}'
+      promptResponse: '{"choices":[{"message":{"content":"{}"}}]}',
     });
     expect(withPromptCall.promptRequest).toBe('{"model":"text-model"}');
-    expect(withPromptCall.promptResponse).toBe('{"choices":[{"message":{"content":"{}"}}]}');
+    expect(withPromptCall.promptResponse).toBe(
+      '{"choices":[{"message":{"content":"{}"}}]}',
+    );
   });
 
   it("rejects a non-string promptRequest or promptResponse", () => {
-    expect(() => MessageImageSchema.parse({ ...legacyRef, promptRequest: { model: "text-model" } })).toThrow();
-    expect(() => MessageImageSchema.parse({ ...legacyRef, promptResponse: 42 })).toThrow();
+    expect(() =>
+      MessageImageSchema.parse({
+        ...legacyRef,
+        promptRequest: { model: "text-model" },
+      }),
+    ).toThrow();
+    expect(() =>
+      MessageImageSchema.parse({ ...legacyRef, promptResponse: 42 }),
+    ).toThrow();
   });
 });

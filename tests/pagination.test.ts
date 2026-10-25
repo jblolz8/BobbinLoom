@@ -11,7 +11,7 @@ import {
   parseStoredPageSize,
   rangeLabel,
   rangeParts,
-  totalPagesFor
+  totalPagesFor,
 } from "../src/client/engine/pagination";
 
 /**
@@ -103,18 +103,38 @@ describe("pageSlice", () => {
 
 describe("rangeParts / rangeLabel", () => {
   it("reports the visible window", () => {
-    expect(rangeParts(1, 12, 57)).toEqual({ from: 1, to: 12, total: 57, all: false });
-    expect(rangeParts(5, 12, 57)).toEqual({ from: 49, to: 57, total: 57, all: false });
+    expect(rangeParts(1, 12, 57)).toEqual({
+      from: 1,
+      to: 12,
+      total: 57,
+      all: false,
+    });
+    expect(rangeParts(5, 12, 57)).toEqual({
+      from: 49,
+      to: 57,
+      total: 57,
+      all: false,
+    });
     expect(rangeLabel(5, 12, 57)).toBe("Showing 49–57 of 57");
   });
 
   it("marks the 'all' case", () => {
-    expect(rangeParts(1, ALL_PAGE_SIZE, 57)).toEqual({ from: 1, to: 57, total: 57, all: true });
+    expect(rangeParts(1, ALL_PAGE_SIZE, 57)).toEqual({
+      from: 1,
+      to: 57,
+      total: 57,
+      all: true,
+    });
     expect(rangeLabel(1, ALL_PAGE_SIZE, 57)).toBe("Showing all 57");
   });
 
   it("handles an empty collection", () => {
-    expect(rangeParts(1, 12, 0)).toEqual({ from: 0, to: 0, total: 0, all: false });
+    expect(rangeParts(1, 12, 0)).toEqual({
+      from: 0,
+      to: 0,
+      total: 0,
+      all: false,
+    });
     expect(rangeLabel(1, 12, 0)).toBe("Showing 0");
   });
 });

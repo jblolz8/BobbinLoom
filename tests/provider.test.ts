@@ -1,11 +1,33 @@
 import { describe, expect, it, vi } from "vitest";
-import { createBlankPlaythrough, createInitialPlaythrough, DEFAULT_CHARACTER_FORMAT, NSFW_CHARACTER_FORMAT, parseUserInput } from "../src/engine/engine";
+import {
+  createBlankPlaythrough,
+  createInitialPlaythrough,
+  DEFAULT_CHARACTER_FORMAT,
+  NSFW_CHARACTER_FORMAT,
+  parseUserInput,
+} from "../src/engine/engine";
 import { DEMO_TEMPLATE } from "../src/engine/demoData";
-import { OpenAICompatibleProvider, assembleTurnPrompt, extractJsonPayload, repairRawControlChars } from "../src/server/openAiCompatibleProvider";
-import { A1111_DEFAULT_IMAGE_TIMEOUT_MS, buildTextSamplingParams, normalizeBaseUrl, normalizeImageBaseUrl, resolveConnectionConfig, resolveImageConfig } from "../src/server/providerConfig";
+import {
+  OpenAICompatibleProvider,
+  assembleTurnPrompt,
+  extractJsonPayload,
+  repairRawControlChars,
+} from "../src/server/openAiCompatibleProvider";
+import {
+  A1111_DEFAULT_IMAGE_TIMEOUT_MS,
+  buildTextSamplingParams,
+  normalizeBaseUrl,
+  normalizeImageBaseUrl,
+  resolveConnectionConfig,
+  resolveImageConfig,
+} from "../src/server/providerConfig";
 import { authHeaders } from "../src/server/httpAuth";
 import type { ResolvedProviderConfig } from "../src/server/providerConfig";
-import { EMPTY_MODULE_SET, PromptConfigSchema, ScenarioSeedSchema } from "../src/schemas";
+import {
+  EMPTY_MODULE_SET,
+  PromptConfigSchema,
+  ScenarioSeedSchema,
+} from "../src/schemas";
 import type { ProviderConnection } from "../src/schemas";
 import type { CharacterTemplate } from "../src/schemas";
 import type { PromptPresetModule } from "../src/schemas";
@@ -17,7 +39,9 @@ const CFG = { modules: { turn: [] } };
  *  in the trailing slot without changing any test's budgeting. */
 const DEFAULT_BUDGET = { contextWindow: 65536, reserveOutputTokens: 1200 };
 
-function testConfig(overrides: Partial<ResolvedProviderConfig>): ResolvedProviderConfig {
+function testConfig(
+  overrides: Partial<ResolvedProviderConfig>,
+): ResolvedProviderConfig {
   return {
     providerId: "custom",
     label: "Test Provider",
@@ -29,14 +53,14 @@ function testConfig(overrides: Partial<ResolvedProviderConfig>): ResolvedProvide
     contextWindow: 32768,
     maxRetries: 1,
     timeoutMs: 120_000,
-    ...overrides
+    ...overrides,
   };
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json" }
+    headers: { "Content-Type": "application/json" },
   });
 }
 
@@ -59,10 +83,14 @@ function jsonExampleAfter(prompt: string, marker: string): string {
       if (depth === 0) return prompt.slice(start, i + 1);
     }
   }
-  throw new Error("unbalanced braces: the JSON example in this prompt never closes");
+  throw new Error(
+    "unbalanced braces: the JSON example in this prompt never closes",
+  );
 }
 
-function currentStateText(assembled: ReturnType<typeof assembleTurnPrompt>): string {
+function currentStateText(
+  assembled: ReturnType<typeof assembleTurnPrompt>,
+): string {
   const joined = promptText(assembled);
   const start = joined.indexOf("CURRENT STATE\n");
   if (start === -1) return "";
@@ -78,11 +106,11 @@ function promptText(assembled: ReturnType<typeof assembleTurnPrompt>): string {
 const VALID_SEED = {
   character: {
     name: "Mira",
-    content: "[Species]: Human\n\n[Body]\n- Height: tall"
+    content: "[Species]: Human\n\n[Body]\n- Height: tall",
   },
   startingWorldState: [],
   items: [],
-  additionalCharacters: []
+  additionalCharacters: [],
 };
 
 describe("ScenarioSeedSchema", () => {
@@ -102,8 +130,12 @@ describe("ScenarioSeedSchema", () => {
 
 describe("provider config", () => {
   it("normalizes OpenAI-compatible base URLs", () => {
-    expect(normalizeBaseUrl("https://api.deepseek.com")).toBe("https://api.deepseek.com/v1");
-    expect(normalizeBaseUrl("https://api.deepseek.com/v1/")).toBe("https://api.deepseek.com/v1");
+    expect(normalizeBaseUrl("https://api.deepseek.com")).toBe(
+      "https://api.deepseek.com/v1",
+    );
+    expect(normalizeBaseUrl("https://api.deepseek.com/v1/")).toBe(
+      "https://api.deepseek.com/v1",
+    );
   });
 
   it("resolves a connection with BOBBINLOOM_TIMEOUT_MS and a 120s default", () => {
@@ -115,10 +147,12 @@ describe("provider config", () => {
       model: "deepseek-chat",
       temperature: 0.8,
       maxTokens: 1400,
-      contextWindow: 65536
+      contextWindow: 65536,
     };
 
-    const overridden = resolveConnectionConfig(conn, { BOBBINLOOM_TIMEOUT_MS: "45000" });
+    const overridden = resolveConnectionConfig(conn, {
+      BOBBINLOOM_TIMEOUT_MS: "45000",
+    });
     expect(overridden.timeoutMs).toBe(45000);
     expect(overridden.baseUrl).toBe("https://api.deepseek.com/v1");
 
@@ -137,44 +171,80 @@ describe("image provider config", () => {
     temperature: 0.8,
     maxTokens: 1200,
     contextWindow: 32768,
-    apiStyle: "a1111"
+    apiStyle: "a1111",
   };
 
   it("normalizes an a1111 base URL to the WebUI ROOT — no /v1 is appended", () => {
     // Appending /v1 here would turn every path into /v1/sdapi/v1/... → 404.
-    expect(normalizeImageBaseUrl("http://127.0.0.1:7860", "a1111")).toBe("http://127.0.0.1:7860");
-    expect(normalizeImageBaseUrl("http://127.0.0.1:7860/", "a1111")).toBe("http://127.0.0.1:7860");
-    expect(normalizeImageBaseUrl("  http://127.0.0.1:7860///  ", "a1111")).toBe("http://127.0.0.1:7860");
+    expect(normalizeImageBaseUrl("http://127.0.0.1:7860", "a1111")).toBe(
+      "http://127.0.0.1:7860",
+    );
+    expect(normalizeImageBaseUrl("http://127.0.0.1:7860/", "a1111")).toBe(
+      "http://127.0.0.1:7860",
+    );
+    expect(normalizeImageBaseUrl("  http://127.0.0.1:7860///  ", "a1111")).toBe(
+      "http://127.0.0.1:7860",
+    );
     // An a1111 URL that already ends in /v1 is NOT stripped — it is a path.
-    expect(normalizeImageBaseUrl("http://127.0.0.1:7860/v1", "a1111")).toBe("http://127.0.0.1:7860/v1");
+    expect(normalizeImageBaseUrl("http://127.0.0.1:7860/v1", "a1111")).toBe(
+      "http://127.0.0.1:7860/v1",
+    );
   });
 
   it("keeps the OpenAI-style normalization for openai, venice and an absent style", () => {
-    expect(normalizeImageBaseUrl("https://api.venice.ai/api/v1", "venice")).toBe("https://api.venice.ai/api/v1");
-    expect(normalizeImageBaseUrl("http://localhost:1234", "openai")).toBe("http://localhost:1234/v1");
+    expect(
+      normalizeImageBaseUrl("https://api.venice.ai/api/v1", "venice"),
+    ).toBe("https://api.venice.ai/api/v1");
+    expect(normalizeImageBaseUrl("http://localhost:1234", "openai")).toBe(
+      "http://localhost:1234/v1",
+    );
     // Absent style = openai, the conservative default (same as createImageProvider).
-    expect(normalizeImageBaseUrl("http://localhost:1234")).toBe("http://localhost:1234/v1");
+    expect(normalizeImageBaseUrl("http://localhost:1234")).toBe(
+      "http://localhost:1234/v1",
+    );
   });
 
   it("defaults an a1111 request to 10 minutes and leaves the other dialects at 180s", () => {
-    expect(resolveImageConfig(a1111Conn, {}).timeoutMs).toBe(A1111_DEFAULT_IMAGE_TIMEOUT_MS);
+    expect(resolveImageConfig(a1111Conn, {}).timeoutMs).toBe(
+      A1111_DEFAULT_IMAGE_TIMEOUT_MS,
+    );
     expect(A1111_DEFAULT_IMAGE_TIMEOUT_MS).toBe(600_000);
-    expect(resolveImageConfig({ ...a1111Conn, apiStyle: "venice" }, {}).timeoutMs).toBe(180_000);
-    expect(resolveImageConfig({ ...a1111Conn, apiStyle: "openai" }, {}).timeoutMs).toBe(180_000);
+    expect(
+      resolveImageConfig({ ...a1111Conn, apiStyle: "venice" }, {}).timeoutMs,
+    ).toBe(180_000);
+    expect(
+      resolveImageConfig({ ...a1111Conn, apiStyle: "openai" }, {}).timeoutMs,
+    ).toBe(180_000);
     // No style at all is the OpenAI lane, not the a1111 one.
-    expect(resolveImageConfig({ ...a1111Conn, apiStyle: undefined }, {}).timeoutMs).toBe(180_000);
+    expect(
+      resolveImageConfig({ ...a1111Conn, apiStyle: undefined }, {}).timeoutMs,
+    ).toBe(180_000);
   });
 
   it("resolves the timeout connection > env > dialect default", () => {
     // The connection's own value beats both the env var and the dialect default.
     expect(
-      resolveImageConfig({ ...a1111Conn, timeoutMs: 120_000 }, { BOBBINLOOM_IMAGE_TIMEOUT_MS: "45000" }).timeoutMs
+      resolveImageConfig(
+        { ...a1111Conn, timeoutMs: 120_000 },
+        { BOBBINLOOM_IMAGE_TIMEOUT_MS: "45000" },
+      ).timeoutMs,
     ).toBe(120_000);
     // The env var beats the dialect default…
-    expect(resolveImageConfig(a1111Conn, { BOBBINLOOM_IMAGE_TIMEOUT_MS: "45000" }).timeoutMs).toBe(45_000);
-    expect(resolveImageConfig({ ...a1111Conn, apiStyle: "venice" }, { BOBBINLOOM_IMAGE_TIMEOUT_MS: "45000" }).timeoutMs).toBe(45_000);
+    expect(
+      resolveImageConfig(a1111Conn, { BOBBINLOOM_IMAGE_TIMEOUT_MS: "45000" })
+        .timeoutMs,
+    ).toBe(45_000);
+    expect(
+      resolveImageConfig(
+        { ...a1111Conn, apiStyle: "venice" },
+        { BOBBINLOOM_IMAGE_TIMEOUT_MS: "45000" },
+      ).timeoutMs,
+    ).toBe(45_000);
     // …and a non-numeric env value falls back to the dialect default.
-    expect(resolveImageConfig(a1111Conn, { BOBBINLOOM_IMAGE_TIMEOUT_MS: "soon" }).timeoutMs).toBe(600_000);
+    expect(
+      resolveImageConfig(a1111Conn, { BOBBINLOOM_IMAGE_TIMEOUT_MS: "soon" })
+        .timeoutMs,
+    ).toBe(600_000);
   });
 
   it("carries the style-aware base URL and keeps the image retry default at 1", () => {
@@ -183,7 +253,14 @@ describe("image provider config", () => {
     expect(resolved.maxRetries).toBe(1);
     expect(resolved.providerId).toBe("a1111_local");
 
-    const venice = resolveImageConfig({ ...a1111Conn, apiStyle: "venice", baseUrl: "https://api.venice.ai/api/v1" }, {});
+    const venice = resolveImageConfig(
+      {
+        ...a1111Conn,
+        apiStyle: "venice",
+        baseUrl: "https://api.venice.ai/api/v1",
+      },
+      {},
+    );
     expect(venice.baseUrl).toBe("https://api.venice.ai/api/v1");
   });
 
@@ -196,12 +273,17 @@ describe("image provider config", () => {
       model: "deepseek-chat",
       temperature: 0.8,
       maxTokens: 1400,
-      contextWindow: 65536
+      contextWindow: 65536,
     };
     const resolved = resolveConnectionConfig(textConn, {});
     expect(resolved.baseUrl).toBe("https://api.deepseek.com/v1");
     expect(resolved.timeoutMs).toBe(120_000);
-    expect(resolveConnectionConfig({ ...textConn, timeoutMs: 240_000 }, { BOBBINLOOM_TIMEOUT_MS: "45000" }).timeoutMs).toBe(240_000);
+    expect(
+      resolveConnectionConfig(
+        { ...textConn, timeoutMs: 240_000 },
+        { BOBBINLOOM_TIMEOUT_MS: "45000" },
+      ).timeoutMs,
+    ).toBe(240_000);
   });
 });
 
@@ -214,28 +296,46 @@ describe("authHeaders", () => {
   });
 
   it("sends a colon-less key as Bearer on every dialect — a1111 included", () => {
-    expect(authHeaders("sk-token")).toEqual({ Authorization: "Bearer sk-token" });
-    expect(authHeaders("Bearer-ish-token", "a1111")).toEqual({ Authorization: "Bearer Bearer-ish-token" });
-    expect(authHeaders("sk-token", "venice")).toEqual({ Authorization: "Bearer sk-token" });
+    expect(authHeaders("sk-token")).toEqual({
+      Authorization: "Bearer sk-token",
+    });
+    expect(authHeaders("Bearer-ish-token", "a1111")).toEqual({
+      Authorization: "Bearer Bearer-ish-token",
+    });
+    expect(authHeaders("sk-token", "venice")).toEqual({
+      Authorization: "Bearer sk-token",
+    });
   });
 
   it("sends a `user:pass` key as HTTP Basic for a1111 — the `--api-auth` form", () => {
     // A1111's `--api-auth user:pass` is HTTP Basic, not a bearer token.
     const expected = Buffer.from("alice:s3cret").toString("base64");
-    expect(authHeaders("alice:s3cret", "a1111")).toEqual({ Authorization: `Basic ${expected}` });
+    expect(authHeaders("alice:s3cret", "a1111")).toEqual({
+      Authorization: `Basic ${expected}`,
+    });
   });
 
   it("keeps Basic off the other dialects even when the key contains a colon", () => {
     // Venice/OpenAI keys never carry a colon; one that does is still a token.
-    expect(authHeaders("alice:s3cret", "venice")).toEqual({ Authorization: "Bearer alice:s3cret" });
-    expect(authHeaders("alice:s3cret", "openai")).toEqual({ Authorization: "Bearer alice:s3cret" });
-    expect(authHeaders("alice:s3cret")).toEqual({ Authorization: "Bearer alice:s3cret" });
+    expect(authHeaders("alice:s3cret", "venice")).toEqual({
+      Authorization: "Bearer alice:s3cret",
+    });
+    expect(authHeaders("alice:s3cret", "openai")).toEqual({
+      Authorization: "Bearer alice:s3cret",
+    });
+    expect(authHeaders("alice:s3cret")).toEqual({
+      Authorization: "Bearer alice:s3cret",
+    });
   });
 
   it("trims the key before it is encoded", () => {
     const expected = Buffer.from("alice:s3cret").toString("base64");
-    expect(authHeaders("  alice:s3cret  ", "a1111")).toEqual({ Authorization: `Basic ${expected}` });
-    expect(authHeaders("  sk-token  ", "venice")).toEqual({ Authorization: "Bearer sk-token" });
+    expect(authHeaders("  alice:s3cret  ", "a1111")).toEqual({
+      Authorization: `Basic ${expected}`,
+    });
+    expect(authHeaders("  sk-token  ", "venice")).toEqual({
+      Authorization: "Bearer sk-token",
+    });
   });
 });
 
@@ -249,12 +349,12 @@ describe("OpenAICompatibleProvider", () => {
               content: JSON.stringify({
                 narrative: "Mira nods once.",
                 choices: ["Ask about the gym"],
-                statePatch: { worldStateAdd: ["met_mira"] }
-              })
-            }
-          }
-        ]
-      })
+                statePatch: { worldStateAdd: ["met_mira"] },
+              }),
+            },
+          },
+        ],
+      }),
     );
 
     const provider = new OpenAICompatibleProvider(
@@ -263,9 +363,9 @@ describe("OpenAICompatibleProvider", () => {
         baseUrl: "https://api.deepseek.com/v1",
         model: "deepseek-chat",
         temperature: 0.7,
-        maxTokens: 900
+        maxTokens: 900,
       }),
-      fetchImpl as unknown as typeof fetch
+      fetchImpl as unknown as typeof fetch,
     );
 
     const state = createInitialPlaythrough("Provider Test");
@@ -274,9 +374,14 @@ describe("OpenAICompatibleProvider", () => {
 
     expect(fetchImpl).toHaveBeenCalledTimes(1);
 
-    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
     expect(url).toBe("https://api.deepseek.com/v1/chat/completions");
-    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer test-key");
+    expect((init.headers as Record<string, string>).Authorization).toBe(
+      "Bearer test-key",
+    );
 
     const body = JSON.parse(String(init.body));
     expect(body.model).toBe("deepseek-chat");
@@ -294,23 +399,25 @@ describe("OpenAICompatibleProvider", () => {
         choices: [
           {
             message: {
-              content: "```json\n{\"narrative\":\"Fenced narrative\",\"statePatch\":{\"worldStateAdd\":[\"fenced\"]}}\n```"
-            }
-          }
-        ]
-      })
+              content:
+                '```json\n{"narrative":"Fenced narrative","statePatch":{"worldStateAdd":["fenced"]}}\n```',
+            },
+          },
+        ],
+      }),
     );
 
     const provider = new OpenAICompatibleProvider(
       testConfig({}),
-      fetchImpl as unknown as typeof fetch
+      fetchImpl as unknown as typeof fetch,
     );
 
     const { turn } = await provider.generateTurn(
       parseUserInput("Look around"),
       createInitialPlaythrough("Fence Test"),
-      false
-    , CFG);
+      false,
+      CFG,
+    );
 
     expect(turn.narrative).toBe("Fenced narrative");
     expect(turn.choices).toBeUndefined();
@@ -320,20 +427,21 @@ describe("OpenAICompatibleProvider", () => {
   it("falls back to raw narrative when the provider does not return JSON", async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({
-        choices: [{ message: { content: "This is not JSON." } }]
-      })
+        choices: [{ message: { content: "This is not JSON." } }],
+      }),
     );
 
     const provider = new OpenAICompatibleProvider(
       testConfig({}),
-      fetchImpl as unknown as typeof fetch
+      fetchImpl as unknown as typeof fetch,
     );
 
     const { turn } = await provider.generateTurn(
       parseUserInput("Say nothing"),
       createInitialPlaythrough("Fallback Test"),
-      true
-    , CFG);
+      true,
+      CFG,
+    );
 
     expect(turn.narrative).toBe("This is not JSON.");
     expect(turn.statePatch).toBeUndefined();
@@ -345,20 +453,21 @@ describe("OpenAICompatibleProvider", () => {
       .mockResolvedValueOnce(new Response("server error", { status: 500 }))
       .mockResolvedValueOnce(
         jsonResponse({
-          choices: [{ message: { content: "{\"narrative\":\"Recovered\"}" } }]
-        })
+          choices: [{ message: { content: '{"narrative":"Recovered"}' } }],
+        }),
       );
 
     const provider = new OpenAICompatibleProvider(
       testConfig({ maxRetries: 1 }),
-      fetchImpl as unknown as typeof fetch
+      fetchImpl as unknown as typeof fetch,
     );
 
     const { turn } = await provider.generateTurn(
       parseUserInput("Test retry"),
       createInitialPlaythrough("Retry Test"),
-      false
-    , CFG);
+      false,
+      CFG,
+    );
 
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     expect(turn.narrative).toBe("Recovered");
@@ -367,23 +476,26 @@ describe("OpenAICompatibleProvider", () => {
   it("retries once WITHOUT response_format when the server rejects JSON mode (400)", async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValueOnce(new Response("unsupported param: response_format", { status: 400 }))
+      .mockResolvedValueOnce(
+        new Response("unsupported param: response_format", { status: 400 }),
+      )
       .mockResolvedValueOnce(
         jsonResponse({
-          choices: [{ message: { content: "{\"narrative\":\"No json mode\"}" } }]
-        })
+          choices: [{ message: { content: '{"narrative":"No json mode"}' } }],
+        }),
       );
 
     const provider = new OpenAICompatibleProvider(
       testConfig({}),
-      fetchImpl as unknown as typeof fetch
+      fetchImpl as unknown as typeof fetch,
     );
 
     const { turn } = await provider.generateTurn(
       parseUserInput("hi"),
       createInitialPlaythrough("Fallback Test"),
-      true
-    , CFG);
+      true,
+      CFG,
+    );
 
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     const firstInit = (fetchImpl.mock.calls[0] as unknown[])[1] as RequestInit;
@@ -398,16 +510,23 @@ describe("OpenAICompatibleProvider", () => {
   it("surfaces the error when the no-response_format fallback also fails", async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValueOnce(new Response("unsupported param: response_format", { status: 400 }))
+      .mockResolvedValueOnce(
+        new Response("unsupported param: response_format", { status: 400 }),
+      )
       .mockResolvedValueOnce(new Response("still broken", { status: 400 }));
 
     const provider = new OpenAICompatibleProvider(
       testConfig({}),
-      fetchImpl as unknown as typeof fetch
+      fetchImpl as unknown as typeof fetch,
     );
 
     await expect(
-      provider.generateTurn(parseUserInput("hi"), createInitialPlaythrough("Fallback Test"), false, CFG)
+      provider.generateTurn(
+        parseUserInput("hi"),
+        createInitialPlaythrough("Fallback Test"),
+        false,
+        CFG,
+      ),
     ).rejects.toThrow(/still broken/);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
@@ -415,36 +534,47 @@ describe("OpenAICompatibleProvider", () => {
   it("reports real prompt usage measured from the assembled prompt", async () => {
     let sentChars = 0;
     const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body)) as { messages?: Array<{ content: string }> };
-      sentChars = (body.messages ?? []).reduce((sum, m) => sum + m.content.length, 0);
+      const body = JSON.parse(String(init?.body)) as {
+        messages?: Array<{ content: string }>;
+      };
+      sentChars = (body.messages ?? []).reduce(
+        (sum, m) => sum + m.content.length,
+        0,
+      );
       return jsonResponse({
-        choices: [{ message: { content: JSON.stringify({ narrative: "Usage probe" }) } }]
+        choices: [
+          {
+            message: { content: JSON.stringify({ narrative: "Usage probe" }) },
+          },
+        ],
       });
     });
 
     const provider = new OpenAICompatibleProvider(
       testConfig({}),
-      fetchImpl as unknown as typeof fetch
+      fetchImpl as unknown as typeof fetch,
     );
 
     const state = createInitialPlaythrough("Usage Test");
     const config = {
       modules: {
-        turn: [{
-          id: "mod_test",
-          name: "Test module",
-          description: "test",
-          content: "You are a meticulous test narrator. ".repeat(12),
-          order: 1,
-          enabled: true
-        }]
-      }
+        turn: [
+          {
+            id: "mod_test",
+            name: "Test module",
+            description: "test",
+            content: "You are a meticulous test narrator. ".repeat(12),
+            order: 1,
+            enabled: true,
+          },
+        ],
+      },
     };
     const { turn, promptUsage } = await provider.generateTurn(
       parseUserInput("Check the meter"),
       state,
       false,
-      config
+      config,
     );
 
     expect(turn.narrative).toBe("Usage probe");
@@ -452,7 +582,10 @@ describe("OpenAICompatibleProvider", () => {
     if (!promptUsage) return;
 
     // Total equals the segment sum and tracks the real payload size (chars/4)
-    const sumBreakdown = Object.values(promptUsage.breakdown).reduce((a, b) => a + b, 0);
+    const sumBreakdown = Object.values(promptUsage.breakdown).reduce(
+      (a, b) => a + b,
+      0,
+    );
     expect(promptUsage.estimated).toBe(sumBreakdown);
     expect(promptUsage.estimated).toBeGreaterThan(sentChars / 4 - 64);
     expect(promptUsage.estimated).toBeLessThan(sentChars / 4 + 64);
@@ -466,7 +599,9 @@ describe("OpenAICompatibleProvider", () => {
   it("scenario-seed prompt embeds a JSON example that parses (escaped newlines in content)", async () => {
     let sentPrompt = "";
     const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
+      const body = JSON.parse(String(init?.body)) as {
+        messages: Array<{ content: string }>;
+      };
       sentPrompt = body.messages[0]?.content ?? "";
       return jsonResponse({
         choices: [
@@ -475,26 +610,32 @@ describe("OpenAICompatibleProvider", () => {
               content: JSON.stringify({
                 character: {
                   name: "Mira",
-                  content: "[Species]: Human\n\n[Body]\n- Height: tall"
+                  content: "[Species]: Human\n\n[Body]\n- Height: tall",
                 },
                 startingWorldState: [],
                 items: [],
-                additionalCharacters: []
-              })
-            }
-          }
-        ]
+                additionalCharacters: [],
+              }),
+            },
+          },
+        ],
       });
     });
 
-    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+    const provider = new OpenAICompatibleProvider(
+      testConfig({}),
+      fetchImpl as unknown as typeof fetch,
+    );
     await provider.generateScenarioSeed({
       name: "Test World",
       setting: "A quiet starting village.",
-      allowAdditionalCharacters: true
+      allowAdditionalCharacters: true,
     });
 
-    const example = jsonExampleAfter(sentPrompt, "Return ONLY a JSON object with this exact shape:");
+    const example = jsonExampleAfter(
+      sentPrompt,
+      "Return ONLY a JSON object with this exact shape:",
+    );
 
     expect(() => JSON.parse(example)).not.toThrow();
   });
@@ -502,20 +643,42 @@ describe("OpenAICompatibleProvider", () => {
   it("character-sheet prompt embeds a valid JSON example (escaped newlines, no drift)", async () => {
     let sentPrompt = "";
     const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const b = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
+      const b = JSON.parse(String(init?.body)) as {
+        messages: Array<{ content: string }>;
+      };
       sentPrompt = b.messages[0]?.content ?? "";
-      return jsonResponse({ choices: [{ message: { content: JSON.stringify({ content: "[Species]: Human" }) } }] });
+      return jsonResponse({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({ content: "[Species]: Human" }),
+            },
+          },
+        ],
+      });
     });
-    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+    const provider = new OpenAICompatibleProvider(
+      testConfig({}),
+      fetchImpl as unknown as typeof fetch,
+    );
     await provider.generateCharacterSheet(
-      { name: "Shopkeep", description: "A friendly shopkeeper.", disposition: "friendly" },
+      {
+        name: "Shopkeep",
+        description: "A friendly shopkeeper.",
+        disposition: "friendly",
+      },
       "Setting: Town\nContent Rating: mature\nPlayer Character: Hero",
       undefined,
-      NSFW_CHARACTER_FORMAT
+      NSFW_CHARACTER_FORMAT,
     );
-    expect(() => JSON.parse(
-      jsonExampleAfter(sentPrompt, "Return ONLY a JSON object with this exact shape:")
-    )).not.toThrow();
+    expect(() =>
+      JSON.parse(
+        jsonExampleAfter(
+          sentPrompt,
+          "Return ONLY a JSON object with this exact shape:",
+        ),
+      ),
+    ).not.toThrow();
     expect(sentPrompt).toContain("[Species]");
     expect(sentPrompt).toContain("[Sexual Capabilities]");
     expect(sentPrompt).toContain("in this order: [Species]");
@@ -525,21 +688,28 @@ describe("OpenAICompatibleProvider", () => {
     let sentBody: Record<string, unknown> = {};
     let sentPrompt = "";
     const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const b = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> } & Record<string, unknown>;
+      const b = JSON.parse(String(init?.body)) as {
+        messages: Array<{ content: string }>;
+      } & Record<string, unknown>;
       sentBody = b;
       sentPrompt = b.messages[0]?.content ?? "";
-      return jsonResponse({ choices: [{ message: { content: "Just an idea." } }] });
+      return jsonResponse({
+        choices: [{ message: { content: "Just an idea." } }],
+      });
     });
-    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+    const provider = new OpenAICompatibleProvider(
+      testConfig({}),
+      fetchImpl as unknown as typeof fetch,
+    );
 
     await provider.brainstormCharacter(
       {
         character: { name: "Mira", content: "[Species]: Human" },
         chatHistory: [],
         userMessage: "Any ideas?",
-        format: DEFAULT_CHARACTER_FORMAT
+        format: DEFAULT_CHARACTER_FORMAT,
       },
-      undefined
+      undefined,
     );
 
     // No response_format: the envelope is gone, and with it the double request some providers cost.
@@ -552,22 +722,33 @@ describe("OpenAICompatibleProvider", () => {
   it("invites a new section only when the sheet allows one", async () => {
     const prompts: string[] = [];
     const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const b = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
+      const b = JSON.parse(String(init?.body)) as {
+        messages: Array<{ content: string }>;
+      };
       prompts.push(b.messages[0]?.content ?? "");
       return jsonResponse({ choices: [{ message: { content: "Fine." } }] });
     });
-    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+    const provider = new OpenAICompatibleProvider(
+      testConfig({}),
+      fetchImpl as unknown as typeof fetch,
+    );
     const base = {
       character: { name: "Mira", content: "[Species]: Human" },
       chatHistory: [],
-      userMessage: "Anything else?"
+      userMessage: "Anything else?",
     };
 
-    await provider.brainstormCharacter({ ...base, format: DEFAULT_CHARACTER_FORMAT }, undefined);
+    await provider.brainstormCharacter(
+      { ...base, format: DEFAULT_CHARACTER_FORMAT },
+      undefined,
+    );
     expect(prompts[0]).toContain("[Daily Life]");
     expect(prompts[0]).not.toContain("Never invent one");
 
-    await provider.brainstormCharacter({ ...base, format: DEFAULT_CHARACTER_FORMAT, allowNewSections: false }, undefined);
+    await provider.brainstormCharacter(
+      { ...base, format: DEFAULT_CHARACTER_FORMAT, allowNewSections: false },
+      undefined,
+    );
     expect(prompts[1]).toContain("Never invent one");
   });
 
@@ -582,30 +763,38 @@ describe("OpenAICompatibleProvider", () => {
         proposedChanges: {
           sections: [
             { header: "Likes", body: "- Tea brewing" },
-            { header: "Favourite Weather", body: "- Rain" }
-          ]
-        }
+            { header: "Favourite Weather", body: "- Rain" },
+          ],
+        },
       }),
-      "```"
+      "```",
     ].join(String.fromCharCode(10));
-    const fetchImpl = vi.fn(async () => jsonResponse({ choices: [{ message: { content: reply } }] }));
-    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({ choices: [{ message: { content: reply } }] }),
+    );
+    const provider = new OpenAICompatibleProvider(
+      testConfig({}),
+      fetchImpl as unknown as typeof fetch,
+    );
 
     const result = await provider.brainstormCharacter(
       {
-        character: { name: "Mira", content: "[Species]: Human\n\n[Likes]\n- Nothing" },
+        character: {
+          name: "Mira",
+          content: "[Species]: Human\n\n[Likes]\n- Nothing",
+        },
         chatHistory: [],
         userMessage: "Give her a hobby",
-        format: DEFAULT_CHARACTER_FORMAT
+        format: DEFAULT_CHARACTER_FORMAT,
       },
-      undefined
+      undefined,
     );
 
     expect(result.reply).toContain("## Two ideas");
     expect(result.reply).not.toContain("```");
     expect(result.proposedChanges?.sections).toEqual([
       { header: "Likes", body: "- Tea brewing" },
-      { header: "Favourite Weather", body: "- Rain" }
+      { header: "Favourite Weather", body: "- Rain" },
     ]);
     // New sections are allowed by default, so nothing is dropped and the addition is named.
     expect(result.unmappedHeaders).toEqual([]);
@@ -616,26 +805,38 @@ describe("OpenAICompatibleProvider", () => {
   it("brainstorm prompt follows the target character format instead of a hardcoded list", async () => {
     let sentPrompt = "";
     const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const b = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
+      const b = JSON.parse(String(init?.body)) as {
+        messages: Array<{ content: string }>;
+      };
       sentPrompt = b.messages[0]?.content ?? "";
-      return jsonResponse({ choices: [{ message: { content: JSON.stringify({ reply: "ok" }) } }] });
+      return jsonResponse({
+        choices: [{ message: { content: JSON.stringify({ reply: "ok" }) } }],
+      });
     });
-    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+    const provider = new OpenAICompatibleProvider(
+      testConfig({}),
+      fetchImpl as unknown as typeof fetch,
+    );
 
     // Default format (10 sections, no [Sexual Capabilities]).
     await provider.brainstormCharacter(
       {
-        character: { name: "Mira", content: "[Species]: Human\n\n[Personality]\n- Cheerful" },
+        character: {
+          name: "Mira",
+          content: "[Species]: Human\n\n[Personality]\n- Cheerful",
+        },
         chatHistory: [],
         userMessage: "Make her more mysterious",
         format: DEFAULT_CHARACTER_FORMAT,
       },
-      undefined
+      undefined,
     );
     // The format's section order and instructions are injected.
     expect(sentPrompt).toContain("in this order: [Species]");
     expect(sentPrompt).toContain("Communication - Public");
-    expect(sentPrompt).toContain("The character's species, ancestry, or type of being.");
+    expect(sentPrompt).toContain(
+      "The character's species, ancestry, or type of being.",
+    );
     // The Default format has no [Sexual Capabilities], so the assistant must not demand it.
     expect(sentPrompt).not.toContain("[Sexual Capabilities]");
     // Inline sections are explained from the format, not hardcoded Species/Gender only.
@@ -649,7 +850,7 @@ describe("OpenAICompatibleProvider", () => {
         userMessage: "Add kinks",
         format: NSFW_CHARACTER_FORMAT,
       },
-      undefined
+      undefined,
     );
     expect(sentPrompt).toContain("[Sexual Capabilities]");
     expect(sentPrompt).toContain("Femdom (giving)");
@@ -658,22 +859,76 @@ describe("OpenAICompatibleProvider", () => {
   it("STORY SO FAR injects the meta-summary plus only the most recent verbatim chapters", () => {
     const pt = createInitialPlaythrough("Story So Far Test");
     pt.chapters = [
-      { id: "ch_1", name: "C1", shortDescription: "s", fullSummary: "FULL1 body", turnRange: { start: 1, end: 1 }, messageIds: [], memoryEventIds: [], createdAt: "2026-01-01T00:00:00.000Z" },
-      { id: "ch_2", name: "C2", shortDescription: "s", fullSummary: "FULL2 body", turnRange: { start: 2, end: 2 }, messageIds: [], memoryEventIds: [], createdAt: "2026-01-02T00:00:00.000Z" },
-      { id: "ch_3", name: "C3", shortDescription: "s", fullSummary: "FULL3 body", turnRange: { start: 3, end: 3 }, messageIds: [], memoryEventIds: [], createdAt: "2026-01-03T00:00:00.000Z" },
-      { id: "ch_4", name: "C4", shortDescription: "s", fullSummary: "FULL4 body", turnRange: { start: 4, end: 4 }, messageIds: [], memoryEventIds: [], createdAt: "2026-01-04T00:00:00.000Z" },
-      { id: "ch_5", name: "C5", shortDescription: "s", fullSummary: "FULL5 body", turnRange: { start: 5, end: 5 }, messageIds: [], memoryEventIds: [], createdAt: "2026-01-05T00:00:00.000Z" }
+      {
+        id: "ch_1",
+        name: "C1",
+        shortDescription: "s",
+        fullSummary: "FULL1 body",
+        turnRange: { start: 1, end: 1 },
+        messageIds: [],
+        memoryEventIds: [],
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+      {
+        id: "ch_2",
+        name: "C2",
+        shortDescription: "s",
+        fullSummary: "FULL2 body",
+        turnRange: { start: 2, end: 2 },
+        messageIds: [],
+        memoryEventIds: [],
+        createdAt: "2026-01-02T00:00:00.000Z",
+      },
+      {
+        id: "ch_3",
+        name: "C3",
+        shortDescription: "s",
+        fullSummary: "FULL3 body",
+        turnRange: { start: 3, end: 3 },
+        messageIds: [],
+        memoryEventIds: [],
+        createdAt: "2026-01-03T00:00:00.000Z",
+      },
+      {
+        id: "ch_4",
+        name: "C4",
+        shortDescription: "s",
+        fullSummary: "FULL4 body",
+        turnRange: { start: 4, end: 4 },
+        messageIds: [],
+        memoryEventIds: [],
+        createdAt: "2026-01-04T00:00:00.000Z",
+      },
+      {
+        id: "ch_5",
+        name: "C5",
+        shortDescription: "s",
+        fullSummary: "FULL5 body",
+        turnRange: { start: 5, end: 5 },
+        messageIds: [],
+        memoryEventIds: [],
+        createdAt: "2026-01-05T00:00:00.000Z",
+      },
     ];
-    pt.storyMetaSummaries = [{
-      id: "mch_1",
-      chapterIds: ["ch_1", "ch_2"],
-      turnRange: { start: 1, end: 2 },
-      summary: "META rolling summary",
-      createdAt: "2026-01-02T00:00:00.000Z",
-      updatedAt: "2026-01-02T00:00:00.000Z"
-    }];
+    pt.storyMetaSummaries = [
+      {
+        id: "mch_1",
+        chapterIds: ["ch_1", "ch_2"],
+        turnRange: { start: 1, end: 2 },
+        summary: "META rolling summary",
+        createdAt: "2026-01-02T00:00:00.000Z",
+        updatedAt: "2026-01-02T00:00:00.000Z",
+      },
+    ];
 
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
+    const assembled = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      DEFAULT_BUDGET,
+      CFG,
+    );
     const user = promptText(assembled);
 
     expect(user).toContain("STORY SO FAR:");
@@ -691,14 +946,28 @@ describe("OpenAICompatibleProvider", () => {
 
   it("STORY SO FAR is omitted entirely when there are no chapters or meta summaries", () => {
     const pt = createInitialPlaythrough("No Chapters Test");
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
+    const assembled = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      DEFAULT_BUDGET,
+      CFG,
+    );
     expect(promptText(assembled)).not.toContain("STORY SO FAR:");
     expect(assembled.promptUsage.breakdown.storySoFar).toBe(0);
   });
 
   it("characterFleshOut and characterAddSimple guidance is present in the prompt", () => {
     const pt = createInitialPlaythrough("Guidance Test");
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
+    const assembled = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      DEFAULT_BUDGET,
+      CFG,
+    );
     expect(promptText(assembled)).toContain("characterFleshOut");
     expect(promptText(assembled)).toContain("characterAddSimple");
   });
@@ -706,25 +975,35 @@ describe("OpenAICompatibleProvider", () => {
   it("sizes the scenario-seed max_tokens off the connection config (with a 4000 floor)", async () => {
     const sentBodies: Array<{ max_tokens?: number }> = [];
     const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
-      sentBodies.push(JSON.parse(String(init?.body)) as { max_tokens?: number });
+      sentBodies.push(
+        JSON.parse(String(init?.body)) as { max_tokens?: number },
+      );
       return jsonResponse({
-        choices: [{ message: { content: JSON.stringify(VALID_SEED) } }]
+        choices: [{ message: { content: JSON.stringify(VALID_SEED) } }],
       });
     });
 
     // Connection configured above the floor → follows the config.
     const provider = new OpenAICompatibleProvider(
       testConfig({ maxTokens: 6000 }),
-      fetchImpl as unknown as typeof fetch
+      fetchImpl as unknown as typeof fetch,
     );
-    await provider.generateScenarioSeed({ name: "Test World", setting: "A village.", allowAdditionalCharacters: true });
+    await provider.generateScenarioSeed({
+      name: "Test World",
+      setting: "A village.",
+      allowAdditionalCharacters: true,
+    });
 
     // Connection configured below the floor → seed still gets the 4000 floor.
     const lowProvider = new OpenAICompatibleProvider(
       testConfig({ maxTokens: 800 }),
-      fetchImpl as unknown as typeof fetch
+      fetchImpl as unknown as typeof fetch,
     );
-    await lowProvider.generateScenarioSeed({ name: "Test World", setting: "A village.", allowAdditionalCharacters: true });
+    await lowProvider.generateScenarioSeed({
+      name: "Test World",
+      setting: "A village.",
+      allowAdditionalCharacters: true,
+    });
 
     expect(sentBodies[0].max_tokens).toBe(6000);
     expect(sentBodies[1].max_tokens).toBe(4000);
@@ -738,14 +1017,20 @@ describe("OpenAICompatibleProvider", () => {
         // Reasoning model cut off before producing a final answer.
         return jsonResponse({ choices: [{ message: { content: "" } }] });
       }
-      return jsonResponse({ choices: [{ message: { content: JSON.stringify(VALID_SEED) } }] });
+      return jsonResponse({
+        choices: [{ message: { content: JSON.stringify(VALID_SEED) } }],
+      });
     });
 
     const provider = new OpenAICompatibleProvider(
       testConfig({}),
-      fetchImpl as unknown as typeof fetch
+      fetchImpl as unknown as typeof fetch,
     );
-    const seed = await provider.generateScenarioSeed({ name: "Test World", setting: "A village.", allowAdditionalCharacters: true });
+    const seed = await provider.generateScenarioSeed({
+      name: "Test World",
+      setting: "A village.",
+      allowAdditionalCharacters: true,
+    });
 
     expect(calls).toBe(2);
     expect(seed.character.name).toBe("Mira");
@@ -759,14 +1044,20 @@ describe("OpenAICompatibleProvider", () => {
         // Proxy returned a 200 with a non-JSON body (e.g. an HTML error page).
         return new Response("<html>gateway hiccup</html>", { status: 200 });
       }
-      return jsonResponse({ choices: [{ message: { content: JSON.stringify(VALID_SEED) } }] });
+      return jsonResponse({
+        choices: [{ message: { content: JSON.stringify(VALID_SEED) } }],
+      });
     });
 
     const provider = new OpenAICompatibleProvider(
       testConfig({}),
-      fetchImpl as unknown as typeof fetch
+      fetchImpl as unknown as typeof fetch,
     );
-    const seed = await provider.generateScenarioSeed({ name: "Test World", setting: "A village.", allowAdditionalCharacters: true });
+    const seed = await provider.generateScenarioSeed({
+      name: "Test World",
+      setting: "A village.",
+      allowAdditionalCharacters: true,
+    });
 
     expect(calls).toBe(2);
     expect(seed.character.name).toBe("Mira");
@@ -779,18 +1070,27 @@ describe("OpenAICompatibleProvider", () => {
       if (calls === 1) {
         return jsonResponse({ choices: [{ message: { content: "" } }] });
       }
-      return jsonResponse({ choices: [{ message: { content: JSON.stringify({ narrative: "The mist clears." }) } }] });
+      return jsonResponse({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({ narrative: "The mist clears." }),
+            },
+          },
+        ],
+      });
     });
 
     const provider = new OpenAICompatibleProvider(
       testConfig({}),
-      fetchImpl as unknown as typeof fetch
+      fetchImpl as unknown as typeof fetch,
     );
     const { turn } = await provider.generateTurn(
       parseUserInput("Look around."),
       createInitialPlaythrough("Retry Turn Test"),
-      true
-    , CFG);
+      true,
+      CFG,
+    );
 
     expect(calls).toBe(2);
     expect(turn.narrative).toBe("The mist clears.");
@@ -798,18 +1098,19 @@ describe("OpenAICompatibleProvider", () => {
 
   it("still degrades to the placeholder when every generateTurn attempt is empty", async () => {
     const fetchImpl = vi.fn(async () =>
-      jsonResponse({ choices: [{ message: { content: "" } }] })
+      jsonResponse({ choices: [{ message: { content: "" } }] }),
     );
 
     const provider = new OpenAICompatibleProvider(
       testConfig({}),
-      fetchImpl as unknown as typeof fetch
+      fetchImpl as unknown as typeof fetch,
     );
     const { turn } = await provider.generateTurn(
       parseUserInput("Look around."),
       createInitialPlaythrough("Degrade Turn Test"),
-      true
-    , CFG);
+      true,
+      CFG,
+    );
 
     expect(fetchImpl).toHaveBeenCalledTimes(2); // initial + one retry (maxRetries=1)
     expect(turn.narrative).toBe("The provider returned an empty response.");
@@ -818,19 +1119,25 @@ describe("OpenAICompatibleProvider", () => {
   it("surfaces finish_reason on the turn result", async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({
-        choices: [{ message: { content: JSON.stringify({ narrative: "All good." }) }, finish_reason: "stop" }]
-      })
+        choices: [
+          {
+            message: { content: JSON.stringify({ narrative: "All good." }) },
+            finish_reason: "stop",
+          },
+        ],
+      }),
     );
 
     const provider = new OpenAICompatibleProvider(
       testConfig({}),
-      fetchImpl as unknown as typeof fetch
+      fetchImpl as unknown as typeof fetch,
     );
     const result = await provider.generateTurn(
       parseUserInput("hi"),
       createInitialPlaythrough("FR Test"),
-      true
-    , CFG);
+      true,
+      CFG,
+    );
 
     expect(result.finishReason).toBe("stop");
   });
@@ -838,34 +1145,59 @@ describe("OpenAICompatibleProvider", () => {
   it("reports measured usage when the provider returns a usage block", async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({
-        choices: [{ message: { content: JSON.stringify({ narrative: "ok" }) }, finish_reason: "stop" }],
-        usage: { prompt_tokens: 1234, completion_tokens: 210, total_tokens: 1444 }
-      })
+        choices: [
+          {
+            message: { content: JSON.stringify({ narrative: "ok" }) },
+            finish_reason: "stop",
+          },
+        ],
+        usage: {
+          prompt_tokens: 1234,
+          completion_tokens: 210,
+          total_tokens: 1444,
+        },
+      }),
     );
 
-    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+    const provider = new OpenAICompatibleProvider(
+      testConfig({}),
+      fetchImpl as unknown as typeof fetch,
+    );
     const result = await provider.generateTurn(
       parseUserInput("go"),
       createInitialPlaythrough("Usage Test"),
-      true
-    , CFG);
+      true,
+      CFG,
+    );
 
-    expect(result.measuredUsage).toEqual({ promptTokens: 1234, completionTokens: 210 });
+    expect(result.measuredUsage).toEqual({
+      promptTokens: 1234,
+      completionTokens: 210,
+    });
   });
 
   it("omits measured usage when the provider reports none", async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({
-        choices: [{ message: { content: JSON.stringify({ narrative: "ok" }) }, finish_reason: "stop" }]
-      })
+        choices: [
+          {
+            message: { content: JSON.stringify({ narrative: "ok" }) },
+            finish_reason: "stop",
+          },
+        ],
+      }),
     );
 
-    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+    const provider = new OpenAICompatibleProvider(
+      testConfig({}),
+      fetchImpl as unknown as typeof fetch,
+    );
     const result = await provider.generateTurn(
       parseUserInput("go"),
       createInitialPlaythrough("No Usage Test"),
-      true
-    , CFG);
+      true,
+      CFG,
+    );
 
     expect(result.measuredUsage).toBeUndefined();
   });
@@ -875,22 +1207,38 @@ describe("OpenAICompatibleProvider", () => {
       jsonResponse({
         // `choices` is a string, so AssistantTurnSchema rejects the shape and the
         // turn comes back through the fallback-narrative branch.
-        choices: [{ message: { content: JSON.stringify({ narrative: "Fallback narrative", choices: "not-an-array" }) } }],
-        usage: { prompt_tokens: 777, completion_tokens: 42 }
-      })
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                narrative: "Fallback narrative",
+                choices: "not-an-array",
+              }),
+            },
+          },
+        ],
+        usage: { prompt_tokens: 777, completion_tokens: 42 },
+      }),
     );
 
-    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+    const provider = new OpenAICompatibleProvider(
+      testConfig({}),
+      fetchImpl as unknown as typeof fetch,
+    );
     const result = await provider.generateTurn(
       parseUserInput("go"),
       createInitialPlaythrough("Fallback Usage Test"),
-      true
-    , CFG);
+      true,
+      CFG,
+    );
 
     // The malformed choices are dropped, which only happens on the fallback branch.
     expect(result.turn.narrative).toBe("Fallback narrative");
     expect(result.turn.choices).toBeUndefined();
-    expect(result.measuredUsage).toEqual({ promptTokens: 777, completionTokens: 42 });
+    expect(result.measuredUsage).toEqual({
+      promptTokens: 777,
+      completionTokens: 42,
+    });
   });
 
   it("budgets the transcript against the connection's configured context window", async () => {
@@ -898,8 +1246,20 @@ describe("OpenAICompatibleProvider", () => {
     const seedTranscript = () => {
       const state = createInitialPlaythrough("Budget Wiring Test");
       for (let i = 0; i < 15; i += 1) {
-        state.messages.push({ id: `u${i}`, role: "user", content: `Player turn ${i}.`, createdAt: "2026-01-01T00:00:00.000Z", turn: i });
-        state.messages.push({ id: `a${i}`, role: "assistant", content: `Narrator reply ${i}.`, createdAt: "2026-01-01T00:00:00.000Z", turn: i });
+        state.messages.push({
+          id: `u${i}`,
+          role: "user",
+          content: `Player turn ${i}.`,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          turn: i,
+        });
+        state.messages.push({
+          id: `a${i}`,
+          role: "assistant",
+          content: `Narrator reply ${i}.`,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          turn: i,
+        });
       }
       return state;
     };
@@ -910,13 +1270,30 @@ describe("OpenAICompatibleProvider", () => {
         if (String(url).endsWith("/embeddings")) {
           return jsonResponse({ data: [{ embedding: [0.1] }] });
         }
-        sent = (JSON.parse(String(init?.body)) as { messages: Array<{ role: string; content: string }> }).messages;
+        sent = (
+          JSON.parse(String(init?.body)) as {
+            messages: Array<{ role: string; content: string }>;
+          }
+        ).messages;
         return jsonResponse({
-          choices: [{ message: { content: JSON.stringify({ narrative: "ok" }) }, finish_reason: "stop" }]
+          choices: [
+            {
+              message: { content: JSON.stringify({ narrative: "ok" }) },
+              finish_reason: "stop",
+            },
+          ],
         });
       });
-      const provider = new OpenAICompatibleProvider(config, fetchImpl as unknown as typeof fetch);
-      await provider.generateTurn(parseUserInput("I look around."), seedTranscript(), true, CFG);
+      const provider = new OpenAICompatibleProvider(
+        config,
+        fetchImpl as unknown as typeof fetch,
+      );
+      await provider.generateTurn(
+        parseUserInput("I look around."),
+        seedTranscript(),
+        true,
+        CFG,
+      );
       return sent;
     };
 
@@ -924,9 +1301,13 @@ describe("OpenAICompatibleProvider", () => {
     // cost (output contract + state summary) alone exceeds what remains, so only
     // the minimum history window survives. A dropped budget argument would send
     // all 30 messages here instead — that is the regression this pins.
-    const tight = await sentMessagesFor(testConfig({ contextWindow: 2048, maxTokens: 1000 }));
+    const tight = await sentMessagesFor(
+      testConfig({ contextWindow: 2048, maxTokens: 1000 }),
+    );
     // Same transcript against a real 64k window: every seeded message is sent.
-    const roomy = await sentMessagesFor(testConfig({ contextWindow: 65536, maxTokens: 1000 }));
+    const roomy = await sentMessagesFor(
+      testConfig({ contextWindow: 65536, maxTokens: 1000 }),
+    );
 
     expect(tight.length).toBe(5); // system + newest user/assistant + tail system + final user
     expect(roomy.length).toBe(33); // system + all 30 seeded + tail system + final user
@@ -934,7 +1315,9 @@ describe("OpenAICompatibleProvider", () => {
     expect(roomy.filter((m) => m.role === "assistant")).toHaveLength(15);
     for (let i = 0; i < 15; i += 1) {
       expect(roomy.some((m) => m.content === `Player turn ${i}.`)).toBe(true);
-      expect(roomy.some((m) => m.content === `Narrator reply ${i}.`)).toBe(true);
+      expect(roomy.some((m) => m.content === `Narrator reply ${i}.`)).toBe(
+        true,
+      );
     }
     expect(tight.some((m) => m.content === "Player turn 0.")).toBe(false);
   });
@@ -942,41 +1325,55 @@ describe("OpenAICompatibleProvider", () => {
   it("reports truncation explicitly when the scenario seed is cut off at the token limit", async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({
-        choices: [{
-          // Truncated JSON — extraction can't repair unbalanced braces.
-          message: { content: '{"character": {"name": "A"' },
-          finish_reason: "length"
-        }]
-      })
+        choices: [
+          {
+            // Truncated JSON — extraction can't repair unbalanced braces.
+            message: { content: '{"character": {"name": "A"' },
+            finish_reason: "length",
+          },
+        ],
+      }),
     );
 
     const provider = new OpenAICompatibleProvider(
       testConfig({}),
-      fetchImpl as unknown as typeof fetch
+      fetchImpl as unknown as typeof fetch,
     );
     await expect(
-      provider.generateScenarioSeed({ name: "Test World", setting: "A village.", allowAdditionalCharacters: true })
+      provider.generateScenarioSeed({
+        name: "Test World",
+        setting: "A village.",
+        allowAdditionalCharacters: true,
+      }),
     ).rejects.toThrow(/token limit/i);
   });
 
   it("replaces a blank narrative in valid JSON with the placeholder but keeps the statePatch", async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({
-        choices: [{
-          message: { content: JSON.stringify({ narrative: "", statePatch: { worldStateAdd: ["met_mira"] } }) }
-        }]
-      })
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                narrative: "",
+                statePatch: { worldStateAdd: ["met_mira"] },
+              }),
+            },
+          },
+        ],
+      }),
     );
 
     const provider = new OpenAICompatibleProvider(
       testConfig({}),
-      fetchImpl as unknown as typeof fetch
+      fetchImpl as unknown as typeof fetch,
     );
     const { turn } = await provider.generateTurn(
       parseUserInput("hi"),
       createInitialPlaythrough("Blank Narrative Test"),
-      true
-    , CFG);
+      true,
+      CFG,
+    );
 
     expect(turn.narrative).toBe("The provider returned an empty response.");
     expect(turn.statePatch?.worldStateAdd).toContain("met_mira");
@@ -985,19 +1382,22 @@ describe("OpenAICompatibleProvider", () => {
   it("treats whitespace-only narratives as empty", async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({
-        choices: [{ message: { content: JSON.stringify({ narrative: "   " }) } }]
-      })
+        choices: [
+          { message: { content: JSON.stringify({ narrative: "   " }) } },
+        ],
+      }),
     );
 
     const provider = new OpenAICompatibleProvider(
       testConfig({}),
-      fetchImpl as unknown as typeof fetch
+      fetchImpl as unknown as typeof fetch,
     );
     const { turn } = await provider.generateTurn(
       parseUserInput("hi"),
       createInitialPlaythrough("Whitespace Test"),
-      true
-    , CFG);
+      true,
+      CFG,
+    );
 
     expect(turn.narrative).toBe("The provider returned an empty response.");
   });
@@ -1007,23 +1407,28 @@ describe("OpenAICompatibleProvider", () => {
     const fetchImpl = vi.fn((_url: unknown, init?: RequestInit) => {
       const signal = init?.signal as AbortSignal | undefined;
       if (signal?.aborted) {
-        return Promise.reject(new DOMException("The operation was aborted.", "AbortError"));
+        return Promise.reject(
+          new DOMException("The operation was aborted.", "AbortError"),
+        );
       }
       // Hang until the request is aborted — like a slow model call.
       return new Promise<Response>((_resolve, reject) => {
-        signal?.addEventListener("abort", () => reject(new DOMException("The operation was aborted.", "AbortError")));
+        signal?.addEventListener("abort", () =>
+          reject(new DOMException("The operation was aborted.", "AbortError")),
+        );
       });
     });
 
     const provider = new OpenAICompatibleProvider(
       testConfig({}),
-      fetchImpl as unknown as typeof fetch
+      fetchImpl as unknown as typeof fetch,
     );
     const promise = provider.generateTurn(
       parseUserInput("hi"),
       createInitialPlaythrough("Abort Test"),
-      true,CFG, 
-      controller.signal
+      true,
+      CFG,
+      controller.signal,
     );
 
     controller.abort();
@@ -1037,15 +1442,23 @@ describe("OpenAICompatibleProvider", () => {
     const controller = new AbortController();
     controller.abort();
     const fetchImpl = vi.fn(async () =>
-      jsonResponse({ choices: [{ message: { content: JSON.stringify({ narrative: "x" }) } }] })
+      jsonResponse({
+        choices: [{ message: { content: JSON.stringify({ narrative: "x" }) } }],
+      }),
     );
 
     const provider = new OpenAICompatibleProvider(
       testConfig({}),
-      fetchImpl as unknown as typeof fetch
+      fetchImpl as unknown as typeof fetch,
     );
     await expect(
-      provider.generateTurn(parseUserInput("hi"), createInitialPlaythrough("PreAbort Test"), true,CFG,  controller.signal)
+      provider.generateTurn(
+        parseUserInput("hi"),
+        createInitialPlaythrough("PreAbort Test"),
+        true,
+        CFG,
+        controller.signal,
+      ),
     ).rejects.toThrow("Request aborted by the client");
 
     expect(fetchImpl).not.toHaveBeenCalled();
@@ -1066,7 +1479,8 @@ describe("extractJsonPayload with raw control characters", () => {
   });
 
   it("repairs raw newlines when JSON is extracted from surrounding prose", () => {
-    const raw = "The result is:\n" + '{"content": "line1\nline2"}' + "\nHope that helps.";
+    const raw =
+      "The result is:\n" + '{"content": "line1\nline2"}' + "\nHope that helps.";
     const result = extractJsonPayload(raw);
     expect(result).toEqual({ content: "line1\nline2" });
   });
@@ -1107,7 +1521,9 @@ describe("repairRawControlChars", () => {
 
   it("respects escaped quotes when tracking string boundaries", () => {
     const text = '{"a": "say \\"hi\\"\nnext"}';
-    expect(JSON.parse(repairRawControlChars(text))).toEqual({ a: 'say "hi"\nnext' });
+    expect(JSON.parse(repairRawControlChars(text))).toEqual({
+      a: 'say "hi"\nnext',
+    });
   });
 
   it("does not double-escape already-repaired sequences (idempotent)", () => {
@@ -1123,15 +1539,23 @@ describe("repairRawControlChars", () => {
   it("keeps valid escape sequences while dropping invalid ones", () => {
     const text = '{"a": "Siren\\\'s \\nLament \\"unquoted\\""}';
     // \\' -> ' (dropped), \\n -> kept, \\" -> kept
-    expect(repairRawControlChars(text)).toBe('{"a": "Siren\'s \\nLament \\"unquoted\\""}');
+    expect(repairRawControlChars(text)).toBe(
+      '{"a": "Siren\'s \\nLament \\"unquoted\\""}',
+    );
   });
 });
 
 describe("resolveConnectionConfig", () => {
   const conn: ProviderConnection = {
-    id: "local_lmstudio", kind: "text", label: "Local", baseUrl: "http://localhost:1234",
-    apiKey: "abc", model: "my-model",
-    temperature: 0.5, maxTokens: 900, contextWindow: 32768
+    id: "local_lmstudio",
+    kind: "text",
+    label: "Local",
+    baseUrl: "http://localhost:1234",
+    apiKey: "abc",
+    model: "my-model",
+    temperature: 0.5,
+    maxTokens: 900,
+    contextWindow: 32768,
   };
   it("maps a connection to a resolved config (normalizing the base URL)", () => {
     const cfg = resolveConnectionConfig(conn, {});
@@ -1143,7 +1567,10 @@ describe("resolveConnectionConfig", () => {
     expect(cfg.timeoutMs).toBe(120_000);
   });
   it("honors timeout/retries env overrides", () => {
-    const cfg = resolveConnectionConfig(conn, { BOBBINLOOM_TIMEOUT_MS: "30000", BOBBINLOOM_MAX_RETRIES: "3" });
+    const cfg = resolveConnectionConfig(conn, {
+      BOBBINLOOM_TIMEOUT_MS: "30000",
+      BOBBINLOOM_MAX_RETRIES: "3",
+    });
     expect(cfg.timeoutMs).toBe(30000);
     expect(cfg.maxRetries).toBe(3);
   });
@@ -1164,15 +1591,26 @@ describe("presence-gated character injection", () => {
       "- Legs: Leather pants",
       "",
       "[Personality]",
-      "- Quiet observer."
-    ].join("\n")
+      "- Quiet observer.",
+    ].join("\n"),
   };
 
   it("renders active characters with their full sheet and no INACTIVE block", () => {
     const pt = createInitialPlaythrough("Presence Present Test");
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
-    expect(promptText(assembled)).toContain("ACTIVE CHARACTER [Detailed Character]: Mira");
-    expect(promptText(assembled)).toContain("- Values competence, honesty, and self-control.");
+    const assembled = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      DEFAULT_BUDGET,
+      CFG,
+    );
+    expect(promptText(assembled)).toContain(
+      "ACTIVE CHARACTER [Detailed Character]: Mira",
+    );
+    expect(promptText(assembled)).toContain(
+      "- Values competence, honesty, and self-control.",
+    );
     expect(promptText(assembled)).not.toContain("INACTIVE CHARACTERS");
   });
 
@@ -1180,11 +1618,22 @@ describe("presence-gated character injection", () => {
     const pt = createInitialPlaythrough("Presence Absent Test");
     const miraId = pt.characters[0].id;
     pt.activeCharacters = [];
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
+    const assembled = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      DEFAULT_BUDGET,
+      CFG,
+    );
     expect(promptText(assembled)).toContain("INACTIVE CHARACTERS");
-    expect(promptText(assembled)).toContain(`- [Detailed Character] Mira (${miraId})`);
+    expect(promptText(assembled)).toContain(
+      `- [Detailed Character] Mira (${miraId})`,
+    );
     // Full sheet withheld for the inactive character.
-    expect(promptText(assembled)).not.toContain("- Values competence, honesty, and self-control.");
+    expect(promptText(assembled)).not.toContain(
+      "- Values competence, honesty, and self-control.",
+    );
     expect(promptText(assembled)).not.toContain("[RUNTIME STATE]");
   });
 
@@ -1193,10 +1642,24 @@ describe("presence-gated character injection", () => {
     const miraId = pt.characters[0].id;
     pt.activeCharacters = [];
     pt.characters[0].towardPlayer = "wary";
-    const wary = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
+    const wary = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      DEFAULT_BUDGET,
+      CFG,
+    );
     expect(promptText(wary)).toContain(`[Role: Stranger] [wary] —`);
     pt.characters[0].towardPlayer = "neutral";
-    const neutral = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
+    const neutral = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      DEFAULT_BUDGET,
+      CFG,
+    );
     expect(promptText(neutral)).toContain(`[Role: Stranger] —`);
     expect(promptText(neutral)).not.toContain("[neutral]");
   });
@@ -1205,38 +1668,88 @@ describe("presence-gated character injection", () => {
     const pt = createInitialPlaythrough("Presence Conditions Test");
     pt.activeCharacters = [];
     pt.characters[0].conditions = ["🤕 wounded"];
-    const wounded = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
+    const wounded = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      DEFAULT_BUDGET,
+      CFG,
+    );
     // The OUTPUT FORMAT contract's own guidance quotes "(e.g. \"🤕 wounded\")",
     // so the character's condition line must be checked in CURRENT STATE only.
     expect(currentStateText(wounded)).toContain("🤕 wounded");
     pt.characters[0].conditions = [];
-    const clean = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
+    const clean = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      DEFAULT_BUDGET,
+      CFG,
+    );
     expect(currentStateText(clean)).not.toContain("🤕 wounded");
   });
 
   it("treats a blank playthrough with all characters active as fully present", () => {
-    const pt = createBlankPlaythrough("Presence Blank Test", undefined, [DEMO_TEMPLATE]);
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
-    expect(promptText(assembled)).toContain("ACTIVE CHARACTER [Detailed Character]: Mira");
+    const pt = createBlankPlaythrough("Presence Blank Test", undefined, [
+      DEMO_TEMPLATE,
+    ]);
+    const assembled = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      DEFAULT_BUDGET,
+      CFG,
+    );
+    expect(promptText(assembled)).toContain(
+      "ACTIVE CHARACTER [Detailed Character]: Mira",
+    );
     expect(promptText(assembled)).not.toContain("INACTIVE CHARACTERS");
   });
 
   it("keeps all instance ids in the Allowed IDs line regardless of presence", () => {
-    const pt = createInitialPlaythrough("Presence AllowedIds Test", undefined, [DEMO_TEMPLATE, CLOTHED_TEMPLATE]);
+    const pt = createInitialPlaythrough("Presence AllowedIds Test", undefined, [
+      DEMO_TEMPLATE,
+      CLOTHED_TEMPLATE,
+    ]);
     pt.activeCharacters = [pt.characters[0].id];
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
-    expect(promptText(assembled)).toContain(`Characters: ${pt.characters[0].id}, ${pt.characters[1].id}`);
+    const assembled = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      DEFAULT_BUDGET,
+      CFG,
+    );
+    expect(promptText(assembled)).toContain(
+      `Characters: ${pt.characters[0].id}, ${pt.characters[1].id}`,
+    );
     expect(promptText(assembled)).toContain("INACTIVE CHARACTERS");
   });
 
   it("omits the raw [Clothing] section and renders a derived line when structured clothing exists", () => {
-    const pt = createInitialPlaythrough("Presence Clothing Test", undefined, [CLOTHED_TEMPLATE]);
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
-    expect(promptText(assembled)).toContain("ACTIVE CHARACTER [Detailed Character]: Aya");
+    const pt = createInitialPlaythrough("Presence Clothing Test", undefined, [
+      CLOTHED_TEMPLATE,
+    ]);
+    const assembled = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      DEFAULT_BUDGET,
+      CFG,
+    );
+    expect(promptText(assembled)).toContain(
+      "ACTIVE CHARACTER [Detailed Character]: Aya",
+    );
     // Sheet-level assertions target the CURRENT STATE region: the OUTPUT FORMAT
     // contract also lists "[Clothing]"/"[Personality]" as canonical section names.
     expect(currentStateText(assembled)).not.toContain("[Clothing]");
-    expect(promptText(assembled)).toContain("Clothing: Top: Torn silk blouse; Legs: Leather pants");
+    expect(promptText(assembled)).toContain(
+      "Clothing: Top: Torn silk blouse; Legs: Leather pants",
+    );
     // The rest of the sheet is still injected verbatim.
     expect(currentStateText(assembled)).toContain("[Personality]");
     expect(promptText(assembled)).toContain("Quiet observer.");
@@ -1244,21 +1757,49 @@ describe("presence-gated character injection", () => {
 
   it("injects the blob unchanged when the character wears no structured clothing", () => {
     const pt = createInitialPlaythrough("Presence NoClothing Test");
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
-    expect(promptText(assembled)).toContain("ACTIVE CHARACTER [Detailed Character]: Mira");
+    const assembled = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      DEFAULT_BUDGET,
+      CFG,
+    );
+    expect(promptText(assembled)).toContain(
+      "ACTIVE CHARACTER [Detailed Character]: Mira",
+    );
     expect(promptText(assembled)).toContain("[Species]: Human");
     expect(currentStateText(assembled)).toContain("[Personality]");
-    expect(promptText(assembled)).toContain("- Values competence, honesty, and self-control.");
+    expect(promptText(assembled)).toContain(
+      "- Values competence, honesty, and self-control.",
+    );
   });
 
   it("documents the active/inactive character rules and characterClothing* patches in the system prompt", () => {
     const pt = createInitialPlaythrough("Presence System Test");
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
-    expect(promptText(assembled)).toContain("characterClothingAdd/Remove/SetState/Set: manage a character's worn clothing.");
-    expect(promptText(assembled)).toContain('The "Clothing" section is managed via characterClothing* patches');
-    expect(promptText(assembled)).toContain("Active characters are present in the scene. Inactive characters are off-screen.");
-    expect(promptText(assembled)).toContain("Inactive characters can still be affected by statePatch");
-    expect(promptText(assembled)).toContain("While a character is off-screen they may evolve");
+    const assembled = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      DEFAULT_BUDGET,
+      CFG,
+    );
+    expect(promptText(assembled)).toContain(
+      "characterClothingAdd/Remove/SetState/Set: manage a character's worn clothing.",
+    );
+    expect(promptText(assembled)).toContain(
+      'The "Clothing" section is managed via characterClothing* patches',
+    );
+    expect(promptText(assembled)).toContain(
+      "Active characters are present in the scene. Inactive characters are off-screen.",
+    );
+    expect(promptText(assembled)).toContain(
+      "Inactive characters can still be affected by statePatch",
+    );
+    expect(promptText(assembled)).toContain(
+      "While a character is off-screen they may evolve",
+    );
   });
 });
 
@@ -1270,7 +1811,7 @@ describe("CCv2 runtime macros (D10)", () => {
     summary: "",
     startingClothing: [],
     content: "{{char}} loves {{user}}",
-    format: "ccv2"
+    format: "ccv2",
   };
 
   const BL_MACRO_TEMPLATE: CharacterTemplate = {
@@ -1279,15 +1820,26 @@ describe("CCv2 runtime macros (D10)", () => {
     version: 1,
     summary: "",
     startingClothing: [],
-    content: "{{Char}} greets {{User}} warmly."
+    content: "{{Char}} greets {{User}} warmly.",
   };
 
   it("expands {{char}}/{{user}} for a CCv2-backed sheet at prompt build time", () => {
-    const pt = createInitialPlaythrough("CCv2 Macro Test", undefined, [CCV2_TEMPLATE]);
+    const pt = createInitialPlaythrough("CCv2 Macro Test", undefined, [
+      CCV2_TEMPLATE,
+    ]);
     pt.playerCharacter.name = "Anon";
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
+    const assembled = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      DEFAULT_BUDGET,
+      CFG,
+    );
     // Sheet is rendered verbatim + macros expanded (D6/D10).
-    expect(promptText(assembled)).toContain("ACTIVE CHARACTER [Detailed Character]: Mira");
+    expect(promptText(assembled)).toContain(
+      "ACTIVE CHARACTER [Detailed Character]: Mira",
+    );
     expect(promptText(assembled)).toContain("Mira loves Anon");
     // Raw macros never leak into the prompt.
     expect(promptText(assembled)).not.toContain("{{char}}");
@@ -1295,18 +1847,36 @@ describe("CCv2 runtime macros (D10)", () => {
   });
 
   it("expands macros in BL sheets too (shared path, case-insensitive)", () => {
-    const pt = createInitialPlaythrough("BL Macro Test", undefined, [BL_MACRO_TEMPLATE]);
+    const pt = createInitialPlaythrough("BL Macro Test", undefined, [
+      BL_MACRO_TEMPLATE,
+    ]);
     pt.playerCharacter.name = "Anon";
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
+    const assembled = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      DEFAULT_BUDGET,
+      CFG,
+    );
     expect(promptText(assembled)).toContain("Mira greets Anon warmly.");
     expect(promptText(assembled)).not.toContain("{{Char}}");
   });
 
   it("expands macros in the inactive-character one-liner summary", () => {
-    const pt = createInitialPlaythrough("CCv2 Absent Macro Test", undefined, [CCV2_TEMPLATE]);
+    const pt = createInitialPlaythrough("CCv2 Absent Macro Test", undefined, [
+      CCV2_TEMPLATE,
+    ]);
     pt.playerCharacter.name = "Anon";
     pt.activeCharacters = [];
-    const assembled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], DEFAULT_BUDGET, CFG);
+    const assembled = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      DEFAULT_BUDGET,
+      CFG,
+    );
     expect(promptText(assembled)).toContain("INACTIVE CHARACTERS");
     expect(promptText(assembled)).not.toContain("{{char}}");
   });
@@ -1316,13 +1886,18 @@ describe("turn prompt modules + hardcoded tone", () => {
   it("injects turn-context modules into the turn prompt; the scenario-seed prompt uses the hardcoded neutral tone (no module system)", async () => {
     let sentPrompt = "";
     const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
+      const body = JSON.parse(String(init?.body)) as {
+        messages: Array<{ content: string }>;
+      };
       sentPrompt = body.messages[0]?.content ?? "";
       return jsonResponse({
-        choices: [{ message: { content: JSON.stringify(VALID_SEED) } }]
+        choices: [{ message: { content: JSON.stringify(VALID_SEED) } }],
       });
     });
-    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+    const provider = new OpenAICompatibleProvider(
+      testConfig({}),
+      fetchImpl as unknown as typeof fetch,
+    );
 
     const turnModule: PromptPresetModule = {
       id: "mod_turn",
@@ -1330,35 +1905,54 @@ describe("turn prompt modules + hardcoded tone", () => {
       description: "test",
       content: "TURN MARKER",
       order: 98,
-      enabled: true
+      enabled: true,
     };
 
-    await provider.generateScenarioSeed({ name: "Test World", setting: "A quiet starting village.", allowAdditionalCharacters: true }, undefined);
+    await provider.generateScenarioSeed(
+      {
+        name: "Test World",
+        setting: "A quiet starting village.",
+        allowAdditionalCharacters: true,
+      },
+      undefined,
+    );
     expect(sentPrompt).toContain("Write in a neutral tone");
     expect(sentPrompt).not.toContain("TURN MARKER");
 
     const state = createInitialPlaythrough("Context Isolation");
     const config = { modules: { turn: [turnModule] } };
-    const assembled = assembleTurnPrompt(parseUserInput("go"), state, true, [], DEFAULT_BUDGET, config);
+    const assembled = assembleTurnPrompt(
+      parseUserInput("go"),
+      state,
+      true,
+      [],
+      DEFAULT_BUDGET,
+      config,
+    );
     expect(promptText(assembled)).toContain("TURN MARKER");
   });
 
   it("makes the scenario-seed prompt cast-aware and names the lead companion", async () => {
     let sentPrompt = "";
     const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
+      const body = JSON.parse(String(init?.body)) as {
+        messages: Array<{ content: string }>;
+      };
       sentPrompt = body.messages[0]?.content ?? "";
       return jsonResponse({
-        choices: [{ message: { content: JSON.stringify(VALID_SEED) } }]
+        choices: [{ message: { content: JSON.stringify(VALID_SEED) } }],
       });
     });
-    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+    const provider = new OpenAICompatibleProvider(
+      testConfig({}),
+      fetchImpl as unknown as typeof fetch,
+    );
 
     await provider.generateScenarioSeed({
       name: "Test World",
       setting: "A quiet starting village.",
       cast: [{ name: "Mira", summary: "a fox companion" }],
-      allowAdditionalCharacters: true
+      allowAdditionalCharacters: true,
     });
     expect(sentPrompt).toContain("EXISTING CAST");
     expect(sentPrompt).toContain("Mira");
@@ -1369,14 +1963,27 @@ describe("turn prompt modules + hardcoded tone", () => {
   it("character-sheet prompt is format-driven (no sheet-context module injection)", async () => {
     let sentPrompt = "";
     const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const b = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
+      const b = JSON.parse(String(init?.body)) as {
+        messages: Array<{ content: string }>;
+      };
       sentPrompt = b.messages[0]?.content ?? "";
-      return jsonResponse({ choices: [{ message: { content: JSON.stringify({ content: "[Species]: Human" }) } }] });
+      return jsonResponse({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({ content: "[Species]: Human" }),
+            },
+          },
+        ],
+      });
     });
-    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+    const provider = new OpenAICompatibleProvider(
+      testConfig({}),
+      fetchImpl as unknown as typeof fetch,
+    );
     await provider.generateCharacterSheet(
       { name: "Shopkeep", description: "A friendly shopkeeper." },
-      "Setting: Town"
+      "Setting: Town",
     );
     expect(sentPrompt).toContain("[Species]");
     expect(sentPrompt).toContain("in this order: [Species]");
@@ -1385,42 +1992,89 @@ describe("turn prompt modules + hardcoded tone", () => {
   it("scenario-seed section-header guidance is format-driven (NSFW includes Sexual Capabilities)", async () => {
     let sentPrompt = "";
     const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const b = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
+      const b = JSON.parse(String(init?.body)) as {
+        messages: Array<{ content: string }>;
+      };
       sentPrompt = b.messages[0]?.content ?? "";
-      return jsonResponse({ choices: [{ message: { content: JSON.stringify(VALID_SEED) } }] });
+      return jsonResponse({
+        choices: [{ message: { content: JSON.stringify(VALID_SEED) } }],
+      });
     });
-    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+    const provider = new OpenAICompatibleProvider(
+      testConfig({}),
+      fetchImpl as unknown as typeof fetch,
+    );
 
     // Default format (10 sections, no Sexual Capabilities).
-    await provider.generateScenarioSeed({ name: "World", setting: "A quiet village.", allowAdditionalCharacters: true }, undefined, undefined, DEFAULT_CHARACTER_FORMAT);
-    expect(sentPrompt).toContain("Use the standard section headers, in this order: [Species], [Gender], [Body]");
+    await provider.generateScenarioSeed(
+      {
+        name: "World",
+        setting: "A quiet village.",
+        allowAdditionalCharacters: true,
+      },
+      undefined,
+      undefined,
+      DEFAULT_CHARACTER_FORMAT,
+    );
+    expect(sentPrompt).toContain(
+      "Use the standard section headers, in this order: [Species], [Gender], [Body]",
+    );
     expect(sentPrompt).not.toContain("Sexual Capabilities");
 
     // NSFW format (11 sections).
-    await provider.generateScenarioSeed({ name: "World", setting: "A quiet village.", allowAdditionalCharacters: true }, undefined, undefined, NSFW_CHARACTER_FORMAT);
+    await provider.generateScenarioSeed(
+      {
+        name: "World",
+        setting: "A quiet village.",
+        allowAdditionalCharacters: true,
+      },
+      undefined,
+      undefined,
+      NSFW_CHARACTER_FORMAT,
+    );
     expect(sentPrompt).toContain("[Sexual Capabilities]");
   });
 
   it("scenario-seed prompt carries the format rules, so new-playthrough sheets get the same guidance as the other paths", async () => {
     let sentPrompt = "";
     const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const b = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
+      const b = JSON.parse(String(init?.body)) as {
+        messages: Array<{ content: string }>;
+      };
       sentPrompt = b.messages[0]?.content ?? "";
-      return jsonResponse({ choices: [{ message: { content: JSON.stringify(VALID_SEED) } }] });
+      return jsonResponse({
+        choices: [{ message: { content: JSON.stringify(VALID_SEED) } }],
+      });
     });
-    const provider = new OpenAICompatibleProvider(testConfig({}), fetchImpl as unknown as typeof fetch);
+    const provider = new OpenAICompatibleProvider(
+      testConfig({}),
+      fetchImpl as unknown as typeof fetch,
+    );
 
-    await provider.generateScenarioSeed({ name: "World", setting: "A quiet village.", allowAdditionalCharacters: true }, undefined, undefined, DEFAULT_CHARACTER_FORMAT);
+    await provider.generateScenarioSeed(
+      {
+        name: "World",
+        setting: "A quiet village.",
+        allowAdditionalCharacters: true,
+      },
+      undefined,
+      undefined,
+      DEFAULT_CHARACTER_FORMAT,
+    );
 
     // The per-section guidance, not just the sample sheet blob. This path used to be
     // the only creation path without buildFormatRules, and its sheets came out at one
     // bullet for Personality / Communication / Sexual Capabilities.
-    expect(sentPrompt).toContain("Use the standard section headers, in this order:");
+    expect(sentPrompt).toContain(
+      "Use the standard section headers, in this order:",
+    );
     expect(sentPrompt).toContain("4-6 bullets");
     // The Clothing convention rides along once, and the old three-slot line is gone.
     expect(sentPrompt).toContain("one garment per bullet");
     expect(sentPrompt).toContain("never invent a catch-all slot");
-    expect(sentPrompt).not.toContain("(- Top: ..., - Bottom: ..., - Feet: ...)");
+    expect(sentPrompt).not.toContain(
+      "(- Top: ..., - Bottom: ..., - Feet: ...)",
+    );
     // The multi-bullet sample body is what the model imitates. This phrase exists only
     // in the Clothing exampleBody, never in its one-line examples.
     expect(sentPrompt).toContain("Two dot stud earrings");
@@ -1432,27 +2086,49 @@ describe("turn prompt modules + hardcoded tone", () => {
 
     // And the embedded JSON example is still valid JSON, despite the braces the
     // macro line adds after it.
-    expect(() => JSON.parse(
-      jsonExampleAfter(sentPrompt, "Return ONLY a JSON object with this exact shape:")
-    )).not.toThrow();
+    expect(() =>
+      JSON.parse(
+        jsonExampleAfter(
+          sentPrompt,
+          "Return ONLY a JSON object with this exact shape:",
+        ),
+      ),
+    ).not.toThrow();
   });
 
   it("normalizes a legacy flat-array module set into turn modules", () => {
     const parsed = PromptConfigSchema.parse({
       modules: [
-        { id: "mod_legacy", name: "Legacy module", description: "test", content: "content", order: 1, enabled: true }
-      ]
+        {
+          id: "mod_legacy",
+          name: "Legacy module",
+          description: "test",
+          content: "content",
+          order: 1,
+          enabled: true,
+        },
+      ],
     });
     expect(parsed.modules.turn).toHaveLength(1);
     expect(parsed.modules.turn[0].id).toBe("mod_legacy");
   });
 
   it("buildTextSamplingParams only emits configured sampler fields and respects jsonMode off", async () => {
-    expect(buildTextSamplingParams(testConfig({}), { jsonObject: true })).toEqual({
-      response_format: { type: "json_object" }
+    expect(
+      buildTextSamplingParams(testConfig({}), { jsonObject: true }),
+    ).toEqual({
+      response_format: { type: "json_object" },
     });
-    expect(buildTextSamplingParams(testConfig({ jsonMode: "off" }), { jsonObject: true })).toEqual({});
-    expect(buildTextSamplingParams(testConfig({ jsonMode: "auto" }), { jsonObject: false })).toEqual({});
+    expect(
+      buildTextSamplingParams(testConfig({ jsonMode: "off" }), {
+        jsonObject: true,
+      }),
+    ).toEqual({});
+    expect(
+      buildTextSamplingParams(testConfig({ jsonMode: "auto" }), {
+        jsonObject: false,
+      }),
+    ).toEqual({});
 
     const full = buildTextSamplingParams(
       testConfig({
@@ -1462,9 +2138,9 @@ describe("turn prompt modules + hardcoded tone", () => {
         frequencyPenalty: 0.25,
         presencePenalty: 0.4,
         repetitionPenalty: 1.08,
-        stop: ["Player:", "\nUser:"]
+        stop: ["Player:", "\nUser:"],
       }),
-      { includeStop: true, jsonObject: true }
+      { includeStop: true, jsonObject: true },
     );
     expect(full).toEqual({
       top_p: 0.92,
@@ -1474,31 +2150,46 @@ describe("turn prompt modules + hardcoded tone", () => {
       presence_penalty: 0.4,
       repetition_penalty: 1.08,
       stop: ["Player:", "\nUser:"],
-      response_format: { type: "json_object" }
+      response_format: { type: "json_object" },
     });
 
     const sentBodies: Array<Record<string, unknown>> = [];
     let calls = 0;
     const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
       calls += 1;
-      sentBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      sentBodies.push(
+        JSON.parse(String(init?.body)) as Record<string, unknown>,
+      );
       if (calls === 1) {
-        return new Response("Unrecognized request argument: min_p", { status: 400 });
+        return new Response("Unrecognized request argument: min_p", {
+          status: 400,
+        });
       }
       return jsonResponse({
-        choices: [{ message: { content: JSON.stringify({ narrative: "Recovered!" }) }, finish_reason: "stop" }]
+        choices: [
+          {
+            message: { content: JSON.stringify({ narrative: "Recovered!" }) },
+            finish_reason: "stop",
+          },
+        ],
       });
     });
 
     const provider = new OpenAICompatibleProvider(
-      testConfig({ topP: 0.9, minP: 0.05, topK: 40, repetitionPenalty: 1.1, frequencyPenalty: 0.2 }),
-      fetchImpl as unknown as typeof fetch
+      testConfig({
+        topP: 0.9,
+        minP: 0.05,
+        topK: 40,
+        repetitionPenalty: 1.1,
+        frequencyPenalty: 0.2,
+      }),
+      fetchImpl as unknown as typeof fetch,
     );
     const { turn } = await provider.generateTurn(
       parseUserInput("hi"),
       createInitialPlaythrough("Extended Sampler Fallback"),
       true,
-      CFG
+      CFG,
     );
     expect(turn.narrative).toBe("Recovered!");
     expect(sentBodies[0].min_p).toBe(0.05);

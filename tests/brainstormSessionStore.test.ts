@@ -1,4 +1,11 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -6,13 +13,13 @@ import {
   brainstormSessionPath,
   deleteBrainstormSession,
   readBrainstormSession,
-  writeBrainstormSession
+  writeBrainstormSession,
 } from "../src/server/brainstormSessions";
 import { buildBrainstormSession } from "../src/engine/brainstorm";
 import {
   characterFolderForId,
   createCharacterTemplateRecord,
-  listCharacterTemplates
+  listCharacterTemplates,
 } from "../src/server/store";
 
 const tempDirs: string[] = [];
@@ -32,7 +39,7 @@ afterEach(() => {
 
 const MESSAGES = [
   { id: "1", role: "user" as const, content: "give her a hobby" },
-  { id: "2", role: "assistant" as const, content: "she could brew tea" }
+  { id: "2", role: "assistant" as const, content: "she could brew tea" },
 ];
 
 describe("the on-disk brainstorm session", () => {
@@ -56,7 +63,9 @@ describe("the on-disk brainstorm session", () => {
 
     const read = readBrainstormSession(created.id, dir);
     expect(read?.messages).toEqual(session.messages);
-    expect(existsSync(brainstormSessionPath(characterFolderForId(created.id, dir)!))).toBe(true);
+    expect(
+      existsSync(brainstormSessionPath(characterFolderForId(created.id, dir)!)),
+    ).toBe(true);
   });
 
   it("reads a character that has never been brainstormed as no session at all", () => {
@@ -99,7 +108,9 @@ describe("the on-disk brainstorm session", () => {
 
     const after = listCharacterTemplates(dir);
     expect(after.map((t) => t.id)).toEqual(before.map((t) => t.id));
-    expect(after.find((t) => t.id === created.id)?.name).toBe("Untouched Record");
+    expect(after.find((t) => t.id === created.id)?.name).toBe(
+      "Untouched Record",
+    );
     // A session stored as a sibling `*.json` would have been read as a record version, failed
     // validation and been quarantined to `.bak` — the subfolder is what keeps that from happening.
     expect(readdirSync(folder).filter((f) => f.endsWith(".bak"))).toEqual([]);

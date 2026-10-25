@@ -3,7 +3,7 @@ import {
   applyStatePatch,
   createInitialPlaythrough,
   createPlaythroughFromSeed,
-  takeTurnSnapshot
+  takeTurnSnapshot,
 } from "../src/engine/engine";
 import { DEMO_TEMPLATE } from "../src/engine/demoData";
 import type { CharacterTemplate, ScenarioSeed } from "../src/schemas";
@@ -17,7 +17,7 @@ const SECOND_TEMPLATE: CharacterTemplate = {
 function twoCastPlaythrough() {
   return createInitialPlaythrough("Two Cast", undefined, [
     structuredClone(DEMO_TEMPLATE),
-    structuredClone(SECOND_TEMPLATE)
+    structuredClone(SECOND_TEMPLATE),
   ]);
 }
 
@@ -25,16 +25,22 @@ function makeSeed(): ScenarioSeed {
   return {
     character: {
       name: "Sera",
-      content: "[Species]: Human\n[Gender]: Female\n\n[Body]\n- Build: Slender\n\n[Personality]\n- Curious, measured, and calm.\n\n[Communication - Public]\nMeasured and calm.\n\n[Likes]\n- Finding the archive\n\n[Dislikes]\n- (not established)",
+      content:
+        "[Species]: Human\n[Gender]: Female\n\n[Body]\n- Build: Slender\n\n[Personality]\n- Curious, measured, and calm.\n\n[Communication - Public]\nMeasured and calm.\n\n[Likes]\n- Finding the archive\n\n[Dislikes]\n- (not established)",
     },
     startingWorldState: [],
     items: [
-      { id: "item_potion", name: "Potion", type: "consumable", description: "Heals.", quantity: 1 }
+      {
+        id: "item_potion",
+        name: "Potion",
+        type: "consumable",
+        description: "Heals.",
+        quantity: 1,
+      },
     ],
     additionalCharacters: [
-      { name: "Guard", description: "Town guard.", storyRole: "gruff" }
+      { name: "Guard", description: "Town guard.", storyRole: "gruff" },
     ],
-
   };
 }
 
@@ -75,7 +81,7 @@ describe("simple characters and character lifecycle", () => {
   it("applies characterMood patch", () => {
     const pt = createInitialPlaythrough("Test");
     const result = applyStatePatch(pt, {
-      characterMood: [{ characterId: pt.characters[0].id, mood: "furious" }]
+      characterMood: [{ characterId: pt.characters[0].id, mood: "furious" }],
     });
     expect(result.applied.length).toBeGreaterThan(0);
     expect(result.state.characters[0].mood).toBe("furious");
@@ -84,7 +90,9 @@ describe("simple characters and character lifecycle", () => {
   it("applies characterTowardPlayer patch", () => {
     const pt = createInitialPlaythrough("Test");
     const result = applyStatePatch(pt, {
-      characterTowardPlayer: [{ characterId: pt.characters[0].id, towardPlayer: "suspicious" }]
+      characterTowardPlayer: [
+        { characterId: pt.characters[0].id, towardPlayer: "suspicious" },
+      ],
     });
     expect(result.state.characters[0].towardPlayer).toBe("suspicious");
   });
@@ -94,10 +102,19 @@ describe("simple characters and character lifecycle", () => {
     const charId = pt.characters[0].id;
 
     const result = applyStatePatch(pt, {
-      characterSectionUpdate: [{ characterId: charId, section: "Appearance", content: "- Hair: Jet black, singed at the tips\n- Eyes: Piercing green" }]
+      characterSectionUpdate: [
+        {
+          characterId: charId,
+          section: "Appearance",
+          content:
+            "- Hair: Jet black, singed at the tips\n- Eyes: Piercing green",
+        },
+      ],
     });
     expect(result.applied.length).toBeGreaterThan(0);
-    const tpl = result.state.characterTemplates.find(t => t.id === pt.characters[0].templateId)!;
+    const tpl = result.state.characterTemplates.find(
+      (t) => t.id === pt.characters[0].templateId,
+    )!;
     expect(tpl.content).toContain("[Appearance]\n- Hair: Jet black");
   });
 
@@ -106,10 +123,14 @@ describe("simple characters and character lifecycle", () => {
     const charId = pt.characters[0].id;
 
     const result = applyStatePatch(pt, {
-      characterSectionUpdate: [{ characterId: charId, section: "FavoriteFood", content: "Pizza" }]
+      characterSectionUpdate: [
+        { characterId: charId, section: "FavoriteFood", content: "Pizza" },
+      ],
     });
     expect(result.rejected.length).toBe(0);
-    const tpl = result.state.characterTemplates.find(t => t.id === pt.characters[0].templateId)!;
+    const tpl = result.state.characterTemplates.find(
+      (t) => t.id === pt.characters[0].templateId,
+    )!;
     expect(tpl.content).toContain("[FavoriteFood]\nPizza");
   });
 
@@ -119,13 +140,15 @@ describe("simple characters and character lifecycle", () => {
     const tplId = pt.characters[0].templateId;
 
     const result = applyStatePatch(pt, {
-      characterSectionRemove: [{ characterId: charId, section: "Dislikes" }]
+      characterSectionRemove: [{ characterId: charId, section: "Dislikes" }],
     });
     expect(result.rejected.length).toBe(0);
-    expect(result.state.characterTemplates.find(t => t.id === tplId)!.content).not.toContain("[Dislikes]");
+    expect(
+      result.state.characterTemplates.find((t) => t.id === tplId)!.content,
+    ).not.toContain("[Dislikes]");
     // Removing an absent section rejects.
     const again = applyStatePatch(result.state, {
-      characterSectionRemove: [{ characterId: charId, section: "Dislikes" }]
+      characterSectionRemove: [{ characterId: charId, section: "Dislikes" }],
     });
     expect(again.rejected.length).toBeGreaterThan(0);
   });
@@ -136,10 +159,12 @@ describe("simple characters and character lifecycle", () => {
     const tplId = pt.characters[0].templateId;
 
     const result = applyStatePatch(pt, {
-      characterSectionRename: [{ characterId: charId, from: "Personality", to: "Temperament" }]
+      characterSectionRename: [
+        { characterId: charId, from: "Personality", to: "Temperament" },
+      ],
     });
     expect(result.rejected.length).toBe(0);
-    const tpl = result.state.characterTemplates.find(t => t.id === tplId)!;
+    const tpl = result.state.characterTemplates.find((t) => t.id === tplId)!;
     expect(tpl.content).toContain("[Temperament]");
     expect(tpl.content).not.toContain("[Personality]");
   });
@@ -148,7 +173,13 @@ describe("simple characters and character lifecycle", () => {
     const pt = createInitialPlaythrough("Test");
 
     const result = applyStatePatch(pt, {
-      characterSectionUpdate: [{ characterId: "nonexistent", section: "Appearance", content: "Whatever" }]
+      characterSectionUpdate: [
+        {
+          characterId: "nonexistent",
+          section: "Appearance",
+          content: "Whatever",
+        },
+      ],
     });
     expect(result.rejected.length).toBeGreaterThan(0);
   });
@@ -156,16 +187,22 @@ describe("simple characters and character lifecycle", () => {
   it("applies characterConditionsAdd/Remove patches", () => {
     const pt = createInitialPlaythrough("Test");
     const charId = pt.characters[0].id;
-    
+
     const addResult = applyStatePatch(pt, {
-      characterConditionsAdd: [{ characterId: charId, conditions: ["🤕 wounded"] }]
+      characterConditionsAdd: [
+        { characterId: charId, conditions: ["🤕 wounded"] },
+      ],
     });
     expect(addResult.state.characters[0].conditions).toContain("🤕 wounded");
-    
+
     const removeResult = applyStatePatch(addResult.state, {
-      characterConditionsRemove: [{ characterId: charId, conditions: ["🤕 wounded"] }]
+      characterConditionsRemove: [
+        { characterId: charId, conditions: ["🤕 wounded"] },
+      ],
     });
-    expect(removeResult.state.characters[0].conditions).not.toContain("🤕 wounded");
+    expect(removeResult.state.characters[0].conditions).not.toContain(
+      "🤕 wounded",
+    );
   });
 
   it("applies fuzzy matching when removing character conditions (emojis, casing, whitespace)", () => {
@@ -173,13 +210,19 @@ describe("simple characters and character lifecycle", () => {
     const charId = pt.characters[0].id;
 
     const addResult = applyStatePatch(pt, {
-      characterConditionsAdd: [{ characterId: charId, conditions: ["🤕 Severely Bleeding"] }]
+      characterConditionsAdd: [
+        { characterId: charId, conditions: ["🤕 Severely Bleeding"] },
+      ],
     });
-    expect(addResult.state.characters[0].conditions).toContain("🤕 Severely Bleeding");
+    expect(addResult.state.characters[0].conditions).toContain(
+      "🤕 Severely Bleeding",
+    );
 
     // Remove with lowercase, no emoji
     const removeResult = applyStatePatch(addResult.state, {
-      characterConditionsRemove: [{ characterId: charId, conditions: ["severely bleeding"] }]
+      characterConditionsRemove: [
+        { characterId: charId, conditions: ["severely bleeding"] },
+      ],
     });
     expect(removeResult.state.characters[0].conditions).toEqual([]);
   });
@@ -189,27 +232,39 @@ describe("simple characters and character lifecycle", () => {
     const charId = pt.characters[0].id;
 
     const addResult = applyStatePatch(pt, {
-      characterConditionsAdd: [{ characterId: charId, conditions: ["🤕 Bleeding"] }]
+      characterConditionsAdd: [
+        { characterId: charId, conditions: ["🤕 Bleeding"] },
+      ],
     });
 
     const replaceResult = applyStatePatch(addResult.state, {
-      characterConditionsReplace: [{ characterId: charId, from: "bleeding", to: "🩹 Bandaged" }]
+      characterConditionsReplace: [
+        { characterId: charId, from: "bleeding", to: "🩹 Bandaged" },
+      ],
     });
-    expect(replaceResult.state.characters[0].conditions).toEqual(["🩹 Bandaged"]);
+    expect(replaceResult.state.characters[0].conditions).toEqual([
+      "🩹 Bandaged",
+    ]);
   });
 
   it("applies characterFlagsAdd/Remove patches with fuzzy matching", () => {
     const pt = createInitialPlaythrough("Test");
     const charId = pt.characters[0].id;
-    
+
     const addResult = applyStatePatch(pt, {
-      characterFlagsAdd: [{ characterId: charId, flags: ["🗝️ Knows the Password"] }]
+      characterFlagsAdd: [
+        { characterId: charId, flags: ["🗝️ Knows the Password"] },
+      ],
     });
-    expect(addResult.state.characters[0].flags).toContain("🗝️ Knows the Password");
-    
+    expect(addResult.state.characters[0].flags).toContain(
+      "🗝️ Knows the Password",
+    );
+
     // Remove with snake_case and no emoji
     const removeResult = applyStatePatch(addResult.state, {
-      characterFlagsRemove: [{ characterId: charId, flags: ["knows_the_password"] }]
+      characterFlagsRemove: [
+        { characterId: charId, flags: ["knows_the_password"] },
+      ],
     });
     expect(removeResult.state.characters[0].flags).toEqual([]);
   });
@@ -219,19 +274,21 @@ describe("simple characters and character lifecycle", () => {
 
     const addResult = applyStatePatch(pt, {
       playerConditionsAdd: ["🤕 Deep Cut"],
-      playerFlagsAdd: ["🗺️ Has Map"]
+      playerFlagsAdd: ["🗺️ Has Map"],
     });
     expect(addResult.state.playerCharacter.conditions).toContain("🤕 Deep Cut");
     expect(addResult.state.playerCharacter.flags).toContain("🗺️ Has Map");
 
     const replaceResult = applyStatePatch(addResult.state, {
-      playerConditionsReplace: [{ from: "deep cut", to: "🩹 Stitched Wound" }]
+      playerConditionsReplace: [{ from: "deep cut", to: "🩹 Stitched Wound" }],
     });
-    expect(replaceResult.state.playerCharacter.conditions).toEqual(["🩹 Stitched Wound"]);
+    expect(replaceResult.state.playerCharacter.conditions).toEqual([
+      "🩹 Stitched Wound",
+    ]);
 
     const removeResult = applyStatePatch(replaceResult.state, {
       playerConditionsRemove: ["stitched wound"],
-      playerFlagsRemove: ["has_map"]
+      playerFlagsRemove: ["has_map"],
     });
     expect(removeResult.state.playerCharacter.conditions).toEqual([]);
     expect(removeResult.state.playerCharacter.flags).toEqual([]);
@@ -241,15 +298,22 @@ describe("simple characters and character lifecycle", () => {
     const pt = createInitialPlaythrough("Test");
     const charId = pt.characters[0].id;
     const result = applyStatePatch(pt, {
-      characterMemory: [{ characterId: charId, memorySummary: "Mira now distrusts the player." }]
+      characterMemory: [
+        {
+          characterId: charId,
+          memorySummary: "Mira now distrusts the player.",
+        },
+      ],
     });
-    expect(result.state.characters[0].memorySummary).toBe("Mira now distrusts the player.");
+    expect(result.state.characters[0].memorySummary).toBe(
+      "Mira now distrusts the player.",
+    );
   });
 
   it("resolves characterId by name (case-insensitive)", () => {
     const pt = createInitialPlaythrough("Test");
     const result = applyStatePatch(pt, {
-      characterMood: [{ characterId: "mira", mood: "elated" }]
+      characterMood: [{ characterId: "mira", mood: "elated" }],
     });
     expect(result.state.characters[0].mood).toBe("elated");
   });
@@ -257,9 +321,17 @@ describe("simple characters and character lifecycle", () => {
   it("adds a simple character and manages scene presence", () => {
     const pt = createInitialPlaythrough("Test");
     const withSimple = applyStatePatch(pt, {
-      characterAddSimple: [{ name: "Shopkeep", description: "A friendly shopkeeper.", storyRole: "Merchant" }]
+      characterAddSimple: [
+        {
+          name: "Shopkeep",
+          description: "A friendly shopkeeper.",
+          storyRole: "Merchant",
+        },
+      ],
     });
-    expect(withSimple.applied.some(a => a.includes("simple character added"))).toBe(true);
+    expect(
+      withSimple.applied.some((a) => a.includes("simple character added")),
+    ).toBe(true);
     expect(withSimple.state.characters.length).toBe(2);
     const shopkeep = withSimple.state.characters[1];
     expect(shopkeep.name).toBe("Shopkeep");
@@ -269,38 +341,52 @@ describe("simple characters and character lifecycle", () => {
 
     // Character exits scene
     const exitResult = applyStatePatch(withSimple.state, {
-      characterExitScene: [shopkeep.id]
+      characterExitScene: [shopkeep.id],
     });
     expect(exitResult.state.activeCharacters).not.toContain(shopkeep.id);
 
     // Character enters scene
     const enterResult = applyStatePatch(exitResult.state, {
-      characterEnterScene: [shopkeep.id]
+      characterEnterScene: [shopkeep.id],
     });
     expect(enterResult.state.activeCharacters).toContain(shopkeep.id);
 
     // Update role
     const roleResult = applyStatePatch(enterResult.state, {
-      characterUpdateRole: [{ characterId: shopkeep.id, storyRole: "Allied Merchant" }]
+      characterUpdateRole: [
+        { characterId: shopkeep.id, storyRole: "Allied Merchant" },
+      ],
     });
-    expect(roleResult.state.characters.find(c => c.id === shopkeep.id)?.storyRole).toBe("Allied Merchant");
+    expect(
+      roleResult.state.characters.find((c) => c.id === shopkeep.id)?.storyRole,
+    ).toBe("Allied Merchant");
   });
 
   it("fleshes out a simple character into a detailed character", () => {
     const pt = createInitialPlaythrough("Test");
     const withSimple = applyStatePatch(pt, {
-      characterAddSimple: [{ name: "Shopkeep", description: "A friendly shopkeeper.", storyRole: "Merchant" }]
+      characterAddSimple: [
+        {
+          name: "Shopkeep",
+          description: "A friendly shopkeeper.",
+          storyRole: "Merchant",
+        },
+      ],
     });
     const shopkeepId = withSimple.state.characters[1].id;
 
     const result = applyStatePatch(withSimple.state, {
-      characterFleshOut: { characterId: shopkeepId }
+      characterFleshOut: { characterId: shopkeepId },
     });
 
-    expect(result.applied.some(a => a.includes("character fleshed out"))).toBe(true);
-    const fleshed = result.state.characters.find(c => c.id === shopkeepId)!;
+    expect(
+      result.applied.some((a) => a.includes("character fleshed out")),
+    ).toBe(true);
+    const fleshed = result.state.characters.find((c) => c.id === shopkeepId)!;
     expect(fleshed.templateId).toBeDefined();
-    const template = result.state.characterTemplates.find(t => t.id === fleshed.templateId);
+    const template = result.state.characterTemplates.find(
+      (t) => t.id === fleshed.templateId,
+    );
     expect(template).toBeDefined();
     expect(template?.content).toContain("A friendly shopkeeper.");
   });
@@ -308,28 +394,50 @@ describe("simple characters and character lifecycle", () => {
   it("fleshes out with custom memorySummary", () => {
     const pt = createInitialPlaythrough("Test");
     const withSimple = applyStatePatch(pt, {
-      characterAddSimple: [{ name: "Shopkeep", description: "A friendly shopkeeper.", storyRole: "Merchant" }]
+      characterAddSimple: [
+        {
+          name: "Shopkeep",
+          description: "A friendly shopkeeper.",
+          storyRole: "Merchant",
+        },
+      ],
     });
     const shopkeepId = withSimple.state.characters[1].id;
     const result = applyStatePatch(withSimple.state, {
-      characterFleshOut: { characterId: shopkeepId, memorySummary: "Shopkeep — Cheerful" }
+      characterFleshOut: {
+        characterId: shopkeepId,
+        memorySummary: "Shopkeep — Cheerful",
+      },
     });
-    const fleshed = result.state.characters.find(c => c.id === shopkeepId)!;
+    const fleshed = result.state.characters.find((c) => c.id === shopkeepId)!;
     expect(fleshed.memorySummary).toBe("Shopkeep — Cheerful");
   });
 
   it("flesh out with content stores the sheet verbatim on the template", () => {
     const pt = createInitialPlaythrough("Test");
     const withSimple = applyStatePatch(pt, {
-      characterAddSimple: [{ name: "Borg", description: "Gruff blacksmith", storyRole: "Blacksmith" }]
+      characterAddSimple: [
+        {
+          name: "Borg",
+          description: "Gruff blacksmith",
+          storyRole: "Blacksmith",
+        },
+      ],
     });
     const borgId = withSimple.state.characters[1].id;
-    const sheet = "[Species]: Dwarf\n\n[Body]\n- Height: short\n\n[Personality]\n- Sturdy and quiet";
+    const sheet =
+      "[Species]: Dwarf\n\n[Body]\n- Height: short\n\n[Personality]\n- Sturdy and quiet";
     const result = applyStatePatch(withSimple.state, {
-      characterFleshOut: { characterId: borgId, content: sheet, memorySummary: "Borg — Sturdy and quiet" }
+      characterFleshOut: {
+        characterId: borgId,
+        content: sheet,
+        memorySummary: "Borg — Sturdy and quiet",
+      },
     });
     const fleshed = result.state.characters.find((c) => c.id === borgId)!;
-    const template = result.state.characterTemplates.find((t) => t.id === fleshed.templateId);
+    const template = result.state.characterTemplates.find(
+      (t) => t.id === fleshed.templateId,
+    );
     expect(template?.content).toBe(sheet);
     expect(fleshed.memorySummary).toBe("Borg — Sturdy and quiet");
   });
@@ -337,7 +445,7 @@ describe("simple characters and character lifecycle", () => {
   it("rejects fleshing out an already detailed character", () => {
     const pt = createInitialPlaythrough("Test");
     const result = applyStatePatch(pt, {
-      characterFleshOut: { characterId: pt.characters[0].id }
+      characterFleshOut: { characterId: pt.characters[0].id },
     });
     expect(result.rejected.length).toBeGreaterThan(0);
     expect(result.rejected[0]).toContain("already detailed");

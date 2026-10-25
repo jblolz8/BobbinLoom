@@ -21,7 +21,7 @@ export const DropdownMenuContent = forwardRef<
   DropdownMenuContentProps
 >(function DropdownMenuContent(
   { className = "", sideOffset = 6, children, ...props },
-  ref
+  ref,
 ) {
   return (
     <RadixDropdownMenu.Portal>
@@ -47,7 +47,7 @@ export const DropdownMenuItem = forwardRef<
   DropdownMenuItemProps
 >(function DropdownMenuItem(
   { children, icon, danger = false, className = "", ...props },
-  ref
+  ref,
 ) {
   return (
     <RadixDropdownMenu.Item
@@ -56,7 +56,9 @@ export const DropdownMenuItem = forwardRef<
       data-variant={danger ? "danger" : undefined}
       {...props}
     >
-      {icon ? <span className="inline-flex items-center shrink-0">{icon}</span> : null}
+      {icon ? (
+        <span className="inline-flex items-center shrink-0">{icon}</span>
+      ) : null}
       <span>{children}</span>
     </RadixDropdownMenu.Item>
   );

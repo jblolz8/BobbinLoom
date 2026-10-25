@@ -1,17 +1,60 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+} from "node:fs";
 import { randomUUID } from "node:crypto";
 import { basename, join } from "node:path";
 import { z } from "zod";
-import { atomicWriteFile, atomicWriteJson, cleanupStaleTmp, quarantineFile, readJsonFile, timestampSuffix } from "./persistence";
+import {
+  atomicWriteFile,
+  atomicWriteJson,
+  cleanupStaleTmp,
+  quarantineFile,
+  readJsonFile,
+  timestampSuffix,
+} from "./persistence";
 import { migratePlaythrough } from "./dataMigrations";
 import { slugify, uniqueSlug } from "./slugs";
 import { normalizeCreator, normalizeTags } from "../engine/characterCards";
 import type { ParsedCard } from "./characterCards/parseCard";
-import { createBlankPlaythrough, createInitialPlaythrough, createPlaythroughFromSeed, ensureMessageTurns, repairMemoryEventTurns, restoreSnapshotState } from "../engine/engine";
+import {
+  createBlankPlaythrough,
+  createInitialPlaythrough,
+  createPlaythroughFromSeed,
+  ensureMessageTurns,
+  repairMemoryEventTurns,
+  restoreSnapshotState,
+} from "../engine/engine";
 import { loadAppSettings } from "./appSettingsStore";
 import { DEMO_TEMPLATE } from "../engine/demoData";
-import type { CharacterFormat, CharacterTemplate, ImageGenerationSettings, LoadFailure, LorebookFile, LorebookSummary, PlayerPersona, Playthrough, PlaythroughCoverView, PlaythroughListResponse, PlaythroughSummary, PromptModuleSet, PromptPreset, ScenarioSeed, TurnSnapshot } from "../schemas";
-import { CharacterTemplateSchema, EMPTY_MODULE_SET, PlayerPersonaSchema, PlaythroughSchema } from "../schemas";
+import type {
+  CharacterFormat,
+  CharacterTemplate,
+  ImageGenerationSettings,
+  LoadFailure,
+  LorebookFile,
+  LorebookSummary,
+  PlayerPersona,
+  Playthrough,
+  PlaythroughCoverView,
+  PlaythroughListResponse,
+  PlaythroughSummary,
+  PromptModuleSet,
+  PromptPreset,
+  ScenarioSeed,
+  TurnSnapshot,
+} from "../schemas";
+import {
+  CharacterTemplateSchema,
+  EMPTY_MODULE_SET,
+  PlayerPersonaSchema,
+  PlaythroughSchema,
+} from "../schemas";
 
 function ensureStoreDir(dir: string): void {
   mkdirSync(dir, { recursive: true });
@@ -22,7 +65,9 @@ function ensureStoreDir(dir: string): void {
 function quarantineFolder(dir: string): string | null {
   try {
     if (!existsSync(dir)) return null;
-    const target = existsSync(dir + ".bak") ? `${dir}.bak.${timestampSuffix()}` : `${dir}.bak`;
+    const target = existsSync(dir + ".bak")
+      ? `${dir}.bak.${timestampSuffix()}`
+      : `${dir}.bak`;
     renameSync(dir, target);
     return target;
   } catch {
@@ -48,7 +93,9 @@ function folderContainsId(folder: string, id: string): boolean {
 function findFolderContainingId(dir: string, id: string): string | null {
   let folders: string[];
   try {
-    folders = readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+    folders = readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
   } catch {
     return null;
   }
@@ -66,14 +113,21 @@ const PERSONAS_DIR = join(process.cwd(), "data", "personas");
 
 // --- Preset helpers ---
 
-export function loadDefaultPreset(): { id: string; name: string; modules: PromptModuleSet; characterFormat?: CharacterFormat } {
+export function loadDefaultPreset(): {
+  id: string;
+  name: string;
+  modules: PromptModuleSet;
+  characterFormat?: CharacterFormat;
+} {
   // The single global prompt config is the source of truth, and it may carry
   // unsaved edits — so it wins. The named active preset's stored config is the
   // fallback for a fresh install whose config has not been seeded yet.
   const settings = loadAppSettings(join(process.cwd(), "data"));
   const activePresetId = settings.activePresetId ?? "default";
   const presets = readAllPresets();
-  const named = presets.find((p) => p.id === activePresetId) ?? presets.find((p) => p.id === "default");
+  const named =
+    presets.find((p) => p.id === activePresetId) ??
+    presets.find((p) => p.id === "default");
   const live = settings.promptConfig;
   return {
     id: activePresetId,
@@ -98,11 +152,23 @@ function readAllPresets(): PromptPreset[] {
  *  seed modules actually reach the Generate Scenario prompt. Returns null only when an
  *  explicit presetId is given but not found — the caller should 404. */
 export function resolvePresetForGeneration(
-  presetId: string | undefined
-): { id: string; name: string; modules: PromptModuleSet; characterFormat?: CharacterFormat } | null {
+  presetId: string | undefined,
+): {
+  id: string;
+  name: string;
+  modules: PromptModuleSet;
+  characterFormat?: CharacterFormat;
+} | null {
   if (presetId) {
     const found = readAllPresets().find((p) => p.id === presetId);
-    return found ? { id: found.id, name: found.name, modules: found.modules, characterFormat: found.characterFormat } : null;
+    return found
+      ? {
+          id: found.id,
+          name: found.name,
+          modules: found.modules,
+          characterFormat: found.characterFormat,
+        }
+      : null;
   }
   return loadDefaultPreset();
 }
@@ -122,14 +188,18 @@ function personaSlugs(dir: string): Set<string> {
     return new Set(
       readdirSync(dir, { withFileTypes: true })
         .filter((e) => e.isDirectory() && !e.name.endsWith(".bak"))
-        .map((e) => e.name)
+        .map((e) => e.name),
     );
   } catch {
     return new Set();
   }
 }
 
-function movePersonaFolder(dir: string, oldSlug: string, newSlug: string): void {
+function movePersonaFolder(
+  dir: string,
+  oldSlug: string,
+  newSlug: string,
+): void {
   const from = personaFolderPath(dir, oldSlug);
   if (!existsSync(from)) return;
   const to = personaFolderPath(dir, newSlug);
@@ -141,7 +211,9 @@ function movePersonaFolder(dir: string, oldSlug: string, newSlug: string): void 
 
 /** Write a persona into its home folder (found by id, else its name slug). */
 function savePersona(persona: PlayerPersona, dir: string = PERSONAS_DIR): void {
-  const home = findFolderContainingId(dir, persona.id) ?? personaFolderPath(dir, slugify(persona.name));
+  const home =
+    findFolderContainingId(dir, persona.id) ??
+    personaFolderPath(dir, slugify(persona.name));
   ensureStoreDir(home);
   const slug = basename(home);
   atomicWriteJson(join(home, `${slug}.json`), persona);
@@ -156,14 +228,20 @@ function loadPersonas(dir: string = PERSONAS_DIR): PlayerPersona[] {
     const result = readJsonFile(file);
     if (!result.ok) {
       const backupPath = quarantineFile(file, result.reason);
-      console.error(`[store] persona ${slug} unreadable (${result.reason})${backupPath ? ` — quarantined to ${backupPath}` : ""}`);
+      console.error(
+        `[store] persona ${slug} unreadable (${result.reason})${backupPath ? ` — quarantined to ${backupPath}` : ""}`,
+      );
       continue;
     }
     const parsed = PlayerPersonaSchema.safeParse(result.data);
     if (!parsed.success) {
-      const issues = parsed.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ");
+      const issues = parsed.error.issues
+        .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+        .join("; ");
       const backupPath = quarantineFile(file, `invalid persona: ${issues}`);
-      console.error(`[store] persona ${slug} failed validation${backupPath ? ` — quarantined to ${backupPath}` : ""}`);
+      console.error(
+        `[store] persona ${slug} failed validation${backupPath ? ` — quarantined to ${backupPath}` : ""}`,
+      );
       continue;
     }
     personas.push(parsed.data);
@@ -188,7 +266,10 @@ export function loadDefaultPersona(): PlayerPersona {
   return personas.find((p) => p.isDefault) ?? personas[0];
 }
 
-export function getPersona(id: string, dir: string = PERSONAS_DIR): PlayerPersona | null {
+export function getPersona(
+  id: string,
+  dir: string = PERSONAS_DIR,
+): PlayerPersona | null {
   return loadPersonas(dir).find((p) => p.id === id) ?? null;
 }
 
@@ -196,9 +277,15 @@ export function listPersonas(dir: string = PERSONAS_DIR): PlayerPersona[] {
   return loadPersonas(dir);
 }
 
-export function createPersonaRecord(name: string, cloneFromId?: string, dir: string = PERSONAS_DIR): PlayerPersona {
+export function createPersonaRecord(
+  name: string,
+  cloneFromId?: string,
+  dir: string = PERSONAS_DIR,
+): PlayerPersona {
   const personas = loadPersonas(dir);
-  const source = cloneFromId ? personas.find((p) => p.id === cloneFromId) : undefined;
+  const source = cloneFromId
+    ? personas.find((p) => p.id === cloneFromId)
+    : undefined;
 
   const persona: PlayerPersona = {
     id: `persona_${Date.now()}`,
@@ -216,7 +303,11 @@ export function createPersonaRecord(name: string, cloneFromId?: string, dir: str
   return persona;
 }
 
-export function updatePersonaRecord(id: string, updates: Partial<PlayerPersona>, dir: string = PERSONAS_DIR): PlayerPersona | null {
+export function updatePersonaRecord(
+  id: string,
+  updates: Partial<PlayerPersona>,
+  dir: string = PERSONAS_DIR,
+): PlayerPersona | null {
   const personas = loadPersonas(dir);
   const index = personas.findIndex((p) => p.id === id);
   if (index === -1) return null;
@@ -232,7 +323,10 @@ export function updatePersonaRecord(id: string, updates: Partial<PlayerPersona>,
   return updated;
 }
 
-export function deletePersonaRecord(id: string, dir: string = PERSONAS_DIR): boolean {
+export function deletePersonaRecord(
+  id: string,
+  dir: string = PERSONAS_DIR,
+): boolean {
   const personas = loadPersonas(dir);
   if (personas.length <= 1) return false;
 
@@ -247,17 +341,23 @@ export function deletePersonaRecord(id: string, dir: string = PERSONAS_DIR): boo
   const folder = findFolderContainingId(dir, id);
   if (!folder) return false;
   const backup = quarantineFolder(folder);
-  console.log(`[store] persona ${id} deleted — folder quarantined${backup ? ` to ${backup}` : ""}`);
+  console.log(
+    `[store] persona ${id} deleted — folder quarantined${backup ? ` to ${backup}` : ""}`,
+  );
   return true;
 }
 
-export function setDefaultPersonaRecord(id: string, dir: string = PERSONAS_DIR): PlayerPersona | null {
+export function setDefaultPersonaRecord(
+  id: string,
+  dir: string = PERSONAS_DIR,
+): PlayerPersona | null {
   const personas = loadPersonas(dir);
   const target = personas.find((p) => p.id === id);
   if (!target) return null;
 
   for (const p of personas) {
-    if (p.isDefault && p.id !== id) savePersona({ ...p, isDefault: false }, dir);
+    if (p.isDefault && p.id !== id)
+      savePersona({ ...p, isDefault: false }, dir);
   }
   const updated = { ...target, isDefault: true };
   savePersona(updated, dir);
@@ -277,13 +377,23 @@ function characterFolderPath(dir: string, slug: string): string {
 /** The folder a character's own files live in (`<dir>/<slug>/`), or null when no record holds that id.
  *  Exported because the brainstorm session is stored BESIDE the record, inside its folder, so the two
  *  travel together. */
-export function characterFolderForId(id: string, dir: string = CHARACTERS_DIR): string | null {
+export function characterFolderForId(
+  id: string,
+  dir: string = CHARACTERS_DIR,
+): string | null {
   const record = listCharacterTemplates(dir).find((t) => t.id === id);
   if (!record) return null;
-  return findFolderContainingId(dir, id) ?? characterFolderPath(dir, slugify(record.name));
+  return (
+    findFolderContainingId(dir, id) ??
+    characterFolderPath(dir, slugify(record.name))
+  );
 }
 
-function characterFilePath(dir: string, slug: string, version?: number): string {
+function characterFilePath(
+  dir: string,
+  slug: string,
+  version?: number,
+): string {
   return version === undefined
     ? join(characterFolderPath(dir, slug), `${slug}.json`)
     : join(characterFolderPath(dir, slug), `${slug}.v${version}.json`);
@@ -294,7 +404,7 @@ function characterSlugs(dir: string): Set<string> {
     return new Set(
       readdirSync(dir, { withFileTypes: true })
         .filter((e) => e.isDirectory() && !e.name.endsWith(".bak"))
-        .map((e) => e.name)
+        .map((e) => e.name),
     );
   } catch {
     return new Set();
@@ -329,7 +439,11 @@ function folderMaxVersion(dir: string, slug: string): number {
 }
 
 /** Move a character folder to a new slug, renaming its files to match. */
-function moveCharacterFolder(dir: string, oldSlug: string, newSlug: string): void {
+function moveCharacterFolder(
+  dir: string,
+  oldSlug: string,
+  newSlug: string,
+): void {
   const from = characterFolderPath(dir, oldSlug);
   if (!existsSync(from)) return;
   const to = characterFolderPath(dir, newSlug);
@@ -348,12 +462,17 @@ function moveCharacterFolder(dir: string, oldSlug: string, newSlug: string): voi
       renameSync(join(to, f), join(to, `${newSlug}.v${m[2]}.json`));
     } else {
       // Rename only the slug prefix so .bl.json / .v<N>.json suffixes survive.
-      renameSync(join(to, f), join(to, f.replace(new RegExp("^" + oldSlug), newSlug)));
+      renameSync(
+        join(to, f),
+        join(to, f.replace(new RegExp("^" + oldSlug), newSlug)),
+      );
     }
   }
 }
 
-export function listCharacterTemplates(dir: string = CHARACTERS_DIR): CharacterTemplate[] {
+export function listCharacterTemplates(
+  dir: string = CHARACTERS_DIR,
+): CharacterTemplate[] {
   let folders: string[];
   try {
     folders = readdirSync(dir, { withFileTypes: true })
@@ -368,7 +487,9 @@ export function listCharacterTemplates(dir: string = CHARACTERS_DIR): CharacterT
     const folderDir = join(dir, folder);
     let files: string[];
     try {
-      files = readdirSync(folderDir).filter((f) => f.endsWith(".json")).sort();
+      files = readdirSync(folderDir)
+        .filter((f) => f.endsWith(".json"))
+        .sort();
     } catch {
       continue;
     }
@@ -378,14 +499,23 @@ export function listCharacterTemplates(dir: string = CHARACTERS_DIR): CharacterT
       const result = readJsonFile(filePath);
       if (!result.ok) {
         const backupPath = quarantineFile(filePath, result.reason);
-        console.error(`[store] character file ${filePath} unreadable (${result.reason})${backupPath ? ` — quarantined to ${backupPath}` : ""}`);
+        console.error(
+          `[store] character file ${filePath} unreadable (${result.reason})${backupPath ? ` — quarantined to ${backupPath}` : ""}`,
+        );
         continue;
       }
       const parsed = CharacterTemplateSchema.safeParse(result.data);
       if (!parsed.success) {
-        const issues = parsed.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ");
-        const backupPath = quarantineFile(filePath, `invalid template: ${issues}`);
-        console.error(`[store] character file ${filePath} failed validation${backupPath ? ` — quarantined to ${backupPath}` : ""}`);
+        const issues = parsed.error.issues
+          .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+          .join("; ");
+        const backupPath = quarantineFile(
+          filePath,
+          `invalid template: ${issues}`,
+        );
+        console.error(
+          `[store] character file ${filePath} failed validation${backupPath ? ` — quarantined to ${backupPath}` : ""}`,
+        );
         continue;
       }
       const template: CharacterTemplate = { ...parsed.data };
@@ -400,9 +530,10 @@ export function listCharacterTemplates(dir: string = CHARACTERS_DIR): CharacterT
         if (!template.createdAt) {
           try {
             const stat = statSync(filePath);
-            template.createdAt = stat.birthtime && stat.birthtime.getTime() > 0
-              ? stat.birthtime.toISOString()
-              : stat.mtime.toISOString();
+            template.createdAt =
+              stat.birthtime && stat.birthtime.getTime() > 0
+                ? stat.birthtime.toISOString()
+                : stat.mtime.toISOString();
           } catch {
             /* ignore fallback */
           }
@@ -411,7 +542,9 @@ export function listCharacterTemplates(dir: string = CHARACTERS_DIR): CharacterT
       if (!template.updatedAt) {
         if (template.avatarUpdatedAt) {
           try {
-            template.updatedAt = new Date(template.avatarUpdatedAt).toISOString();
+            template.updatedAt = new Date(
+              template.avatarUpdatedAt,
+            ).toISOString();
           } catch {
             /* ignore */
           }
@@ -419,7 +552,9 @@ export function listCharacterTemplates(dir: string = CHARACTERS_DIR): CharacterT
         if (!template.updatedAt) {
           try {
             const stat = statSync(filePath);
-            template.updatedAt = stat.mtime ? stat.mtime.toISOString() : (template.createdAt ?? new Date().toISOString());
+            template.updatedAt = stat.mtime
+              ? stat.mtime.toISOString()
+              : (template.createdAt ?? new Date().toISOString());
           } catch {
             template.updatedAt = template.createdAt ?? new Date().toISOString();
           }
@@ -431,7 +566,10 @@ export function listCharacterTemplates(dir: string = CHARACTERS_DIR): CharacterT
   return templates;
 }
 
-export function getCharacterTemplate(id: string, dir: string = CHARACTERS_DIR): CharacterTemplate | null {
+export function getCharacterTemplate(
+  id: string,
+  dir: string = CHARACTERS_DIR,
+): CharacterTemplate | null {
   return listCharacterTemplates(dir).find((t) => t.id === id) ?? null;
 }
 
@@ -439,7 +577,10 @@ export function getCharacterTemplate(id: string, dir: string = CHARACTERS_DIR): 
  *  custom portrait → `portrait.<ext>` → the CCv2 card PNG. ONE owner for that chain —
  *  the avatar route and the present-cast cover resolver both go through it, so "does
  *  this character have art" can never mean two different things. */
-function portraitFileFor(record: CharacterTemplate, folder: string): string | null {
+function portraitFileFor(
+  record: CharacterTemplate,
+  folder: string,
+): string | null {
   if (record.customPortrait) {
     const file = join(folder, record.customPortrait);
     if (existsSync(file)) return file;
@@ -458,15 +599,24 @@ function portraitFileFor(record: CharacterTemplate, folder: string): string | nu
 export function getCharacterAvatarPath(
   id: string,
   typeOrDir?: "portrait" | "profile" | "original" | string,
-  maybeDir?: string
+  maybeDir?: string,
 ): string | null {
-  const isType = typeOrDir === "portrait" || typeOrDir === "profile" || typeOrDir === "original";
-  const type: "portrait" | "profile" | "original" = isType ? (typeOrDir as "portrait" | "profile" | "original") : "portrait";
-  const dir = isType ? (maybeDir ?? CHARACTERS_DIR) : (typeOrDir ?? CHARACTERS_DIR);
+  const isType =
+    typeOrDir === "portrait" ||
+    typeOrDir === "profile" ||
+    typeOrDir === "original";
+  const type: "portrait" | "profile" | "original" = isType
+    ? (typeOrDir as "portrait" | "profile" | "original")
+    : "portrait";
+  const dir = isType
+    ? (maybeDir ?? CHARACTERS_DIR)
+    : (typeOrDir ?? CHARACTERS_DIR);
 
   const record = listCharacterTemplates(dir).find((t) => t.id === id);
   if (!record) return null;
-  const folder = findFolderContainingId(dir, id) ?? characterFolderPath(dir, slugify(record.name));
+  const folder =
+    findFolderContainingId(dir, id) ??
+    characterFolderPath(dir, slugify(record.name));
 
   if (type === "original") {
     const ref = record.cardRef;
@@ -501,10 +651,12 @@ export function getCharacterAvatarPath(
  *  bytes live in the library folder, so there is nothing left to render. */
 export function resolveCharacterPortraits(
   ids: string[],
-  dir: string = CHARACTERS_DIR
+  dir: string = CHARACTERS_DIR,
 ): { id: string; avatarUpdatedAt?: number }[] {
   if (ids.length === 0) return [];
-  const byId = new Map(listCharacterTemplates(dir).map((template) => [template.id, template]));
+  const byId = new Map(
+    listCharacterTemplates(dir).map((template) => [template.id, template]),
+  );
   const found: { id: string; avatarUpdatedAt?: number }[] = [];
   for (const id of ids) {
     const record = byId.get(id);
@@ -512,10 +664,16 @@ export function resolveCharacterPortraits(
     // The normal case is the slug folder; a folder renamed by hand is the fallback, and
     // only then do we pay for a scan.
     const slugged = characterFolderPath(dir, slugify(record.name));
-    const folder = existsSync(slugged) ? slugged : findFolderContainingId(dir, id);
+    const folder = existsSync(slugged)
+      ? slugged
+      : findFolderContainingId(dir, id);
     if (!folder) continue;
     if (!portraitFileFor(record, folder)) continue;
-    found.push(record.avatarUpdatedAt === undefined ? { id } : { id, avatarUpdatedAt: record.avatarUpdatedAt });
+    found.push(
+      record.avatarUpdatedAt === undefined
+        ? { id }
+        : { id, avatarUpdatedAt: record.avatarUpdatedAt },
+    );
   }
   return found;
 }
@@ -525,11 +683,13 @@ export function saveCharacterAvatar(
   type: "portrait" | "profile",
   buffer: Buffer,
   ext: string = "png",
-  dir: string = CHARACTERS_DIR
+  dir: string = CHARACTERS_DIR,
 ): CharacterTemplate | null {
   const record = listCharacterTemplates(dir).find((t) => t.id === id);
   if (!record) return null;
-  const folder = findFolderContainingId(dir, id) ?? characterFolderPath(dir, slugify(record.name));
+  const folder =
+    findFolderContainingId(dir, id) ??
+    characterFolderPath(dir, slugify(record.name));
   ensureStoreDir(folder);
 
   const cleanExt = ext.replace(/^\./, "").toLowerCase() || "png";
@@ -540,20 +700,25 @@ export function saveCharacterAvatar(
   const now = Date.now();
   const updates: Partial<CharacterTemplate> = {
     avatarUpdatedAt: now,
-    ...(type === "portrait" ? { customPortrait: filename } : { profileImage: filename }),
+    ...(type === "portrait"
+      ? { customPortrait: filename }
+      : { profileImage: filename }),
   };
   return updateCharacterTemplateRecord(id, updates, dir);
 }
 
 export function restoreCharacterOriginalAvatar(
   id: string,
-  dir: string = CHARACTERS_DIR
+  dir: string = CHARACTERS_DIR,
 ): CharacterTemplate | null {
   const record = listCharacterTemplates(dir).find((t) => t.id === id);
   if (!record) return null;
-  const folder = findFolderContainingId(dir, id) ?? characterFolderPath(dir, slugify(record.name));
+  const folder =
+    findFolderContainingId(dir, id) ??
+    characterFolderPath(dir, slugify(record.name));
 
-  const originalFile = record.cardRef?.kind === "png" ? record.cardRef.file : null;
+  const originalFile =
+    record.cardRef?.kind === "png" ? record.cardRef.file : null;
   for (const ext of ["png", "jpg", "jpeg", "webp"]) {
     const candidate = join(folder, `portrait.${ext}`);
     if (existsSync(candidate) && basename(candidate) !== originalFile) {
@@ -574,11 +739,13 @@ export function restoreCharacterOriginalAvatar(
 
 export function removeCharacterProfileAvatar(
   id: string,
-  dir: string = CHARACTERS_DIR
+  dir: string = CHARACTERS_DIR,
 ): CharacterTemplate | null {
   const record = listCharacterTemplates(dir).find((t) => t.id === id);
   if (!record) return null;
-  const folder = findFolderContainingId(dir, id) ?? characterFolderPath(dir, slugify(record.name));
+  const folder =
+    findFolderContainingId(dir, id) ??
+    characterFolderPath(dir, slugify(record.name));
 
   for (const ext of ["png", "jpg", "jpeg", "webp"]) {
     const candidate = join(folder, `profile.${ext}`);
@@ -598,7 +765,10 @@ export function removeCharacterProfileAvatar(
   return updateCharacterTemplateRecord(id, updates, dir);
 }
 
-export function createCharacterTemplateRecord(name: string, dir: string = CHARACTERS_DIR): CharacterTemplate {
+export function createCharacterTemplateRecord(
+  name: string,
+  dir: string = CHARACTERS_DIR,
+): CharacterTemplate {
   const now = new Date().toISOString();
   const template: CharacterTemplate = {
     id: `char_${Date.now()}`,
@@ -610,7 +780,8 @@ export function createCharacterTemplateRecord(name: string, dir: string = CHARAC
     specVersion: "1.0",
     tags: [],
     extensions: {},
-    content: "[Species]: (unknown)\\n[Gender]: (unknown)\\n\\n[Body]\\n(no details recorded yet)\\n\\n[Personality]\\n(no details recorded yet)\\n\\n[Communication]\\n(no details recorded yet)\\n\\n[Likes]\\n(not established)\\n\\n[Dislikes]\\n(not established)",
+    content:
+      "[Species]: (unknown)\\n[Gender]: (unknown)\\n\\n[Body]\\n(no details recorded yet)\\n\\n[Personality]\\n(no details recorded yet)\\n\\n[Communication]\\n(no details recorded yet)\\n\\n[Likes]\\n(not established)\\n\\n[Dislikes]\\n(not established)",
     createdAt: now,
     updatedAt: now,
   };
@@ -620,7 +791,11 @@ export function createCharacterTemplateRecord(name: string, dir: string = CHARAC
   return template;
 }
 
-export function updateCharacterTemplateRecord(id: string, updates: Partial<CharacterTemplate>, dir: string = CHARACTERS_DIR): CharacterTemplate | null {
+export function updateCharacterTemplateRecord(
+  id: string,
+  updates: Partial<CharacterTemplate>,
+  dir: string = CHARACTERS_DIR,
+): CharacterTemplate | null {
   const templates = listCharacterTemplates(dir);
   const index = templates.findIndex((t) => t.id === id);
   if (index === -1) return null;
@@ -642,7 +817,10 @@ export function updateCharacterTemplateRecord(id: string, updates: Partial<Chara
  *  remain. That leaves two records for one card — making converted cards show
  *  "(2 versions)" and still display as CCv2 (the `.bl.json` sorts first).
  *  Remove the stale import record, keeping the raw original (.png/.card.json). */
-export function removeCharacterImportRecord(id: string, dir: string = CHARACTERS_DIR): void {
+export function removeCharacterImportRecord(
+  id: string,
+  dir: string = CHARACTERS_DIR,
+): void {
   const folder = findFolderContainingId(dir, id);
   if (!folder) return;
   const slug = basename(folder);
@@ -651,23 +829,33 @@ export function removeCharacterImportRecord(id: string, dir: string = CHARACTERS
   const r = readJsonFile(importRecord);
   if (r.ok && (r.data as { id?: unknown }).id === id) {
     unlinkSync(importRecord);
-    console.log(`[store] removed stale CCv2 import record ${importRecord} (id ${id})`);
+    console.log(
+      `[store] removed stale CCv2 import record ${importRecord} (id ${id})`,
+    );
   }
 }
 
-export function deleteCharacterTemplateRecord(id: string, dir: string = CHARACTERS_DIR): boolean {
+export function deleteCharacterTemplateRecord(
+  id: string,
+  dir: string = CHARACTERS_DIR,
+): boolean {
   if (!listCharacterTemplates(dir).some((t) => t.id === id)) return false;
   const folder = findFolderContainingId(dir, id);
   if (!folder) return false;
   const backup = quarantineFolder(folder);
-  console.log(`[store] character ${id} deleted — folder quarantined${backup ? ` to ${backup}` : ""}`);
+  console.log(
+    `[store] character ${id} deleted — folder quarantined${backup ? ` to ${backup}` : ""}`,
+  );
   return true;
 }
 
 /** Upsert — used by Save to Library + editor updates. Creates or updates by template id.
  *  Latest version of a folder lives at `<slug>.json`; older versions as `<slug>.v<N>.json`.
  *  Renames move the folder (id unchanged). */
-export function saveCharacterTemplateRecord(template: CharacterTemplate, dir: string = CHARACTERS_DIR): CharacterTemplate {
+export function saveCharacterTemplateRecord(
+  template: CharacterTemplate,
+  dir: string = CHARACTERS_DIR,
+): CharacterTemplate {
   const templates = listCharacterTemplates(dir);
   const existing = templates.find((t) => t.id === template.id);
   const slugs = characterSlugs(dir);
@@ -704,12 +892,18 @@ export function saveCharacterTemplateRecord(template: CharacterTemplate, dir: st
     }
     atomicWriteJson(latestPath, recordToSave);
   } else {
-    atomicWriteJson(characterFilePath(dir, slug, recordToSave.version), recordToSave);
+    atomicWriteJson(
+      characterFilePath(dir, slug, recordToSave.version),
+      recordToSave,
+    );
   }
   return recordToSave;
 }
 
-export interface ImportResult { record: CharacterTemplate; created: boolean }
+export interface ImportResult {
+  record: CharacterTemplate;
+  created: boolean;
+}
 
 /** Persist an imported CCv2 card: untouched original file + .bl.json record.
  *  Upserts when a record with the same name+creator exists (D11). */
@@ -717,10 +911,13 @@ export function importCharacterCard(
   card: ParsedCard,
   originalBytes: Buffer,
   kind: "png" | "json",
-  dir: string = CHARACTERS_DIR
+  dir: string = CHARACTERS_DIR,
 ): ImportResult {
   const existing = listCharacterTemplates(dir).find(
-    (t) => t.format === "ccv2" && t.name === card.name && (t.creator ?? "") === normalizeCreator(card.creator)
+    (t) =>
+      t.format === "ccv2" &&
+      t.name === card.name &&
+      (t.creator ?? "") === normalizeCreator(card.creator),
   );
   let slug: string;
   if (existing) {
@@ -742,15 +939,15 @@ export function importCharacterCard(
     startingClothing: [],
     spec: "bobbinloom_chara",
     specVersion: "1.0",
-    title: card.name,                 // D16
+    title: card.name, // D16
     creatorNotes: card.creatorNotes,
-    creator: normalizeCreator(card.creator),  // D4
-    tags: normalizeTags(card.tags),           // D4
+    creator: normalizeCreator(card.creator), // D4
+    tags: normalizeTags(card.tags), // D4
     extensions: {},
     format: "ccv2",
     cardRef: { file: originalFile, kind },
     cardVersion: card.characterVersion || undefined,
-    scenario: card.scenario || undefined,     // D7
+    scenario: card.scenario || undefined, // D7
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
@@ -762,35 +959,57 @@ export function importCharacterCard(
  *  records are excluded. Undefined = no picker involvement (engine default applies).
  *  `dir` overrides the characters dir for hermetic tests ONLY — production callers
  *  must NOT pass their playthroughs dir here (it differs from CHARACTERS_DIR). */
-export function resolveCast(castIds?: string[], dir: string = CHARACTERS_DIR): CharacterTemplate[] | undefined {
+export function resolveCast(
+  castIds?: string[],
+  dir: string = CHARACTERS_DIR,
+): CharacterTemplate[] | undefined {
   if (!castIds) return undefined;
   const library = listCharacterTemplates(dir);
   return castIds
     .map((id) => library.find((t) => t.id === id))
-    .filter((t): t is CharacterTemplate => t !== undefined && t.format !== "ccv2");
+    .filter(
+      (t): t is CharacterTemplate => t !== undefined && t.format !== "ccv2",
+    );
 }
 
 export function createBlankPlaythroughRecord(
-  dir: string, name: string, personaId?: string, castIds: string[] = [], lorebookIds?: string[],
-  scenarioDescription?: string
+  dir: string,
+  name: string,
+  personaId?: string,
+  castIds: string[] = [],
+  lorebookIds?: string[],
+  scenarioDescription?: string,
 ): Playthrough {
-  const persona = personaId ? (getPersona(personaId) ?? loadDefaultPersona()) : loadDefaultPersona();
+  const persona = personaId
+    ? (getPersona(personaId) ?? loadDefaultPersona())
+    : loadDefaultPersona();
   const cast = resolveCast(castIds) ?? [];
   const playthrough = createBlankPlaythrough(name, persona, cast);
   if (lorebookIds) playthrough.lorebookIds = lorebookIds;
-  if (scenarioDescription) playthrough.scenarioDescription = scenarioDescription;
+  if (scenarioDescription)
+    playthrough.scenarioDescription = scenarioDescription;
   if (personaId) playthrough.personaId = personaId;
   if (castIds.length > 0) playthrough.initialCastIds = castIds;
   updatePlaythroughRecord(dir, playthrough);
   return playthrough;
 }
 
-export function createPlaythroughRecord(dir: string, name: string, personaId?: string, castIds?: string[], lorebookIds?: string[], scenarioDescription?: string): Playthrough {
-  const persona = personaId ? (getPersona(personaId) ?? loadDefaultPersona()) : loadDefaultPersona();
+export function createPlaythroughRecord(
+  dir: string,
+  name: string,
+  personaId?: string,
+  castIds?: string[],
+  lorebookIds?: string[],
+  scenarioDescription?: string,
+): Playthrough {
+  const persona = personaId
+    ? (getPersona(personaId) ?? loadDefaultPersona())
+    : loadDefaultPersona();
   const cast = resolveCast(castIds);
   const playthrough = createInitialPlaythrough(name, persona, cast);
   if (lorebookIds) playthrough.lorebookIds = lorebookIds;
-  if (scenarioDescription) playthrough.scenarioDescription = scenarioDescription;
+  if (scenarioDescription)
+    playthrough.scenarioDescription = scenarioDescription;
   if (personaId) playthrough.personaId = personaId;
   if (castIds && castIds.length > 0) playthrough.initialCastIds = castIds;
   updatePlaythroughRecord(dir, playthrough);
@@ -804,34 +1023,55 @@ export function createPlaythroughRecord(dir: string, name: string, personaId?: s
  * failed opening turn can never leave an orphaned seed-only playthrough on disk.
  */
 export function createPlaythroughFromSeedRecord(
-  dir: string, name: string, seed: ScenarioSeed, personaId?: string, castIds?: string[], lorebookIds?: string[],
+  dir: string,
+  name: string,
+  seed: ScenarioSeed,
+  personaId?: string,
+  castIds?: string[],
+  lorebookIds?: string[],
   scenarioDescription?: string,
-  includeOpening = true
+  includeOpening = true,
 ): Playthrough {
-  const persona = personaId ? (getPersona(personaId) ?? loadDefaultPersona()) : loadDefaultPersona();
-  const playthrough = createPlaythroughFromSeed(name, seed, persona, resolveCast(castIds), includeOpening);
+  const persona = personaId
+    ? (getPersona(personaId) ?? loadDefaultPersona())
+    : loadDefaultPersona();
+  const playthrough = createPlaythroughFromSeed(
+    name,
+    seed,
+    persona,
+    resolveCast(castIds),
+    includeOpening,
+  );
   if (lorebookIds) playthrough.lorebookIds = lorebookIds;
-  if (scenarioDescription) playthrough.scenarioDescription = scenarioDescription;
+  if (scenarioDescription)
+    playthrough.scenarioDescription = scenarioDescription;
   if (personaId) playthrough.personaId = personaId;
   if (castIds && castIds.length > 0) playthrough.initialCastIds = castIds;
   return playthrough;
 }
 
-export function getPlaythroughRecord(dir: string, id: string): Playthrough | null {
+export function getPlaythroughRecord(
+  dir: string,
+  id: string,
+): Playthrough | null {
   const path = playthroughPath(dir, id);
   const result = readJsonFile(path);
   if (!result.ok) {
     if (result.reason !== "missing") {
       // Unparseable JSON → quarantine + report (tier-2 contract; route 404s)
       const backupPath = quarantineFile(path, result.reason);
-      console.error(`[store] playthrough ${id} unreadable (${result.reason})${backupPath ? ` — quarantined to ${backupPath}` : ""}`);
+      console.error(
+        `[store] playthrough ${id} unreadable (${result.reason})${backupPath ? ` — quarantined to ${backupPath}` : ""}`,
+      );
     }
     return null;
   }
   const migrated = migratePlaythrough(result.data);
   if (!migrated.ok) {
     const backupPath = quarantineFile(path, migrated.reason);
-    console.error(`[store] playthrough ${id} failed validation (${migrated.reason})${backupPath ? ` — quarantined to ${backupPath}` : ""}`);
+    console.error(
+      `[store] playthrough ${id} failed validation (${migrated.reason})${backupPath ? ` — quarantined to ${backupPath}` : ""}`,
+    );
     return null;
   }
   const data = migrated.data;
@@ -841,7 +1081,10 @@ export function getPlaythroughRecord(dir: string, id: string): Playthrough | nul
   return data;
 }
 
-export function updatePlaythroughRecord(dir: string, playthrough: Playthrough): void {
+export function updatePlaythroughRecord(
+  dir: string,
+  playthrough: Playthrough,
+): void {
   invalidatePlaythroughCache();
   // Validate-on-write canary (decision 6): never persist an invalid playthrough.
   const parsed = PlaythroughSchema.safeParse(playthrough);
@@ -849,7 +1092,9 @@ export function updatePlaythroughRecord(dir: string, playthrough: Playthrough): 
     const issues = parsed.error.issues
       .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
       .join("; ");
-    throw new Error(`refusing to persist invalid playthrough ${playthrough.id}: ${issues}`);
+    throw new Error(
+      `refusing to persist invalid playthrough ${playthrough.id}: ${issues}`,
+    );
   }
   ensureStoreDir(dir);
   // Write the ORIGINAL in-memory object (not the parsed copy).
@@ -864,7 +1109,11 @@ export function deletePlaythroughRecord(dir: string, id: string): boolean {
   return true;
 }
 
-export function renamePlaythroughRecord(dir: string, id: string, name: string): Playthrough | null {
+export function renamePlaythroughRecord(
+  dir: string,
+  id: string,
+  name: string,
+): Playthrough | null {
   const playthrough = getPlaythroughRecord(dir, id);
   if (!playthrough) return null;
   playthrough.name = name;
@@ -885,14 +1134,17 @@ export function renamePlaythroughRecord(dir: string, id: string, name: string): 
 export function setPlaythroughCoverRecord(
   dir: string,
   id: string,
-  cover: { file: string } | null
+  cover: { file: string } | null,
 ): Playthrough | null {
   const playthrough = getPlaythroughRecord(dir, id);
   if (!playthrough) return null;
   if (cover === null) {
     delete playthrough.cover;
   } else {
-    playthrough.cover = { file: cover.file, updatedAt: new Date().toISOString() };
+    playthrough.cover = {
+      file: cover.file,
+      updatedAt: new Date().toISOString(),
+    };
   }
   updatePlaythroughRecord(dir, playthrough);
   return playthrough;
@@ -904,7 +1156,10 @@ export function setPlaythroughCoverRecord(
  * duplicate is an exact checkpoint the player can branch from. The name gets
  * a " (copy)" suffix to make it distinguishable in the save/load list.
  */
-export function duplicatePlaythroughRecord(dir: string, id: string): Playthrough | null {
+export function duplicatePlaythroughRecord(
+  dir: string,
+  id: string,
+): Playthrough | null {
   const original = getPlaythroughRecord(dir, id);
   if (!original) return null;
 
@@ -932,7 +1187,7 @@ export function branchPlaythroughRecord(
   id: string,
   messageId: string,
   branchName?: string,
-  asStandalone = false
+  asStandalone = false,
 ): Playthrough | null {
   const original = getPlaythroughRecord(dir, id);
   if (!original) return null;
@@ -955,7 +1210,9 @@ export function branchPlaythroughRecord(
   // If there are dropped messages, the snapshot of the first assistant message
   // in the dropped block holds the pre-turn world state right after the kept block.
   const nextAssistant = droppedMessages.find((m) => m.role === "assistant");
-  let snapshotToRestore = nextAssistant ? clone.snapshots?.[nextAssistant.id] : undefined;
+  let snapshotToRestore = nextAssistant
+    ? clone.snapshots?.[nextAssistant.id]
+    : undefined;
 
   // Fallback: if that exact checkpoint is missing (dropped by an earlier
   // truncate/retry, or a legacy record), walk back through every snapshot to the
@@ -977,7 +1234,10 @@ export function branchPlaythroughRecord(
 
   if (snapshotToRestore) {
     restoreSnapshotState(clone, snapshotToRestore);
-  } else if (droppedMessages.length === 0 && typeof targetMessage.turn === "number") {
+  } else if (
+    droppedMessages.length === 0 &&
+    typeof targetMessage.turn === "number"
+  ) {
     // Nothing was dropped — the live world state already matches the branch
     // point; only the turn counter needs to reflect it.
     clone.turn = targetMessage.turn;
@@ -994,7 +1254,8 @@ export function branchPlaythroughRecord(
   clone.rootPlaythroughId = original.rootPlaythroughId ?? original.id;
   clone.isTimelineBranch = !asStandalone;
   clone.createdFromTurn = targetMessage.turn ?? clone.turn;
-  clone.name = branchName?.trim() || `${original.name} (Branch T${clone.createdFromTurn})`;
+  clone.name =
+    branchName?.trim() || `${original.name} (Branch T${clone.createdFromTurn})`;
   clone.messages = keptMessages;
 
   // Memory events/layers are restored by restoreSnapshotState (which now copies
@@ -1021,7 +1282,9 @@ export function branchPlaythroughRecord(
   // Drop snapshots belonging to messages that no longer exist in this branch
   const liveMessageIds = new Set(clone.messages.map((m) => m.id));
   clone.snapshots = Object.fromEntries(
-    Object.entries(clone.snapshots ?? {}).filter(([msgId]) => liveMessageIds.has(msgId))
+    Object.entries(clone.snapshots ?? {}).filter(([msgId]) =>
+      liveMessageIds.has(msgId),
+    ),
   );
 
   const now = new Date().toISOString();
@@ -1032,16 +1295,26 @@ export function branchPlaythroughRecord(
   return clone;
 }
 
-export function listPlaythroughTimelines(dir: string, id: string): Playthrough[] {
+export function listPlaythroughTimelines(
+  dir: string,
+  id: string,
+): Playthrough[] {
   const current = getPlaythroughRecord(dir, id);
   if (!current) return [];
   const rootId = current.rootPlaythroughId ?? current.id;
 
-  const all = listPlaythroughRecords(dir, { includeTimelineBranches: true }).playthroughs;
-  return all.filter((p) => (p.rootPlaythroughId ?? p.id) === rootId || p.id === rootId);
+  const all = listPlaythroughRecords(dir, {
+    includeTimelineBranches: true,
+  }).playthroughs;
+  return all.filter(
+    (p) => (p.rootPlaythroughId ?? p.id) === rootId || p.id === rootId,
+  );
 }
 
-export function promotePlaythroughBranchRecord(dir: string, id: string): Playthrough | null {
+export function promotePlaythroughBranchRecord(
+  dir: string,
+  id: string,
+): Playthrough | null {
   const playthrough = getPlaythroughRecord(dir, id);
   if (!playthrough) return null;
   playthrough.isTimelineBranch = false;
@@ -1091,14 +1364,18 @@ function readAllPlaythroughRecords(dir: string): PlaythroughRecordList {
       // Best-effort name from the raw file BEFORE quarantine
       let name = id;
       try {
-        const raw = JSON.parse(readFileSync(path, "utf8")) as { name?: unknown };
+        const raw = JSON.parse(readFileSync(path, "utf8")) as {
+          name?: unknown;
+        };
         if (raw && typeof raw.name === "string") name = raw.name;
       } catch {
         // unparseable — name stays as the filename
       }
       const backupPath = quarantineFile(path, reason);
       failures.push({ id, name, reason, backupPath: backupPath ?? undefined });
-      console.error(`[store] playthrough ${id} failed to load (${reason})${backupPath ? ` — quarantined to ${backupPath}` : ""}`);
+      console.error(
+        `[store] playthrough ${id} failed to load (${reason})${backupPath ? ` — quarantined to ${backupPath}` : ""}`,
+      );
     }
   }
   playthroughs.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -1106,8 +1383,13 @@ function readAllPlaythroughRecords(dir: string): PlaythroughRecordList {
   return playthroughRecordsCache;
 }
 
-function filterBranches(playthroughs: Playthrough[], includeTimelineBranches: boolean): Playthrough[] {
-  return includeTimelineBranches ? playthroughs : playthroughs.filter((p) => !p.isTimelineBranch);
+function filterBranches(
+  playthroughs: Playthrough[],
+  includeTimelineBranches: boolean,
+): Playthrough[] {
+  return includeTimelineBranches
+    ? playthroughs
+    : playthroughs.filter((p) => !p.isTimelineBranch);
 }
 
 export type PlaythroughSummaryOptions = {
@@ -1128,7 +1410,7 @@ export type PlaythroughSummaryOptions = {
  *  `Partial<Playthrough>` so adding a field to the card without adding it here fails to compile. */
 export function toPlaythroughSummary(
   p: Playthrough,
-  options: PlaythroughSummaryOptions = {}
+  options: PlaythroughSummaryOptions = {},
 ): PlaythroughSummary {
   const visible = p.messages.filter((m) => !m.hidden);
   return {
@@ -1140,7 +1422,7 @@ export function toPlaythroughSummary(
     lastMessagePreview: visible.slice(-1)[0]?.content.slice(0, 120) ?? "",
     isTimelineBranch: p.isTimelineBranch === true,
     cover: options.resolveCover?.(p) ?? null,
-    updatedAt: p.updatedAt
+    updatedAt: p.updatedAt,
   };
 }
 
@@ -1157,17 +1439,20 @@ export type PlaythroughListOptions = {
 
 export function listPlaythroughSummaries(
   dir: string,
-  options?: PlaythroughListOptions & PlaythroughSummaryOptions
+  options?: PlaythroughListOptions & PlaythroughSummaryOptions,
 ): PlaythroughListResponse {
   const { playthroughs, failures } = readAllPlaythroughRecords(dir);
-  let summaries = filterBranches(playthroughs, options?.includeTimelineBranches === true).map((p) =>
-    toPlaythroughSummary(p, options)
-  );
+  let summaries = filterBranches(
+    playthroughs,
+    options?.includeTimelineBranches === true,
+  ).map((p) => toPlaythroughSummary(p, options));
 
   if (options?.search) {
     const needle = options.search.trim().toLowerCase();
     if (needle) {
-      summaries = summaries.filter((p) => p.name.toLowerCase().includes(needle));
+      summaries = summaries.filter((p) =>
+        p.name.toLowerCase().includes(needle),
+      );
     }
   }
 
@@ -1200,12 +1485,17 @@ export function listPlaythroughSummaries(
  *  cards must use `listPlaythroughSummaries` instead. */
 export function listPlaythroughRecords(
   dir: string,
-  options?: { includeTimelineBranches?: boolean }
+  options?: { includeTimelineBranches?: boolean },
 ): PlaythroughRecordList {
   const { playthroughs, failures } = readAllPlaythroughRecords(dir);
-  return { playthroughs: filterBranches(playthroughs, options?.includeTimelineBranches === true), failures };
+  return {
+    playthroughs: filterBranches(
+      playthroughs,
+      options?.includeTimelineBranches === true,
+    ),
+    failures,
+  };
 }
-
 
 // ── Lorebook store ──
 
@@ -1219,10 +1509,10 @@ export function listLorebooks(dir?: string): LorebookSummary[] {
   const dirPath = dir ?? LOREBOOKS_DIR;
   ensureStoreDir(dirPath);
   const files = readdirSync(dirPath, { withFileTypes: true })
-    .filter(f => f.isFile() && f.name.endsWith(".json"))
+    .filter((f) => f.isFile() && f.name.endsWith(".json"))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  return files.map(f => {
+  return files.map((f) => {
     const id = f.name.replace(/\.json$/i, "");
     try {
       const raw = readFileSync(join(dirPath, f.name), "utf8");
@@ -1255,7 +1545,11 @@ export function getLorebook(id: string, dir?: string): LorebookFile | null {
   }
 }
 
-export function saveLorebook(id: string, data: LorebookFile, dir?: string): void {
+export function saveLorebook(
+  id: string,
+  data: LorebookFile,
+  dir?: string,
+): void {
   const dirPath = dir ?? LOREBOOKS_DIR;
   ensureStoreDir(dirPath);
   const path = dir ? join(dir, `${id}.json`) : lorebookPath(id);

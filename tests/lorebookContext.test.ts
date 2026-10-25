@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { LorebookEntry } from "../src/schemas";
-import { buildLorebookContextFromEntries, lorebookBudgetChars } from "../src/server/lorebookContext";
+import {
+  buildLorebookContextFromEntries,
+  lorebookBudgetChars,
+} from "../src/server/lorebookContext";
 
-const entry = (uid: number, opts: { key?: string[]; constant?: boolean; content: string }): LorebookEntry => ({
+const entry = (
+  uid: number,
+  opts: { key?: string[]; constant?: boolean; content: string },
+): LorebookEntry => ({
   uid,
   key: opts.key ?? [],
   keysecondary: [],
@@ -28,7 +34,7 @@ const entry = (uid: number, opts: { key?: string[]; constant?: boolean; content:
   groupWeight: 100,
   preventRecursion: false,
   excludeRecursion: false,
-  delayUntilRecursion: false
+  delayUntilRecursion: false,
 });
 
 describe("lorebookContext", () => {
@@ -40,9 +46,13 @@ describe("lorebookContext", () => {
     const entries = [
       entry(1, { constant: true, content: "The realm is old." }),
       entry(2, { key: ["salt"], content: "Saltmere mines salt." }),
-      entry(3, { key: ["fog"], content: "The fog is deep." })
+      entry(3, { key: ["fog"], content: "The fog is deep." }),
     ];
-    const out = buildLorebookContextFromEntries(entries, "a coastal town of salt flats", 10_000);
+    const out = buildLorebookContextFromEntries(
+      entries,
+      "a coastal town of salt flats",
+      10_000,
+    );
     expect(out).toContain("The realm is old.");
     expect(out).toContain("Saltmere mines salt.");
     expect(out).not.toContain("The fog is deep.");
@@ -51,14 +61,27 @@ describe("lorebookContext", () => {
 
   it("respects a tight budget by truncating entries", () => {
     const entries = [
-      entry(1, { constant: true, content: "A constant entry that is fairly long." }),
-      entry(2, { key: ["salt"], content: "Saltmere mines salt." })
+      entry(1, {
+        constant: true,
+        content: "A constant entry that is fairly long.",
+      }),
+      entry(2, { key: ["salt"], content: "Saltmere mines salt." }),
     ];
-    const out = buildLorebookContextFromEntries(entries, "town of salt flats", 10);
+    const out = buildLorebookContextFromEntries(
+      entries,
+      "town of salt flats",
+      10,
+    );
     expect(out).toBe("");
   });
 
   it("returns empty string when nothing matches", () => {
-    expect(buildLorebookContextFromEntries([entry(9, { key: ["fog"], content: "deep" })], "sunny plains", 1000)).toBe("");
+    expect(
+      buildLorebookContextFromEntries(
+        [entry(9, { key: ["fog"], content: "deep" })],
+        "sunny plains",
+        1000,
+      ),
+    ).toBe("");
   });
 });

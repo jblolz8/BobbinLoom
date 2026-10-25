@@ -10,7 +10,12 @@ export type Persona = {
   isDefault: boolean;
 };
 
-export type PersonaUpdate = Partial<Pick<Persona, "name" | "description" | "bodyType" | "appearance" | "initialClothing">>;
+export type PersonaUpdate = Partial<
+  Pick<
+    Persona,
+    "name" | "description" | "bodyType" | "appearance" | "initialClothing"
+  >
+>;
 
 export function listPersonas(): Promise<Persona[]> {
   return request<Persona[]>("/api/personas");
@@ -20,17 +25,23 @@ export function getPersona(id: string): Promise<Persona> {
   return request<Persona>(`/api/personas/${id}`);
 }
 
-export function createPersona(name: string, cloneFromId?: string): Promise<Persona> {
+export function createPersona(
+  name: string,
+  cloneFromId?: string,
+): Promise<Persona> {
   return request<Persona>("/api/personas", {
     method: "POST",
-    body: JSON.stringify({ name, cloneFromId })
+    body: JSON.stringify({ name, cloneFromId }),
   });
 }
 
-export function updatePersona(id: string, updates: PersonaUpdate): Promise<Persona> {
+export function updatePersona(
+  id: string,
+  updates: PersonaUpdate,
+): Promise<Persona> {
   return request<Persona>(`/api/personas/${id}`, {
     method: "PUT",
-    body: JSON.stringify(updates)
+    body: JSON.stringify(updates),
   });
 }
 
@@ -39,5 +50,7 @@ export function deletePersona(id: string): Promise<void> {
 }
 
 export function setDefaultPersona(id: string): Promise<Persona> {
-  return request<Persona>(`/api/personas/${id}/set-default`, { method: "POST" });
+  return request<Persona>(`/api/personas/${id}/set-default`, {
+    method: "POST",
+  });
 }

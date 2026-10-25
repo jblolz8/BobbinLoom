@@ -69,13 +69,24 @@ export function SideNav({
   open = false,
   showScrim = false,
   onScrimClick,
-  emptyLabel = "Nothing to show yet."
+  emptyLabel = "Nothing to show yet.",
 }: SideNavProps) {
-  const className = ["side-nav", hidden ? "is-hidden" : "", open ? "is-open" : ""].filter(Boolean).join(" ");
+  const className = [
+    "side-nav",
+    hidden ? "is-hidden" : "",
+    open ? "is-open" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <>
-      <nav className={className} id={id} aria-label={ariaLabel} aria-hidden={hidden}>
+      <nav
+        className={className}
+        id={id}
+        aria-label={ariaLabel}
+        aria-hidden={hidden}
+      >
         {title || headerExtra ? (
           <div className="side-nav-header">
             {title ? <span className="side-nav-title">{title}</span> : null}
@@ -98,7 +109,9 @@ export function SideNav({
                   >
                     {item.meta ? (
                       <span className="side-nav-item-row">
-                        <span className="side-nav-item-label">{item.label}</span>
+                        <span className="side-nav-item-label">
+                          {item.label}
+                        </span>
                         <span className="side-nav-item-meta">{item.meta}</span>
                       </span>
                     ) : (
@@ -115,7 +128,9 @@ export function SideNav({
         )}
       </nav>
 
-      {showScrim ? <div className="side-nav-scrim" onClick={onScrimClick} /> : null}
+      {showScrim ? (
+        <div className="side-nav-scrim" onClick={onScrimClick} />
+      ) : null}
     </>
   );
 }

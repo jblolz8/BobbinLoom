@@ -83,9 +83,25 @@ describe("GET /api/docs", () => {
   it("lists every page ordered by front-matter `order`, not by filename", async () => {
     const res = await app.inject({ method: "GET", url: "/api/docs" });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { pages: Array<{ slug: string; title: string; section: string; order: number }> };
-    expect(body.pages.map((p) => p.slug)).toEqual(["index", "playthroughs", "image-generation", "orphan"]);
-    expect(body.pages[0]).toMatchObject({ title: "BobbinLoom", section: "Overview", order: 1 });
+    const body = res.json() as {
+      pages: Array<{
+        slug: string;
+        title: string;
+        section: string;
+        order: number;
+      }>;
+    };
+    expect(body.pages.map((p) => p.slug)).toEqual([
+      "index",
+      "playthroughs",
+      "image-generation",
+      "orphan",
+    ]);
+    expect(body.pages[0]).toMatchObject({
+      title: "BobbinLoom",
+      section: "Overview",
+      order: 1,
+    });
   });
 
   it("does not ship page bodies in the list", async () => {
@@ -96,7 +112,14 @@ describe("GET /api/docs", () => {
 
   it("falls back to the page's H1 when there is no front-matter", async () => {
     const res = await app.inject({ method: "GET", url: "/api/docs" });
-    const body = res.json() as { pages: Array<{ slug: string; title: string; section: string; order: number | null }> };
+    const body = res.json() as {
+      pages: Array<{
+        slug: string;
+        title: string;
+        section: string;
+        order: number | null;
+      }>;
+    };
     const orphan = body.pages.find((p) => p.slug === "orphan");
     expect(orphan).toMatchObject({ title: "Orphan page", section: "" });
     expect(orphan?.order).toBeNull();
@@ -104,7 +127,9 @@ describe("GET /api/docs", () => {
 
   it("answers an empty list (never an error) when the docs directory is missing", async () => {
     const lonely = Fastify();
-    await lonely.register(docsRoutes, { docsDir: join(emptyDir, "does-not-exist") });
+    await lonely.register(docsRoutes, {
+      docsDir: join(emptyDir, "does-not-exist"),
+    });
     await lonely.ready();
     const res = await lonely.inject({ method: "GET", url: "/api/docs" });
     expect(res.statusCode).toBe(200);
@@ -115,9 +140,16 @@ describe("GET /api/docs", () => {
 
 describe("GET /api/docs/:slug", () => {
   it("returns the page body with the front-matter stripped", async () => {
-    const res = await app.inject({ method: "GET", url: "/api/docs/playthroughs" });
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/docs/playthroughs",
+    });
     expect(res.statusCode).toBe(200);
-    const body = res.json() as { slug: string; title: string; markdown: string };
+    const body = res.json() as {
+      slug: string;
+      title: string;
+      markdown: string;
+    };
     expect(body.title).toBe("Playthroughs");
     expect(body.markdown.startsWith("# Playthroughs")).toBe(true);
     expect(body.markdown).not.toContain("section: Playing");
@@ -125,7 +157,10 @@ describe("GET /api/docs/:slug", () => {
   });
 
   it("keeps fenced content byte-for-byte", async () => {
-    const res = await app.inject({ method: "GET", url: "/api/docs/image-generation" });
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/docs/image-generation",
+    });
     const body = res.json() as { markdown: string };
     expect(body.markdown).toContain('{"model":"x","max_tokens":12000}');
   });
@@ -137,7 +172,12 @@ describe("GET /api/docs/:slug", () => {
   });
 
   it("refuses traversal instead of reading outside the docs directory", async () => {
-    for (const url of ["/api/docs/..%2Fbl-docs-secret", "/api/docs/../bl-docs-secret", "/api/docs/..%2f..%2fpackage", "/api/docs/%2e%2e%2fpackage"]) {
+    for (const url of [
+      "/api/docs/..%2Fbl-docs-secret",
+      "/api/docs/../bl-docs-secret",
+      "/api/docs/..%2f..%2fpackage",
+      "/api/docs/%2e%2e%2fpackage",
+    ]) {
       const res = await app.inject({ method: "GET", url });
       expect(res.statusCode, url).toBeGreaterThanOrEqual(400);
       expect(res.body, url).not.toContain(SECRET_MARKER);
@@ -169,7 +209,7 @@ describe("GET /api/docs/search", () => {
     "```ts",
     "const memoryEvents = [];",
     "```",
-    ""
+    "",
   ].join("\n");
 
   /** Matches on title only: the word never appears in the body. */
@@ -183,7 +223,7 @@ describe("GET /api/docs/search", () => {
     "# Vaults",
     "",
     "Nothing relevant here.",
-    ""
+    "",
   ].join("\n");
 
   beforeAll(async () => {
@@ -195,7 +235,12 @@ describe("GET /api/docs/search", () => {
     await searchApp.ready();
   });
 
-  const search = async (query: string) => (await searchApp.inject({ url: `/api/docs/search?q=${encodeURIComponent(query)}` })).json();
+  const search = async (query: string) =>
+    (
+      await searchApp.inject({
+        url: `/api/docs/search?q=${encodeURIComponent(query)}`,
+      })
+    ).json();
 
   it("returns per-page counts, capped hits and a total", async () => {
     const body = await search("memory");
@@ -210,9 +255,15 @@ describe("GET /api/docs/search", () => {
 
   it("attaches anchors that are the ids the renderer writes", async () => {
     const body = await search("memory");
-    expect(body.pages[0].hits[0].anchor).toBe(slugifyHeading("Memory rotation"));
+    expect(body.pages[0].hits[0].anchor).toBe(
+      slugifyHeading("Memory rotation"),
+    );
     // cross-layer guard: the anchor must exist as an id in the rendered page
-    expect(renderDocMarkdown(MEMORY_PAGE).includes(`id="${body.pages[0].hits[0].anchor}"`)).toBe(true);
+    expect(
+      renderDocMarkdown(MEMORY_PAGE).includes(
+        `id="${body.pages[0].hits[0].anchor}"`,
+      ),
+    ).toBe(true);
     expect(body.pages[0].hits[2].anchor).toBe(slugifyHeading("Rotation rules"));
   });
 
@@ -226,7 +277,12 @@ describe("GET /api/docs/search", () => {
     const body = await search("lorebook");
     expect(body.total).toBe(0);
     expect(body.pages).toHaveLength(1);
-    expect(body.pages[0]).toMatchObject({ slug: "lorebooks", count: 0, titleMatch: true, hits: [] });
+    expect(body.pages[0]).toMatchObject({
+      slug: "lorebooks",
+      count: 0,
+      titleMatch: true,
+      hits: [],
+    });
   });
 
   it("treats a query shorter than two characters as empty", async () => {

@@ -58,7 +58,11 @@ describe("countOccurrences", () => {
 
 describe("snippetAround", () => {
   it("keeps the hit, collapses whitespace and marks clipped edges", () => {
-    const snippet = snippetAround(body, body.indexOf("second memory"), "second memory".length);
+    const snippet = snippetAround(
+      body,
+      body.indexOf("second memory"),
+      "second memory".length,
+    );
     expect(snippet).toContain("second memory");
     expect(snippet).not.toMatch(/\s{2,}/);
     expect(snippet.startsWith("…")).toBe(true);
@@ -69,7 +73,9 @@ describe("snippetAround", () => {
   });
 
   it("never leaves a raw newline in a snippet", () => {
-    expect(snippetAround(body, body.indexOf("The engine"), 10)).not.toContain("\n");
+    expect(snippetAround(body, body.indexOf("The engine"), 10)).not.toContain(
+      "\n",
+    );
   });
 });
 
@@ -90,12 +96,22 @@ describe("searchPage", () => {
   });
 
   it("has no anchor before the first heading", () => {
-    const result = searchPage(page({ body: "preamble memory here\n\n# Later\n" }), "memory");
+    const result = searchPage(
+      page({ body: "preamble memory here\n\n# Later\n" }),
+      "memory",
+    );
     expect(result.hits[0].anchor).toBeNull();
   });
 
   it("reports a title-only match with a zero count", () => {
-    const result = searchPage(page({ title: "Lorebook vault", section: "World", body: "# Vaults\n\nNothing here.\n" }), "lorebook");
+    const result = searchPage(
+      page({
+        title: "Lorebook vault",
+        section: "World",
+        body: "# Vaults\n\nNothing here.\n",
+      }),
+      "lorebook",
+    );
     expect(result.count).toBe(0);
     expect(result.titleMatch).toBe(true);
     expect(result.hits).toEqual([]);

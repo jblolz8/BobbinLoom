@@ -1,12 +1,15 @@
 :root {
   color-scheme: dark;
-  --font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-sans:
+    Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-display: var(--font-sans);
   font-family: var(--font-sans);
   /* The mono stack for code surfaces, so a NEW one reads a token instead of
      re-spelling a family list. (Older rules still carry their own stack inline;
      folding them in would change their fallback order, so that is its own pass.) */
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
 
   /* ── 0. Shape & Radius Tokens ── */
   --radius-xs: 4px;
@@ -36,9 +39,9 @@
 
   /* ── 4. Story & Roleplay Markdown ── */
   --story-text: #e4eaf2;
-  --story-quote: #e5be73;             /* Spoken dialogue ("...") */
-  --story-italic: #b4c3d8;            /* Italic prose: actions and internal thoughts (*...*) */
-  --story-emphasis: #bcd8ff;          /* Bold / action (**...**) */
+  --story-quote: #e5be73; /* Spoken dialogue ("...") */
+  --story-italic: #b4c3d8; /* Italic prose: actions and internal thoughts (*...*) */
+  --story-emphasis: #bcd8ff; /* Bold / action (**...**) */
   --story-blockquote-border: #e5be73;
   --story-blockquote-bg: rgba(229, 190, 115, 0.06);
   --story-blockquote-text: #b4c3d8;
@@ -61,7 +64,11 @@
   --code-block-header: var(--bg-panel);
   --code-block-border: var(--border-subtle);
   --code-lang-label: var(--text-muted);
-  --code-inline-bg: color-mix(in srgb, var(--bg-surface-elevated) 78%, transparent);
+  --code-inline-bg: color-mix(
+    in srgb,
+    var(--bg-surface-elevated) 78%,
+    transparent
+  );
   --code-inline-border: var(--border-main);
   --code-inline-text: var(--accent-highlight);
 
@@ -212,9 +219,9 @@
   --text-disabled: #94a3b8;
 
   --story-text: #1e293b;
-  --story-quote: #b45309;             /* Inverted warm amber/gold for high contrast */
-  --story-italic: #4a5d78;            /* Muted steel-blue slate for italic prose */
-  --story-emphasis: #163f73;          /* Deep sapphire-navy ink for bold emphasis */
+  --story-quote: #b45309; /* Inverted warm amber/gold for high contrast */
+  --story-italic: #4a5d78; /* Muted steel-blue slate for italic prose */
+  --story-emphasis: #163f73; /* Deep sapphire-navy ink for bold emphasis */
   --story-blockquote-border: #d97706;
   --story-blockquote-bg: rgba(245, 158, 11, 0.08);
   --story-blockquote-text: #334155;
@@ -351,7 +358,9 @@ body {
   margin: 0;
   background: var(--bg-app);
   color: var(--text-primary);
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
 
 svg {
@@ -373,7 +382,10 @@ button {
   border-radius: 8px;
   padding: 0.55rem 0.8rem;
   cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
 /* The pre-`.base-btn` raw-button theme. Its specificity (one element, one
@@ -381,7 +393,15 @@ button {
    so every base button must be excluded here or its own hover is silently
    overridden — which is what painted the overlay controls a theme surface
    colour under a white glyph. Each `.base-btn--*` declares its own hover. */
-button:hover:not(:disabled):not(.base-btn):not(.base-tab):not(.base-card):not(.base-header__logo-btn):not(.primary-btn):not(.danger):not(.ai-brainstorm-toggle-btn):not(.suggest-tags-ai-btn):not(.auto-detect-action):not(.crop-auto-detect-btn):not(.tag-regenerate-btn):not(.danger-action):not(.warning-action):not(.import-btn):not(.active):not(.preset-card) {
+button:hover:not(:disabled):not(.base-btn):not(.base-tab):not(.base-card):not(
+    .base-header__logo-btn
+  ):not(.primary-btn):not(.danger):not(.ai-brainstorm-toggle-btn):not(
+    .suggest-tags-ai-btn
+  ):not(.auto-detect-action):not(.crop-auto-detect-btn):not(
+    .tag-regenerate-btn
+  ):not(.danger-action):not(.warning-action):not(.import-btn):not(.active):not(
+    .preset-card
+  ) {
   background: var(--bg-surface-hover);
   border-color: var(--border-focus);
 }
@@ -450,4 +470,3 @@ textarea {
   white-space: pre-wrap;
   word-break: break-word;
 }
-

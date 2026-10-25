@@ -21,12 +21,16 @@ const FILE_RE = /^[a-f0-9]{64}\.(png|jpg|webp)$/;
 const EXT_BY_MIME: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
-  "image/webp": "webp"
+  "image/webp": "webp",
 };
 
 /** Writes bytes under their sha256. Identical bytes (a re-roll that reproduces
  *  the same image, or a branch copying a message) reuse one file on disk. */
-export function saveImageBytes(bytes: Buffer, mime: string, dir: string = IMAGES_DIR): { file: string; created: boolean } {
+export function saveImageBytes(
+  bytes: Buffer,
+  mime: string,
+  dir: string = IMAGES_DIR,
+): { file: string; created: boolean } {
   mkdirSync(dir, { recursive: true });
   const ext = EXT_BY_MIME[mime] ?? "png";
   const file = `${createHash("sha256").update(bytes).digest("hex")}.${ext}`;
@@ -40,7 +44,10 @@ export function saveImageBytes(bytes: Buffer, mime: string, dir: string = IMAGES
  *  file is missing. EVERY read path goes through this (the serve route, the
  *  per-image delete) — the regex runs before any filesystem call, so a
  *  traversal attempt can never reach the disk. */
-export function imageFilePath(file: string, dir: string = IMAGES_DIR): string | null {
+export function imageFilePath(
+  file: string,
+  dir: string = IMAGES_DIR,
+): string | null {
   if (!FILE_RE.test(file)) return null;
   const path = join(dir, file);
   return existsSync(path) ? path : null;
@@ -55,7 +62,9 @@ export function mimeForFile(file: string): string {
  *  playthroughs. A cover reference is easy to forget and invisible when it regresses: the
  *  sweep then deletes the bytes behind a deliberate user choice, and the card quietly falls
  *  back to its next source. Any new kind of stored reference to `data/images/` belongs here. */
-export function collectReferencedImages(playthroughs: Playthrough[]): Set<string> {
+export function collectReferencedImages(
+  playthroughs: Playthrough[],
+): Set<string> {
   const refs = new Set<string>();
   for (const playthrough of playthroughs) {
     for (const message of playthrough.messages ?? []) {
@@ -73,7 +82,10 @@ export function collectReferencedImages(playthroughs: Playthrough[]): Set<string
 
 /** Deletes unreferenced files; returns the count removed. Files that are not
  *  hash-named are left alone — the store does not own that namespace. */
-export function sweepOrphanImages(playthroughs: Playthrough[], dir: string = IMAGES_DIR): number {
+export function sweepOrphanImages(
+  playthroughs: Playthrough[],
+  dir: string = IMAGES_DIR,
+): number {
   if (!existsSync(dir)) return 0;
   const referenced = collectReferencedImages(playthroughs);
   let removed = 0;
@@ -93,7 +105,12 @@ export function sweepOrphanImages(playthroughs: Playthrough[], dir: string = IMA
  *  the list with `includeTimelineBranches` — a timeline branch is excluded from
  *  the default list, so a sweep that skipped branches would delete a surviving
  *  branch's images the moment its parent was deleted. */
-export function sweepOrphansInDataDir(dataDir: string, imagesDir: string = IMAGES_DIR): number {
-  const { playthroughs } = listPlaythroughRecords(dataDir, { includeTimelineBranches: true });
+export function sweepOrphansInDataDir(
+  dataDir: string,
+  imagesDir: string = IMAGES_DIR,
+): number {
+  const { playthroughs } = listPlaythroughRecords(dataDir, {
+    includeTimelineBranches: true,
+  });
   return sweepOrphanImages(playthroughs, imagesDir);
 }

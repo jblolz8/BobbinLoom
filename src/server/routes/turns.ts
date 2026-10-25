@@ -1,10 +1,22 @@
 import type { FastifyPluginAsync, FastifyPluginOptions } from "fastify";
 import { z } from "zod";
 import { getPlaythroughRecord, updatePlaythroughRecord } from "../store";
-import { editChatMessage, executeTurn, retryAssistantTurn, revertAction, truncateChat, type TurnExecution } from "../turnActions";
+import {
+  editChatMessage,
+  executeTurn,
+  retryAssistantTurn,
+  revertAction,
+  truncateChat,
+  type TurnExecution,
+} from "../turnActions";
 import type { RevertAnchor } from "../../engine/chapterRevert";
 import { loadPromptConfig } from "../promptConfigStore";
-import { abortOnClientDisconnect, dataDir as defaultDataDir, providerManager, settingsDir } from "./helpers";
+import {
+  abortOnClientDisconnect,
+  dataDir as defaultDataDir,
+  providerManager,
+  settingsDir,
+} from "./helpers";
 
 const TurnBody = z.object({
   playthroughId: z.string(),
@@ -13,20 +25,20 @@ const TurnBody = z.object({
   /** Keep the synthetic user message out of the visible chat (used by the
    *  client's "Continue" flow, which sends a hidden continuation instruction
    *  so the model replies to the player's last visible message). */
-  hideUserMessage: z.boolean().default(false)
+  hideUserMessage: z.boolean().default(false),
 });
 
 const RetryBody = z.object({
   messageId: z.string(),
-  suggestedChoicesEnabled: z.boolean().default(true)
+  suggestedChoicesEnabled: z.boolean().default(true),
 });
 
 const EditMessageBody = z.object({
-  content: z.string()
+  content: z.string(),
 });
 
 const TruncateBody = z.object({
-  messageId: z.string()
+  messageId: z.string(),
 });
 
 /** Where a revert starts. The union is deliberate: "revert to this chapter" and "revert from this
@@ -36,8 +48,8 @@ const TruncateBody = z.object({
 export const RevertBody = z.object({
   anchor: z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("chapter"), id: z.string() }),
-    z.object({ kind: z.literal("message"), id: z.string() })
-  ])
+    z.object({ kind: z.literal("message"), id: z.string() }),
+  ]),
 });
 
 export type TurnRoutesOptions = FastifyPluginOptions & {
@@ -46,14 +58,18 @@ export type TurnRoutesOptions = FastifyPluginOptions & {
   dataDir?: string;
 };
 
-export const turnRoutes: FastifyPluginAsync<TurnRoutesOptions> = async (app, options = {}) => {
+export const turnRoutes: FastifyPluginAsync<TurnRoutesOptions> = async (
+  app,
+  options = {},
+) => {
   const dataDir = options.dataDir ?? defaultDataDir;
 
   app.post("/api/turn", async (request, reply) => {
     const body = TurnBody.parse(request.body);
     const playthrough = getPlaythroughRecord(dataDir, body.playthroughId);
 
-    if (!playthrough) return reply.code(404).send({ error: "Playthrough not found" });
+    if (!playthrough)
+      return reply.code(404).send({ error: "Playthrough not found" });
 
     const controller = abortOnClientDisconnect(reply);
 
@@ -68,9 +84,11 @@ export const turnRoutes: FastifyPluginAsync<TurnRoutesOptions> = async (app, opt
         {
           signal: controller.signal,
           hideUserMessage: body.hideUserMessage,
-          characterProvider: providerManager.getProvider(providerManager.characterTextProviderId() ?? undefined)
+          characterProvider: providerManager.getProvider(
+            providerManager.characterTextProviderId() ?? undefined,
+          ),
         },
-        loadPromptConfig(settingsDir).promptConfig
+        loadPromptConfig(settingsDir).promptConfig,
       );
     } catch (error) {
       if (controller.signal.aborted) return;
@@ -91,7 +109,7 @@ export const turnRoutes: FastifyPluginAsync<TurnRoutesOptions> = async (app, opt
       tokenUsage: result.tokenUsage,
       rawInput: result.rawInput,
       rawOutput: result.rawOutput,
-      finishReason: result.finishReason
+      finishReason: result.finishReason,
     };
   });
 
@@ -110,12 +128,15 @@ export const turnRoutes: FastifyPluginAsync<TurnRoutesOptions> = async (app, opt
       controller.signal,
       loadPromptConfig(settingsDir).promptConfig,
       undefined,
-      providerManager.getProvider(providerManager.characterTextProviderId() ?? undefined)
+      providerManager.getProvider(
+        providerManager.characterTextProviderId() ?? undefined,
+      ),
     );
 
     if (controller.signal.aborted) return;
 
-    if (!result.ok) return reply.code(result.status).send({ error: result.error });
+    if (!result.ok)
+      return reply.code(result.status).send({ error: result.error });
 
     return {
       narrative: result.narrative,
@@ -127,19 +148,30 @@ export const turnRoutes: FastifyPluginAsync<TurnRoutesOptions> = async (app, opt
       tokenUsage: result.tokenUsage,
       rawInput: result.rawInput,
       rawOutput: result.rawOutput,
-      finishReason: result.finishReason
+      finishReason: result.finishReason,
     };
   });
 
-  app.put("/api/playthroughs/:id/messages/:messageId", async (request, reply) => {
-    const params = z.object({ id: z.string(), messageId: z.string() }).parse(request.params);
-    const body = EditMessageBody.parse(request.body);
+  app.put(
+    "/api/playthroughs/:id/messages/:messageId",
+    async (request, reply) => {
+      const params = z
+        .object({ id: z.string(), messageId: z.string() })
+        .parse(request.params);
+      const body = EditMessageBody.parse(request.body);
 
-    const result = editChatMessage(dataDir, params.id, params.messageId, body.content);
+      const result = editChatMessage(
+        dataDir,
+        params.id,
+        params.messageId,
+        body.content,
+      );
 
-    if (!result.ok) return reply.code(result.status).send({ error: result.error });
-    return result.state;
-  });
+      if (!result.ok)
+        return reply.code(result.status).send({ error: result.error });
+      return result.state;
+    },
+  );
 
   app.post("/api/playthroughs/:id/truncate", async (request, reply) => {
     const params = z.object({ id: z.string() }).parse(request.params);
@@ -147,7 +179,8 @@ export const turnRoutes: FastifyPluginAsync<TurnRoutesOptions> = async (app, opt
 
     const result = truncateChat(dataDir, params.id, body.messageId);
 
-    if (!result.ok) return reply.code(result.status).send({ error: result.error });
+    if (!result.ok)
+      return reply.code(result.status).send({ error: result.error });
     return result.state;
   });
 
@@ -157,18 +190,25 @@ export const turnRoutes: FastifyPluginAsync<TurnRoutesOptions> = async (app, opt
     const params = z.object({ id: z.string() }).parse(request.params);
     const parsedBody = RevertBody.safeParse(request.body ?? {});
     if (!parsedBody.success) {
-      const reasons = parsedBody.error.issues.map((issue) => issue.message).join("; ");
-      return reply.code(400).send({ error: `Invalid revert request: ${reasons}` });
+      const reasons = parsedBody.error.issues
+        .map((issue) => issue.message)
+        .join("; ");
+      return reply
+        .code(400)
+        .send({ error: `Invalid revert request: ${reasons}` });
     }
 
     const { kind, id } = parsedBody.data.anchor;
     // The wire shape is one generic `id`; the engine's anchor is two distinct fields, so the
     // discriminator is mapped here and nowhere else.
     const anchor: RevertAnchor =
-      kind === "chapter" ? { kind: "chapter", chapterId: id } : { kind: "message", messageId: id };
+      kind === "chapter"
+        ? { kind: "chapter", chapterId: id }
+        : { kind: "message", messageId: id };
     const result = revertAction(dataDir, params.id, anchor);
 
-    if (!result.ok) return reply.code(result.status).send({ error: result.error });
+    if (!result.ok)
+      return reply.code(result.status).send({ error: result.error });
     return result.state;
   });
-}
+};

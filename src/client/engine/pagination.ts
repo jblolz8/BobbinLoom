@@ -54,7 +54,11 @@ export function getPageNumbers(current: number, total: number): number[] {
   return [1, -1, current - 1, current, current + 1, -1, total];
 }
 
-export function pageSlice<T>(items: T[], page: number, pageSize: PageSize): T[] {
+export function pageSlice<T>(
+  items: T[],
+  page: number,
+  pageSize: PageSize,
+): T[] {
   if (isAllPageSize(pageSize)) return items;
   const per = Math.max(1, Math.floor(pageSize));
   const safePage = clampPage(page, totalPagesFor(items.length, pageSize));
@@ -63,10 +67,19 @@ export function pageSlice<T>(items: T[], page: number, pageSize: PageSize): T[] 
 }
 
 /** "Showing 13–24 of 57" — the caller supplies the noun separately. */
-export type RangeParts = { from: number; to: number; total: number; all: boolean };
+export type RangeParts = {
+  from: number;
+  to: number;
+  total: number;
+  all: boolean;
+};
 
 /** Structured form for the UI (which renders the numbers in <strong>). */
-export function rangeParts(page: number, pageSize: PageSize, total: number): RangeParts {
+export function rangeParts(
+  page: number,
+  pageSize: PageSize,
+  total: number,
+): RangeParts {
   if (total <= 0) return { from: 0, to: 0, total: 0, all: false };
   if (isAllPageSize(pageSize)) return { from: 1, to: total, total, all: true };
   const per = Math.max(1, Math.floor(pageSize));
@@ -75,11 +88,15 @@ export function rangeParts(page: number, pageSize: PageSize, total: number): Ran
     from: (safePage - 1) * per + 1,
     to: Math.min(safePage * per, total),
     total,
-    all: false
+    all: false,
   };
 }
 
-export function rangeLabel(page: number, pageSize: PageSize, total: number): string {
+export function rangeLabel(
+  page: number,
+  pageSize: PageSize,
+  total: number,
+): string {
   const { from, to, all } = rangeParts(page, pageSize, total);
   if (total <= 0) return "Showing 0";
   if (all) return `Showing all ${total}`;
@@ -99,7 +116,10 @@ export function parsePageSizeInput(raw: string): number | null {
  * Reads a persisted page size. Accepts the legacy numeric format (including the old `1000`
  * "show all" sentinel) and the new `"all"` string.
  */
-export function parseStoredPageSize(raw: string | null, fallback: PageSize = DEFAULT_PAGE_SIZE): PageSize {
+export function parseStoredPageSize(
+  raw: string | null,
+  fallback: PageSize = DEFAULT_PAGE_SIZE,
+): PageSize {
   if (raw === null || raw === "") return fallback;
   if (raw === ALL_PAGE_SIZE) return ALL_PAGE_SIZE;
   const parsed = Number(raw);
@@ -110,5 +130,8 @@ export function parseStoredPageSize(raw: string | null, fallback: PageSize = DEF
 
 /** True when the size is one of the dropdown presets (i.e. not the custom-input case). */
 export function isPresetPageSize(size: PageSize): boolean {
-  return isAllPageSize(size) || (PAGE_SIZE_PRESETS as readonly number[]).includes(size);
+  return (
+    isAllPageSize(size) ||
+    (PAGE_SIZE_PRESETS as readonly number[]).includes(size)
+  );
 }

@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import type { TagTaxonomyConfig, CustomCategoryConfig } from "../../../schemas";
-import { BUILT_IN_CATEGORIES, deriveLightColor, discoverLibraryNamespaces } from "../../../engine/tagTaxonomy";
+import {
+  BUILT_IN_CATEGORIES,
+  deriveLightColor,
+  discoverLibraryNamespaces,
+} from "../../../engine/tagTaxonomy";
 import { Icon, TagChip } from "../base";
 import { getTagTaxonomy, updateTagTaxonomy } from "../../api";
 
@@ -56,7 +60,9 @@ export function TagTaxonomyPanel({
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [previewInput, setPreviewInput] = useState("species:cat-girl");
-  const [previewTheme, setPreviewTheme] = useState<"both" | "dark" | "light">("both");
+  const [previewTheme, setPreviewTheme] = useState<"both" | "dark" | "light">(
+    "both",
+  );
 
   // Form state for creating/editing a custom category
   const [newCatLabel, setNewCatLabel] = useState("");
@@ -98,13 +104,15 @@ export function TagTaxonomyPanel({
         allKnownPrefixes.add(p.toLowerCase().replace(/:.*$/, ""));
       }
     }
-    return discoveredNamespaces.filter((d) => !allKnownPrefixes.has(d.prefix.toLowerCase()));
+    return discoveredNamespaces.filter(
+      (d) => !allKnownPrefixes.has(d.prefix.toLowerCase()),
+    );
   }, [discoveredNamespaces, config.customCategories]);
 
   const effectiveLightColor = useMemo(() => {
     return useAutoLightColor
       ? deriveLightColor(newCatColor)
-      : (newCatColorLight || deriveLightColor(newCatColor));
+      : newCatColorLight || deriveLightColor(newCatColor);
   }, [useAutoLightColor, newCatColor, newCatColorLight]);
 
   function handleAddOrUpdateCategory() {
@@ -126,7 +134,7 @@ export function TagTaxonomyPanel({
       label,
       prefixes,
       color: newCatColor,
-      colorLight: useAutoLightColor ? undefined : (newCatColorLight || undefined),
+      colorLight: useAutoLightColor ? undefined : newCatColorLight || undefined,
     };
 
     setConfig((prev) => {
@@ -180,7 +188,10 @@ export function TagTaxonomyPanel({
 
   function handleQuickAddNamespace(prefix: string) {
     const label = prefix.charAt(0).toUpperCase() + prefix.slice(1);
-    const color = PRESET_COLOR_SWATCHES[Math.floor(Math.random() * PRESET_COLOR_SWATCHES.length)];
+    const color =
+      PRESET_COLOR_SWATCHES[
+        Math.floor(Math.random() * PRESET_COLOR_SWATCHES.length)
+      ];
     setEditingCatId(null);
     setNewCatLabel(label);
     setNewCatPrefixes(prefix);
@@ -237,7 +248,11 @@ export function TagTaxonomyPanel({
       <div className="taxonomy-preview-card">
         <div className="preview-top-row">
           <span className="preview-label">Live Tag Preview:</span>
-          <div className="preview-theme-toggle" role="group" aria-label="Preview theme mode">
+          <div
+            className="preview-theme-toggle"
+            role="group"
+            aria-label="Preview theme mode"
+          >
             <button
               type="button"
               className={`preview-toggle-btn ${previewTheme === "both" ? "active" : ""}`}
@@ -262,28 +277,50 @@ export function TagTaxonomyPanel({
           </div>
         </div>
 
-        <div className={`preview-themes-wrap ${previewTheme === "both" ? "is-split" : ""}`}>
+        <div
+          className={`preview-themes-wrap ${previewTheme === "both" ? "is-split" : ""}`}
+        >
           {(previewTheme === "both" || previewTheme === "dark") && (
             <div className="preview-theme-pane dark-pane" data-theme="dark">
               <span className="theme-pane-tag">Dark Mode</span>
               <div className="preview-chips-row">
-                <TagChip tag={previewInput || "species:cat-girl"} userConfig={config} size="md" />
+                <TagChip
+                  tag={previewInput || "species:cat-girl"}
+                  userConfig={config}
+                  size="md"
+                />
                 <TagChip tag="nsfw" userConfig={config} size="md" />
                 <TagChip tag="rating:sfw" userConfig={config} size="md" />
-                <TagChip tag="copyright:cyberpunk" userConfig={config} size="md" />
+                <TagChip
+                  tag="copyright:cyberpunk"
+                  userConfig={config}
+                  size="md"
+                />
                 <TagChip tag="adventurer" userConfig={config} size="md" />
               </div>
             </div>
           )}
 
           {(previewTheme === "both" || previewTheme === "light") && (
-            <div className="preview-theme-pane light-pane" data-theme="light" data-theme-preview="light">
+            <div
+              className="preview-theme-pane light-pane"
+              data-theme="light"
+              data-theme-preview="light"
+            >
               <span className="theme-pane-tag">Light Mode</span>
               <div className="preview-chips-row">
-                <TagChip tag={previewInput || "species:cat-girl"} userConfig={config} size="md" />
+                <TagChip
+                  tag={previewInput || "species:cat-girl"}
+                  userConfig={config}
+                  size="md"
+                />
                 <TagChip tag="nsfw" userConfig={config} size="md" />
                 <TagChip tag="rating:sfw" userConfig={config} size="md" />
-                <TagChip tag="copyright:cyberpunk" userConfig={config} size="md" />
+                <TagChip
+                  tag="copyright:cyberpunk"
+                  userConfig={config}
+                  size="md"
+                />
                 <TagChip tag="adventurer" userConfig={config} size="md" />
               </div>
             </div>
@@ -306,7 +343,9 @@ export function TagTaxonomyPanel({
         <div className="unmapped-namespaces-banner">
           <div className="unmapped-banner-header">
             <Icon name="Sparkles" size={15} />
-            <span>Discovered prefixes in your library without a custom category:</span>
+            <span>
+              Discovered prefixes in your library without a custom category:
+            </span>
           </div>
           <div className="unmapped-chips">
             {unmappedNamespaces.map((d) => (
@@ -334,9 +373,18 @@ export function TagTaxonomyPanel({
             <div key={cat.id} className="category-card built-in">
               <div className="category-card-header">
                 <div className="category-title-wrap">
-                  <div className="category-color-dots" title={`Dark: ${cat.color} | Light: ${cat.colorLight || cat.color}`}>
-                    <span className="category-color-dot dark" style={{ backgroundColor: cat.color }} />
-                    <span className="category-color-dot light" style={{ backgroundColor: cat.colorLight || cat.color }} />
+                  <div
+                    className="category-color-dots"
+                    title={`Dark: ${cat.color} | Light: ${cat.colorLight || cat.color}`}
+                  >
+                    <span
+                      className="category-color-dot dark"
+                      style={{ backgroundColor: cat.color }}
+                    />
+                    <span
+                      className="category-color-dot light"
+                      style={{ backgroundColor: cat.colorLight || cat.color }}
+                    />
                   </div>
                   <strong className="category-name">{cat.label}</strong>
                 </div>
@@ -344,21 +392,33 @@ export function TagTaxonomyPanel({
               <p className="category-desc">{cat.description}</p>
               <div className="category-prefixes-wrap">
                 {cat.prefixes.map((p) => (
-                  <span key={p} className="prefix-badge" style={{ borderColor: `${cat.color}66`, color: cat.color }}>
+                  <span
+                    key={p}
+                    className="prefix-badge"
+                    style={{ borderColor: `${cat.color}66`, color: cat.color }}
+                  >
                     {p.endsWith(":") ? p : `${p}:`}
                   </span>
                 ))}
                 {cat.id === "rating_nsfw" && (
-                  <span className="prefix-badge" style={{ borderColor: `${cat.color}66`, color: cat.color }}>
+                  <span
+                    className="prefix-badge"
+                    style={{ borderColor: `${cat.color}66`, color: cat.color }}
+                  >
                     nsfw, explicit, lewd, 18+ (values)
                   </span>
                 )}
                 {cat.id === "rating_sfw" && (
-                  <span className="prefix-badge" style={{ borderColor: `${cat.color}66`, color: cat.color }}>
+                  <span
+                    className="prefix-badge"
+                    style={{ borderColor: `${cat.color}66`, color: cat.color }}
+                  >
                     sfw, safe, general (values)
                   </span>
                 )}
-                {cat.prefixes.length === 0 ? <span className="prefix-badge neutral">Standalone tags</span> : null}
+                {cat.prefixes.length === 0 ? (
+                  <span className="prefix-badge neutral">Standalone tags</span>
+                ) : null}
               </div>
             </div>
           ))}
@@ -380,9 +440,18 @@ export function TagTaxonomyPanel({
                 <div key={cat.id} className="category-card custom">
                   <div className="category-card-header">
                     <div className="category-title-wrap">
-                      <div className="category-color-dots" title={`Dark: ${cat.color} | Light: ${lightColor}`}>
-                        <span className="category-color-dot dark" style={{ backgroundColor: cat.color }} />
-                        <span className="category-color-dot light" style={{ backgroundColor: lightColor }} />
+                      <div
+                        className="category-color-dots"
+                        title={`Dark: ${cat.color} | Light: ${lightColor}`}
+                      >
+                        <span
+                          className="category-color-dot dark"
+                          style={{ backgroundColor: cat.color }}
+                        />
+                        <span
+                          className="category-color-dot light"
+                          style={{ backgroundColor: lightColor }}
+                        />
                       </div>
                       <strong className="category-name">{cat.label}</strong>
                     </div>
@@ -407,7 +476,14 @@ export function TagTaxonomyPanel({
                   </div>
                   <div className="category-prefixes-wrap">
                     {cat.prefixes.map((p) => (
-                      <span key={p} className="prefix-badge" style={{ borderColor: `${cat.color}66`, color: cat.color }}>
+                      <span
+                        key={p}
+                        className="prefix-badge"
+                        style={{
+                          borderColor: `${cat.color}66`,
+                          color: cat.color,
+                        }}
+                      >
                         {p}:
                       </span>
                     ))}
@@ -418,13 +494,17 @@ export function TagTaxonomyPanel({
           </div>
         ) : (
           <p className="empty-category-hint">
-            No custom categories added yet. You can create custom prefixes (like <code>clan:</code>, <code>world:</code>, <code>faction:</code>) below.
+            No custom categories added yet. You can create custom prefixes (like{" "}
+            <code>clan:</code>, <code>world:</code>, <code>faction:</code>)
+            below.
           </p>
         )}
 
         {/* Add / Edit Category Form */}
         <div className="add-category-box">
-          <h5>{editingCatId ? "Edit Custom Category" : "Add New Custom Category"}</h5>
+          <h5>
+            {editingCatId ? "Edit Custom Category" : "Add New Custom Category"}
+          </h5>
           <div className="add-cat-row">
             <div className="form-group flex-1">
               <label>Category Label</label>
@@ -509,7 +589,11 @@ export function TagTaxonomyPanel({
                     setNewCatColorLight(e.target.value);
                   }}
                   className="color-input"
-                  title={useAutoLightColor ? "Auto-derived from dark color" : "Custom light theme color"}
+                  title={
+                    useAutoLightColor
+                      ? "Auto-derived from dark color"
+                      : "Custom light theme color"
+                  }
                 />
                 <div className="preset-swatches">
                   {PRESET_LIGHT_COLOR_SWATCHES.slice(0, 7).map((swatch) => (
@@ -553,7 +637,8 @@ export function TagTaxonomyPanel({
               onClick={handleAddOrUpdateCategory}
               disabled={!newCatLabel.trim()}
             >
-              <Icon name="Plus" size={13} /> {editingCatId ? "Update Category" : "Add Category"}
+              <Icon name="Plus" size={13} />{" "}
+              {editingCatId ? "Update Category" : "Add Category"}
             </button>
           </div>
         </div>
@@ -565,7 +650,8 @@ export function TagTaxonomyPanel({
           <Icon name="Bookmark" size={14} /> Specific Tag Overrides
         </h4>
         <p className="section-subtitle">
-          Map individual standalone tags directly to a specific category ID or Hex color.
+          Map individual standalone tags directly to a specific category ID or
+          Hex color.
         </p>
 
         {Object.keys(config.tagOverrides).length > 0 ? (
@@ -615,8 +701,17 @@ export function TagTaxonomyPanel({
       </div>
 
       <div className="taxonomy-save-bar">
-        {status ? <span className="modal-status-text">{status}</span> : <span />}
-        <button type="button" className="primary" onClick={handleSave} disabled={saving}>
+        {status ? (
+          <span className="modal-status-text">{status}</span>
+        ) : (
+          <span />
+        )}
+        <button
+          type="button"
+          className="primary"
+          onClick={handleSave}
+          disabled={saving}
+        >
           {saving ? "Saving…" : "Save Taxonomy Settings"}
         </button>
       </div>
@@ -655,11 +750,17 @@ export function TagTaxonomyModal({
             <div>
               <h2>Tag Taxonomy &amp; Color Settings</h2>
               <p className="taxonomy-subtitle">
-                Customize category namespaces (e.g. <code>species:</code>, <code>copyright:</code>), colors, and tag rules.
+                Customize category namespaces (e.g. <code>species:</code>,{" "}
+                <code>copyright:</code>), colors, and tag rules.
               </p>
             </div>
           </div>
-          <button type="button" className="diff-close-btn" onClick={onClose} title="Close">
+          <button
+            type="button"
+            className="diff-close-btn"
+            onClick={onClose}
+            title="Close"
+          >
             <Icon name="X" size={16} />
           </button>
         </header>

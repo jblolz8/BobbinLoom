@@ -2,7 +2,9 @@
  *  (signature + IHDR + tEXt/iTXt chunk + IEND) with a real CRC32, so tests
  *  exercise the real chunk-walking code paths in pngText.ts / parseCard.ts. */
 
-export const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+export const PNG_SIGNATURE = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+]);
 
 const CRC_TABLE = (() => {
   const t = new Uint32Array(256);
@@ -36,7 +38,7 @@ function chunk(type: string, data: Buffer): Buffer {
 export function makePng(
   charaPayload: string,
   textChunkType: "tEXt" | "iTXt" = "tEXt",
-  keyword = "chara"
+  keyword = "chara",
 ): Buffer {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(1, 0);

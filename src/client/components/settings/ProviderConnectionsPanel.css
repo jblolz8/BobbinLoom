@@ -42,7 +42,10 @@
   background-color: var(--input-filled-bg, var(--input-bg));
   color: var(--input-text);
   font: inherit;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .conn-editor .base-form-input:focus,

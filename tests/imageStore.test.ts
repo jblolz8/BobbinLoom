@@ -8,9 +8,14 @@ import {
   mimeForFile,
   saveImageBytes,
   sweepOrphanImages,
-  sweepOrphansInDataDir
+  sweepOrphansInDataDir,
 } from "../src/server/imageStore";
-import { cleanupTempDirs, pngBytes, tempDir, writePlaythroughWithImages } from "./helpers/imageFixtures";
+import {
+  cleanupTempDirs,
+  pngBytes,
+  tempDir,
+  writePlaythroughWithImages,
+} from "./helpers/imageFixtures";
 
 afterEach(cleanupTempDirs);
 
@@ -47,10 +52,20 @@ describe("saveImageBytes", () => {
 
   it("maps the mime onto the file extension", () => {
     const dir = imagesDir();
-    expect(saveImageBytes(pngBytes("j"), "image/jpeg", dir).file.endsWith(".jpg")).toBe(true);
-    expect(saveImageBytes(pngBytes("w"), "image/webp", dir).file.endsWith(".webp")).toBe(true);
+    expect(
+      saveImageBytes(pngBytes("j"), "image/jpeg", dir).file.endsWith(".jpg"),
+    ).toBe(true);
+    expect(
+      saveImageBytes(pngBytes("w"), "image/webp", dir).file.endsWith(".webp"),
+    ).toBe(true);
     // Unknown mime falls back to png, the format both dialects are asked for.
-    expect(saveImageBytes(pngBytes("u"), "application/octet-stream", dir).file.endsWith(".png")).toBe(true);
+    expect(
+      saveImageBytes(
+        pngBytes("u"),
+        "application/octet-stream",
+        dir,
+      ).file.endsWith(".png"),
+    ).toBe(true);
   });
 
   it("creates the directory on demand", () => {
@@ -102,10 +117,19 @@ describe("collectReferencedImages", () => {
     const dir = tempDir("bobbinloom-refs-");
     const a = pngBytes("a");
     const b = pngBytes("b");
-    const pt = writePlaythroughWithImages(dir, "Refs", [[saveImageBytes(a, "image/png", dir).file], [], [saveImageBytes(b, "image/png", dir).file]]);
+    const pt = writePlaythroughWithImages(dir, "Refs", [
+      [saveImageBytes(a, "image/png", dir).file],
+      [],
+      [saveImageBytes(b, "image/png", dir).file],
+    ]);
 
-    const refs = collectReferencedImages([pt, writePlaythroughWithImages(dir, "NoImages", [[], []])]);
-    expect([...refs].sort()).toEqual([`${sha256(a)}.png`, `${sha256(b)}.png`].sort());
+    const refs = collectReferencedImages([
+      pt,
+      writePlaythroughWithImages(dir, "NoImages", [[], []]),
+    ]);
+    expect([...refs].sort()).toEqual(
+      [`${sha256(a)}.png`, `${sha256(b)}.png`].sort(),
+    );
   });
 });
 
@@ -117,7 +141,11 @@ describe("sweepOrphanImages", () => {
     // Not ours to manage — a stray non-hash file must survive.
     writeFileSync(join(dir, "notes.txt"), "hello", "utf8");
 
-    const pt = writePlaythroughWithImages(tempDir("bobbinloom-sweep-"), "Sweep", [[kept]]);
+    const pt = writePlaythroughWithImages(
+      tempDir("bobbinloom-sweep-"),
+      "Sweep",
+      [[kept]],
+    );
     expect(sweepOrphanImages([pt], dir)).toBe(1);
 
     const left = readdirSync(dir).sort();
@@ -126,7 +154,9 @@ describe("sweepOrphanImages", () => {
   });
 
   it("is a no-op when the directory does not exist", () => {
-    expect(sweepOrphanImages([], join(tempDir("bobbinloom-missing-"), "images"))).toBe(0);
+    expect(
+      sweepOrphanImages([], join(tempDir("bobbinloom-missing-"), "images")),
+    ).toBe(0);
   });
 });
 
@@ -135,13 +165,27 @@ describe("sweepOrphansInDataDir", () => {
     const dataDir = tempDir("bobbinloom-branch-data-");
     const dir = imagesDir();
 
-    const branchFile = saveImageBytes(pngBytes("branch"), "image/png", dir).file;
-    const parentFile = saveImageBytes(pngBytes("parent"), "image/png", dir).file;
-    const orphanFile = saveImageBytes(pngBytes("orphan2"), "image/png", dir).file;
+    const branchFile = saveImageBytes(
+      pngBytes("branch"),
+      "image/png",
+      dir,
+    ).file;
+    const parentFile = saveImageBytes(
+      pngBytes("parent"),
+      "image/png",
+      dir,
+    ).file;
+    const orphanFile = saveImageBytes(
+      pngBytes("orphan2"),
+      "image/png",
+      dir,
+    ).file;
 
     // A timeline branch is EXCLUDED from the default list — the sweep has to ask
     // for it explicitly or the branch's images get eaten when its parent dies.
-    writePlaythroughWithImages(dataDir, "Branch", [[branchFile]], { isTimelineBranch: true });
+    writePlaythroughWithImages(dataDir, "Branch", [[branchFile]], {
+      isTimelineBranch: true,
+    });
     writePlaythroughWithImages(dataDir, "Parent", [[parentFile]]);
 
     expect(sweepOrphansInDataDir(dataDir, dir)).toBe(1);

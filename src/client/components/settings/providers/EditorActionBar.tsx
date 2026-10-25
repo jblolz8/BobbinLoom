@@ -64,7 +64,13 @@ export function EditorActionBar({
         gap="sm"
         className="conn-actions-row"
       >
-        <Stack direction="row" align="center" gap="xs" wrap className="conn-actions-left">
+        <Stack
+          direction="row"
+          align="center"
+          gap="xs"
+          wrap
+          className="conn-actions-left"
+        >
           <Button
             type="submit"
             variant="primary"
@@ -114,7 +120,9 @@ export function EditorActionBar({
                   onClick={onToggleTestDrawer}
                   aria-label="Configure global test prompt"
                   title="Configure global test prompt"
-                  leftIcon={testDrawerOpen ? "ChevronDown" : "SlidersHorizontal"}
+                  leftIcon={
+                    testDrawerOpen ? "ChevronDown" : "SlidersHorizontal"
+                  }
                 />
               )}
             </Stack>

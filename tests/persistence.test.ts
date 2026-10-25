@@ -1,4 +1,10 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -8,7 +14,7 @@ import {
   backupFile,
   cleanupStaleTmp,
   quarantineFile,
-  readJsonFile
+  readJsonFile,
 } from "../src/server/persistence";
 
 const tempDirs: string[] = [];
@@ -61,7 +67,10 @@ describe("persistence", () => {
 
       expect(existsSync(path)).toBe(true);
       expect(existsSync(path + ".tmp")).toBe(false);
-      expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({ a: 1, b: [1, 2] });
+      expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
+        a: 1,
+        b: [1, 2],
+      });
     });
 
     it("creates parent directories", () => {
@@ -111,7 +120,9 @@ describe("persistence", () => {
     });
 
     it("is a no-op on a missing directory", () => {
-      expect(() => cleanupStaleTmp(join(tempDir(), "does-not-exist"))).not.toThrow();
+      expect(() =>
+        cleanupStaleTmp(join(tempDir(), "does-not-exist")),
+      ).not.toThrow();
     });
   });
 
@@ -174,7 +185,9 @@ describe("persistence", () => {
     });
 
     it("returns null when there is nothing to quarantine", () => {
-      expect(quarantineFile(join(tempDir(), "ghost.json"), "missing")).toBeNull();
+      expect(
+        quarantineFile(join(tempDir(), "ghost.json"), "missing"),
+      ).toBeNull();
     });
   });
 

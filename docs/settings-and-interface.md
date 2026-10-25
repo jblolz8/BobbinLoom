@@ -7,16 +7,17 @@ order: 130
 # Settings & interface
 
 Settings opens from the header and is available from anywhere — the home screen and inside a
-playthrough alike. It has six tabs.
+playthrough alike. It has six tabs in a split sidebar layout, and panels stay mounted after their
+first visit so switching tabs never discards an in-progress draft.
 
 | Tab | What it holds |
 |---|---|
-| **Provider** | Text and image connections, keys, models, per-connection parameters |
-| **Prompt Configuration** | The active preset's turn modules, character-sheet format and image prompt block |
+| **Providers** | *Text Providers*, *Image Providers*, and *Provider Overrides* (per-workflow connection routing) |
+| **Prompts** | The active preset's turn modules, character-sheet format and image prompt block |
 | **Tags & Taxonomy** | The tag categories and colours the character library uses |
-| **Chat** | The switches that change how the chat behaves and what it displays |
-| **Interface** | Avatar shape, cover art frame ratio, and how the play view moves between panels on a narrow screen |
-| **Theme Appearance** | Theme mode, self-contained theme preset cards, custom palette tweaks, active token reference, and live story preview |
+| **Chat** | The switches and auto-scroll behaviour that control what the chat displays and how turns run |
+| **Interface** | Workspace content width (`50%–100%`), avatar badge shape, cover art frame ratio, and narrow-screen panel swipe |
+| **Appearance** | Theme mode, 5 paired Dark ↔ Light theme presets, custom palette overrides, live story & markdown preview, and the active token showcase |
 
 ## Chat
 
@@ -26,8 +27,8 @@ playthrough alike. It has six tabs.
 | Display Response Generation Time | The stopwatch on each assistant message |
 | Display Chat Message Timestamps | The timestamp on each message |
 | Display AI Model Name | The model badge on each response |
-| Show Message Numbers | Displays turn numbers (#0, #1, #2...) on both user and assistant message bubbles |
-| AI Response Auto-Scroll | Auto-scroll behavior on response arrival: Scroll to Start of Message (default), Scroll to Bottom, or No Auto-Scroll |
+| Show Message Numbers | Displays turn numbers (`#0`, `#1`, `#2`...) on both user and assistant message bubbles |
+| AI Response Auto-Scroll | Auto-scroll behavior on response arrival: *Scroll to Start of Message* (default), *Scroll to Bottom*, or *No Auto-Scroll* |
 | Show Context Usage | The context meter below the input |
 | Review Image Prompt Before Generating | Whether the image prompt opens for review before the image call |
 | Generate Image right after AI Response | Chains an image generation onto each response |
@@ -44,16 +45,53 @@ confirmation's own *Always discard old image* checkbox turns it on for you. Edit
 does not ask and does not replace anything: that is a save, and it leaves the image alone. See
 [Image generation](image-generation.md) → *Editing and re-sending a stored request body*.
 
-## Interface & Theme Appearance
+## Interface
 
-- **Mode** — dark, light, or follow the system
-- **Preset** — the theme family, with a live swatch preview of each one
-- **Custom colours** — per-variable overrides on top of the preset
-- **Avatar shape** — how portraits are framed throughout the app
-- **Cover art** — the shape of every cover on the playthrough shelf: Portrait (2:3), 1:1 Square, or Landscape (16:9)
-- **Mobile panels** — **Swipe Between Panels**, whether a horizontal swipe moves between the play
-  view's panels. On by default, and offered on the layouts that have the gesture; the bottom tab bar
-  works either way
+- **Workspace Content Width** — A clamped slider and number field (`50% – 100%`, default `80%`)
+  that controls how much horizontal screen space the Home workspace tabs (**Playthroughs**,
+  **Characters**, **Lorebooks**, **Personas**, and **Documentation**) occupy on wide screens
+  (`> 1100px`). Below `1100px`, workspace pages automatically expand to `100%` of the viewport.
+- **Avatar Badge Shape** — How entity identity badges are framed across the Player tab, Main Cast
+  compact roster, Background NPCs, and Persona selectors: *Square* (`2px`), *Rounded Corner Square*
+  (`8px`, default), or *Circle* (`50%`).
+- **Cover Art** — The frame aspect ratio of every cover on the playthrough shelf: *Landscape*
+  (`16:9`, default), *1:1 Square*, or *Portrait* (`2:3`).
+- **Mobile Panels** — **Swipe Between Panels**, whether a horizontal drag moves between the play
+  view's panels on narrow screens (`<= 1100px`). On by default, and offered only on viewports where
+  the single-panel layout is active; the bottom tab bar works either way.
+
+## Appearance
+
+- **Theme Mode & Paired Presets** — *Dark Mode*, *Light Mode*, or *Follow System*. The ten shipped
+  presets are arranged as five **Dark ↔ Light counterpart pairs** in a two-column grid, and
+  switching between Dark and Light modes automatically flips the active preset to its counterpart:
+
+| Dark Preset | Light Counterpart | Character |
+|---|---|---|
+| **Bobbin Classic Dark** | **Studio Light** | Deep slate navy ↔ crisp daylight slate & royal blue |
+| **Nord Frost** | **Polar Mist** | Arctic slate & frost cyan ↔ cool glacier daylight |
+| **Amber Hearth** | **Warm Parchment** | Candlelit espresso & amber ↔ sunlit cream vellum & terracotta |
+| **Emerald Archive** | **Matcha & Cream** | Phosphor CRT terminal green ↔ botanical sage & warm clay |
+| **Midnight Violet** | **Sakura Blossom** | Obsidian plum & neon orchid ↔ soft petal blush & plum rose |
+
+- **Self-Contained Preset Cards** — Every preset card scopes its own surface, border, text, accent,
+  `"Quotes"`, and `**Bold**` tokens, so light presets preview accurately while in dark mode and
+  vice versa.
+- **Custom Palette Tweaks** — A collapsible drawer for overriding individual CSS tokens on top of
+  the active preset across Core Surfaces, Typography & Story Markdown (`--story-text`,
+  `--story-emphasis`, `--story-italic`, `--story-quote`), Accents, and Chat Bubbles, with per-token
+  and full reset actions.
+- **Live Story & Markdown Preview** — Renders sample assistant and player chat bubbles with
+  headings, bold emphasis, italics, strikethrough, `"spoken dialogue"`, blockquotes, lists, inline
+  code, and fenced code blocks using the active palette.
+- **Theme Color Palette (Active Tokens)** — An always-visible visual reference of all active theme
+  tokens grouped into seven functional sections (*Background Surfaces*, *Borders & Dividers*,
+  *Typography & Hierarchy*, *Story & Markdown Highlights*, *Accents & Semantic Status*, *Chat
+  Bubbles & Timeline*, and *Inputs & Code Blocks*), each with a full-width preview stage.
+- **First-Frame Server Paint** — Theme tokens, `data-theme`, `data-avatar-shape`,
+  `data-cover-aspect`, and `--workspace-max-width` are compiled through `src/engine/theme.ts` and
+  injected into `index.html` (`#theme-first-paint`) on every request, so reloads paint the exact
+  active theme and layout width on the very first frame without flicker.
 
 ### Cast and Character Manager
 
@@ -65,12 +103,12 @@ Preferences on the PlayView's Chars tab are saved per profile and remembered acr
 
 Everything here applies immediately and is stored with your other runtime settings.
 
-## Prompt Configuration is global
+## Prompts (Prompt Configuration) is global
 
-There is one prompt configuration, not one per playthrough. The Prompt Configuration tab edits
-that single config; switching presets copies the preset over it. A playthrough does not keep
-its own snapshot, so an edit reaches every playthrough's next turn. The tab also works from the
-home screen, where there is no playthrough at all.
+There is one prompt configuration, not one per playthrough. The **Prompts** tab edits that single
+config; switching presets copies the preset over it. A playthrough does not keep its own snapshot,
+so an edit reaches every playthrough's next turn. The tab also works from the home screen, where
+there is no playthrough at all.
 
 Details of the modules themselves are in [Prompt modules](prompt-modules.md).
 
@@ -83,6 +121,7 @@ Everything is designed to collapse at one breakpoint, **1100px**:
 
 - the header's navigation tabs collapse to a row below the brand
 - panel labels become icons
+- the home workspace pages expand from `--workspace-max-width` (`50%–100%`) to `100%` of the viewport
 - the play view switches to one panel at a time, chosen by a compact tab bar at the bottom of the
   screen (icon beside the panel name, 44px plus the safe area)
 - panels that are not selected are hidden rather than unmounted, so scroll position and

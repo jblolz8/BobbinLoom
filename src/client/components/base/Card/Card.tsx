@@ -1,4 +1,9 @@
-import { forwardRef, type ElementType, type HTMLAttributes, type ReactNode } from "react";
+import {
+  forwardRef,
+  type ElementType,
+  type HTMLAttributes,
+  type ReactNode,
+} from "react";
 import { Icon } from "../Icon";
 
 export type CardVariant = "elevated" | "panel" | "active";
@@ -32,7 +37,7 @@ export const Card = forwardRef<HTMLElement, CardProps>(function Card(
     children,
     ...props
   },
-  ref
+  ref,
 ) {
   const classNames = [
     "base-card",
@@ -66,7 +71,11 @@ export function DragHandle({
   ...props
 }: DragHandleProps) {
   return (
-    <span className={`base-drag-handle ${className}`.trim()} title={title} {...props}>
+    <span
+      className={`base-drag-handle ${className}`.trim()}
+      title={title}
+      {...props}
+    >
       <Icon name="GripVertical" size={14} />
     </span>
   );

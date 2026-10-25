@@ -11,7 +11,9 @@
   border-radius: var(--radius-sm, 6px);
   background: var(--bg-panel);
   border: 1px solid var(--border-subtle);
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .base-slider--active {
@@ -87,7 +89,10 @@
   font-weight: 500;
   line-height: 1.2;
   cursor: pointer;
-  transition: color 0.12s ease, border-color 0.12s ease, background-color 0.12s ease;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background-color 0.12s ease;
 }
 
 .base-slider__reset:hover {
@@ -128,7 +133,8 @@
   background: linear-gradient(
     to right,
     color-mix(in srgb, var(--text-muted) 45%, transparent) 0%,
-    color-mix(in srgb, var(--text-muted) 45%, transparent) var(--slider-fill, 50%),
+    color-mix(in srgb, var(--text-muted) 45%, transparent)
+      var(--slider-fill, 50%),
     var(--border-subtle) var(--slider-fill, 50%),
     var(--border-subtle) 100%
   );
@@ -144,7 +150,9 @@
   border: 2px solid var(--bg-panel);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
   cursor: grab;
-  transition: transform 0.1s ease, background-color 0.15s ease;
+  transition:
+    transform 0.1s ease,
+    background-color 0.15s ease;
 }
 
 .base-slider--unset .base-slider__track::-webkit-slider-thumb {
@@ -168,7 +176,9 @@
   border: 2px solid var(--bg-panel);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
   cursor: grab;
-  transition: transform 0.1s ease, background-color 0.15s ease;
+  transition:
+    transform 0.1s ease,
+    background-color 0.15s ease;
 }
 
 .base-slider--unset .base-slider__track::-moz-range-thumb {

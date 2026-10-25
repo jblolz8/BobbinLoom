@@ -1,16 +1,46 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify from "fastify";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { ProviderManager } from "../src/server/providerManager";
 import { MockProvider } from "../src/server/provider";
-import { loadAppSettings, saveAppSettings } from "../src/server/appSettingsStore";
+import {
+  loadAppSettings,
+  saveAppSettings,
+} from "../src/server/appSettingsStore";
 import { seedRegistry } from "../src/server/providerRegistry";
-import { DEFAULT_IMAGE_GENERATION_SETTINGS, DEFAULT_IMAGE_PROMPT_INSTRUCTION, LEGACY_SCENE_SIDES, PERSPECTIVE_PAIRS, applyInstructionMode, instructionModeApplies } from "../src/engine/imageDefaults";
+import {
+  DEFAULT_IMAGE_GENERATION_SETTINGS,
+  DEFAULT_IMAGE_PROMPT_INSTRUCTION,
+  LEGACY_SCENE_SIDES,
+  PERSPECTIVE_PAIRS,
+  applyInstructionMode,
+  instructionModeApplies,
+} from "../src/engine/imageDefaults";
 import { FORGE_COUPLE_SEPARATOR } from "../src/server/imageProvider/a1111Provider";
-import { ImageApiStyleSchema, ImageGenerationSettingsSchema, PromptPresetSchema, ProviderConnectionSchema } from "../src/schemas";
+import {
+  ImageApiStyleSchema,
+  ImageGenerationSettingsSchema,
+  PromptPresetSchema,
+  ProviderConnectionSchema,
+} from "../src/schemas";
 
 const tempDirs: string[] = [];
 
@@ -53,9 +83,9 @@ describe("app settings store", () => {
         maxTokens: 1800,
         contextWindow: 131072,
         defaultPresetId: "default-nsfw",
-        themePreset: "emerald-archive"
+        themePreset: "emerald-archive",
       }),
-      "utf8"
+      "utf8",
     );
 
     const settings = loadAppSettings(dir);
@@ -88,8 +118,12 @@ describe("app settings store", () => {
     // preset was Default (NSFW) would silently revert to the vanilla Default.
     writeFileSync(
       join(dir, "user-settings.json"),
-      JSON.stringify({ schemaVersion: 1, defaultPresetId: "default-nsfw", themeMode: "dark" }),
-      "utf8"
+      JSON.stringify({
+        schemaVersion: 1,
+        defaultPresetId: "default-nsfw",
+        themeMode: "dark",
+      }),
+      "utf8",
     );
 
     const settings = loadAppSettings(dir);
@@ -101,8 +135,12 @@ describe("app settings store", () => {
     // A file that ALREADY carries the new field wins — the legacy one never overrides it.
     writeFileSync(
       join(dir, "user-settings.json"),
-      JSON.stringify({ schemaVersion: 1, defaultPresetId: "default-nsfw", activePresetId: "user-preset" }),
-      "utf8"
+      JSON.stringify({
+        schemaVersion: 1,
+        defaultPresetId: "default-nsfw",
+        activePresetId: "user-preset",
+      }),
+      "utf8",
     );
     expect(loadAppSettings(dir).activePresetId).toBe("user-preset");
   });
@@ -121,7 +159,9 @@ describe("app settings store", () => {
     // Persisted to the runtime file, not the template.
     expect(loadAppSettings(dir).activePresetId).toBe("default-nsfw");
     expect(existsSync(join(dir, "user-settings.json"))).toBe(true);
-    const onDisk = JSON.parse(readFileSync(join(dir, "user-settings.json"), "utf8"));
+    const onDisk = JSON.parse(
+      readFileSync(join(dir, "user-settings.json"), "utf8"),
+    );
     expect(onDisk.activePresetId).toBe("default-nsfw");
 
     const updated = saveAppSettings(dir, { activePresetId: "default" });
@@ -143,16 +183,25 @@ describe("app settings store", () => {
     // A file written before the switch existed must read as ON: the gesture behaves that way today,
     // so an absent field cannot start meaning "off" for everyone who upgrades.
     const dir = tempDir();
-    writeFileSync(join(dir, "user-settings.json"), JSON.stringify({ schemaVersion: 1, themeMode: "dark" }), "utf8");
+    writeFileSync(
+      join(dir, "user-settings.json"),
+      JSON.stringify({ schemaVersion: 1, themeMode: "dark" }),
+      "utf8",
+    );
     expect(loadAppSettings(dir).paneSwipeEnabled).toBe(true);
 
     const saved = saveAppSettings(dir, { paneSwipeEnabled: false });
     expect(saved.paneSwipeEnabled).toBe(false);
     expect(loadAppSettings(dir).paneSwipeEnabled).toBe(false);
-    expect(JSON.parse(readFileSync(join(dir, "user-settings.json"), "utf8")).paneSwipeEnabled).toBe(false);
+    expect(
+      JSON.parse(readFileSync(join(dir, "user-settings.json"), "utf8"))
+        .paneSwipeEnabled,
+    ).toBe(false);
 
     // And back on, so the switch is not a one-way door.
-    expect(saveAppSettings(dir, { paneSwipeEnabled: true }).paneSwipeEnabled).toBe(true);
+    expect(
+      saveAppSettings(dir, { paneSwipeEnabled: true }).paneSwipeEnabled,
+    ).toBe(true);
     expect(loadAppSettings(dir).paneSwipeEnabled).toBe(true);
   });
 });
@@ -170,7 +219,7 @@ const A1111_CONNECTION = {
   temperature: 0.8,
   maxTokens: 1200,
   contextWindow: 32768,
-  apiStyle: "a1111" as const
+  apiStyle: "a1111" as const,
 };
 
 describe("A1111 image connection schema", () => {
@@ -185,7 +234,7 @@ describe("A1111 image connection schema", () => {
       cfgScale: 6.5,
       sampler: "DPM++ 2M Karras",
       scheduler: "Karras",
-      timeoutMs: 600_000
+      timeoutMs: 600_000,
     });
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
@@ -201,18 +250,44 @@ describe("A1111 image connection schema", () => {
     const parsed = ProviderConnectionSchema.safeParse(A1111_CONNECTION);
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
-    for (const field of ["steps", "cfgScale", "sampler", "scheduler", "timeoutMs"] as const) {
+    for (const field of [
+      "steps",
+      "cfgScale",
+      "sampler",
+      "scheduler",
+      "timeoutMs",
+    ] as const) {
       expect(field in parsed.data).toBe(false);
     }
   });
 
   it("rejects sampling controls outside their published range", () => {
-    expect(ProviderConnectionSchema.safeParse({ ...A1111_CONNECTION, steps: 0 }).success).toBe(false);
-    expect(ProviderConnectionSchema.safeParse({ ...A1111_CONNECTION, steps: 151 }).success).toBe(false);
-    expect(ProviderConnectionSchema.safeParse({ ...A1111_CONNECTION, steps: 28.5 }).success).toBe(false);
-    expect(ProviderConnectionSchema.safeParse({ ...A1111_CONNECTION, cfgScale: 31 }).success).toBe(false);
-    expect(ProviderConnectionSchema.safeParse({ ...A1111_CONNECTION, cfgScale: -1 }).success).toBe(false);
-    expect(ProviderConnectionSchema.safeParse({ ...A1111_CONNECTION, timeoutMs: 999 }).success).toBe(false);
+    expect(
+      ProviderConnectionSchema.safeParse({ ...A1111_CONNECTION, steps: 0 })
+        .success,
+    ).toBe(false);
+    expect(
+      ProviderConnectionSchema.safeParse({ ...A1111_CONNECTION, steps: 151 })
+        .success,
+    ).toBe(false);
+    expect(
+      ProviderConnectionSchema.safeParse({ ...A1111_CONNECTION, steps: 28.5 })
+        .success,
+    ).toBe(false);
+    expect(
+      ProviderConnectionSchema.safeParse({ ...A1111_CONNECTION, cfgScale: 31 })
+        .success,
+    ).toBe(false);
+    expect(
+      ProviderConnectionSchema.safeParse({ ...A1111_CONNECTION, cfgScale: -1 })
+        .success,
+    ).toBe(false);
+    expect(
+      ProviderConnectionSchema.safeParse({
+        ...A1111_CONNECTION,
+        timeoutMs: 999,
+      }).success,
+    ).toBe(false);
   });
 });
 
@@ -240,20 +315,24 @@ describe("provider manager registry integration", () => {
       model: "m",
       temperature: 0.8,
       maxTokens: 1200,
-      contextWindow: 32768
+      contextWindow: 32768,
     });
     expect(created.id).toBe("lmo");
-    expect(manager.setActiveConnection(created.id).activeTextProviderId).toBe(created.id);
+    expect(manager.setActiveConnection(created.id).activeTextProviderId).toBe(
+      created.id,
+    );
     const updated = manager.updateConnection(created.id, {
       label: "LMO2",
       baseUrl: "http://l:1234",
       model: "m",
       temperature: 0.8,
       maxTokens: 1200,
-      contextWindow: 32768
+      contextWindow: 32768,
     });
     expect(updated.label).toBe("LMO2");
-    const tested = await manager.testConnection({ baseUrl: "http://localhost:1" });
+    const tested = await manager.testConnection({
+      baseUrl: "http://localhost:1",
+    });
     expect(typeof tested.ok).toBe("boolean");
     // Deleting the (now active) connection is allowed; active id clears.
     const afterDelete = manager.deleteConnection(created.id);
@@ -262,16 +341,23 @@ describe("provider manager registry integration", () => {
 
   it("testConnection/fetchModels with an id use the STORED connection key and base URL", async () => {
     const dir = tempDir();
-    const fetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify({ data: [{ id: "m1" }, { id: "m2" }] }), { status: 200 })
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ data: [{ id: "m1" }, { id: "m2" }] }), {
+          status: 200,
+        }),
     );
-    const manager = new ProviderManager(dir, {}, fetchImpl as unknown as typeof fetch);
+    const manager = new ProviderManager(
+      dir,
+      {},
+      fetchImpl as unknown as typeof fetch,
+    );
 
     const created = manager.createConnection({
       label: "DS",
       baseUrl: "https://api.deepseek.com",
       model: "deepseek-chat",
-      apiKey: "sk-stored"
+      apiKey: "sk-stored",
     });
 
     const models = await manager.fetchModels({ id: created.id });
@@ -280,8 +366,8 @@ describe("provider manager registry integration", () => {
     expect(fetchImpl).toHaveBeenCalledWith(
       "https://api.deepseek.com/v1/models",
       expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: "Bearer sk-stored" })
-      })
+        headers: expect.objectContaining({ Authorization: "Bearer sk-stored" }),
+      }),
     );
 
     const tested = await manager.testConnection({ id: created.id });
@@ -291,14 +377,19 @@ describe("provider manager registry integration", () => {
   it("fetchModels with an unknown id throws", async () => {
     const dir = tempDir();
     const manager = new ProviderManager(dir, {});
-    await expect(manager.fetchModels({ id: "nope" })).rejects.toThrow(/not found/i);
+    await expect(manager.fetchModels({ id: "nope" })).rejects.toThrow(
+      /not found/i,
+    );
   });
 
   it("getApiKey returns the stored key for a connection and rejects unknown ids", () => {
     const dir = tempDir();
     const manager = new ProviderManager(dir, {});
     const created = manager.createConnection({
-      label: "DS", baseUrl: "https://api.deepseek.com", model: "m", apiKey: "sk-test-1234"
+      label: "DS",
+      baseUrl: "https://api.deepseek.com",
+      model: "m",
+      apiKey: "sk-test-1234",
     });
     expect(manager.getApiKey(created.id)).toEqual({ apiKey: "sk-test-1234" });
     expect(() => manager.getApiKey("nope")).toThrow(/not found/i);
@@ -310,7 +401,9 @@ describe("provider manager registry integration", () => {
 /** The shipped file, resolved from this test file rather than the cwd, so the
  *  drift guard still reads the real repo file while a route test has swapped
  *  the cwd for a hermetic data dir. */
-const PRESETS_FILE = fileURLToPath(new URL("../data/prompt-presets.json", import.meta.url));
+const PRESETS_FILE = fileURLToPath(
+  new URL("../data/prompt-presets.json", import.meta.url),
+);
 
 describe("image generation: shipped preset configs", () => {
   const raw = readFileSync(PRESETS_FILE, "utf8");
@@ -328,7 +421,9 @@ describe("image generation: shipped preset configs", () => {
   });
 
   it("ships the default preset's instruction byte-identical to the code constant", () => {
-    expect(preset("default").imageGeneration?.instruction).toBe(DEFAULT_IMAGE_PROMPT_INSTRUCTION);
+    expect(preset("default").imageGeneration?.instruction).toBe(
+      DEFAULT_IMAGE_PROMPT_INSTRUCTION,
+    );
   });
 
   it("swaps both read-only presets' perspective rules without touching their own parts", () => {
@@ -341,7 +436,10 @@ describe("image generation: shipped preset configs", () => {
       expect(applyInstructionMode(scene, "pov"), id).toBe(shipped);
     }
     // The NSFW-only block is not perspective text, so it survives the swap.
-    const nsfwScene = applyInstructionMode(preset("default-nsfw").imageGeneration!.instruction as string, "scene");
+    const nsfwScene = applyInstructionMode(
+      preset("default-nsfw").imageGeneration!.instruction as string,
+      "scene",
+    );
     expect(nsfwScene).toContain("EXPLICIT SCENES");
   });
 
@@ -357,9 +455,11 @@ describe("image generation: shipped preset configs", () => {
       expect(image.historyMessages).toBe(6);
       expect(image.includePreviousAnswer).toBe(false);
     }
-    expect(preset("default").imageGeneration?.negativePrefix).toBe(DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix);
+    expect(preset("default").imageGeneration?.negativePrefix).toBe(
+      DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix,
+    );
     expect(preset("default-nsfw").imageGeneration?.negativePrefix).toBe(
-      `${DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix}, censored, mosaic censoring, bar censor`
+      `${DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix}, censored, mosaic censoring, bar censor`,
     );
   });
 
@@ -375,7 +475,9 @@ describe("image generation: shipped preset configs", () => {
     // them is exactly how this file went red when they re-made their clone from
     // Default (NSFW) instead of the old 1980s-anime copy.
     expect(preset("default").imageGeneration?.promptCharacterLimit).toBe(1200);
-    expect(preset("default-nsfw").imageGeneration?.promptCharacterLimit).toBe(1200);
+    expect(preset("default-nsfw").imageGeneration?.promptCharacterLimit).toBe(
+      1200,
+    );
   });
 
   it("ships the user-approved negative tag set byte-for-byte, in order", () => {
@@ -435,7 +537,7 @@ describe("image generation: shipped preset configs", () => {
       "photorealistic",
       "realistic",
       "3d",
-      "cgi"
+      "cgi",
     ].join(", ");
 
     expect(DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix).toBe(approved);
@@ -445,7 +547,13 @@ describe("image generation: shipped preset configs", () => {
     // well as a medium and these presets are anime-prefixed; `cropped` and
     // `out of frame` would fight the tight close-ups that are wanted; a
     // character-count negative would fight every two-person scene.
-    for (const omitted of ["manga", "cropped", "out of frame", "multiple girls", "extra person"]) {
+    for (const omitted of [
+      "manga",
+      "cropped",
+      "out of frame",
+      "multiple girls",
+      "extra person",
+    ]) {
       expect(approved).not.toContain(omitted);
     }
   });
@@ -461,50 +569,73 @@ describe("image generation: shipped preset configs", () => {
   });
 
   it("ships the NSFW instruction as the core document with the rating bullets swapped and Explicit scenes inserted", () => {
-      const fmtRating =
-        "- First tag is the rating, exactly one word from safe, sensitive, nsfw, explicit — the one that matches what is actually happening. Never a blend of two, never a new word, never more than one rating tag. A tame scene stays tame.";
-      const nsfwFmtRating =
-        "- First tag is the rating, exactly one word from safe, sensitive, nsfw, explicit — nsfw or explicit when the scene is sexual, safe or sensitive when it is not. Never a blend of two, never a new word, never more than one rating tag.";
-      const tagRating = "1. Rating: one word from safe, sensitive, nsfw, explicit — never a blend, never more than one. A tame scene stays tame.";
-      const nsfwTagRating = "1. Rating: one word from safe, sensitive, nsfw, explicit — nsfw or explicit when the scene is sexual, safe or sensitive when it is not, never a blend.";
-      const explicitScenes =
-        "EXPLICIT SCENES\n" +
-        "- When the scene is sexually explicit, tag it at the same explicitness, plainly and without euphemism: the act, the position, what is exposed, what the bodies are doing, visible physical state (sweat, fluids, trembling, flushed skin).\n" +
-        "- Keep the characters' established appearance, clothing state and arousal consistent with what the scene says. Do not add acts, partners or undress the scene did not describe.\n" +
-        "- Never censor, blur, fade or sanitise what the scene describes, and never add safety, boilerplate or refusals. If the scene is not explicit, do not invent explicit content.";
+    const fmtRating =
+      "- First tag is the rating, exactly one word from safe, sensitive, nsfw, explicit — the one that matches what is actually happening. Never a blend of two, never a new word, never more than one rating tag. A tame scene stays tame.";
+    const nsfwFmtRating =
+      "- First tag is the rating, exactly one word from safe, sensitive, nsfw, explicit — nsfw or explicit when the scene is sexual, safe or sensitive when it is not. Never a blend of two, never a new word, never more than one rating tag.";
+    const tagRating =
+      "1. Rating: one word from safe, sensitive, nsfw, explicit — never a blend, never more than one. A tame scene stays tame.";
+    const nsfwTagRating =
+      "1. Rating: one word from safe, sensitive, nsfw, explicit — nsfw or explicit when the scene is sexual, safe or sensitive when it is not, never a blend.";
+    const explicitScenes =
+      "EXPLICIT SCENES\n" +
+      "- When the scene is sexually explicit, tag it at the same explicitness, plainly and without euphemism: the act, the position, what is exposed, what the bodies are doing, visible physical state (sweat, fluids, trembling, flushed skin).\n" +
+      "- Keep the characters' established appearance, clothing state and arousal consistent with what the scene says. Do not add acts, partners or undress the scene did not describe.\n" +
+      "- Never censor, blur, fade or sanitise what the scene describes, and never add safety, boilerplate or refusals. If the scene is not explicit, do not invent explicit content.";
 
-      // Each replacement must actually bite, or the equality below is vacuous.
-      expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(fmtRating);
-      expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(tagRating);
-      expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).not.toContain(nsfwFmtRating);
-      expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("Return JSON only:");
-      expect(preset("default-nsfw").imageGeneration?.instruction).toBe(
-        DEFAULT_IMAGE_PROMPT_INSTRUCTION
-          .replace(fmtRating, nsfwFmtRating)
-          .replace(tagRating, nsfwTagRating)
-          .replace("BEFORE OUTPUTTING", `${explicitScenes}\n\nBEFORE OUTPUTTING`)
-      );
-    });
+    // Each replacement must actually bite, or the equality below is vacuous.
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(fmtRating);
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(tagRating);
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).not.toContain(nsfwFmtRating);
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("Return JSON only:");
+    expect(preset("default-nsfw").imageGeneration?.instruction).toBe(
+      DEFAULT_IMAGE_PROMPT_INSTRUCTION.replace(fmtRating, nsfwFmtRating)
+        .replace(tagRating, nsfwTagRating)
+        .replace("BEFORE OUTPUTTING", `${explicitScenes}\n\nBEFORE OUTPUTTING`),
+    );
+  });
 
   it("keeps the rules that stop prose, and the two-character attribution rule", () => {
     // Each of these exists because something leaked through in a real generation:
     // a sentence with articles and a copula, a chained movement, and a
     // two-character scene where nothing said whose hair or eyes were whose.
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("Every item is a TAG, not a clause");
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("NEVER write articles (a, an, the)");
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("ONE FRAME, ONE INSTANT");
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain('WRONG: "A medium close-up shot of');
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("RIGHT: safe, 1boy 1girl, close-up, pale skin");
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("WHO IS WHO (two or more characters)");
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("prefix it: her ponytail, his black hair");
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("In a one-person scene never use those prefixes");
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("THE PLAYER (POV scenes)");
     expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(
-      "No style or quality tags (anime style, masterpiece, best quality)"
+      "Every item is a TAG, not a clause",
+    );
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(
+      "NEVER write articles (a, an, the)",
+    );
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(
+      "ONE FRAME, ONE INSTANT",
+    );
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(
+      'WRONG: "A medium close-up shot of',
+    );
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(
+      "RIGHT: safe, 1boy 1girl, close-up, pale skin",
+    );
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(
+      "WHO IS WHO (two or more characters)",
+    );
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(
+      "prefix it: her ponytail, his black hair",
+    );
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(
+      "In a one-person scene never use those prefixes",
+    );
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(
+      "THE PLAYER (POV scenes)",
+    );
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(
+      "No style or quality tags (anime style, masterpiece, best quality)",
     );
     // It is ordered for the encoder: the frame-defining tags sit in the first chunk.
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("The FIRST ~300 CHARACTERS carry the most weight");
-    expect(preset("default").imageGeneration?.instruction).toBe(DEFAULT_IMAGE_PROMPT_INSTRUCTION);
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(
+      "The FIRST ~300 CHARACTERS carry the most weight",
+    );
+    expect(preset("default").imageGeneration?.instruction).toBe(
+      DEFAULT_IMAGE_PROMPT_INSTRUCTION,
+    );
   });
 
   it("pins the MULTIPLE CHARACTERS grouping rule the region splitter depends on", () => {
@@ -519,8 +650,12 @@ describe("image generation: shipped preset configs", () => {
     expect(core).toContain('separate the groups with " | "');
     expect(core).toContain("Still ONE line");
     expect(core).toContain("The FIRST group holds what is shared");
-    expect(core).toContain("then one group per character, in the order they appear");
-    expect(core).toContain("The FIRST group holds what is shared (rating, character count");
+    expect(core).toContain(
+      "then one group per character, in the order they appear",
+    );
+    expect(core).toContain(
+      "The FIRST group holds what is shared (rating, character count",
+    );
     expect(core).toContain('A scene with ONE character has no " | " at all');
     // The separator the prose asks for IS the one the code splits on: one string
     // constant, so the rule can never describe a separator nothing looks for.
@@ -529,8 +664,12 @@ describe("image generation: shipped preset configs", () => {
     // Both shipped presets carry it — `default` byte-identically, NSFW by the
     // same derivation the drift guard above asserts.
     for (const id of ["default", "default-nsfw"]) {
-      expect(preset(id).imageGeneration?.instruction, id).toContain("MULTIPLE CHARACTERS");
-      expect(preset(id).imageGeneration?.instruction, id).toContain('separate the groups with " | "');
+      expect(preset(id).imageGeneration?.instruction, id).toContain(
+        "MULTIPLE CHARACTERS",
+      );
+      expect(preset(id).imageGeneration?.instruction, id).toContain(
+        'separate the groups with " | "',
+      );
     }
     // The examples teach the distinction that kept tripping the writer: GROUP
     // COUNT, not people. One character in frame is ONE group with no separator;
@@ -545,7 +684,9 @@ describe("image generation: shipped preset configs", () => {
     const twoGroupExample = core
       .split("TWO characters, no POV:\n")[1]!
       .split("\n")[0]!;
-    const exampleGroups = twoGroupExample.split("|").map((group) => group.trim());
+    const exampleGroups = twoGroupExample
+      .split("|")
+      .map((group) => group.trim());
     expect(exampleGroups).toHaveLength(3);
     expect(exampleGroups[0]).toContain("1boy 1girl");
     expect(exampleGroups[1]).toContain("her ");
@@ -567,7 +708,9 @@ describe("image generation: shipped preset configs", () => {
     // asserted as absence rather than failing on a preset nobody shipped.
     const userOwned = presets.find((p) => !p.readonly && !p.imageGeneration);
     if (!userOwned) {
-      expect(presets.some((p) => !p.readonly && !p.imageGeneration)).toBe(false);
+      expect(presets.some((p) => !p.readonly && !p.imageGeneration)).toBe(
+        false,
+      );
       return;
     }
     expect(userOwned.readonly).toBe(false);
@@ -586,9 +729,16 @@ describe("image prompt: the instruction mode", () => {
   });
 
   it("rejects an unknown mode and an out-of-range history count", () => {
-    expect(ImageGenerationSettingsSchema.safeParse({ instructionMode: "third" }).success).toBe(false);
-    expect(ImageGenerationSettingsSchema.safeParse({ historyMessages: 13 }).success).toBe(false);
-    expect(ImageGenerationSettingsSchema.safeParse({ historyMessages: -1 }).success).toBe(false);
+    expect(
+      ImageGenerationSettingsSchema.safeParse({ instructionMode: "third" })
+        .success,
+    ).toBe(false);
+    expect(
+      ImageGenerationSettingsSchema.safeParse({ historyMessages: 13 }).success,
+    ).toBe(false);
+    expect(
+      ImageGenerationSettingsSchema.safeParse({ historyMessages: -1 }).success,
+    ).toBe(false);
   });
 
   it("swaps the perspective passages both ways", () => {
@@ -686,7 +836,7 @@ const IMAGE_BLOCK = {
   includeState: false,
   includeCast: true,
   historyMessages: 3,
-  includePreviousAnswer: true
+  includePreviousAnswer: true,
 };
 
 /** The preset routes resolve `data/` from the process cwd, so this block swaps
@@ -699,7 +849,11 @@ describe("image generation: preset routes and the global prompt config", () => {
   let startedIn: string;
 
   const presetsFile = () => join(dir, "data", "prompt-presets.json");
-  const readPresets = () => JSON.parse(readFileSync(presetsFile(), "utf8")) as Array<{ id: string; imageGeneration?: unknown }>;
+  const readPresets = () =>
+    JSON.parse(readFileSync(presetsFile(), "utf8")) as Array<{
+      id: string;
+      imageGeneration?: unknown;
+    }>;
 
   beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), "bobbinloom-preset-routes-"));
@@ -709,24 +863,47 @@ describe("image generation: preset routes and the global prompt config", () => {
       presetsFile(),
       JSON.stringify(
         [
-          { id: "shipped", name: "Shipped", readonly: true, modules: { turn: [] }, imageGeneration: { ...IMAGE_BLOCK } },
-          { id: "user-no-image", name: "User (no image)", readonly: false, modules: { turn: [] } },
-          { id: "user-plain", name: "User (plain)", readonly: false, modules: { turn: [] } },
-          { id: "user-with-image", name: "User (image)", readonly: false, modules: { turn: [] }, imageGeneration: { ...IMAGE_BLOCK } }
+          {
+            id: "shipped",
+            name: "Shipped",
+            readonly: true,
+            modules: { turn: [] },
+            imageGeneration: { ...IMAGE_BLOCK },
+          },
+          {
+            id: "user-no-image",
+            name: "User (no image)",
+            readonly: false,
+            modules: { turn: [] },
+          },
+          {
+            id: "user-plain",
+            name: "User (plain)",
+            readonly: false,
+            modules: { turn: [] },
+          },
+          {
+            id: "user-with-image",
+            name: "User (image)",
+            readonly: false,
+            modules: { turn: [] },
+            imageGeneration: { ...IMAGE_BLOCK },
+          },
         ],
         null,
-        1
+        1,
       ),
-      "utf8"
+      "utf8",
     );
 
     startedIn = process.cwd();
     process.chdir(dir);
-    const [{ presetRoutes }, { playthroughRoutes }, { promptConfigRoutes }] = await Promise.all([
-      import("../src/server/routes/presets"),
-      import("../src/server/routes/playthroughs"),
-      import("../src/server/routes/promptConfig")
-    ]);
+    const [{ presetRoutes }, { playthroughRoutes }, { promptConfigRoutes }] =
+      await Promise.all([
+        import("../src/server/routes/presets"),
+        import("../src/server/routes/playthroughs"),
+        import("../src/server/routes/promptConfig"),
+      ]);
     app = Fastify();
     await app.register(presetRoutes);
     await app.register(playthroughRoutes);
@@ -744,22 +921,35 @@ describe("image generation: preset routes and the global prompt config", () => {
     const res = await app.inject({
       method: "PUT",
       url: "/api/prompt-presets/user-no-image",
-      payload: { imageGeneration: { positivePrefix: "photorealistic, 35mm film" } }
+      payload: {
+        imageGeneration: { positivePrefix: "photorealistic, 35mm film" },
+      },
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     // Inner fields carry defaults, so a partial block arrives complete.
-    expect(body.imageGeneration.positivePrefix).toBe("photorealistic, 35mm film");
-    expect(body.imageGeneration.instruction).toBe(DEFAULT_IMAGE_PROMPT_INSTRUCTION);
-    expect(body.imageGeneration.promptCharacterLimit).toBe(DEFAULT_IMAGE_GENERATION_SETTINGS.promptCharacterLimit);
+    expect(body.imageGeneration.positivePrefix).toBe(
+      "photorealistic, 35mm film",
+    );
+    expect(body.imageGeneration.instruction).toBe(
+      DEFAULT_IMAGE_PROMPT_INSTRUCTION,
+    );
+    expect(body.imageGeneration.promptCharacterLimit).toBe(
+      DEFAULT_IMAGE_GENERATION_SETTINGS.promptCharacterLimit,
+    );
     expect(body.imageGeneration.includeState).toBe(true);
     expect(body.imageGeneration.includeCast).toBe(true);
     // Persisted, not merely echoed.
-    expect(readPresets().find((p) => p.id === "user-no-image")!.imageGeneration).toEqual(body.imageGeneration);
+    expect(
+      readPresets().find((p) => p.id === "user-no-image")!.imageGeneration,
+    ).toEqual(body.imageGeneration);
   });
 
   it("returns the stored block from the preset GET route", async () => {
-    const res = await app.inject({ method: "GET", url: "/api/prompt-presets/user-with-image" });
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/prompt-presets/user-with-image",
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json().imageGeneration).toEqual(IMAGE_BLOCK);
   });
@@ -768,7 +958,7 @@ describe("image generation: preset routes and the global prompt config", () => {
     const res = await app.inject({
       method: "PUT",
       url: "/api/prompt-config/active",
-      payload: { presetId: "user-with-image" }
+      payload: { presetId: "user-with-image" },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().activePresetId).toBe("user-with-image");
@@ -776,7 +966,9 @@ describe("image generation: preset routes and the global prompt config", () => {
     expect(res.json().promptConfig.modules).toEqual({ turn: [] });
 
     // Persisted to the runtime settings file, not merely echoed.
-    const onDisk = JSON.parse(readFileSync(join(dir, "data", "user-settings.json"), "utf8"));
+    const onDisk = JSON.parse(
+      readFileSync(join(dir, "data", "user-settings.json"), "utf8"),
+    );
     expect(onDisk.activePresetId).toBe("user-with-image");
     expect(onDisk.promptConfig.imageGeneration).toEqual(IMAGE_BLOCK);
   });
@@ -785,7 +977,7 @@ describe("image generation: preset routes and the global prompt config", () => {
     const res = await app.inject({
       method: "PUT",
       url: "/api/prompt-config/active",
-      payload: { presetId: "user-plain" }
+      payload: { presetId: "user-plain" },
     });
     expect(res.statusCode).toBe(200);
     // Undefined, not a copy of nothing: the read sites then fall back to
@@ -797,26 +989,31 @@ describe("image generation: preset routes and the global prompt config", () => {
     const res = await app.inject({
       method: "PUT",
       url: "/api/prompt-config/active",
-      payload: { presetId: "nope" }
+      payload: { presetId: "nope" },
     });
     expect(res.statusCode).toBe(404);
   });
 
   it("patches ONE field of the image block, leaving the rest", async () => {
-    const before = (await app.inject({
-      method: "PUT",
-      url: "/api/prompt-config/active",
-      payload: { presetId: "user-with-image" }
-    })).json().promptConfig.imageGeneration;
+    const before = (
+      await app.inject({
+        method: "PUT",
+        url: "/api/prompt-config/active",
+        payload: { presetId: "user-with-image" },
+      })
+    ).json().promptConfig.imageGeneration;
 
     const res = await app.inject({
       method: "PATCH",
       url: "/api/prompt-config",
-      payload: { imageGeneration: { ...before, instructionMode: "pov" } }
+      payload: { imageGeneration: { ...before, instructionMode: "pov" } },
     });
     expect(res.statusCode).toBe(200);
     // One field changed, every other one survived the merge…
-    expect(res.json().promptConfig.imageGeneration).toEqual({ ...before, instructionMode: "pov" });
+    expect(res.json().promptConfig.imageGeneration).toEqual({
+      ...before,
+      instructionMode: "pov",
+    });
     // …and the turn modules are untouched by an image-only patch.
     expect(res.json().promptConfig.modules).toEqual({ turn: [] });
   });
@@ -825,8 +1022,15 @@ describe("image generation: preset routes and the global prompt config", () => {
     const file = join(dir, "data", "user-settings.json");
     const before = existsSync(file) ? readFileSync(file, "utf8") : null;
 
-    for (const payload of [{ imageGeneration: { instructionMode: "third" } }, { imageGeneration: { historyMessages: 99 } }]) {
-      const res = await app.inject({ method: "PATCH", url: "/api/prompt-config", payload });
+    for (const payload of [
+      { imageGeneration: { instructionMode: "third" } },
+      { imageGeneration: { historyMessages: 99 } },
+    ]) {
+      const res = await app.inject({
+        method: "PATCH",
+        url: "/api/prompt-config",
+        payload,
+      });
       expect(res.statusCode, JSON.stringify(payload)).toBe(400);
       expect(res.json().error).toContain("Invalid prompt config patch");
     }
@@ -841,7 +1045,7 @@ describe("image generation: preset routes and the global prompt config", () => {
     const res = await app.inject({
       method: "PUT",
       url: "/api/prompt-presets/shipped",
-      payload: { imageGeneration: { positivePrefix: "nope" } }
+      payload: { imageGeneration: { positivePrefix: "nope" } },
     });
     expect(res.statusCode).toBe(403);
     expect(readFileSync(presetsFile(), "utf8")).toBe(before);
@@ -851,7 +1055,7 @@ describe("image generation: preset routes and the global prompt config", () => {
     const created = await app.inject({
       method: "POST",
       url: "/api/prompt-presets",
-      payload: { name: "Clone", cloneFromId: "user-with-image" }
+      payload: { name: "Clone", cloneFromId: "user-with-image" },
     });
     expect(created.statusCode).toBe(201);
     expect(created.json().imageGeneration).toEqual(IMAGE_BLOCK);
@@ -860,72 +1064,116 @@ describe("image generation: preset routes and the global prompt config", () => {
     const edited = await app.inject({
       method: "PUT",
       url: "/api/prompt-presets/user-with-image",
-      payload: { imageGeneration: { ...IMAGE_BLOCK, positivePrefix: "changed after the clone" } }
+      payload: {
+        imageGeneration: {
+          ...IMAGE_BLOCK,
+          positivePrefix: "changed after the clone",
+        },
+      },
     });
     expect(edited.statusCode).toBe(200);
-    const reread = await app.inject({ method: "GET", url: `/api/prompt-presets/${created.json().id}` });
+    const reread = await app.inject({
+      method: "GET",
+      url: `/api/prompt-presets/${created.json().id}`,
+    });
     expect(reread.json().imageGeneration).toEqual(IMAGE_BLOCK);
 
     // Restore the source for the tests below.
     await app.inject({
       method: "PUT",
       url: "/api/prompt-presets/user-with-image",
-      payload: { imageGeneration: IMAGE_BLOCK }
+      payload: { imageGeneration: IMAGE_BLOCK },
     });
   });
 
   it("parses a preset with no imageGeneration block and falls back to the shipped defaults", () => {
-    const parsed = PromptPresetSchema.parse({ id: "legacy", name: "Legacy", readonly: false, modules: { turn: [] } });
+    const parsed = PromptPresetSchema.parse({
+      id: "legacy",
+      name: "Legacy",
+      readonly: false,
+      modules: { turn: [] },
+    });
     expect(parsed.imageGeneration).toBeUndefined();
-    const resolved = parsed.imageGeneration ?? DEFAULT_IMAGE_GENERATION_SETTINGS;
+    const resolved =
+      parsed.imageGeneration ?? DEFAULT_IMAGE_GENERATION_SETTINGS;
     expect(resolved.instruction).toBe(DEFAULT_IMAGE_PROMPT_INSTRUCTION);
     expect(resolved.promptCharacterLimit).toBe(1200);
   });
 
   it("round-trips the brainstorm settings, one field at a time", async () => {
-    const initial = await app.inject({ method: "GET", url: "/api/settings/brainstorm" });
+    const initial = await app.inject({
+      method: "GET",
+      url: "/api/settings/brainstorm",
+    });
     expect(initial.statusCode).toBe(200);
     // New sections are allowed out of the box; the other two default to off and to the active connection.
-    expect(initial.json()).toEqual({ includeOriginalCard: false, textProviderId: null, allowNewSections: true });
+    expect(initial.json()).toEqual({
+      includeOriginalCard: false,
+      textProviderId: null,
+      allowNewSections: true,
+    });
 
     // Each control saves as it changes, so a patch carries only what moved.
     const toggled = await app.inject({
       method: "PUT",
       url: "/api/settings/brainstorm",
-      payload: { includeOriginalCard: true }
+      payload: { includeOriginalCard: true },
     });
     expect(toggled.statusCode).toBe(200);
-    expect(toggled.json()).toEqual({ includeOriginalCard: true, textProviderId: null, allowNewSections: true });
+    expect(toggled.json()).toEqual({
+      includeOriginalCard: true,
+      textProviderId: null,
+      allowNewSections: true,
+    });
 
     const pointed = await app.inject({
       method: "PUT",
       url: "/api/settings/brainstorm",
-      payload: { textProviderId: "beta" }
+      payload: { textProviderId: "beta" },
     });
-    expect(pointed.json()).toEqual({ includeOriginalCard: true, textProviderId: "beta", allowNewSections: true });
+    expect(pointed.json()).toEqual({
+      includeOriginalCard: true,
+      textProviderId: "beta",
+      allowNewSections: true,
+    });
 
     const restricted = await app.inject({
       method: "PUT",
       url: "/api/settings/brainstorm",
-      payload: { allowNewSections: false }
+      payload: { allowNewSections: false },
     });
-    expect(restricted.json()).toEqual({ includeOriginalCard: true, textProviderId: "beta", allowNewSections: false });
+    expect(restricted.json()).toEqual({
+      includeOriginalCard: true,
+      textProviderId: "beta",
+      allowNewSections: false,
+    });
 
     // And back to following the active connection.
     const cleared = await app.inject({
       method: "PUT",
       url: "/api/settings/brainstorm",
-      payload: { textProviderId: null }
+      payload: { textProviderId: null },
     });
-    expect(cleared.json()).toEqual({ includeOriginalCard: true, textProviderId: null, allowNewSections: false });
+    expect(cleared.json()).toEqual({
+      includeOriginalCard: true,
+      textProviderId: null,
+      allowNewSections: false,
+    });
 
-    const reread = await app.inject({ method: "GET", url: "/api/settings/brainstorm" });
-    expect(reread.json()).toEqual({ includeOriginalCard: true, textProviderId: null, allowNewSections: false });
+    const reread = await app.inject({
+      method: "GET",
+      url: "/api/settings/brainstorm",
+    });
+    expect(reread.json()).toEqual({
+      includeOriginalCard: true,
+      textProviderId: null,
+      allowNewSections: false,
+    });
 
     const rejected = await app.inject({
       method: "PUT",
       url: "/api/settings/brainstorm",
-      payload: { includeOriginalCard: "yes" }
+      payload: { includeOriginalCard: "yes" },
     });
     expect(rejected.statusCode).toBe(400);
   });
@@ -933,25 +1181,37 @@ describe("image generation: preset routes and the global prompt config", () => {
   it("round-trips the chapter opening mode, defaulting to continuation and rejecting an unknown value", async () => {
     // A chapter-lifecycle preference beside the appearance ones; a fresh install must not need a
     // write to get a sane default.
-    const initial = await app.inject({ method: "GET", url: "/api/settings/chapter-opening-mode" });
+    const initial = await app.inject({
+      method: "GET",
+      url: "/api/settings/chapter-opening-mode",
+    });
     expect(initial.statusCode).toBe(200);
-    expect((initial.json() as { chapterOpeningMode?: string }).chapterOpeningMode).toBe("continuation");
+    expect(
+      (initial.json() as { chapterOpeningMode?: string }).chapterOpeningMode,
+    ).toBe("continuation");
 
     const saved = await app.inject({
       method: "PUT",
       url: "/api/settings/chapter-opening-mode",
-      payload: { openingMode: "longJump" }
+      payload: { openingMode: "longJump" },
     });
     expect(saved.statusCode).toBe(200);
-    expect((saved.json() as { chapterOpeningMode?: string }).chapterOpeningMode).toBe("longJump");
+    expect(
+      (saved.json() as { chapterOpeningMode?: string }).chapterOpeningMode,
+    ).toBe("longJump");
 
-    const reread = await app.inject({ method: "GET", url: "/api/settings/chapter-opening-mode" });
-    expect((reread.json() as { chapterOpeningMode?: string }).chapterOpeningMode).toBe("longJump");
+    const reread = await app.inject({
+      method: "GET",
+      url: "/api/settings/chapter-opening-mode",
+    });
+    expect(
+      (reread.json() as { chapterOpeningMode?: string }).chapterOpeningMode,
+    ).toBe("longJump");
 
     const rejected = await app.inject({
       method: "PUT",
       url: "/api/settings/chapter-opening-mode",
-      payload: { openingMode: "teleport" }
+      payload: { openingMode: "teleport" },
     });
     expect(rejected.statusCode).toBe(400);
   });
@@ -959,26 +1219,38 @@ describe("image generation: preset routes and the global prompt config", () => {
   it("round-trips the cover art shape, defaulting to landscape and rejecting an unknown value", async () => {
     // The shape is a display preference, but it lives in the appearance settings beside the
     // avatar shape (which is why this rides in the preset-routes harness).
-    const initial = await app.inject({ method: "GET", url: "/api/settings/appearance" });
+    const initial = await app.inject({
+      method: "GET",
+      url: "/api/settings/appearance",
+    });
     expect(initial.statusCode).toBe(200);
     // A fresh install must not need a write to get a sane frame.
-    expect((initial.json() as { coverAspect?: string }).coverAspect).toBe("landscape");
+    expect((initial.json() as { coverAspect?: string }).coverAspect).toBe(
+      "landscape",
+    );
 
     const saved = await app.inject({
       method: "PUT",
       url: "/api/settings/appearance",
-      payload: { coverAspect: "square" }
+      payload: { coverAspect: "square" },
     });
     expect(saved.statusCode).toBe(200);
-    expect((saved.json() as { coverAspect?: string }).coverAspect).toBe("square");
+    expect((saved.json() as { coverAspect?: string }).coverAspect).toBe(
+      "square",
+    );
 
-    const reread = await app.inject({ method: "GET", url: "/api/settings/appearance" });
-    expect((reread.json() as { coverAspect?: string }).coverAspect).toBe("square");
+    const reread = await app.inject({
+      method: "GET",
+      url: "/api/settings/appearance",
+    });
+    expect((reread.json() as { coverAspect?: string }).coverAspect).toBe(
+      "square",
+    );
 
     const rejected = await app.inject({
       method: "PUT",
       url: "/api/settings/appearance",
-      payload: { coverAspect: "cinema" }
+      payload: { coverAspect: "cinema" },
     });
     expect(rejected.statusCode).toBe(400);
   });
@@ -986,44 +1258,63 @@ describe("image generation: preset routes and the global prompt config", () => {
   it("round-trips the panel swipe switch, defaulting to on and rejecting a non-boolean", async () => {
     // Display, like the cover shape beside it — and the one appearance value the play view ACTS on,
     // which is why it has to survive a round trip through the same route.
-    const initial = await app.inject({ method: "GET", url: "/api/settings/appearance" });
-    expect((initial.json() as { paneSwipeEnabled?: boolean }).paneSwipeEnabled).toBe(true);
+    const initial = await app.inject({
+      method: "GET",
+      url: "/api/settings/appearance",
+    });
+    expect(
+      (initial.json() as { paneSwipeEnabled?: boolean }).paneSwipeEnabled,
+    ).toBe(true);
 
     // A neighbouring appearance value, so the "leaves the rest alone" check below does not depend on
     // another test having written one.
     await app.inject({
       method: "PUT",
       url: "/api/settings/appearance",
-      payload: { coverAspect: "portrait" }
+      payload: { coverAspect: "portrait" },
     });
 
     const saved = await app.inject({
       method: "PUT",
       url: "/api/settings/appearance",
-      payload: { paneSwipeEnabled: false }
+      payload: { paneSwipeEnabled: false },
     });
     expect(saved.statusCode).toBe(200);
-    expect((saved.json() as { paneSwipeEnabled?: boolean }).paneSwipeEnabled).toBe(false);
+    expect(
+      (saved.json() as { paneSwipeEnabled?: boolean }).paneSwipeEnabled,
+    ).toBe(false);
 
-    const reread = await app.inject({ method: "GET", url: "/api/settings/appearance" });
-    expect((reread.json() as { paneSwipeEnabled?: boolean }).paneSwipeEnabled).toBe(false);
+    const reread = await app.inject({
+      method: "GET",
+      url: "/api/settings/appearance",
+    });
+    expect(
+      (reread.json() as { paneSwipeEnabled?: boolean }).paneSwipeEnabled,
+    ).toBe(false);
 
     // A switch is a boolean: a truthy string must be a 400 with a reason, and write nothing.
     const rejected = await app.inject({
       method: "PUT",
       url: "/api/settings/appearance",
-      payload: { paneSwipeEnabled: "yes" }
+      payload: { paneSwipeEnabled: "yes" },
     });
     expect(rejected.statusCode).toBe(400);
     expect(JSON.stringify(rejected.json())).toContain("paneSwipeEnabled");
 
-    const afterRejection = await app.inject({ method: "GET", url: "/api/settings/appearance" });
-    expect((afterRejection.json() as { paneSwipeEnabled?: boolean }).paneSwipeEnabled).toBe(false);
+    const afterRejection = await app.inject({
+      method: "GET",
+      url: "/api/settings/appearance",
+    });
+    expect(
+      (afterRejection.json() as { paneSwipeEnabled?: boolean })
+        .paneSwipeEnabled,
+    ).toBe(false);
 
     // …and neither PUT disturbed the value beside it.
-    expect((afterRejection.json() as { coverAspect?: string }).coverAspect).toBe("portrait");
+    expect(
+      (afterRejection.json() as { coverAspect?: string }).coverAspect,
+    ).toBe("portrait");
   });
-
 });
 
 /** The global config's bootstrap path: a fresh install (or a pre-change
@@ -1044,15 +1335,25 @@ describe("global prompt config seeding", () => {
             name: "Default",
             readonly: true,
             modules: {
-              turn: [{ id: "mod_seed", name: "Seed module", description: "d", content: "SEEDED", order: 1, enabled: true }]
+              turn: [
+                {
+                  id: "mod_seed",
+                  name: "Seed module",
+                  description: "d",
+                  content: "SEEDED",
+                  order: 1,
+                  enabled: true,
+                },
+              ],
             },
-            imageGeneration: { ...IMAGE_BLOCK }
-          }
+            imageGeneration: { ...IMAGE_BLOCK },
+          },
         ]),
-        "utf8"
+        "utf8",
       );
       process.chdir(root);
-      const { loadPromptConfig } = await import("../src/server/promptConfigStore");
+      const { loadPromptConfig } =
+        await import("../src/server/promptConfigStore");
       const state = loadPromptConfig(join(root, "data"));
       expect(state.activePresetId).toBe("default");
       expect(state.promptConfig.modules.turn).toHaveLength(1);
@@ -1066,5 +1367,3 @@ describe("global prompt config seeding", () => {
     }
   });
 });
-
-

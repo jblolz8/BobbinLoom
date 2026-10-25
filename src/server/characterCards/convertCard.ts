@@ -1,5 +1,12 @@
-import type { CharacterFormat, CharacterTemplate, PromptPresetModule } from "../../schemas";
-import { ensureAllSections, resolveCharacterFormat } from "../../engine/characterFormat";
+import type {
+  CharacterFormat,
+  CharacterTemplate,
+  PromptPresetModule,
+} from "../../schemas";
+import {
+  ensureAllSections,
+  resolveCharacterFormat,
+} from "../../engine/characterFormat";
 import type { TurnProvider } from "../provider";
 
 export interface ConvertGenerateInput {
@@ -24,7 +31,7 @@ export interface ConvertGenerateOutput {
 export async function convertCardGenerate(
   provider: TurnProvider,
   input: ConvertGenerateInput,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<ConvertGenerateOutput> {
   const t = input.template;
   const fmt = resolveCharacterFormat(input.format);
@@ -48,7 +55,7 @@ export async function convertCardGenerate(
       input.feedback,
       context,
       signal,
-      fmt
+      fmt,
     );
   } else {
     // Initial generation from source CCv2 card
@@ -56,7 +63,7 @@ export async function convertCardGenerate(
       { name: t.name, description: t.content },
       context,
       signal,
-      fmt
+      fmt,
     );
   }
 
@@ -74,14 +81,16 @@ export interface ConvertApplyInput {
  * Apply a generated BL sheet to the record: overwrite content, drop format="ccv2",
  * preserve ccv2Content for "Compare to Original", keep metadata.
  */
-export function convertCardApply(input: ConvertApplyInput): Partial<CharacterTemplate> {
+export function convertCardApply(
+  input: ConvertApplyInput,
+): Partial<CharacterTemplate> {
   return {
     content: input.content,
-    format: undefined,           // drops the "ccv2" literal → becomes BL-native
-    ccv2Content: input.template.content,  // cache original for comparison
+    format: undefined, // drops the "ccv2" literal → becomes BL-native
+    ccv2Content: input.template.content, // cache original for comparison
     ccv2CreatorNotes: input.template.creatorNotes, // cache original creator notes for comparison
-    ccv2Tags: input.template.tags,        // cache original tags for comparison / restoration
-    summary: "",                 // reset summary — BL-native re-derives it
+    ccv2Tags: input.template.tags, // cache original tags for comparison / restoration
+    summary: "", // reset summary — BL-native re-derives it
     // Preserve: name, tags, scenario, creator, cardRef, spec, specVersion, etc.
   };
 }

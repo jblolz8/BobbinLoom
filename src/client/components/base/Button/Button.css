@@ -16,13 +16,20 @@
   cursor: pointer;
   user-select: none;
   text-decoration: none;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease,
+    opacity 0.15s ease;
   box-sizing: border-box;
 }
 
 .base-btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--bg-panel), 0 0 0 4px var(--accent-base);
+  box-shadow:
+    0 0 0 2px var(--bg-panel),
+    0 0 0 4px var(--accent-base);
 }
 
 .base-btn:disabled,

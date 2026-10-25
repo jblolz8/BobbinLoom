@@ -12,10 +12,13 @@ import { ConfirmActions } from "../src/client/components/common/ConfirmModal";
 
 /** The visible labels, in DOM order — the whole point of the test. */
 function labels(html: string): string[] {
-  return [...html.matchAll(/<span class="base-btn__label">([^<]*)<\/span>/g)].map((match) => match[1]);
+  return [
+    ...html.matchAll(/<span class="base-btn__label">([^<]*)<\/span>/g),
+  ].map((match) => match[1]);
 }
 
-const backupButton = () => createElement(Button, { variant: "secondary" }, "Duplicate as backup");
+const backupButton = () =>
+  createElement(Button, { variant: "secondary" }, "Duplicate as backup");
 
 describe("the confirm dialog's action row", () => {
   it("orders the row confirm, secondary actions, then Cancel", () => {
@@ -25,11 +28,15 @@ describe("the confirm dialog's action row", () => {
         danger: true,
         secondaryActions: backupButton(),
         onConfirm: () => {},
-        onCancel: () => {}
-      })
+        onCancel: () => {},
+      }),
     );
 
-    expect(labels(html)).toEqual(["Retry this response", "Duplicate as backup", "Cancel"]);
+    expect(labels(html)).toEqual([
+      "Retry this response",
+      "Duplicate as backup",
+      "Cancel",
+    ]);
     expect(html.startsWith('<div class="settings-actions">')).toBe(true);
     expect(html).toContain("base-btn--danger");
   });
@@ -45,8 +52,8 @@ describe("the confirm dialog's action row", () => {
         confirmDisabled: true,
         secondaryActions: backupButton(),
         onConfirm: () => {},
-        onCancel: () => {}
-      })
+        onCancel: () => {},
+      }),
     );
 
     expect((html.match(/base-btn__spinner/g) ?? []).length).toBe(1);

@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useId, useRef, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { createPortal } from "react-dom";
 import { FOCUSABLE_SELECTOR, wrapIndex } from "../../engine/dialogFocus";
 import { isTopDialog, popDialog, pushDialog } from "../../engine/dialogStack";
@@ -54,7 +62,7 @@ export function Dialog({
   className = "",
   maxWidth,
   initialFocusRef,
-  headerAction
+  headerAction,
 }: DialogProps) {
   const titleId = useId();
   const id = useId();
@@ -73,7 +81,8 @@ export function Dialog({
   // rather than thrown at `<body>`.
   useEffect(() => {
     const active = document.activeElement;
-    restoreRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
+    restoreRef.current =
+      active instanceof HTMLElement && active !== document.body ? active : null;
     // This runs before a Radix menu hands focus back to its own trigger, so the trap below — not
     // this line — is what actually keeps focus here.
     const target = initialFocusRef?.current ?? sectionRef.current;
@@ -100,7 +109,7 @@ export function Dialog({
       const target = event.target;
       if (!section || !(target instanceof HTMLElement)) return;
       if (section.contains(target)) return;
-      if (target.closest('[data-radix-popper-content-wrapper]')) return;
+      if (target.closest("[data-radix-popper-content-wrapper]")) return;
       if (target !== document.body) restoreRef.current = target;
       // Back to the dialog's own first stop, not merely the container: an Escape or a Tab from the
       // container is a worse place to land than the field the dialog was opened for.
@@ -123,22 +132,28 @@ export function Dialog({
       if (!section) return;
       // Visible, non-hidden stops only: Radix's selects keep hidden helpers in the tree, and a
       // tab ring that lands on one of those is worse than no ring at all.
-      const stops = Array.from(section.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-        (node) => node.offsetParent !== null && !node.closest('[aria-hidden="true"]')
+      const stops = Array.from(
+        section.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+      ).filter(
+        (node) =>
+          node.offsetParent !== null && !node.closest('[aria-hidden="true"]'),
       );
       if (stops.length === 0) {
         event.preventDefault();
         return;
       }
       const active = document.activeElement;
-      const current = active instanceof HTMLElement ? stops.indexOf(active) : -1;
+      const current =
+        active instanceof HTMLElement ? stops.indexOf(active) : -1;
       // Anywhere but the two edges is the browser's own business — it stays inside the ring.
-      const atEdge = current === -1 || (event.shiftKey ? current === 0 : current === stops.length - 1);
+      const atEdge =
+        current === -1 ||
+        (event.shiftKey ? current === 0 : current === stops.length - 1);
       if (!atEdge) return;
       event.preventDefault();
       stops[wrapIndex(stops.length, current, event.shiftKey)].focus();
     },
-    [id, isBusy, onClose]
+    [id, isBusy, onClose],
   );
 
   // The net under the ring: if focus somehow ends up outside the dialog, Escape must still close it.
@@ -149,7 +164,12 @@ export function Dialog({
       // Nested: the dialog on top owns Escape, and this net must not also answer it.
       if (!isTopDialog(id)) return;
       const section = sectionRef.current;
-      if (section && event.target instanceof Node && section.contains(event.target)) return;
+      if (
+        section &&
+        event.target instanceof Node &&
+        section.contains(event.target)
+      )
+        return;
       onClose();
     }
     window.addEventListener("keydown", onWindowKeyDown);
@@ -162,7 +182,8 @@ export function Dialog({
       onMouseDown={(event) => {
         // Only a press on the backdrop itself: a drag that starts in a field and ends out here must
         // not dismiss the dialog mid-edit.
-        if (event.target === event.currentTarget && !isBusy && isTopDialog(id)) onClose();
+        if (event.target === event.currentTarget && !isBusy && isTopDialog(id))
+          onClose();
       }}
     >
       <section
@@ -178,7 +199,13 @@ export function Dialog({
         <header className="modal-header">
           <div>
             <h2 id={titleId}>{title}</h2>
-            {description ? (typeof description === "string" ? <p>{description}</p> : description) : null}
+            {description ? (
+              typeof description === "string" ? (
+                <p>{description}</p>
+              ) : (
+                description
+              )
+            ) : null}
           </div>
           {headerAction ?? null}
         </header>
@@ -186,7 +213,7 @@ export function Dialog({
         <div className="settings-actions">{footer}</div>
       </section>
     </div>,
-    document.body
+    document.body,
   );
 }
 

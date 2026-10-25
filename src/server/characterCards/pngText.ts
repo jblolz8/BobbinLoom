@@ -1,6 +1,8 @@
 /** PNG signature bytes (0x89 'P' 'N' 'G' CR LF 0x1A LF). Exported for the
  *  import route's PNG/JSON sniffing. */
-export const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+export const PNG_SIG = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+]);
 
 /** Extract the base64 JSON payload stored under the `chara` keyword in a PNG's
  *  tEXt (or iTXt) chunk. Returns null when the PNG is invalid or has no card. */

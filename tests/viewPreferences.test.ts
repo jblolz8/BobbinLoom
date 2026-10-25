@@ -2,7 +2,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadAppSettings, saveViewPreferences } from "../src/server/appSettingsStore";
+import {
+  loadAppSettings,
+  saveViewPreferences,
+} from "../src/server/appSettingsStore";
 
 const tempDirs: string[] = [];
 
@@ -39,7 +42,7 @@ describe("view preferences storage", () => {
     expect(loadAppSettings(dir).viewPreferences?.library).toEqual({
       viewMode: "grid",
       sortBy: "name",
-      search: "elf"
+      search: "elf",
     });
   });
 
@@ -49,27 +52,40 @@ describe("view preferences storage", () => {
     saveViewPreferences(dir, { pageSizes: { library: 25 } });
     saveViewPreferences(dir, { pageSizes: { home: 48 } });
 
-    expect(loadAppSettings(dir).viewPreferences?.pageSizes).toEqual({ library: 25, home: 48 });
+    expect(loadAppSettings(dir).viewPreferences?.pageSizes).toEqual({
+      library: 25,
+      home: 48,
+    });
   });
 
   it("keeps the groups independent", () => {
     const dir = tempDir();
-    saveViewPreferences(dir, { chat: { choicesEnabled: false }, setup: { showTagFilters: true } });
+    saveViewPreferences(dir, {
+      chat: { choicesEnabled: false },
+      setup: { showTagFilters: true },
+    });
     saveViewPreferences(dir, { setup: { castViewMode: "list" } });
 
     const stored = loadAppSettings(dir).viewPreferences;
     expect(stored?.chat).toEqual({ choicesEnabled: false });
-    expect(stored?.setup).toEqual({ showTagFilters: true, castViewMode: "list" });
+    expect(stored?.setup).toEqual({
+      showTagFilters: true,
+      castViewMode: "list",
+    });
   });
 
   it("merges the dismissals record rather than dropping earlier ones", () => {
     const dir = tempDir();
-    saveViewPreferences(dir, { staleNoteDismissals: { ch_1: "2026-01-01T00:00:00.000Z" } });
-    saveViewPreferences(dir, { staleNoteDismissals: { ch_2: "2026-01-02T00:00:00.000Z" } });
+    saveViewPreferences(dir, {
+      staleNoteDismissals: { ch_1: "2026-01-01T00:00:00.000Z" },
+    });
+    saveViewPreferences(dir, {
+      staleNoteDismissals: { ch_2: "2026-01-02T00:00:00.000Z" },
+    });
 
     expect(loadAppSettings(dir).viewPreferences?.staleNoteDismissals).toEqual({
       ch_1: "2026-01-01T00:00:00.000Z",
-      ch_2: "2026-01-02T00:00:00.000Z"
+      ch_2: "2026-01-02T00:00:00.000Z",
     });
   });
 

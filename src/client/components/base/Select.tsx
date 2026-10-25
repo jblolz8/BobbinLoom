@@ -1,4 +1,9 @@
-import { forwardRef, type ComponentPropsWithoutRef, type ElementRef, type ReactNode } from "react";
+import {
+  forwardRef,
+  type ComponentPropsWithoutRef,
+  type ElementRef,
+  type ReactNode,
+} from "react";
 import * as RadixSelect from "@radix-ui/react-select";
 import { Badge } from "./Badge/Badge";
 import { Icon } from "./Icon";
@@ -27,8 +32,9 @@ function fromRadixValue(value: string): string {
   return value === EMPTY_VALUE_SENTINEL ? "" : value;
 }
 
-export interface SelectTriggerProps
-  extends ComponentPropsWithoutRef<typeof RadixSelect.Trigger> {
+export interface SelectTriggerProps extends ComponentPropsWithoutRef<
+  typeof RadixSelect.Trigger
+> {
   size?: SelectSize;
   variant?: SelectVariant;
   fullWidth?: boolean;
@@ -48,7 +54,7 @@ export const SelectTrigger = forwardRef<
     dirty = false,
     ...props
   },
-  ref
+  ref,
 ) {
   return (
     <RadixSelect.Trigger
@@ -66,8 +72,9 @@ export const SelectTrigger = forwardRef<
   );
 });
 
-export interface SelectContentProps
-  extends ComponentPropsWithoutRef<typeof RadixSelect.Content> {
+export interface SelectContentProps extends ComponentPropsWithoutRef<
+  typeof RadixSelect.Content
+> {
   className?: string;
 }
 
@@ -76,7 +83,7 @@ export const SelectContent = forwardRef<
   SelectContentProps
 >(function SelectContent(
   { className = "", children, position = "popper", sideOffset = 5, ...props },
-  ref
+  ref,
 ) {
   return (
     <RadixSelect.Portal>
@@ -101,8 +108,9 @@ export const SelectContent = forwardRef<
   );
 });
 
-export interface SelectItemProps
-  extends ComponentPropsWithoutRef<typeof RadixSelect.Item> {
+export interface SelectItemProps extends ComponentPropsWithoutRef<
+  typeof RadixSelect.Item
+> {
   icon?: ReactNode;
   description?: string;
 }
@@ -112,7 +120,7 @@ export const SelectItem = forwardRef<
   SelectItemProps
 >(function SelectItem(
   { className = "", children, icon, description, ...props },
-  ref
+  ref,
 ) {
   return (
     <RadixSelect.Item
@@ -123,7 +131,9 @@ export const SelectItem = forwardRef<
       <span className="base-select-item__content">
         {icon && <span className="base-select-item__icon">{icon}</span>}
         <RadixSelect.ItemText>{children}</RadixSelect.ItemText>
-        {description && <span className="base-select-item__desc">{description}</span>}
+        {description && (
+          <span className="base-select-item__desc">{description}</span>
+        )}
       </span>
       <RadixSelect.ItemIndicator className="base-select-item__indicator">
         <Icon name="Check" size={13} />
@@ -200,12 +210,16 @@ export function SimpleSelect<T extends string = string>({
         fullWidth={fullWidth}
         dirty={dirty}
         className={className}
-        aria-label={ariaLabel ?? (typeof label === "string" ? label : undefined)}
+        aria-label={
+          ariaLabel ?? (typeof label === "string" ? label : undefined)
+        }
       >
         <SelectValue placeholder={placeholder}>
           {selectedOption ? (
             <span className="flex items-center gap-1.5 min-w-0">
-              {selectedOption.icon && <span className="shrink-0">{selectedOption.icon}</span>}
+              {selectedOption.icon && (
+                <span className="shrink-0">{selectedOption.icon}</span>
+              )}
               <span className="truncate">{selectedOption.label}</span>
             </span>
           ) : (
@@ -233,9 +247,13 @@ export function SimpleSelect<T extends string = string>({
   );
 
   const controlNode = rightElement ? (
-    <div className={`field-input-row field-input-row--${size} has-action has-right-action`}>
+    <div
+      className={`field-input-row field-input-row--${size} has-action has-right-action`}
+    >
       {selectNode}
-      <div className="field-input-action field-input-action--right">{rightElement}</div>
+      <div className="field-input-action field-input-action--right">
+        {rightElement}
+      </div>
     </div>
   ) : (
     selectNode
@@ -251,7 +269,13 @@ export function SimpleSelect<T extends string = string>({
     >
       {label && (
         <span className="field-label-text">
-          {labelIcon && <Icon name={labelIcon} size={12} className="ds-icon-accent shrink-0" />}
+          {labelIcon && (
+            <Icon
+              name={labelIcon}
+              size={12}
+              className="ds-icon-accent shrink-0"
+            />
+          )}
           <span>{label}</span>
           {tooltip && <TooltipIcon content={tooltip} />}
           {dirty && (

@@ -1,4 +1,9 @@
-import type { CharacterTemplate, InventoryRef, Item, WorldStateEntry } from "../schemas";
+import type {
+  CharacterTemplate,
+  InventoryRef,
+  Item,
+  WorldStateEntry,
+} from "../schemas";
 
 export const ITEMS: Item[] = [
   {
@@ -6,22 +11,23 @@ export const ITEMS: Item[] = [
     name: "Potion",
     type: "consumable",
     description: "Restores a small amount of HP.",
-    stackable: true
+    stackable: true,
   },
   {
     id: "town_map",
     name: "Town Map",
     type: "key item",
     description: "A simple map of the starter area.",
-    stackable: false
-  }
+    stackable: false,
+  },
 ];
 
 export const DEMO_TEMPLATE: CharacterTemplate = {
   id: "char_mira",
   name: "Mira",
   version: 1,
-  summary: "A disciplined, guarded swordswoman who values competence and earned trust.",
+  summary:
+    "A disciplined, guarded swordswoman who values competence and earned trust.",
   startingClothing: [
     { slot: "Top", name: "Black training top" },
     { slot: "Bottom", name: "Grey training pants" },
@@ -67,13 +73,13 @@ Voice softens slightly. Still direct but warmer. Uses fewer words but each carri
 
 export const STARTER_INVENTORY: InventoryRef[] = [
   { itemId: "potion", quantity: 1 },
-  { itemId: "town_map", quantity: 1 }
+  { itemId: "town_map", quantity: 1 },
 ];
 
 export const STARTER_WORLD_STATE: WorldStateEntry[] = [
   {
     id: "first_steps",
     name: "First Steps",
-    description: "Get oriented in town and prove you can handle basic trouble."
-  }
+    description: "Get oriented in town and prove you can handle basic trouble.",
+  },
 ];

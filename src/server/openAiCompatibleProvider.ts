@@ -1,6 +1,10 @@
 import { parseBrainstormReply } from "../engine/brainstorm";
 import { toJsonExampleContent } from "../engine/characterSections";
-import { buildFormatExample, buildFormatRules, resolveCharacterFormat } from "../engine/characterFormat";
+import {
+  buildFormatExample,
+  buildFormatRules,
+  resolveCharacterFormat,
+} from "../engine/characterFormat";
 import {
   AssistantTurnSchema,
   CharacterFormat,
@@ -10,7 +14,7 @@ import {
   PromptConfig,
   ScenarioPreferences,
   ScenarioSeed,
-  ScenarioSeedSchema
+  ScenarioSeedSchema,
 } from "../schemas";
 import type {
   ChapterCompactionInput,
@@ -18,16 +22,31 @@ import type {
   CharacterBrainstormOutput,
   MeasuredUsage,
   ProposedSectionChange,
-  ProviderTurn
+  ProviderTurn,
 } from "./provider";
-import { buildTextSamplingParams, type ResolvedProviderConfig } from "./providerConfig";
+import {
+  buildTextSamplingParams,
+  type ResolvedProviderConfig,
+} from "./providerConfig";
 import { buildLorebookContext, lorebookBudgetChars } from "./lorebookContext";
-import { completionValidator, extractJsonPayload, repairRawControlChars } from "./provider/patchParser";
+import {
+  completionValidator,
+  extractJsonPayload,
+  repairRawControlChars,
+} from "./provider/patchParser";
 import { assembleTurnPrompt, renderModules } from "./provider/promptBuilder";
 import { requestWithRetry } from "./provider/openaiClient";
 
-export { extractJsonPayload, repairRawControlChars } from "./provider/patchParser";
-export { assembleTurnPrompt, summarizePlaythrough, renderModules, buildSystemPrompt } from "./provider/promptBuilder";
+export {
+  extractJsonPayload,
+  repairRawControlChars,
+} from "./provider/patchParser";
+export {
+  assembleTurnPrompt,
+  summarizePlaythrough,
+  renderModules,
+  buildSystemPrompt,
+} from "./provider/promptBuilder";
 
 type ChatMessage = {
   role: "system" | "user" | "assistant";
@@ -37,16 +56,23 @@ type ChatMessage = {
 export class OpenAICompatibleProvider {
   constructor(
     private readonly config: ResolvedProviderConfig,
-    private readonly fetchImpl: typeof fetch = fetch
+    private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
   private async executeRequest(
     body: Record<string, unknown>,
     path: string = "/chat/completions",
     validate?: (text: string) => string | null,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<Response> {
-    return requestWithRetry(this.config, this.fetchImpl, body, path, validate, signal);
+    return requestWithRetry(
+      this.config,
+      this.fetchImpl,
+      body,
+      path,
+      validate,
+      signal,
+    );
   }
 
   async generateTurn(
@@ -54,22 +80,29 @@ export class OpenAICompatibleProvider {
     state: Playthrough,
     choicesEnabled: boolean,
     promptConfig: PromptConfig,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<ProviderTurn> {
-    const queryMessages = state.messages.filter(m => !m.hidden).slice(-4);
-    const queryText = queryMessages.map(m => m.content).join("\n");
+    const queryMessages = state.messages.filter((m) => !m.hidden).slice(-4);
+    const queryText = queryMessages.map((m) => m.content).join("\n");
     const queryEmbeddings = queryText
       ? await this.embedTexts([queryText])
       : [[]];
     const queryEmbedding = queryEmbeddings[0] ?? [];
 
-    const { messages, promptUsage } = assembleTurnPrompt(input, state, choicesEnabled, queryEmbedding, {
-      contextWindow: this.config.contextWindow ?? 65536,
-      // Mirrors the `max_tokens` sent below, so the budget cannot be spent entirely on prompt.
-      reserveOutputTokens: this.config.maxTokens,
-      // Feed back the last measured/estimated ratio so the estimate self-corrects.
-      calibration: state.tokenCalibration
-    }, promptConfig);
+    const { messages, promptUsage } = assembleTurnPrompt(
+      input,
+      state,
+      choicesEnabled,
+      queryEmbedding,
+      {
+        contextWindow: this.config.contextWindow ?? 65536,
+        // Mirrors the `max_tokens` sent below, so the budget cannot be spent entirely on prompt.
+        reserveOutputTokens: this.config.maxTokens,
+        // Feed back the last measured/estimated ratio so the estimate self-corrects.
+        calibration: state.tokenCalibration,
+      },
+      promptConfig,
+    );
 
     const body: Record<string, unknown> = {
       model: this.config.model,
@@ -77,14 +110,25 @@ export class OpenAICompatibleProvider {
       temperature: this.config.temperature,
       max_tokens: this.config.maxTokens,
 
-      ...buildTextSamplingParams(this.config, { includeStop: true, jsonObject: true })
+      ...buildTextSamplingParams(this.config, {
+        includeStop: true,
+        jsonObject: true,
+      }),
     };
 
     const rawInput = JSON.stringify(body);
-    const response = await this.executeRequest(body, "/chat/completions", completionValidator, signal);
+    const response = await this.executeRequest(
+      body,
+      "/chat/completions",
+      completionValidator,
+      signal,
+    );
     const rawOutput = await response.text();
     let payload: {
-      choices?: Array<{ message?: { content?: string | null }; finish_reason?: string | null }>;
+      choices?: Array<{
+        message?: { content?: string | null };
+        finish_reason?: string | null;
+      }>;
       usage?: { prompt_tokens?: number; completion_tokens?: number };
     } = { choices: [] };
     try {
@@ -102,12 +146,14 @@ export class OpenAICompatibleProvider {
     // chars/4 estimate instead of treating a fake zero as a measurement.
     const usage = payload.usage;
     const measuredUsage: MeasuredUsage | undefined =
-      typeof usage?.prompt_tokens === "number" && Number.isFinite(usage.prompt_tokens)
+      typeof usage?.prompt_tokens === "number" &&
+      Number.isFinite(usage.prompt_tokens)
         ? {
             promptTokens: usage.prompt_tokens,
-            ...(typeof usage.completion_tokens === "number" && Number.isFinite(usage.completion_tokens)
+            ...(typeof usage.completion_tokens === "number" &&
+            Number.isFinite(usage.completion_tokens)
               ? { completionTokens: usage.completion_tokens }
-              : {})
+              : {}),
           }
         : undefined;
 
@@ -122,44 +168,82 @@ export class OpenAICompatibleProvider {
         if (!choicesEnabled) {
           delete parsed.data.choices;
         }
-        return withUsage({ turn: parsed.data, promptUsage, model: this.config.model, rawInput, rawOutput, finishReason });
+        return withUsage({
+          turn: parsed.data,
+          promptUsage,
+          model: this.config.model,
+          rawInput,
+          rawOutput,
+          finishReason,
+        });
       }
 
       const extractedObj = extracted as Record<string, unknown>;
-      const narrative = typeof extractedObj.narrative === "string" && extractedObj.narrative.trim() ? extractedObj.narrative : "";
+      const narrative =
+        typeof extractedObj.narrative === "string" &&
+        extractedObj.narrative.trim()
+          ? extractedObj.narrative
+          : "";
       const choices = Array.isArray(extractedObj.choices)
         ? extractedObj.choices.filter((c): c is string => typeof c === "string")
         : undefined;
-      const statePatch = typeof extractedObj.statePatch === "object" && extractedObj.statePatch !== null
-        ? extractedObj.statePatch
-        : undefined;
+      const statePatch =
+        typeof extractedObj.statePatch === "object" &&
+        extractedObj.statePatch !== null
+          ? extractedObj.statePatch
+          : undefined;
 
       if (narrative) {
-        return withUsage({ turn: { narrative, choices: choicesEnabled ? choices : undefined, statePatch }, promptUsage, model: this.config.model, rawInput, rawOutput, finishReason });
+        return withUsage({
+          turn: {
+            narrative,
+            choices: choicesEnabled ? choices : undefined,
+            statePatch,
+          },
+          promptUsage,
+          model: this.config.model,
+          rawInput,
+          rawOutput,
+          finishReason,
+        });
       }
 
       return withUsage({
-        turn: { narrative: "The provider returned an empty response.", statePatch },
+        turn: {
+          narrative: "The provider returned an empty response.",
+          statePatch,
+        },
         promptUsage,
         model: this.config.model,
         rawInput,
         rawOutput,
-        finishReason
+        finishReason,
       });
     }
 
     return withUsage({
-      turn: { narrative: content || "The provider returned an empty response." },
+      turn: {
+        narrative: content || "The provider returned an empty response.",
+      },
       promptUsage,
       model: this.config.model,
       rawInput,
       rawOutput,
-      finishReason
+      finishReason,
     });
   }
 
-  async generateScenarioSeed(preferences: ScenarioPreferences, lorebookIds?: string[], signal?: AbortSignal, format?: CharacterFormat): Promise<ScenarioSeed> {
-    const lorebookContext = buildLorebookContext(lorebookIds, preferences.setting ?? "", lorebookBudgetChars(this.config.maxTokens));
+  async generateScenarioSeed(
+    preferences: ScenarioPreferences,
+    lorebookIds?: string[],
+    signal?: AbortSignal,
+    format?: CharacterFormat,
+  ): Promise<ScenarioSeed> {
+    const lorebookContext = buildLorebookContext(
+      lorebookIds,
+      preferences.setting ?? "",
+      lorebookBudgetChars(this.config.maxTokens),
+    );
     // The same resolved-format guidance the sheet/refine/reformat prompts already get:
     // without it this path saw only the sample sheet blob and wrote one-bullet sections.
     const fmt = resolveCharacterFormat(format);
@@ -193,14 +277,18 @@ export class OpenAICompatibleProvider {
       preferences.setting ? `Setting: ${preferences.setting}` : "",
       "",
       ...(lorebookContext ? [lorebookContext, ""] : []),
-      ...(preferences.cast && preferences.cast.length ? [
-        "",
-        "EXISTING CAST (already chosen — do NOT create new versions of these):",
-        ...preferences.cast.map((c) => `- ${c.name}${c.summary ? ` — ${c.summary}` : ""}`),
-        `The lead companion is ${preferences.cast[0].name}.`,
-        `Set "character.name" to ${preferences.cast[0].name} and keep "character.content" minimal (the engine reuses the chosen card's existing sheet).`,
-        "",
-      ] : []),
+      ...(preferences.cast && preferences.cast.length
+        ? [
+            "",
+            "EXISTING CAST (already chosen — do NOT create new versions of these):",
+            ...preferences.cast.map(
+              (c) => `- ${c.name}${c.summary ? ` — ${c.summary}` : ""}`,
+            ),
+            `The lead companion is ${preferences.cast[0].name}.`,
+            `Set "character.name" to ${preferences.cast[0].name} and keep "character.content" minimal (the engine reuses the chosen card's existing sheet).`,
+            "",
+          ]
+        : []),
       "Guidelines:",
       "- Write in a neutral tone; let the user's setting description carry the genre and atmosphere.",
       "- Provide 1 starting companion character template with a complete character sheet in the content field. Write a compelling, detailed character sheet; these rules define its shape:",
@@ -211,24 +299,37 @@ export class OpenAICompatibleProvider {
         ? "- additionalCharacters: Keep this array empty []. Do NOT invent or create any new background characters. The story must only involve the existing cast or characters explicitly named in the setting."
         : "- additionalCharacters: Provide 0 to 2 simple characters who appear in the opening scene with names, one-line descriptions, and their storyRole (e.g. 'Town Guard', 'Tavern Keeper', 'Mysterious Stranger').",
       "- Make openingText engaging, setting up immediate atmosphere and context for the player.",
-      "- Return ONLY the JSON object. No markdown, no explanation."
-    ].filter(Boolean).join("\n");
+      "- Return ONLY the JSON object. No markdown, no explanation.",
+    ]
+      .filter(Boolean)
+      .join("\n");
 
-    const messages: ChatMessage[] = [
-      { role: "user", content: prompt }
-    ];
+    const messages: ChatMessage[] = [{ role: "user", content: prompt }];
 
     const body: Record<string, unknown> = {
       model: this.config.model,
       messages,
       temperature: this.config.temperature,
       max_tokens: Math.max(4000, this.config.maxTokens),
-      ...buildTextSamplingParams(this.config, { includeStop: true, jsonObject: true })
+      ...buildTextSamplingParams(this.config, {
+        includeStop: true,
+        jsonObject: true,
+      }),
     };
 
-    const response = await this.executeRequest(body, "/chat/completions", completionValidator, signal);
+    const response = await this.executeRequest(
+      body,
+      "/chat/completions",
+      completionValidator,
+      signal,
+    );
     const rawOutput = await response.text();
-    let payload: { choices?: Array<{ message?: { content?: string | null }; finish_reason?: string | null }> } = { choices: [] };
+    let payload: {
+      choices?: Array<{
+        message?: { content?: string | null };
+        finish_reason?: string | null;
+      }>;
+    } = { choices: [] };
     try {
       payload = JSON.parse(rawOutput) as typeof payload;
     } catch {
@@ -244,24 +345,32 @@ export class OpenAICompatibleProvider {
       if (parsed.success) return parsed.data;
 
       if (parsed.error) {
-        throw new Error(`Generated scenario failed validation: ${parsed.error.issues.map((i) => `${i.path.join(".") || "root"}: ${i.message}`).join("; ")}`);
+        throw new Error(
+          `Generated scenario failed validation: ${parsed.error.issues.map((i) => `${i.path.join(".") || "root"}: ${i.message}`).join("; ")}`,
+        );
       }
     }
 
     const snippet = content ? content.slice(0, 300) : "(empty response)";
-    const truncationHint = finishReason === "length"
-      ? " The response was cut off at the token limit (finish_reason: \"length\") — raise Max Tokens for this connection in Settings and try again."
-      : "";
+    const truncationHint =
+      finishReason === "length"
+        ? ' The response was cut off at the token limit (finish_reason: "length") — raise Max Tokens for this connection in Settings and try again.'
+        : "";
     throw new Error(
-      `The model did not return a valid scenario. Raw response snippet: "${snippet}"${truncationHint}`
+      `The model did not return a valid scenario. Raw response snippet: "${snippet}"${truncationHint}`,
     );
   }
 
   async generateCharacterSheet(
-    npc: { name: string; description: string; disposition?: string; storyRole?: string },
+    npc: {
+      name: string;
+      description: string;
+      disposition?: string;
+      storyRole?: string;
+    },
     storyContext: string,
     signal?: AbortSignal,
-    format?: CharacterFormat
+    format?: CharacterFormat,
   ): Promise<string> {
     const fmt = resolveCharacterFormat(format);
     const example = toJsonExampleContent(buildFormatExample(fmt));
@@ -290,7 +399,11 @@ export class OpenAICompatibleProvider {
       "Return ONLY the JSON object. No markdown, no explanation.",
     ].join("\n");
 
-    return this.executeSheetJsonRequest(prompt, signal, "The model did not return a valid character sheet.");
+    return this.executeSheetJsonRequest(
+      prompt,
+      signal,
+      "The model did not return a valid character sheet.",
+    );
   }
 
   async generateNewCharacter(
@@ -300,7 +413,7 @@ export class OpenAICompatibleProvider {
       storyContext: string;
       format?: CharacterFormat;
     },
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<{
     name: string;
     storyRole: string;
@@ -329,7 +442,7 @@ export class OpenAICompatibleProvider {
           '  "towardPlayer": "neutral",',
           '  "clothing": [{ "slot": "Top", "name": "Traveler tunic", "state": "worn" }],',
           `  "sheetContent": "${example}"`,
-          "}"
+          "}",
         ].join("\n")
       : [
           "{",
@@ -339,7 +452,7 @@ export class OpenAICompatibleProvider {
           '  "mood": "neutral",',
           '  "towardPlayer": "neutral",',
           '  "clothing": [{ "slot": "Top", "name": "Traveler tunic", "state": "worn" }]',
-          "}"
+          "}",
         ].join("\n");
 
     const prompt = [
@@ -355,14 +468,18 @@ export class OpenAICompatibleProvider {
       "- The character must feel cohesive with the story context, active world state, and setting.",
       "- Anchor their presence, occupation, or purpose directly to the current events, environment, and ongoing dilemmas.",
       "- Provide a distinct name, a concise 1-2 sentence description, an appropriate storyRole, initial mood, attitude toward the player, and clothing items worn.",
-      isDetailed ? "- For sheetContent, expand their full character sheet following the format rules below. Embed at least 1-2 narrative secrets, personal stakes, or plot hooks that offer the player new interactive opportunities or avenues to explore." : "",
+      isDetailed
+        ? "- For sheetContent, expand their full character sheet following the format rules below. Embed at least 1-2 narrative secrets, personal stakes, or plot hooks that offer the player new interactive opportunities or avenues to explore."
+        : "",
       isDetailed ? rules : "",
       "",
       "STORY CONTEXT:",
       input.storyContext,
       "",
-      "Return ONLY the JSON object. No markdown, no explanation."
-    ].filter(Boolean).join("\n");
+      "Return ONLY the JSON object. No markdown, no explanation.",
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     const messages = [{ role: "user" as const, content: prompt }];
     const body: Record<string, unknown> = {
@@ -370,10 +487,18 @@ export class OpenAICompatibleProvider {
       messages,
       temperature: this.config.temperature ?? 0.7,
       max_tokens: Math.min(4000, this.config.maxTokens),
-      ...buildTextSamplingParams(this.config, { includeStop: true, jsonObject: true })
+      ...buildTextSamplingParams(this.config, {
+        includeStop: true,
+        jsonObject: true,
+      }),
     };
 
-    const response = await this.executeRequest(body, "/chat/completions", undefined, signal);
+    const response = await this.executeRequest(
+      body,
+      "/chat/completions",
+      undefined,
+      signal,
+    );
     const payload = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
@@ -383,20 +508,42 @@ export class OpenAICompatibleProvider {
 
     if (extracted && typeof extracted === "object" && extracted !== null) {
       const obj = extracted as Record<string, unknown>;
-      const name = typeof obj.name === "string" && obj.name.trim() ? obj.name.trim() : "Mysterious Stranger";
-      const storyRole = typeof obj.storyRole === "string" && obj.storyRole.trim() ? obj.storyRole.trim() : "Stranger";
-      const description = typeof obj.description === "string" && obj.description.trim() ? obj.description.trim() : "A newcomer in the area.";
-      const mood = typeof obj.mood === "string" && obj.mood.trim() ? obj.mood.trim() : "neutral";
-      const towardPlayer = typeof obj.towardPlayer === "string" && obj.towardPlayer.trim() ? obj.towardPlayer.trim() : "neutral";
+      const name =
+        typeof obj.name === "string" && obj.name.trim()
+          ? obj.name.trim()
+          : "Mysterious Stranger";
+      const storyRole =
+        typeof obj.storyRole === "string" && obj.storyRole.trim()
+          ? obj.storyRole.trim()
+          : "Stranger";
+      const description =
+        typeof obj.description === "string" && obj.description.trim()
+          ? obj.description.trim()
+          : "A newcomer in the area.";
+      const mood =
+        typeof obj.mood === "string" && obj.mood.trim()
+          ? obj.mood.trim()
+          : "neutral";
+      const towardPlayer =
+        typeof obj.towardPlayer === "string" && obj.towardPlayer.trim()
+          ? obj.towardPlayer.trim()
+          : "neutral";
 
       let clothing: ClothingItem[] = [];
       if (Array.isArray(obj.clothing)) {
         clothing = obj.clothing
-          .filter((c): c is { slot: string; name: string; state?: string } => Boolean(c && typeof c === "object" && typeof c.slot === "string" && typeof c.name === "string"))
+          .filter((c): c is { slot: string; name: string; state?: string } =>
+            Boolean(
+              c &&
+              typeof c === "object" &&
+              typeof c.slot === "string" &&
+              typeof c.name === "string",
+            ),
+          )
           .map((c) => ({
             slot: String(c.slot).trim(),
             name: String(c.name).trim(),
-            state: typeof c.state === "string" ? c.state.trim() : undefined
+            state: typeof c.state === "string" ? c.state.trim() : undefined,
           }));
       }
 
@@ -416,12 +563,16 @@ export class OpenAICompatibleProvider {
         mood,
         towardPlayer,
         clothing,
-        sheetContent
+        sheetContent,
       };
     }
 
-    const errSnippet = rawContent ? rawContent.slice(0, 300) : "(empty response)";
-    throw new Error(`The model did not return a valid character definition. Raw response snippet: "${errSnippet}"`);
+    const errSnippet = rawContent
+      ? rawContent.slice(0, 300)
+      : "(empty response)";
+    throw new Error(
+      `The model did not return a valid character definition. Raw response snippet: "${errSnippet}"`,
+    );
   }
 
   async refineCharacterSheet(
@@ -430,7 +581,7 @@ export class OpenAICompatibleProvider {
     feedback: string,
     storyContext: string,
     signal?: AbortSignal,
-    format?: CharacterFormat
+    format?: CharacterFormat,
   ): Promise<string> {
     const fmt = resolveCharacterFormat(format);
     const example = toJsonExampleContent(buildFormatExample(fmt));
@@ -460,18 +611,24 @@ export class OpenAICompatibleProvider {
       "--- USER FEEDBACK (APPLY THIS) ---",
       feedback,
       "",
-      ...(storyContext && storyContext !== "(no additional context)" ? ["--- ADDITIONAL CONTEXT ---", storyContext, ""] : []),
+      ...(storyContext && storyContext !== "(no additional context)"
+        ? ["--- ADDITIONAL CONTEXT ---", storyContext, ""]
+        : []),
       "Return ONLY the JSON object. No markdown, no explanation.",
     ].join("\n");
 
-    return this.executeSheetJsonRequest(prompt, signal, "The model did not return a valid revised character sheet.");
+    return this.executeSheetJsonRequest(
+      prompt,
+      signal,
+      "The model did not return a valid revised character sheet.",
+    );
   }
 
   async reformatCharacterSheet(
     currentContent: string,
     format: CharacterFormat,
     signal?: AbortSignal,
-    feedback?: string
+    feedback?: string,
   ): Promise<string> {
     const fmt = resolveCharacterFormat(format);
     const example = toJsonExampleContent(buildFormatExample(fmt));
@@ -490,7 +647,7 @@ export class OpenAICompatibleProvider {
       "",
       "RULES:",
       "- Keep every established detail from the source sheet — do not lose or invent facts.",
-      "- Ensure every section in the target format is present, in the given order. For a missing section, derive fitting content from the existing sheet, or write \"(not established)\" when nothing is known.",
+      '- Ensure every section in the target format is present, in the given order. For a missing section, derive fitting content from the existing sheet, or write "(not established)" when nothing is known.',
       "- Preserve additional sections that carry real information; fold clearly redundant ones into the nearest matching section.",
       "- Sections marked inline are written as `[Name]: value` on one line; the rest use block form ([Name] followed by content lines).",
       "",
@@ -501,7 +658,11 @@ export class OpenAICompatibleProvider {
       "Return ONLY the JSON object. No markdown, no explanation.",
     ].join("\n");
 
-    return this.executeSheetJsonRequest(prompt, signal, "The model did not return a valid restructured character sheet.");
+    return this.executeSheetJsonRequest(
+      prompt,
+      signal,
+      "The model did not return a valid restructured character sheet.",
+    );
   }
 
   /** Shared `{ "content": "..." }` JSON request for the sheet generation,
@@ -509,21 +670,27 @@ export class OpenAICompatibleProvider {
   private async executeSheetJsonRequest(
     prompt: string,
     signal: AbortSignal | undefined,
-    errorPrefix: string
+    errorPrefix: string,
   ): Promise<string> {
-    const messages: ChatMessage[] = [
-      { role: "user", content: prompt }
-    ];
+    const messages: ChatMessage[] = [{ role: "user", content: prompt }];
 
     const body: Record<string, unknown> = {
       model: this.config.model,
       messages,
       temperature: this.config.temperature ?? 0.7,
       max_tokens: Math.min(4000, this.config.maxTokens),
-      ...buildTextSamplingParams(this.config, { includeStop: true, jsonObject: true })
+      ...buildTextSamplingParams(this.config, {
+        includeStop: true,
+        jsonObject: true,
+      }),
     };
 
-    const response = await this.executeRequest(body, "/chat/completions", undefined, signal);
+    const response = await this.executeRequest(
+      body,
+      "/chat/completions",
+      undefined,
+      signal,
+    );
     const payload = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
@@ -531,23 +698,37 @@ export class OpenAICompatibleProvider {
     const rawContent = payload.choices?.[0]?.message?.content?.trim() ?? "";
     const extracted = extractJsonPayload(rawContent);
 
-    if (extracted && typeof extracted === "object" && extracted !== null && "content" in extracted) {
+    if (
+      extracted &&
+      typeof extracted === "object" &&
+      extracted !== null &&
+      "content" in extracted
+    ) {
       const sheetContent = (extracted as Record<string, unknown>).content;
       if (typeof sheetContent === "string" && sheetContent.trim()) {
         return sheetContent.trim();
       }
     }
 
-    const errSnippet = rawContent ? rawContent.slice(0, 300) : "(empty response)";
+    const errSnippet = rawContent
+      ? rawContent.slice(0, 300)
+      : "(empty response)";
     throw new Error(`${errorPrefix} Raw response snippet: "${errSnippet}"`);
   }
 
   async suggestCharacterTags(
-    character: { name: string; content: string; creatorNotes?: string; currentTags?: string[]; guidance?: string },
+    character: {
+      name: string;
+      content: string;
+      creatorNotes?: string;
+      currentTags?: string[];
+      guidance?: string;
+    },
     libraryTags: string[],
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<string[]> {
-    const systemPrompt = "You are an expert booru-style tagger for characters in BobbinLoom RPG. You must output a valid JSON object containing a 'tags' array.";
+    const systemPrompt =
+      "You are an expert booru-style tagger for characters in BobbinLoom RPG. You must output a valid JSON object containing a 'tags' array.";
     const userPrompt = [
       "Given the character's details, current tags, and library taxonomy, generate a comprehensive list of recommended tags.",
       "",
@@ -569,24 +750,32 @@ export class OpenAICompatibleProvider {
       "2. CURRENT TAGS: If current tags are provided, retain the accurate ones, but actively ADD new missing descriptive tags from the character sheet and creator notes.",
       "3. TAXONOMY REUSE: Reuse existing tags and prefixes from the LIBRARY TAXONOMY where appropriate, but feel free to introduce new specific tags when the character possesses distinct traits not in the taxonomy.",
       "4. FORMAT & NAMESPACES: Lowercase, concise (1-3 words max, kebab-case or space-separated). Use category prefixes (species:..., copyright:..., rating:...) when appropriate alongside general descriptive tags.",
-      ...(character.guidance ? ["", `USER GUIDANCE: ${character.guidance}`] : []),
+      ...(character.guidance
+        ? ["", `USER GUIDANCE: ${character.guidance}`]
+        : []),
       "",
       `CHARACTER NAME: ${character.name || "Unnamed"}`,
-      character.creatorNotes ? `CREATOR'S NOTES: ${character.creatorNotes}` : "",
+      character.creatorNotes
+        ? `CREATOR'S NOTES: ${character.creatorNotes}`
+        : "",
       character.currentTags && character.currentTags.length > 0
         ? `CURRENT CARD TAGS: ${character.currentTags.join(", ")}`
         : "",
       "CHARACTER CONTENT / SHEET:",
       character.content || "(no content provided)",
       "",
-      libraryTags.length > 0 ? `LIBRARY TAXONOMY (FOR REFERENCE / CONSISTENCY):\n${libraryTags.join(", ")}` : "",
+      libraryTags.length > 0
+        ? `LIBRARY TAXONOMY (FOR REFERENCE / CONSISTENCY):\n${libraryTags.join(", ")}`
+        : "",
       "",
       "Return ONLY the JSON object. No markdown, no explanation.",
-    ].filter(Boolean).join("\n");
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt }
+      { role: "user", content: userPrompt },
     ];
 
     const maxTokens = Math.max(4000, this.config.maxTokens || 4000);
@@ -599,14 +788,25 @@ export class OpenAICompatibleProvider {
         temperature: 0.5,
         max_tokens: maxTokens,
 
-        ...buildTextSamplingParams(this.config, { includeStop: true, jsonObject: true })
+        ...buildTextSamplingParams(this.config, {
+          includeStop: true,
+          jsonObject: true,
+        }),
       };
 
-      const response = await this.executeRequest(bodyWithFormat, "/chat/completions", undefined, signal);
+      const response = await this.executeRequest(
+        bodyWithFormat,
+        "/chat/completions",
+        undefined,
+        signal,
+      );
       const rawText = await response.text();
       let payload: {
         choices?: Array<{
-          message?: { content?: string | null; reasoning_content?: string | null };
+          message?: {
+            content?: string | null;
+            reasoning_content?: string | null;
+          };
           text?: string | null;
           delta?: { content?: string | null };
           finish_reason?: string | null;
@@ -646,14 +846,22 @@ export class OpenAICompatibleProvider {
       messages,
       temperature: 0.5,
       max_tokens: maxTokens,
-      ...buildTextSamplingParams(this.config)
+      ...buildTextSamplingParams(this.config),
     };
 
-    const fallbackResponse = await this.executeRequest(bodyFallback, "/chat/completions", undefined, signal);
+    const fallbackResponse = await this.executeRequest(
+      bodyFallback,
+      "/chat/completions",
+      undefined,
+      signal,
+    );
     const fallbackRawText = await fallbackResponse.text();
     let fallbackPayload: {
       choices?: Array<{
-        message?: { content?: string | null; reasoning_content?: string | null };
+        message?: {
+          content?: string | null;
+          reasoning_content?: string | null;
+        };
         text?: string | null;
         delta?: { content?: string | null };
         finish_reason?: string | null;
@@ -685,11 +893,16 @@ export class OpenAICompatibleProvider {
       return fallbackTags;
     }
 
-    const truncationHint = finishReason === "length"
-      ? " (The model response was truncated due to token limit: finish_reason='length'. Please increase Max Tokens in Settings.)"
-      : "";
-    const errSnippet = fallbackRawContent ? fallbackRawContent.slice(0, 300) : "(empty response)";
-    throw new Error(`The model did not return any recognized tags. Raw model output: "${errSnippet}"${truncationHint}`);
+    const truncationHint =
+      finishReason === "length"
+        ? " (The model response was truncated due to token limit: finish_reason='length'. Please increase Max Tokens in Settings.)"
+        : "";
+    const errSnippet = fallbackRawContent
+      ? fallbackRawContent.slice(0, 300)
+      : "(empty response)";
+    throw new Error(
+      `The model did not return any recognized tags. Raw model output: "${errSnippet}"${truncationHint}`,
+    );
   }
 
   /**
@@ -704,11 +917,13 @@ export class OpenAICompatibleProvider {
    */
   async brainstormCharacter(
     input: CharacterBrainstormInput,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<CharacterBrainstormOutput> {
     const c = input.character;
     const fmt = resolveCharacterFormat(input.format);
-    const inlineSections = fmt.sections.filter((s) => s.inline).map((s) => s.name);
+    const inlineSections = fmt.sections
+      .filter((s) => s.inline)
+      .map((s) => s.name);
     const formatRules = [
       buildFormatRules(fmt),
       `- Sections marked inline (${inlineSections.join(", ")}) are written as [Name]: value on one line; the rest use block form ([Name] followed by content lines).`,
@@ -725,10 +940,14 @@ export class OpenAICompatibleProvider {
     if ((c.tags ?? []).length > 0) {
       contextParts.push(`Tags: ${c.tags!.join(", ")}`);
     }
-    contextParts.push(`\n--- CURRENT CHARACTER SHEET CONTENT ---\n${c.content || "(empty sheet)"}`);
+    contextParts.push(
+      `\n--- CURRENT CHARACTER SHEET CONTENT ---\n${c.content || "(empty sheet)"}`,
+    );
 
     if (input.includeOriginalCard && c.ccv2Content) {
-      contextParts.push(`\n--- ORIGINAL CCV2 CARD (REFERENCE) ---\n${c.ccv2Content}`);
+      contextParts.push(
+        `\n--- ORIGINAL CCV2 CARD (REFERENCE) ---\n${c.ccv2Content}`,
+      );
     }
 
     const systemPrompt = [
@@ -747,7 +966,7 @@ export class OpenAICompatibleProvider {
       "3. Omit that block entirely when the reply only discusses ideas, answers questions about the card, or compares options.",
       "4. Inside the block:",
       '   - "sections" lists the sections being changed, each as { "header": "<a section name from the list above>", "body": "<that section\'s COMPLETE new body>" }.',
-      '   - A body REPLACES its section as written. Never send a diff, a fragment, a note about what changed, or the [Header] line itself.',
+      "   - A body REPLACES its section as written. Never send a diff, a fragment, a note about what changed, or the [Header] line itself.",
       "   - A body of several lines is normal; escape the line breaks inside the json string.",
       input.allowNewSections === false
         ? "   - Use section names exactly as listed above. Never invent one."
@@ -757,12 +976,10 @@ export class OpenAICompatibleProvider {
       "6. If a request cannot be expressed as an edit to this sheet, say so in the reply and propose nothing.",
       "",
       "CONTEXT:",
-      ...contextParts
+      ...contextParts,
     ].join("\n");
 
-    const messages: ChatMessage[] = [
-      { role: "system", content: systemPrompt }
-    ];
+    const messages: ChatMessage[] = [{ role: "system", content: systemPrompt }];
 
     for (const msg of input.chatHistory) {
       if (msg.content) {
@@ -778,10 +995,15 @@ export class OpenAICompatibleProvider {
       messages,
       temperature: this.config.temperature ?? 0.7,
       max_tokens: maxTokens,
-      ...buildTextSamplingParams(this.config)
+      ...buildTextSamplingParams(this.config),
     };
 
-    const response = await this.executeRequest(body, "/chat/completions", undefined, signal);
+    const response = await this.executeRequest(
+      body,
+      "/chat/completions",
+      undefined,
+      signal,
+    );
     const payload = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
@@ -789,7 +1011,7 @@ export class OpenAICompatibleProvider {
     const parsed = parseBrainstormReply(
       rawContent,
       fmt.sections.map((section) => section.name),
-      { allowNewSections: input.allowNewSections }
+      { allowNewSections: input.allowNewSections },
     );
 
     return {
@@ -797,11 +1019,14 @@ export class OpenAICompatibleProvider {
       proposedChanges: parsed.proposedChanges,
       unmappedHeaders: parsed.unmappedHeaders,
       newSections: parsed.newSections,
-      model: this.config.model
+      model: this.config.model,
     };
   }
 
-  async summarizeChapter(transcript: string, signal?: AbortSignal): Promise<{ name: string; shortDescription: string; fullSummary: string }> {
+  async summarizeChapter(
+    transcript: string,
+    signal?: AbortSignal,
+  ): Promise<{ name: string; shortDescription: string; fullSummary: string }> {
     const summaryPrompt = [
       "You are a story archivist. Below is the transcript of a story chapter.",
       "Produce a JSON object with:",
@@ -813,21 +1038,27 @@ export class OpenAICompatibleProvider {
       "TRANSCRIPT:",
       transcript,
       "",
-      "Return ONLY the JSON object, nothing else."
+      "Return ONLY the JSON object, nothing else.",
     ].join("\n");
 
     const body: Record<string, unknown> = {
       model: this.config.model,
-      messages: [
-        { role: "system", content: summaryPrompt }
-      ],
+      messages: [{ role: "system", content: summaryPrompt }],
       temperature: 0.3,
       max_tokens: this.config.maxTokens,
 
-      ...buildTextSamplingParams(this.config, { includeStop: true, jsonObject: true })
+      ...buildTextSamplingParams(this.config, {
+        includeStop: true,
+        jsonObject: true,
+      }),
     };
 
-    const response = await this.executeRequest(body, "/chat/completions", undefined, signal);
+    const response = await this.executeRequest(
+      body,
+      "/chat/completions",
+      undefined,
+      signal,
+    );
     const payload = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
@@ -837,18 +1068,30 @@ export class OpenAICompatibleProvider {
 
     if (extracted) {
       const obj = extracted as Record<string, unknown>;
-      const name = typeof obj.name === "string" ? obj.name.trim() : "Untitled Chapter";
-      const shortDescription = typeof obj.shortDescription === "string" ? obj.shortDescription.trim() : "";
-      const fullSummary = typeof obj.fullSummary === "string" ? obj.fullSummary.trim() : "";
+      const name =
+        typeof obj.name === "string" ? obj.name.trim() : "Untitled Chapter";
+      const shortDescription =
+        typeof obj.shortDescription === "string"
+          ? obj.shortDescription.trim()
+          : "";
+      const fullSummary =
+        typeof obj.fullSummary === "string" ? obj.fullSummary.trim() : "";
       if (name && fullSummary) {
         return { name, shortDescription, fullSummary };
       }
     }
 
-    return { name: "Untitled Chapter", shortDescription: "", fullSummary: content || "No summary available." };
+    return {
+      name: "Untitled Chapter",
+      shortDescription: "",
+      fullSummary: content || "No summary available.",
+    };
   }
 
-  async compactStorySoFar(input: ChapterCompactionInput, signal?: AbortSignal): Promise<{ summary: string }> {
+  async compactStorySoFar(
+    input: ChapterCompactionInput,
+    signal?: AbortSignal,
+  ): Promise<{ summary: string }> {
     const parts: string[] = [
       "You are a story archivist maintaining a rolling summary of an ongoing roleplay story.",
       "Below is the prior rolling summary, the endings of chapters that must now be folded in,",
@@ -860,7 +1103,10 @@ export class OpenAICompatibleProvider {
       "",
       "CHAPTERS TO FOLD IN:",
     ];
-    if (input.chapterTranscriptions.length === 0 && input.importantEvents.length === 0) {
+    if (
+      input.chapterTranscriptions.length === 0 &&
+      input.importantEvents.length === 0
+    ) {
       parts.push("(none — just refresh/continue the prior summary)");
     }
     for (const ch of input.chapterTranscriptions) {
@@ -878,20 +1124,23 @@ export class OpenAICompatibleProvider {
       "Reflect the important events. Do not re-state what the PRIOR SUMMARY already covers in detail —",
       "only record new developments and keep continuity.",
       "Return the consolidated story-so-far as a single cohesive paragraph (~250-350 words).",
-      "Return ONLY the summary text, no JSON."
+      "Return ONLY the summary text, no JSON.",
     );
 
     const body: Record<string, unknown> = {
       model: this.config.model,
-      messages: [
-        { role: "system", content: parts.join("\n") }
-      ],
+      messages: [{ role: "system", content: parts.join("\n") }],
       temperature: 0.3,
       max_tokens: this.config.maxTokens,
-      ...buildTextSamplingParams(this.config)
+      ...buildTextSamplingParams(this.config),
     };
 
-    const response = await this.executeRequest(body, "/chat/completions", undefined, signal);
+    const response = await this.executeRequest(
+      body,
+      "/chat/completions",
+      undefined,
+      signal,
+    );
     const payload = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
@@ -922,7 +1171,9 @@ export class OpenAICompatibleProvider {
       }
       return [];
     } catch (error) {
-      console.error(`embedTexts failed: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(
+        `embedTexts failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return [];
     }
   }
@@ -931,7 +1182,12 @@ export class OpenAICompatibleProvider {
 function sanitizeTags(rawList: unknown[]): string[] {
   return rawList
     .filter((t): t is string => typeof t === "string" && t.trim().length > 0)
-    .map((t) => t.trim().toLowerCase().replace(/^[#\s]+/, ""))
+    .map((t) =>
+      t
+        .trim()
+        .toLowerCase()
+        .replace(/^[#\s]+/, ""),
+    )
     .filter((t) => t.length > 0 && t.length < 50)
     .filter((t, idx, arr) => arr.indexOf(t) === idx);
 }
@@ -947,9 +1203,21 @@ function parseTagsFromCleanString(rawContent: string): string[] {
       if (sanitized.length > 0) return sanitized;
     }
     if (typeof extracted === "object" && extracted !== null) {
-      for (const key of ["tags", "suggestedTags", "recommendedTags", "characterTags", "results", "output"]) {
-        if (key in extracted && Array.isArray((extracted as Record<string, unknown>)[key])) {
-          const sanitized = sanitizeTags((extracted as Record<string, unknown>)[key] as unknown[]);
+      for (const key of [
+        "tags",
+        "suggestedTags",
+        "recommendedTags",
+        "characterTags",
+        "results",
+        "output",
+      ]) {
+        if (
+          key in extracted &&
+          Array.isArray((extracted as Record<string, unknown>)[key])
+        ) {
+          const sanitized = sanitizeTags(
+            (extracted as Record<string, unknown>)[key] as unknown[],
+          );
           if (sanitized.length > 0) return sanitized;
         }
       }
@@ -964,7 +1232,9 @@ function parseTagsFromCleanString(rawContent: string): string[] {
   }
 
   // Strategy 2: Look for JSON array in text [ "tag1", "tag2", ... ]
-  const arrayMatch = rawContent.match(/\[\s*(?:"[^"]*"|'[^']*'|[\w-]+)(?:\s*,\s*(?:"[^"]*"|'[^']*'|[\w-]+))*\s*\]/);
+  const arrayMatch = rawContent.match(
+    /\[\s*(?:"[^"]*"|'[^']*'|[\w-]+)(?:\s*,\s*(?:"[^"]*"|'[^']*'|[\w-]+))*\s*\]/,
+  );
   if (arrayMatch) {
     try {
       const parsed = JSON.parse(arrayMatch[0].replace(/'/g, '"'));
@@ -982,7 +1252,9 @@ function parseTagsFromCleanString(rawContent: string): string[] {
   const lineTags: string[] = [];
   for (const line of lines) {
     const trimmed = line.trim();
-    const bulletMatch = trimmed.match(/^(?:[-*•+]|\d+\.)\s*["']?([^"',\n]+)["']?/);
+    const bulletMatch = trimmed.match(
+      /^(?:[-*•+]|\d+\.)\s*["']?([^"',\n]+)["']?/,
+    );
     if (bulletMatch?.[1]) {
       const tag = bulletMatch[1].trim();
       if (tag && tag.length < 40 && !tag.toLowerCase().includes("tags:")) {
@@ -1000,7 +1272,14 @@ function parseTagsFromCleanString(rawContent: string): string[] {
     .replace(/^.*tags:?\s*/i, "")
     .split(/[,;\n]/)
     .map((t) => t.trim().replace(/^["'\s]+|["'\s]+$/g, ""))
-    .filter((t) => t && t.length > 1 && t.length < 35 && !t.includes("{") && !t.includes("}"));
+    .filter(
+      (t) =>
+        t &&
+        t.length > 1 &&
+        t.length < 35 &&
+        !t.includes("{") &&
+        !t.includes("}"),
+    );
   if (commaSeparated.length >= 2) {
     const sanitized = sanitizeTags(commaSeparated);
     if (sanitized.length > 0) return sanitized;
@@ -1021,7 +1300,9 @@ export function parseTagsFromModelOutput(rawContent: string): string[] {
     }
   }
 
-  const cleanContent = rawContent.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  const cleanContent = rawContent
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .trim();
   if (cleanContent) {
     const parsed = parseTagsFromCleanString(cleanContent);
     if (parsed.length > 0) return parsed;

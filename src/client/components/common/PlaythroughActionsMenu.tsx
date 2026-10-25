@@ -22,7 +22,14 @@ export type PlaythroughActionsMenuProps = {
 };
 
 export function PlaythroughActionsMenu(props: PlaythroughActionsMenuProps) {
-  const { playthroughId, playthroughName, onRenameRequest, onDuplicated, onDeleted, onError } = props;
+  const {
+    playthroughId,
+    playthroughName,
+    onRenameRequest,
+    onDuplicated,
+    onDeleted,
+    onError,
+  } = props;
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   async function handleDuplicate() {
@@ -53,7 +60,10 @@ export function PlaythroughActionsMenu(props: PlaythroughActionsMenuProps) {
   }
 
   return (
-    <div className="playthrough-actions-menu" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="playthrough-actions-menu"
+      onClick={(e) => e.stopPropagation()}
+    >
       <DropdownMenu>
         <Tooltip content="More options">
           <DropdownMenuTrigger asChild>
@@ -97,11 +107,12 @@ export function PlaythroughActionsMenu(props: PlaythroughActionsMenuProps) {
           message={`Delete "${playthroughName}"? This cannot be undone.`}
           confirmLabel="Delete"
           danger
-          onConfirm={() => { void confirmDelete(); }}
+          onConfirm={() => {
+            void confirmDelete();
+          }}
           onCancel={() => setDeleteConfirm(false)}
         />
       ) : null}
     </div>
   );
 }
-

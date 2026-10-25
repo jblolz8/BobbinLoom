@@ -1,19 +1,33 @@
-import { isValidElement, useEffect, useState, type ReactElement, type ReactNode } from "react";
+import {
+  isValidElement,
+  useEffect,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import * as RadixTooltip from "@radix-ui/react-tooltip";
 import { Icon, type IconName } from "../Icon";
 
 export type TooltipCollapseBreakpoint = "xs" | "sm" | "md" | "always";
 
-const COLLAPSE_MEDIA_QUERY: Record<Exclude<TooltipCollapseBreakpoint, "always">, string> = {
+const COLLAPSE_MEDIA_QUERY: Record<
+  Exclude<TooltipCollapseBreakpoint, "always">,
+  string
+> = {
   xs: "(max-width: 360px)",
   sm: "(max-width: 540px)",
   md: "(max-width: 768px)",
 };
 
-function matchesCollapseBreakpoint(breakpoint: TooltipCollapseBreakpoint | undefined): boolean {
+function matchesCollapseBreakpoint(
+  breakpoint: TooltipCollapseBreakpoint | undefined,
+): boolean {
   if (!breakpoint) return true;
   if (breakpoint === "always") return true;
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+  if (
+    typeof window === "undefined" ||
+    typeof window.matchMedia !== "function"
+  ) {
     return false;
   }
   return window.matchMedia(COLLAPSE_MEDIA_QUERY[breakpoint]).matches;
@@ -25,7 +39,9 @@ export interface TooltipProps {
   side?: "top" | "right" | "bottom" | "left";
   align?: "start" | "center" | "end";
   sideOffset?: number;
-  collisionPadding?: number | Partial<Record<"top" | "right" | "bottom" | "left", number>>;
+  collisionPadding?:
+    | number
+    | Partial<Record<"top" | "right" | "bottom" | "left", number>>;
   disabled?: boolean;
   /**
    * Breakpoint below which the trigger collapses to an icon-only control.
@@ -74,10 +90,11 @@ export function Tooltip({
 
   const effectiveCollapseBelow = collapseBelow ?? childProps?.collapseBelow;
   const shouldGateByCollapse =
-    onlyWhenCollapsed ?? (effectiveCollapseBelow !== undefined && !childProps?.iconOnly);
+    onlyWhenCollapsed ??
+    (effectiveCollapseBelow !== undefined && !childProps?.iconOnly);
 
   const [isBelowBreakpoint, setIsBelowBreakpoint] = useState<boolean>(() =>
-    matchesCollapseBreakpoint(effectiveCollapseBelow)
+    matchesCollapseBreakpoint(effectiveCollapseBelow),
   );
 
   useEffect(() => {
@@ -85,7 +102,10 @@ export function Tooltip({
       setIsBelowBreakpoint(true);
       return;
     }
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    if (
+      typeof window === "undefined" ||
+      typeof window.matchMedia !== "function"
+    ) {
       setIsBelowBreakpoint(false);
       return;
     }
@@ -124,11 +144,17 @@ export function Tooltip({
           align={align}
           sideOffset={sideOffset}
           collisionPadding={collisionPadding}
-          data-collapse-below={shouldGateByCollapse ? effectiveCollapseBelow : undefined}
+          data-collapse-below={
+            shouldGateByCollapse ? effectiveCollapseBelow : undefined
+          }
           className={`base-tooltip-content ${className}`.trim()}
         >
           {content}
-          <RadixTooltip.Arrow className="base-tooltip-arrow" width={8} height={4} />
+          <RadixTooltip.Arrow
+            className="base-tooltip-arrow"
+            width={8}
+            height={4}
+          />
         </RadixTooltip.Content>
       </RadixTooltip.Portal>
     </RadixTooltip.Root>

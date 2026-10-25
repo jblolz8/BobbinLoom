@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { createInitialPlaythrough, parseUserInput, type ActivatedEntry } from "../src/engine/engine";
-import { assembleTurnPrompt, selectHistory, clampCalibration, estimateTokens, PROMPT_MESSAGE_OVERHEAD_TOKENS, MIN_HISTORY_MESSAGES, renderLorebookSegments } from "../src/server/provider/promptBuilder";
+import {
+  createInitialPlaythrough,
+  parseUserInput,
+  type ActivatedEntry,
+} from "../src/engine/engine";
+import {
+  assembleTurnPrompt,
+  selectHistory,
+  clampCalibration,
+  estimateTokens,
+  PROMPT_MESSAGE_OVERHEAD_TOKENS,
+  MIN_HISTORY_MESSAGES,
+  renderLorebookSegments,
+} from "../src/server/provider/promptBuilder";
 
 /** The global prompt config the builder now reads. An empty module set is the
  *  neutral default for tests that do not exercise modules. */
@@ -11,8 +23,20 @@ function withHistory(pairs: number, chars = 100) {
   const pt = createInitialPlaythrough("History Test");
   pt.messages = [];
   for (let i = 0; i < pairs; i++) {
-    pt.messages.push({ id: `u${i}`, role: "user", content: "u".repeat(chars), createdAt: "2026-01-01T00:00:00.000Z", turn: i });
-    pt.messages.push({ id: `a${i}`, role: "assistant", content: "a".repeat(chars), createdAt: "2026-01-01T00:00:00.000Z", turn: i });
+    pt.messages.push({
+      id: `u${i}`,
+      role: "user",
+      content: "u".repeat(chars),
+      createdAt: "2026-01-01T00:00:00.000Z",
+      turn: i,
+    });
+    pt.messages.push({
+      id: `a${i}`,
+      role: "assistant",
+      content: "a".repeat(chars),
+      createdAt: "2026-01-01T00:00:00.000Z",
+      turn: i,
+    });
   }
   return pt;
 }
@@ -24,7 +48,7 @@ describe("selectHistory", () => {
     expect(history.length).toBeGreaterThanOrEqual(MIN_HISTORY_MESSAGES);
     expect(history.length).toBeLessThan(20);
     expect(history[history.length - 1].content.startsWith("a")).toBe(true); // newest assistant turn
-    expect(history[0].content.startsWith("u")).toBe(true);                  // window starts on a user turn
+    expect(history[0].content.startsWith("u")).toBe(true); // window starts on a user turn
     expect(droppedChars).toBeGreaterThan(0);
   });
 
@@ -57,7 +81,10 @@ describe("selectHistory", () => {
 
   it("charges per-message overhead", () => {
     const pt = withHistory(1, 0); // two empty messages → cost is overhead only
-    const { history } = selectHistory(pt, PROMPT_MESSAGE_OVERHEAD_TOKENS * 2 - 1);
+    const { history } = selectHistory(
+      pt,
+      PROMPT_MESSAGE_OVERHEAD_TOKENS * 2 - 1,
+    );
     expect(history).toHaveLength(MIN_HISTORY_MESSAGES);
   });
 });
@@ -67,7 +94,14 @@ describe("assembleTurnPrompt message array", () => {
 
   it("emits a real transcript with alternating roles and ends on the user turn", () => {
     const pt = withHistory(4, 200);
-    const { messages } = assembleTurnPrompt(parseUserInput("I look around."), pt, true, [], budget, CFG);
+    const { messages } = assembleTurnPrompt(
+      parseUserInput("I look around."),
+      pt,
+      true,
+      [],
+      budget,
+      CFG,
+    );
     expect(messages[0].role).toBe("system");
     expect(messages[1].role).toBe("user");
     expect(messages[2].role).toBe("assistant");
@@ -79,7 +113,14 @@ describe("assembleTurnPrompt message array", () => {
 
   it("puts the volatile block in a tail system message before the final user turn", () => {
     const pt = withHistory(2, 200);
-    const { messages } = assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget, CFG);
+    const { messages } = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      budget,
+      CFG,
+    );
     const tail = messages[messages.length - 2];
     expect(tail.role).toBe("system");
     expect(tail.content).toContain("CURRENT STATE");
@@ -90,7 +131,14 @@ describe("assembleTurnPrompt message array", () => {
   it("merges the tail block into the leading system message when there is no history", () => {
     const pt = createInitialPlaythrough("Empty");
     pt.messages = [];
-    const { messages } = assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget, CFG);
+    const { messages } = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      budget,
+      CFG,
+    );
     expect(messages).toHaveLength(2);
     expect(messages[0].role).toBe("system");
     expect(messages[0].content).toContain("OUTPUT FORMAT");
@@ -100,10 +148,31 @@ describe("assembleTurnPrompt message array", () => {
   it("never sends two leading system messages", () => {
     const pt = createInitialPlaythrough("Archived");
     pt.messages = [
-      { id: "m1", role: "user", content: "old", createdAt: "2026-01-01T00:00:00.000Z", hidden: true, chapterId: "ch_1" },
-      { id: "m2", role: "assistant", content: "old reply", createdAt: "2026-01-01T00:00:00.000Z", hidden: true, chapterId: "ch_1" }
+      {
+        id: "m1",
+        role: "user",
+        content: "old",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        hidden: true,
+        chapterId: "ch_1",
+      },
+      {
+        id: "m2",
+        role: "assistant",
+        content: "old reply",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        hidden: true,
+        chapterId: "ch_1",
+      },
     ];
-    const { messages } = assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget, CFG);
+    const { messages } = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      budget,
+      CFG,
+    );
     expect(messages[0].role).toBe("system");
     expect(messages[1].role).toBe("user");
   });
@@ -111,8 +180,12 @@ describe("assembleTurnPrompt message array", () => {
   it("keeps chatHistory segments off the wire when nothing fits", () => {
     const pt = withHistory(30, 8000);
     const { messages, promptUsage } = assembleTurnPrompt(
-      parseUserInput("go"), pt, true, [],
-      { contextWindow: 4096, reserveOutputTokens: 1200 }, CFG
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      { contextWindow: 4096, reserveOutputTokens: 1200 },
+      CFG,
     );
     expect(promptUsage.breakdown.chatHistory).toBeGreaterThan(0);
     expect(messages.length).toBeLessThan(30);
@@ -121,8 +194,12 @@ describe("assembleTurnPrompt message array", () => {
   it("reports dropped history characters for the excluded tail of the transcript", () => {
     const pt = withHistory(4, 400);
     const { messages, droppedHistoryChars } = assembleTurnPrompt(
-      parseUserInput("go"), pt, true, [],
-      { contextWindow: 3000, reserveOutputTokens: 1200 }, CFG
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      { contextWindow: 3000, reserveOutputTokens: 1200 },
+      CFG,
     );
     // History is truncated, so some visible characters never reach the wire.
     expect(droppedHistoryChars).toBeGreaterThan(0);
@@ -138,17 +215,26 @@ describe("assembleTurnPrompt message array", () => {
     // A module proves the stable prefix is its own leading message.
     const config = {
       modules: {
-        turn: [{
-          id: "mod_stable",
-          name: "Stable module",
-          description: "stable",
-          content: "STABLE PREFIX MARKER",
-          order: 1,
-          enabled: true
-        }]
-      }
+        turn: [
+          {
+            id: "mod_stable",
+            name: "Stable module",
+            description: "stable",
+            content: "STABLE PREFIX MARKER",
+            order: 1,
+            enabled: true,
+          },
+        ],
+      },
     };
-    const { messages } = assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget, config);
+    const { messages } = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      budget,
+      config,
+    );
     expect(messages[0].role).toBe("system");
     expect(messages[0].content).toContain("STABLE PREFIX MARKER");
     expect(messages[0].content).not.toContain("CURRENT STATE");
@@ -165,14 +251,24 @@ describe("assembleTurnPrompt message array", () => {
   // not leak the raw section (or its "(not established)" stub) into the context.
   it("never injects the raw [Clothing] section for a BL sheet, even with an empty outfit", () => {
     const tpl = {
-      id: "tpl_bl", name: "Test Subject", version: 1,
+      id: "tpl_bl",
+      name: "Test Subject",
+      version: 1,
       summary: "A test character.",
-      content: "[Species]: Human\n[Gender]: Female\n\n[Clothing]\n(not established) NOISE_CLOTHING_SECTION\n\n[Personality]\n- Watchful.",
+      content:
+        "[Species]: Human\n[Gender]: Female\n\n[Clothing]\n(not established) NOISE_CLOTHING_SECTION\n\n[Personality]\n- Watchful.",
       startingClothing: [],
     };
     const pt = createInitialPlaythrough("Clothing Test", undefined, [tpl]);
     expect(pt.characters[0].clothing).toEqual([]); // no slot bullets -> nothing worn
-    const built = assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget, CFG);
+    const built = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      budget,
+      CFG,
+    );
     const all = built.messages.map((m) => m.content).join("\n");
     expect(all).toContain("[Personality]"); // the sheet itself DID reach the prompt
     // The whole section is gone, not just its header. Assert on a marker inside its
@@ -184,13 +280,26 @@ describe("assembleTurnPrompt message array", () => {
 
   it("renders a worn outfit as a derived line and still never the raw section", () => {
     const tpl = {
-      id: "tpl_dressed", name: "Dressed Subject", version: 1,
+      id: "tpl_dressed",
+      name: "Dressed Subject",
+      version: 1,
       summary: "A test character.",
-      content: "[Species]: Human\n\n[Clothing]\n- Top: Linen tunic\n- Feet: Sandals\n\n[Personality]\n- Watchful.",
-      startingClothing: [{ slot: "Top", name: "Linen tunic" }, { slot: "Feet", name: "Sandals" }],
+      content:
+        "[Species]: Human\n\n[Clothing]\n- Top: Linen tunic\n- Feet: Sandals\n\n[Personality]\n- Watchful.",
+      startingClothing: [
+        { slot: "Top", name: "Linen tunic" },
+        { slot: "Feet", name: "Sandals" },
+      ],
     };
     const pt = createInitialPlaythrough("Clothing Test 2", undefined, [tpl]);
-    const built = assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget, CFG);
+    const built = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      budget,
+      CFG,
+    );
     const all = built.messages.map((m) => m.content).join("\n");
     expect(all).toContain("Clothing: Top: Linen tunic; Feet: Sandals");
     expect(all).not.toContain("- Top: Linen tunic");
@@ -204,9 +313,13 @@ describe("token calibration", () => {
     const calibrated = selectHistory(pt, 300, 3);
 
     expect(calibrated.history.length).toBeLessThan(uncalibrated.history.length);
-    expect(calibrated.history.length).toBeGreaterThanOrEqual(MIN_HISTORY_MESSAGES);
+    expect(calibrated.history.length).toBeGreaterThanOrEqual(
+      MIN_HISTORY_MESSAGES,
+    );
     // The same cap a scaled estimate implies: at 3x, ~79 tokens per 100-char message.
-    expect(calibrated.history.every((m) => m.content.length === 100)).toBe(true);
+    expect(calibrated.history.every((m) => m.content.length === 100)).toBe(
+      true,
+    );
   });
 
   it("(b) floors at 1 when the provider measured fewer tokens than estimated", () => {
@@ -232,8 +345,22 @@ describe("token calibration", () => {
     // so any difference in `promptUsage` would come purely from scaling.
     const pt = withHistory(3, 100);
     const budget = { contextWindow: 65536, reserveOutputTokens: 1200 };
-    const plain = assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget, CFG);
-    const scaled = assembleTurnPrompt(parseUserInput("go"), pt, true, [], { ...budget, calibration: 4 }, CFG);
+    const plain = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      budget,
+      CFG,
+    );
+    const scaled = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      { ...budget, calibration: 4 },
+      CFG,
+    );
 
     expect(scaled.promptUsage).toEqual(plain.promptUsage);
     expect(scaled.promptUsage.estimated).toBe(plain.promptUsage.estimated);
@@ -241,12 +368,28 @@ describe("token calibration", () => {
     // Even when the calibration changes what is sent, history-independent
     // segments stay on the unscaled chars/4 basis.
     const tight = { contextWindow: 3000, reserveOutputTokens: 1200 };
-    const plainTight = assembleTurnPrompt(parseUserInput("go"), pt, true, [], tight, CFG);
-    const scaledTight = assembleTurnPrompt(parseUserInput("go"), pt, true, [], { ...tight, calibration: 4 }, CFG);
-    expect(scaledTight.promptUsage.breakdown.outputFormat).toBe(
-      plainTight.promptUsage.breakdown.outputFormat
+    const plainTight = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      tight,
+      CFG,
     );
-    expect(scaledTight.promptUsage.breakdown.userInput).toBe(plainTight.promptUsage.breakdown.userInput);
+    const scaledTight = assembleTurnPrompt(
+      parseUserInput("go"),
+      pt,
+      true,
+      [],
+      { ...tight, calibration: 4 },
+      CFG,
+    );
+    expect(scaledTight.promptUsage.breakdown.outputFormat).toBe(
+      plainTight.promptUsage.breakdown.outputFormat,
+    );
+    expect(scaledTight.promptUsage.breakdown.userInput).toBe(
+      plainTight.promptUsage.breakdown.userInput,
+    );
   });
 
   it("scales estimateTokens only when an explicit scale is passed", () => {
@@ -259,22 +402,33 @@ describe("token calibration", () => {
 describe("macro expansion coverage", () => {
   const budget = { contextWindow: 65536, reserveOutputTokens: 1200 };
   const promptOf = (pt: ReturnType<typeof createInitialPlaythrough>) =>
-    assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget, CFG).messages
-      .map((m) => m.content).join("\n");
+    assembleTurnPrompt(parseUserInput("go"), pt, true, [], budget, CFG)
+      .messages.map((m) => m.content)
+      .join("\n");
 
   /** renderLorebookSegments reads only content/position/depth/order, so the cast keeps
    *  this fixture honest about the fields under test (tests/lorebook.test.ts has the
    *  full-shape builder). */
-  const activated = (content: string, position: number, depth = 4, order = 100) =>
-    ({ entry: { content, position, depth, order } }) as unknown as ActivatedEntry;
+  const activated = (
+    content: string,
+    position: number,
+    depth = 4,
+    order = 100,
+  ) =>
+    ({
+      entry: { content, position, depth, order },
+    }) as unknown as ActivatedEntry;
 
   it("expands {{user}} in lorebook entries and leaves {{char}} literal", () => {
-    const { before, after, depth } = renderLorebookSegments([
-      activated("{{char}} follows {{user}} through the gate.", 0),
-      activated("{{user}}'s satchel holds {{char}}'s letter.", 1),
-      activated("Deeper lore for {{user}}.", 2, 6),
-      activated("Shallower lore for {{ user }}.", 2, 2),
-    ], "Anon");
+    const { before, after, depth } = renderLorebookSegments(
+      [
+        activated("{{char}} follows {{user}} through the gate.", 0),
+        activated("{{user}}'s satchel holds {{char}}'s letter.", 1),
+        activated("Deeper lore for {{user}}.", 2, 6),
+        activated("Shallower lore for {{ user }}.", 2, 2),
+      ],
+      "Anon",
+    );
 
     // {{user}} resolves everywhere...
     expect(before).toBe("{{char}} follows Anon through the gate.");
@@ -288,13 +442,18 @@ describe("macro expansion coverage", () => {
   });
 
   it("returns empty segments for no activated entries", () => {
-    expect(renderLorebookSegments([], "Anon")).toEqual({ before: "", after: "", depth: "" });
+    expect(renderLorebookSegments([], "Anon")).toEqual({
+      before: "",
+      after: "",
+      depth: "",
+    });
   });
 
   it("expands {{user}} in the player character's own fields and leaves {{char}}", () => {
     const pt = createInitialPlaythrough("Player Macro Test");
     pt.playerCharacter.name = "Anon";
-    pt.playerCharacter.description = "{{user}} is a drifter; {{char}} means nothing here.";
+    pt.playerCharacter.description =
+      "{{user}} is a drifter; {{char}} means nothing here.";
     pt.playerCharacter.appearance = "{{ user }} wears a worn coat.";
     const all = promptOf(pt);
     expect(all).toContain("Anon is a drifter; {{char}} means nothing here.");

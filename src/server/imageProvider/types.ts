@@ -54,5 +54,7 @@ export type ImageGenerationResult = {
 };
 
 export interface ImageProvider {
-  generateImage(request: ImageGenerationRequest): Promise<ImageGenerationResult>;
+  generateImage(
+    request: ImageGenerationRequest,
+  ): Promise<ImageGenerationResult>;
 }

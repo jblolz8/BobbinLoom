@@ -34,7 +34,7 @@ export function RenameModal({
   isSaving = false,
   errorMessage,
   onSave,
-  onCancel
+  onCancel,
 }: RenameModalProps) {
   const [draft, setDraft] = useState(initialValue);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -59,10 +59,21 @@ export function RenameModal({
       initialFocusRef={inputRef}
       footer={
         <>
-          <Button type="submit" form={formId} variant="primary" disabled={!canSave} isLoading={isSaving}>
+          <Button
+            type="submit"
+            form={formId}
+            variant="primary"
+            disabled={!canSave}
+            isLoading={isSaving}
+          >
             {isSaving ? "Saving…" : "Save"}
           </Button>
-          <Button ref={cancelRef} variant="secondary" onClick={onCancel} disabled={isSaving}>
+          <Button
+            ref={cancelRef}
+            variant="secondary"
+            onClick={onCancel}
+            disabled={isSaving}
+          >
             Cancel
           </Button>
         </>

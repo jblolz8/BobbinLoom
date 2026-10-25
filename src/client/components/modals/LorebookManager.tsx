@@ -7,7 +7,11 @@ export type LorebookManagerProps = {
   onLorebooksChanged?: () => void;
 };
 
-export function LorebookManager({ open, onClose, onLorebooksChanged }: LorebookManagerProps) {
+export function LorebookManager({
+  open,
+  onClose,
+  onLorebooksChanged,
+}: LorebookManagerProps) {
   if (!open) return null;
 
   return (
@@ -16,14 +20,26 @@ export function LorebookManager({ open, onClose, onLorebooksChanged }: LorebookM
         <header className="modal-header">
           <div>
             <h2>Lorebook Manager</h2>
-            <p>Manage World Info lorebooks. Import .json files exported from SillyTavern, or create new ones here.</p>
+            <p>
+              Manage World Info lorebooks. Import .json files exported from
+              SillyTavern, or create new ones here.
+            </p>
           </div>
-          <Button variant="secondary" size="sm" onClick={onClose} leftIcon={<Icon name="X" size={14} />}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onClose}
+            leftIcon={<Icon name="X" size={14} />}
+          >
             Close
           </Button>
         </header>
 
-        <LorebookLibrary isModal={true} onClose={onClose} onLorebooksChanged={onLorebooksChanged} />
+        <LorebookLibrary
+          isModal={true}
+          onClose={onClose}
+          onLorebooksChanged={onLorebooksChanged}
+        />
       </section>
     </div>
   );

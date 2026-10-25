@@ -5,7 +5,11 @@ import {
   type HTMLAttributes,
   type ReactNode,
 } from "react";
-import { isTopDialog, popDialog, pushDialog } from "../../../engine/dialogStack";
+import {
+  isTopDialog,
+  popDialog,
+  pushDialog,
+} from "../../../engine/dialogStack";
 
 export type ModalSize = "sm" | "md" | "lg" | "wide";
 
@@ -37,50 +41,54 @@ export interface ModalFooterProps extends HTMLAttributes<HTMLElement> {
   children?: ReactNode;
 }
 
-export const ModalBody = forwardRef<HTMLDivElement, ModalBodyProps>(function ModalBody(
-  { layout = "stack", className = "", children, ...props },
-  ref
-) {
-  const classNames = [
-    "base-modal__body",
-    `base-modal__body--${layout}`,
-    className,
-  ]
-    .filter(Boolean)
-    .join(" ");
+export const ModalBody = forwardRef<HTMLDivElement, ModalBodyProps>(
+  function ModalBody(
+    { layout = "stack", className = "", children, ...props },
+    ref,
+  ) {
+    const classNames = [
+      "base-modal__body",
+      `base-modal__body--${layout}`,
+      className,
+    ]
+      .filter(Boolean)
+      .join(" ");
 
-  return (
-    <div ref={ref} className={classNames} {...props}>
-      {children}
-    </div>
-  );
-});
+    return (
+      <div ref={ref} className={classNames} {...props}>
+        {children}
+      </div>
+    );
+  },
+);
 
-export const ModalContent = forwardRef<HTMLDivElement, ModalContentProps>(function ModalContent(
-  { className = "", children, ...props },
-  ref
-) {
-  const classNames = ["base-modal__content", className].filter(Boolean).join(" ");
+export const ModalContent = forwardRef<HTMLDivElement, ModalContentProps>(
+  function ModalContent({ className = "", children, ...props }, ref) {
+    const classNames = ["base-modal__content", className]
+      .filter(Boolean)
+      .join(" ");
 
-  return (
-    <div ref={ref} className={classNames} {...props}>
-      {children}
-    </div>
-  );
-});
+    return (
+      <div ref={ref} className={classNames} {...props}>
+        {children}
+      </div>
+    );
+  },
+);
 
-export const ModalFooter = forwardRef<HTMLElement, ModalFooterProps>(function ModalFooter(
-  { className = "", children, ...props },
-  ref
-) {
-  const classNames = ["base-modal__footer", className].filter(Boolean).join(" ");
+export const ModalFooter = forwardRef<HTMLElement, ModalFooterProps>(
+  function ModalFooter({ className = "", children, ...props }, ref) {
+    const classNames = ["base-modal__footer", className]
+      .filter(Boolean)
+      .join(" ");
 
-  return (
-    <footer ref={ref} className={classNames} {...props}>
-      {children}
-    </footer>
-  );
-});
+    return (
+      <footer ref={ref} className={classNames} {...props}>
+        {children}
+      </footer>
+    );
+  },
+);
 
 const ModalRoot = forwardRef<HTMLElement, ModalProps>(function Modal(
   {
@@ -96,7 +104,7 @@ const ModalRoot = forwardRef<HTMLElement, ModalProps>(function Modal(
     children,
     ...props
   },
-  ref
+  ref,
 ) {
   const dialogId = useId();
 

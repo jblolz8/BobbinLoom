@@ -60,7 +60,7 @@ export type ImageStyleDisplay = {
 export function imageStyleDisplay({
   value,
   styles,
-  customRequested
+  customRequested,
 }: ImageStyleDisplayInput): ImageStyleDisplay {
   const valueInList = value !== "" && styles.includes(value);
   const listLoaded = styles.length > 0;
@@ -72,7 +72,11 @@ export function imageStyleDisplay({
   const showCustom = customRequested || valueNotListed;
 
   const options: ImageStyleOption[] = [
-    { value: NONE_STYLE_OPTION, label: "None", description: "Send no style_preset" }
+    {
+      value: NONE_STYLE_OPTION,
+      label: "None",
+      description: "Send no style_preset",
+    },
   ];
   const seen = new Set<string>([NONE_STYLE_OPTION]);
   for (const style of styles) {
@@ -88,7 +92,11 @@ export function imageStyleDisplay({
     seen.add(value);
     options.push({ value, label: value });
   }
-  options.push({ value: CUSTOM_STYLE_OPTION, label: "Custom…", description: "Type an exact value" });
+  options.push({
+    value: CUSTOM_STYLE_OPTION,
+    label: "Custom…",
+    description: "Type an exact value",
+  });
 
   const suggestion = valueNotListed
     ? styles.find((style) => style.toLowerCase() === value.trim().toLowerCase())
@@ -99,6 +107,6 @@ export function imageStyleDisplay({
     options,
     showCustomInput: showCustom,
     showWarning: valueNotListed,
-    suggestion
+    suggestion,
   };
 }

@@ -16,7 +16,13 @@ import { ChatSettingsPanel } from "../settings/ChatSettingsPanel";
 import { ConfirmModal } from "../common/ConfirmModal";
 import { Button, Header, Modal, Stack, Tabs, type TabItem } from "../base";
 
-type SettingsTab = "provider" | "prompts" | "tags" | "chat" | "interface" | "appearance";
+type SettingsTab =
+  | "provider"
+  | "prompts"
+  | "tags"
+  | "chat"
+  | "interface"
+  | "appearance";
 
 const SETTINGS_TABS: TabItem<SettingsTab>[] = [
   { id: "provider", label: "Providers", icon: "Cpu" },
@@ -107,10 +113,10 @@ export function SettingsModal(props: SettingsModalProps) {
   const titleId = useId();
 
   const [settingsTab, setSettingsTabState] = useState<SettingsTab>(
-    UI_PREFERENCE_DEFAULTS.settingsTab
+    UI_PREFERENCE_DEFAULTS.settingsTab,
   );
   const [providerKind, setProviderKindState] = useState<ProviderSubTab>(
-    UI_PREFERENCE_DEFAULTS.settingsProviderKind
+    UI_PREFERENCE_DEFAULTS.settingsProviderKind,
   );
 
   /** Set the moment the reader picks a tab or provider kind so the initial server read never overwrites their choice. */
@@ -129,9 +135,11 @@ export function SettingsModal(props: SettingsModalProps) {
   const setProviderKind = (kind: ProviderSubTab) => {
     providerKindTouchedRef.current = true;
     setProviderKindState(kind);
-    void updateViewPreferences({ ui: { settingsProviderKind: kind } }).catch(() => {
-      /* The next read reconciles; a failed write must not break the tabs. */
-    });
+    void updateViewPreferences({ ui: { settingsProviderKind: kind } }).catch(
+      () => {
+        /* The next read reconciles; a failed write must not break the tabs. */
+      },
+    );
   };
 
   /**
@@ -144,10 +152,11 @@ export function SettingsModal(props: SettingsModalProps) {
    * below adds the stored tab, which the effects further down then visit.
    */
   const [visitedTabs, setVisitedTabs] = useState<Set<SettingsTab>>(
-    () => new Set<SettingsTab>([UI_PREFERENCE_DEFAULTS.settingsTab])
+    () => new Set<SettingsTab>([UI_PREFERENCE_DEFAULTS.settingsTab]),
   );
   const [visitedKinds, setVisitedKinds] = useState<Set<ProviderSubTab>>(
-    () => new Set<ProviderSubTab>([UI_PREFERENCE_DEFAULTS.settingsProviderKind])
+    () =>
+      new Set<ProviderSubTab>([UI_PREFERENCE_DEFAULTS.settingsProviderKind]),
   );
 
   /** Reported up from ProviderConnections, which owns the form. Keyed by kind
@@ -183,18 +192,27 @@ export function SettingsModal(props: SettingsModalProps) {
   }, []);
 
   useEffect(() => {
-    setVisitedTabs((prev) => (prev.has(settingsTab) ? prev : new Set(prev).add(settingsTab)));
+    setVisitedTabs((prev) =>
+      prev.has(settingsTab) ? prev : new Set(prev).add(settingsTab),
+    );
   }, [settingsTab]);
 
   useEffect(() => {
-    setVisitedKinds((prev) => (prev.has(providerKind) ? prev : new Set(prev).add(providerKind)));
+    setVisitedKinds((prev) =>
+      prev.has(providerKind) ? prev : new Set(prev).add(providerKind),
+    );
   }, [providerKind]);
 
   // Stable identity: ProviderConnections calls this from an effect, so a new
   // function every render would re-run that effect on every render.
-  const handleDirtyChange = useCallback((kind: ProviderKind, isDirty: boolean) => {
-    setDirtyKinds((prev) => (prev[kind] === isDirty ? prev : { ...prev, [kind]: isDirty }));
-  }, []);
+  const handleDirtyChange = useCallback(
+    (kind: ProviderKind, isDirty: boolean) => {
+      setDirtyKinds((prev) =>
+        prev[kind] === isDirty ? prev : { ...prev, [kind]: isDirty },
+      );
+    },
+    [],
+  );
 
   const requestClose = useCallback(() => {
     if (dirty) setConfirmClose(true);
@@ -278,7 +296,9 @@ export function SettingsModal(props: SettingsModalProps) {
                 </Tabs.Panel>
                 <Tabs.Panel active={providerKind === "overrides"}>
                   {visitedKinds.has("overrides") && (
-                    <ProviderOverridesPanel active={providerKind === "overrides"} />
+                    <ProviderOverridesPanel
+                      active={providerKind === "overrides"}
+                    />
                   )}
                 </Tabs.Panel>
               </Stack>

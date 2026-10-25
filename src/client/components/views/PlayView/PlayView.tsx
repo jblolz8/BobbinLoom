@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import {
   buildImageUrl,
   getAppearanceSettings,
@@ -7,16 +13,31 @@ import {
   type ImageGenerationProgress,
   type TokenUsage,
   type Persona,
-  type WorldStateAction
+  type WorldStateAction,
 } from "../../../api";
-import type { AutoScrollBehavior, ChatMessage, Playthrough } from "../../../../schemas";
+import type {
+  AutoScrollBehavior,
+  ChatMessage,
+  Playthrough,
+} from "../../../../schemas";
 import type { RevertTarget } from "../../../../engine/chapterRevert";
-import type { DeleteImageTarget, FailedResponseNotice, ImageGenerationOverrides, ImagePromptRequest, ImageRequestEditorState, RetryImageTarget } from "../../../hooks/usePlaythrough";
+import type {
+  DeleteImageTarget,
+  FailedResponseNotice,
+  ImageGenerationOverrides,
+  ImagePromptRequest,
+  ImageRequestEditorState,
+  RetryImageTarget,
+} from "../../../hooks/usePlaythrough";
 import { ScenePanel } from "./ScenePanel";
 import { ChatPanel } from "./ChatPanel";
 import { ImageRequestBodyModal } from "./ImageRequestBodyModal";
 import { InfoPanel } from "./InfoPanel/InfoPanel";
-import { incomingOffset, paneIndexOf, paneSide } from "../../../engine/paneSwipe";
+import {
+  incomingOffset,
+  paneIndexOf,
+  paneSide,
+} from "../../../engine/paneSwipe";
 import { PANE_ORDER } from "../../../engine/paneSwipe";
 import { usePaneSwipe } from "../../../hooks/usePaneSwipe";
 import { PlaythroughLibrary } from "../../library/PlaythroughLibrary";
@@ -94,7 +115,12 @@ export type PlayViewProps = {
   setBranchTarget: (msg: ChatMessage | null) => void;
   confirmBranch: (branchName?: string, asStandalone?: boolean) => Promise<void>;
   handleResummarizeChapter: (chapterId: string) => Promise<void>;
-  handleWorldStateAction: (worldStateId: string, action: WorldStateAction, name?: string, description?: string) => Promise<void>;
+  handleWorldStateAction: (
+    worldStateId: string,
+    action: WorldStateAction,
+    name?: string,
+    description?: string,
+  ) => Promise<void>;
   handleDismissNotice: () => void;
   handleDismissFailedNotice?: () => void;
   openPersonaManager: () => void;
@@ -103,7 +129,7 @@ export type PlayViewProps = {
     scenarioDescription: string,
     personaId: string | undefined,
     initialCastIds: string[] | undefined,
-    originalName: string
+    originalName: string,
   ) => void;
   isMobile: boolean;
   mobileTab: "scene" | "chat" | "info";
@@ -138,7 +164,10 @@ export type PlayViewProps = {
    *  report progress). */
   imageProgress?: ImageGenerationProgress | null;
   imagePromptRequest?: ImagePromptRequest | null;
-  handleGenerateImage?: (msg: ChatMessage, overrides?: ImageGenerationOverrides) => Promise<void>;
+  handleGenerateImage?: (
+    msg: ChatMessage,
+    overrides?: ImageGenerationOverrides,
+  ) => Promise<void>;
   handleCancelImage?: () => void;
   closeImagePrompt?: () => void;
   rerunImagePrompt?: () => Promise<void>;
@@ -279,13 +308,16 @@ export function PlayView(props: PlayViewProps) {
     saveImageRequestBody,
     imageSaving = false,
     alwaysDiscardOldImage = false,
-    setAlwaysDiscardOldImage
+    setAlwaysDiscardOldImage,
   } = props;
 
   // Which side the arriving panel slides in from. It is kept in a ref because the direction only
   // exists as a move — and compared against the previous panel, with the ref written only when the
   // panel actually changed, so a second render cannot flip it.
-  const paneMove = useRef<{ to: string; side: "left" | "right" }>({ to: mobileTab, side: "right" });
+  const paneMove = useRef<{ to: string; side: "left" | "right" }>({
+    to: mobileTab,
+    side: "right",
+  });
   // The panel a swipe carried in — or carried and settled back. Its arrival WAS the drag, so it must
   // not also run the entry animation — that would read as one slide too many. The marker lives until
   // the panel changes by some other means, so an unrelated re-render cannot sneak the animation back
@@ -294,7 +326,7 @@ export function PlayView(props: PlayViewProps) {
   if (paneMove.current.to !== mobileTab) {
     paneMove.current = {
       to: mobileTab,
-      side: paneSide(paneIndexOf(paneMove.current.to), paneIndexOf(mobileTab))
+      side: paneSide(paneIndexOf(paneMove.current.to), paneIndexOf(mobileTab)),
     };
     if (draggedInto.current !== mobileTab) draggedInto.current = null;
   }
@@ -303,7 +335,9 @@ export function PlayView(props: PlayViewProps) {
   // Following the finger is motion under the finger, which is what a reduced-motion preference asks
   // to be spared. The gesture still changes panels; it just does not drag them.
   const [reducedMotion, setReducedMotion] = useState(
-    () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
   );
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -324,16 +358,23 @@ export function PlayView(props: PlayViewProps) {
         /* keep the last known value — the gesture must not flap on a failed read */
       });
   }, []);
-  useEffect(() => { refreshPaneSwipe(); }, [refreshPaneSwipe]);
+  useEffect(() => {
+    refreshPaneSwipe();
+  }, [refreshPaneSwipe]);
 
   /** A drag in progress, and the release that finishes it. */
-  const [paneDrag, setPaneDrag] = useState<{ target: string; offset: number; released: boolean } | null>(null);
+  const [paneDrag, setPaneDrag] = useState<{
+    target: string;
+    offset: number;
+    released: boolean;
+  } | null>(null);
   const settleTimer = useRef<number | null>(null);
   useEffect(
     () => () => {
-      if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
+      if (settleTimer.current !== null)
+        window.clearTimeout(settleTimer.current);
     },
-    []
+    [],
   );
 
   // Swiping between panels, on the single-panel layout only, and only while the stored setting
@@ -362,9 +403,14 @@ export function PlayView(props: PlayViewProps) {
       }
       const width = layoutRef.current?.clientWidth ?? 0;
       // Where the pair comes to rest: the neighbour in, or back where it started.
-      const rest = committed ? (targetIndex > paneIndexOf(mobileTab) ? -width : width) : 0;
+      const rest = committed
+        ? targetIndex > paneIndexOf(mobileTab)
+          ? -width
+          : width
+        : 0;
       setPaneDrag({ target, offset: rest, released: true });
-      if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
+      if (settleTimer.current !== null)
+        window.clearTimeout(settleTimer.current);
       settleTimer.current = window.setTimeout(() => {
         settleTimer.current = null;
         if (committed) {
@@ -378,30 +424,46 @@ export function PlayView(props: PlayViewProps) {
         }
         setPaneDrag(null);
       }, PANE_SETTLE_MS);
-    }
+    },
   });
 
   /**
    * Class and transform for one panel: which one is showing, the arriving panel's slide, and both
    * participants' live positions while a swipe is under the finger.
    */
-  function paneLayout(pane: string): { className?: string; style?: CSSProperties } {
+  function paneLayout(pane: string): {
+    className?: string;
+    style?: CSSProperties;
+  } {
     if (!isMobile) return {};
     if (paneDrag) {
       const settled = paneDrag.released ? " pane-settling" : "";
       if (pane === mobileTab) {
-        return { className: `pane-dragging${settled}`, style: { transform: `translateX(${paneDrag.offset}px)` } };
+        return {
+          className: `pane-dragging${settled}`,
+          style: { transform: `translateX(${paneDrag.offset}px)` },
+        };
       }
       if (pane === paneDrag.target) {
         const width = layoutRef.current?.clientWidth ?? 0;
-        const offset = incomingOffset(paneDrag.offset, paneIndexOf(mobileTab), paneIndexOf(paneDrag.target), width);
-        return { className: `pane-dragging${settled}`, style: { transform: `translateX(${offset}px)` } };
+        const offset = incomingOffset(
+          paneDrag.offset,
+          paneIndexOf(mobileTab),
+          paneIndexOf(paneDrag.target),
+          width,
+        );
+        return {
+          className: `pane-dragging${settled}`,
+          style: { transform: `translateX(${offset}px)` },
+        };
       }
       return { className: "mobile-hidden" };
     }
     if (mobileTab !== pane) return { className: "mobile-hidden" };
     // Arrived by drag: no entry animation, it already moved.
-    return draggedInto.current === pane ? {} : { className: `pane-enter-from-${paneMove.current.side}` };
+    return draggedInto.current === pane
+      ? {}
+      : { className: `pane-enter-from-${paneMove.current.side}` };
   }
 
   // The retry confirmation's own "always" tick. Deliberately NOT seeded from the
@@ -412,7 +474,9 @@ export function PlayView(props: PlayViewProps) {
   const [timelinesOpen, setTimelinesOpen] = useState(false);
   const [branchNameInput, setBranchNameInput] = useState("");
   const [branchAsStandalone, setBranchAsStandalone] = useState(false);
-  const [characterManagerEditingId, setCharacterManagerEditingId] = useState<string | undefined>(undefined);
+  const [characterManagerEditingId, setCharacterManagerEditingId] = useState<
+    string | undefined
+  >(undefined);
 
   // ── Image provider availability ──
   // The active image connection is GLOBAL (no per-playthrough override), so the
@@ -420,18 +484,27 @@ export function PlayView(props: PlayViewProps) {
   // (that is where a connection is added or activated). ChatPanel only receives
   // the derived boolean — it never fetches.
   const [hasImageProvider, setHasImageProvider] = useState(false);
-  const [imageConnection, setImageConnection] = useState<{ label: string; model: string } | null>(null);
+  const [imageConnection, setImageConnection] = useState<{
+    label: string;
+    model: string;
+  } | null>(null);
 
   const refreshImageProvider = useCallback(async () => {
     try {
       const registry = await listProviderConnections();
       // Mirrors the server's `activeConnectionOfKind`: the active slot when it
       // points at an image connection, else the first image connection.
-      const imageConnections = registry.connections.filter((c) => c.kind === "image");
+      const imageConnections = registry.connections.filter(
+        (c) => c.kind === "image",
+      );
       const active =
-        imageConnections.find((c) => c.id === registry.activeImageProviderId) ?? imageConnections[0] ?? null;
+        imageConnections.find((c) => c.id === registry.activeImageProviderId) ??
+        imageConnections[0] ??
+        null;
       setHasImageProvider(imageConnections.length > 0);
-      setImageConnection(active ? { label: active.label, model: active.model } : null);
+      setImageConnection(
+        active ? { label: active.label, model: active.model } : null,
+      );
     } catch {
       /* keep the last known state — the button must not flap on a failed read */
     }
@@ -444,13 +517,21 @@ export function PlayView(props: PlayViewProps) {
   // The global config's soft prompt limit (the prompt modal then shows a real
   // `n / limit` counter). Re-read when Settings closes, since the limit is edited
   // there — and it now lives in the one global config, not a playthrough snapshot.
-  const [imageCharacterLimit, setImageCharacterLimit] = useState<number | undefined>(undefined);
+  const [imageCharacterLimit, setImageCharacterLimit] = useState<
+    number | undefined
+  >(undefined);
   const refreshImageCharacterLimit = useCallback(() => {
     void getPromptConfig()
-      .then((state) => setImageCharacterLimit(state.promptConfig.imageGeneration?.promptCharacterLimit))
+      .then((state) =>
+        setImageCharacterLimit(
+          state.promptConfig.imageGeneration?.promptCharacterLimit,
+        ),
+      )
       .catch(() => setImageCharacterLimit(undefined));
   }, []);
-  useEffect(() => { refreshImageCharacterLimit(); }, [refreshImageCharacterLimit]);
+  useEffect(() => {
+    refreshImageCharacterLimit();
+  }, [refreshImageCharacterLimit]);
 
   // The modal reports ids, not documents: this list is a summary projection, so the
   // replacement playthrough is loaded by id through the same loader the Load button uses.
@@ -497,7 +578,9 @@ export function PlayView(props: PlayViewProps) {
           playthrough={playthrough}
           input={input}
           onInputChange={setInput}
-          onSend={() => { void handleSend(); }}
+          onSend={() => {
+            void handleSend();
+          }}
           loading={loading}
           actionLoading={actionLoading}
           choices={choices}
@@ -515,12 +598,16 @@ export function PlayView(props: PlayViewProps) {
           editDraft={editDraft}
           onEditDraftChange={setEditDraft}
           onStartEdit={startEdit}
-          onSaveEdit={() => { void saveEdit(); }}
+          onSaveEdit={() => {
+            void saveEdit();
+          }}
           onCancelEdit={cancelEdit}
           onRetryRequest={setRetryTarget}
           retryingTargetId={retryingTarget?.messageId ?? null}
           onRequestTruncate={setTruncateTarget}
-          onRevertRequest={(msg) => setRevertTarget({ kind: "message", id: msg.id, label: msg.content })}
+          onRevertRequest={(msg) =>
+            setRevertTarget({ kind: "message", id: msg.id, label: msg.content })
+          }
           onBranchRequest={setBranchTarget}
           lastPatchInfo={lastPatchInfo}
           sendingMessage={sendingMessage}
@@ -547,19 +634,28 @@ export function PlayView(props: PlayViewProps) {
           imageCharacterLimit={imageCharacterLimit}
           imageProviderLabel={imageConnection?.label}
           imageProviderModel={imageConnection?.model}
-          onGenerateImage={(msg) => { void handleGenerateImage?.(msg); }}
+          onGenerateImage={(msg) => {
+            void handleGenerateImage?.(msg);
+          }}
           onCancelImage={handleCancelImage}
           onDeleteImage={(msg, file) => requestDeleteImage?.(msg, file)}
           onRetryImage={(msg, file) => requestImageRetry?.(msg, file)}
-          onEditImageRequest={(msg, file) => { void openImageRequestEditor?.(msg, file); }}
+          onEditImageRequest={(msg, file) => {
+            void openImageRequestEditor?.(msg, file);
+          }}
           onImagePromptGenerate={(prompt, negativePrompt) => {
             const request = imagePromptRequest;
             if (!request) return;
             // Both overrides present ⇒ the server skips the text call: no second
             // token spend and the edits are what the image provider receives.
-            void handleGenerateImage?.(request.message, { promptOverride: prompt, negativeOverride: negativePrompt });
+            void handleGenerateImage?.(request.message, {
+              promptOverride: prompt,
+              negativeOverride: negativePrompt,
+            });
           }}
-          onImagePromptRerun={() => { void rerunImagePrompt?.(); }}
+          onImagePromptRerun={() => {
+            void rerunImagePrompt?.();
+          }}
           onImagePromptClose={closeImagePrompt}
           {...paneLayout("chat")}
         />
@@ -575,10 +671,16 @@ export function PlayView(props: PlayViewProps) {
             if (isMobile && mobileTab !== "chat") setMobileTab("chat");
           }}
           onCloseChapterComplete={(tu) => setTokenUsage(tu)}
-          onRevertToChapter={(chapterId, name) => setRevertTarget({ kind: "chapter", id: chapterId, label: name })}
-          onResummarizeChapter={(chapterId) => { void handleResummarizeChapter(chapterId); }}
+          onRevertToChapter={(chapterId, name) =>
+            setRevertTarget({ kind: "chapter", id: chapterId, label: name })
+          }
+          onResummarizeChapter={(chapterId) => {
+            void handleResummarizeChapter(chapterId);
+          }}
           resummarizingChapterId={resummarizingChapterId}
-          onStartNewWithSameScenario={(sd, pid, cids, name) => handleStartNewWithSameScenario(sd, pid, cids, name)}
+          onStartNewWithSameScenario={(sd, pid, cids, name) =>
+            handleStartNewWithSameScenario(sd, pid, cids, name)
+          }
           onOpenLibrary={(templateId) => {
             setCharacterManagerEditingId(templateId);
             setCharacterManagerOpen(true);
@@ -590,7 +692,11 @@ export function PlayView(props: PlayViewProps) {
       </section>
 
       {isMobile ? (
-        <nav className="mobile-tab-bar" aria-label="Mobile View Panels Navigation" role="tablist">
+        <nav
+          className="mobile-tab-bar"
+          aria-label="Mobile View Panels Navigation"
+          role="tablist"
+        >
           <button
             role="tab"
             type="button"
@@ -647,11 +753,17 @@ export function PlayView(props: PlayViewProps) {
               ? "It is removed from this message. The file is deleted if nothing else uses it — and this image is your playthrough's cover, so the cover falls back to the latest remaining image."
               : "It is removed from this message. The file is deleted if nothing else uses it."
           }
-          confirmLabel={imageDeletingId === deleteImageTarget.messageId ? "Removing…" : "Yes, remove"}
+          confirmLabel={
+            imageDeletingId === deleteImageTarget.messageId
+              ? "Removing…"
+              : "Yes, remove"
+          }
           danger
           maxWidth={420}
           isLoading={imageDeletingId === deleteImageTarget.messageId}
-          onConfirm={() => { void confirmDeleteImage?.(); }}
+          onConfirm={() => {
+            void confirmDeleteImage?.();
+          }}
           onCancel={() => setDeleteImageTarget(null)}
         >
           <div className="delete-image-preview">
@@ -672,7 +784,9 @@ export function PlayView(props: PlayViewProps) {
           body={imageRequestEditor.body}
           connection={imageRequestEditor.connection}
           saving={imageSaving}
-          onSave={async (body) => (saveImageRequestBody ? await saveImageRequestBody(body) : null)}
+          onSave={async (body) =>
+            saveImageRequestBody ? await saveImageRequestBody(body) : null
+          }
           onClose={() => closeImageRequestEditor?.()}
         />
       ) : null}
@@ -687,11 +801,17 @@ export function PlayView(props: PlayViewProps) {
         <ConfirmModal
           title="Re-send this request body?"
           message="The image provider receives this body — the text model is not called, and the seed, size and checkpoint it names are sent as they stand. The image above is replaced once the new one arrives, so nothing is lost if the render fails."
-          confirmLabel={imageGeneratingId === retryImageTarget.message.id ? "Generating…" : "Replace image"}
+          confirmLabel={
+            imageGeneratingId === retryImageTarget.message.id
+              ? "Generating…"
+              : "Replace image"
+          }
           danger
           maxWidth={460}
           isLoading={imageGeneratingId === retryImageTarget.message.id}
-          onConfirm={() => { void confirmImageRetry?.(retryDiscardAlways); }}
+          onConfirm={() => {
+            void confirmImageRetry?.(retryDiscardAlways);
+          }}
           onCancel={() => {
             setRetryDiscardAlways(false);
             cancelImageRetry?.();
@@ -720,8 +840,14 @@ export function PlayView(props: PlayViewProps) {
         <RevertConfirmModal
           playthrough={playthrough}
           mode="retry"
-          target={{ kind: "message", id: retryTarget.id, label: retryTarget.content }}
-          onConfirm={() => { void startRetry(); }}
+          target={{
+            kind: "message",
+            id: retryTarget.id,
+            label: retryTarget.content,
+          }}
+          onConfirm={() => {
+            void startRetry();
+          }}
           onCancel={() => setRetryTarget(null)}
         />
       ) : null}
@@ -731,7 +857,9 @@ export function PlayView(props: PlayViewProps) {
           playthrough={playthrough}
           target={revertTarget}
           isLoading={actionLoading}
-          onConfirm={() => { void confirmRevert(); }}
+          onConfirm={() => {
+            void confirmRevert();
+          }}
           onCancel={() => setRevertTarget(null)}
         />
       ) : null}
@@ -743,11 +871,14 @@ export function PlayView(props: PlayViewProps) {
           confirmLabel={actionLoading ? "Deleting…" : "Yes, delete"}
           danger
           isLoading={actionLoading}
-          onConfirm={() => { void confirmTruncate(); }}
+          onConfirm={() => {
+            void confirmTruncate();
+          }}
           onCancel={() => setTruncateTarget(null)}
         >
           <blockquote className="retry-preview">
-            {truncateTarget.content.slice(0, 200)}{truncateTarget.content.length > 200 ? "…" : ""}
+            {truncateTarget.content.slice(0, 200)}
+            {truncateTarget.content.length > 200 ? "…" : ""}
           </blockquote>
         </ConfirmModal>
       ) : null}
@@ -773,7 +904,8 @@ export function PlayView(props: PlayViewProps) {
           }}
         >
           <blockquote className="retry-preview">
-            {branchTarget.content.slice(0, 200)}{branchTarget.content.length > 200 ? "…" : ""}
+            {branchTarget.content.slice(0, 200)}
+            {branchTarget.content.length > 200 ? "…" : ""}
           </blockquote>
           <div className="modal-form-fields">
             <TextInput
@@ -793,7 +925,6 @@ export function PlayView(props: PlayViewProps) {
           </div>
         </ConfirmModal>
       ) : null}
-
 
       <SettingsModal
         open={settingsOpen}

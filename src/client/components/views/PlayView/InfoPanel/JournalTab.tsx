@@ -1,10 +1,35 @@
 import { useEffect, useMemo, useState } from "react";
-import type { LorebookSummary, MemoryEvent, Playthrough } from "../../../../../schemas";
-import { closeChapter, listLorebooks, type CloseChapterBody, type TokenUsage } from "../../../../api";
-import { AvatarBadge, Badge, Button, Icon, IconButton, TextInput } from "../../../base";
-import { adoptLocalPreferences, buildImageUrl, clearPlaythroughCover, setPlaythroughCover, updateViewPreferences } from "../../../../api";
+import type {
+  LorebookSummary,
+  MemoryEvent,
+  Playthrough,
+} from "../../../../../schemas";
+import {
+  closeChapter,
+  listLorebooks,
+  type CloseChapterBody,
+  type TokenUsage,
+} from "../../../../api";
+import {
+  AvatarBadge,
+  Badge,
+  Button,
+  Icon,
+  IconButton,
+  TextInput,
+} from "../../../base";
+import {
+  adoptLocalPreferences,
+  buildImageUrl,
+  clearPlaythroughCover,
+  setPlaythroughCover,
+  updateViewPreferences,
+} from "../../../../api";
 import { buildCoverMedia } from "../../../../engine/coverMedia";
-import { chapterStaleSignature, chapterSummaryIsStale } from "../../../../../engine/chapterLifecycle";
+import {
+  chapterStaleSignature,
+  chapterSummaryIsStale,
+} from "../../../../../engine/chapterLifecycle";
 import { GalleryModal } from "../../../modals/GalleryModal";
 import { CloseChapterModal } from "../../../modals/CloseChapterModal";
 
@@ -17,7 +42,7 @@ export function JournalTab({
   resummarizingChapterId,
   onRevertToChapter,
   onStartNewWithSameScenario,
-  onOpenTimelines
+  onOpenTimelines,
 }: {
   playthrough: Playthrough;
   onPlaythroughChange: (updated: Playthrough) => void;
@@ -30,21 +55,32 @@ export function JournalTab({
   /** Ask to revert to this chapter: everything after it is discarded and it becomes the running
    *  chapter again. The confirm dialog (with the counts and the backup button) lives in PlayView. */
   onRevertToChapter: (chapterId: string, chapterName: string) => void;
-  onStartNewWithSameScenario: (scenarioDescription: string, personaId: string | undefined, initialCastIds: string[] | undefined, originalName: string) => void;
+  onStartNewWithSameScenario: (
+    scenarioDescription: string,
+    personaId: string | undefined,
+    initialCastIds: string[] | undefined,
+    originalName: string,
+  ) => void;
   onOpenTimelines?: () => void;
 }) {
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
-  const [lorebookSummaries, setLorebookSummaries] = useState<LorebookSummary[]>([]);
-  const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set());
+  const [lorebookSummaries, setLorebookSummaries] = useState<LorebookSummary[]>(
+    [],
+  );
+  const [expandedChapters, setExpandedChapters] = useState<Set<string>>(
+    new Set(),
+  );
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [coverSaving, setCoverSaving] = useState(false);
   const [coverError, setCoverError] = useState<string | null>(null);
   /** Which chapter's stale-summary note was dismissed, and for which edit signature. Keyed on the
    *  chapter PLUS the signature, so a later edit warns again instead of being silenced for good.
    *  The server owns the record; state starts empty and the mount effect below fills it. */
-  const [staleDismissals, setStaleDismissals] = useState<Record<string, string>>({});
+  const [staleDismissals, setStaleDismissals] = useState<
+    Record<string, string>
+  >({});
 
   // Filter state for timeline events
   const [eventSearch, setEventSearch] = useState("");
@@ -58,16 +94,25 @@ export function JournalTab({
     void (async () => {
       const { preferences } = await adoptLocalPreferences();
       if (cancelled) return;
-      setStaleDismissals((current) => ({ ...(preferences.staleNoteDismissals ?? {}), ...current }));
+      setStaleDismissals((current) => ({
+        ...(preferences.staleNoteDismissals ?? {}),
+        ...current,
+      }));
     })().catch(() => {});
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    listLorebooks().then(setLorebookSummaries).catch(() => setLorebookSummaries([]));
+    listLorebooks()
+      .then(setLorebookSummaries)
+      .catch(() => setLorebookSummaries([]));
   }, [playthrough.id]);
 
-  const attachedLorebooks = lorebookSummaries.filter(lb => playthrough.lorebookIds?.includes(lb.id));
+  const attachedLorebooks = lorebookSummaries.filter((lb) =>
+    playthrough.lorebookIds?.includes(lb.id),
+  );
 
   // Newest first, hidden messages skipped, one entry per file — see buildCoverMedia.
   const media = useMemo(() => buildCoverMedia(playthrough), [playthrough]);
@@ -101,7 +146,8 @@ export function JournalTab({
 
   const events = useMemo(() => {
     const all = new Map<string, MemoryEvent>();
-    for (const e of playthrough.memoryLayers?.compressed ?? []) all.set(e.id, e);
+    for (const e of playthrough.memoryLayers?.compressed ?? [])
+      all.set(e.id, e);
     for (const e of playthrough.memoryLayers?.recent ?? []) all.set(e.id, e);
     for (const e of playthrough.memoryEvents) all.set(e.id, e);
     return [...all.values()].sort((a, b) => b.turn - a.turn);
@@ -117,7 +163,8 @@ export function JournalTab({
 
   const chapterGroups = useMemo((): ChapterEventGroup[] => {
     const all = new Map<string, MemoryEvent>();
-    for (const e of playthrough.memoryLayers?.compressed ?? []) all.set(e.id, e);
+    for (const e of playthrough.memoryLayers?.compressed ?? [])
+      all.set(e.id, e);
     for (const e of playthrough.memoryLayers?.recent ?? []) all.set(e.id, e);
     for (const e of playthrough.memoryEvents) all.set(e.id, e);
 
@@ -183,25 +230,33 @@ export function JournalTab({
   // Filtered groups based on search & importance
   const filteredChapterGroups = useMemo(() => {
     const query = eventSearch.trim().toLowerCase();
-    return chapterGroups.map(group => {
-      const filteredEvents = group.events.filter(e => {
-        if (minImportance > 0 && e.importance < minImportance) return false;
-        if (query) {
-          const matchSummary = e.summary?.toLowerCase().includes(query);
-          const matchType = e.type?.toLowerCase().includes(query);
-          const matchTurn = `t${e.turn}`.toLowerCase().includes(query);
-          if (!matchSummary && !matchType && !matchTurn) return false;
-        }
-        return true;
-      });
-      return {
-        ...group,
-        events: filteredEvents,
-      };
-    }).filter(group => group.events.length > 0 || (!query && minImportance === 0 && group.chapterId === null));
+    return chapterGroups
+      .map((group) => {
+        const filteredEvents = group.events.filter((e) => {
+          if (minImportance > 0 && e.importance < minImportance) return false;
+          if (query) {
+            const matchSummary = e.summary?.toLowerCase().includes(query);
+            const matchType = e.type?.toLowerCase().includes(query);
+            const matchTurn = `t${e.turn}`.toLowerCase().includes(query);
+            if (!matchSummary && !matchType && !matchTurn) return false;
+          }
+          return true;
+        });
+        return {
+          ...group,
+          events: filteredEvents,
+        };
+      })
+      .filter(
+        (group) =>
+          group.events.length > 0 ||
+          (!query && minImportance === 0 && group.chapterId === null),
+      );
   }, [chapterGroups, eventSearch, minImportance]);
 
-  const visibleMessages = playthrough.messages.filter(m => !m.hidden && !m.chapterId);
+  const visibleMessages = playthrough.messages.filter(
+    (m) => !m.hidden && !m.chapterId,
+  );
   const canClose = visibleMessages.length >= 6;
 
   /** The dialog owns its fields (and remembers the chosen connection); the call lives here,
@@ -215,7 +270,9 @@ export function JournalTab({
       onCloseChapterComplete(tokenUsage);
       setCloseModalOpen(false);
     } catch (e) {
-      setCloseError(e instanceof Error ? e.message : "Closing the chapter failed");
+      setCloseError(
+        e instanceof Error ? e.message : "Closing the chapter failed",
+      );
     } finally {
       setClosing(false);
     }
@@ -230,9 +287,10 @@ export function JournalTab({
   }
 
   function toggleExpand(chapterId: string) {
-    setExpandedChapters(prev => {
+    setExpandedChapters((prev) => {
       const next = new Set(prev);
-      if (next.has(chapterId)) next.delete(chapterId); else next.add(chapterId);
+      if (next.has(chapterId)) next.delete(chapterId);
+      else next.add(chapterId);
       return next;
     });
   }
@@ -240,7 +298,10 @@ export function JournalTab({
   function renderStars(importance: number) {
     const count = Math.max(1, Math.min(5, Math.round(importance)));
     return (
-      <div className="timeline-stars" title={`Importance: ${importance.toFixed(1)}/5`}>
+      <div
+        className="timeline-stars"
+        title={`Importance: ${importance.toFixed(1)}/5`}
+      >
         {Array.from({ length: 5 }).map((_, i) => (
           <Icon
             key={i}
@@ -284,18 +345,22 @@ export function JournalTab({
               <span>Setting & Scenario</span>
             </h3>
           </div>
-          <p className="about-synopsis-text">{playthrough.scenarioDescription}</p>
+          <p className="about-synopsis-text">
+            {playthrough.scenarioDescription}
+          </p>
           <div className="about-actions">
             <Button
               variant="primary"
               size="sm"
               leftIcon={<Icon name="Copy" size={13} />}
-              onClick={() => onStartNewWithSameScenario(
-                playthrough.scenarioDescription!,
-                playthrough.personaId,
-                playthrough.initialCastIds,
-                playthrough.name,
-              )}
+              onClick={() =>
+                onStartNewWithSameScenario(
+                  playthrough.scenarioDescription!,
+                  playthrough.personaId,
+                  playthrough.initialCastIds,
+                  playthrough.name,
+                )
+              }
               title="Start a new game using this scenario, cast, and persona"
             >
               Start New with Same Scenario
@@ -312,7 +377,9 @@ export function JournalTab({
             <span>Lorebooks</span>
           </h3>
           {attachedLorebooks.length > 0 ? (
-            <Badge variant="neutral" size="xs" pill>{attachedLorebooks.length} attached</Badge>
+            <Badge variant="neutral" size="xs" pill>
+              {attachedLorebooks.length} attached
+            </Badge>
           ) : null}
         </div>
         {attachedLorebooks.length === 0 ? (
@@ -323,10 +390,16 @@ export function JournalTab({
         ) : (
           <div className="lorebooks-grid">
             {attachedLorebooks.map((lb) => (
-              <div key={lb.id} className="lorebook-pill" title={`${lb.entryCount} active lore entries`}>
+              <div
+                key={lb.id}
+                className="lorebook-pill"
+                title={`${lb.entryCount} active lore entries`}
+              >
                 <Icon name="BookOpen" size={13} />
                 <span>{lb.name}</span>
-                <Badge variant="neutral" size="xs" pill>{lb.entryCount} entries</Badge>
+                <Badge variant="neutral" size="xs" pill>
+                  {lb.entryCount} entries
+                </Badge>
               </div>
             ))}
           </div>
@@ -342,7 +415,9 @@ export function JournalTab({
           </h3>
           <Badge variant="neutral" size="xs" pill>
             {(playthrough.chapters?.length ?? 0) + 1}{" "}
-            {(playthrough.chapters?.length ?? 0) + 1 === 1 ? "volume" : "volumes"}
+            {(playthrough.chapters?.length ?? 0) + 1 === 1
+              ? "volume"
+              : "volumes"}
           </Badge>
         </div>
 
@@ -351,18 +426,30 @@ export function JournalTab({
           <div className="chapter-current-banner">
             <div className="current-chapter-header">
               <h4 className="current-chapter-title">
-                <Icon name="BookOpen" size={15} className="current-chapter-icon" />
+                <Icon
+                  name="BookOpen"
+                  size={15}
+                  className="current-chapter-icon"
+                />
                 <span>Current Chapter</span>
               </h4>
-              <Badge variant="accent" size="xs" pill leftIcon={<span className="current-chapter-status-dot" />}>
+              <Badge
+                variant="accent"
+                size="xs"
+                pill
+                leftIcon={<span className="current-chapter-status-dot" />}
+              >
                 Ongoing
               </Badge>
             </div>
 
             <div className="current-chapter-controls">
               <span className="chapter-progress-hint">
-                {visibleMessages.length} message{visibleMessages.length === 1 ? "" : "s"} in session
-                {!canClose ? ` (need ${6 - visibleMessages.length} more to close)` : " · Ready to summarize"}
+                {visibleMessages.length} message
+                {visibleMessages.length === 1 ? "" : "s"} in session
+                {!canClose
+                  ? ` (need ${6 - visibleMessages.length} more to close)`
+                  : " · Ready to summarize"}
               </span>
               <Button
                 variant="primary"
@@ -371,7 +458,11 @@ export function JournalTab({
                 disabled={!canClose || closing}
                 isLoading={closing}
                 onClick={() => setCloseModalOpen(true)}
-                title={!canClose ? "Play a bit longer before closing this chapter" : "Close and summarize this chapter into an archived volume"}
+                title={
+                  !canClose
+                    ? "Play a bit longer before closing this chapter"
+                    : "Close and summarize this chapter into an archived volume"
+                }
               >
                 {closing ? "Closing…" : "Close Chapter"}
               </Button>
@@ -385,15 +476,27 @@ export function JournalTab({
                 const isExpanded = expandedChapters.has(ch.id);
                 // Derived, never stored: an edit after the summary was written makes it stale, and
                 // re-summarizing (which stamps the chapter) clears it with no second write.
-                const staleSignature = chapterSummaryIsStale(ch, playthrough.messages)
+                const staleSignature = chapterSummaryIsStale(
+                  ch,
+                  playthrough.messages,
+                )
                   ? chapterStaleSignature(ch, playthrough.messages)
                   : null;
-                const staleNoteShown = staleSignature !== null && staleDismissals[ch.id] !== staleSignature;
+                const staleNoteShown =
+                  staleSignature !== null &&
+                  staleDismissals[ch.id] !== staleSignature;
                 return (
                   <li key={ch.id} className="archived-volume-card">
-                    <div className="volume-header" onClick={() => toggleExpand(ch.id)}>
+                    <div
+                      className="volume-header"
+                      onClick={() => toggleExpand(ch.id)}
+                    >
                       <div className="volume-title-group">
-                        <Icon name={isExpanded ? "ChevronDown" : "ChevronRight"} size={14} className="volume-expand-icon" />
+                        <Icon
+                          name={isExpanded ? "ChevronDown" : "ChevronRight"}
+                          size={14}
+                          className="volume-expand-icon"
+                        />
                         <h4>{ch.name}</h4>
                       </div>
                       <div className="volume-meta-pills">
@@ -405,28 +508,39 @@ export function JournalTab({
 
                     {ch.shortDescription && !isExpanded ? (
                       <div className="volume-short-desc-wrapper">
-                        <p className="volume-short-desc">{ch.shortDescription}</p>
+                        <p className="volume-short-desc">
+                          {ch.shortDescription}
+                        </p>
                       </div>
                     ) : null}
 
                     {isExpanded ? (
                       <div className="volume-body">
                         {ch.shortDescription ? (
-                          <p className="volume-short-desc">{ch.shortDescription}</p>
+                          <p className="volume-short-desc">
+                            {ch.shortDescription}
+                          </p>
                         ) : null}
                         {staleNoteShown ? (
                           <div className="chapter-stale-note" role="status">
-                            <Icon name="TriangleAlert" size={13} className="chapter-stale-note-icon" />
+                            <Icon
+                              name="TriangleAlert"
+                              size={13}
+                              className="chapter-stale-note-icon"
+                            />
                             <span>
-                              This summary was written before a later edit to this chapter's messages,
-                              so it may no longer match them.
+                              This summary was written before a later edit to
+                              this chapter's messages, so it may no longer match
+                              them.
                             </span>
                             <IconButton
                               icon="X"
                               size="xs"
                               variant="ghost"
                               label="Dismiss this note"
-                              onClick={() => dismissStaleNote(ch.id, staleSignature)}
+                              onClick={() =>
+                                dismissStaleNote(ch.id, staleSignature)
+                              }
                             />
                           </div>
                         ) : null}
@@ -436,7 +550,16 @@ export function JournalTab({
                             className="volume-date-meta"
                             title={`Archived: ${ch.createdAt ? new Date(ch.createdAt).toLocaleString() : "Unknown"}${ch.summaryDurationMs ? ` (summarized in ${(ch.summaryDurationMs / 1000).toFixed(1)}s)` : ""}`}
                           >
-                            {ch.createdAt ? new Date(ch.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : ""}
+                            {ch.createdAt
+                              ? new Date(ch.createdAt).toLocaleDateString(
+                                  undefined,
+                                  {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  },
+                                )
+                              : ""}
                           </span>
                           <Button
                             variant="outline"
@@ -450,7 +573,9 @@ export function JournalTab({
                               onResummarizeChapter(ch.id);
                             }}
                           >
-                            {resummarizingChapterId === ch.id ? "Summarizing…" : "Re-summarize"}
+                            {resummarizingChapterId === ch.id
+                              ? "Summarizing…"
+                              : "Re-summarize"}
                           </Button>
                           <Button
                             variant="outline"
@@ -485,7 +610,10 @@ export function JournalTab({
           ) : (
             <div className="info-empty-state">
               <Icon name="Layers" size={15} />
-              <span>No archived chapters yet. When you close a chapter, its transcript and summary will be saved here.</span>
+              <span>
+                No archived chapters yet. When you close a chapter, its
+                transcript and summary will be saved here.
+              </span>
             </div>
           )}
         </div>
@@ -501,14 +629,15 @@ export function JournalTab({
           <div className="info-empty-state">
             <Icon name="Image" size={15} />
             <span>
-              No generated images yet. An image on an assistant message becomes this story's cover,
-              and every image from every chapter can be chosen by hand here.
+              No generated images yet. An image on an assistant message becomes
+              this story's cover, and every image from every chapter can be
+              chosen by hand here.
             </span>
           </div>
         ) : (
           <div className="journal-media-body">
             <div className="journal-media-strip">
-              {media.slice(0, 6).map(item => (
+              {media.slice(0, 6).map((item) => (
                 <button
                   key={item.file}
                   type="button"
@@ -516,15 +645,25 @@ export function JournalTab({
                   onClick={() => setGalleryOpen(true)}
                   title={item.prompt || "Open the gallery"}
                 >
-                  <img src={buildImageUrl(item.file)} alt="" loading="lazy" decoding="async" />
+                  <img
+                    src={buildImageUrl(item.file)}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                  />
                 </button>
               ))}
             </div>
             <div className="journal-media-actions">
               <span className="journal-media-count">
-                {media.length} {media.length === 1 ? "image" : "images"} across every chapter
+                {media.length} {media.length === 1 ? "image" : "images"} across
+                every chapter
               </span>
-              <Button variant="secondary" size="sm" onClick={() => setGalleryOpen(true)}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setGalleryOpen(true)}
+              >
                 Open Gallery Media
               </Button>
             </div>
@@ -541,8 +680,12 @@ export function JournalTab({
           hasManualCover={Boolean(playthrough.cover)}
           saving={coverSaving}
           errorMessage={coverError ?? undefined}
-          onPick={(file) => { void handlePickCover(file); }}
-          onClear={() => { void handleClearCover(); }}
+          onPick={(file) => {
+            void handlePickCover(file);
+          }}
+          onClear={() => {
+            void handleClearCover();
+          }}
           onClose={() => setGalleryOpen(false)}
         />
       ) : null}
@@ -553,7 +696,9 @@ export function JournalTab({
           visibleMessageCount={visibleMessages.length}
           isLoading={closing}
           errorMessage={closeError}
-          onConfirm={(body) => { void handleCloseChapter(body); }}
+          onConfirm={(body) => {
+            void handleCloseChapter(body);
+          }}
           onCancel={() => {
             setCloseModalOpen(false);
             setCloseError(null);
@@ -582,15 +727,23 @@ export function JournalTab({
           <div className="dramatis-sections">
             <div className="dramatis-grid">
               {playthrough.characters.map((c) => {
-                const isActive = (playthrough.activeCharacters ?? []).includes(c.id);
+                const isActive = (playthrough.activeCharacters ?? []).includes(
+                  c.id,
+                );
                 return (
                   <div key={c.id} className="dramatis-card">
                     <AvatarBadge name={c.name} icon="User" size="sm" />
                     <div className="dramatis-info">
                       <div className="dramatis-title-row">
-                        <strong className="dramatis-name" title={c.name}>{c.name}</strong>
+                        <strong className="dramatis-name" title={c.name}>
+                          {c.name}
+                        </strong>
                         {c.storyRole ? (
-                          <Badge variant="neutral" size="xs" title={`Role: ${c.storyRole}`}>
+                          <Badge
+                            variant="neutral"
+                            size="xs"
+                            title={`Role: ${c.storyRole}`}
+                          >
                             {c.storyRole}
                           </Badge>
                         ) : null}
@@ -637,7 +790,11 @@ export function JournalTab({
             containerClassName="timeline-search-input-container"
             size="sm"
           />
-          <div className="timeline-importance-filter" role="group" aria-label="Filter events by importance">
+          <div
+            className="timeline-importance-filter"
+            role="group"
+            aria-label="Filter events by importance"
+          >
             <Button
               variant={minImportance === 0 ? "secondary" : "ghost"}
               size="xs"
@@ -666,7 +823,7 @@ export function JournalTab({
                     className={`timeline-star-picker-btn ${isLit ? "lit" : ""} ${isSelected ? "selected" : ""}`}
                     onClick={() => {
                       // Clicking on the currently selected star toggles back to All (0)
-                      setMinImportance(prev => (prev === star ? 0 : star));
+                      setMinImportance((prev) => (prev === star ? 0 : star));
                     }}
                     onMouseEnter={() => setHoverImportance(star)}
                     title={`Filter by ${star}★ or higher (click again to reset)`}
@@ -699,22 +856,35 @@ export function JournalTab({
           <div className="vertical-timeline-container">
             {filteredChapterGroups.map((group) => {
               const groupKey = group.chapterId ?? "current";
-              const isExpanded = group.chapterId === null || expandedChapters.has(group.chapterId);
+              const isExpanded =
+                group.chapterId === null ||
+                expandedChapters.has(group.chapterId);
               return (
                 <div key={groupKey} className="timeline-chapter-accordion">
                   <div
                     className="timeline-chapter-accordion-header"
-                    onClick={() => { if (group.chapterId) toggleExpand(group.chapterId); }}
+                    onClick={() => {
+                      if (group.chapterId) toggleExpand(group.chapterId);
+                    }}
                   >
                     <h4>
                       {group.chapterId ? (
-                        <Icon name={isExpanded ? "ChevronDown" : "ChevronRight"} size={14} className="timeline-expand-icon" />
+                        <Icon
+                          name={isExpanded ? "ChevronDown" : "ChevronRight"}
+                          size={14}
+                          className="timeline-expand-icon"
+                        />
                       ) : (
-                        <Icon name="Bookmark" size={14} className="timeline-bookmark-icon" />
+                        <Icon
+                          name="Bookmark"
+                          size={14}
+                          className="timeline-bookmark-icon"
+                        />
                       )}
                       <span>{group.chapterName}</span>
                       <span className="timeline-events-count">
-                        ({group.events.length} event{group.events.length !== 1 ? "s" : ""})
+                        ({group.events.length} event
+                        {group.events.length !== 1 ? "s" : ""})
                       </span>
                     </h4>
                     {group.turnRange ? (
@@ -744,12 +914,18 @@ export function JournalTab({
                               <div className="timeline-item-card">
                                 <div className="timeline-item-header">
                                   <div className="timeline-item-meta">
-                                    <Badge variant="accent" size="xs">T{e.turn}</Badge>
-                                    <Badge variant="outline" size="xs">{e.type}</Badge>
+                                    <Badge variant="accent" size="xs">
+                                      T{e.turn}
+                                    </Badge>
+                                    <Badge variant="outline" size="xs">
+                                      {e.type}
+                                    </Badge>
                                   </div>
                                   {renderStars(e.importance)}
                                 </div>
-                                <p className="timeline-item-summary">{e.summary}</p>
+                                <p className="timeline-item-summary">
+                                  {e.summary}
+                                </p>
                               </div>
                             </li>
                           );

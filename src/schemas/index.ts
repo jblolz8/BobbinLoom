@@ -1,13 +1,17 @@
 import { z } from "zod";
-import { DEFAULT_IMAGE_PROMPT_INSTRUCTION, IMAGE_HISTORY_MESSAGES, IMAGE_HISTORY_MESSAGES_MAX, IMAGE_PROMPT_CHARACTER_LIMIT } from "../engine/imageDefaults";
+import {
+  DEFAULT_IMAGE_PROMPT_INSTRUCTION,
+  IMAGE_HISTORY_MESSAGES,
+  IMAGE_HISTORY_MESSAGES_MAX,
+  IMAGE_PROMPT_CHARACTER_LIMIT,
+} from "../engine/imageDefaults";
 
 export const ClothingItemSchema = z.object({
   slot: z.string(),
   name: z.string(),
-  state: z.string().optional()
+  state: z.string().optional(),
 });
 export type ClothingItem = z.infer<typeof ClothingItemSchema>;
-
 
 // ── Lorebook (SillyTavern-compatible World Info) ──
 export const LorebookEntrySchema = z.object({
@@ -87,7 +91,9 @@ export const CharacterTemplateSchema = z.object({
   tags: z.array(z.string()).optional(),
   extensions: z.record(z.any()).optional(),
   format: z.literal("ccv2").optional(),
-  cardRef: z.object({ file: z.string(), kind: z.enum(["png", "json"]) }).optional(),
+  cardRef: z
+    .object({ file: z.string(), kind: z.enum(["png", "json"]) })
+    .optional(),
   cardVersion: z.string().optional(),
   scenario: z.string().optional(),
   ccv2Content: z.string().optional(),
@@ -104,7 +110,7 @@ export type CharacterTemplate = z.infer<typeof CharacterTemplateSchema>;
 export const InventoryRefSchema = z.object({
   itemId: z.string(),
   quantity: z.number(),
-  equippedBy: z.string().optional()
+  equippedBy: z.string().optional(),
 });
 export type InventoryRef = z.infer<typeof InventoryRefSchema>;
 
@@ -113,10 +119,9 @@ export const ItemSchema = z.object({
   name: z.string(),
   type: z.string(),
   description: z.string(),
-  stackable: z.boolean()
+  stackable: z.boolean(),
 });
 export type Item = z.infer<typeof ItemSchema>;
-
 
 export const CharacterInstanceSchema = z.object({
   id: z.string(),
@@ -133,7 +138,7 @@ export const CharacterInstanceSchema = z.object({
   flags: z.array(z.string()),
   createdAt: z.string(),
   updatedAt: z.string(),
-  clothing: z.array(ClothingItemSchema).default([])
+  clothing: z.array(ClothingItemSchema).default([]),
 });
 export type CharacterInstance = z.infer<typeof CharacterInstanceSchema>;
 
@@ -144,7 +149,7 @@ export const PlayerCharacterSchema = z.object({
   appearance: z.string(),
   clothing: z.array(ClothingItemSchema),
   conditions: z.array(z.string()),
-  flags: z.array(z.string())
+  flags: z.array(z.string()),
 });
 export type PlayerCharacter = z.infer<typeof PlayerCharacterSchema>;
 
@@ -155,7 +160,7 @@ export const PlayerPersonaSchema = z.object({
   bodyType: z.string(),
   appearance: z.string(),
   initialClothing: z.array(ClothingItemSchema),
-  isDefault: z.boolean()
+  isDefault: z.boolean(),
 });
 export type PlayerPersona = z.infer<typeof PlayerPersonaSchema>;
 
@@ -275,7 +280,7 @@ export const ProviderConnectionSchema = z.object({
   readonly: z.boolean().optional(),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
-  lastActiveAt: z.string().optional()
+  lastActiveAt: z.string().optional(),
 });
 export type ProviderConnection = z.infer<typeof ProviderConnectionSchema>;
 
@@ -295,7 +300,7 @@ export const ProviderRegistryFileSchema = z.object({
   chapterTextProviderId: z.string().nullable().optional(),
   characterTextProviderId: z.string().nullable().optional(),
   testPrompt: z.string().nullable().optional(),
-  connections: z.array(ProviderConnectionSchema)
+  connections: z.array(ProviderConnectionSchema),
 });
 export type ProviderRegistryFile = z.infer<typeof ProviderRegistryFileSchema>;
 
@@ -324,6 +329,15 @@ export const CoverAspectSchema = z.enum(["portrait", "square", "landscape"]);
 export type CoverAspect = z.infer<typeof CoverAspectSchema>;
 export type AvatarShape = z.infer<typeof AvatarShapeSchema>;
 
+export const WORKSPACE_WIDTH_MIN = 50;
+export const WORKSPACE_WIDTH_MAX = 100;
+export const WORKSPACE_WIDTH_DEFAULT = 80;
+export const WorkspaceWidthPercentSchema = z
+  .number()
+  .int()
+  .min(WORKSPACE_WIDTH_MIN)
+  .max(WORKSPACE_WIDTH_MAX);
+
 export const ThemeModeSchema = z.enum(["dark", "light", "system"]);
 export type ThemeMode = z.infer<typeof ThemeModeSchema>;
 
@@ -333,7 +347,7 @@ export type CustomThemeColors = z.infer<typeof CustomThemeColorsSchema>;
 export const WorldStateEntrySchema = z.object({
   id: z.string(),
   name: z.string(),
-  description: z.string()
+  description: z.string(),
 });
 export type WorldStateEntry = z.infer<typeof WorldStateEntrySchema>;
 
@@ -346,7 +360,7 @@ export const PromptPresetModuleSchema = z.object({
   description: z.string(),
   content: z.string(),
   order: z.number(),
-  enabled: z.boolean()
+  enabled: z.boolean(),
 });
 export type PromptPresetModule = z.infer<typeof PromptPresetModuleSchema>;
 
@@ -364,8 +378,8 @@ export const PromptModuleSetSchema = z.preprocess(
     return val;
   },
   z.object({
-    turn: z.array(PromptPresetModuleSchema)
-  })
+    turn: z.array(PromptPresetModuleSchema),
+  }),
 );
 export type PromptModuleSet = z.infer<typeof PromptModuleSetSchema>;
 export const EMPTY_MODULE_SET: PromptModuleSet = { turn: [] };
@@ -390,7 +404,9 @@ export const CharacterFormatSectionSchema = z.object({
   exampleBody: z.string().default(""),
   inline: z.boolean().default(false),
 });
-export type CharacterFormatSection = z.infer<typeof CharacterFormatSectionSchema>;
+export type CharacterFormatSection = z.infer<
+  typeof CharacterFormatSectionSchema
+>;
 
 export const CharacterFormatSchema = z.object({
   sections: z.array(CharacterFormatSectionSchema).default([]),
@@ -418,19 +434,30 @@ export const ImageGenerationSettingsSchema = z.object({
   negativePrefix: z.string().default(""),
   // Sourced from the shipped limit so a partial block can never default to a stale
   // number while the presets and the fallback say something else.
-  promptCharacterLimit: z.number().int().min(0).default(IMAGE_PROMPT_CHARACTER_LIMIT),
+  promptCharacterLimit: z
+    .number()
+    .int()
+    .min(0)
+    .default(IMAGE_PROMPT_CHARACTER_LIMIT),
   includeState: z.boolean().default(true),
   includeCast: z.boolean().default(true),
   // Same convention as the two flags above: the READ-TIME default is the shipped
   // value, so a snapshot written before these fields existed behaves like a preset
   // that ships them. A playthrough therefore gains history context on its next
   // image with no other change — intended, and documented.
-  historyMessages: z.number().int().min(0).max(IMAGE_HISTORY_MESSAGES_MAX).default(IMAGE_HISTORY_MESSAGES),
+  historyMessages: z
+    .number()
+    .int()
+    .min(0)
+    .max(IMAGE_HISTORY_MESSAGES_MAX)
+    .default(IMAGE_HISTORY_MESSAGES),
   /** Give the prompt writer ONE earlier answer as a SHAPE reference. OFF by
    *  default: an in-context example anchors a tag model, so it is opt-in. */
-  includePreviousAnswer: z.boolean().default(false)
+  includePreviousAnswer: z.boolean().default(false),
 });
-export type ImageGenerationSettings = z.infer<typeof ImageGenerationSettingsSchema>;
+export type ImageGenerationSettings = z.infer<
+  typeof ImageGenerationSettingsSchema
+>;
 
 export const PromptPresetSchema = z.object({
   id: z.string(),
@@ -438,7 +465,7 @@ export const PromptPresetSchema = z.object({
   readonly: z.boolean(),
   modules: PromptModuleSetSchema,
   characterFormat: CharacterFormatSchema.optional(),
-  imageGeneration: ImageGenerationSettingsSchema.optional()
+  imageGeneration: ImageGenerationSettingsSchema.optional(),
 });
 export type PromptPreset = z.infer<typeof PromptPresetSchema>;
 
@@ -452,7 +479,7 @@ export type PromptPreset = z.infer<typeof PromptPresetSchema>;
 export const PromptConfigSchema = z.object({
   modules: PromptModuleSetSchema,
   characterFormat: CharacterFormatSchema.optional(),
-  imageGeneration: ImageGenerationSettingsSchema.optional()
+  imageGeneration: ImageGenerationSettingsSchema.optional(),
 });
 export type PromptConfig = z.infer<typeof PromptConfigSchema>;
 
@@ -462,7 +489,12 @@ export type PromptConfig = z.infer<typeof PromptConfigSchema>;
  *  model — the free-form-string rule is about fields the model fills. The matching labels, blurbs
  *  and prompt fragments live with it in `engine/chapterLifecycle.ts`, so the route's enum, the
  *  modal's options and the instruction text cannot drift apart. */
-export const ChapterOpeningModeSchema = z.enum(["continuation", "shortJump", "longJump", "custom"]);
+export const ChapterOpeningModeSchema = z.enum([
+  "continuation",
+  "shortJump",
+  "longJump",
+  "custom",
+]);
 export type ChapterOpeningMode = z.infer<typeof ChapterOpeningModeSchema>;
 
 /**
@@ -477,12 +509,19 @@ export type ChapterOpeningMode = z.infer<typeof ChapterOpeningModeSchema>;
  */
 /** How many rows a list shows. `"all"` is the engine's sentinel for "show everything" — a real choice
  *  rather than a number, so it is part of the type. */
-export const PageSizeSchema = z.union([z.number().int().positive(), z.literal("all")]);
+export const PageSizeSchema = z.union([
+  z.number().int().positive(),
+  z.literal("all"),
+]);
 
 export const AutoScrollBehaviorSchema = z.enum(["start", "bottom", "none"]);
 export type AutoScrollBehavior = z.infer<typeof AutoScrollBehaviorSchema>;
 
-export const CharacterContextScopeSchema = z.enum(["chapter", "timeline", "recent"]);
+export const CharacterContextScopeSchema = z.enum([
+  "chapter",
+  "timeline",
+  "recent",
+]);
 export type CharacterContextScope = z.infer<typeof CharacterContextScopeSchema>;
 
 export const ViewPreferencesSchema = z.object({
@@ -501,7 +540,7 @@ export const ViewPreferencesSchema = z.object({
       imagePromptPreview: z.boolean().optional(),
       autoImageAfterTurn: z.boolean().optional(),
       alwaysDiscardOldImage: z.boolean().optional(),
-      autoScrollBehavior: AutoScrollBehaviorSchema.optional()
+      autoScrollBehavior: AutoScrollBehaviorSchema.optional(),
     })
     .optional(),
   library: z
@@ -519,7 +558,7 @@ export const ViewPreferencesSchema = z.object({
        *  rather than sharing names that would collide with the library's own. */
       playthroughViewMode: z.enum(["grid", "list"]).optional(),
       playthroughSortBy: z.enum(["updatedAt", "name", "turn"]).optional(),
-      playthroughSortDir: z.enum(["asc", "desc"]).optional()
+      playthroughSortDir: z.enum(["asc", "desc"]).optional(),
     })
     .optional(),
   /** How many rows each list shows, one leaf per pager. Deliberately NOT inside `library`: three of the
@@ -530,7 +569,7 @@ export const ViewPreferencesSchema = z.object({
       lorebook: PageSizeSchema.optional(),
       persona: PageSizeSchema.optional(),
       setupCast: PageSizeSchema.optional(),
-      home: PageSizeSchema.optional()
+      home: PageSizeSchema.optional(),
     })
     .optional(),
   /** The setup wizard's cast picker. */
@@ -540,7 +579,7 @@ export const ViewPreferencesSchema = z.object({
       castSortBy: z.enum(["name", "createdAt", "updatedAt"]).optional(),
       castSortDir: z.enum(["asc", "desc"]).optional(),
       castViewMode: z.enum(["portrait", "list", "grid"]).optional(),
-      showTagFilters: z.boolean().optional()
+      showTagFilters: z.boolean().optional(),
     })
     .optional(),
   /** The play view's cast tab. */
@@ -548,30 +587,43 @@ export const ViewPreferencesSchema = z.object({
     .object({
       viewMode: z.enum(["portrait", "compact"]).optional(),
       contextScope: CharacterContextScopeSchema.optional(),
-      recentCount: z.number().int().min(1).max(50).optional()
+      recentCount: z.number().int().min(1).max(50).optional(),
     })
     .optional(),
   /** Provider-list sort, one leaf per kind: the text and image lists sit side by side, and one shared
    *  value meant sorting one of them re-sorted the other. */
   providers: z
     .object({
-      sortByText: z.enum(["lastActiveAt", "label", "updatedAt", "createdAt"]).optional(),
+      sortByText: z
+        .enum(["lastActiveAt", "label", "updatedAt", "createdAt"])
+        .optional(),
       sortDirText: z.enum(["asc", "desc"]).optional(),
-      sortByImage: z.enum(["lastActiveAt", "label", "updatedAt", "createdAt"]).optional(),
-      sortDirImage: z.enum(["asc", "desc"]).optional()
+      sortByImage: z
+        .enum(["lastActiveAt", "label", "updatedAt", "createdAt"])
+        .optional(),
+      sortDirImage: z.enum(["asc", "desc"]).optional(),
     })
     .optional(),
   nav: z.object({ showPlayNavTabs: z.boolean().optional() }).optional(),
   /** The Settings dialog's own memory: which tab was open, and which provider kind it was showing. */
   ui: z
     .object({
-      settingsTab: z.enum(["provider", "prompts", "tags", "chat", "interface", "appearance"]).optional(),
-      settingsProviderKind: z.enum(["text", "image", "overrides"]).optional()
+      settingsTab: z
+        .enum([
+          "provider",
+          "prompts",
+          "tags",
+          "chat",
+          "interface",
+          "appearance",
+        ])
+        .optional(),
+      settingsProviderKind: z.enum(["text", "image", "overrides"]).optional(),
     })
     .optional(),
   /** Chapter id → the stale-summary note's dismissal. UI ephemera that happens to grow; it moves
    *  only so nothing preference-shaped is left on the device. */
-  staleNoteDismissals: z.record(z.string(), z.string()).optional()
+  staleNoteDismissals: z.record(z.string(), z.string()).optional(),
 });
 export type ViewPreferences = z.infer<typeof ViewPreferencesSchema>;
 
@@ -585,6 +637,9 @@ export const AppSettingsSchema = z.object({
   tagTaxonomy: TagTaxonomyConfigSchema.optional(),
   avatarShape: AvatarShapeSchema.optional(),
   coverAspect: CoverAspectSchema.optional(),
+  /** Horizontal width percentage (50–100%) for Home workspace pages (Playthroughs, Characters,
+   *  Lorebooks, Personas, Docs). Defaults to 80%. */
+  workspaceWidthPercent: WorkspaceWidthPercentSchema.optional(),
   themeMode: ThemeModeSchema.optional(),
   themePreset: z.string().optional(),
   customThemeColors: CustomThemeColorsSchema.optional(),
@@ -608,10 +663,9 @@ export const AppSettingsSchema = z.object({
    *  written before this parses untouched — and each LEAF stays individually absent until it is
    *  actually chosen, which is the signal the one-shot adoption reads. */
   viewPreferences: ViewPreferencesSchema.optional(),
-  updatedAt: z.string().optional()
+  updatedAt: z.string().optional(),
 });
 export type AppSettings = z.infer<typeof AppSettingsSchema>;
-
 
 export const MemoryEventSchema = z.object({
   id: z.string(),
@@ -628,7 +682,7 @@ export const MemoryEventSchema = z.object({
    *  after the turn that creates it. Absent on older events or when the
    *  embedding API is unavailable — keyword fallback handles those. */
   embedding: z.array(z.number()).optional(),
-  createdAt: z.string()
+  createdAt: z.string(),
 });
 export type MemoryEvent = z.infer<typeof MemoryEventSchema>;
 
@@ -679,7 +733,7 @@ export const MessageImageSchema = z.object({
    *  reasoning model cannot bloat the playthrough record. Optional like the
    *  rest of the provenance fields. */
   promptResponse: z.string().optional(),
-  createdAt: z.string()
+  createdAt: z.string(),
 });
 export type MessageImage = z.infer<typeof MessageImageSchema>;
 
@@ -706,11 +760,13 @@ export const ChatMessageSchema = z.object({
    *  Powers a Debug-panel view that survives a reload, and makes an
    *  emitted-but-rejected patch visible after the fact — patch feedback is
    *  deliberately never re-injected into the prompt. */
-  patchInfo: z.object({
-    applied: z.array(z.string()).default([]),
-    rejected: z.array(z.string()).default([]),
-    warnings: z.array(z.string()).default([])
-  }).optional()
+  patchInfo: z
+    .object({
+      applied: z.array(z.string()).default([]),
+      rejected: z.array(z.string()).default([]),
+      warnings: z.array(z.string()).default([]),
+    })
+    .optional(),
 });
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 
@@ -721,13 +777,13 @@ export const ChapterSchema = z.object({
   fullSummary: z.string(),
   turnRange: z.object({
     start: z.number(),
-    end: z.number()
+    end: z.number(),
   }),
   messageIds: z.array(z.string()),
   memoryEventIds: z.array(z.string()),
   createdAt: z.string(),
   updatedAt: z.string().optional(),
-  summaryDurationMs: z.number().int().nonnegative().optional()
+  summaryDurationMs: z.number().int().nonnegative().optional(),
 });
 export type Chapter = z.infer<typeof ChapterSchema>;
 
@@ -735,23 +791,23 @@ export type Chapter = z.infer<typeof ChapterSchema>;
  *  unbounded `STORY SO FAR` prompt section: only the most recent chapters are
  *  injected verbatim, everything older collapses into this meta-summary. */
 export const ChapterMetaSummarySchema = z.object({
-  id: z.string(),                  // "mch_xxx"
+  id: z.string(), // "mch_xxx"
   chapterIds: z.array(z.string()), // ids of the Chapters folded into this meta-summary
   /** Turn range span covered (start = first folded chapter's turnRange.start,
    *  end = last folded chapter's turnRange.end), for display. */
   turnRange: z.object({
     start: z.number(),
-    end: z.number()
+    end: z.number(),
   }),
-  summary: z.string(),             // the rolling meta-summary text (injected into STORY SO FAR)
+  summary: z.string(), // the rolling meta-summary text (injected into STORY SO FAR)
   createdAt: z.string(),
-  updatedAt: z.string()
+  updatedAt: z.string(),
 });
 export type ChapterMetaSummary = z.infer<typeof ChapterMetaSummarySchema>;
 
 export const MemoryLayersSchema = z.object({
   recent: z.array(MemoryEventSchema),
-  compressed: z.array(MemoryEventSchema)
+  compressed: z.array(MemoryEventSchema),
 });
 export type MemoryLayers = z.infer<typeof MemoryLayersSchema>;
 
@@ -767,7 +823,9 @@ export const TurnSnapshotSchema = z.object({
   memoryEvents: z.array(MemoryEventSchema),
   memoryLayers: MemoryLayersSchema.optional(),
   lorebookIds: z.array(z.string()),
-  lorebookTimingStates: z.record(z.number().or(z.string()), EntryTimingStateSchema).optional(),
+  lorebookTimingStates: z
+    .record(z.number().or(z.string()), EntryTimingStateSchema)
+    .optional(),
   chapters: z.array(ChapterSchema).default([]),
   storyMetaSummaries: z.array(ChapterMetaSummarySchema).default([]),
   currentChapterStartedAtTurn: z.number().default(1),
@@ -784,7 +842,7 @@ export type TurnSnapshot = z.infer<typeof TurnSnapshotSchema>;
 export const PlaythroughCoverSchema = z.object({
   /** "<sha256>.<ext>" — content-addressed file under data/images/. */
   file: z.string(),
-  updatedAt: z.string()
+  updatedAt: z.string(),
 });
 export type PlaythroughCover = z.infer<typeof PlaythroughCoverSchema>;
 
@@ -810,7 +868,9 @@ export const PlaythroughSchema = z.object({
   messages: z.array(ChatMessageSchema),
   snapshots: z.record(z.string(), TurnSnapshotSchema).optional(),
   lorebookIds: z.array(z.string()).default([]),
-  lorebookTimingStates: z.record(z.number().or(z.string()), EntryTimingStateSchema).optional(),
+  lorebookTimingStates: z
+    .record(z.number().or(z.string()), EntryTimingStateSchema)
+    .optional(),
   chapters: z.array(ChapterSchema).default([]),
   storyMetaSummaries: z.array(ChapterMetaSummarySchema).default([]),
   currentChapterStartedAtTurn: z.number().default(1),
@@ -832,11 +892,10 @@ export const PlaythroughSchema = z.object({
   // it measures the tokenizer, not world state, so a retry must not rewind it.
   tokenCalibration: z.number().optional(),
   createdAt: z.string(),
-  updatedAt: z.string()
+  updatedAt: z.string(),
 });
 export type Playthrough = z.infer<typeof PlaythroughSchema>;
 export const LoadFailureSchema = z.object({
-
   id: z.string(),
   name: z.string(),
   reason: z.string(),
@@ -867,11 +926,15 @@ export const PlaythroughCoverViewSchema = z.object({
    *  URL from the character library's avatar route, which is why the id is what travels
    *  rather than a file name; `name` rides along for the tile's letter fallback, for the
    *  case where a character left the library after casting and its art 404s. */
-  characters: z.array(z.object({
-    id: z.string(),
-    name: z.string().default(""),
-    avatarUpdatedAt: z.number().optional()
-  })).optional()
+  characters: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string().default(""),
+        avatarUpdatedAt: z.number().optional(),
+      }),
+    )
+    .optional(),
 });
 export type PlaythroughCoverView = z.infer<typeof PlaythroughCoverViewSchema>;
 
@@ -898,325 +961,488 @@ export const PlaythroughListResponseSchema = z.object({
   /** Size of the filtered list. The pager's total: the client must not infer it from the array. */
   total: z.number(),
 });
-export type PlaythroughListResponse = z.infer<typeof PlaythroughListResponseSchema>;
-
+export type PlaythroughListResponse = z.infer<
+  typeof PlaythroughListResponseSchema
+>;
 
 export const ParsedUserInputSchema = z.object({
   raw: z.string(),
   actionText: z.string(),
-  spokenText: z.array(z.string())
+  spokenText: z.array(z.string()),
 });
 export type ParsedUserInput = z.infer<typeof ParsedUserInputSchema>;
 
 export const InventoryPatchSchema = z.object({
   itemId: z.string(),
   quantity: z.number(),
-  equippedBy: z.string().optional()
+  equippedBy: z.string().optional(),
 });
 
-
-export const MemoryEventDraftSchema = z.preprocess((val) => {
-  if (typeof val === "object" && val !== null) {
-    const raw = val as Record<string, unknown>;
-    const summary = raw.summary ?? raw.event ?? raw.description ?? raw.text ?? "";
-    return { ...raw, summary: typeof summary === "string" ? summary.trim() : String(summary) };
-  }
-  return val;
-}, z.object({
-  characterInstanceId: z.string().optional(),
-  type: z.preprocess(
-    (v) => (typeof v === "string" && v.trim() ? v.trim() : "event"),
-    z.string().default("event")
-  ),
-  summary: z.string().min(1),
-  importance: z.preprocess((val) => {
-    if (typeof val === "number" && !isNaN(val)) return Math.min(5, Math.max(1, Math.round(val)));
-    if (typeof val === "string") {
-      const parsed = parseFloat(val);
-      if (!isNaN(parsed)) return Math.min(5, Math.max(1, Math.round(parsed)));
-      const lower = val.toLowerCase().trim();
-      if (lower === "high" || lower === "major") return 4;
-      if (lower === "critical" || lower === "pivotal") return 5;
-      if (lower === "medium" || lower === "moderate") return 3;
-      if (lower === "low" || lower === "minor") return 2;
+export const MemoryEventDraftSchema = z.preprocess(
+  (val) => {
+    if (typeof val === "object" && val !== null) {
+      const raw = val as Record<string, unknown>;
+      const summary =
+        raw.summary ?? raw.event ?? raw.description ?? raw.text ?? "";
+      return {
+        ...raw,
+        summary: typeof summary === "string" ? summary.trim() : String(summary),
+      };
     }
-    return 1;
-  }, z.number().default(1)),
-  tags: z.preprocess((val) => {
-    if (Array.isArray(val)) return val.map((v) => String(v).trim()).filter(Boolean);
-    if (typeof val === "string" && val.trim()) return [val.trim()];
-    return [];
-  }, z.array(z.string()).default([]))
-}));
-
-export const WorldStateAddEntrySchema = z.preprocess((val) => {
-  if (typeof val === "string") {
-    return val.trim();
-  }
-  if (typeof val === "object" && val !== null) {
-    const raw = val as Record<string, unknown>;
-    const name = raw.name ?? raw.title ?? raw.state ?? "";
-    const description = raw.description ?? raw.desc ?? raw.summary ?? "";
-    return {
-      name: typeof name === "string" ? name.trim() : String(name),
-      description: typeof description === "string" ? description.trim() : String(description)
-    };
-  }
-  return val;
-}, z.union([
-  z.string().min(1),
+    return val;
+  },
   z.object({
-    name: z.string().min(1),
-    description: z.string().default("")
-  })
-]));
+    characterInstanceId: z.string().optional(),
+    type: z.preprocess(
+      (v) => (typeof v === "string" && v.trim() ? v.trim() : "event"),
+      z.string().default("event"),
+    ),
+    summary: z.string().min(1),
+    importance: z.preprocess((val) => {
+      if (typeof val === "number" && !isNaN(val))
+        return Math.min(5, Math.max(1, Math.round(val)));
+      if (typeof val === "string") {
+        const parsed = parseFloat(val);
+        if (!isNaN(parsed)) return Math.min(5, Math.max(1, Math.round(parsed)));
+        const lower = val.toLowerCase().trim();
+        if (lower === "high" || lower === "major") return 4;
+        if (lower === "critical" || lower === "pivotal") return 5;
+        if (lower === "medium" || lower === "moderate") return 3;
+        if (lower === "low" || lower === "minor") return 2;
+      }
+      return 1;
+    }, z.number().default(1)),
+    tags: z.preprocess((val) => {
+      if (Array.isArray(val))
+        return val.map((v) => String(v).trim()).filter(Boolean);
+      if (typeof val === "string" && val.trim()) return [val.trim()];
+      return [];
+    }, z.array(z.string()).default([])),
+  }),
+);
 
-export const CharacterConditionsEntrySchema = z.preprocess((val) => {
-  if (typeof val === "object" && val !== null) {
-    const raw = val as Record<string, unknown>;
-    const characterId = raw.characterId ?? raw.id ?? raw.character;
-    let conditions = raw.conditions ?? raw.condition;
-    if (typeof conditions === "string") {
-      conditions = [conditions.trim()];
-    } else if (Array.isArray(conditions)) {
-      conditions = conditions.map((c) => String(c).trim()).filter(Boolean);
-    } else {
-      conditions = [];
+export const WorldStateAddEntrySchema = z.preprocess(
+  (val) => {
+    if (typeof val === "string") {
+      return val.trim();
     }
-    return { characterId: typeof characterId === "string" ? characterId.trim() : characterId, conditions };
-  }
-  return val;
-}, z.object({
-  characterId: z.string(),
-  conditions: z.array(z.string()),
-}));
+    if (typeof val === "object" && val !== null) {
+      const raw = val as Record<string, unknown>;
+      const name = raw.name ?? raw.title ?? raw.state ?? "";
+      const description = raw.description ?? raw.desc ?? raw.summary ?? "";
+      return {
+        name: typeof name === "string" ? name.trim() : String(name),
+        description:
+          typeof description === "string"
+            ? description.trim()
+            : String(description),
+      };
+    }
+    return val;
+  },
+  z.union([
+    z.string().min(1),
+    z.object({
+      name: z.string().min(1),
+      description: z.string().default(""),
+    }),
+  ]),
+);
 
-export const CharacterFlagsEntrySchema = z.preprocess((val) => {
-  if (typeof val === "object" && val !== null) {
-    const raw = val as Record<string, unknown>;
-    const characterId = raw.characterId ?? raw.id ?? raw.character;
-    let flags = raw.flags ?? raw.flag;
-    if (typeof flags === "string") {
-      flags = [flags.trim()];
-    } else if (Array.isArray(flags)) {
-      flags = flags.map((f) => String(f).trim()).filter(Boolean);
-    } else {
-      flags = [];
+export const CharacterConditionsEntrySchema = z.preprocess(
+  (val) => {
+    if (typeof val === "object" && val !== null) {
+      const raw = val as Record<string, unknown>;
+      const characterId = raw.characterId ?? raw.id ?? raw.character;
+      let conditions = raw.conditions ?? raw.condition;
+      if (typeof conditions === "string") {
+        conditions = [conditions.trim()];
+      } else if (Array.isArray(conditions)) {
+        conditions = conditions.map((c) => String(c).trim()).filter(Boolean);
+      } else {
+        conditions = [];
+      }
+      return {
+        characterId:
+          typeof characterId === "string" ? characterId.trim() : characterId,
+        conditions,
+      };
     }
-    return { characterId: typeof characterId === "string" ? characterId.trim() : characterId, flags };
-  }
-  return val;
-}, z.object({
-  characterId: z.string(),
-  flags: z.array(z.string()),
-}));
+    return val;
+  },
+  z.object({
+    characterId: z.string(),
+    conditions: z.array(z.string()),
+  }),
+);
+
+export const CharacterFlagsEntrySchema = z.preprocess(
+  (val) => {
+    if (typeof val === "object" && val !== null) {
+      const raw = val as Record<string, unknown>;
+      const characterId = raw.characterId ?? raw.id ?? raw.character;
+      let flags = raw.flags ?? raw.flag;
+      if (typeof flags === "string") {
+        flags = [flags.trim()];
+      } else if (Array.isArray(flags)) {
+        flags = flags.map((f) => String(f).trim()).filter(Boolean);
+      } else {
+        flags = [];
+      }
+      return {
+        characterId:
+          typeof characterId === "string" ? characterId.trim() : characterId,
+        flags,
+      };
+    }
+    return val;
+  },
+  z.object({
+    characterId: z.string(),
+    flags: z.array(z.string()),
+  }),
+);
 
 export const StatePatchSchema = z.object({
-  worldStateAdd: z.preprocess(
-    (val) => Array.isArray(val) ? val : (val ? [val] : []),
-    z.array(WorldStateAddEntrySchema)
-  ).optional(),
-  worldStateRemove: z.preprocess(
-    (val) => Array.isArray(val) ? val : (typeof val === "string" ? [val] : []),
-    z.array(z.string())
-  ).optional(),
-  worldStateUpdate: z.preprocess(
-    (val) => Array.isArray(val) ? val : (val && typeof val === "object" ? [val] : []),
-    z.array(z.object({
-      id: z.string(),
-      name: z.string().optional(),
-      description: z.string().optional()
-    }))
-  ).optional(),
+  worldStateAdd: z
+    .preprocess(
+      (val) => (Array.isArray(val) ? val : val ? [val] : []),
+      z.array(WorldStateAddEntrySchema),
+    )
+    .optional(),
+  worldStateRemove: z
+    .preprocess(
+      (val) =>
+        Array.isArray(val) ? val : typeof val === "string" ? [val] : [],
+      z.array(z.string()),
+    )
+    .optional(),
+  worldStateUpdate: z
+    .preprocess(
+      (val) =>
+        Array.isArray(val) ? val : val && typeof val === "object" ? [val] : [],
+      z.array(
+        z.object({
+          id: z.string(),
+          name: z.string().optional(),
+          description: z.string().optional(),
+        }),
+      ),
+    )
+    .optional(),
   // Targeted detailed-character patches (keyed by characterId)
-  characterMood: z.preprocess(
-    (val) => Array.isArray(val) ? val : (val && typeof val === "object" ? [val] : []),
-    z.array(z.object({
-      characterId: z.string(),
-      mood: z.string(),
-    }))
-  ).optional(),
-  characterSectionUpdate: z.array(z.object({
-    characterId: z.string(),
-    section: z.string(),
-    content: z.string(),
-  })).optional(),
-  characterSectionItemAdd: z.array(z.object({
-    characterId: z.string(),
-    section: z.string(),
-    item: z.string(),
-  })).optional(),
-  characterSectionItemRemove: z.array(z.object({
-    characterId: z.string(),
-    section: z.string(),
-    item: z.string(),
-  })).optional(),
-  characterSectionItemReplace: z.array(z.object({
-    characterId: z.string(),
-    section: z.string(),
-    from: z.string(),
-    to: z.string(),
-  })).optional(),
-  characterSectionRemove: z.array(z.object({
-    characterId: z.string(),
-    section: z.string(),
-  })).optional(),
-  characterSectionRename: z.array(z.object({
-    characterId: z.string(),
-    from: z.string(),
-    to: z.string(),
-  })).optional(),
-  characterTowardPlayer: z.preprocess(
-    (val) => Array.isArray(val) ? val : (val && typeof val === "object" ? [val] : []),
-    z.array(z.object({
-      characterId: z.string(),
-      towardPlayer: z.string(),
-    }))
-  ).optional(),
-  characterMemory: z.preprocess(
-    (val) => Array.isArray(val) ? val : (val && typeof val === "object" ? [val] : []),
-    z.array(z.object({
-      characterId: z.string(),
-      memorySummary: z.string(),
-    }))
-  ).optional(),
-  characterConditionsAdd: z.preprocess(
-    (val) => Array.isArray(val) ? val : (val ? [val] : []),
-    z.array(CharacterConditionsEntrySchema)
-  ).optional(),
-  characterConditionsRemove: z.preprocess(
-    (val) => Array.isArray(val) ? val : (val ? [val] : []),
-    z.array(CharacterConditionsEntrySchema)
-  ).optional(),
-  characterConditionsReplace: z.array(z.object({
-    characterId: z.string(),
-    from: z.string(),
-    to: z.string(),
-  })).optional(),
-  characterConditionsUpdate: z.array(z.object({
-    characterId: z.string(),
-    from: z.string(),
-    to: z.string(),
-  })).optional(),
-  characterFlagsAdd: z.preprocess(
-    (val) => Array.isArray(val) ? val : (val ? [val] : []),
-    z.array(CharacterFlagsEntrySchema)
-  ).optional(),
-  characterFlagsRemove: z.preprocess(
-    (val) => Array.isArray(val) ? val : (val ? [val] : []),
-    z.array(CharacterFlagsEntrySchema)
-  ).optional(),
+  characterMood: z
+    .preprocess(
+      (val) =>
+        Array.isArray(val) ? val : val && typeof val === "object" ? [val] : [],
+      z.array(
+        z.object({
+          characterId: z.string(),
+          mood: z.string(),
+        }),
+      ),
+    )
+    .optional(),
+  characterSectionUpdate: z
+    .array(
+      z.object({
+        characterId: z.string(),
+        section: z.string(),
+        content: z.string(),
+      }),
+    )
+    .optional(),
+  characterSectionItemAdd: z
+    .array(
+      z.object({
+        characterId: z.string(),
+        section: z.string(),
+        item: z.string(),
+      }),
+    )
+    .optional(),
+  characterSectionItemRemove: z
+    .array(
+      z.object({
+        characterId: z.string(),
+        section: z.string(),
+        item: z.string(),
+      }),
+    )
+    .optional(),
+  characterSectionItemReplace: z
+    .array(
+      z.object({
+        characterId: z.string(),
+        section: z.string(),
+        from: z.string(),
+        to: z.string(),
+      }),
+    )
+    .optional(),
+  characterSectionRemove: z
+    .array(
+      z.object({
+        characterId: z.string(),
+        section: z.string(),
+      }),
+    )
+    .optional(),
+  characterSectionRename: z
+    .array(
+      z.object({
+        characterId: z.string(),
+        from: z.string(),
+        to: z.string(),
+      }),
+    )
+    .optional(),
+  characterTowardPlayer: z
+    .preprocess(
+      (val) =>
+        Array.isArray(val) ? val : val && typeof val === "object" ? [val] : [],
+      z.array(
+        z.object({
+          characterId: z.string(),
+          towardPlayer: z.string(),
+        }),
+      ),
+    )
+    .optional(),
+  characterMemory: z
+    .preprocess(
+      (val) =>
+        Array.isArray(val) ? val : val && typeof val === "object" ? [val] : [],
+      z.array(
+        z.object({
+          characterId: z.string(),
+          memorySummary: z.string(),
+        }),
+      ),
+    )
+    .optional(),
+  characterConditionsAdd: z
+    .preprocess(
+      (val) => (Array.isArray(val) ? val : val ? [val] : []),
+      z.array(CharacterConditionsEntrySchema),
+    )
+    .optional(),
+  characterConditionsRemove: z
+    .preprocess(
+      (val) => (Array.isArray(val) ? val : val ? [val] : []),
+      z.array(CharacterConditionsEntrySchema),
+    )
+    .optional(),
+  characterConditionsReplace: z
+    .array(
+      z.object({
+        characterId: z.string(),
+        from: z.string(),
+        to: z.string(),
+      }),
+    )
+    .optional(),
+  characterConditionsUpdate: z
+    .array(
+      z.object({
+        characterId: z.string(),
+        from: z.string(),
+        to: z.string(),
+      }),
+    )
+    .optional(),
+  characterFlagsAdd: z
+    .preprocess(
+      (val) => (Array.isArray(val) ? val : val ? [val] : []),
+      z.array(CharacterFlagsEntrySchema),
+    )
+    .optional(),
+  characterFlagsRemove: z
+    .preprocess(
+      (val) => (Array.isArray(val) ? val : val ? [val] : []),
+      z.array(CharacterFlagsEntrySchema),
+    )
+    .optional(),
   // Scene & Character presence patches
-  characterEnterScene: z.preprocess((val) => {
-    if (Array.isArray(val)) return val.map((v) => String(v).trim()).filter(Boolean);
-    if (typeof val === "string" && val.trim()) return [val.trim()];
-    return [];
-  }, z.array(z.string())).optional(),
-  characterExitScene: z.preprocess((val) => {
-    if (Array.isArray(val)) return val.map((v) => String(v).trim()).filter(Boolean);
-    if (typeof val === "string" && val.trim()) return [val.trim()];
-    return [];
-  }, z.array(z.string())).optional(),
-  characterUpdateRole: z.array(z.object({
-    characterId: z.string(),
-    storyRole: z.string(),
-  })).optional(),
-  characterAddSimple: z.array(z.object({
-    name: z.string(),
-    description: z.string(),
-    storyRole: z.string(),
-  })).optional(),
-  characterFleshOut: z.object({
-    characterId: z.string(),
-    content: z.string().optional(),
-    memorySummary: z.string().optional(),
-  }).optional(),
+  characterEnterScene: z
+    .preprocess((val) => {
+      if (Array.isArray(val))
+        return val.map((v) => String(v).trim()).filter(Boolean);
+      if (typeof val === "string" && val.trim()) return [val.trim()];
+      return [];
+    }, z.array(z.string()))
+    .optional(),
+  characterExitScene: z
+    .preprocess((val) => {
+      if (Array.isArray(val))
+        return val.map((v) => String(v).trim()).filter(Boolean);
+      if (typeof val === "string" && val.trim()) return [val.trim()];
+      return [];
+    }, z.array(z.string()))
+    .optional(),
+  characterUpdateRole: z
+    .array(
+      z.object({
+        characterId: z.string(),
+        storyRole: z.string(),
+      }),
+    )
+    .optional(),
+  characterAddSimple: z
+    .array(
+      z.object({
+        name: z.string(),
+        description: z.string(),
+        storyRole: z.string(),
+      }),
+    )
+    .optional(),
+  characterFleshOut: z
+    .object({
+      characterId: z.string(),
+      content: z.string().optional(),
+      memorySummary: z.string().optional(),
+    })
+    .optional(),
   inventoryAdd: z.array(InventoryPatchSchema).optional(),
   inventoryRemove: z.array(InventoryPatchSchema).optional(),
-  itemAdd: z.array(z.object({
-    id: z.string(),
-    name: z.string(),
-    type: z.string(),
-    description: z.string(),
-    quantity: z.number().int().min(1).default(1),
-    stackable: z.boolean().optional(),
-  })).optional(),
-  itemUpdate: z.array(z.object({
-    itemId: z.string(),
-    name: z.string().optional(),
-    type: z.string().optional(),
-    description: z.string().optional(),
-  })).optional(),
+  itemAdd: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        type: z.string(),
+        description: z.string(),
+        quantity: z.number().int().min(1).default(1),
+        stackable: z.boolean().optional(),
+      }),
+    )
+    .optional(),
+  itemUpdate: z
+    .array(
+      z.object({
+        itemId: z.string(),
+        name: z.string().optional(),
+        type: z.string().optional(),
+        description: z.string().optional(),
+      }),
+    )
+    .optional(),
 
-  memoryEvents: z.preprocess(
-    (val) => Array.isArray(val) ? val : (val && typeof val === "object" ? [val] : []),
-    z.array(MemoryEventDraftSchema)
-  ).optional(),
+  memoryEvents: z
+    .preprocess(
+      (val) =>
+        Array.isArray(val) ? val : val && typeof val === "object" ? [val] : [],
+      z.array(MemoryEventDraftSchema),
+    )
+    .optional(),
   // Player-specific patches
-  playerConditionsAdd: z.preprocess((val) => {
-    if (Array.isArray(val)) return val.map((v) => String(v).trim()).filter(Boolean);
-    if (typeof val === "string" && val.trim()) return [val.trim()];
-    return [];
-  }, z.array(z.string())).optional(),
-  playerConditionsRemove: z.preprocess((val) => {
-    if (Array.isArray(val)) return val.map((v) => String(v).trim()).filter(Boolean);
-    if (typeof val === "string" && val.trim()) return [val.trim()];
-    return [];
-  }, z.array(z.string())).optional(),
-  playerConditionsReplace: z.array(z.object({
-    from: z.string(),
-    to: z.string(),
-  })).optional(),
-  playerConditionsUpdate: z.array(z.object({
-    from: z.string(),
-    to: z.string(),
-  })).optional(),
+  playerConditionsAdd: z
+    .preprocess((val) => {
+      if (Array.isArray(val))
+        return val.map((v) => String(v).trim()).filter(Boolean);
+      if (typeof val === "string" && val.trim()) return [val.trim()];
+      return [];
+    }, z.array(z.string()))
+    .optional(),
+  playerConditionsRemove: z
+    .preprocess((val) => {
+      if (Array.isArray(val))
+        return val.map((v) => String(v).trim()).filter(Boolean);
+      if (typeof val === "string" && val.trim()) return [val.trim()];
+      return [];
+    }, z.array(z.string()))
+    .optional(),
+  playerConditionsReplace: z
+    .array(
+      z.object({
+        from: z.string(),
+        to: z.string(),
+      }),
+    )
+    .optional(),
+  playerConditionsUpdate: z
+    .array(
+      z.object({
+        from: z.string(),
+        to: z.string(),
+      }),
+    )
+    .optional(),
   playerClothingAdd: z.array(ClothingItemSchema).optional(),
   playerClothingRemove: z.array(z.object({ slot: z.string() })).optional(),
-  playerClothingSetState: z.array(z.object({ slot: z.string(), state: z.string() })).optional(),
-  characterClothingAdd: z.array(z.object({
-    characterId: z.string(),
-    items: z.array(ClothingItemSchema),
-  })).optional(),
-  characterClothingRemove: z.array(z.object({
-    characterId: z.string(),
-    slots: z.array(z.string()),
-  })).optional(),
-  characterClothingSetState: z.array(z.object({
-    characterId: z.string(),
-    items: z.array(z.object({ slot: z.string(), state: z.string() })),
-  })).optional(),
-  characterClothingSet: z.array(z.object({
-    characterId: z.string(),
-    items: z.array(ClothingItemSchema),
-  })).optional(),
-  playerFlagsAdd: z.preprocess((val) => {
-    if (Array.isArray(val)) return val.map((v) => String(v).trim()).filter(Boolean);
-    if (typeof val === "string" && val.trim()) return [val.trim()];
-    return [];
-  }, z.array(z.string())).optional(),
-  playerFlagsRemove: z.preprocess((val) => {
-    if (Array.isArray(val)) return val.map((v) => String(v).trim()).filter(Boolean);
-    if (typeof val === "string" && val.trim()) return [val.trim()];
-    return [];
-  }, z.array(z.string())).optional()
+  playerClothingSetState: z
+    .array(z.object({ slot: z.string(), state: z.string() }))
+    .optional(),
+  characterClothingAdd: z
+    .array(
+      z.object({
+        characterId: z.string(),
+        items: z.array(ClothingItemSchema),
+      }),
+    )
+    .optional(),
+  characterClothingRemove: z
+    .array(
+      z.object({
+        characterId: z.string(),
+        slots: z.array(z.string()),
+      }),
+    )
+    .optional(),
+  characterClothingSetState: z
+    .array(
+      z.object({
+        characterId: z.string(),
+        items: z.array(z.object({ slot: z.string(), state: z.string() })),
+      }),
+    )
+    .optional(),
+  characterClothingSet: z
+    .array(
+      z.object({
+        characterId: z.string(),
+        items: z.array(ClothingItemSchema),
+      }),
+    )
+    .optional(),
+  playerFlagsAdd: z
+    .preprocess((val) => {
+      if (Array.isArray(val))
+        return val.map((v) => String(v).trim()).filter(Boolean);
+      if (typeof val === "string" && val.trim()) return [val.trim()];
+      return [];
+    }, z.array(z.string()))
+    .optional(),
+  playerFlagsRemove: z
+    .preprocess((val) => {
+      if (Array.isArray(val))
+        return val.map((v) => String(v).trim()).filter(Boolean);
+      if (typeof val === "string" && val.trim()) return [val.trim()];
+      return [];
+    }, z.array(z.string()))
+    .optional(),
 });
 export type StatePatch = z.infer<typeof StatePatchSchema>;
 
 export const AssistantTurnSchema = z.object({
   narrative: z.string(),
   choices: z.array(z.string()).optional(),
-  statePatch: StatePatchSchema.optional()
+  statePatch: StatePatchSchema.optional(),
 });
 export type AssistantTurn = z.infer<typeof AssistantTurnSchema>;
 
 export const ScenarioPreferencesSchema = z.object({
   name: z.string().min(1).default("New Adventure"),
   setting: z.string().optional(),
-  cast: z.array(z.object({
-    name: z.string(),
-    summary: z.string().optional(),
-  })).optional(),
+  cast: z
+    .array(
+      z.object({
+        name: z.string(),
+        summary: z.string().optional(),
+      }),
+    )
+    .optional(),
   allowAdditionalCharacters: z.boolean().default(true),
 });
 export type ScenarioPreferences = z.infer<typeof ScenarioPreferencesSchema>;
@@ -1231,21 +1457,29 @@ export const ScenarioSeedItemSchema = z.object({
   name: z.string(),
   type: z.string(),
   description: z.string(),
-  quantity: z.number().int().min(1).default(1)
+  quantity: z.number().int().min(1).default(1),
 });
 
 export const ScenarioSeedSchema = z.object({
   character: ScenarioSeedCharacterSchema,
-  startingWorldState: z.array(z.object({
-    name: z.string(),
-    description: z.string()
-  })).default([]),
+  startingWorldState: z
+    .array(
+      z.object({
+        name: z.string(),
+        description: z.string(),
+      }),
+    )
+    .default([]),
   items: z.array(ScenarioSeedItemSchema),
-  additionalCharacters: z.array(z.object({
-    name: z.string(),
-    description: z.string(),
-    storyRole: z.string().optional()
-  })).default([]),
-  openingText: z.string().optional()
+  additionalCharacters: z
+    .array(
+      z.object({
+        name: z.string(),
+        description: z.string(),
+        storyRole: z.string().optional(),
+      }),
+    )
+    .default([]),
+  openingText: z.string().optional(),
 });
 export type ScenarioSeed = z.infer<typeof ScenarioSeedSchema>;

@@ -32,7 +32,10 @@ export function repairMemoryEventTurns(playthrough: Playthrough): boolean {
 
       if (msg.role === "assistant" && msg.patchInfo?.applied) {
         for (const line of msg.patchInfo.applied) {
-          if (typeof line === "string" && line.startsWith("memory event added: ")) {
+          if (
+            typeof line === "string" &&
+            line.startsWith("memory event added: ")
+          ) {
             const summary = line.slice("memory event added: ".length).trim();
             if (summary && !summaryToTurn.has(summary)) {
               summaryToTurn.set(summary, msg.turn);
@@ -64,7 +67,8 @@ export function repairMemoryEventTurns(playthrough: Playthrough): boolean {
         let minDiff = Infinity;
         for (const m of messagesWithTurn) {
           const diff = Math.abs(m.time - eventTime);
-          if (diff < minDiff && diff < 60_000) { // within 60s
+          if (diff < minDiff && diff < 60_000) {
+            // within 60s
             minDiff = diff;
             bestTurn = m.turn;
           }

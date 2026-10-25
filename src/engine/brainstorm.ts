@@ -57,7 +57,7 @@ export type BrainstormChatMessageLike = {
 function readEnvelope(
   text: string,
   sectionNames: string[],
-  options: ProposalOptions = {}
+  options: ProposalOptions = {},
 ): ParsedBrainstormReply | null {
   if (!text.startsWith("{")) return null;
   let parsed: unknown;
@@ -68,9 +68,14 @@ function readEnvelope(
   }
   if (!parsed || typeof parsed !== "object") return null;
   const obj = parsed as Record<string, unknown>;
-  if (!("reply" in obj) && !("proposedChanges" in obj) && !("message" in obj)) return null;
+  if (!("reply" in obj) && !("proposedChanges" in obj) && !("message" in obj))
+    return null;
   const reply =
-    typeof obj.reply === "string" ? obj.reply : typeof obj.message === "string" ? obj.message : "";
+    typeof obj.reply === "string"
+      ? obj.reply
+      : typeof obj.message === "string"
+        ? obj.message
+        : "";
   const { proposal, unmapped, added } = toProposal(obj, sectionNames, options);
   if (!reply.trim() && !proposal) return null;
   return {
@@ -78,23 +83,33 @@ function readEnvelope(
     proposedChanges: proposal,
     unmappedHeaders: unmapped,
     newSections: added,
-    hadBlock: true
+    hadBlock: true,
   };
 }
 
 /** Every ```json block in a reply, in order, with where it sits. */
-export function findJsonBlocks(text: string): Array<{ start: number; end: number; body: string }> {
+export function findJsonBlocks(
+  text: string,
+): Array<{ start: number; end: number; body: string }> {
   const pattern = /```[ \t]*json[ \t]*\r?\n([\s\S]*?)```/gi;
   const blocks: Array<{ start: number; end: number; body: string }> = [];
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(text)) !== null) {
-    blocks.push({ start: match.index, end: match.index + match[0].length, body: (match[1] ?? "").trim() });
+    blocks.push({
+      start: match.index,
+      end: match.index + match[0].length,
+      body: (match[1] ?? "").trim(),
+    });
   }
   return blocks;
 }
 
 function normaliseHeader(header: string): string {
-  return header.replace(/^\[|\]$/g, "").trim().toLowerCase().replace(/\s+/g, " ");
+  return header
+    .replace(/^\[|\]$/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
 /** Letters and digits only, so "Likes & Dislikes" and "likes" are comparable. */
@@ -110,7 +125,10 @@ function fingerprint(header: string): string {
  * "[House Cat]" must stay a section of its own, so the name has to be *joined* to what follows by a
  * connector — a bare space is a different name, not the same one wearing a clause.
  */
-function matchCanonicalName(header: string, sectionNames: string[]): string | null {
+function matchCanonicalName(
+  header: string,
+  sectionNames: string[],
+): string | null {
   const proposed = normaliseHeader(header);
   const wanted = fingerprint(header);
   for (const name of sectionNames) {
@@ -153,7 +171,7 @@ export function sanitiseTagList(input: unknown[]): string[] {
 export function toProposal(
   value: unknown,
   sectionNames: string[] = [],
-  options: ProposalOptions = {}
+  options: ProposalOptions = {},
 ): { proposal?: BrainstormProposal; unmapped: string[]; added: string[] } {
   const allowNewSections = options.allowNewSections ?? true;
   if (!value || typeof value !== "object") return { unmapped: [], added: [] };
@@ -172,13 +190,20 @@ export function toProposal(
     for (const entry of inner.sections) {
       if (!entry || typeof entry !== "object") continue;
       const section = entry as Record<string, unknown>;
-      if (typeof section.header !== "string" || typeof section.body !== "string") continue;
+      if (
+        typeof section.header !== "string" ||
+        typeof section.body !== "string"
+      )
+        continue;
       const proposed = section.header.replace(/^\[|\]$/g, "").trim();
       const body = section.body.trim();
       if (!proposed || !body) continue;
       // A header the sheet already has is an edit; a near-miss of one is that edit under another
       // name, and becomes it. Only a genuinely new name is a new section — if it is allowed at all.
-      const canonical = sectionNames.length > 0 ? matchCanonicalName(proposed, sectionNames) : null;
+      const canonical =
+        sectionNames.length > 0
+          ? matchCanonicalName(proposed, sectionNames)
+          : null;
       if (canonical) {
         sections.push({ header: canonical, body });
         continue;
@@ -196,22 +221,35 @@ export function toProposal(
     }
   }
 
-  const tags = Array.isArray(inner.tags) ? sanitiseTagList(inner.tags) : undefined;
+  const tags = Array.isArray(inner.tags)
+    ? sanitiseTagList(inner.tags)
+    : undefined;
   const creatorNotes =
-    typeof inner.creatorNotes === "string" && inner.creatorNotes.trim() ? inner.creatorNotes.trim() : undefined;
-  const name = typeof inner.name === "string" && inner.name.trim() ? inner.name.trim() : undefined;
+    typeof inner.creatorNotes === "string" && inner.creatorNotes.trim()
+      ? inner.creatorNotes.trim()
+      : undefined;
+  const name =
+    typeof inner.name === "string" && inner.name.trim()
+      ? inner.name.trim()
+      : undefined;
   const fullContent =
-    typeof inner.fullContent === "string" && inner.fullContent.trim() ? inner.fullContent.trim() : undefined;
+    typeof inner.fullContent === "string" && inner.fullContent.trim()
+      ? inner.fullContent.trim()
+      : undefined;
 
   const proposal: BrainstormProposal = {
     ...(sections.length > 0 ? { sections } : {}),
     ...(tags && tags.length > 0 ? { tags } : {}),
     ...(creatorNotes ? { creatorNotes } : {}),
     ...(name ? { name } : {}),
-    ...(fullContent ? { fullContent } : {})
+    ...(fullContent ? { fullContent } : {}),
   };
 
-  return { proposal: Object.keys(proposal).length > 0 ? proposal : undefined, unmapped, added };
+  return {
+    proposal: Object.keys(proposal).length > 0 ? proposal : undefined,
+    unmapped,
+    added,
+  };
 }
 
 /**
@@ -225,7 +263,7 @@ export function toProposal(
 export function parseBrainstormReply(
   text: string,
   sectionNames: string[] = [],
-  options: ProposalOptions = {}
+  options: ProposalOptions = {},
 ): ParsedBrainstormReply {
   const trimmed = text.trim();
   const blocks = findJsonBlocks(trimmed);
@@ -234,7 +272,12 @@ export function parseBrainstormReply(
     // tolerance costs nothing, and the alternative is a wall of JSON in the chat.
     const envelope = readEnvelope(trimmed, sectionNames, options);
     if (envelope) return envelope;
-    return { reply: trimmed, unmappedHeaders: [], newSections: [], hadBlock: false };
+    return {
+      reply: trimmed,
+      unmappedHeaders: [],
+      newSections: [],
+      hadBlock: false,
+    };
   }
 
   const last = blocks[blocks.length - 1]!;
@@ -245,7 +288,9 @@ export function parseBrainstormReply(
     parsed = undefined;
   }
   const { proposal, unmapped, added } =
-    parsed === undefined ? { proposal: undefined, unmapped: [], added: [] } : toProposal(parsed, sectionNames, options);
+    parsed === undefined
+      ? { proposal: undefined, unmapped: [], added: [] }
+      : toProposal(parsed, sectionNames, options);
 
   // Every json fence goes, not only the one that was read: a fenced block in this conversation is
   // machine talk, whichever block the proposal came from. Text that was nothing but blocks keeps its
@@ -257,7 +302,13 @@ export function parseBrainstormReply(
   reply = reply.trim();
   if (!reply) reply = trimmed;
 
-  return { reply, proposedChanges: proposal, unmappedHeaders: unmapped, newSections: added, hadBlock: true };
+  return {
+    reply,
+    proposedChanges: proposal,
+    unmappedHeaders: unmapped,
+    newSections: added,
+    hadBlock: true,
+  };
 }
 
 /**
@@ -266,14 +317,17 @@ export function parseBrainstormReply(
  * The proposals are part of the history on purpose: without them a follow-up like "make the second
  * one shorter" has nothing to refer to, and the model re-proposes from scratch.
  */
-export function brainstormHistoryContent(message: { content: string; proposedChanges?: BrainstormProposal }): string {
+export function brainstormHistoryContent(message: {
+  content: string;
+  proposedChanges?: BrainstormProposal;
+}): string {
   if (!message.proposedChanges) return message.content;
   return [
     message.content,
     "",
     "```json",
     JSON.stringify({ proposedChanges: message.proposedChanges }),
-    "```"
+    "```",
   ].join("\n");
 }
 
@@ -314,7 +368,7 @@ export type BrainstormSession = {
 /** The tail of a long session, always starting on a question so the trimmed thread still reads. */
 export function trimBrainstormMessages<T extends { role: string }>(
   messages: T[],
-  limit: number = BRAINSTORM_MESSAGE_LIMIT
+  limit: number = BRAINSTORM_MESSAGE_LIMIT,
 ): T[] {
   if (messages.length <= limit) return messages;
   const kept = messages.slice(messages.length - limit);
@@ -335,11 +389,13 @@ export function isBrainstormMessage(value: unknown): boolean {
 /** The session the server stores, from messages of unknown provenance: unusable entries are DROPPED —
  *  one bad message must not cost the reader the whole conversation — and the tail is trimmed. */
 export function buildBrainstormSession(messages: unknown[]): BrainstormSession {
-  const usable = messages.filter(isBrainstormMessage) as BrainstormSessionMessage[];
+  const usable = messages.filter(
+    isBrainstormMessage,
+  ) as BrainstormSessionMessage[];
   return {
     v: BRAINSTORM_STORAGE_VERSION,
     updatedAt: new Date().toISOString(),
-    messages: trimBrainstormMessages(usable)
+    messages: trimBrainstormMessages(usable),
   };
 }
 
@@ -347,23 +403,42 @@ export function buildBrainstormSession(messages: unknown[]): BrainstormSession {
  *  hand-edited file or a truncated write all read as "no session" rather than as a broken panel. */
 export function parseBrainstormSession(raw: unknown): BrainstormSession | null {
   if (!raw || typeof raw !== "object") return null;
-  const candidate = raw as { v?: unknown; updatedAt?: unknown; messages?: unknown };
-  if (candidate.v !== BRAINSTORM_STORAGE_VERSION || !Array.isArray(candidate.messages)) return null;
-  const usable = candidate.messages.filter(isBrainstormMessage) as BrainstormSessionMessage[];
+  const candidate = raw as {
+    v?: unknown;
+    updatedAt?: unknown;
+    messages?: unknown;
+  };
+  if (
+    candidate.v !== BRAINSTORM_STORAGE_VERSION ||
+    !Array.isArray(candidate.messages)
+  )
+    return null;
+  const usable = candidate.messages.filter(
+    isBrainstormMessage,
+  ) as BrainstormSessionMessage[];
   return {
     v: BRAINSTORM_STORAGE_VERSION,
-    updatedAt: typeof candidate.updatedAt === "string" ? candidate.updatedAt : new Date().toISOString(),
-    messages: trimBrainstormMessages(usable)
+    updatedAt:
+      typeof candidate.updatedAt === "string"
+        ? candidate.updatedAt
+        : new Date().toISOString(),
+    messages: trimBrainstormMessages(usable),
   };
 }
 
 /** Messages from the LEGACY device key, or null when it holds nothing usable — a stale or hand-edited
  *  key is dropped rather than handed over. */
-export function decodeLegacyBrainstormSession(raw: string | null): unknown[] | null {
+export function decodeLegacyBrainstormSession(
+  raw: string | null,
+): unknown[] | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as { v?: unknown; messages?: unknown };
-    if (parsed?.v !== BRAINSTORM_STORAGE_VERSION || !Array.isArray(parsed.messages)) return null;
+    if (
+      parsed?.v !== BRAINSTORM_STORAGE_VERSION ||
+      !Array.isArray(parsed.messages)
+    )
+      return null;
     return parsed.messages;
   } catch {
     return null;

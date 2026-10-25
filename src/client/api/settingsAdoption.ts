@@ -20,7 +20,11 @@
  */
 import type { ViewPreferences } from "../../schemas";
 import { ALL_PAGE_SIZE, MAX_PAGE_SIZE } from "../engine/pagination";
-import { getViewPreferences, updateViewPreferences, type PageSizeSurface } from "./settings";
+import {
+  getViewPreferences,
+  updateViewPreferences,
+  type PageSizeSurface,
+} from "./settings";
 
 /** The groups shaped as "a bag of leaves" that the registry can target. `staleNoteDismissals` is a
  *  record rather than a group of leaves, but a source may still feed it: the leaf IS the whole record. */
@@ -57,15 +61,18 @@ const fromChatBlob = (leaf: string) => (raw: string) => {
 };
 
 /** Read one enum string leaf out of the chat-settings blob, validated against allowed values. */
-const fromChatBlobOneOf = (leaf: string, allowed: readonly string[]) => (raw: string) => {
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const value = parsed?.[leaf];
-    return typeof value === "string" && allowed.includes(value) ? value : undefined;
-  } catch {
-    return undefined;
-  }
-};
+const fromChatBlobOneOf =
+  (leaf: string, allowed: readonly string[]) => (raw: string) => {
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const value = parsed?.[leaf];
+      return typeof value === "string" && allowed.includes(value)
+        ? value
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  };
 
 /** A leaf stored as-is (a plain string, or `""` for an emptied search box). */
 const asString = (raw: string) => raw;
@@ -81,7 +88,8 @@ const oneOf =
 const asStringArray = (raw: string) => {
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.every((value) => typeof value === "string")
+    return Array.isArray(parsed) &&
+      parsed.every((value) => typeof value === "string")
       ? (parsed as string[])
       : undefined;
   } catch {
@@ -97,13 +105,13 @@ const LIBRARY_KEYS = {
   sortDir: "bobbinloom_library_sort_dir",
   sidebarViewMode: "bobbinloom_library_sidebar_view_mode",
   collapsedCategories: "bobbinloom_library_collapsed_categories",
-  search: "bobbinloom_library_search"
+  search: "bobbinloom_library_search",
 } as const;
 
 const SHELF_KEYS = {
   viewMode: "bobbinloom_playthrough_view_mode",
   sortBy: "bobbinloom_playthrough_sort_by",
-  sortDir: "bobbinloom_playthrough_sort_dir"
+  sortDir: "bobbinloom_playthrough_sort_dir",
 } as const;
 
 /** A page size stored as-is: a number, the `"all"` sentinel, or the legacy numeric sentinel (1000)
@@ -123,7 +131,8 @@ const asBooleanString = (raw: string): boolean | undefined =>
 const asStringRecord = (raw: string) => {
   try {
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return undefined;
     const entries = Object.entries(parsed as Record<string, unknown>);
     return entries.every(([, value]) => typeof value === "string")
       ? (parsed as Record<string, string>)
@@ -139,7 +148,7 @@ const PAGE_SIZE_KEYS: Record<PageSizeSurface, string> = {
   lorebook: "bobbinloom_lorebook_page_size",
   persona: "bobbinloom_persona_page_size",
   setupCast: "bobbinloom_setup_cast_page_size",
-  home: "bobbinloom_home_page_size"
+  home: "bobbinloom_home_page_size",
 };
 
 const SETUP_KEYS = {
@@ -147,7 +156,7 @@ const SETUP_KEYS = {
   castSortBy: "bobbinloom_setup_cast_sort_by",
   castSortDir: "bobbinloom_setup_cast_sort_dir",
   castViewMode: "bobbinloom_setup_cast_view_mode",
-  showTagFilters: "bobbinloom_setup_cast_show_tag_filters"
+  showTagFilters: "bobbinloom_setup_cast_show_tag_filters",
 } as const;
 
 /** The provider keys are built per kind ("bobbinloom_provider_sort_by_text"), and each leaf names its
@@ -156,116 +165,263 @@ const PROVIDER_KEYS = {
   sortByText: "bobbinloom_provider_sort_by_text",
   sortDirText: "bobbinloom_provider_sort_dir_text",
   sortByImage: "bobbinloom_provider_sort_by_image",
-  sortDirImage: "bobbinloom_provider_sort_dir_image"
+  sortDirImage: "bobbinloom_provider_sort_dir_image",
 } as const;
 
-const SORT_BY_VALUES = ["lastActiveAt", "label", "updatedAt", "createdAt"] as const;
+const SORT_BY_VALUES = [
+  "lastActiveAt",
+  "label",
+  "updatedAt",
+  "createdAt",
+] as const;
 
 /**
  * Every key this pass migrates, added one group at a time as its surface switches to the server. A
  * group that is missing here has simply not been migrated yet.
  */
 export const ADOPTION_SOURCES: readonly LocalAdoptionSource[] = [
-  { key: CHAT_KEY, group: "chat", leaf: "choicesEnabled", parse: fromChatBlob("choicesEnabled") },
-  { key: CHAT_KEY, group: "chat", leaf: "showDebug", parse: fromChatBlob("showDebug") },
-  { key: CHAT_KEY, group: "chat", leaf: "showContextUsage", parse: fromChatBlob("showContextUsage") },
-  { key: CHAT_KEY, group: "chat", leaf: "showGenerationTime", parse: fromChatBlob("showGenerationTime") },
+  {
+    key: CHAT_KEY,
+    group: "chat",
+    leaf: "choicesEnabled",
+    parse: fromChatBlob("choicesEnabled"),
+  },
+  {
+    key: CHAT_KEY,
+    group: "chat",
+    leaf: "showDebug",
+    parse: fromChatBlob("showDebug"),
+  },
+  {
+    key: CHAT_KEY,
+    group: "chat",
+    leaf: "showContextUsage",
+    parse: fromChatBlob("showContextUsage"),
+  },
+  {
+    key: CHAT_KEY,
+    group: "chat",
+    leaf: "showGenerationTime",
+    parse: fromChatBlob("showGenerationTime"),
+  },
   {
     key: CHAT_KEY,
     group: "chat",
     leaf: "showMessageTimestamps",
-    parse: fromChatBlob("showMessageTimestamps")
+    parse: fromChatBlob("showMessageTimestamps"),
   },
-  { key: CHAT_KEY, group: "chat", leaf: "showModelName", parse: fromChatBlob("showModelName") },
-  { key: CHAT_KEY, group: "chat", leaf: "showMessageNumbers", parse: fromChatBlob("showMessageNumbers") },
-  { key: CHAT_KEY, group: "chat", leaf: "imagePromptPreview", parse: fromChatBlob("imagePromptPreview") },
-  { key: CHAT_KEY, group: "chat", leaf: "autoImageAfterTurn", parse: fromChatBlob("autoImageAfterTurn") },
+  {
+    key: CHAT_KEY,
+    group: "chat",
+    leaf: "showModelName",
+    parse: fromChatBlob("showModelName"),
+  },
+  {
+    key: CHAT_KEY,
+    group: "chat",
+    leaf: "showMessageNumbers",
+    parse: fromChatBlob("showMessageNumbers"),
+  },
+  {
+    key: CHAT_KEY,
+    group: "chat",
+    leaf: "imagePromptPreview",
+    parse: fromChatBlob("imagePromptPreview"),
+  },
+  {
+    key: CHAT_KEY,
+    group: "chat",
+    leaf: "autoImageAfterTurn",
+    parse: fromChatBlob("autoImageAfterTurn"),
+  },
   {
     key: CHAT_KEY,
     group: "chat",
     leaf: "alwaysDiscardOldImage",
-    parse: fromChatBlob("alwaysDiscardOldImage")
+    parse: fromChatBlob("alwaysDiscardOldImage"),
   },
   {
     key: CHAT_KEY,
     group: "chat",
     leaf: "autoScrollBehavior",
-    parse: fromChatBlobOneOf("autoScrollBehavior", ["start", "bottom", "none"])
+    parse: fromChatBlobOneOf("autoScrollBehavior", ["start", "bottom", "none"]),
   },
-  { key: LIBRARY_KEYS.viewMode, group: "library", leaf: "viewMode", parse: oneOf(["portrait", "list", "grid"]) },
-  { key: LIBRARY_KEYS.sortBy, group: "library", leaf: "sortBy", parse: oneOf(["name", "createdAt", "updatedAt"]) },
-  { key: LIBRARY_KEYS.sortDir, group: "library", leaf: "sortDir", parse: oneOf(["asc", "desc"]) },
+  {
+    key: LIBRARY_KEYS.viewMode,
+    group: "library",
+    leaf: "viewMode",
+    parse: oneOf(["portrait", "list", "grid"]),
+  },
+  {
+    key: LIBRARY_KEYS.sortBy,
+    group: "library",
+    leaf: "sortBy",
+    parse: oneOf(["name", "createdAt", "updatedAt"]),
+  },
+  {
+    key: LIBRARY_KEYS.sortDir,
+    group: "library",
+    leaf: "sortDir",
+    parse: oneOf(["asc", "desc"]),
+  },
   {
     key: LIBRARY_KEYS.sidebarViewMode,
     group: "library",
     leaf: "sidebarViewMode",
-    parse: oneOf(["grouped", "flat"])
+    parse: oneOf(["grouped", "flat"]),
   },
   {
     key: LIBRARY_KEYS.collapsedCategories,
     group: "library",
     leaf: "collapsedCategories",
-    parse: asStringArray
+    parse: asStringArray,
   },
-  { key: LIBRARY_KEYS.search, group: "library", leaf: "search", parse: asString },
+  {
+    key: LIBRARY_KEYS.search,
+    group: "library",
+    leaf: "search",
+    parse: asString,
+  },
   {
     key: SHELF_KEYS.viewMode,
     group: "library",
     leaf: "playthroughViewMode",
-    parse: oneOf(["grid", "list"])
+    parse: oneOf(["grid", "list"]),
   },
   {
     key: SHELF_KEYS.sortBy,
     group: "library",
     leaf: "playthroughSortBy",
-    parse: oneOf(["updatedAt", "name", "turn"])
+    parse: oneOf(["updatedAt", "name", "turn"]),
   },
   {
     key: SHELF_KEYS.sortDir,
     group: "library",
     leaf: "playthroughSortDir",
-    parse: oneOf(["asc", "desc"])
+    parse: oneOf(["asc", "desc"]),
   },
-  { key: PAGE_SIZE_KEYS.library, group: "pageSizes", leaf: "library", parse: asPageSize },
-  { key: PAGE_SIZE_KEYS.lorebook, group: "pageSizes", leaf: "lorebook", parse: asPageSize },
-  { key: PAGE_SIZE_KEYS.persona, group: "pageSizes", leaf: "persona", parse: asPageSize },
-  { key: PAGE_SIZE_KEYS.setupCast, group: "pageSizes", leaf: "setupCast", parse: asPageSize },
-  { key: PAGE_SIZE_KEYS.home, group: "pageSizes", leaf: "home", parse: asPageSize },
-  { key: SETUP_KEYS.castSearch, group: "setup", leaf: "castSearch", parse: asString },
-  { key: SETUP_KEYS.castSortBy, group: "setup", leaf: "castSortBy", parse: oneOf(["name", "createdAt", "updatedAt"]) },
-  { key: SETUP_KEYS.castSortDir, group: "setup", leaf: "castSortDir", parse: oneOf(["asc", "desc"]) },
+  {
+    key: PAGE_SIZE_KEYS.library,
+    group: "pageSizes",
+    leaf: "library",
+    parse: asPageSize,
+  },
+  {
+    key: PAGE_SIZE_KEYS.lorebook,
+    group: "pageSizes",
+    leaf: "lorebook",
+    parse: asPageSize,
+  },
+  {
+    key: PAGE_SIZE_KEYS.persona,
+    group: "pageSizes",
+    leaf: "persona",
+    parse: asPageSize,
+  },
+  {
+    key: PAGE_SIZE_KEYS.setupCast,
+    group: "pageSizes",
+    leaf: "setupCast",
+    parse: asPageSize,
+  },
+  {
+    key: PAGE_SIZE_KEYS.home,
+    group: "pageSizes",
+    leaf: "home",
+    parse: asPageSize,
+  },
+  {
+    key: SETUP_KEYS.castSearch,
+    group: "setup",
+    leaf: "castSearch",
+    parse: asString,
+  },
+  {
+    key: SETUP_KEYS.castSortBy,
+    group: "setup",
+    leaf: "castSortBy",
+    parse: oneOf(["name", "createdAt", "updatedAt"]),
+  },
+  {
+    key: SETUP_KEYS.castSortDir,
+    group: "setup",
+    leaf: "castSortDir",
+    parse: oneOf(["asc", "desc"]),
+  },
   {
     key: SETUP_KEYS.castViewMode,
     group: "setup",
     leaf: "castViewMode",
-    parse: oneOf(["portrait", "list", "grid"])
+    parse: oneOf(["portrait", "list", "grid"]),
   },
-  { key: SETUP_KEYS.showTagFilters, group: "setup", leaf: "showTagFilters", parse: asBooleanString },
-  { key: "bobbinloom_cast_view_mode", group: "cast", leaf: "viewMode", parse: oneOf(["portrait", "compact"]) },
-  { key: PROVIDER_KEYS.sortByText, group: "providers", leaf: "sortByText", parse: oneOf(SORT_BY_VALUES) },
-  { key: PROVIDER_KEYS.sortDirText, group: "providers", leaf: "sortDirText", parse: oneOf(["asc", "desc"]) },
-  { key: PROVIDER_KEYS.sortByImage, group: "providers", leaf: "sortByImage", parse: oneOf(SORT_BY_VALUES) },
-  { key: PROVIDER_KEYS.sortDirImage, group: "providers", leaf: "sortDirImage", parse: oneOf(["asc", "desc"]) },
-  { key: "bobbinloom_show_play_nav_tabs", group: "nav", leaf: "showPlayNavTabs", parse: asBooleanString },
+  {
+    key: SETUP_KEYS.showTagFilters,
+    group: "setup",
+    leaf: "showTagFilters",
+    parse: asBooleanString,
+  },
+  {
+    key: "bobbinloom_cast_view_mode",
+    group: "cast",
+    leaf: "viewMode",
+    parse: oneOf(["portrait", "compact"]),
+  },
+  {
+    key: PROVIDER_KEYS.sortByText,
+    group: "providers",
+    leaf: "sortByText",
+    parse: oneOf(SORT_BY_VALUES),
+  },
+  {
+    key: PROVIDER_KEYS.sortDirText,
+    group: "providers",
+    leaf: "sortDirText",
+    parse: oneOf(["asc", "desc"]),
+  },
+  {
+    key: PROVIDER_KEYS.sortByImage,
+    group: "providers",
+    leaf: "sortByImage",
+    parse: oneOf(SORT_BY_VALUES),
+  },
+  {
+    key: PROVIDER_KEYS.sortDirImage,
+    group: "providers",
+    leaf: "sortDirImage",
+    parse: oneOf(["asc", "desc"]),
+  },
+  {
+    key: "bobbinloom_show_play_nav_tabs",
+    group: "nav",
+    leaf: "showPlayNavTabs",
+    parse: asBooleanString,
+  },
   {
     key: "bobbinloom_settings_tab",
     group: "ui",
     leaf: "settingsTab",
-    parse: oneOf(["provider", "prompts", "tags", "chat", "interface", "appearance"])
+    parse: oneOf([
+      "provider",
+      "prompts",
+      "tags",
+      "chat",
+      "interface",
+      "appearance",
+    ]),
   },
   {
     key: "bobbinloom_settings_provider_kind",
     group: "ui",
     leaf: "settingsProviderKind",
-    parse: oneOf(["text", "image", "overrides"])
+    parse: oneOf(["text", "image", "overrides"]),
   },
   {
     key: "bobbinloom_chapter_stale_dismissed",
     group: "staleNoteDismissals",
     leaf: "the record itself",
     wholeGroup: true,
-    parse: asStringRecord
-  }
+    parse: asStringRecord,
+  },
 ];
 
 export type AdoptionPlan = {
@@ -287,7 +443,7 @@ export type AdoptionPlan = {
 export function planAdoption(
   server: ViewPreferences,
   readLocal: (key: string) => string | null,
-  sources: readonly LocalAdoptionSource[] = ADOPTION_SOURCES
+  sources: readonly LocalAdoptionSource[] = ADOPTION_SOURCES,
 ): AdoptionPlan {
   const write: Record<string, Record<string, unknown>> = {};
   const removeKeys = new Set<string>();
@@ -296,7 +452,9 @@ export function planAdoption(
     const raw = readLocal(source.key);
     if (raw === null) continue; // The device never had one: nothing to adopt, nothing to delete.
 
-    const serverGroup = server[source.group] as Record<string, unknown> | undefined;
+    const serverGroup = server[source.group] as
+      | Record<string, unknown>
+      | undefined;
     const chosen = source.wholeGroup ? serverGroup : serverGroup?.[source.leaf];
     if (chosen !== undefined) {
       // Already chosen server-side: the device's copy is superseded, not authoritative.
@@ -321,7 +479,10 @@ export function planAdoption(
 }
 
 /** What the read path gets back: the preferences to use, and whether anything moved. */
-export type AdoptionOutcome = { preferences: ViewPreferences; changed: boolean };
+export type AdoptionOutcome = {
+  preferences: ViewPreferences;
+  changed: boolean;
+};
 
 /**
  * The read in flight, shared by every surface that asks in the same tick.
@@ -375,11 +536,14 @@ async function readAndAdopt(): Promise<AdoptionOutcome> {
       return null;
     }
   });
-  if (plan.removeKeys.length === 0) return { preferences: server, changed: false };
+  if (plan.removeKeys.length === 0)
+    return { preferences: server, changed: false };
 
   // The server's answer to the write is the merged truth, not the patch that was sent.
   const preferences =
-    Object.keys(plan.write).length > 0 ? await updateViewPreferences(plan.write) : server;
+    Object.keys(plan.write).length > 0
+      ? await updateViewPreferences(plan.write)
+      : server;
 
   for (const key of plan.removeKeys) {
     try {

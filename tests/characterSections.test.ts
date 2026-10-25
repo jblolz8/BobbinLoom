@@ -17,30 +17,45 @@ import {
   removeSectionItem,
   replaceSectionItem,
   removeContentSection,
-  renameContentSection
+  renameContentSection,
 } from "../src/engine/characterSections";
-import { DEFAULT_CHARACTER_FORMAT, isFormatAligned } from "../src/engine/characterFormat";
+import {
+  DEFAULT_CHARACTER_FORMAT,
+  isFormatAligned,
+} from "../src/engine/characterFormat";
 
 describe("characterSections", () => {
   it("adds a section the format does not list without disturbing its own order", () => {
     // The brainstorm assistant may propose a section the format has no room for. The sheet machinery
     // appends it, and the alignment check only asks that the format's own sections are present and in
     // order — which is why an addition is safe to offer and cannot trigger a reformat prompt.
-    expect(isFormatAligned(CHARACTER_SHEET_EXAMPLE, DEFAULT_CHARACTER_FORMAT)).toBe(true);
+    expect(
+      isFormatAligned(CHARACTER_SHEET_EXAMPLE, DEFAULT_CHARACTER_FORMAT),
+    ).toBe(true);
     const withAddition = applySectionChanges(CHARACTER_SHEET_EXAMPLE, [
-      { header: "Cat Traits", body: "- Purrs when pleased" }
+      { header: "Cat Traits", body: "- Purrs when pleased" },
     ]);
     expect(isFormatAligned(withAddition, DEFAULT_CHARACTER_FORMAT)).toBe(true);
-    const names = splitContentSections(withAddition).sections.map((section) => section.header);
+    const names = splitContentSections(withAddition).sections.map(
+      (section) => section.header,
+    );
     expect(names[names.length - 1]).toBe("Cat Traits");
     expect(withAddition.trimEnd().endsWith("- Purrs when pleased")).toBe(true);
   });
 
   it("defines the canonical section headers in display order", () => {
     expect(CHARACTER_SECTION_HEADERS).toEqual([
-      "Species", "Gender", "Body", "Appearance", "Clothing", "Personality",
-      "Communication - Public", "Communication - Private", "Likes", "Dislikes",
-      "Sexual Capabilities"
+      "Species",
+      "Gender",
+      "Body",
+      "Appearance",
+      "Clothing",
+      "Personality",
+      "Communication - Public",
+      "Communication - Private",
+      "Likes",
+      "Dislikes",
+      "Sexual Capabilities",
     ]);
   });
 
@@ -66,14 +81,20 @@ describe("characterSections", () => {
   });
 
   it("seedMemorySummary picks the first Personality bullet, else falls back", () => {
-    expect(seedMemorySummary("Mira", "[Species]: Human\n\n[Personality]\n- Cheerful, curious\n..."))
-      .toBe("Mira — Cheerful, curious");
-    expect(seedMemorySummary("Mira", "[Species]: Human\n[Dislikes]\n- x"))
-      .toContain("Mira has not formed");
+    expect(
+      seedMemorySummary(
+        "Mira",
+        "[Species]: Human\n\n[Personality]\n- Cheerful, curious\n...",
+      ),
+    ).toBe("Mira — Cheerful, curious");
+    expect(
+      seedMemorySummary("Mira", "[Species]: Human\n[Dislikes]\n- x"),
+    ).toContain("Mira has not formed");
   });
 
   it("removeContentSection drops one whole section and keeps the rest", () => {
-    const content = "[Species]: Human\n\n[Body]\n- Tall\n\n[Personality]\n- Cheerful";
+    const content =
+      "[Species]: Human\n\n[Body]\n- Tall\n\n[Personality]\n- Cheerful";
     const out = removeContentSection(content, "Body");
     expect(out).not.toContain("[Body]");
     expect(out).toContain("[Species]: Human");
@@ -97,7 +118,9 @@ describe("pickSections", () => {
   const raya =
     "[Body]\n- Height: 5'6\"\n- Build: Lanky\n\n[Appearance]\n- Skin: Dark gray\n\n[Clothing]\n- Top: White shirt\n";
   it("returns Body, Appearance, Clothing in canonical order", () => {
-    expect(pickSections(raya, PHYSICAL_SECTION_HEADERS).map((s) => s.header)).toEqual(["Body", "Appearance", "Clothing"]);
+    expect(
+      pickSections(raya, PHYSICAL_SECTION_HEADERS).map((s) => s.header),
+    ).toEqual(["Body", "Appearance", "Clothing"]);
   });
   it("omits absent wanted sections without synthesizing stubs", () => {
     const missing = pickSections("[Body]\n- Tall\n", PHYSICAL_SECTION_HEADERS);
@@ -105,21 +128,31 @@ describe("pickSections", () => {
   });
   it("ignores inline and out-of-list sections (e.g. Species/Gender)", () => {
     const content = "[Species]: Human\n[Gender]: Female\n\n[Body]\n- Tall\n";
-    expect(pickSections(content, PHYSICAL_SECTION_HEADERS).map((s) => s.header)).toEqual(["Body"]);
+    expect(
+      pickSections(content, PHYSICAL_SECTION_HEADERS).map((s) => s.header),
+    ).toEqual(["Body"]);
   });
   it("returns [] for empty content", () => {
     expect(pickSections("", PHYSICAL_SECTION_HEADERS)).toEqual([]);
   });
 });
 describe("isStubSection", () => {
-  it("true for (not established)", () => expect(isStubSection({ header: "Clothing", body: "(not established)" })).toBe(true));
-  it("true for empty body", () => expect(isStubSection({ header: "Clothing", body: "" })).toBe(true));
-  it("false for real content", () => expect(isStubSection({ header: "Body", body: "- Tall and lithe" })).toBe(false));
+  it("true for (not established)", () =>
+    expect(
+      isStubSection({ header: "Clothing", body: "(not established)" }),
+    ).toBe(true));
+  it("true for empty body", () =>
+    expect(isStubSection({ header: "Clothing", body: "" })).toBe(true));
+  it("false for real content", () =>
+    expect(isStubSection({ header: "Body", body: "- Tall and lithe" })).toBe(
+      false,
+    ));
 });
 
 describe("parseClothingFromContent", () => {
   it("round-trips slot bullets into structured clothing items", () => {
-    const content = "[Clothing]\n- Top: Torn silk blouse\n- Bottom: Leather pants";
+    const content =
+      "[Clothing]\n- Top: Torn silk blouse\n- Bottom: Leather pants";
     expect(parseClothingFromContent(content)).toEqual([
       { slot: "Top", name: "Torn silk blouse" },
       { slot: "Bottom", name: "Leather pants" },
@@ -127,23 +160,35 @@ describe("parseClothingFromContent", () => {
   });
 
   it("ignores freeform lines that don't match the slot pattern", () => {
-    const content = "[Clothing]\nA practical cloak worn over simple leathers.\n- Top: Linen vest";
-    expect(parseClothingFromContent(content)).toEqual([{ slot: "Top", name: "Linen vest" }]);
+    const content =
+      "[Clothing]\nA practical cloak worn over simple leathers.\n- Top: Linen vest";
+    expect(parseClothingFromContent(content)).toEqual([
+      { slot: "Top", name: "Linen vest" },
+    ]);
   });
 
   it("returns [] when there is no Clothing section", () => {
-    expect(parseClothingFromContent("[Body]\n- Tall and lithe\n\n[Personality]\n- Calm")).toEqual([]);
+    expect(
+      parseClothingFromContent(
+        "[Body]\n- Tall and lithe\n\n[Personality]\n- Calm",
+      ),
+    ).toEqual([]);
   });
 
   it("returns [] when the Clothing section has no slot bullets", () => {
-    expect(parseClothingFromContent("[Clothing]\n(not established)")).toEqual([]);
+    expect(parseClothingFromContent("[Clothing]\n(not established)")).toEqual(
+      [],
+    );
   });
 });
 
 describe("summaryFromContent", () => {
   it("returns the first Personality bullet with the dash stripped", () => {
-    const content = "[Personality]\n- Disciplined, guarded, fair, and direct.\n- Slow to trust";
-    expect(summaryFromContent(content)).toBe("Disciplined, guarded, fair, and direct.");
+    const content =
+      "[Personality]\n- Disciplined, guarded, fair, and direct.\n- Slow to trust";
+    expect(summaryFromContent(content)).toBe(
+      "Disciplined, guarded, fair, and direct.",
+    );
   });
 
   it("skips stub bullets such as (not established)", () => {
@@ -151,28 +196,35 @@ describe("summaryFromContent", () => {
     expect(summaryFromContent(content)).toBe("Cheerful");
   });
 
-  it("returns \"\" when there is no Personality section", () => {
+  it('returns "" when there is no Personality section', () => {
     expect(summaryFromContent("[Body]\n- Tall")).toBe("");
   });
 });
 
 describe("applySectionChanges", () => {
   it("surgically updates an existing section while keeping others untouched", () => {
-    const original = "[Species]: Elf\n[Gender]: Female\n\n[Personality]\n- Timid and quiet\n\n[Likes]\n- Reading";
+    const original =
+      "[Species]: Elf\n[Gender]: Female\n\n[Personality]\n- Timid and quiet\n\n[Likes]\n- Reading";
     const updated = applySectionChanges(original, [
-      { header: "Personality", body: "- Bold and adventurous\n- Loves challenges" }
+      {
+        header: "Personality",
+        body: "- Bold and adventurous\n- Loves challenges",
+      },
     ]);
     expect(updated).toContain("[Species]: Elf");
     expect(updated).toContain("[Gender]: Female");
-    expect(updated).toContain("[Personality]\n- Bold and adventurous\n- Loves challenges");
+    expect(updated).toContain(
+      "[Personality]\n- Bold and adventurous\n- Loves challenges",
+    );
     expect(updated).toContain("[Likes]\n- Reading");
     expect(updated).not.toContain("Timid and quiet");
   });
 
   it("inserts a missing section in canonical order", () => {
-    const original = "[Species]: Elf\n[Gender]: Female\n\n[Personality]\n- Calm\n\n[Dislikes]\n- Noise";
+    const original =
+      "[Species]: Elf\n[Gender]: Female\n\n[Personality]\n- Calm\n\n[Dislikes]\n- Noise";
     const updated = applySectionChanges(original, [
-      { header: "Likes", body: "- Tea\n- Starlight" }
+      { header: "Likes", body: "- Tea\n- Starlight" },
     ]);
     // [Likes] should be placed before [Dislikes] in canonical order
     const likesIdx = updated.indexOf("[Likes]");
@@ -183,11 +235,12 @@ describe("applySectionChanges", () => {
   });
 
   it("applies multiple section changes at once", () => {
-    const original = "[Species]: Human\n[Gender]: Male\n\n[Body]\n- Lean\n\n[Clothing]\n- Top: Vest";
+    const original =
+      "[Species]: Human\n[Gender]: Male\n\n[Body]\n- Lean\n\n[Clothing]\n- Top: Vest";
     const updated = applySectionChanges(original, [
       { header: "Body", body: "- Tall and muscular" },
       { header: "Clothing", body: "- Top: Cloak\n- Bottom: Boots" },
-      { header: "Personality", body: "- Fierce" }
+      { header: "Personality", body: "- Fierce" },
     ]);
     expect(updated).toContain("[Body]\n- Tall and muscular");
     expect(updated).toContain("[Clothing]\n- Top: Cloak\n- Bottom: Boots");
@@ -196,18 +249,26 @@ describe("applySectionChanges", () => {
 });
 
 describe("sectionItemOps", () => {
-  const likes = "[Species]: Elf\n[Gender]: Female\n\n[Personality]\n- Timid and quiet\n\n[Likes]\n- Reading\n- Going outside";
+  const likes =
+    "[Species]: Elf\n[Gender]: Female\n\n[Personality]\n- Timid and quiet\n\n[Likes]\n- Reading\n- Going outside";
 
   it("parseSectionItems splits a body into trimmed, dash-stripped bullets", () => {
-    expect(parseSectionItems("[Likes]\n- Reading\n- Going outside")).toEqual(["Reading", "Going outside"]);
-    expect(parseSectionItems("[Likes]\n- Reading\n(not established)")).toEqual(["Reading"]);
+    expect(parseSectionItems("[Likes]\n- Reading\n- Going outside")).toEqual([
+      "Reading",
+      "Going outside",
+    ]);
+    expect(parseSectionItems("[Likes]\n- Reading\n(not established)")).toEqual([
+      "Reading",
+    ]);
     expect(parseSectionItems("[Personality]\n(not established)")).toEqual([]);
   });
 
   it("addSectionItem appends a bullet to an existing section", () => {
     const out = addSectionItem(likes, "Likes", "Stargazing");
     expect(out.applied).toBe(true);
-    expect(out.content).toContain("[Likes]\n- Reading\n- Going outside\n- Stargazing");
+    expect(out.content).toContain(
+      "[Likes]\n- Reading\n- Going outside\n- Stargazing",
+    );
   });
 
   it("addSectionItem is idempotent when the item already exists", () => {
@@ -247,21 +308,39 @@ describe("sectionItemOps", () => {
   });
 
   it("removeSectionItem rejects when the section is missing or a stub", () => {
-    const noSection = removeSectionItem("[Personality]\n- Quiet", "Dislikes", "Noise");
+    const noSection = removeSectionItem(
+      "[Personality]\n- Quiet",
+      "Dislikes",
+      "Noise",
+    );
     expect(noSection.applied).toBe(false);
-    const stub = removeSectionItem("[Personality]\n(not established)", "Personality", "Quiet");
+    const stub = removeSectionItem(
+      "[Personality]\n(not established)",
+      "Personality",
+      "Quiet",
+    );
     expect(stub.applied).toBe(false);
   });
 
   it("replaceSectionItem swaps the matching bullet text", () => {
-    const out = replaceSectionItem(likes, "Personality", "Timid and quiet", "Cautious, slow to trust");
+    const out = replaceSectionItem(
+      likes,
+      "Personality",
+      "Timid and quiet",
+      "Cautious, slow to trust",
+    );
     expect(out.applied).toBe(true);
     expect(out.content).toContain("- Cautious, slow to trust");
     expect(out.content).not.toContain("Timid and quiet");
   });
 
   it("replaceSectionItem rejects when from has no exact match", () => {
-    const out = replaceSectionItem(likes, "Personality", "Nothing matches", "Nope");
+    const out = replaceSectionItem(
+      likes,
+      "Personality",
+      "Nothing matches",
+      "Nope",
+    );
     expect(out.applied).toBe(false);
     expect(out.content).toBe(likes);
   });

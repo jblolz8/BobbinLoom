@@ -36,7 +36,7 @@ export type CoverResolverOptions = {
 
 export function resolvePlaythroughCover(
   p: Playthrough,
-  options: CoverResolverOptions
+  options: CoverResolverOptions,
 ): PlaythroughCoverView | null {
   const manualFile = p.cover?.file;
   if (manualFile && imageFilePath(manualFile, options.imagesDir)) {
@@ -52,28 +52,40 @@ export function resolvePlaythroughCover(
     const images = message.images ?? [];
     for (let imageIndex = images.length - 1; imageIndex >= 0; imageIndex -= 1) {
       const file = images[imageIndex]?.file;
-      if (file && imageFilePath(file, options.imagesDir)) return { source: "latest", file };
+      if (file && imageFilePath(file, options.imagesDir))
+        return { source: "latest", file };
     }
   }
 
   // Cast order, not recency: a cover's job is recognition, and re-ordering it by who spoke
   // last would reshuffle the shelf mid-scene.
   const activeSet = new Set(p.activeCharacters ?? []);
-  const present = p.characters.filter((character) => activeSet.has(character.id));
+  const present = p.characters.filter((character) =>
+    activeSet.has(character.id),
+  );
   const portraits = resolveCharacterPortraits(
-    present.map((character) => character.templateId).filter((id): id is string => Boolean(id)),
-    options.charactersDir
+    present
+      .map((character) => character.templateId)
+      .filter((id): id is string => Boolean(id)),
+    options.charactersDir,
   );
   if (portraits.length > 0) {
-    const nameById = new Map(present.map((character) => [character.templateId ?? character.id, character.name]));
+    const nameById = new Map(
+      present.map((character) => [
+        character.templateId ?? character.id,
+        character.name,
+      ]),
+    );
     return {
       source: "cast",
       characterCount: portraits.length,
       characters: portraits.slice(0, COVER_COLLAGE_LIMIT).map((portrait) => ({
         id: portrait.id,
         name: nameById.get(portrait.id) ?? "",
-        ...(portrait.avatarUpdatedAt === undefined ? {} : { avatarUpdatedAt: portrait.avatarUpdatedAt })
-      }))
+        ...(portrait.avatarUpdatedAt === undefined
+          ? {}
+          : { avatarUpdatedAt: portrait.avatarUpdatedAt }),
+      })),
     };
   }
 

@@ -1,4 +1,11 @@
-import { useEffect, useId, useState, type ChangeEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { Badge } from "../Badge/Badge";
 import { Icon } from "../Icon";
 import { TooltipIcon } from "../Tooltip/Tooltip";
@@ -23,6 +30,10 @@ export interface SliderProps {
   /** Value emitted when cleared (`null` by default so PATCH/PUT payloads clear stored values). */
   clearedValue?: null | undefined;
   integer?: boolean;
+  /** Strictly clamp numeric input to `[min, max]` (allowing mid-keystroke typing and clamping out-of-range values on blur/Enter). */
+  clamp?: boolean;
+  /** Optional unit suffix displayed in the reset label (e.g. `"%"`). */
+  unit?: string;
   dirty?: boolean;
   disabled?: boolean;
   className?: string;
@@ -43,6 +54,8 @@ export function Slider({
   clearable = false,
   clearedValue = null,
   integer = false,
+  clamp = false,
+  unit = "",
   dirty = false,
   disabled = false,
   className = "",
@@ -57,11 +70,16 @@ export function Slider({
 
   const fillPercent =
     trackMax > min
-      ? Math.min(100, Math.max(0, ((sliderNumericValue - min) / (trackMax - min)) * 100))
+      ? Math.min(
+          100,
+          Math.max(0, ((sliderNumericValue - min) / (trackMax - min)) * 100),
+        )
       : 0;
 
   // Keep a local string draft while the number input is focused so typing "0." or "-0." doesn't get clobbered mid-keystroke.
-  const [draft, setDraft] = useState<string>(() => (isSet ? String(value) : ""));
+  const [draft, setDraft] = useState<string>(() =>
+    isSet ? String(value) : "",
+  );
   const [focused, setFocused] = useState(false);
 
   useEffect(() => {
@@ -71,11 +89,15 @@ export function Slider({
   }, [value, isSet, focused]);
 
   function normalizeNumber(rawNum: number): number {
+    const rounded = integer ? Math.round(rawNum) : Number(rawNum.toFixed(4));
+    if (clamp) {
+      return Math.min(max, Math.max(min, rounded));
+    }
     if (integer) {
-      return Math.max(min, Math.round(rawNum));
+      return Math.max(min, rounded);
     }
     // Round floating-point step artifacts (e.g. 0.30000000000000004 -> 0.3)
-    return Number(rawNum.toFixed(4));
+    return rounded;
   }
 
   function handleRangeChange(e: ChangeEvent<HTMLInputElement>) {
@@ -91,12 +113,53 @@ export function Slider({
     setDraft(rawText);
     const trimmed = rawText.trim();
     if (!trimmed) {
-      onChange(clearable ? clearedValue : undefined);
+      if (!clamp || clearable) {
+        onChange(clearable ? clearedValue : undefined);
+      }
       return;
     }
     const parsed = Number(trimmed);
     if (Number.isFinite(parsed)) {
+      if (clamp && (parsed < min || parsed > max)) {
+        // Allow typing intermediate digits (e.g. "7" on the way to "75"); clamp on blur or Enter.
+        return;
+      }
       onChange(normalizeNumber(parsed));
+    }
+  }
+
+  function commitClampedDraft() {
+    if (!clamp) {
+      setDraft(isSet ? String(value) : "");
+      return;
+    }
+    const trimmed = draft.trim();
+    if (!trimmed) {
+      if (clearable) {
+        setDraft("");
+        onChange(clearedValue);
+      } else {
+        const restored = isSet ? normalizeNumber(value) : fallbackValue;
+        setDraft(String(restored));
+        if (restored !== value) onChange(restored);
+      }
+      return;
+    }
+    const parsed = Number(trimmed);
+    if (Number.isFinite(parsed)) {
+      const clamped = normalizeNumber(parsed);
+      setDraft(String(clamped));
+      if (clamped !== value) {
+        onChange(clamped);
+      }
+    } else {
+      setDraft(isSet ? String(value) : String(fallbackValue));
+    }
+  }
+
+  function handleNumberKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" && clamp) {
+      commitClampedDraft();
     }
   }
 
@@ -131,7 +194,9 @@ export function Slider({
       <div className="base-slider__header">
         <label htmlFor={id} className="base-slider__label">
           <span>{label}</span>
-          {rangeHint && <span className="base-slider__range">({rangeHint})</span>}
+          {rangeHint && (
+            <span className="base-slider__range">({rangeHint})</span>
+          )}
           {description && <TooltipIcon content={description} />}
           {dirty && (
             <Badge variant="warning" size="xs">
@@ -150,13 +215,15 @@ export function Slider({
                 title={
                   clearable
                     ? "Reset to provider default (omit from request)"
-                    : `Reset to default (${fallbackValue.toLocaleString()})`
+                    : `Reset to default (${fallbackValue.toLocaleString()}${unit})`
                 }
                 aria-label={`Reset ${label} to default`}
               >
                 <Icon name="RotateCcw" size={11} />
                 <span>
-                  {clearable ? "Default" : `Default (${fallbackValue.toLocaleString()})`}
+                  {clearable
+                    ? "Default"
+                    : `Default (${fallbackValue.toLocaleString()}${unit})`}
                 </span>
               </button>
             )}
@@ -189,8 +256,9 @@ export function Slider({
           onFocus={() => setFocused(true)}
           onBlur={() => {
             setFocused(false);
-            setDraft(isSet ? String(value) : "");
+            commitClampedDraft();
           }}
+          onKeyDown={handleNumberKeyDown}
           onChange={handleNumberChange}
           disabled={disabled}
         />

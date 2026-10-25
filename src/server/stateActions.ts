@@ -1,19 +1,44 @@
 import { randomUUID } from "node:crypto";
 import { applyStatePatch } from "../engine/engine";
-import { seedMemorySummary, summaryFromContent } from "../engine/characterSections";
-import { ensureAllSections, resolveCharacterFormat } from "../engine/characterFormat";
+import {
+  seedMemorySummary,
+  summaryFromContent,
+} from "../engine/characterSections";
+import {
+  ensureAllSections,
+  resolveCharacterFormat,
+} from "../engine/characterFormat";
 import { expandUserMacro } from "../engine/macros";
-import type { Chapter, ChapterMetaSummary, CharacterContextScope, CharacterInstance, CharacterTemplate, ClothingItem, Playthrough, PromptConfig } from "../schemas";
-import { getCharacterTemplate, getPlaythroughRecord, listCharacterTemplates, saveCharacterTemplateRecord, updatePlaythroughRecord } from "./store";
+import type {
+  Chapter,
+  ChapterMetaSummary,
+  CharacterContextScope,
+  CharacterInstance,
+  CharacterTemplate,
+  ClothingItem,
+  Playthrough,
+  PromptConfig,
+} from "../schemas";
+import {
+  getCharacterTemplate,
+  getPlaythroughRecord,
+  listCharacterTemplates,
+  saveCharacterTemplateRecord,
+  updatePlaythroughRecord,
+} from "./store";
 import { buildLorebookContext, lorebookBudgetChars } from "./lorebookContext";
 import { executeTurn } from "./turnActions";
 import {
   buildChapterOpeningInstruction,
-  chapterOpeningModeNeedsMessage
+  chapterOpeningModeNeedsMessage,
 } from "../engine/chapterLifecycle";
 import type { ChapterOpeningMode } from "../schemas";
 import type { TurnProvider } from "./provider";
-import { COMPACT_TRIGGER_COUNT, IMPORTANCE_FLOOR, VERBATIM_CHAPTER_LIMIT } from "./provider";
+import {
+  COMPACT_TRIGGER_COUNT,
+  IMPORTANCE_FLOOR,
+  VERBATIM_CHAPTER_LIMIT,
+} from "./provider";
 
 type ActionFailure = {
   ok: false;
@@ -21,10 +46,23 @@ type ActionFailure = {
   error: string;
 };
 
-export type StateActionOutcome = { ok: true; state: Playthrough; applied: string[]; rejected: string[]; warnings: string[] } | ActionFailure;
-export type SaveToLibraryOutcome = { ok: true; template: CharacterTemplate; created: boolean } | ActionFailure;
+export type StateActionOutcome =
+  | {
+      ok: true;
+      state: Playthrough;
+      applied: string[];
+      rejected: string[];
+      warnings: string[];
+    }
+  | ActionFailure;
+export type SaveToLibraryOutcome =
+  | { ok: true; template: CharacterTemplate; created: boolean }
+  | ActionFailure;
 
-function load(dataDir: string, playthroughId: string): Playthrough | ActionFailure {
+function load(
+  dataDir: string,
+  playthroughId: string,
+): Playthrough | ActionFailure {
   const playthrough = getPlaythroughRecord(dataDir, playthroughId);
   if (!playthrough) {
     return { ok: false, status: 404, error: "Playthrough not found" };
@@ -42,7 +80,7 @@ export function worldStateAction(
   worldStateId: string,
   action: "delete" | "edit",
   name?: string,
-  description?: string
+  description?: string,
 ): StateActionOutcome {
   const loaded = load(dataDir, playthroughId);
   if (isFailure(loaded)) return loaded;
@@ -51,7 +89,9 @@ export function worldStateAction(
   if (!entry) return { ok: false, status: 404, error: "World State not found" };
 
   if (action === "delete") {
-    loaded.worldState = loaded.worldState.filter((ws) => ws.id !== worldStateId);
+    loaded.worldState = loaded.worldState.filter(
+      (ws) => ws.id !== worldStateId,
+    );
   } else if (action === "edit") {
     if (name !== undefined) entry.name = name;
     if (description !== undefined) entry.description = description;
@@ -59,7 +99,13 @@ export function worldStateAction(
 
   loaded.updatedAt = new Date().toISOString();
   updatePlaythroughRecord(dataDir, loaded);
-  return { ok: true, state: loaded, applied: [`world state ${action}: ${entry.name}`], rejected: [], warnings: [] };
+  return {
+    ok: true,
+    state: loaded,
+    applied: [`world state ${action}: ${entry.name}`],
+    rejected: [],
+    warnings: [],
+  };
 }
 
 export type CharacterContextOptions = {
@@ -70,16 +116,21 @@ export type CharacterContextOptions = {
 
 export function buildFleshOutStoryContext(
   loaded: Playthrough,
-  character: CharacterInstance | { name: string; description?: string; storyRole?: string; id?: string },
+  character:
+    | CharacterInstance
+    | { name: string; description?: string; storyRole?: string; id?: string },
   maxTokens = 4000,
-  options?: CharacterContextOptions
+  options?: CharacterContextOptions,
 ): string {
   const parts: string[] = [];
-  if (loaded.scenarioDescription) parts.push(`Setting: ${loaded.scenarioDescription}`);
+  if (loaded.scenarioDescription)
+    parts.push(`Setting: ${loaded.scenarioDescription}`);
 
   // Active World State
   if (loaded.worldState && loaded.worldState.length > 0) {
-    const wsLines = loaded.worldState.map((ws) => `- ${ws.name}: ${ws.description}`);
+    const wsLines = loaded.worldState.map(
+      (ws) => `- ${ws.name}: ${ws.description}`,
+    );
     parts.push(`Active World State / Environment:\n${wsLines.join("\n")}`);
   }
 
@@ -88,17 +139,27 @@ export function buildFleshOutStoryContext(
   const pc = loaded.playerCharacter;
   parts.push(
     `Player Character: ${pc.name} (${expandUserMacro(pc.bodyType, playerName)}) — ` +
-      expandUserMacro(pc.description, playerName)
+      expandUserMacro(pc.description, playerName),
   );
 
   // Other Cast Members
-  const otherChars = loaded.characters.filter((c) => c.id !== character.id && c.name.toLowerCase() !== character.name.toLowerCase());
+  const otherChars = loaded.characters.filter(
+    (c) =>
+      c.id !== character.id &&
+      c.name.toLowerCase() !== character.name.toLowerCase(),
+  );
   if (otherChars.length > 0) {
     const cast = otherChars.map((c) => {
       if (c.templateId) {
-        const tpl = loaded.characterTemplates.find((t) => t.id === c.templateId);
-        const species = tpl?.content.match(/\[Species\]:\s*(.+)/)?.[1] ?? "unknown";
-        const memory = expandUserMacro(c.memorySummary || "no details yet", playerName);
+        const tpl = loaded.characterTemplates.find(
+          (t) => t.id === c.templateId,
+        );
+        const species =
+          tpl?.content.match(/\[Species\]:\s*(.+)/)?.[1] ?? "unknown";
+        const memory = expandUserMacro(
+          c.memorySummary || "no details yet",
+          playerName,
+        );
         return `- ${c.name} (${species}) [Role: ${c.storyRole}]: ${memory}`;
       } else {
         return `- ${c.name} [Role: ${c.storyRole}]: ${c.description || "no details"}`;
@@ -109,11 +170,16 @@ export function buildFleshOutStoryContext(
 
   // Story So Far / Earlier Chapters
   if (loaded.storyMetaSummaries && loaded.storyMetaSummaries.length > 0) {
-    const latest = loaded.storyMetaSummaries[loaded.storyMetaSummaries.length - 1];
+    const latest =
+      loaded.storyMetaSummaries[loaded.storyMetaSummaries.length - 1];
     parts.push(`Earlier Story Summary:\n${latest.summary}`);
   } else if (loaded.chapters && loaded.chapters.length > 0) {
-    const recent = loaded.chapters.slice(-3).map((ch) =>
-      `- ${ch.name}: ${ch.shortDescription || ch.fullSummary?.slice(0, 200) || ""}`);
+    const recent = loaded.chapters
+      .slice(-3)
+      .map(
+        (ch) =>
+          `- ${ch.name}: ${ch.shortDescription || ch.fullSummary?.slice(0, 200) || ""}`,
+      );
     parts.push(`Recent Story Chapters:\n${recent.join("\n")}`);
   }
 
@@ -122,7 +188,12 @@ export function buildFleshOutStoryContext(
   if (scope === "timeline") {
     const charNameLower = character.name.toLowerCase();
     const events = (loaded.memoryEvents ?? [])
-      .filter((e) => e.importance >= 3 || e.tags?.some((t) => t.toLowerCase() === charNameLower) || e.summary.toLowerCase().includes(charNameLower))
+      .filter(
+        (e) =>
+          e.importance >= 3 ||
+          e.tags?.some((t) => t.toLowerCase() === charNameLower) ||
+          e.summary.toLowerCase().includes(charNameLower),
+      )
       .slice(-15);
     if (events.length > 0) {
       const eventLines = events.map((e) => `- [Turn ${e.turn}] ${e.summary}`);
@@ -130,10 +201,12 @@ export function buildFleshOutStoryContext(
     }
   } else if (scope === "recent") {
     const count = options?.recentCount ?? 8;
-    const recentMessages = (loaded.messages ?? []).filter((m) => !m.hidden).slice(-count);
+    const recentMessages = (loaded.messages ?? [])
+      .filter((m) => !m.hidden)
+      .slice(-count);
     if (recentMessages.length > 0) {
-      const msgLines = recentMessages.map((m) =>
-        `[${m.role === "user" ? playerName : "Story"}]: ${m.content}`
+      const msgLines = recentMessages.map(
+        (m) => `[${m.role === "user" ? playerName : "Story"}]: ${m.content}`,
       );
       parts.push(`Recent Scene Transcript:\n${msgLines.join("\n\n")}`);
     }
@@ -141,10 +214,13 @@ export function buildFleshOutStoryContext(
     // scope === "chapter" (default)
     const chapterStartTurn = loaded.currentChapterStartedAtTurn ?? 1;
     let chapterMessages = (loaded.messages ?? []).filter(
-      (m) => !m.hidden && (typeof m.turn !== "number" || m.turn >= chapterStartTurn)
+      (m) =>
+        !m.hidden && (typeof m.turn !== "number" || m.turn >= chapterStartTurn),
     );
     if (chapterMessages.length === 0) {
-      chapterMessages = (loaded.messages ?? []).filter((m) => !m.hidden).slice(-8);
+      chapterMessages = (loaded.messages ?? [])
+        .filter((m) => !m.hidden)
+        .slice(-8);
     }
     // Cap total transcript characters to prevent excessive context
     const MAX_TRANSCRIPT_CHARS = 12000;
@@ -152,20 +228,34 @@ export function buildFleshOutStoryContext(
     const selectedMessages: typeof chapterMessages = [];
     for (let i = chapterMessages.length - 1; i >= 0; i--) {
       const len = chapterMessages[i].content.length;
-      if (selectedMessages.length > 0 && totalChars + len > MAX_TRANSCRIPT_CHARS) break;
+      if (
+        selectedMessages.length > 0 &&
+        totalChars + len > MAX_TRANSCRIPT_CHARS
+      )
+        break;
       selectedMessages.unshift(chapterMessages[i]);
       totalChars += len;
     }
     if (selectedMessages.length > 0) {
-      const msgLines = selectedMessages.map((m) =>
-        `[${m.role === "user" ? playerName : "Story"}]: ${m.content}`
+      const msgLines = selectedMessages.map(
+        (m) => `[${m.role === "user" ? playerName : "Story"}]: ${m.content}`,
       );
-      parts.push(`Current Chapter Dialogue & Scene Transcript:\n${msgLines.join("\n\n")}`);
+      parts.push(
+        `Current Chapter Dialogue & Scene Transcript:\n${msgLines.join("\n\n")}`,
+      );
     }
   }
 
-  const haystack = [character.description ?? "", character.storyRole ?? "", loaded.scenarioDescription ?? ""].join(" ");
-  const lore = buildLorebookContext(loaded.lorebookIds, haystack, lorebookBudgetChars(maxTokens));
+  const haystack = [
+    character.description ?? "",
+    character.storyRole ?? "",
+    loaded.scenarioDescription ?? "",
+  ].join(" ");
+  const lore = buildLorebookContext(
+    loaded.lorebookIds,
+    haystack,
+    lorebookBudgetChars(maxTokens),
+  );
   if (lore) parts.push(expandUserMacro(lore, playerName));
 
   return parts.join("\n\n");
@@ -180,18 +270,28 @@ export async function fleshOutCharacterAction(
   maxTokens = 4000,
   signal?: AbortSignal,
   promptConfig?: PromptConfig,
-  contextOptions?: CharacterContextOptions
+  contextOptions?: CharacterContextOptions,
 ): Promise<StateActionOutcome> {
   const loaded = load(dataDir, playthroughId);
   if (isFailure(loaded)) return loaded;
 
   const character = loaded.characters.find((c) => c.id === characterId);
-  if (!character) return { ok: false, status: 404, error: "Character not found" };
+  if (!character)
+    return { ok: false, status: 404, error: "Character not found" };
   if (character.templateId) {
-    return { ok: false, status: 400, error: "Character is already a detailed character" };
+    return {
+      ok: false,
+      status: 400,
+      error: "Character is already a detailed character",
+    };
   }
 
-  const storyContext = buildFleshOutStoryContext(loaded, character, maxTokens, contextOptions);
+  const storyContext = buildFleshOutStoryContext(
+    loaded,
+    character,
+    maxTokens,
+    contextOptions,
+  );
   const format = resolveCharacterFormat(promptConfig?.characterFormat);
 
   // 1) Generate (only when no approved draft content was supplied)
@@ -199,14 +299,22 @@ export async function fleshOutCharacterAction(
   if (content === undefined) {
     try {
       content = await provider.generateCharacterSheet(
-        { name: character.name, description: character.description ?? "", storyRole: character.storyRole },
+        {
+          name: character.name,
+          description: character.description ?? "",
+          storyRole: character.storyRole,
+        },
         storyContext,
         signal,
-        format
+        format,
       );
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      return { ok: false, status: 502, error: `Failed to generate character sheet: ${message}` };
+      return {
+        ok: false,
+        status: 502,
+        error: `Failed to generate character sheet: ${message}`,
+      };
     }
   }
 
@@ -220,14 +328,29 @@ export async function fleshOutCharacterAction(
   const memorySummary = seedMemorySummary(character.name, content);
 
   // 3) Apply (single commit — no partial state)
-  const result = applyStatePatch(loaded, { characterFleshOut: { characterId, content, memorySummary } }, promptConfig?.characterFormat);
+  const result = applyStatePatch(
+    loaded,
+    { characterFleshOut: { characterId, content, memorySummary } },
+    promptConfig?.characterFormat,
+  );
   result.state.updatedAt = new Date().toISOString();
   updatePlaythroughRecord(dataDir, result.state);
-  return { ok: true, state: result.state, applied: result.applied, rejected: result.rejected, warnings: result.warnings };
+  return {
+    ok: true,
+    state: result.state,
+    applied: result.applied,
+    rejected: result.rejected,
+    warnings: result.warnings,
+  };
 }
 
 export type FleshOutDraftOutcome =
-  | { ok: true; character: CharacterInstance; content: string; storyContext: string }
+  | {
+      ok: true;
+      character: CharacterInstance;
+      content: string;
+      storyContext: string;
+    }
   | { ok: false; status: number; error: string };
 
 /** @deprecated Use FleshOutDraftOutcome */
@@ -241,29 +364,47 @@ export async function fleshOutCharacterDraftAction(
   maxTokens = 4000,
   signal?: AbortSignal,
   promptConfig?: PromptConfig,
-  contextOptions?: CharacterContextOptions
+  contextOptions?: CharacterContextOptions,
 ): Promise<FleshOutDraftOutcome> {
   const loaded = load(dataDir, playthroughId);
   if (isFailure(loaded)) return loaded;
   const character = loaded.characters.find((c) => c.id === characterId);
-  if (!character) return { ok: false, status: 404, error: "Character not found" };
+  if (!character)
+    return { ok: false, status: 404, error: "Character not found" };
   if (character.templateId) {
-    return { ok: false, status: 400, error: "Character is already a detailed character" };
+    return {
+      ok: false,
+      status: 400,
+      error: "Character is already a detailed character",
+    };
   }
 
-  const storyContext = buildFleshOutStoryContext(loaded, character, maxTokens, contextOptions);
+  const storyContext = buildFleshOutStoryContext(
+    loaded,
+    character,
+    maxTokens,
+    contextOptions,
+  );
   const format = resolveCharacterFormat(promptConfig?.characterFormat);
   let content: string;
   try {
     content = await provider.generateCharacterSheet(
-      { name: character.name, description: character.description ?? "", storyRole: character.storyRole },
+      {
+        name: character.name,
+        description: character.description ?? "",
+        storyRole: character.storyRole,
+      },
       storyContext,
       signal,
-      format
+      format,
     );
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    return { ok: false, status: 502, error: `Failed to generate character sheet: ${message}` };
+    return {
+      ok: false,
+      status: 502,
+      error: `Failed to generate character sheet: ${message}`,
+    };
   }
   content = ensureAllSections(content, format);
   return { ok: true, character, content, storyContext };
@@ -284,7 +425,7 @@ export async function generateNewCharacterAction(
     contextOptions?: CharacterContextOptions;
   },
   signal?: AbortSignal,
-  promptConfig?: PromptConfig
+  promptConfig?: PromptConfig,
 ): Promise<GenerateNewCharacterOutcome> {
   const loaded = load(dataDir, playthroughId);
   if (isFailure(loaded)) return loaded;
@@ -294,11 +435,15 @@ export async function generateNewCharacterAction(
     loaded,
     { name: input.prompt ? input.prompt.slice(0, 50) : "New Character" },
     input.contextOptions?.maxTokens ?? 4000,
-    input.contextOptions
+    input.contextOptions,
   );
 
   if (!provider.generateNewCharacter) {
-    return { ok: false, status: 501, error: "Active provider does not support generating new characters" };
+    return {
+      ok: false,
+      status: 501,
+      error: "Active provider does not support generating new characters",
+    };
   }
 
   let generated;
@@ -308,13 +453,17 @@ export async function generateNewCharacterAction(
         prompt: input.prompt,
         tier: input.tier,
         storyContext,
-        format
+        format,
       },
-      signal
+      signal,
     );
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    return { ok: false, status: 502, error: `Failed to generate character: ${message}` };
+    return {
+      ok: false,
+      status: 502,
+      error: `Failed to generate character: ${message}`,
+    };
   }
 
   if (signal?.aborted) {
@@ -323,7 +472,9 @@ export async function generateNewCharacterAction(
 
   // Ensure unique name if one already exists
   let finalName = generated.name.trim();
-  const existingNames = new Set(loaded.characters.map((c) => c.name.toLowerCase()));
+  const existingNames = new Set(
+    loaded.characters.map((c) => c.name.toLowerCase()),
+  );
   if (existingNames.has(finalName.toLowerCase())) {
     finalName = `${finalName} (2)`;
   }
@@ -342,9 +493,13 @@ export async function generateNewCharacterAction(
       version: 1,
       content: sheetContent,
       summary: "",
-      startingClothing: (generated.clothing ?? []).map((c) => ({ slot: c.slot, name: c.name, state: c.state })),
+      startingClothing: (generated.clothing ?? []).map((c) => ({
+        slot: c.slot,
+        name: c.name,
+        state: c.state,
+      })),
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     };
     loaded.characterTemplates.push(template);
   }
@@ -364,7 +519,7 @@ export async function generateNewCharacterAction(
     flags: [],
     clothing: generated.clothing ?? [],
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
   };
 
   loaded.characters.push(newChar);
@@ -399,24 +554,42 @@ export function saveToLibraryAction(
   playthroughId: string,
   characterId: string,
   mode: "update" | "newVersion" = "update",
-  charactersDir?: string
+  charactersDir?: string,
 ): SaveToLibraryOutcome {
   const loaded = load(dataDir, playthroughId);
   if (isFailure(loaded)) return loaded;
 
   const character = loaded.characters.find((c) => c.id === characterId);
-  if (!character) return { ok: false, status: 404, error: "Character not found in playthrough" };
+  if (!character)
+    return {
+      ok: false,
+      status: 404,
+      error: "Character not found in playthrough",
+    };
 
-  const local = loaded.characterTemplates.find((t) => t.id === character.templateId);
-  if (!local) return { ok: false, status: 404, error: "No template data for this character" };
+  const local = loaded.characterTemplates.find(
+    (t) => t.id === character.templateId,
+  );
+  if (!local)
+    return {
+      ok: false,
+      status: 404,
+      error: "No template data for this character",
+    };
 
   if (mode === "newVersion") {
     const existing = getCharacterTemplate(local.id, charactersDir);
     if (!existing) {
-      return { ok: false, status: 409, error: "No library copy exists — save to the library first" };
+      return {
+        ok: false,
+        status: 409,
+        error: "No library copy exists — save to the library first",
+      };
     }
     const lineageId = existing.lineageId ?? existing.id;
-    const family = listCharacterTemplates(charactersDir).filter((t) => (t.lineageId ?? t.id) === lineageId);
+    const family = listCharacterTemplates(charactersDir).filter(
+      (t) => (t.lineageId ?? t.id) === lineageId,
+    );
     const nextVersion = Math.max(...family.map((t) => t.version)) + 1;
     const template: CharacterTemplate = {
       ...structuredClone(local),
@@ -425,7 +598,10 @@ export function saveToLibraryAction(
       version: nextVersion,
       name: character.name,
       summary: local.summary || summaryFromContent(local.content),
-      startingClothing: (character.clothing ?? []).map((c) => ({ slot: c.slot, name: c.name })),
+      startingClothing: (character.clothing ?? []).map((c) => ({
+        slot: c.slot,
+        name: c.name,
+      })),
     };
     saveCharacterTemplateRecord(template, charactersDir);
     return { ok: true, template, created: true };
@@ -437,15 +613,21 @@ export function saveToLibraryAction(
     lineageId: existing ? (existing.lineageId ?? existing.id) : local.id,
     name: character.name,
     summary: local.summary || summaryFromContent(local.content),
-    startingClothing: (character.clothing ?? []).map((c) => ({ slot: c.slot, name: c.name })),
+    startingClothing: (character.clothing ?? []).map((c) => ({
+      slot: c.slot,
+      name: c.name,
+    })),
   };
   saveCharacterTemplateRecord(template, charactersDir);
   return { ok: true, template, created: !existing };
 }
 
-export type CloseChapterResult = { ok: true; state: Playthrough } | ActionFailure;
-export type ResummarizeChapterResult = { ok: true; state: Playthrough } | ActionFailure;
-
+export type CloseChapterResult =
+  | { ok: true; state: Playthrough }
+  | ActionFailure;
+export type ResummarizeChapterResult =
+  | { ok: true; state: Playthrough }
+  | ActionFailure;
 
 /**
  * Roll older chapters into the single rolling meta-summary so the injected
@@ -465,10 +647,12 @@ export type ResummarizeChapterResult = { ok: true; state: Playthrough } | Action
 async function foldOldestChaptersIntoMetaSummaries(
   loaded: Playthrough,
   provider: TurnProvider,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<void> {
   loaded.storyMetaSummaries = loaded.storyMetaSummaries ?? [];
-  const foldedIds = new Set(loaded.storyMetaSummaries.flatMap((m) => m.chapterIds));
+  const foldedIds = new Set(
+    loaded.storyMetaSummaries.flatMap((m) => m.chapterIds),
+  );
   const uncompacted = (loaded.chapters ?? [])
     .filter((ch) => !foldedIds.has(ch.id))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt)); // oldest first
@@ -487,10 +671,13 @@ async function foldOldestChaptersIntoMetaSummaries(
     target = {
       id: `mch_${randomUUID()}`,
       chapterIds: [seedChapter.id],
-      turnRange: { start: seedChapter.turnRange.start, end: seedChapter.turnRange.end },
+      turnRange: {
+        start: seedChapter.turnRange.start,
+        end: seedChapter.turnRange.end,
+      },
       summary: seedChapter.fullSummary,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     };
     loaded.storyMetaSummaries.push(target);
     remainingToFold = oldestOverflow.slice(1);
@@ -507,10 +694,14 @@ async function foldOldestChaptersIntoMetaSummaries(
   for (const layer of [
     loaded.memoryEvents,
     loaded.memoryLayers?.recent ?? [],
-    loaded.memoryLayers?.compressed ?? []
+    loaded.memoryLayers?.compressed ?? [],
   ]) {
     for (const e of layer) {
-      if (e.chapterId && targetChapterIds.has(e.chapterId) && e.importance >= IMPORTANCE_FLOOR) {
+      if (
+        e.chapterId &&
+        targetChapterIds.has(e.chapterId) &&
+        e.importance >= IMPORTANCE_FLOOR
+      ) {
         eventMap.set(e.id, e);
       }
     }
@@ -519,21 +710,29 @@ async function foldOldestChaptersIntoMetaSummaries(
     type: e.type,
     summary: e.summary,
     importance: e.importance,
-    turn: e.turn
+    turn: e.turn,
   }));
 
   try {
-    const result = await provider.compactStorySoFar({
-      priorSummary: target.summary,
-      chapterTranscriptions: remainingToFold.map((ch) => ({ name: ch.name, fullSummary: ch.fullSummary })),
-      importantEvents
-    }, signal);
+    const result = await provider.compactStorySoFar(
+      {
+        priorSummary: target.summary,
+        chapterTranscriptions: remainingToFold.map((ch) => ({
+          name: ch.name,
+          fullSummary: ch.fullSummary,
+        })),
+        importantEvents,
+      },
+      signal,
+    );
     target.summary = result.summary;
   } catch (error) {
     // Degrade-and-warn: still fold the ids so the verbatim window shrinks, but
     // keep the prior summary text. The folded chapters are still whole in the
     // Journal; the next successful fold merges their content in.
-    console.error(`foldOldestChaptersIntoMetaSummaries: compaction failed for ${loaded.id}: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `foldOldestChaptersIntoMetaSummaries: compaction failed for ${loaded.id}: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 
   // Fold ids into the target meta and extend its turn range, regardless of
@@ -543,7 +742,9 @@ async function foldOldestChaptersIntoMetaSummaries(
     if (target.chapterIds.includes(ch.id)) continue;
     target.chapterIds.push(ch.id);
   }
-  const allFolded = (loaded.chapters ?? []).filter((ch) => target.chapterIds.includes(ch.id));
+  const allFolded = (loaded.chapters ?? []).filter((ch) =>
+    target.chapterIds.includes(ch.id),
+  );
   const starts = allFolded.map((ch) => ch.turnRange.start);
   const ends = allFolded.map((ch) => ch.turnRange.end);
   // Merge the target's EXISTING span: it may cover chapters archived in earlier
@@ -580,12 +781,17 @@ export async function closeChapterAction(
   promptConfig?: PromptConfig,
   /** How the next chapter opens, and the message the player wrote to open it. Absent means
    *  `continuation` with no message — the behaviour every caller had before modes existed. */
-  options?: { openingMode?: ChapterOpeningMode; openingMessage?: string }
+  options?: { openingMode?: ChapterOpeningMode; openingMessage?: string },
 ): Promise<CloseChapterResult> {
-  const openingMode: ChapterOpeningMode = options?.openingMode ?? "continuation";
+  const openingMode: ChapterOpeningMode =
+    options?.openingMode ?? "continuation";
   const openingMessage = options?.openingMessage?.trim() ?? "";
   if (chapterOpeningModeNeedsMessage(openingMode) && !openingMessage) {
-    return { ok: false, status: 400, error: "This opening mode needs a message to follow" };
+    return {
+      ok: false,
+      status: 400,
+      error: "This opening mode needs a message to follow",
+    };
   }
   const loaded = load(dataDir, playthroughId);
   if (isFailure(loaded)) return loaded;
@@ -594,10 +800,17 @@ export async function closeChapterAction(
   loaded.chapters = loaded.chapters ?? [];
 
   // Collect non-hidden messages that don't have a chapterId yet (current session)
-  const msgsToArchive = loaded.messages.filter(m => !m.hidden && !m.chapterId);
+  const msgsToArchive = loaded.messages.filter(
+    (m) => !m.hidden && !m.chapterId,
+  );
 
   if (msgsToArchive.length < 6) {
-    return { ok: false, status: 400, error: "Need at least 6 messages before closing a chapter. Play a bit longer!" };
+    return {
+      ok: false,
+      status: 400,
+      error:
+        "Need at least 6 messages before closing a chapter. Play a bit longer!",
+    };
   }
 
   // Collect memory events across all layers in the chapter's turn range.
@@ -622,10 +835,10 @@ export async function closeChapterAction(
     shortDescription: summary.shortDescription,
     fullSummary: summary.fullSummary,
     turnRange: { start: chapterStartTurn, end: loaded.turn },
-    messageIds: msgsToArchive.map(m => m.id),
-    memoryEventIds: eventsToTag.map(e => e.id),
+    messageIds: msgsToArchive.map((m) => m.id),
+    memoryEventIds: eventsToTag.map((e) => e.id),
     createdAt: new Date().toISOString(),
-    summaryDurationMs
+    summaryDurationMs,
   };
 
   // Tag messages with chapterId and hide them
@@ -666,7 +879,10 @@ export async function closeChapterAction(
     }
   }
 
-  const chapterText = msgsToArchive.map((m) => m.content).join("\n").toLowerCase();
+  const chapterText = msgsToArchive
+    .map((m) => m.content)
+    .join("\n")
+    .toLowerCase();
   const eventText = eventsToTag
     .map((e) => `${e.summary} ${e.tags.join(" ")}`)
     .join("\n")
@@ -675,21 +891,25 @@ export async function closeChapterAction(
   const staleCharacters = loaded.characters.filter((c) => {
     if (c.templateId) return false; // detailed character — keep
     const name = c.name.toLowerCase();
-    return !activeInChapter.has(c.id)
-        && !chapterText.includes(name)
-        && !eventText.includes(name);
+    return (
+      !activeInChapter.has(c.id) &&
+      !chapterText.includes(name) &&
+      !eventText.includes(name)
+    );
   });
 
   if (staleCharacters.length > 0) {
     const staleIds = new Set(staleCharacters.map((c) => c.id));
     const names = staleCharacters.map((n) => n.name);
     loaded.characters = loaded.characters.filter((c) => !staleIds.has(c.id));
-    loaded.activeCharacters = (loaded.activeCharacters ?? []).filter((id) => !staleIds.has(id));
+    loaded.activeCharacters = (loaded.activeCharacters ?? []).filter(
+      (id) => !staleIds.has(id),
+    );
     loaded.messages.push({
       id: `msg_${randomUUID()}`,
       role: "system",
       content: `Some background characters faded from the story: ${names.join(", ")}.`,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     });
   }
 
@@ -705,7 +925,7 @@ export async function closeChapterAction(
       content: openingMessage,
       createdAt: new Date().toISOString(),
       // The turn the opening turn is about to occupy: the player's message of that turn.
-      turn: loaded.turn + 1
+      turn: loaded.turn + 1,
     });
   }
 
@@ -723,8 +943,12 @@ export async function closeChapterAction(
       provider,
       suggestedChoicesEnabled,
       contextWindow,
-      { hideUserMessage: true, chapterOpening: true, ...(signal ? { signal } : {}) },
-      promptConfig
+      {
+        hideUserMessage: true,
+        chapterOpening: true,
+        ...(signal ? { signal } : {}),
+      },
+      promptConfig,
     );
     updatePlaythroughRecord(dataDir, openingResult.state);
     return { ok: true, state: openingResult.state };
@@ -732,8 +956,13 @@ export async function closeChapterAction(
     // The chapter was archived successfully even if the opening failed — the
     // caller still gets the archived state back so progress isn't lost. The
     // chat will just be empty until the player sends the next message.
-    const message = error instanceof Error ? error.message : "Chapter opening generation failed";
-    console.error(`closeChapterAction: opening generation failed for ${playthroughId}: ${message}`);
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Chapter opening generation failed";
+    console.error(
+      `closeChapterAction: opening generation failed for ${playthroughId}: ${message}`,
+    );
     return { ok: true, state: loaded };
   }
 }
@@ -749,12 +978,12 @@ export async function resummarizeChapterAction(
   playthroughId: string,
   chapterId: string,
   provider: TurnProvider,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<ResummarizeChapterResult> {
   const loaded = load(dataDir, playthroughId);
   if (isFailure(loaded)) return loaded;
 
-  const chapter = (loaded.chapters ?? []).find(ch => ch.id === chapterId);
+  const chapter = (loaded.chapters ?? []).find((ch) => ch.id === chapterId);
   if (!chapter) {
     return { ok: false, status: 404, error: "Chapter not found" };
   }
@@ -762,12 +991,16 @@ export async function resummarizeChapterAction(
   // Rebuild the transcript from the archived message ids.
   const idSet = new Set(chapter.messageIds);
   const transcript = loaded.messages
-    .filter(m => idSet.has(m.id))
-    .map(m => m.role.toUpperCase() + ": " + m.content)
+    .filter((m) => idSet.has(m.id))
+    .map((m) => m.role.toUpperCase() + ": " + m.content)
     .join("\n");
 
   if (!transcript.trim()) {
-    return { ok: false, status: 400, error: "Chapter has no message transcript to summarize" };
+    return {
+      ok: false,
+      status: 400,
+      error: "Chapter has no message transcript to summarize",
+    };
   }
 
   let summary: { name: string; shortDescription: string; fullSummary: string };
@@ -777,7 +1010,10 @@ export async function resummarizeChapterAction(
     summary = await provider.summarizeChapter(transcript, signal);
     summaryDurationMs = Math.round(performance.now() - summaryStartTime);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Chapter re-summarization failed";
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Chapter re-summarization failed";
     return { ok: false, status: 502, error: message };
   }
 

@@ -9,7 +9,10 @@ import { Text, type TextElement } from "../Text/Text";
 
 export type HeaderVariant = "app" | "page" | "modal" | "panel" | "section";
 
-export interface HeaderProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
+export interface HeaderProps extends Omit<
+  HTMLAttributes<HTMLElement>,
+  "title"
+> {
   as?: ElementType;
   variant?: HeaderVariant;
   title?: ReactNode;
@@ -25,7 +28,10 @@ export interface HeaderProps extends Omit<HTMLAttributes<HTMLElement>, "title"> 
   children?: ReactNode;
 }
 
-export interface HeaderBrandProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
+export interface HeaderBrandProps extends Omit<
+  HTMLAttributes<HTMLDivElement>,
+  "title"
+> {
   icon?: ReactNode;
   title?: ReactNode;
   onClick?: () => void;
@@ -41,7 +47,10 @@ export interface HeaderActionsProps extends HTMLAttributes<HTMLDivElement> {
   children?: ReactNode;
 }
 
-export interface HeaderTitleProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
+export interface HeaderTitleProps extends Omit<
+  HTMLAttributes<HTMLDivElement>,
+  "title"
+> {
   as?: TextElement;
   icon?: ReactNode | IconName;
   badge?: ReactNode;
@@ -58,7 +67,10 @@ const DEFAULT_HEADING_BY_VARIANT: Record<HeaderVariant, TextElement> = {
   section: "h5",
 };
 
-function renderHeaderIcon(icon: ReactNode | IconName | undefined, size: number): ReactNode {
+function renderHeaderIcon(
+  icon: ReactNode | IconName | undefined,
+  size: number,
+): ReactNode {
   if (!icon) return null;
   if (typeof icon === "string") {
     return <Icon name={icon} size={size} />;
@@ -66,104 +78,130 @@ function renderHeaderIcon(icon: ReactNode | IconName | undefined, size: number):
   return icon;
 }
 
-export const HeaderBrand = forwardRef<HTMLDivElement, HeaderBrandProps>(function HeaderBrand(
-  { icon, title, onClick, className = "", children, ...props },
-  ref
-) {
-  const isInteractive = typeof onClick === "function";
+export const HeaderBrand = forwardRef<HTMLDivElement, HeaderBrandProps>(
+  function HeaderBrand(
+    { icon, title, onClick, className = "", children, ...props },
+    ref,
+  ) {
+    const isInteractive = typeof onClick === "function";
 
-  const logoContent = (
-    <>
-      {icon && <span className="base-header__logo-icon">{icon}</span>}
-      {title && (
-        <Text as="span" className="base-header__logo-text" weight="bold" tone="primary">
-          {title}
-        </Text>
-      )}
-    </>
-  );
-
-  return (
-    <div
-      ref={ref}
-      className={["base-header__brand", className].filter(Boolean).join(" ")}
-      {...props}
-    >
-      {(icon || title) && (
-        <h1 className="base-header__logo">
-          {isInteractive ? (
-            <button type="button" className="base-header__logo-btn" onClick={onClick}>
-              {logoContent}
-            </button>
-          ) : (
-            logoContent
-          )}
-        </h1>
-      )}
-      {children}
-    </div>
-  );
-});
-
-export const HeaderNav = forwardRef<HTMLElement, HeaderNavProps>(function HeaderNav(
-  { ariaLabel, className = "", children, ...props },
-  ref
-) {
-  return (
-    <nav
-      ref={ref}
-      aria-label={ariaLabel}
-      className={["base-header__nav", className].filter(Boolean).join(" ")}
-      {...props}
-    >
-      {children}
-    </nav>
-  );
-});
-
-export const HeaderActions = forwardRef<HTMLDivElement, HeaderActionsProps>(function HeaderActions(
-  { className = "", children, ...props },
-  ref
-) {
-  return (
-    <div
-      ref={ref}
-      className={["base-header__actions", className].filter(Boolean).join(" ")}
-      {...props}
-    >
-      {children}
-    </div>
-  );
-});
-
-export const HeaderTitle = forwardRef<HTMLDivElement, HeaderTitleProps>(function HeaderTitle(
-  { as = "h2", icon, badge, subtitle, titleId, className = "", children, ...props },
-  ref
-) {
-  return (
-    <div
-      ref={ref}
-      className={["base-header__main", className].filter(Boolean).join(" ")}
-      {...props}
-    >
-      <div className="base-header__title-row">
-        <Text as={as} id={titleId} className="base-header__title">
-          {icon && <span className="base-header__title-icon">{renderHeaderIcon(icon, 16)}</span>}
-          <span className="base-header__title-text">{children}</span>
-          {badge}
-        </Text>
-      </div>
-      {subtitle &&
-        (typeof subtitle === "string" ? (
-          <Text as="p" tone="secondary" className="base-header__subtitle">
-            {subtitle}
+    const logoContent = (
+      <>
+        {icon && <span className="base-header__logo-icon">{icon}</span>}
+        {title && (
+          <Text
+            as="span"
+            className="base-header__logo-text"
+            weight="bold"
+            tone="primary"
+          >
+            {title}
           </Text>
-        ) : (
-          <div className="base-header__subtitle">{subtitle}</div>
-        ))}
-    </div>
-  );
-});
+        )}
+      </>
+    );
+
+    return (
+      <div
+        ref={ref}
+        className={["base-header__brand", className].filter(Boolean).join(" ")}
+        {...props}
+      >
+        {(icon || title) && (
+          <h1 className="base-header__logo">
+            {isInteractive ? (
+              <button
+                type="button"
+                className="base-header__logo-btn"
+                onClick={onClick}
+              >
+                {logoContent}
+              </button>
+            ) : (
+              logoContent
+            )}
+          </h1>
+        )}
+        {children}
+      </div>
+    );
+  },
+);
+
+export const HeaderNav = forwardRef<HTMLElement, HeaderNavProps>(
+  function HeaderNav({ ariaLabel, className = "", children, ...props }, ref) {
+    return (
+      <nav
+        ref={ref}
+        aria-label={ariaLabel}
+        className={["base-header__nav", className].filter(Boolean).join(" ")}
+        {...props}
+      >
+        {children}
+      </nav>
+    );
+  },
+);
+
+export const HeaderActions = forwardRef<HTMLDivElement, HeaderActionsProps>(
+  function HeaderActions({ className = "", children, ...props }, ref) {
+    return (
+      <div
+        ref={ref}
+        className={["base-header__actions", className]
+          .filter(Boolean)
+          .join(" ")}
+        {...props}
+      >
+        {children}
+      </div>
+    );
+  },
+);
+
+export const HeaderTitle = forwardRef<HTMLDivElement, HeaderTitleProps>(
+  function HeaderTitle(
+    {
+      as = "h2",
+      icon,
+      badge,
+      subtitle,
+      titleId,
+      className = "",
+      children,
+      ...props
+    },
+    ref,
+  ) {
+    return (
+      <div
+        ref={ref}
+        className={["base-header__main", className].filter(Boolean).join(" ")}
+        {...props}
+      >
+        <div className="base-header__title-row">
+          <Text as={as} id={titleId} className="base-header__title">
+            {icon && (
+              <span className="base-header__title-icon">
+                {renderHeaderIcon(icon, 16)}
+              </span>
+            )}
+            <span className="base-header__title-text">{children}</span>
+            {badge}
+          </Text>
+        </div>
+        {subtitle &&
+          (typeof subtitle === "string" ? (
+            <Text as="p" tone="secondary" className="base-header__subtitle">
+              {subtitle}
+            </Text>
+          ) : (
+            <div className="base-header__subtitle">{subtitle}</div>
+          ))}
+      </div>
+    );
+  },
+);
 
 const HeaderRoot = forwardRef<HTMLElement, HeaderProps>(function Header(
   {
@@ -182,9 +220,10 @@ const HeaderRoot = forwardRef<HTMLElement, HeaderProps>(function Header(
     children,
     ...props
   },
-  ref
+  ref,
 ) {
-  const Component: ElementType = as ?? (variant === "section" ? "div" : "header");
+  const Component: ElementType =
+    as ?? (variant === "section" ? "div" : "header");
   const headingElement = DEFAULT_HEADING_BY_VARIANT[variant];
   const iconSize = variant === "section" ? 13 : 16;
 
@@ -207,7 +246,11 @@ const HeaderRoot = forwardRef<HTMLElement, HeaderProps>(function Header(
         <>
           <div className="base-header__row">
             <div className="base-header__main">
-              <Text as={headingElement} id={titleId} className="base-header__title">
+              <Text
+                as={headingElement}
+                id={titleId}
+                className="base-header__title"
+              >
                 {icon && (
                   <span className="base-header__title-icon">
                     {renderHeaderIcon(icon, iconSize)}
@@ -218,7 +261,11 @@ const HeaderRoot = forwardRef<HTMLElement, HeaderProps>(function Header(
               </Text>
               {subtitle &&
                 (typeof subtitle === "string" ? (
-                  <Text as="p" tone="secondary" className="base-header__subtitle">
+                  <Text
+                    as="p"
+                    tone="secondary"
+                    className="base-header__subtitle"
+                  >
                     {subtitle}
                   </Text>
                 ) : (

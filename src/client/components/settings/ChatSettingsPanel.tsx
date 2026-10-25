@@ -162,12 +162,22 @@ export function ChatSettingsPanel({
                 aria-pressed={isSelected}
               >
                 <Stack direction="column" align="stretch" gap="2xs">
-                  <Stack direction="row" align="center" justify="between" gap="xs">
+                  <Stack
+                    direction="row"
+                    align="center"
+                    justify="between"
+                    gap="xs"
+                  >
                     <Stack direction="row" align="center" gap="xs">
                       <Text as="span" tone="accent">
                         <Icon name={opt.icon} size={14} />
                       </Text>
-                      <Text as="strong" size="xs" weight="semibold" tone="primary">
+                      <Text
+                        as="strong"
+                        size="xs"
+                        weight="semibold"
+                        tone="primary"
+                      >
                         {opt.title}
                       </Text>
                     </Stack>

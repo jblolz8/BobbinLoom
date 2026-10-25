@@ -1078,7 +1078,10 @@
   display: flex;
   flex-direction: column;
   cursor: pointer;
-  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+  transition:
+    transform 0.15s,
+    border-color 0.15s,
+    box-shadow 0.15s;
   position: relative;
   box-shadow: var(--shadow-card);
 }
@@ -1201,7 +1204,11 @@
   border-radius: 10px;
   padding: 10px 14px;
   cursor: pointer;
-  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
   position: relative;
   overflow: visible;
   box-shadow: var(--shadow-card);
@@ -1539,7 +1546,9 @@
   background: #1a1e2b;
 }
 
-.library-avatar:not(.card-portrait-avatar):not(.card-list-avatar):not(.card-grid-thumb):not(.selected-cast-avatar) {
+.library-avatar:not(.card-portrait-avatar):not(.card-list-avatar):not(
+    .card-grid-thumb
+  ):not(.selected-cast-avatar) {
   width: 44px;
   height: 44px;
   border-radius: 8px;
@@ -1555,7 +1564,9 @@
   font-weight: 600;
 }
 
-.avatar-placeholder:not(.card-portrait-avatar):not(.card-list-avatar):not(.card-grid-thumb):not(.selected-cast-avatar) {
+.avatar-placeholder:not(.card-portrait-avatar):not(.card-list-avatar):not(
+    .card-grid-thumb
+  ):not(.selected-cast-avatar) {
   width: 44px;
   height: 44px;
   border-radius: 8px;
@@ -1766,14 +1777,18 @@
 }
 
 .color-tag-chip.active {
-  box-shadow: 0 0 0 1.5px currentColor, 0 2px 6px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 0 0 1.5px currentColor,
+    0 2px 6px rgba(0, 0, 0, 0.3);
   font-weight: 600;
 }
 
 [data-theme="light"] .color-tag-chip.active,
 .theme-light .color-tag-chip.active,
 [data-theme-preview="light"] .color-tag-chip.active {
-  box-shadow: 0 0 0 1.5px currentColor, 0 2px 4px rgba(0, 0, 0, 0.12);
+  box-shadow:
+    0 0 0 1.5px currentColor,
+    0 2px 4px rgba(0, 0, 0, 0.12);
   font-weight: 600;
 }
 
@@ -1817,7 +1832,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.1s, transform 0.1s;
+  transition:
+    opacity 0.1s,
+    transform 0.1s;
 }
 
 .tag-remove-action:hover {
@@ -1848,7 +1865,10 @@ button.tag-chip {
   font-size: 0.74rem;
   color: #94a3b8;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s,
+    border-color 0.12s;
 }
 
 button.tag-chip:hover {
@@ -1911,7 +1931,6 @@ button.import-btn:active:not(:disabled),
   border-radius: 6px;
   margin-bottom: 1rem;
 }
-
 
 /* ═══════════════════════════════════════════════════════════════════════════
    PLAYTHROUGH LIBRARY — covers, view modes, gallery
@@ -2023,10 +2042,20 @@ button.import-btn:active:not(:disabled),
   justify-items: stretch;
 }
 
-.cover-art-collage-1 { grid-template-columns: 1fr; grid-template-rows: 1fr; }
-.cover-art-collage-2 { grid-template-columns: repeat(2, 1fr); }
-.cover-art-collage-3 { grid-template-columns: repeat(3, 1fr); }
-.cover-art-collage-4 { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); }
+.cover-art-collage-1 {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+}
+.cover-art-collage-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+.cover-art-collage-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+.cover-art-collage-4 {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+}
 
 /* Landscape: one row, so four characters stand side by side rather than in a block. */
 :root[data-cover-aspect="landscape"] .cover-art-collage-4 {
@@ -2159,7 +2188,11 @@ button.import-btn:active:not(:disabled),
   padding: 10px 14px;
   cursor: pointer;
   box-shadow: var(--shadow-card);
-  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
 }
 
 @media (hover: hover) {
@@ -2187,7 +2220,10 @@ button.import-btn:active:not(:disabled),
      icon). `aspect-ratio` cannot be used here: a stretched cross size does not feed the main size,
      which is exactly how an empty cover's column came out 20px wide with the artwork painting
      underneath the row's text. */
-  width: calc(var(--cover-row-thumb, 96px) * var(--cover-art-w, 16) / var(--cover-art-h, 9));
+  width: calc(
+    var(--cover-row-thumb, 96px) * var(--cover-art-w, 16) /
+      var(--cover-art-h, 9)
+  );
 }
 
 .playthrough-row-content {
@@ -2358,7 +2394,6 @@ button.import-btn:active:not(:disabled),
   font-size: 0.78rem;
   color: var(--text-secondary);
 }
-
 
 /* ── Library cards: the name is the navigation target ──────────────────────────────────────────
    The card used to BE a button (`role="button"` with a key handler), which nested a text field and a

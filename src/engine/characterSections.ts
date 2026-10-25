@@ -13,9 +13,17 @@ import type { ClothingItem } from "../schemas";
  * sections are joined with a single "\n", everything else with "\n\n".
  */
 export const CHARACTER_SECTION_HEADERS = [
-  "Species", "Gender", "Body", "Appearance", "Clothing", "Personality",
-  "Communication - Public", "Communication - Private", "Likes", "Dislikes",
-  "Sexual Capabilities"
+  "Species",
+  "Gender",
+  "Body",
+  "Appearance",
+  "Clothing",
+  "Personality",
+  "Communication - Public",
+  "Communication - Private",
+  "Likes",
+  "Dislikes",
+  "Sexual Capabilities",
 ] as const;
 
 export type CharacterSectionHeader = (typeof CHARACTER_SECTION_HEADERS)[number];
@@ -75,14 +83,17 @@ export const CHARACTER_SHEET_EXAMPLE = [
   "[Sexual Capabilities]",
   "- ... (giving): ...",
   "- ...: ...",
-  "- ...: ..."
+  "- ...: ...",
 ].join("\n");
 
 /** Escape a content blob for embedding inside a double-quoted JSON string
  *  (the form used in prompt examples). Deterministic; prevents the raw-newline
  *  JSON bug and its variants. */
 export function toJsonExampleContent(text: string): string {
-  return text.replace(/\\/g, "\\\\").replace(/\r?\n/g, "\\n").replace(/"/g, '\\"');
+  return text
+    .replace(/\\/g, "\\\\")
+    .replace(/\r?\n/g, "\\n")
+    .replace(/"/g, '\\"');
 }
 
 const INLINE_HEADER_RE = /^\s*\[([^\]]+)\]\s*:\s*(.*)$/;
@@ -94,7 +105,10 @@ export type ContentSection = { header: string; body: string; inline?: boolean };
  *  Handles both inline headers (`[Species]: Human`) and block headers
  *  (`[Body]` + content lines). Blank separator lines between sections are
  *  dropped; blank lines INSIDE a section body are preserved. */
-export function splitContentSections(content: string): { preamble: string; sections: ContentSection[] } {
+export function splitContentSections(content: string): {
+  preamble: string;
+  sections: ContentSection[];
+} {
   const lines = content.split("\n");
   const sections: ContentSection[] = [];
   const preamble: string[] = [];
@@ -117,7 +131,10 @@ export function splitContentSections(content: string): { preamble: string; secti
     if (current && line.trim() === "") {
       let j = i + 1;
       while (j < lines.length && lines[j].trim() === "") j++;
-      if (j < lines.length && (lines[j].match(INLINE_HEADER_RE) || lines[j].match(BARE_HEADER_RE))) {
+      if (
+        j < lines.length &&
+        (lines[j].match(INLINE_HEADER_RE) || lines[j].match(BARE_HEADER_RE))
+      ) {
         continue;
       }
     }
@@ -135,7 +152,10 @@ export function splitContentSections(content: string): { preamble: string; secti
 /** Reassemble sections back into a blob (inverse of split for example-shaped
  *  blobs). Consecutive inline sections are joined with "\n"; all other section
  *  boundaries with "\n\n". */
-export function joinContentSections(sections: ContentSection[], preamble = ""): string {
+export function joinContentSections(
+  sections: ContentSection[],
+  preamble = "",
+): string {
   const parts: string[] = [];
   if (preamble) parts.push(preamble);
   sections.forEach((s, idx) => {
@@ -143,7 +163,11 @@ export function joinContentSections(sections: ContentSection[], preamble = ""): 
       const prev = sections[idx - 1];
       parts.push(prev.inline && s.inline ? "\n" : "\n\n");
     }
-    parts.push(s.inline ? `[${s.header}]: ${s.body}` : `[${s.header}]${s.body ? `\n${s.body}` : ""}`);
+    parts.push(
+      s.inline
+        ? `[${s.header}]: ${s.body}`
+        : `[${s.header}]${s.body ? `\n${s.body}` : ""}`,
+    );
   });
   return parts.join("").replace(/^\n+/, "");
 }
@@ -152,7 +176,9 @@ export function joinContentSections(sections: ContentSection[], preamble = ""): 
  *  @deprecated use missingFormatSections(format) from ./characterFormat — the
  *  canonical list is no longer the only sheet structure. */
 export function missingSections(content: string): string[] {
-  const present = new Set(splitContentSections(content).sections.map((s) => s.header.toLowerCase()));
+  const present = new Set(
+    splitContentSections(content).sections.map((s) => s.header.toLowerCase()),
+  );
   return CHARACTER_SECTION_HEADERS.filter((h) => !present.has(h.toLowerCase()));
 }
 
@@ -172,11 +198,11 @@ export function missingSections(content: string): string[] {
 export function applySectionChanges(
   currentContent: string,
   changes: Array<{ header: string; body: string }>,
-  opts: { order?: readonly string[]; inlineHeaders?: readonly string[] } = {}
+  opts: { order?: readonly string[]; inlineHeaders?: readonly string[] } = {},
 ): string {
   const order = opts.order ?? CHARACTER_SECTION_HEADERS;
   const inlineHeaders = new Set(
-    (opts.inlineHeaders ?? ["Species", "Gender"]).map((h) => h.toLowerCase())
+    (opts.inlineHeaders ?? ["Species", "Gender"]).map((h) => h.toLowerCase()),
   );
   const { preamble, sections } = splitContentSections(currentContent);
   const updatedSections: ContentSection[] = [...sections];
@@ -185,7 +211,9 @@ export function applySectionChanges(
     const trimmedHeader = change.header.trim();
     if (!trimmedHeader) continue;
     const normHeader = trimmedHeader.toLowerCase();
-    const existingIdx = updatedSections.findIndex((s) => s.header.toLowerCase() === normHeader);
+    const existingIdx = updatedSections.findIndex(
+      (s) => s.header.toLowerCase() === normHeader,
+    );
     const isInline = inlineHeaders.has(normHeader);
 
     const newSec: ContentSection = {
@@ -198,13 +226,13 @@ export function applySectionChanges(
       updatedSections[existingIdx] = newSec;
     } else {
       const canonicalIdx = order.findIndex(
-        (h) => h.toLowerCase() === normHeader
+        (h) => h.toLowerCase() === normHeader,
       );
       if (canonicalIdx >= 0) {
         let insertPos = updatedSections.length;
         for (let i = 0; i < updatedSections.length; i++) {
           const currentCanonicalIdx = order.findIndex(
-            (h) => h.toLowerCase() === updatedSections[i].header.toLowerCase()
+            (h) => h.toLowerCase() === updatedSections[i].header.toLowerCase(),
           );
           if (currentCanonicalIdx > canonicalIdx) {
             insertPos = i;
@@ -228,22 +256,26 @@ export function removeContentSection(content: string, header: string): string {
   const key = header.trim().toLowerCase();
   return joinContentSections(
     sections.filter((s) => s.header.trim().toLowerCase() !== key),
-    preamble
+    preamble,
   );
 }
 
 /** Rename a whole section's header (case-insensitive match), preserving its
  *  body. Returns the original content when the source header is missing. */
-export function renameContentSection(content: string, from: string, to: string): string {
+export function renameContentSection(
+  content: string,
+  from: string,
+  to: string,
+): string {
   const { preamble, sections } = splitContentSections(content);
   const fromKey = from.trim().toLowerCase();
   const toName = to.trim();
   if (!toName) return content;
   return joinContentSections(
     sections.map((s) =>
-      s.header.trim().toLowerCase() === fromKey ? { ...s, header: toName } : s
+      s.header.trim().toLowerCase() === fromKey ? { ...s, header: toName } : s,
     ),
-    preamble
+    preamble,
   );
 }
 
@@ -251,7 +283,9 @@ export function renameContentSection(content: string, from: string, to: string):
  *  Falls back to the existing neutral default when no bullet exists. */
 export function seedMemorySummary(name: string, content: string): string {
   const { sections } = splitContentSections(content);
-  const personality = sections.find((s) => s.header.toLowerCase() === "personality");
+  const personality = sections.find(
+    (s) => s.header.toLowerCase() === "personality",
+  );
   const firstBullet = personality?.body
     .split("\n")
     .map((l) => l.trim().replace(/^-\s*/, ""))
@@ -282,7 +316,9 @@ export function parseClothingFromContent(content: string): ClothingItem[] {
  *  extraction without the name-prefix formatting or the fallback sentence. */
 export function summaryFromContent(content: string): string {
   const { sections } = splitContentSections(content);
-  const personality = sections.find((s) => s.header.toLowerCase() === "personality");
+  const personality = sections.find(
+    (s) => s.header.toLowerCase() === "personality",
+  );
   const firstBullet = personality?.body
     .split("\n")
     .map((l) => l.trim().replace(/^-\s*/, ""))
@@ -292,14 +328,21 @@ export function summaryFromContent(content: string): string {
 
 /** Physical-description sections, in display order — used for compact
  *  read-only previews (e.g. Body/Appearance/Clothing on the Chars tab card). */
-export const PHYSICAL_SECTION_HEADERS = ["Body", "Appearance", "Clothing"] as const;
+export const PHYSICAL_SECTION_HEADERS = [
+  "Body",
+  "Appearance",
+  "Clothing",
+] as const;
 
 const STUB_BODY_RE = /^\s*\(\s*not established\s*\)\s*$/i;
 
 /** Select a subset of sections from a content blob in the order given by
  *  `wanted`. Only sections actually present in the blob are returned — absent
  *  ones are simply omitted (no stubs are synthesized here). */
-export function pickSections(content: string, wanted: readonly string[]): ContentSection[] {
+export function pickSections(
+  content: string,
+  wanted: readonly string[],
+): ContentSection[] {
   const { sections } = splitContentSections(content);
   const byHeader = new Map(sections.map((s) => [s.header.toLowerCase(), s]));
   const picked: ContentSection[] = [];
@@ -314,11 +357,16 @@ export function pickSections(content: string, wanted: readonly string[]): Conten
 export function isStubSection(section: ContentSection): boolean {
   const trimmed = section.body.trim();
   if (trimmed.length === 0) return true;
-  return trimmed.split("\n").every((line) => STUB_BODY_RE.test(line.replace(/^-\s*/, "")));
+  return trimmed
+    .split("\n")
+    .every((line) => STUB_BODY_RE.test(line.replace(/^-\s*/, "")));
 }
 /** Normalize a bullet line for exact-match comparison: trim, strip one leading dash+space, lowercase. Never fuzzy. */
 export function normalizeBullet(text: string): string {
-  return text.replace(/^\s*-\s+/, "").trim().toLowerCase();
+  return text
+    .replace(/^\s*-\s+/, "")
+    .trim()
+    .toLowerCase();
 }
 
 /** Split a section body (or full content blob — headers ignored) into its bullet items. Stub lines like "(not established)" are excluded. */
@@ -326,41 +374,73 @@ export function parseSectionItems(body: string): string[] {
   return body
     .split("\n")
     .map((l) => l.trim().replace(/^-\s+/, ""))
-    .filter((l) => l.length > 0 && !/^\(\s*not established\s*\)$/i.test(l) && !/^\[[^\]]+\]\s*:?\s*$/i.test(l));
+    .filter(
+      (l) =>
+        l.length > 0 &&
+        !/^\(\s*not established\s*\)$/i.test(l) &&
+        !/^\[[^\]]+\]\s*:?\s*$/i.test(l),
+    );
 }
 
-type SectionItemResult = { content: string; applied: boolean; rejectedReason?: string };
+type SectionItemResult = {
+  content: string;
+  applied: boolean;
+  rejectedReason?: string;
+};
 
-function sectionBodyOf(content: string, section: string): { body: string; present: boolean } {
+function sectionBodyOf(
+  content: string,
+  section: string,
+): { body: string; present: boolean } {
   const { sections } = splitContentSections(content);
-  const hit = sections.find((s) => s.header.toLowerCase() === section.toLowerCase());
+  const hit = sections.find(
+    (s) => s.header.toLowerCase() === section.toLowerCase(),
+  );
   return hit ? { body: hit.body, present: true } : { body: "", present: false };
 }
 
-function rebuildSection(content: string, section: string, newBody: string): string {
+function rebuildSection(
+  content: string,
+  section: string,
+  newBody: string,
+): string {
   return applySectionChanges(content, [{ header: section, body: newBody }]);
 }
 
 /** Append one bullet to a section. Creates the section in canonical order if missing. Idempotent on exact duplicate. */
-export function addSectionItem(content: string, section: string, item: string): SectionItemResult {
+export function addSectionItem(
+  content: string,
+  section: string,
+  item: string,
+): SectionItemResult {
   const trimmed = item.trim();
-  if (!trimmed) return { content, applied: false, rejectedReason: "empty item" };
+  if (!trimmed)
+    return { content, applied: false, rejectedReason: "empty item" };
   const { body, present } = sectionBodyOf(content, section);
   const items = parseSectionItems(body);
   if (items.some((it) => it.toLowerCase() === trimmed.toLowerCase())) {
     return { content, applied: true };
   }
-  const nextBody = (present && body.trim() && body.trim() !== "(not established)"
-    ? body.replace(/\s*$/, "\n")
-    : "") + `- ${trimmed}`;
+  const nextBody =
+    (present && body.trim() && body.trim() !== "(not established)"
+      ? body.replace(/\s*$/, "\n")
+      : "") + `- ${trimmed}`;
   return { content: rebuildSection(content, section, nextBody), applied: true };
 }
 
 /** Remove one bullet by normalized exact match. Rejects if missing/stub/no match. */
-export function removeSectionItem(content: string, section: string, item: string): SectionItemResult {
+export function removeSectionItem(
+  content: string,
+  section: string,
+  item: string,
+): SectionItemResult {
   const { body, present } = sectionBodyOf(content, section);
   if (!present || parseSectionItems(body).length === 0) {
-    return { content, applied: false, rejectedReason: "section has no items to remove" };
+    return {
+      content,
+      applied: false,
+      rejectedReason: "section has no items to remove",
+    };
   }
   const target = normalizeBullet(item);
   const lines = body.split("\n");
@@ -368,20 +448,36 @@ export function removeSectionItem(content: string, section: string, item: string
   if (next.length === lines.length) {
     return { content, applied: false, rejectedReason: "no matching item" };
   }
-  return { content: rebuildSection(content, section, next.join("\n")), applied: true };
+  return {
+    content: rebuildSection(content, section, next.join("\n")),
+    applied: true,
+  };
 }
 
 /** Replace one bullet's text by normalized exact match on from. */
-export function replaceSectionItem(content: string, section: string, from: string, to: string): SectionItemResult {
+export function replaceSectionItem(
+  content: string,
+  section: string,
+  from: string,
+  to: string,
+): SectionItemResult {
   const { body, present } = sectionBodyOf(content, section);
   if (!present || parseSectionItems(body).length === 0) {
-    return { content, applied: false, rejectedReason: "section has no items to replace" };
+    return {
+      content,
+      applied: false,
+      rejectedReason: "section has no items to replace",
+    };
   }
   const target = normalizeBullet(from);
   const lines = body.split("\n");
   const idx = lines.findIndex((l) => normalizeBullet(l) === target);
-  if (idx < 0) return { content, applied: false, rejectedReason: "no matching item" };
+  if (idx < 0)
+    return { content, applied: false, rejectedReason: "no matching item" };
   const next = [...lines];
   next[idx] = `- ${to.trim()}`;
-  return { content: rebuildSection(content, section, next.join("\n")), applied: true };
+  return {
+    content: rebuildSection(content, section, next.join("\n")),
+    applied: true,
+  };
 }

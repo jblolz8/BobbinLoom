@@ -28,7 +28,10 @@ export function CharacterVisualsDrawer({
 }: CharacterVisualsDrawerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState<{ text: string; isError?: boolean } | null>(null);
+  const [status, setStatus] = useState<{
+    text: string;
+    isError?: boolean;
+  } | null>(null);
 
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [compareModalOpen, setCompareModalOpen] = useState(false);
@@ -43,9 +46,16 @@ export function CharacterVisualsDrawer({
   const hasCustomPortrait = !!template?.customPortrait;
   const hasProfileImage = !!template?.profileImage;
 
-  const portraitUrl = charId ? getCharacterAvatarUrl(charId, "portrait", updatedAt) : null;
-  const profileUrl = charId ? getCharacterAvatarUrl(charId, "profile", updatedAt) : null;
-  const originalUrl = charId && hasOriginalCcv2 ? getCharacterAvatarUrl(charId, "original", updatedAt) : null;
+  const portraitUrl = charId
+    ? getCharacterAvatarUrl(charId, "portrait", updatedAt)
+    : null;
+  const profileUrl = charId
+    ? getCharacterAvatarUrl(charId, "profile", updatedAt)
+    : null;
+  const originalUrl =
+    charId && hasOriginalCcv2
+      ? getCharacterAvatarUrl(charId, "original", updatedAt)
+      : null;
 
   async function handlePortraitFileChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -60,7 +70,10 @@ export function CharacterVisualsDrawer({
       await onUploadPortrait(base64, file.name);
       setStatus({ text: "Portrait updated successfully." });
     } catch (err) {
-      setStatus({ text: err instanceof Error ? err.message : "Failed to upload portrait.", isError: true });
+      setStatus({
+        text: err instanceof Error ? err.message : "Failed to upload portrait.",
+        isError: true,
+      });
     } finally {
       setLoading(false);
     }
@@ -79,7 +92,13 @@ export function CharacterVisualsDrawer({
       await onUploadProfile(base64, file.name);
       setStatus({ text: "Profile avatar updated successfully." });
     } catch (err) {
-      setStatus({ text: err instanceof Error ? err.message : "Failed to upload profile avatar.", isError: true });
+      setStatus({
+        text:
+          err instanceof Error
+            ? err.message
+            : "Failed to upload profile avatar.",
+        isError: true,
+      });
     } finally {
       setLoading(false);
     }
@@ -95,7 +114,10 @@ export function CharacterVisualsDrawer({
       setStatus({ text: "Auto-detected face and saved 1:1 profile avatar." });
     } catch (err) {
       setStatus({
-        text: err instanceof Error ? err.message : "Failed to auto-detect face from portrait.",
+        text:
+          err instanceof Error
+            ? err.message
+            : "Failed to auto-detect face from portrait.",
         isError: true,
       });
     } finally {
@@ -111,7 +133,11 @@ export function CharacterVisualsDrawer({
       setCropModalOpen(false);
       setStatus({ text: "Profile avatar cropped and saved." });
     } catch (err) {
-      setStatus({ text: err instanceof Error ? err.message : "Failed to save cropped avatar.", isError: true });
+      setStatus({
+        text:
+          err instanceof Error ? err.message : "Failed to save cropped avatar.",
+        isError: true,
+      });
     } finally {
       setLoading(false);
     }
@@ -125,7 +151,10 @@ export function CharacterVisualsDrawer({
       setCompareModalOpen(false);
       setStatus({ text: "Restored original CCv2 card artwork." });
     } catch (err) {
-      setStatus({ text: err instanceof Error ? err.message : "Failed to restore artwork.", isError: true });
+      setStatus({
+        text: err instanceof Error ? err.message : "Failed to restore artwork.",
+        isError: true,
+      });
     } finally {
       setLoading(false);
     }
@@ -138,14 +167,22 @@ export function CharacterVisualsDrawer({
       await onDeleteProfile();
       setStatus({ text: "Profile avatar reset to portrait fallback." });
     } catch (err) {
-      setStatus({ text: err instanceof Error ? err.message : "Failed to reset profile avatar.", isError: true });
+      setStatus({
+        text:
+          err instanceof Error
+            ? err.message
+            : "Failed to reset profile avatar.",
+        isError: true,
+      });
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className={`character-visuals-drawer ${isOpen ? "is-open" : "is-closed"}`}>
+    <div
+      className={`character-visuals-drawer ${isOpen ? "is-open" : "is-closed"}`}
+    >
       {/* Top Toggle Bar */}
       <button
         type="button"
@@ -175,8 +212,14 @@ export function CharacterVisualsDrawer({
         </div>
 
         <div className="drawer-header-right">
-          <span className="drawer-toggle-text">{isOpen ? "Hide Artwork" : "Edit Artwork"}</span>
-          <Icon name={isOpen ? "ChevronUp" : "ChevronDown"} size={14} className="drawer-chevron" />
+          <span className="drawer-toggle-text">
+            {isOpen ? "Hide Artwork" : "Edit Artwork"}
+          </span>
+          <Icon
+            name={isOpen ? "ChevronUp" : "ChevronDown"}
+            size={14}
+            className="drawer-chevron"
+          />
         </div>
       </button>
 
@@ -184,8 +227,13 @@ export function CharacterVisualsDrawer({
       {isOpen && (
         <div className="visuals-drawer-body">
           {status && (
-            <div className={`drawer-status-msg ${status.isError ? "status-error" : "status-success"}`}>
-              <Icon name={status.isError ? "AlertTriangle" : "CheckCircle2"} size={13} />
+            <div
+              className={`drawer-status-msg ${status.isError ? "status-error" : "status-success"}`}
+            >
+              <Icon
+                name={status.isError ? "AlertTriangle" : "CheckCircle2"}
+                size={13}
+              />
               <span>{status.text}</span>
             </div>
           )}
@@ -193,7 +241,10 @@ export function CharacterVisualsDrawer({
           {!charId ? (
             <div className="drawer-notice-box">
               <Icon name="Info" size={14} />
-              <span>Save this character card first to upload, crop, and manage artwork.</span>
+              <span>
+                Save this character card first to upload, crop, and manage
+                artwork.
+              </span>
             </div>
           ) : (
             <div className="visuals-slots-grid">
@@ -310,7 +361,12 @@ export function CharacterVisualsDrawer({
                     disabled={disabled || loading || !portraitUrl}
                     title="Automatically detect face/head and save 1:1 profile avatar"
                   >
-                    <Icon name="Sparkles" size={13} className={loading ? "sparkle-pulse" : ""} /> Auto-Detect
+                    <Icon
+                      name="Sparkles"
+                      size={13}
+                      className={loading ? "sparkle-pulse" : ""}
+                    />{" "}
+                    Auto-Detect
                   </button>
 
                   <button
@@ -388,7 +444,8 @@ function readFileAsBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(reader.error ?? new Error("Could not read file."));
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("Could not read file."));
     reader.readAsDataURL(file);
   });
 }

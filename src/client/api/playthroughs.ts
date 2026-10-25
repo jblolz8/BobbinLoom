@@ -1,4 +1,12 @@
-import type { ChapterOpeningMode, CharacterContextScope, CharacterInstance, ClothingItem, Playthrough, PlaythroughCover, PlaythroughListResponse } from "../../schemas";
+import type {
+  ChapterOpeningMode,
+  CharacterContextScope,
+  CharacterInstance,
+  ClothingItem,
+  Playthrough,
+  PlaythroughCover,
+  PlaythroughListResponse,
+} from "../../schemas";
 import type { RevertRequestAnchor } from "../../engine/chapterRevert";
 import { request } from "./client";
 
@@ -38,7 +46,11 @@ export type TurnResponse = {
 
 export type WorldStateAction = "add" | "delete" | "edit";
 
-export type FleshOutDraftResult = { character: CharacterInstance; content: string; storyContext: string };
+export type FleshOutDraftResult = {
+  character: CharacterInstance;
+  content: string;
+  storyContext: string;
+};
 /** @deprecated Use FleshOutDraftResult */
 export type PromoteDraftResult = FleshOutDraftResult;
 
@@ -75,7 +87,9 @@ export type ListPlaythroughsOptions = {
   sortDir?: "asc" | "desc";
 };
 
-export function listPlaythroughs(options?: ListPlaythroughsOptions): Promise<PlaythroughListResponse> {
+export function listPlaythroughs(
+  options?: ListPlaythroughsOptions,
+): Promise<PlaythroughListResponse> {
   const query = new URLSearchParams();
   if (options?.page) query.set("page", String(options.page));
   if (options?.pageSize) query.set("pageSize", String(options.pageSize));
@@ -83,7 +97,9 @@ export function listPlaythroughs(options?: ListPlaythroughsOptions): Promise<Pla
   if (options?.sortBy) query.set("sortBy", options.sortBy);
   if (options?.sortDir) query.set("sortDir", options.sortDir);
   const q = query.toString();
-  return request<PlaythroughListResponse>(`/api/playthroughs${q ? `?${q}` : ""}`);
+  return request<PlaythroughListResponse>(
+    `/api/playthroughs${q ? `?${q}` : ""}`,
+  );
 }
 
 export function getPlaythrough(id: string): Promise<Playthrough> {
@@ -96,11 +112,18 @@ export function createPlaythrough(
   castIds?: string[],
   blank?: boolean,
   lorebookIds?: string[],
-  setting?: string
+  setting?: string,
 ): Promise<Playthrough> {
   return request<Playthrough>("/api/playthroughs", {
     method: "POST",
-    body: JSON.stringify({ name, personaId, castIds, blank, lorebookIds, setting })
+    body: JSON.stringify({
+      name,
+      personaId,
+      castIds,
+      blank,
+      lorebookIds,
+      setting,
+    }),
   });
 }
 
@@ -116,7 +139,7 @@ export function sendTurn(
   input: string,
   suggestedChoicesEnabled: boolean,
   signal?: AbortSignal,
-  options?: SendTurnOptions
+  options?: SendTurnOptions,
 ): Promise<TurnResponse> {
   return request<TurnResponse>("/api/turn", {
     method: "POST",
@@ -124,9 +147,9 @@ export function sendTurn(
       playthroughId,
       input,
       suggestedChoicesEnabled,
-      hideUserMessage: options?.hideUserMessage ?? false
+      hideUserMessage: options?.hideUserMessage ?? false,
     }),
-    signal
+    signal,
   });
 }
 
@@ -134,36 +157,47 @@ export function retryTurn(
   playthroughId: string,
   messageId: string,
   suggestedChoicesEnabled: boolean,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<TurnResponse> {
   return request<TurnResponse>(`/api/playthroughs/${playthroughId}/retry`, {
     method: "POST",
     body: JSON.stringify({ messageId, suggestedChoicesEnabled }),
     // Same as sendTurn: the retry runs inline, so it needs the same cancel path.
-    signal
+    signal,
   });
 }
 
-export function getContextUsage(playthroughId: string, choicesEnabled: boolean): Promise<TokenUsage> {
-  return request<TokenUsage>(`/api/playthroughs/${playthroughId}/context-usage?choices=${choicesEnabled}`);
+export function getContextUsage(
+  playthroughId: string,
+  choicesEnabled: boolean,
+): Promise<TokenUsage> {
+  return request<TokenUsage>(
+    `/api/playthroughs/${playthroughId}/context-usage?choices=${choicesEnabled}`,
+  );
 }
 
 export function editMessage(
   playthroughId: string,
   messageId: string,
-  content: string
+  content: string,
 ): Promise<Playthrough> {
-  return request<Playthrough>(`/api/playthroughs/${playthroughId}/messages/${messageId}`, {
-    method: "PUT",
-    body: JSON.stringify({ content })
-  });
+  return request<Playthrough>(
+    `/api/playthroughs/${playthroughId}/messages/${messageId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ content }),
+    },
+  );
 }
 
 /** Deletes a message and everything after it (inclusive), reverting world state. */
-export function truncatePlaythrough(playthroughId: string, messageId: string): Promise<Playthrough> {
+export function truncatePlaythrough(
+  playthroughId: string,
+  messageId: string,
+): Promise<Playthrough> {
   return request<Playthrough>(`/api/playthroughs/${playthroughId}/truncate`, {
     method: "POST",
-    body: JSON.stringify({ messageId })
+    body: JSON.stringify({ messageId }),
   });
 }
 
@@ -172,23 +206,26 @@ export function truncatePlaythrough(playthroughId: string, messageId: string): P
  *  Nothing regenerates. */
 export function revertToAnchor(
   playthroughId: string,
-  anchor: RevertRequestAnchor
+  anchor: RevertRequestAnchor,
 ): Promise<Playthrough> {
   return request<Playthrough>(`/api/playthroughs/${playthroughId}/revert`, {
     method: "POST",
-    body: JSON.stringify({ anchor })
+    body: JSON.stringify({ anchor }),
   });
 }
 
 /** Persists the per-playthrough input draft (empty content clears it). */
 export function saveDraft(
   playthroughId: string,
-  content: string
+  content: string,
 ): Promise<{ ok: boolean; draftUpdatedAt: string }> {
-  return request<{ ok: boolean; draftUpdatedAt: string }>(`/api/playthroughs/${playthroughId}/draft`, {
-    method: "PUT",
-    body: JSON.stringify({ content })
-  });
+  return request<{ ok: boolean; draftUpdatedAt: string }>(
+    `/api/playthroughs/${playthroughId}/draft`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ content }),
+    },
+  );
 }
 
 export function worldStateAction(
@@ -196,12 +233,15 @@ export function worldStateAction(
   worldStateId: string,
   action: WorldStateAction,
   name?: string,
-  description?: string
+  description?: string,
 ): Promise<Playthrough> {
-  return request<Playthrough>(`/api/playthroughs/${playthroughId}/world-state-action`, {
-    method: "POST",
-    body: JSON.stringify({ worldStateId, action, name, description })
-  });
+  return request<Playthrough>(
+    `/api/playthroughs/${playthroughId}/world-state-action`,
+    {
+      method: "POST",
+      body: JSON.stringify({ worldStateId, action, name, description }),
+    },
+  );
 }
 
 export type EditPlayerPayload = {
@@ -216,11 +256,11 @@ export type EditPlayerPayload = {
 
 export function editPlayer(
   playthroughId: string,
-  payload: EditPlayerPayload
+  payload: EditPlayerPayload,
 ): Promise<Playthrough> {
   return request<Playthrough>(`/api/playthroughs/${playthroughId}/player`, {
     method: "PUT",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
@@ -249,47 +289,60 @@ export function fleshOutCharacter(
   playthroughId: string,
   characterId: string,
   contentOrOptions?: string | FleshOutOptions,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<Playthrough> {
   const opts: FleshOutOptions =
     typeof contentOrOptions === "string"
       ? { content: contentOrOptions, signal }
-      : contentOrOptions ?? { signal };
+      : (contentOrOptions ?? { signal });
 
-  return request<Playthrough>(`/api/playthroughs/${playthroughId}/characters/${characterId}/flesh-out`, {
-    method: "POST",
-    body: JSON.stringify({
-      ...(opts.content !== undefined ? { content: opts.content } : {}),
-      ...(opts.scope ? { scope: opts.scope } : {}),
-      ...(opts.recentCount ? { recentCount: opts.recentCount } : {})
-    }),
-    signal: opts.signal ?? signal
-  });
+  return request<Playthrough>(
+    `/api/playthroughs/${playthroughId}/characters/${characterId}/flesh-out`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        ...(opts.content !== undefined ? { content: opts.content } : {}),
+        ...(opts.scope ? { scope: opts.scope } : {}),
+        ...(opts.recentCount ? { recentCount: opts.recentCount } : {}),
+      }),
+      signal: opts.signal ?? signal,
+    },
+  );
 }
 
 export function generatePlaythroughCharacter(
   playthroughId: string,
   payload: GenerateCharacterPayload,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<GenerateCharacterResult> {
-  return request<GenerateCharacterResult>(`/api/playthroughs/${playthroughId}/characters/generate`, {
-    method: "POST",
-    body: JSON.stringify({
-      prompt: payload.prompt,
-      tier: payload.tier ?? "simple",
-      inScene: payload.inScene !== false,
-      ...(payload.scope ? { scope: payload.scope } : {}),
-      ...(payload.recentCount ? { recentCount: payload.recentCount } : {})
-    }),
-    signal: signal ?? payload.signal
-  });
+  return request<GenerateCharacterResult>(
+    `/api/playthroughs/${playthroughId}/characters/generate`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        prompt: payload.prompt,
+        tier: payload.tier ?? "simple",
+        inScene: payload.inScene !== false,
+        ...(payload.scope ? { scope: payload.scope } : {}),
+        ...(payload.recentCount ? { recentCount: payload.recentCount } : {}),
+      }),
+      signal: signal ?? payload.signal,
+    },
+  );
 }
 
-export function fleshOutCharacterDraft(playthroughId: string, characterId: string, signal?: AbortSignal): Promise<FleshOutDraftResult> {
-  return request<FleshOutDraftResult>(`/api/playthroughs/${playthroughId}/characters/${characterId}/flesh-out/draft`, {
-    method: "POST",
-    signal,
-  });
+export function fleshOutCharacterDraft(
+  playthroughId: string,
+  characterId: string,
+  signal?: AbortSignal,
+): Promise<FleshOutDraftResult> {
+  return request<FleshOutDraftResult>(
+    `/api/playthroughs/${playthroughId}/characters/${characterId}/flesh-out/draft`,
+    {
+      method: "POST",
+      signal,
+    },
+  );
 }
 
 /** @deprecated Use fleshOutCharacter */
@@ -301,16 +354,19 @@ export function deletePlaythrough(id: string): Promise<void> {
   return request<void>(`/api/playthroughs/${id}`, { method: "DELETE" });
 }
 
-export function renamePlaythrough(id: string, name: string): Promise<Playthrough> {
+export function renamePlaythrough(
+  id: string,
+  name: string,
+): Promise<Playthrough> {
   return request<Playthrough>(`/api/playthroughs/${id}`, {
     method: "PUT",
-    body: JSON.stringify({ name })
+    body: JSON.stringify({ name }),
   });
 }
 
 export function duplicatePlaythrough(id: string): Promise<Playthrough> {
   return request<Playthrough>(`/api/playthroughs/${id}/duplicate`, {
-    method: "POST"
+    method: "POST",
   });
 }
 
@@ -318,43 +374,56 @@ export function duplicatePlaythrough(id: string): Promise<Playthrough> {
  *  setting (Settings → Interface & Appearance → Cover Art), not a property of the choice. */
 export type PlaythroughCoverChoice = Pick<PlaythroughCover, "file">;
 
-export function setPlaythroughCover(id: string, cover: PlaythroughCoverChoice): Promise<Playthrough> {
+export function setPlaythroughCover(
+  id: string,
+  cover: PlaythroughCoverChoice,
+): Promise<Playthrough> {
   return request<Playthrough>(`/api/playthroughs/${id}/cover`, {
     method: "POST",
-    body: JSON.stringify(cover)
+    body: JSON.stringify(cover),
   });
 }
 
 /** Clears the manual choice, handing the card back to the automatic chain (latest image →
  *  present cast → placeholder). */
 export function clearPlaythroughCover(id: string): Promise<Playthrough> {
-  return request<Playthrough>(`/api/playthroughs/${id}/cover`, { method: "DELETE" });
+  return request<Playthrough>(`/api/playthroughs/${id}/cover`, {
+    method: "DELETE",
+  });
 }
 
 export function branchPlaythrough(
   id: string,
   messageId: string,
   name?: string,
-  asStandalone?: boolean
+  asStandalone?: boolean,
 ): Promise<Playthrough> {
   return request<Playthrough>(`/api/playthroughs/${id}/branch`, {
     method: "POST",
-    body: JSON.stringify({ messageId, name, asStandalone })
+    body: JSON.stringify({ messageId, name, asStandalone }),
   });
 }
 
-export function listPlaythroughTimelines(id: string): Promise<{ timelines: Playthrough[] }> {
-  return request<{ timelines: Playthrough[] }>(`/api/playthroughs/${id}/timelines`);
+export function listPlaythroughTimelines(
+  id: string,
+): Promise<{ timelines: Playthrough[] }> {
+  return request<{ timelines: Playthrough[] }>(
+    `/api/playthroughs/${id}/timelines`,
+  );
 }
 
 export function promotePlaythroughBranch(id: string): Promise<Playthrough> {
   return request<Playthrough>(`/api/playthroughs/${id}/promote`, {
-    method: "POST"
+    method: "POST",
   });
 }
 
-export function getGenerationProgress(sessionId: string): Promise<{ active: boolean; phase?: string }> {
-  return request<{ active: boolean; phase?: string }>(`/api/playthroughs/generate/progress?sessionId=${sessionId}`);
+export function getGenerationProgress(
+  sessionId: string,
+): Promise<{ active: boolean; phase?: string }> {
+  return request<{ active: boolean; phase?: string }>(
+    `/api/playthroughs/generate/progress?sessionId=${sessionId}`,
+  );
 }
 
 export function generatePlaythrough(
@@ -369,7 +438,7 @@ export function generatePlaythrough(
    *  then the active connection. */
   providerId?: string,
   signal?: AbortSignal,
-  sessionId?: string
+  sessionId?: string,
 ): Promise<GeneratePlaythroughResponse> {
   return request<GeneratePlaythroughResponse>("/api/playthroughs/generate", {
     method: "POST",
@@ -382,27 +451,33 @@ export function generatePlaythrough(
       lorebookIds,
       ...(presetId ? { presetId } : {}),
       ...(providerId ? { providerId } : {}),
-      ...(sessionId ? { sessionId } : {})
+      ...(sessionId ? { sessionId } : {}),
     }),
-    signal
+    signal,
   });
 }
 
 export function closeChapter(
   playthroughId: string,
-  body: CloseChapterBody
+  body: CloseChapterBody,
 ): Promise<{ state: Playthrough; tokenUsage: TokenUsage }> {
-  return request<{ state: Playthrough; tokenUsage: TokenUsage }>(`/api/playthroughs/${playthroughId}/close-chapter`, {
-    method: "POST",
-    body: JSON.stringify(body)
-  });
+  return request<{ state: Playthrough; tokenUsage: TokenUsage }>(
+    `/api/playthroughs/${playthroughId}/close-chapter`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    },
+  );
 }
 
 export function resummarizeChapter(
   playthroughId: string,
-  chapterId: string
+  chapterId: string,
 ): Promise<Playthrough> {
-  return request<Playthrough>(`/api/playthroughs/${playthroughId}/chapters/${chapterId}/resummarize`, {
-    method: "POST"
-  });
+  return request<Playthrough>(
+    `/api/playthroughs/${playthroughId}/chapters/${chapterId}/resummarize`,
+    {
+      method: "POST",
+    },
+  );
 }

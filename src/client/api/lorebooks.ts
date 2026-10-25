@@ -12,14 +12,17 @@ export function getLorebook(id: string): Promise<LorebookFile> {
 export function createLorebook(name: string): Promise<LorebookFile> {
   return request<LorebookFile>("/api/lorebooks", {
     method: "POST",
-    body: JSON.stringify({ name })
+    body: JSON.stringify({ name }),
   });
 }
 
-export function saveLorebook(id: string, data: LorebookFile): Promise<LorebookFile> {
+export function saveLorebook(
+  id: string,
+  data: LorebookFile,
+): Promise<LorebookFile> {
   return request<LorebookFile>(`/api/lorebooks/${id}`, {
     method: "PUT",
-    body: JSON.stringify(data)
+    body: JSON.stringify(data),
   });
 }
 
@@ -27,9 +30,12 @@ export function deleteLorebook(id: string): Promise<void> {
   return request<void>(`/api/lorebooks/${id}`, { method: "DELETE" });
 }
 
-export function importLorebook(filename: string, contents: unknown): Promise<LorebookFile> {
+export function importLorebook(
+  filename: string,
+  contents: unknown,
+): Promise<LorebookFile> {
   return request<LorebookFile>("/api/lorebooks/import", {
     method: "POST",
-    body: JSON.stringify({ filename, contents })
+    body: JSON.stringify({ filename, contents }),
   });
 }

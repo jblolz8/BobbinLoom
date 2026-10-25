@@ -37,11 +37,13 @@ export function DiffModal({
 }: DiffModalProps) {
   const diffLines = useMemo(
     () => computeLineDiff(oldContent, newContent),
-    [oldContent, newContent]
+    [oldContent, newContent],
   );
 
   const [feedback, setFeedback] = useState("");
-  const [paneViewMode, setPaneViewMode] = useState<"split" | "left" | "right">("split");
+  const [paneViewMode, setPaneViewMode] = useState<"split" | "left" | "right">(
+    "split",
+  );
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -58,7 +60,12 @@ export function DiffModal({
   const isReadOnly = !onAccept && !onRetry;
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !loading) onClose(); }}>
+    <div
+      className="modal-backdrop"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget && !loading) onClose();
+      }}
+    >
       <section className="modal diff-modal" aria-labelledby="diff-modal-title">
         <header className="modal-header diff-modal-header">
           <div className="diff-modal-title-wrap">
@@ -83,7 +90,11 @@ export function DiffModal({
 
           <div className="diff-header-right-actions">
             {/* View Mode Toggle */}
-            <div className="diff-pane-toggle-group" role="tablist" aria-label="Diff View Mode">
+            <div
+              className="diff-pane-toggle-group"
+              role="tablist"
+              aria-label="Diff View Mode"
+            >
               <button
                 type="button"
                 className={`diff-pane-toggle-btn ${paneViewMode === "split" ? "active" : ""}`}
@@ -177,11 +188,14 @@ export function DiffModal({
           <footer className="diff-footer">
             <div className="diff-footer-left">
               <span className="diff-readonly-note">
-                <Icon name="FileText" size={14} /> Comparing original CCv2 card with converted BobbinLoom sheet.
+                <Icon name="FileText" size={14} /> Comparing original CCv2 card
+                with converted BobbinLoom sheet.
               </span>
             </div>
             <div className="diff-footer-right">
-              <Button variant="primary" onClick={onClose}>Close</Button>
+              <Button variant="primary" onClick={onClose}>
+                Close
+              </Button>
             </div>
           </footer>
         ) : (
@@ -190,7 +204,8 @@ export function DiffModal({
               <div className="diff-feedback-label">
                 <div className="diff-feedback-header-row">
                   <span className="diff-feedback-title">
-                    <Icon name="MessageSquare" size={13} /> Guidance for AI retry (optional)
+                    <Icon name="MessageSquare" size={13} /> Guidance for AI
+                    retry (optional)
                   </span>
                   {feedback.trim() && !loading && (
                     <button
@@ -251,7 +266,13 @@ export function DiffModal({
                 variant="secondary"
                 onClick={() => onRetry?.(feedback)}
                 disabled={loading}
-                leftIcon={<Icon name={loading ? "Sparkles" : "RotateCcw"} size={14} className={loading ? "sparkle-pulse" : ""} />}
+                leftIcon={
+                  <Icon
+                    name={loading ? "Sparkles" : "RotateCcw"}
+                    size={14}
+                    className={loading ? "sparkle-pulse" : ""}
+                  />
+                }
                 title="Regenerate BL character sheet with optional feedback"
               >
                 {loading ? "Retrying…" : "Retry with Feedback"}

@@ -44,6 +44,6 @@ export function useSideNavMode() {
     shown: narrow ? drawerOpen : !collapsed,
     toggle,
     closeDrawer,
-    collapse
+    collapse,
   };
 }

@@ -8,7 +8,11 @@ export function normalizeTags(tags: string[]): string[] {
 
 /** Creator normalization: lowercase, trim, strip leading @/URLs, "" when empty. */
 export function normalizeCreator(creator: string | undefined): string {
-  return (creator ?? "").trim().toLowerCase().replace(/^@+/, "").replace(/^https?:\/\/(www\.)?/, "");
+  return (creator ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^@+/, "")
+    .replace(/^https?:\/\/(www\.)?/, "");
 }
 
 export type LibraryEntryKind = "bl" | "ccv2";
@@ -30,7 +34,9 @@ export function displayTitle(t: CharacterTemplate): string {
   return (t.title ?? "").trim() || t.name;
 }
 
-export interface LibraryQuery { text: string }
+export interface LibraryQuery {
+  text: string;
+}
 
 /** Booru tag matcher: exact match with whitespace/underscore/hyphen normalization and optional wildcards (*). */
 export function matchesTag(tag: string, target: string): boolean {
@@ -44,17 +50,30 @@ export function matchesTag(tag: string, target: string): boolean {
   if (tagFlat === targetFlat) return true;
 
   // Wildcard support: *suffix, prefix*, or *substring*
-  if (normTarget.startsWith("*") && normTarget.endsWith("*") && normTarget.length > 2) {
+  if (
+    normTarget.startsWith("*") &&
+    normTarget.endsWith("*") &&
+    normTarget.length > 2
+  ) {
     const inner = normTarget.slice(1, -1);
-    return normTag.includes(inner) || tagFlat.includes(inner.replace(/[-_\s]+/g, " "));
+    return (
+      normTag.includes(inner) ||
+      tagFlat.includes(inner.replace(/[-_\s]+/g, " "))
+    );
   }
   if (normTarget.endsWith("*") && normTarget.length > 1) {
     const prefix = normTarget.slice(0, -1);
-    return normTag.startsWith(prefix) || tagFlat.startsWith(prefix.replace(/[-_\s]+/g, " "));
+    return (
+      normTag.startsWith(prefix) ||
+      tagFlat.startsWith(prefix.replace(/[-_\s]+/g, " "))
+    );
   }
   if (normTarget.startsWith("*") && normTarget.length > 1) {
     const suffix = normTarget.slice(1);
-    return normTag.endsWith(suffix) || tagFlat.endsWith(suffix.replace(/[-_\s]+/g, " "));
+    return (
+      normTag.endsWith(suffix) ||
+      tagFlat.endsWith(suffix.replace(/[-_\s]+/g, " "))
+    );
   }
 
   return false;
@@ -62,7 +81,8 @@ export function matchesTag(tag: string, target: string): boolean {
 
 export function parseQueryTerms(query: string): string[] {
   const terms: string[] = [];
-  const regex = /(-?(?:tag|creator|format):"(?:[^"\\]|\\.)*"|-?(?:tag|creator|format):[^\s]+|"(?:[^"\\]|\\.)*"|[^\s]+)/gi;
+  const regex =
+    /(-?(?:tag|creator|format):"(?:[^"\\]|\\.)*"|-?(?:tag|creator|format):[^\s]+|"(?:[^"\\]|\\.)*"|[^\s]+)/gi;
   let match: RegExpExecArray | null;
   while ((match = regex.exec(query)) !== null) {
     let term = match[0].trim();
@@ -80,7 +100,10 @@ export function parseQueryTerms(query: string): string[] {
 
 /** Booru search: whitespace/quote-split terms; `-tag` excludes; `creator:x` / `format:x` / `tag:x`
  *  virtual namespaces; otherwise match title/name/tags (case-insensitive substring). */
-export function filterLibraryEntries(entries: CharacterTemplate[], query: string): CharacterTemplate[] {
+export function filterLibraryEntries(
+  entries: CharacterTemplate[],
+  query: string,
+): CharacterTemplate[] {
   const terms = parseQueryTerms(query);
   if (terms.length === 0) return entries;
   return entries.filter((e) => {
@@ -114,7 +137,9 @@ export function filterLibraryEntries(entries: CharacterTemplate[], query: string
 }
 
 /** Collect playthrough-setting candidates from CCv2-backed records (F6). */
-export function collectCardSettings(entries: CharacterTemplate[]): Array<{ title: string; scenario: string }> {
+export function collectCardSettings(
+  entries: CharacterTemplate[],
+): Array<{ title: string; scenario: string }> {
   const seen = new Set<string>();
   const out: Array<{ title: string; scenario: string }> = [];
   for (const e of entries) {
@@ -186,7 +211,7 @@ export function getGroupUpdatedAt(group: VersionGroup): string {
 export function sortVersionGroups(
   groups: VersionGroup[],
   sortBy: CharacterSortOption = "name",
-  sortDirection: SortDirection = "asc"
+  sortDirection: SortDirection = "asc",
 ): VersionGroup[] {
   const dir = sortDirection === "asc" ? 1 : -1;
   return [...groups].sort((a, b) => {
@@ -209,14 +234,18 @@ export function sortVersionGroups(
       const bCreated = getGroupCreatedAt(b);
       // If one is missing a timestamp, push it to the end regardless of direction
       if (!aCreated && !bCreated) {
-        return (displayTitle(aLatest) || aLatest.name).localeCompare(displayTitle(bLatest) || bLatest.name);
+        return (displayTitle(aLatest) || aLatest.name).localeCompare(
+          displayTitle(bLatest) || bLatest.name,
+        );
       }
       if (!aCreated) return 1;
       if (!bCreated) return -1;
 
       const cmp = aCreated.localeCompare(bCreated);
       if (cmp !== 0) return cmp * dir;
-      return (displayTitle(aLatest) || aLatest.name).localeCompare(displayTitle(bLatest) || bLatest.name);
+      return (displayTitle(aLatest) || aLatest.name).localeCompare(
+        displayTitle(bLatest) || bLatest.name,
+      );
     }
 
     if (sortBy === "updatedAt") {
@@ -224,14 +253,18 @@ export function sortVersionGroups(
       const bUpdated = getGroupUpdatedAt(b);
       // If one is missing a timestamp, push it to the end
       if (!aUpdated && !bUpdated) {
-        return (displayTitle(aLatest) || aLatest.name).localeCompare(displayTitle(bLatest) || bLatest.name);
+        return (displayTitle(aLatest) || aLatest.name).localeCompare(
+          displayTitle(bLatest) || bLatest.name,
+        );
       }
       if (!aUpdated) return 1;
       if (!bUpdated) return -1;
 
       const cmp = aUpdated.localeCompare(bUpdated);
       if (cmp !== 0) return cmp * dir;
-      return (displayTitle(aLatest) || aLatest.name).localeCompare(displayTitle(bLatest) || bLatest.name);
+      return (displayTitle(aLatest) || aLatest.name).localeCompare(
+        displayTitle(bLatest) || bLatest.name,
+      );
     }
 
     return 0;
@@ -241,7 +274,7 @@ export function sortVersionGroups(
 export function groupByLineage(
   templates: CharacterTemplate[],
   sortBy: CharacterSortOption = "name",
-  sortDirection: SortDirection = "asc"
+  sortDirection: SortDirection = "asc",
 ): VersionGroup[] {
   const map = new Map<string, CharacterTemplate[]>();
   for (const t of templates) {
@@ -252,8 +285,7 @@ export function groupByLineage(
   }
   const groups = [...map.entries()].map(([key, versions]) => ({
     key,
-    versions: versions.sort((a, b) => b.version - a.version)
+    versions: versions.sort((a, b) => b.version - a.version),
   }));
   return sortVersionGroups(groups, sortBy, sortDirection);
 }
-

@@ -14,7 +14,7 @@ function testConfig(): ResolvedProviderConfig {
     maxTokens: 1200,
     contextWindow: 32768,
     maxRetries: 0,
-    timeoutMs: 180_000
+    timeoutMs: 180_000,
   };
 }
 
@@ -23,19 +23,26 @@ function stubFetch(content: string): typeof fetch {
   return (async () =>
     new Response(JSON.stringify({ choices: [{ message: { content } }] }), {
       status: 200,
-      headers: { "Content-Type": "application/json" }
+      headers: { "Content-Type": "application/json" },
     })) as unknown as typeof fetch;
 }
 
 const INPUT = {
-  messageContent: "She knelt between his knees and hooked a finger into his waistband.",
+  messageContent:
+    "She knelt between his knees and hooked a finger into his waistband.",
   previousUserContent: "I sit down on the mattress.",
-  stateSummary: "Location: Cramped apartment — A dim studio with a sagging mattress.",
-  castSummary: "THE CAMERA (the player):\nAnon — A male human"
+  stateSummary:
+    "Location: Cramped apartment — A dim studio with a sagging mattress.",
+  castSummary: "THE CAMERA (the player):\nAnon — A male human",
 };
 
 async function warningsFor(content: string): Promise<string[]> {
-  const out = await generateImagePrompt(testConfig(), DEFAULT_IMAGE_GENERATION_SETTINGS, INPUT, stubFetch(content));
+  const out = await generateImagePrompt(
+    testConfig(),
+    DEFAULT_IMAGE_GENERATION_SETTINGS,
+    INPUT,
+    stubFetch(content),
+  );
   return out.warnings;
 }
 
@@ -45,10 +52,10 @@ async function warningsFor(content: string): Promise<string[]> {
 const NESTED_JSON = JSON.stringify({
   prompt: JSON.stringify({
     prompt:
-      'One naked woman, Jeneine, 5\'7", slim, pale skin, straddling and sitting on a man\'s hips, leaning forward on her elbows, hands gripping his shoulders.',
-    negative: "clothing on Jeneine, sheet covering her breasts, censoring"
+      "One naked woman, Jeneine, 5'7\", slim, pale skin, straddling and sitting on a man's hips, leaning forward on her elbows, hands gripping his shoulders.",
+    negative: "clothing on Jeneine, sheet covering her breasts, censoring",
   }),
-  negative: ""
+  negative: "",
 });
 
 const PROSE =
@@ -74,14 +81,24 @@ describe("the prompt-shape warning", () => {
   });
 
   it("flags prose where a tag line belongs", async () => {
-    const warnings = await warningsFor(JSON.stringify({ prompt: PROSE, negative: "worst quality" }));
+    const warnings = await warningsFor(
+      JSON.stringify({ prompt: PROSE, negative: "worst quality" }),
+    );
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain("reads as prose");
   });
 
   it("stays silent on a clean tag line — including a two-group one", async () => {
-    expect(await warningsFor(JSON.stringify({ prompt: CLEAN_TAGS, negative: "worst quality" }))).toHaveLength(0);
-    expect(await warningsFor(JSON.stringify({ prompt: CLEAN_TAGS_WITH_PIPES_AND_ONLY_TWO_COMMAS }))).toHaveLength(0);
+    expect(
+      await warningsFor(
+        JSON.stringify({ prompt: CLEAN_TAGS, negative: "worst quality" }),
+      ),
+    ).toHaveLength(0);
+    expect(
+      await warningsFor(
+        JSON.stringify({ prompt: CLEAN_TAGS_WITH_PIPES_AND_ONLY_TWO_COMMAS }),
+      ),
+    ).toHaveLength(0);
   });
 
   it("reports a refusal once, without also calling it prose", async () => {
@@ -94,7 +111,9 @@ describe("the prompt-shape warning", () => {
   it("still reports a missing prompt field on its own", async () => {
     // One cause, one warning: the raw blob is already named as the wrong shape,
     // so the JSON-shape note must not pile on top of it.
-    const warnings = await warningsFor(JSON.stringify({ negative: "worst quality" }));
+    const warnings = await warningsFor(
+      JSON.stringify({ negative: "worst quality" }),
+    );
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('no "prompt" field');
   });
@@ -102,7 +121,13 @@ describe("the prompt-shape warning", () => {
   it("stays silent on a terse answer — the false positive this rule must not have", async () => {
     // A short tag line written by a lazy model is not prose. Nagging on it would
     // train the user to ignore the warnings panel.
-    expect(await warningsFor(JSON.stringify({ prompt: "a woman in the rain" }))).toHaveLength(0);
-    expect(await warningsFor(JSON.stringify({ prompt: "safe, 1girl, bedroom, night" }))).toHaveLength(0);
+    expect(
+      await warningsFor(JSON.stringify({ prompt: "a woman in the rain" })),
+    ).toHaveLength(0);
+    expect(
+      await warningsFor(
+        JSON.stringify({ prompt: "safe, 1girl, bedroom, night" }),
+      ),
+    ).toHaveLength(0);
   });
 });

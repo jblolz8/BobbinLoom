@@ -43,13 +43,17 @@ export interface TextSamplingParamSpec {
   integer?: boolean;
 }
 
-export const TEXT_SAMPLING_PARAMS: Record<TextSamplingParamKey, TextSamplingParamSpec> = {
+export const TEXT_SAMPLING_PARAMS: Record<
+  TextSamplingParamKey,
+  TextSamplingParamSpec
+> = {
   temperature: {
     key: "temperature",
     wireKey: "temperature",
     label: "Temperature",
     rangeHint: "0–2",
-    description: "Controls randomness. Higher values produce more creative responses; lower values are more deterministic.",
+    description:
+      "Controls randomness. Higher values produce more creative responses; lower values are more deterministic.",
     min: 0,
     max: 2,
     step: 0.05,
@@ -60,7 +64,8 @@ export const TEXT_SAMPLING_PARAMS: Record<TextSamplingParamKey, TextSamplingPara
     wireKey: "top_p",
     label: "Top P",
     rangeHint: "0–1",
-    description: "Nucleus sampling: considers only tokens comprising the top P probability mass.",
+    description:
+      "Nucleus sampling: considers only tokens comprising the top P probability mass.",
     min: 0,
     max: 1,
     step: 0.01,
@@ -84,7 +89,8 @@ export const TEXT_SAMPLING_PARAMS: Record<TextSamplingParamKey, TextSamplingPara
     wireKey: "min_p",
     label: "Min P",
     rangeHint: "0–1",
-    description: "Minimum probability threshold scaled relative to the most likely token.",
+    description:
+      "Minimum probability threshold scaled relative to the most likely token.",
     min: 0,
     max: 1,
     step: 0.01,
@@ -95,7 +101,8 @@ export const TEXT_SAMPLING_PARAMS: Record<TextSamplingParamKey, TextSamplingPara
     wireKey: "top_a",
     label: "Top A",
     rangeHint: "0–1",
-    description: "Dynamic probability threshold proportional to the squared probability of the top token.",
+    description:
+      "Dynamic probability threshold proportional to the squared probability of the top token.",
     min: 0,
     max: 1,
     step: 0.01,
@@ -106,7 +113,8 @@ export const TEXT_SAMPLING_PARAMS: Record<TextSamplingParamKey, TextSamplingPara
     wireKey: "frequency_penalty",
     label: "Frequency Penalty",
     rangeHint: "-2–2",
-    description: "Penalizes tokens based on their existing frequency in the generated text.",
+    description:
+      "Penalizes tokens based on their existing frequency in the generated text.",
     min: -2,
     max: 2,
     step: 0.05,
@@ -117,7 +125,8 @@ export const TEXT_SAMPLING_PARAMS: Record<TextSamplingParamKey, TextSamplingPara
     wireKey: "presence_penalty",
     label: "Presence Penalty",
     rangeHint: "-2–2",
-    description: "Penalizes tokens based on whether they have appeared in the generated text so far.",
+    description:
+      "Penalizes tokens based on whether they have appeared in the generated text so far.",
     min: -2,
     max: 2,
     step: 0.05,
@@ -128,7 +137,8 @@ export const TEXT_SAMPLING_PARAMS: Record<TextSamplingParamKey, TextSamplingPara
     wireKey: "repetition_penalty",
     label: "Repetition Penalty",
     rangeHint: "0–3",
-    description: "Multiplicative penalty applied to tokens that have already appeared (1.0 = no penalty).",
+    description:
+      "Multiplicative penalty applied to tokens that have already appeared (1.0 = no penalty).",
     min: 0,
     max: 3,
     sliderMax: 2,
@@ -159,12 +169,20 @@ export interface TextProviderSourceSpec {
   paramOverrides?: Partial<
     Record<
       TextSamplingParamKey,
-      Partial<Pick<TextSamplingParamSpec, "min" | "max" | "sliderMax" | "step" | "defaultPreview" | "rangeHint">>
+      Partial<
+        Pick<
+          TextSamplingParamSpec,
+          "min" | "max" | "sliderMax" | "step" | "defaultPreview" | "rangeHint"
+        >
+      >
     >
   >;
 }
 
-export const TEXT_PROVIDER_SOURCES: Record<TextProviderSource, TextProviderSourceSpec> = {
+export const TEXT_PROVIDER_SOURCES: Record<
+  TextProviderSource,
+  TextProviderSourceSpec
+> = {
   openai_compatible: {
     id: "openai_compatible",
     label: "OpenAI Compatible",
@@ -214,7 +232,12 @@ export const TEXT_PROVIDER_SOURCES: Record<TextProviderSource, TextProviderSourc
     modelPlaceholder: "e.g. deepseek-chat, deepseek-reasoner",
     description:
       "Official DeepSeek Chat Completions API. Extended local samplers (Top K, Min P, Top A, Rep Penalty) are omitted.",
-    supportedParams: ["temperature", "topP", "frequencyPenalty", "presencePenalty"],
+    supportedParams: [
+      "temperature",
+      "topP",
+      "frequencyPenalty",
+      "presencePenalty",
+    ],
   },
   moonshot: {
     id: "moonshot",
@@ -225,7 +248,12 @@ export const TEXT_PROVIDER_SOURCES: Record<TextProviderSource, TextProviderSourc
     modelPlaceholder: "e.g. kimi-k2-0711-preview, moonshot-v1-128k",
     description:
       "Official Moonshot AI (Kimi) API. Temperature is bounded to 0–1; use .cn/v1 in Base URL for China mainland keys.",
-    supportedParams: ["temperature", "topP", "frequencyPenalty", "presencePenalty"],
+    supportedParams: [
+      "temperature",
+      "topP",
+      "frequencyPenalty",
+      "presencePenalty",
+    ],
     paramOverrides: {
       temperature: {
         min: 0,
@@ -245,7 +273,12 @@ export const TEXT_PROVIDER_SOURCES: Record<TextProviderSource, TextProviderSourc
     modelPlaceholder: "e.g. gpt-4o",
     description:
       "Official OpenAI Chat Completions API. Supports standard OpenAI sampling and penalty parameters.",
-    supportedParams: ["temperature", "topP", "frequencyPenalty", "presencePenalty"],
+    supportedParams: [
+      "temperature",
+      "topP",
+      "frequencyPenalty",
+      "presencePenalty",
+    ],
   },
 };
 
@@ -255,7 +288,7 @@ export const TEXT_PROVIDER_SOURCE_LIST: readonly TextProviderSourceSpec[] =
 /** Resolve the effective parameter spec for a given source (applying any per-source bounds like Moonshot's 0–1 temperature). */
 export function getSourceParamSpec(
   source: TextProviderSource,
-  paramKey: TextSamplingParamKey
+  paramKey: TextSamplingParamKey,
 ): TextSamplingParamSpec {
   const base = TEXT_SAMPLING_PARAMS[paramKey];
   const override = TEXT_PROVIDER_SOURCES[source]?.paramOverrides?.[paramKey];
@@ -265,7 +298,7 @@ export function getSourceParamSpec(
 /** Whether a given source supports a specific sampling parameter on the wire. */
 export function isParamSupportedBySource(
   source: TextProviderSource,
-  paramKey: TextSamplingParamKey
+  paramKey: TextSamplingParamKey,
 ): boolean {
   return TEXT_PROVIDER_SOURCES[source].supportedParams.includes(paramKey);
 }
@@ -273,7 +306,7 @@ export function isParamSupportedBySource(
 /** Infer the Chat Completion Source from an explicit field or, for legacy connections, from the Base URL. */
 export function resolveTextProviderSource(
   explicit?: TextProviderSource | null,
-  baseUrl?: string | null
+  baseUrl?: string | null,
 ): TextProviderSource {
   if (explicit && explicit in TEXT_PROVIDER_SOURCES) {
     return explicit;
@@ -281,7 +314,11 @@ export function resolveTextProviderSource(
   const normalized = (baseUrl ?? "").trim().toLowerCase();
   if (normalized.includes("openrouter.ai")) return "openrouter";
   if (normalized.includes("api.deepseek.com")) return "deepseek";
-  if (normalized.includes("api.moonshot.ai") || normalized.includes("api.moonshot.cn")) return "moonshot";
+  if (
+    normalized.includes("api.moonshot.ai") ||
+    normalized.includes("api.moonshot.cn")
+  )
+    return "moonshot";
   if (normalized.includes("api.openai.com")) return "openai";
   return "openai_compatible";
 }

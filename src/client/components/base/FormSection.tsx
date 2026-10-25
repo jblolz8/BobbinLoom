@@ -37,7 +37,10 @@ export function SectionHeader({
   );
 }
 
-export interface FormSectionProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
+export interface FormSectionProps extends Omit<
+  HTMLAttributes<HTMLElement>,
+  "title"
+> {
   icon?: string;
   title: ReactNode;
   tooltip?: ReactNode;
@@ -75,7 +78,11 @@ export function FormSection({
             {tooltip && <TooltipIcon content={tooltip} />}
             {badge}
           </span>
-          <Icon name="ChevronDown" size={13} className="base-form-section__chevron" />
+          <Icon
+            name="ChevronDown"
+            size={13}
+            className="base-form-section__chevron"
+          />
         </summary>
         <div className="base-form-section__body base-form-section__body--collapsible">
           {description && <p className="field-helper-text">{description}</p>}

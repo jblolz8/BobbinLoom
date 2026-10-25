@@ -11,23 +11,31 @@ import {
   PromptModuleSetSchema,
   TagTaxonomyConfigSchema,
   ThemeModeSchema,
+  WorkspaceWidthPercentSchema,
   type PromptModuleSet,
   type PromptPreset,
-  ViewPreferencesSchema
+  ViewPreferencesSchema,
 } from "../../schemas";
-import { loadPresets, savePresets, loadAppSettings, saveAppSettings, saveViewPreferences, settingsDir } from "./helpers";
+import {
+  loadPresets,
+  savePresets,
+  loadAppSettings,
+  saveAppSettings,
+  saveViewPreferences,
+  settingsDir,
+} from "./helpers";
 import { DEFAULT_APP_SETTINGS } from "../appSettingsStore";
 
 const CreatePresetBody = z.object({
   name: z.string().min(1),
-  cloneFromId: z.string().optional()
+  cloneFromId: z.string().optional(),
 });
 
 const UpdatePresetBody = z.object({
   name: z.string().min(1).optional(),
   modules: PromptModuleSetSchema.optional(),
   characterFormat: CharacterFormatSchema.optional(),
-  imageGeneration: ImageGenerationSettingsSchema.optional()
+  imageGeneration: ImageGenerationSettingsSchema.optional(),
 });
 
 /** The appearance panel's writable fields. Declared once so the route can `safeParse` it and
@@ -35,13 +43,14 @@ const UpdatePresetBody = z.object({
 const AppearanceBody = z.object({
   avatarShape: AvatarShapeSchema.optional(),
   coverAspect: CoverAspectSchema.optional(),
+  workspaceWidthPercent: WorkspaceWidthPercentSchema.optional(),
   themeMode: ThemeModeSchema.optional(),
   themePreset: z.string().optional(),
   customThemeColors: CustomThemeColorsSchema.optional(),
   /** The panel swipe is display, not appearance — it lives here because this is the settings surface
    *  the play view already reads, and the panel that edits it is the one the user thinks of as
    *  "how the app behaves". */
-  paneSwipeEnabled: z.boolean().optional()
+  paneSwipeEnabled: z.boolean().optional(),
 });
 
 export async function presetRoutes(app: FastifyInstance): Promise<void> {
@@ -51,7 +60,7 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
       id,
       name,
       readonly,
-      moduleCount: modules.turn.length
+      moduleCount: modules.turn.length,
     }));
   });
 
@@ -71,12 +80,17 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
     let imageGeneration: PromptPreset["imageGeneration"];
     if (body.cloneFromId) {
       const source = presets.find((p) => p.id === body.cloneFromId);
-      if (!source) return reply.code(404).send({ error: "Source preset not found" });
+      if (!source)
+        return reply.code(404).send({ error: "Source preset not found" });
       modules = {
-        turn: source.modules.turn.map((m) => ({ ...m }))
+        turn: source.modules.turn.map((m) => ({ ...m })),
       };
-      characterFormat = source.characterFormat ? JSON.parse(JSON.stringify(source.characterFormat)) : undefined;
-      imageGeneration = source.imageGeneration ? JSON.parse(JSON.stringify(source.imageGeneration)) : undefined;
+      characterFormat = source.characterFormat
+        ? JSON.parse(JSON.stringify(source.characterFormat))
+        : undefined;
+      imageGeneration = source.imageGeneration
+        ? JSON.parse(JSON.stringify(source.imageGeneration))
+        : undefined;
     }
 
     const id = `preset_${Date.now()}`;
@@ -86,7 +100,7 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
       readonly: false,
       modules,
       ...(characterFormat ? { characterFormat } : {}),
-      ...(imageGeneration ? { imageGeneration } : {})
+      ...(imageGeneration ? { imageGeneration } : {}),
     };
     presets.push(preset);
     savePresets(presets);
@@ -98,13 +112,17 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
     const body = UpdatePresetBody.parse(request.body ?? {});
     const presets = loadPresets();
     const index = presets.findIndex((p) => p.id === params.id);
-    if (index === -1) return reply.code(404).send({ error: "Preset not found" });
-    if (presets[index].readonly) return reply.code(403).send({ error: "Cannot modify read-only preset" });
+    if (index === -1)
+      return reply.code(404).send({ error: "Preset not found" });
+    if (presets[index].readonly)
+      return reply.code(403).send({ error: "Cannot modify read-only preset" });
 
     if (body.name !== undefined) presets[index].name = body.name;
     if (body.modules !== undefined) presets[index].modules = body.modules;
-    if (body.characterFormat !== undefined) presets[index].characterFormat = body.characterFormat;
-    if (body.imageGeneration !== undefined) presets[index].imageGeneration = body.imageGeneration;
+    if (body.characterFormat !== undefined)
+      presets[index].characterFormat = body.characterFormat;
+    if (body.imageGeneration !== undefined)
+      presets[index].imageGeneration = body.imageGeneration;
     savePresets(presets);
     return presets[index];
   });
@@ -113,8 +131,10 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
     const params = z.object({ id: z.string() }).parse(request.params);
     const presets = loadPresets();
     const index = presets.findIndex((p) => p.id === params.id);
-    if (index === -1) return reply.code(404).send({ error: "Preset not found" });
-    if (presets[index].readonly) return reply.code(403).send({ error: "Cannot delete read-only preset" });
+    if (index === -1)
+      return reply.code(404).send({ error: "Preset not found" });
+    if (presets[index].readonly)
+      return reply.code(403).send({ error: "Cannot delete read-only preset" });
 
     presets.splice(index, 1);
     savePresets(presets);
@@ -124,14 +144,22 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/settings/tag-taxonomy", async () => {
     const settings = loadAppSettings(settingsDir);
     return {
-      tagTaxonomy: settings.tagTaxonomy ?? { customCategories: [], tagOverrides: {} },
+      tagTaxonomy: settings.tagTaxonomy ?? {
+        customCategories: [],
+        tagOverrides: {},
+      },
     };
   });
 
   app.put("/api/settings/tag-taxonomy", async (request) => {
     const body = TagTaxonomyConfigSchema.parse(request.body ?? {});
     const updated = saveAppSettings(settingsDir, { tagTaxonomy: body });
-    return { tagTaxonomy: updated.tagTaxonomy ?? { customCategories: [], tagOverrides: {} } };
+    return {
+      tagTaxonomy: updated.tagTaxonomy ?? {
+        customCategories: [],
+        tagOverrides: {},
+      },
+    };
   });
 
   /** The last chapter-opening mode the player chose. Its own endpoint rather than a field on the
@@ -139,21 +167,33 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
    *  would silently drop it. */
   app.get("/api/settings/chapter-opening-mode", async () => {
     const settings = loadAppSettings(settingsDir);
-    return { chapterOpeningMode: settings.chapterOpeningMode ?? DEFAULT_APP_SETTINGS.chapterOpeningMode };
+    return {
+      chapterOpeningMode:
+        settings.chapterOpeningMode ?? DEFAULT_APP_SETTINGS.chapterOpeningMode,
+    };
   });
 
   app.put("/api/settings/chapter-opening-mode", async (request, reply) => {
     // safeParse, not parse: an invalid value must be a 400 WITH the reason rather than the 500 a
     // thrown ZodError would produce, and nothing may be written.
-    const parsed = z.object({ openingMode: ChapterOpeningModeSchema }).safeParse(request.body ?? {});
+    const parsed = z
+      .object({ openingMode: ChapterOpeningModeSchema })
+      .safeParse(request.body ?? {});
     if (!parsed.success) {
       const reason = parsed.error.issues
         .map((issue) => `${issue.path.join(".") || "body"} ${issue.message}`)
         .join("; ");
-      return reply.code(400).send({ error: `Invalid chapter opening mode: ${reason}` });
+      return reply
+        .code(400)
+        .send({ error: `Invalid chapter opening mode: ${reason}` });
     }
-    const updated = saveAppSettings(settingsDir, { chapterOpeningMode: parsed.data.openingMode });
-    return { chapterOpeningMode: updated.chapterOpeningMode ?? DEFAULT_APP_SETTINGS.chapterOpeningMode };
+    const updated = saveAppSettings(settingsDir, {
+      chapterOpeningMode: parsed.data.openingMode,
+    });
+    return {
+      chapterOpeningMode:
+        updated.chapterOpeningMode ?? DEFAULT_APP_SETTINGS.chapterOpeningMode,
+    };
   });
 
   /** The brainstorm assistant's preferences: the original-card context, and which connection it
@@ -163,7 +203,10 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
     return {
       includeOriginalCard: settings.brainstormIncludeOriginalCard ?? false,
       textProviderId: settings.brainstormTextProviderId ?? null,
-      allowNewSections: settings.brainstormAllowNewSections ?? DEFAULT_APP_SETTINGS.brainstormAllowNewSections ?? true
+      allowNewSections:
+        settings.brainstormAllowNewSections ??
+        DEFAULT_APP_SETTINGS.brainstormAllowNewSections ??
+        true,
     };
   });
 
@@ -174,14 +217,16 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
       .object({
         includeOriginalCard: z.boolean().optional(),
         textProviderId: z.string().nullable().optional(),
-        allowNewSections: z.boolean().optional()
+        allowNewSections: z.boolean().optional(),
       })
       .safeParse(request.body ?? {});
     if (!parsed.success) {
       const reason = parsed.error.issues
         .map((issue) => `${issue.path.join(".") || "body"} ${issue.message}`)
         .join("; ");
-      return reply.code(400).send({ error: `Invalid brainstorm settings: ${reason}` });
+      return reply
+        .code(400)
+        .send({ error: `Invalid brainstorm settings: ${reason}` });
     }
     const updated = saveAppSettings(settingsDir, {
       ...(parsed.data.includeOriginalCard !== undefined
@@ -192,12 +237,15 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
         : {}),
       ...(parsed.data.allowNewSections !== undefined
         ? { brainstormAllowNewSections: parsed.data.allowNewSections }
-        : {})
+        : {}),
     });
     return {
       includeOriginalCard: updated.brainstormIncludeOriginalCard ?? false,
       textProviderId: updated.brainstormTextProviderId ?? null,
-      allowNewSections: updated.brainstormAllowNewSections ?? DEFAULT_APP_SETTINGS.brainstormAllowNewSections ?? true
+      allowNewSections:
+        updated.brainstormAllowNewSections ??
+        DEFAULT_APP_SETTINGS.brainstormAllowNewSections ??
+        true,
     };
   });
 
@@ -206,10 +254,17 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
     return {
       avatarShape: settings.avatarShape ?? DEFAULT_APP_SETTINGS.avatarShape,
       coverAspect: settings.coverAspect ?? DEFAULT_APP_SETTINGS.coverAspect,
+      workspaceWidthPercent:
+        settings.workspaceWidthPercent ??
+        DEFAULT_APP_SETTINGS.workspaceWidthPercent ??
+        80,
       themeMode: settings.themeMode ?? DEFAULT_APP_SETTINGS.themeMode,
       themePreset: settings.themePreset ?? DEFAULT_APP_SETTINGS.themePreset,
       customThemeColors: settings.customThemeColors ?? {},
-      paneSwipeEnabled: settings.paneSwipeEnabled ?? DEFAULT_APP_SETTINGS.paneSwipeEnabled ?? true,
+      paneSwipeEnabled:
+        settings.paneSwipeEnabled ??
+        DEFAULT_APP_SETTINGS.paneSwipeEnabled ??
+        true,
     };
   });
 
@@ -221,16 +276,25 @@ export async function presetRoutes(app: FastifyInstance): Promise<void> {
       const reason = parsed.error.issues
         .map((issue) => `${issue.path.join(".") || "body"} ${issue.message}`)
         .join("; ");
-      return reply.code(400).send({ error: `Invalid appearance settings: ${reason}` });
+      return reply
+        .code(400)
+        .send({ error: `Invalid appearance settings: ${reason}` });
     }
     const updated = saveAppSettings(settingsDir, parsed.data);
     return {
       avatarShape: updated.avatarShape ?? DEFAULT_APP_SETTINGS.avatarShape,
       coverAspect: updated.coverAspect ?? DEFAULT_APP_SETTINGS.coverAspect,
+      workspaceWidthPercent:
+        updated.workspaceWidthPercent ??
+        DEFAULT_APP_SETTINGS.workspaceWidthPercent ??
+        80,
       themeMode: updated.themeMode ?? DEFAULT_APP_SETTINGS.themeMode,
       themePreset: updated.themePreset ?? DEFAULT_APP_SETTINGS.themePreset,
       customThemeColors: updated.customThemeColors ?? {},
-      paneSwipeEnabled: updated.paneSwipeEnabled ?? DEFAULT_APP_SETTINGS.paneSwipeEnabled ?? true,
+      paneSwipeEnabled:
+        updated.paneSwipeEnabled ??
+        DEFAULT_APP_SETTINGS.paneSwipeEnabled ??
+        true,
     };
   });
 

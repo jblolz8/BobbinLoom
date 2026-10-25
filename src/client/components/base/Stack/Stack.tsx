@@ -1,4 +1,9 @@
-import { forwardRef, type ElementType, type HTMLAttributes, type ReactNode } from "react";
+import {
+  forwardRef,
+  type ElementType,
+  type HTMLAttributes,
+  type ReactNode,
+} from "react";
 
 export type StackDirection = "row" | "column";
 export type StackAlign = "start" | "center" | "end" | "stretch" | "baseline";
@@ -38,7 +43,7 @@ export const Stack = forwardRef<HTMLElement, StackProps>(function Stack(
     children,
     ...props
   },
-  ref
+  ref,
 ) {
   const classNames = [
     "base-stack",

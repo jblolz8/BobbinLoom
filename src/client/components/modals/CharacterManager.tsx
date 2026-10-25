@@ -6,11 +6,20 @@ export type CharacterManagerProps = {
   initialEditingId?: string;
 };
 
-export function CharacterManager({ open, onClose, initialEditingId }: CharacterManagerProps) {
+export function CharacterManager({
+  open,
+  onClose,
+  initialEditingId,
+}: CharacterManagerProps) {
   if (!open) return null;
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div
+      className="modal-backdrop"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <section className="modal character-manager-modal">
         <header className="modal-header">
           <h2>Character Library</h2>

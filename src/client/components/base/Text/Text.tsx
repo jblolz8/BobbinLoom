@@ -1,4 +1,9 @@
-import { forwardRef, type ElementType, type HTMLAttributes, type ReactNode } from "react";
+import {
+  forwardRef,
+  type ElementType,
+  type HTMLAttributes,
+  type ReactNode,
+} from "react";
 
 export type TextElement =
   | "span"
@@ -88,7 +93,7 @@ export const Text = forwardRef<HTMLElement, TextProps>(function Text(
     children,
     ...props
   },
-  ref
+  ref,
 ) {
   const Component = (as ??
     (variant ? DEFAULT_ELEMENT_BY_VARIANT[variant] : undefined) ??

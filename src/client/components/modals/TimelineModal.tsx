@@ -10,11 +10,16 @@ import {
   type Node,
   type Edge,
   useNodesState,
-  useEdgesState
+  useEdgesState,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { Playthrough } from "../../../schemas";
-import { listPlaythroughTimelines, deletePlaythrough, renamePlaythrough, promotePlaythroughBranch } from "../../api";
+import {
+  listPlaythroughTimelines,
+  deletePlaythrough,
+  renamePlaythrough,
+  promotePlaythroughBranch,
+} from "../../api";
 import { Icon, IconButton } from "../base";
 
 export type TimelineModalProps = {
@@ -48,13 +53,9 @@ function TimelineCustomNode({ data }: { data: TimelineNodeData }) {
       />
 
       <div className="timeline-node-header">
-        <span className="timeline-turn-badge">
-          Turn {playthrough.turn}
-        </span>
+        <span className="timeline-turn-badge">Turn {playthrough.turn}</span>
         {isActive ? (
-          <span className="timeline-active-badge">
-            ACTIVE
-          </span>
+          <span className="timeline-active-badge">ACTIVE</span>
         ) : null}
       </div>
 
@@ -63,7 +64,8 @@ function TimelineCustomNode({ data }: { data: TimelineNodeData }) {
       </div>
 
       <div className="timeline-node-meta">
-        {playthrough.createdFromTurn !== undefined && playthrough.createdFromTurn > 0 ? (
+        {playthrough.createdFromTurn !== undefined &&
+        playthrough.createdFromTurn > 0 ? (
           <span className="timeline-meta-branched">
             <Icon name="GitBranch" size={10} /> T{playthrough.createdFromTurn}
           </span>
@@ -77,8 +79,11 @@ function TimelineCustomNode({ data }: { data: TimelineNodeData }) {
 
       {lastMsg ? (
         <div className="timeline-node-preview" title={lastMsg.content}>
-          <span className="preview-role">{lastMsg.role === "user" ? "You" : "AI"}:</span>{" "}
-          {lastMsg.content.slice(0, 50)}{lastMsg.content.length > 50 ? "…" : ""}
+          <span className="preview-role">
+            {lastMsg.role === "user" ? "You" : "AI"}:
+          </span>{" "}
+          {lastMsg.content.slice(0, 50)}
+          {lastMsg.content.length > 50 ? "…" : ""}
         </div>
       ) : null}
 
@@ -120,7 +125,8 @@ export function TimelineModal({
   const [playthroughs, setPlaythroughs] = useState<Playthrough[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedPlaythrough, setSelectedPlaythrough] = useState<Playthrough | null>(null);
+  const [selectedPlaythrough, setSelectedPlaythrough] =
+    useState<Playthrough | null>(null);
   const [renameTarget, setRenameTarget] = useState<Playthrough | null>(null);
   const [renameSaving, setRenameSaving] = useState(false);
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -171,7 +177,7 @@ export function TimelineModal({
       await onSwitchPlaythrough(id);
       onClose();
     },
-    [onSwitchPlaythrough, onClose]
+    [onSwitchPlaythrough, onClose],
   );
 
   const handleDelete = useCallback(
@@ -187,7 +193,7 @@ export function TimelineModal({
         setError(err instanceof Error ? err.message : String(err));
       }
     },
-    [selectedPlaythrough, activePlaythrough, fetchPlaythroughs]
+    [selectedPlaythrough, activePlaythrough, fetchPlaythroughs],
   );
 
   // The name comes from the dialog; the row it belongs to is the selection.
@@ -199,7 +205,9 @@ export function TimelineModal({
       setRenameError(null);
       try {
         const updated = await renamePlaythrough(target.id, name.trim());
-        setPlaythroughs((prev) => prev.map((p) => (p.id === target.id ? updated : p)));
+        setPlaythroughs((prev) =>
+          prev.map((p) => (p.id === target.id ? updated : p)),
+        );
         setSelectedPlaythrough(updated);
         setRenameTarget(null);
       } catch (err) {
@@ -208,21 +216,18 @@ export function TimelineModal({
         setRenameSaving(false);
       }
     },
-    [renameTarget]
+    [renameTarget],
   );
 
-  const handlePromote = useCallback(
-    async (id: string) => {
-      try {
-        const updated = await promotePlaythroughBranch(id);
-        setPlaythroughs((prev) => prev.map((p) => (p.id === id ? updated : p)));
-        setSelectedPlaythrough(updated);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    },
-    []
-  );
+  const handlePromote = useCallback(async (id: string) => {
+    try {
+      const updated = await promotePlaythroughBranch(id);
+      setPlaythroughs((prev) => prev.map((p) => (p.id === id ? updated : p)));
+      setSelectedPlaythrough(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, []);
 
   // Compute graph nodes and edges
   useEffect(() => {
@@ -315,7 +320,9 @@ export function TimelineModal({
       if (parentId) {
         const isPathActive = p.id === activePlaythrough.id;
         const branchLabel =
-          p.createdFromTurn !== undefined ? `Branched at T${p.createdFromTurn}` : undefined;
+          p.createdFromTurn !== undefined
+            ? `Branched at T${p.createdFromTurn}`
+            : undefined;
 
         flowEdges.push({
           id: `edge_${parentId}_${p.id}`,
@@ -366,7 +373,9 @@ export function TimelineModal({
 
   const selectedIsActive = selectedPlaythrough?.id === activePlaythrough.id;
   const parentOfSelected = selectedPlaythrough?.parentBranchId
-    ? playthroughs.find((p) => (p.branchId || p.id) === selectedPlaythrough.parentBranchId)
+    ? playthroughs.find(
+        (p) => (p.branchId || p.id) === selectedPlaythrough.parentBranchId,
+      )
     : null;
 
   return (
@@ -382,11 +391,20 @@ export function TimelineModal({
               <Icon name="GitFork" size={20} className="timeline-header-icon" />
               <span>Timelines & Branches</span>
             </h2>
-            <p>Explore and switch between timeline branches for <strong>{activePlaythrough.name}</strong>.</p>
+            <p>
+              Explore and switch between timeline branches for{" "}
+              <strong>{activePlaythrough.name}</strong>.
+            </p>
           </div>
 
           <div className="timeline-header-controls">
-            <IconButton icon="X" label="Close timeline" title="Close modal" size="md" onClick={onClose} />
+            <IconButton
+              icon="X"
+              label="Close timeline"
+              title="Close modal"
+              size="md"
+              onClick={onClose}
+            />
           </div>
         </header>
 
@@ -407,7 +425,8 @@ export function TimelineModal({
               <Icon name="GitBranch" size={40} />
               <h3>No Branches Found</h3>
               <p>
-                Branch from any message in your chat to create alternative timeline paths!
+                Branch from any message in your chat to create alternative
+                timeline paths!
               </p>
             </div>
           ) : (
@@ -441,7 +460,9 @@ export function TimelineModal({
             <div className="timeline-inspector-main">
               <div className="inspector-info">
                 <div className="inspector-title-row">
-                  <h3 title={selectedPlaythrough.name}>{selectedPlaythrough.name}</h3>
+                  <h3 title={selectedPlaythrough.name}>
+                    {selectedPlaythrough.name}
+                  </h3>
                   <button
                     className="rename-icon-btn"
                     onClick={() => {
@@ -459,12 +480,16 @@ export function TimelineModal({
                       initialValue={renameTarget.name}
                       isSaving={renameSaving}
                       errorMessage={renameError}
-                      onSave={(name) => { void handleRename(name); }}
+                      onSave={(name) => {
+                        void handleRename(name);
+                      }}
                       onCancel={() => setRenameTarget(null)}
                     />
                   ) : null}
                   {selectedIsActive ? (
-                    <span className="inspector-active-pill">CURRENT TIMELINE</span>
+                    <span className="inspector-active-pill">
+                      CURRENT TIMELINE
+                    </span>
                   ) : null}
                 </div>
 
@@ -474,7 +499,8 @@ export function TimelineModal({
                   </span>
                   <span>•</span>
                   <span>{selectedPlaythrough.messages.length} messages</span>
-                  {selectedPlaythrough.createdFromTurn !== undefined && parentOfSelected ? (
+                  {selectedPlaythrough.createdFromTurn !== undefined &&
+                  parentOfSelected ? (
                     <>
                       <span>•</span>
                       <span>
@@ -489,12 +515,23 @@ export function TimelineModal({
                     </>
                   )}
                   <span>•</span>
-                  <span style={{ color: selectedPlaythrough.isTimelineBranch ? "#94a3b8" : "#38bdf8" }}>
-                    {selectedPlaythrough.isTimelineBranch ? "Internal Timeline" : "Standalone Playthrough"}
+                  <span
+                    style={{
+                      color: selectedPlaythrough.isTimelineBranch
+                        ? "#94a3b8"
+                        : "#38bdf8",
+                    }}
+                  >
+                    {selectedPlaythrough.isTimelineBranch
+                      ? "Internal Timeline"
+                      : "Standalone Playthrough"}
                   </span>
                   <span>•</span>
                   <span>
-                    Updated {new Date(selectedPlaythrough.updatedAt).toLocaleDateString()}
+                    Updated{" "}
+                    {new Date(
+                      selectedPlaythrough.updatedAt,
+                    ).toLocaleDateString()}
                   </span>
                 </div>
               </div>
@@ -531,7 +568,9 @@ export function TimelineModal({
                       <span className="confirm-text">Delete?</span>
                       <button
                         className="danger-btn confirm"
-                        onClick={() => void handleDelete(selectedPlaythrough.id)}
+                        onClick={() =>
+                          void handleDelete(selectedPlaythrough.id)
+                        }
                       >
                         Yes
                       </button>

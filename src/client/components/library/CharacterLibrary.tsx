@@ -14,7 +14,17 @@ import {
   deleteCharacterProfileAvatar,
   getCharacterAvatarUrl,
 } from "../../api";
-import { convertCharacterApply, convertCharacterGenerate, reformatCharacterApply, reformatCharacterGenerate, suggestCharacterTags, brainstormCharacter, getPromptConfig, listPresets, getPreset } from "../../api";
+import {
+  convertCharacterApply,
+  convertCharacterGenerate,
+  reformatCharacterApply,
+  reformatCharacterGenerate,
+  suggestCharacterTags,
+  brainstormCharacter,
+  getPromptConfig,
+  listPresets,
+  getPreset,
+} from "../../api";
 import {
   LIBRARY_PREFERENCE_DEFAULTS,
   adoptLocalPreferences,
@@ -22,12 +32,34 @@ import {
   updateViewPreferences,
   getBrainstormSession,
   saveBrainstormSession,
-  clearBrainstormSession
+  clearBrainstormSession,
 } from "../../api";
-import type { CharacterTemplateUpdate, ProposedSectionChange, CharacterBrainstormResult, Preset, ResolvedLibraryPreferences } from "../../api";
-import { CHARACTER_SHEET_EXAMPLE, applySectionChanges } from "../../../engine/characterSections";
-import { isFormatAligned, resolveCharacterFormat } from "../../../engine/characterFormat";
-import { displayTitle, entryKind, filterLibraryEntries, cardBadgeLabel, groupByLineage, getGroupCreatedAt, getGroupUpdatedAt, type CharacterSortOption, type SortDirection } from "../../../engine/characterCards";
+import type {
+  CharacterTemplateUpdate,
+  ProposedSectionChange,
+  CharacterBrainstormResult,
+  Preset,
+  ResolvedLibraryPreferences,
+} from "../../api";
+import {
+  CHARACTER_SHEET_EXAMPLE,
+  applySectionChanges,
+} from "../../../engine/characterSections";
+import {
+  isFormatAligned,
+  resolveCharacterFormat,
+} from "../../../engine/characterFormat";
+import {
+  displayTitle,
+  entryKind,
+  filterLibraryEntries,
+  cardBadgeLabel,
+  groupByLineage,
+  getGroupCreatedAt,
+  getGroupUpdatedAt,
+  type CharacterSortOption,
+  type SortDirection,
+} from "../../../engine/characterCards";
 import {
   Button,
   Icon,
@@ -50,18 +82,29 @@ import { DiffModal } from "./DiffModal";
 import { TwoPaneDiff } from "./TwoPaneDiff";
 import { TagSuggestionModal } from "./TagSuggestionModal";
 import { TagTaxonomyModal } from "./TagTaxonomyModal";
-import { CharacterBrainstormPanel, type BrainstormChatMessage } from "./CharacterBrainstormPanel";
+import {
+  CharacterBrainstormPanel,
+  type BrainstormChatMessage,
+} from "./CharacterBrainstormPanel";
 import { BrainstormSettingsModal } from "./BrainstormSettingsModal";
 import {
   brainstormHistoryContent,
   brainstormStorageKey,
   decodeLegacyBrainstormSession,
   isBrainstormMessage,
-  trimBrainstormMessages
+  trimBrainstormMessages,
 } from "../../../engine/brainstorm";
 import { CharacterVisualsDrawer } from "./CharacterVisualsDrawer";
-import { getBrainstormSettings, getTagTaxonomy, setBrainstormSettings } from "../../api";
-import { groupTagsByCategory, sortTags, type TagTaxonomyConfig } from "../../../engine/tagTaxonomy";
+import {
+  getBrainstormSettings,
+  getTagTaxonomy,
+  setBrainstormSettings,
+} from "../../api";
+import {
+  groupTagsByCategory,
+  sortTags,
+  type TagTaxonomyConfig,
+} from "../../../engine/tagTaxonomy";
 
 export type CharacterLibraryProps = {
   isModal?: boolean;
@@ -146,7 +189,12 @@ function TagChipEditor({
   }
 
   function removeTag(tagToRemove: string) {
-    onChange(sortTags(tags.filter((t) => t !== tagToRemove), taxonomyConfig));
+    onChange(
+      sortTags(
+        tags.filter((t) => t !== tagToRemove),
+        taxonomyConfig,
+      ),
+    );
   }
 
   return (
@@ -161,7 +209,11 @@ function TagChipEditor({
             disabled={disabled || suggestingAI}
             title="Use AI to analyze character content and suggest tags based on library taxonomy"
           >
-            <Icon name="Sparkles" size={13} className={suggestingAI ? "sparkle-pulse" : ""} />
+            <Icon
+              name="Sparkles"
+              size={13}
+              className={suggestingAI ? "sparkle-pulse" : ""}
+            />
             {suggestingAI ? "Analyzing Tags…" : "Edit Tags by AI"}
           </button>
         ) : null}
@@ -184,7 +236,11 @@ function TagChipEditor({
             <div className="tag-input-wrap">
               <input
                 type="text"
-                placeholder={tags.length === 0 ? "Add tags (e.g. species:elf, rating:sfw)…" : "Add tag…"}
+                placeholder={
+                  tags.length === 0
+                    ? "Add tags (e.g. species:elf, rating:sfw)…"
+                    : "Add tag…"
+                }
                 value={inputVal}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -212,24 +268,28 @@ function TagChipEditor({
                       e.preventDefault();
                       if (e.shiftKey) {
                         setFocusedSuggestionIdx((prev) =>
-                          prev <= 0 ? availableSuggestions.length - 1 : prev - 1
+                          prev <= 0
+                            ? availableSuggestions.length - 1
+                            : prev - 1,
                         );
                       } else {
                         setFocusedSuggestionIdx((prev) =>
-                          prev >= availableSuggestions.length - 1 ? 0 : prev + 1
+                          prev >= availableSuggestions.length - 1
+                            ? 0
+                            : prev + 1,
                         );
                       }
                       return;
                     } else if (e.key === "ArrowDown") {
                       e.preventDefault();
                       setFocusedSuggestionIdx((prev) =>
-                        prev >= availableSuggestions.length - 1 ? 0 : prev + 1
+                        prev >= availableSuggestions.length - 1 ? 0 : prev + 1,
                       );
                       return;
                     } else if (e.key === "ArrowUp") {
                       e.preventDefault();
                       setFocusedSuggestionIdx((prev) =>
-                        prev <= 0 ? availableSuggestions.length - 1 : prev - 1
+                        prev <= 0 ? availableSuggestions.length - 1 : prev - 1,
                       );
                       return;
                     } else if (e.key === "Escape") {
@@ -251,7 +311,11 @@ function TagChipEditor({
                     } else if (inputVal.trim()) {
                       addTag(inputVal);
                     }
-                  } else if (e.key === "Backspace" && !inputVal && tags.length > 0) {
+                  } else if (
+                    e.key === "Backspace" &&
+                    !inputVal &&
+                    tags.length > 0
+                  ) {
                     removeTag(tags[tags.length - 1]);
                   }
                 }}
@@ -260,7 +324,9 @@ function TagChipEditor({
 
               {showSuggestions && availableSuggestions.length > 0 ? (
                 <div className="tag-autocomplete-dropdown" role="listbox">
-                  <span className="autocomplete-header">Library Suggestions:</span>
+                  <span className="autocomplete-header">
+                    Library Suggestions:
+                  </span>
                   {availableSuggestions.map((sug, idx) => (
                     <button
                       key={sug}
@@ -274,7 +340,11 @@ function TagChipEditor({
                       }}
                       onMouseEnter={() => setFocusedSuggestionIdx(idx)}
                     >
-                      <TagChip tag={sug} userConfig={taxonomyConfig} size="xs" />
+                      <TagChip
+                        tag={sug}
+                        userConfig={taxonomyConfig}
+                        size="xs"
+                      />
                     </button>
                   ))}
                 </div>
@@ -299,8 +369,14 @@ function TagDiffViewer({
   onRestore: () => void;
   taxonomyConfig?: TagTaxonomyConfig | null;
 }) {
-  const normOriginal = useMemo(() => originalTags.map((t) => t.toLowerCase()), [originalTags]);
-  const normCurrent = useMemo(() => currentTags.map((t) => t.toLowerCase()), [currentTags]);
+  const normOriginal = useMemo(
+    () => originalTags.map((t) => t.toLowerCase()),
+    [originalTags],
+  );
+  const normCurrent = useMemo(
+    () => currentTags.map((t) => t.toLowerCase()),
+    [currentTags],
+  );
 
   const added = normCurrent.filter((t) => !normOriginal.includes(t));
   const removed = normOriginal.filter((t) => !normCurrent.includes(t));
@@ -323,7 +399,9 @@ function TagDiffViewer({
 
       <div className="tag-diff-container">
         <div className="tag-diff-pane">
-          <span className="tag-diff-pane-header">Original CCv2 Tags ({originalTags.length})</span>
+          <span className="tag-diff-pane-header">
+            Original CCv2 Tags ({originalTags.length})
+          </span>
           <div className="tag-diff-pane-chips">
             {originalTags.length === 0 ? (
               <span className="empty-tags-hint">(no original tags)</span>
@@ -341,7 +419,9 @@ function TagDiffViewer({
         </div>
 
         <div className="tag-diff-pane">
-          <span className="tag-diff-pane-header">BL Format Tags ({currentTags.length})</span>
+          <span className="tag-diff-pane-header">
+            BL Format Tags ({currentTags.length})
+          </span>
           <div className="tag-diff-pane-chips">
             {currentTags.length === 0 ? (
               <span className="empty-tags-hint">(none)</span>
@@ -376,7 +456,6 @@ function formatLibraryDate(isoOrStr?: string): string {
     return "";
   }
 }
-
 
 /** Card dropdown "more options" menu */
 function MoreOptionsMenu({
@@ -422,7 +501,13 @@ function MoreOptionsMenu({
           </DropdownMenuItem>
           {onConvert ? (
             <DropdownMenuItem
-              icon={<Icon name="Sparkles" size={14} className={converting ? "sparkle-pulse" : ""} />}
+              icon={
+                <Icon
+                  name="Sparkles"
+                  size={14}
+                  className={converting ? "sparkle-pulse" : ""}
+                />
+              }
               onClick={onConvert}
               disabled={converting}
             >
@@ -442,13 +527,18 @@ function MoreOptionsMenu({
   );
 }
 
-export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibraryProps) {
+export function CharacterLibrary({
+  isModal,
+  initialEditingId,
+}: CharacterLibraryProps) {
   const [templates, setTemplates] = useState<CharacterTemplate[]>([]);
   const [form, setForm] = useState<CharacterForm>(blankForm());
   const [initialForm, setInitialForm] = useState<CharacterForm>(blankForm());
   /** The action to run once the reader accepts losing their unsaved work — closing the editor or
    *  opening a different character. Null means the confirmation is not up. */
-  const [discardConfirm, setDiscardConfirm] = useState<{ after: () => void } | null>(null);
+  const [discardConfirm, setDiscardConfirm] = useState<{
+    after: () => void;
+  } | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingIsCcv2, setEditingIsCcv2] = useState(false);
@@ -463,17 +553,21 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
 
   const [tagFilterSearch, setTagFilterSearch] = useState("");
   const [importing, setImporting] = useState(false);
-  const [viewMode, setViewModeState] = useState<ViewMode>(LIBRARY_PREFERENCE_DEFAULTS.viewMode);
+  const [viewMode, setViewModeState] = useState<ViewMode>(
+    LIBRARY_PREFERENCE_DEFAULTS.viewMode,
+  );
 
   const setViewMode = (mode: ViewMode) => {
     setViewModeState(mode);
     writeLibraryPreference({ viewMode: mode });
   };
 
-  const [sortBy, setSortByState] = useState<CharacterSortOption>(LIBRARY_PREFERENCE_DEFAULTS.sortBy);
+  const [sortBy, setSortByState] = useState<CharacterSortOption>(
+    LIBRARY_PREFERENCE_DEFAULTS.sortBy,
+  );
 
   const [sortDirection, setSortDirectionState] = useState<SortDirection>(
-    LIBRARY_PREFERENCE_DEFAULTS.sortDir
+    LIBRARY_PREFERENCE_DEFAULTS.sortDir,
   );
 
   const setSortBy = (option: CharacterSortOption) => {
@@ -520,7 +614,10 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     let cancelled = false;
     (async () => {
       try {
-        const [summaries, def] = await Promise.all([listPresets(), getPromptConfig()]);
+        const [summaries, def] = await Promise.all([
+          listPresets(),
+          getPromptConfig(),
+        ]);
         const full = await Promise.all(summaries.map((s) => getPreset(s.id)));
         if (cancelled) return;
         setPresetOptions(full);
@@ -530,7 +627,9 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
         // Ignore preset-load failures — the format falls back to Default.
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // ── Edit-form tab (converted cards): BL Format (default) / Original / Both ──
@@ -573,11 +672,12 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
   const tagSuggestAbortControllerRef = useRef<AbortController | null>(null);
 
   // ── Tag Taxonomy & Categorization State ──
-  const [taxonomyConfig, setTaxonomyConfig] = useState<TagTaxonomyConfig | null>(null);
+  const [taxonomyConfig, setTaxonomyConfig] =
+    useState<TagTaxonomyConfig | null>(null);
   const [taxonomyModalOpen, setTaxonomyModalOpen] = useState(false);
-  const [sidebarViewMode, setSidebarViewModeState] = useState<"grouped" | "flat">(
-    LIBRARY_PREFERENCE_DEFAULTS.sidebarViewMode
-  );
+  const [sidebarViewMode, setSidebarViewModeState] = useState<
+    "grouped" | "flat"
+  >(LIBRARY_PREFERENCE_DEFAULTS.sidebarViewMode);
 
   const setSidebarViewMode = (mode: "grouped" | "flat") => {
     setSidebarViewModeState(mode);
@@ -585,7 +685,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
   };
 
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(
-    () => new Set(LIBRARY_PREFERENCE_DEFAULTS.collapsedCategories)
+    () => new Set(LIBRARY_PREFERENCE_DEFAULTS.collapsedCategories),
   );
 
   /** Set the moment the reader changes any of these, so a read that lands later never overwrites what
@@ -634,11 +734,19 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [includeOriginalCcv2, setIncludeOriginalCcv2] = useState(false);
-  const [brainstormProviderId, setBrainstormProviderId] = useState<string | null>(null);
-  const [brainstormAllowNewSections, setBrainstormAllowNewSections] = useState(true);
+  const [brainstormProviderId, setBrainstormProviderId] = useState<
+    string | null
+  >(null);
+  const [brainstormAllowNewSections, setBrainstormAllowNewSections] =
+    useState(true);
   const [brainstormSettingsOpen, setBrainstormSettingsOpen] = useState(false);
-  const [brainstormSettingsError, setBrainstormSettingsError] = useState<string | null>(null);
-  const [revertRetryTarget, setRevertRetryTarget] = useState<{ id: string; drops: number } | null>(null);
+  const [brainstormSettingsError, setBrainstormSettingsError] = useState<
+    string | null
+  >(null);
+  const [revertRetryTarget, setRevertRetryTarget] = useState<{
+    id: string;
+    drops: number;
+  } | null>(null);
   const aiAbortControllerRef = useRef<AbortController | null>(null);
 
   // The assistant's settings are global, so they are read once and written as they change.
@@ -668,8 +776,9 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     const key = brainstormStorageKey(editingId);
     // The device's old localStorage copy is handed to the server once. The server always wins, so a
     // session that already exists there is not overwritten by whatever this browser still holds.
-    const legacy = (decodeLegacyBrainstormSession(window.localStorage.getItem(key)) ?? [])
-      .filter(isBrainstormMessage) as BrainstormChatMessage[];
+    const legacy = (
+      decodeLegacyBrainstormSession(window.localStorage.getItem(key)) ?? []
+    ).filter(isBrainstormMessage) as BrainstormChatMessage[];
     void (async () => {
       const fromServer = await getBrainstormSession(editingId);
       if (cancelled) return;
@@ -693,17 +802,25 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     };
   }, [editorOpen, editingId]);
 
-  function persistBrainstormSession(messages: BrainstormChatMessage[], id = editingId) {
+  function persistBrainstormSession(
+    messages: BrainstormChatMessage[],
+    id = editingId,
+  ) {
     // The id is a parameter because the first save of a new character sets state that this closure
     // will not see until the next render, and those messages are exactly the ones at risk.
     if (!id) return;
-    void saveBrainstormSession(id, trimBrainstormMessages(messages)).catch(() => {
-      /* A failed write must not break the conversation. */
-    });
+    void saveBrainstormSession(id, trimBrainstormMessages(messages)).catch(
+      () => {
+        /* A failed write must not break the conversation. */
+      },
+    );
   }
 
   // ── Deletion Confirmation Modal State ──
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   const isFormDirty = useMemo(() => {
     if (!editorOpen) return false;
@@ -731,7 +848,9 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     try {
       const [chars, taxRes] = await Promise.all([
         listCharacters(),
-        getTagTaxonomy().catch(() => ({ tagTaxonomy: { customCategories: [], tagOverrides: {} } })),
+        getTagTaxonomy().catch(() => ({
+          tagTaxonomy: { customCategories: [], tagOverrides: {} },
+        })),
       ]);
       setTemplates(chars);
       if (taxRes?.tagTaxonomy) {
@@ -856,7 +975,10 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
    * Every way of asking again — sending, editing a question, reverting a reply, regenerating one —
    * goes through here, so the history is built in exactly one place.
    */
-  async function runBrainstormTurn(history: BrainstormChatMessage[], userMessage: BrainstormChatMessage) {
+  async function runBrainstormTurn(
+    history: BrainstormChatMessage[],
+    userMessage: BrainstormChatMessage,
+  ) {
     if (aiAbortControllerRef.current) {
       aiAbortControllerRef.current.abort();
     }
@@ -870,7 +992,9 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     setAiError(null);
 
     try {
-      const activeTpl = editingId ? templates.find((t) => t.id === editingId) : undefined;
+      const activeTpl = editingId
+        ? templates.find((t) => t.id === editingId)
+        : undefined;
       const res = await brainstormCharacter(
         {
           character: {
@@ -882,14 +1006,17 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
           },
           // The proposals go back with the reply: without them a follow-up like "make the second one
           // shorter" has nothing to refer to.
-          chatHistory: history.map((m) => ({ role: m.role, content: brainstormHistoryContent(m) })),
+          chatHistory: history.map((m) => ({
+            role: m.role,
+            content: brainstormHistoryContent(m),
+          })),
           userMessage: userMessage.content,
           includeOriginalCard: includeOriginalCcv2,
           allowNewSections: brainstormAllowNewSections,
           ...(brainstormProviderId ? { providerId: brainstormProviderId } : {}),
           format: targetFormat,
         },
-        { signal: controller.signal }
+        { signal: controller.signal },
       );
 
       const assistantMsg: BrainstormChatMessage = {
@@ -908,7 +1035,10 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
       persistBrainstormSession(settled);
     } catch (e) {
       if (
-        (e instanceof Error && (e.name === "AbortError" || e.message.includes("abort") || e.message.includes("cancelled"))) ||
+        (e instanceof Error &&
+          (e.name === "AbortError" ||
+            e.message.includes("abort") ||
+            e.message.includes("cancelled"))) ||
         controller.signal.aborted
       ) {
         return;
@@ -923,7 +1053,11 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
   }
 
   function handleSendBrainstormMessage(userText: string) {
-    return runBrainstormTurn(aiMessages, { id: crypto.randomUUID(), role: "user", content: userText });
+    return runBrainstormTurn(aiMessages, {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: userText,
+    });
   }
 
   /** The question an assistant reply was answering, and the history before it. */
@@ -963,7 +1097,10 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
   function handleEditBrainstormMessage(messageId: string, text: string) {
     const index = aiMessages.findIndex((m) => m.id === messageId);
     if (index === -1) return;
-    const edited: BrainstormChatMessage = { ...aiMessages[index]!, content: text };
+    const edited: BrainstormChatMessage = {
+      ...aiMessages[index]!,
+      content: text,
+    };
     // Whatever followed the edited question no longer follows from it.
     const kept = [...aiMessages.slice(0, index), edited];
     setAiMessages(kept);
@@ -976,21 +1113,33 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
   function handleToggleIncludeOriginalCard(include: boolean) {
     setIncludeOriginalCcv2(include);
     setBrainstormSettingsError(null);
-    setBrainstormSettings({ includeOriginalCard: include }).catch((error: unknown) => {
-      // The switch does not claim a preference that could not be stored.
-      setIncludeOriginalCcv2(!include);
-      setBrainstormSettingsError(error instanceof Error ? error.message : "Could not save that preference");
-    });
+    setBrainstormSettings({ includeOriginalCard: include }).catch(
+      (error: unknown) => {
+        // The switch does not claim a preference that could not be stored.
+        setIncludeOriginalCcv2(!include);
+        setBrainstormSettingsError(
+          error instanceof Error
+            ? error.message
+            : "Could not save that preference",
+        );
+      },
+    );
   }
 
   function handleToggleAllowNewSections(allow: boolean) {
     setBrainstormAllowNewSections(allow);
     setBrainstormSettingsError(null);
-    setBrainstormSettings({ allowNewSections: allow }).catch((error: unknown) => {
-      // The switch does not claim a preference that could not be stored.
-      setBrainstormAllowNewSections(!allow);
-      setBrainstormSettingsError(error instanceof Error ? error.message : "Could not save that preference");
-    });
+    setBrainstormSettings({ allowNewSections: allow }).catch(
+      (error: unknown) => {
+        // The switch does not claim a preference that could not be stored.
+        setBrainstormAllowNewSections(!allow);
+        setBrainstormSettingsError(
+          error instanceof Error
+            ? error.message
+            : "Could not save that preference",
+        );
+      },
+    );
   }
 
   function handleBrainstormProviderChange(id: string | null) {
@@ -999,11 +1148,18 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     setBrainstormSettingsError(null);
     setBrainstormSettings({ textProviderId: id }).catch((error: unknown) => {
       setBrainstormProviderId(previous);
-      setBrainstormSettingsError(error instanceof Error ? error.message : "Could not save that connection");
+      setBrainstormSettingsError(
+        error instanceof Error
+          ? error.message
+          : "Could not save that connection",
+      );
     });
   }
 
-  function handleApplySection(section: ProposedSectionChange, messageId: string) {
+  function handleApplySection(
+    section: ProposedSectionChange,
+    messageId: string,
+  ) {
     const updatedContent = applySectionChanges(form.content, [section]);
     setForm((f) => ({ ...f, content: updatedContent }));
 
@@ -1016,7 +1172,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
               [`section:${section.header.toLowerCase()}`]: true,
             },
           }
-        : msg
+        : msg,
     );
     setAiMessages(next);
     persistBrainstormSession(next);
@@ -1024,7 +1180,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
 
   function handleApplyAllProposed(
     proposed: CharacterBrainstormResult["proposedChanges"],
-    messageId: string
+    messageId: string,
   ) {
     if (!proposed) return;
 
@@ -1053,7 +1209,9 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
         ...f,
         content,
         tags,
-        ...(proposed.creatorNotes ? { creatorNotes: proposed.creatorNotes } : {}),
+        ...(proposed.creatorNotes
+          ? { creatorNotes: proposed.creatorNotes }
+          : {}),
         ...(proposed.name ? { name: proposed.name } : {}),
       };
     });
@@ -1067,12 +1225,15 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
               all: true,
               ...(proposed.sections
                 ? Object.fromEntries(
-                    proposed.sections.map((s) => [`section:${s.header.toLowerCase()}`, true])
+                    proposed.sections.map((s) => [
+                      `section:${s.header.toLowerCase()}`,
+                      true,
+                    ]),
                   )
                 : {}),
             },
           }
-        : msg
+        : msg,
     );
     setAiMessages(next);
     persistBrainstormSession(next);
@@ -1094,7 +1255,8 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     const controller = new AbortController();
     tagSuggestAbortControllerRef.current = controller;
 
-    const cleanGuidance = typeof guidance === "string" ? guidance.trim() || undefined : undefined;
+    const cleanGuidance =
+      typeof guidance === "string" ? guidance.trim() || undefined : undefined;
     setSuggestedTags([]);
     setTagSuggestLoading(true);
     setTagSuggestError(null);
@@ -1110,12 +1272,15 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
           guidance: cleanGuidance,
           libraryTags: allTagsList,
         },
-        { signal: controller.signal }
+        { signal: controller.signal },
       );
       setSuggestedTags(res.tags);
     } catch (e) {
       if (
-        (e instanceof Error && (e.name === "AbortError" || e.message.includes("abort") || e.message.includes("cancelled"))) ||
+        (e instanceof Error &&
+          (e.name === "AbortError" ||
+            e.message.includes("abort") ||
+            e.message.includes("cancelled"))) ||
         controller.signal.aborted
       ) {
         return;
@@ -1137,7 +1302,10 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
       const canonicalTags = sortTags(form.tags, taxonomyConfig);
       const update = formToUpdate({ ...form, tags: canonicalTags });
       if (editingId) {
-        await updateCharacter(editingId, editingIsCcv2 ? { name: update.name } : update);
+        await updateCharacter(
+          editingId,
+          editingIsCcv2 ? { name: update.name } : update,
+        );
         setStatus(`"${form.name}" saved successfully.`);
       } else {
         const created = await createCharacter(form.name);
@@ -1197,16 +1365,22 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result ?? ""));
-        reader.onerror = () => reject(reader.error ?? new Error("Could not read file."));
+        reader.onerror = () =>
+          reject(reader.error ?? new Error("Could not read file."));
         reader.readAsDataURL(file);
       });
       const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1); // strip data: prefix
       const result = await importCharacter(file.name, base64);
       // Check for already-converted notice
-      if ("notice" in result && (result as Record<string, unknown>).notice === "already_converted") {
-        const existing = (result as Record<string, unknown>).existingRecord as CharacterTemplate;
+      if (
+        "notice" in result &&
+        (result as Record<string, unknown>).notice === "already_converted"
+      ) {
+        const existing = (result as Record<string, unknown>)
+          .existingRecord as CharacterTemplate;
         setImportNotice({
-          message: "This character already exists with its original content, importing will make no change.",
+          message:
+            "This character already exists with its original content, importing will make no change.",
           existingRecord: existing,
         });
         return;
@@ -1235,7 +1409,10 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     const controller = new AbortController();
     abortControllerRef.current = controller;
     try {
-      const result = await convertCharacterGenerate(template.id, { format: targetFormat, signal: controller.signal });
+      const result = await convertCharacterGenerate(template.id, {
+        format: targetFormat,
+        signal: controller.signal,
+      });
       setDiffData({
         oldContent: result.originalContent,
         newContent: result.content,
@@ -1243,7 +1420,12 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
         kind: "convert",
       });
     } catch (e) {
-      if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted") || e.message.includes("cancelled"))) {
+      if (
+        e instanceof Error &&
+        (e.name === "AbortError" ||
+          e.message.includes("aborted") ||
+          e.message.includes("cancelled"))
+      ) {
         setStatus("Conversion cancelled.");
       } else {
         const errMsg = e instanceof Error ? e.message : String(e);
@@ -1276,7 +1458,12 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
         kind: "convert",
       });
     } catch (e) {
-      if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted") || e.message.includes("cancelled"))) {
+      if (
+        e instanceof Error &&
+        (e.name === "AbortError" ||
+          e.message.includes("aborted") ||
+          e.message.includes("cancelled"))
+      ) {
         setStatus("Conversion retry cancelled.");
       } else {
         setConvertError(e instanceof Error ? e.message : String(e));
@@ -1301,14 +1488,18 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     setConvertLoading(true);
     setConvertError(null);
     try {
-      const applyResult = await convertCharacterApply(diffData.recordId, diffData.newContent);
+      const applyResult = await convertCharacterApply(
+        diffData.recordId,
+        diffData.newContent,
+      );
       const convertedRecordId = diffData.recordId;
       setDiffData(null);
       setConvertingId(null);
       const refreshed = await listCharacters();
       setTemplates(refreshed);
 
-      const targetTpl = refreshed.find(t => t.id === convertedRecordId) ?? applyResult.record;
+      const targetTpl =
+        refreshed.find((t) => t.id === convertedRecordId) ?? applyResult.record;
       setConvertedSuccess({
         recordId: convertedRecordId,
         recordName: displayTitle(targetTpl),
@@ -1345,7 +1536,10 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     const controller = new AbortController();
     abortControllerRef.current = controller;
     try {
-      const result = await reformatCharacterGenerate(editingId, { format: targetFormat, signal: controller.signal });
+      const result = await reformatCharacterGenerate(editingId, {
+        format: targetFormat,
+        signal: controller.signal,
+      });
       setDiffData({
         oldContent: result.originalContent,
         newContent: result.content,
@@ -1353,7 +1547,12 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
         kind: "reformat",
       });
     } catch (e) {
-      if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted") || e.message.includes("cancelled"))) {
+      if (
+        e instanceof Error &&
+        (e.name === "AbortError" ||
+          e.message.includes("aborted") ||
+          e.message.includes("cancelled"))
+      ) {
         setStatus("Reformat cancelled.");
       } else {
         setConvertError(e instanceof Error ? e.message : String(e));
@@ -1384,7 +1583,12 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
         kind: "reformat",
       });
     } catch (e) {
-      if (e instanceof Error && (e.name === "AbortError" || e.message.includes("aborted") || e.message.includes("cancelled"))) {
+      if (
+        e instanceof Error &&
+        (e.name === "AbortError" ||
+          e.message.includes("aborted") ||
+          e.message.includes("cancelled"))
+      ) {
         setStatus("Reformat retry cancelled.");
       } else {
         setConvertError(e instanceof Error ? e.message : String(e));
@@ -1400,14 +1604,18 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     setConvertLoading(true);
     setConvertError(null);
     try {
-      const result = await reformatCharacterApply(diffData.recordId, diffData.newContent);
+      const result = await reformatCharacterApply(
+        diffData.recordId,
+        diffData.newContent,
+      );
       const reformattedRecordId = diffData.recordId;
       setDiffData(null);
       setConvertingId(null);
       const refreshed = await listCharacters();
       setTemplates(refreshed);
 
-      const targetTpl = refreshed.find(t => t.id === reformattedRecordId) ?? result.record;
+      const targetTpl =
+        refreshed.find((t) => t.id === reformattedRecordId) ?? result.record;
       setConvertedSuccess({
         recordId: reformattedRecordId,
         recordName: displayTitle(targetTpl),
@@ -1448,7 +1656,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
   const filteredTagCounts = useMemo(() => {
     if (!tagFilterSearch.trim()) return allTagCounts;
     const q = tagFilterSearch.trim().toLowerCase();
-    return allTagCounts.filter(item => item.tag.includes(q));
+    return allTagCounts.filter((item) => item.tag.includes(q));
   }, [allTagCounts, tagFilterSearch]);
 
   const groupedTagCategories = useMemo(() => {
@@ -1466,22 +1674,24 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
   const activeFilterTags = useMemo(() => {
     return search
       .split(/\s+/)
-      .map(t => t.trim().toLowerCase())
-      .filter(t => t.startsWith("tag:") && t.length > 4)
-      .map(t => t.slice(4));
+      .map((t) => t.trim().toLowerCase())
+      .filter((t) => t.startsWith("tag:") && t.length > 4)
+      .map((t) => t.slice(4));
   }, [search]);
 
   function isTagActive(tag: string): boolean {
     const raw = tag.toLowerCase();
     const norm = raw.replace(/\s+/g, "_");
-    return activeFilterTags.some(t => t === norm || t === raw || t.replace(/_/g, " ") === raw);
+    return activeFilterTags.some(
+      (t) => t === norm || t === raw || t.replace(/_/g, " ") === raw,
+    );
   }
 
   function toggleTag(tag: string) {
     const normTag = tag.trim().toLowerCase().replace(/\s+/g, "_");
     const tagToken = `tag:${normTag}`;
     const tokens = search.split(/\s+/).filter(Boolean);
-    const existingIdx = tokens.findIndex(t => {
+    const existingIdx = tokens.findIndex((t) => {
       const low = t.toLowerCase();
       return low === tagToken || low === `tag:${tag.toLowerCase()}`;
     });
@@ -1498,7 +1708,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
     const normTag = tag.trim().toLowerCase().replace(/\s+/g, "_");
     const tagToken = `tag:${normTag}`;
     const tokens = search.split(/\s+/).filter(Boolean);
-    const next = tokens.filter(t => {
+    const next = tokens.filter((t) => {
       const low = t.toLowerCase();
       return low !== tagToken && low !== `tag:${tag.toLowerCase()}`;
     });
@@ -1506,8 +1716,14 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
   }
 
   // ── Filtering and Pagination ──
-  const filteredTemplates = useMemo(() => filterLibraryEntries(templates, search), [templates, search]);
-  const groups = useMemo(() => groupByLineage(filteredTemplates, sortBy, sortDirection), [filteredTemplates, sortBy, sortDirection]);
+  const filteredTemplates = useMemo(
+    () => filterLibraryEntries(templates, search),
+    [templates, search],
+  );
+  const groups = useMemo(
+    () => groupByLineage(filteredTemplates, sortBy, sortDirection),
+    [filteredTemplates, sortBy, sortDirection],
+  );
 
   // Pagination — shared maths + state (engine/pagination.ts + hooks/usePagination.ts). The page
   // returns to 1 when the search text, sort field, or sort direction changes (this replaces the old
@@ -1515,7 +1731,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
   const pager = usePagination({
     items: groups,
     persistAs: "library",
-    resetDeps: [search, sortBy, sortDirection]
+    resetDeps: [search, sortBy, sortDirection],
   });
   const paginatedGroups = pager.pageItems;
 
@@ -1568,9 +1784,14 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
   }, [galleryHeight, isModal]);
 
   return (
-    <div className={`character-library-container ${isModal ? "is-modal" : "is-workspace"}`}>
+    <div
+      className={`character-library-container ${isModal ? "is-modal" : "is-workspace"}`}
+    >
       {isModal ? (
-        <div className="global-scope-badge" title="Edits modify global templates used for new playthroughs">
+        <div
+          className="global-scope-badge"
+          title="Edits modify global templates used for new playthroughs"
+        >
           🌐 Global Character Templates
         </div>
       ) : null}
@@ -1583,7 +1804,9 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                 <Icon name="Sparkles" size={17} className="sparkle-pulse" />
               </span>
               <span className="conversion-banner-text">
-                Converting <strong>&quot;{displayTitle(convertingCharacter)}&quot;</strong> to BobbinLoom format with AI…
+                Converting{" "}
+                <strong>&quot;{displayTitle(convertingCharacter)}&quot;</strong>{" "}
+                to BobbinLoom format with AI…
               </span>
             </div>
             <button
@@ -1617,9 +1840,19 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                 <Icon name="CheckCircle2" size={18} />
               </span>
               <span className="conversion-success-text">
-                {convertedSuccess.kind === "reformat"
-                  ? <>Successfully updated <strong>&quot;{convertedSuccess.recordName}&quot;</strong> into the newer format!</>
-                  : <>Successfully converted and saved <strong>&quot;{convertedSuccess.recordName}&quot;</strong> to BobbinLoom format!</>}
+                {convertedSuccess.kind === "reformat" ? (
+                  <>
+                    Successfully updated{" "}
+                    <strong>&quot;{convertedSuccess.recordName}&quot;</strong>{" "}
+                    into the newer format!
+                  </>
+                ) : (
+                  <>
+                    Successfully converted and saved{" "}
+                    <strong>&quot;{convertedSuccess.recordName}&quot;</strong>{" "}
+                    to BobbinLoom format!
+                  </>
+                )}
               </span>
               <button
                 type="button"
@@ -1650,7 +1883,9 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                 <Icon name="CheckCircle2" size={18} />
               </span>
               <span className="conversion-success-text">
-                Successfully imported <strong>&quot;{importSuccess.recordName}&quot;</strong> into the library!
+                Successfully imported{" "}
+                <strong>&quot;{importSuccess.recordName}&quot;</strong> into the
+                library!
               </span>
               <button
                 type="button"
@@ -1681,7 +1916,9 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                 <Icon name="Trash2" size={18} />
               </span>
               <span className="conversion-success-text">
-                Character card <strong>&quot;{deleteSuccess.recordName}&quot;</strong> was deleted from the library.
+                Character card{" "}
+                <strong>&quot;{deleteSuccess.recordName}&quot;</strong> was
+                deleted from the library.
               </span>
             </div>
             <button
@@ -1723,7 +1960,11 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                 <Icon name="AlertCircle" size={18} />
               </span>
               <span className="conversion-success-text error-text">
-                Failed to convert <strong>&quot;{displayTitle(conversionFailed.template)}&quot;</strong> to BobbinLoom format: {conversionFailed.error}
+                Failed to convert{" "}
+                <strong>
+                  &quot;{displayTitle(conversionFailed.template)}&quot;
+                </strong>{" "}
+                to BobbinLoom format: {conversionFailed.error}
               </span>
               <Button
                 type="button"
@@ -1752,7 +1993,9 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
         ) : null}
 
         {editorOpen ? (
-          <div className={`character-editor-inline ${aiBrainstormOpen ? "split-layout" : ""}`}>
+          <div
+            className={`character-editor-inline ${aiBrainstormOpen ? "split-layout" : ""}`}
+          >
             <div className="editor-top-bar">
               <div className="editor-title-wrap">
                 <Button
@@ -1768,20 +2011,36 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                 </Button>
                 <h3>{editingId ? `Edit: ${form.name}` : "New Character"}</h3>
                 {status ? (
-                  <span className={`editor-status-toast ${status.toLowerCase().includes("error") || status.toLowerCase().includes("fail") ? "is-error" : ""}`}>
-                    <Icon name={status.toLowerCase().includes("error") || status.toLowerCase().includes("fail") ? "AlertCircle" : "Check"} size={13} />
+                  <span
+                    className={`editor-status-toast ${status.toLowerCase().includes("error") || status.toLowerCase().includes("fail") ? "is-error" : ""}`}
+                  >
+                    <Icon
+                      name={
+                        status.toLowerCase().includes("error") ||
+                        status.toLowerCase().includes("fail")
+                          ? "AlertCircle"
+                          : "Check"
+                      }
+                      size={13}
+                    />
                     {status}
                   </span>
                 ) : null}
               </div>
 
               <div className="editor-header-actions">
-                <div className="format-picker-label" title="Target character format used by Convert to BL and Update into Newer Format">
+                <div
+                  className="format-picker-label"
+                  title="Target character format used by Convert to BL and Update into Newer Format"
+                >
                   <span>Format</span>
                   <SimpleSelect<string>
                     value={targetFormatId ?? (presetOptions[0]?.id || "")}
                     onChange={(val) => setTargetFormatId(val)}
-                    options={presetOptions.map((p) => ({ value: p.id, label: p.name }))}
+                    options={presetOptions.map((p) => ({
+                      value: p.id,
+                      label: p.name,
+                    }))}
                     size="xs"
                   />
                 </div>
@@ -1791,17 +2050,29 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                     type="button"
                     className={`ai-brainstorm-toggle-btn ${aiBrainstormOpen ? "active" : ""}`}
                     onClick={() => setAiBrainstormOpen(!aiBrainstormOpen)}
-                    title={aiBrainstormOpen ? "Hide AI Assistant" : "Open AI Brainstorm Assistant"}
+                    title={
+                      aiBrainstormOpen
+                        ? "Hide AI Assistant"
+                        : "Open AI Brainstorm Assistant"
+                    }
                   >
-                    <Icon name="Sparkles" size={14} className={aiLoading ? "sparkle-pulse" : ""} />
+                    <Icon
+                      name="Sparkles"
+                      size={14}
+                      className={aiLoading ? "sparkle-pulse" : ""}
+                    />
                     <span>AI Assistant</span>
                     {aiMessages.length > 0 && (
-                      <span className="ai-msg-count-badge">{aiMessages.length}</span>
+                      <span className="ai-msg-count-badge">
+                        {aiMessages.length}
+                      </span>
                     )}
                   </button>
                 ) : null}
 
-                {!editingIsCcv2 && editingId && !isFormatAligned(form.content, targetFormat) ? (
+                {!editingIsCcv2 &&
+                editingId &&
+                !isFormatAligned(form.content, targetFormat) ? (
                   <Button
                     type="button"
                     size="xs"
@@ -1809,9 +2080,17 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                     onClick={() => void handleReformat()}
                     disabled={convertLoading}
                     title="Restructure this sheet to match the selected format, with a preview before applying"
-                    leftIcon={<Icon name="Sparkles" size={14} className={convertLoading ? "sparkle-pulse" : ""} />}
+                    leftIcon={
+                      <Icon
+                        name="Sparkles"
+                        size={14}
+                        className={convertLoading ? "sparkle-pulse" : ""}
+                      />
+                    }
                   >
-                    {convertLoading ? "Updating…" : "Update into Newer Format with AI"}
+                    {convertLoading
+                      ? "Updating…"
+                      : "Update into Newer Format with AI"}
                   </Button>
                 ) : null}
 
@@ -1822,7 +2101,7 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                     variant="primary"
                     className="convert-btn"
                     onClick={() => {
-                      const tpl = templates.find(t => t.id === editingId);
+                      const tpl = templates.find((t) => t.id === editingId);
                       if (tpl) handleConvert(tpl);
                     }}
                     disabled={convertLoading}
@@ -1836,27 +2115,47 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
             <div className="editor-split-container">
               <div className="editor-main-pane">
                 <CharacterVisualsDrawer
-                  template={editingId ? templates.find((t) => t.id === editingId) : null}
+                  template={
+                    editingId ? templates.find((t) => t.id === editingId) : null
+                  }
                   characterName={form.name}
                   onUploadPortrait={async (dataBase64, fileName) => {
                     if (!editingId) return;
-                    const res = await uploadCharacterAvatar(editingId, "portrait", dataBase64, fileName);
-                    setTemplates((prev) => prev.map((t) => (t.id === editingId ? res.record : t)));
+                    const res = await uploadCharacterAvatar(
+                      editingId,
+                      "portrait",
+                      dataBase64,
+                      fileName,
+                    );
+                    setTemplates((prev) =>
+                      prev.map((t) => (t.id === editingId ? res.record : t)),
+                    );
                   }}
                   onUploadProfile={async (dataBase64, fileName) => {
                     if (!editingId) return;
-                    const res = await uploadCharacterAvatar(editingId, "profile", dataBase64, fileName);
-                    setTemplates((prev) => prev.map((t) => (t.id === editingId ? res.record : t)));
+                    const res = await uploadCharacterAvatar(
+                      editingId,
+                      "profile",
+                      dataBase64,
+                      fileName,
+                    );
+                    setTemplates((prev) =>
+                      prev.map((t) => (t.id === editingId ? res.record : t)),
+                    );
                   }}
                   onRestoreOriginalPortrait={async () => {
                     if (!editingId) return;
                     const res = await restoreOriginalCharacterAvatar(editingId);
-                    setTemplates((prev) => prev.map((t) => (t.id === editingId ? res.record : t)));
+                    setTemplates((prev) =>
+                      prev.map((t) => (t.id === editingId ? res.record : t)),
+                    );
                   }}
                   onDeleteProfile={async () => {
                     if (!editingId) return;
                     const res = await deleteCharacterProfileAvatar(editingId);
-                    setTemplates((prev) => prev.map((t) => (t.id === editingId ? res.record : t)));
+                    setTemplates((prev) =>
+                      prev.map((t) => (t.id === editingId ? res.record : t)),
+                    );
                   }}
                   disabled={saving}
                 />
@@ -1864,14 +2163,23 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                 <TextInput
                   label="Name"
                   value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, name: e.target.value }))
+                  }
                 />
 
                 {(() => {
-                  const tpl = editingId ? templates.find(t => t.id === editingId) : undefined;
-                  const isConverted = editingId !== null && !!tpl?.ccv2Content && !editingIsCcv2;
-                  const originalCreatorNotes = tpl?.ccv2CreatorNotes ?? tpl?.creatorNotes ?? "";
-                  const originalTags = tpl?.ccv2Tags ?? (tpl?.format === "ccv2" ? (tpl.tags ?? []) : []) ?? [];
+                  const tpl = editingId
+                    ? templates.find((t) => t.id === editingId)
+                    : undefined;
+                  const isConverted =
+                    editingId !== null && !!tpl?.ccv2Content && !editingIsCcv2;
+                  const originalCreatorNotes =
+                    tpl?.ccv2CreatorNotes ?? tpl?.creatorNotes ?? "";
+                  const originalTags =
+                    tpl?.ccv2Tags ??
+                    (tpl?.format === "ccv2" ? (tpl.tags ?? []) : []) ??
+                    [];
 
                   if (!isConverted) {
                     // Unconverted CCv2 (read-only) or native BL (editable) — single view.
@@ -1880,12 +2188,21 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                         <label className="editor-field">
                           <span className="editor-field-label">
                             Creator's Notes
-                            {editingIsCcv2 ? <span className="ccv2-readonly-badge">Read-only CCv2 sheet</span> : null}
+                            {editingIsCcv2 ? (
+                              <span className="ccv2-readonly-badge">
+                                Read-only CCv2 sheet
+                              </span>
+                            ) : null}
                           </span>
                           <textarea
                             rows={3}
                             value={form.creatorNotes}
-                            onChange={e => setForm(f => ({ ...f, creatorNotes: e.target.value }))}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                creatorNotes: e.target.value,
+                              }))
+                            }
                             placeholder="Optional notes from the creator (e.g. usage guidelines, character background, tags)..."
                             className="creator-notes-textarea"
                             disabled={editingIsCcv2}
@@ -1894,10 +2211,14 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
 
                         <TagChipEditor
                           tags={form.tags}
-                          onChange={tags => setForm(f => ({ ...f, tags }))}
-                          allLibraryTags={allTagCounts.map(t => t.tag)}
+                          onChange={(tags) => setForm((f) => ({ ...f, tags }))}
+                          allLibraryTags={allTagCounts.map((t) => t.tag)}
                           disabled={editingIsCcv2}
-                          onSuggestAI={!editingIsCcv2 ? () => void handleOpenAiTagSuggestions() : undefined}
+                          onSuggestAI={
+                            !editingIsCcv2
+                              ? () => void handleOpenAiTagSuggestions()
+                              : undefined
+                          }
                           suggestingAI={tagSuggestLoading}
                           taxonomyConfig={taxonomyConfig}
                         />
@@ -1905,13 +2226,25 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                         <label className="editor-field">
                           <span className="editor-field-label">
                             Content (full character sheet)
-                            {editingIsCcv2 ? <span className="ccv2-readonly-badge">Read-only CCv2 sheet</span> : null}
+                            {editingIsCcv2 ? (
+                              <span className="ccv2-readonly-badge">
+                                Read-only CCv2 sheet
+                              </span>
+                            ) : null}
                           </span>
-                          <textarea rows={20} value={form.content}
-                            onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
+                          <textarea
+                            rows={20}
+                            value={form.content}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                content: e.target.value,
+                              }))
+                            }
                             placeholder={CHARACTER_SHEET_EXAMPLE}
                             className="content-textarea"
-                            disabled={editingIsCcv2} />
+                            disabled={editingIsCcv2}
+                          />
                         </label>
                       </>
                     );
@@ -1921,18 +2254,43 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                   return (
                     <div className="editor-tabs-wrap">
                       <div className="editor-tabs" role="tablist">
-                        <button className={viewTab === "bl" ? "active" : ""} onClick={() => setViewTab("bl")} role="tab">BL Format</button>
-                        <button className={viewTab === "original" ? "active" : ""} onClick={() => setViewTab("original")} role="tab">Original</button>
-                        <button className={viewTab === "both" ? "active" : ""} onClick={() => setViewTab("both")} role="tab">Both</button>
+                        <button
+                          className={viewTab === "bl" ? "active" : ""}
+                          onClick={() => setViewTab("bl")}
+                          role="tab"
+                        >
+                          BL Format
+                        </button>
+                        <button
+                          className={viewTab === "original" ? "active" : ""}
+                          onClick={() => setViewTab("original")}
+                          role="tab"
+                        >
+                          Original
+                        </button>
+                        <button
+                          className={viewTab === "both" ? "active" : ""}
+                          onClick={() => setViewTab("both")}
+                          role="tab"
+                        >
+                          Both
+                        </button>
                       </div>
                       {viewTab === "bl" ? (
                         <>
                           <label className="editor-field">
-                            <span className="editor-field-label">Creator's Notes (BL format — editable)</span>
+                            <span className="editor-field-label">
+                              Creator's Notes (BL format — editable)
+                            </span>
                             <textarea
                               rows={3}
                               value={form.creatorNotes}
-                              onChange={e => setForm(f => ({ ...f, creatorNotes: e.target.value }))}
+                              onChange={(e) =>
+                                setForm((f) => ({
+                                  ...f,
+                                  creatorNotes: e.target.value,
+                                }))
+                              }
                               placeholder="Optional notes from the creator (e.g. usage guidelines, character background, tags)..."
                               className="creator-notes-textarea"
                             />
@@ -1940,18 +2298,32 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
 
                           <TagChipEditor
                             tags={form.tags}
-                            onChange={tags => setForm(f => ({ ...f, tags }))}
-                            allLibraryTags={allTagCounts.map(t => t.tag)}
-                            onSuggestAI={() => void handleOpenAiTagSuggestions()}
+                            onChange={(tags) =>
+                              setForm((f) => ({ ...f, tags }))
+                            }
+                            allLibraryTags={allTagCounts.map((t) => t.tag)}
+                            onSuggestAI={() =>
+                              void handleOpenAiTagSuggestions()
+                            }
                             suggestingAI={tagSuggestLoading}
                             taxonomyConfig={taxonomyConfig}
                           />
 
                           <label className="editor-field">
-                            <span className="editor-field-label">Content (BL format — editable)</span>
-                            <textarea rows={20} value={form.content}
-                              onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
-                              className="content-textarea" />
+                            <span className="editor-field-label">
+                              Content (BL format — editable)
+                            </span>
+                            <textarea
+                              rows={20}
+                              value={form.content}
+                              onChange={(e) =>
+                                setForm((f) => ({
+                                  ...f,
+                                  content: e.target.value,
+                                }))
+                              }
+                              className="content-textarea"
+                            />
                           </label>
                         </>
                       ) : viewTab === "original" ? (
@@ -1959,7 +2331,9 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                           <label className="editor-field read-only">
                             <span className="editor-field-label">
                               Original Creator's Notes
-                              <span className="ccv2-readonly-badge">Read-only</span>
+                              <span className="ccv2-readonly-badge">
+                                Read-only
+                              </span>
                             </span>
                             <textarea
                               rows={3}
@@ -1972,14 +2346,21 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
 
                           <div className="editor-field read-only">
                             <div className="editor-field-header-row">
-                              <span className="editor-field-label">Original CCv2 Tags</span>
+                              <span className="editor-field-label">
+                                Original CCv2 Tags
+                              </span>
                               {originalTags.length > 0 ? (
                                 <Button
                                   type="button"
                                   size="xs"
                                   variant="secondary"
                                   className="restore-tags-btn"
-                                  onClick={() => setForm(f => ({ ...f, tags: [...originalTags] }))}
+                                  onClick={() =>
+                                    setForm((f) => ({
+                                      ...f,
+                                      tags: [...originalTags],
+                                    }))
+                                  }
                                   title="Restore original CCv2 tags to current character sheet"
                                   leftIcon={<Icon name="RotateCcw" size={13} />}
                                 >
@@ -1989,11 +2370,18 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                             </div>
                             <div className="read-only-tags-wrap">
                               {originalTags.length > 0 ? (
-                                originalTags.map(tag => (
-                                  <TagChip key={tag} tag={tag} userConfig={taxonomyConfig} size="sm" />
+                                originalTags.map((tag) => (
+                                  <TagChip
+                                    key={tag}
+                                    tag={tag}
+                                    userConfig={taxonomyConfig}
+                                    size="sm"
+                                  />
                                 ))
                               ) : (
-                                <span className="empty-tags-hint">(no original tags)</span>
+                                <span className="empty-tags-hint">
+                                  (no original tags)
+                                </span>
                               )}
                             </div>
                           </div>
@@ -2001,7 +2389,9 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                           <label className="editor-field read-only">
                             <span className="editor-field-label">
                               Original CCv2 Content
-                              <span className="ccv2-readonly-badge">Read-only</span>
+                              <span className="ccv2-readonly-badge">
+                                Read-only
+                              </span>
                             </span>
                             <textarea
                               rows={20}
@@ -2014,7 +2404,9 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                       ) : (
                         <>
                           <div className="editor-field">
-                            <span className="editor-field-label">Creator's Notes</span>
+                            <span className="editor-field-label">
+                              Creator's Notes
+                            </span>
                             <TwoPaneDiff
                               leftLabel="Original Creator's Notes"
                               rightLabel="BL Format"
@@ -2027,7 +2419,12 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                           <TagDiffViewer
                             originalTags={originalTags}
                             currentTags={form.tags}
-                            onRestore={() => setForm(f => ({ ...f, tags: [...originalTags] }))}
+                            onRestore={() =>
+                              setForm((f) => ({
+                                ...f,
+                                tags: [...originalTags],
+                              }))
+                            }
                             taxonomyConfig={taxonomyConfig}
                           />
 
@@ -2055,8 +2452,12 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                         variant="danger"
                         className="editor-delete-btn"
                         onClick={() => {
-                          const targetTpl = templates.find((t) => t.id === editingId);
-                          const targetName = targetTpl ? displayTitle(targetTpl) : form.name;
+                          const targetTpl = templates.find(
+                            (t) => t.id === editingId,
+                          );
+                          const targetName = targetTpl
+                            ? displayTitle(targetTpl)
+                            : form.name;
                           requestDelete(editingId, targetName);
                         }}
                         disabled={saving}
@@ -2065,7 +2466,9 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                         Delete
                       </Button>
                     </Tooltip>
-                  ) : <div />}
+                  ) : (
+                    <div />
+                  )}
                   <div className="editor-footer-right-actions">
                     <Button
                       type="button"
@@ -2075,7 +2478,13 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                     >
                       Cancel
                     </Button>
-                    <Tooltip content={!isFormDirty ? "No changes to save" : "Save character card"}>
+                    <Tooltip
+                      content={
+                        !isFormDirty
+                          ? "No changes to save"
+                          : "Save character card"
+                      }
+                    >
                       <Button
                         type="button"
                         variant="primary"
@@ -2096,7 +2505,9 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                 <div className="editor-ai-pane">
                   <CharacterBrainstormPanel
                     characterName={form.name}
-                    hasOriginalCcv2={!!templates.find(t => t.id === editingId)?.ccv2Content}
+                    hasOriginalCcv2={
+                      !!templates.find((t) => t.id === editingId)?.ccv2Content
+                    }
                     includeOriginalCcv2={includeOriginalCcv2}
                     onOpenSettings={() => setBrainstormSettingsOpen(true)}
                     messages={aiMessages}
@@ -2137,21 +2548,40 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
               >
                 <h4>
                   <Icon name="Tag" size={15} /> Tags
-                  <span className="sidebar-total-count">({allTagCounts.length})</span>
+                  <span className="sidebar-total-count">
+                    ({allTagCounts.length})
+                  </span>
                   {activeFilterTags.length > 0 && (
-                    <span className="sidebar-active-filter-badge" title={`${activeFilterTags.length} active tag filter(s)`}>
+                    <span
+                      className="sidebar-active-filter-badge"
+                      title={`${activeFilterTags.length} active tag filter(s)`}
+                    >
                       {activeFilterTags.length} active
                     </span>
                   )}
                 </h4>
-                <div className="sidebar-header-actions" onClick={(e) => e.stopPropagation()}>
+                <div
+                  className="sidebar-header-actions"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <button
                     type="button"
                     className={`sidebar-mode-btn ${sidebarViewMode === "grouped" ? "active" : ""}`}
-                    onClick={() => setSidebarViewMode(sidebarViewMode === "grouped" ? "flat" : "grouped")}
-                    title={sidebarViewMode === "grouped" ? "Switch to flat tag list" : "Switch to category grouped tags"}
+                    onClick={() =>
+                      setSidebarViewMode(
+                        sidebarViewMode === "grouped" ? "flat" : "grouped",
+                      )
+                    }
+                    title={
+                      sidebarViewMode === "grouped"
+                        ? "Switch to flat tag list"
+                        : "Switch to category grouped tags"
+                    }
                   >
-                    <Icon name={sidebarViewMode === "grouped" ? "Layers" : "List"} size={13} />
+                    <Icon
+                      name={sidebarViewMode === "grouped" ? "Layers" : "List"}
+                      size={13}
+                    />
                   </button>
                   <button
                     type="button"
@@ -2176,12 +2606,27 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                   <button
                     type="button"
                     className="sidebar-mobile-toggle-btn"
-                    onClick={() => setMobileSidebarExpanded(!mobileSidebarExpanded)}
-                    aria-label={mobileSidebarExpanded ? "Collapse tag filters" : "Expand tag filters"}
-                    title={mobileSidebarExpanded ? "Collapse tag filters" : "Expand tag filters"}
+                    onClick={() =>
+                      setMobileSidebarExpanded(!mobileSidebarExpanded)
+                    }
+                    aria-label={
+                      mobileSidebarExpanded
+                        ? "Collapse tag filters"
+                        : "Expand tag filters"
+                    }
+                    title={
+                      mobileSidebarExpanded
+                        ? "Collapse tag filters"
+                        : "Expand tag filters"
+                    }
                   >
-                    <span className="sidebar-toggle-text">{mobileSidebarExpanded ? "Hide" : "Filter"}</span>
-                    <Icon name={mobileSidebarExpanded ? "ChevronUp" : "ChevronDown"} size={13} />
+                    <span className="sidebar-toggle-text">
+                      {mobileSidebarExpanded ? "Hide" : "Filter"}
+                    </span>
+                    <Icon
+                      name={mobileSidebarExpanded ? "ChevronUp" : "ChevronDown"}
+                      size={13}
+                    />
                   </button>
                 </div>
               </div>
@@ -2249,12 +2694,18 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                                 className="sidebar-cat-dot"
                                 style={{ backgroundColor: group.color }}
                               />
-                              <span className="sidebar-cat-label">{group.label}</span>
+                              <span className="sidebar-cat-label">
+                                {group.label}
+                              </span>
                             </div>
                             <div className="sidebar-cat-right">
-                              <span className="sidebar-cat-count">{group.tags.length}</span>
+                              <span className="sidebar-cat-count">
+                                {group.tags.length}
+                              </span>
                               <Icon
-                                name={isCollapsed ? "ChevronRight" : "ChevronDown"}
+                                name={
+                                  isCollapsed ? "ChevronRight" : "ChevronDown"
+                                }
                                 size={12}
                                 className="sidebar-cat-chevron"
                               />
@@ -2270,22 +2721,46 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                                     type="button"
                                     className={`sidebar-tag-item ${active ? "active" : ""}`}
                                     onClick={() => toggleTag(tag)}
-                                    title={active ? `Remove tag "${tag}"` : `Filter by tag "${tag}"`}
+                                    title={
+                                      active
+                                        ? `Remove tag "${tag}"`
+                                        : `Filter by tag "${tag}"`
+                                    }
                                     style={{
-                                      borderLeftColor: active ? style.colors.text : "transparent",
+                                      borderLeftColor: active
+                                        ? style.colors.text
+                                        : "transparent",
                                     }}
                                   >
                                     <span className="sidebar-tag-name">
                                       {style.namespace ? (
-                                        <span className="sidebar-tag-prefix" style={{ color: style.colors.text, opacity: 0.8 }}>
+                                        <span
+                                          className="sidebar-tag-prefix"
+                                          style={{
+                                            color: style.colors.text,
+                                            opacity: 0.8,
+                                          }}
+                                        >
                                           {style.namespace}:
                                         </span>
                                       ) : null}
-                                      <span style={{ color: active ? style.colors.text : undefined }}>{style.value}</span>
+                                      <span
+                                        style={{
+                                          color: active
+                                            ? style.colors.text
+                                            : undefined,
+                                        }}
+                                      >
+                                        {style.value}
+                                      </span>
                                     </span>
                                     <span
                                       className="sidebar-tag-count"
-                                      style={{ borderColor: active ? style.colors.text : undefined }}
+                                      style={{
+                                        borderColor: active
+                                          ? style.colors.text
+                                          : undefined,
+                                      }}
                                     >
                                       {count}
                                     </span>
@@ -2306,7 +2781,11 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                           type="button"
                           className={`sidebar-tag-item ${active ? "active" : ""}`}
                           onClick={() => toggleTag(tag)}
-                          title={active ? `Remove tag "${tag}"` : `Filter by tag "${tag}"`}
+                          title={
+                            active
+                              ? `Remove tag "${tag}"`
+                              : `Filter by tag "${tag}"`
+                          }
                         >
                           <span className="sidebar-tag-name">{tag}</span>
                           <span className="sidebar-tag-count">{count}</span>
@@ -2323,7 +2802,11 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
               {/* Top Toolbar */}
               <div className="library-toolbar">
                 <div className="library-toolbar-actions">
-                  <Button variant="primary" onClick={openCreate} leftIcon={<Icon name="Plus" size={15} />}>
+                  <Button
+                    variant="primary"
+                    onClick={openCreate}
+                    leftIcon={<Icon name="Plus" size={15} />}
+                  >
                     New Character
                   </Button>
                   <Button
@@ -2356,14 +2839,30 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                 />
 
                 {/* Sort Controls */}
-                <div className="library-sort-control-group" role="group" aria-label="Sort library">
+                <div
+                  className="library-sort-control-group"
+                  role="group"
+                  aria-label="Sort library"
+                >
                   <SimpleSelect<CharacterSortOption>
                     value={sortBy}
                     onChange={(val) => setSortBy(val)}
                     options={[
-                      { value: "name", label: "Name", icon: <Icon name="ArrowUpDown" size={12} /> },
-                      { value: "createdAt", label: "Created Date", icon: <Icon name="ArrowUpDown" size={12} /> },
-                      { value: "updatedAt", label: "Updated Date", icon: <Icon name="ArrowUpDown" size={12} /> },
+                      {
+                        value: "name",
+                        label: "Name",
+                        icon: <Icon name="ArrowUpDown" size={12} />,
+                      },
+                      {
+                        value: "createdAt",
+                        label: "Created Date",
+                        icon: <Icon name="ArrowUpDown" size={12} />,
+                      },
+                      {
+                        value: "updatedAt",
+                        label: "Updated Date",
+                        icon: <Icon name="ArrowUpDown" size={12} />,
+                      },
                     ]}
                     size="xs"
                     variant="ghost"
@@ -2375,25 +2874,41 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                     onClick={toggleSortDirection}
                     title={
                       sortBy === "name"
-                        ? (sortDirection === "asc" ? "Sort A to Z (click for Z to A)" : "Sort Z to A (click for A to Z)")
-                        : (sortDirection === "desc" ? "Newest first (click for Oldest first)" : "Oldest first (click for Newest first)")
+                        ? sortDirection === "asc"
+                          ? "Sort A to Z (click for Z to A)"
+                          : "Sort Z to A (click for A to Z)"
+                        : sortDirection === "desc"
+                          ? "Newest first (click for Oldest first)"
+                          : "Oldest first (click for Newest first)"
                     }
                     aria-label="Toggle sort order"
                   >
                     <Icon
-                      name={sortDirection === "asc" ? "ArrowUpNarrowWide" : "ArrowDownWideNarrow"}
+                      name={
+                        sortDirection === "asc"
+                          ? "ArrowUpNarrowWide"
+                          : "ArrowDownWideNarrow"
+                      }
                       size={14}
                     />
                     <span className="sort-dir-label">
                       {sortBy === "name"
-                        ? (sortDirection === "asc" ? "A-Z" : "Z-A")
-                        : (sortDirection === "desc" ? "Newest" : "Oldest")}
+                        ? sortDirection === "asc"
+                          ? "A-Z"
+                          : "Z-A"
+                        : sortDirection === "desc"
+                          ? "Newest"
+                          : "Oldest"}
                     </span>
                   </button>
                 </div>
 
                 {/* View Mode Switcher */}
-                <div className="view-mode-switcher" role="group" aria-label="View mode">
+                <div
+                  className="view-mode-switcher"
+                  role="group"
+                  aria-label="View mode"
+                >
                   <button
                     type="button"
                     className={`view-mode-btn ${viewMode === "portrait" ? "active" : ""}`}
@@ -2454,7 +2969,9 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
               {groups.length === 0 ? (
                 <div className="empty-library-container">
                   <p className="empty-value">
-                    {search ? "No characters found matching your search." : "No characters in the library yet."}
+                    {search
+                      ? "No characters found matching your search."
+                      : "No characters in the library yet."}
                   </p>
                   {search ? (
                     <button
@@ -2478,7 +2995,8 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                       {paginatedGroups.map((group) => {
                         const latest = group.versions[0];
                         const badge = cardBadgeLabel(latest);
-                        const isConverting = convertingId === latest.id && convertLoading;
+                        const isConverting =
+                          convertingId === latest.id && convertLoading;
                         return (
                           <div
                             key={group.key}
@@ -2491,21 +3009,31 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                             }}
                           >
                             <div className="card-portrait-image-wrap">
-                              <CharacterAvatar template={latest} variant="portrait" />
+                              <CharacterAvatar
+                                template={latest}
+                                variant="portrait"
+                              />
                             </div>
 
                             <div className="card-portrait-body">
                               <div className="card-portrait-title-row">
-                                <strong className="card-portrait-title" title={displayTitle(latest)}>
+                                <strong
+                                  className="card-portrait-title"
+                                  title={displayTitle(latest)}
+                                >
                                   {displayTitle(latest)}
                                 </strong>
                                 {group.versions.length > 1 ? (
-                                  <span className="version-count">({group.versions.length} v)</span>
+                                  <span className="version-count">
+                                    ({group.versions.length} v)
+                                  </span>
                                 ) : null}
                               </div>
 
                               {latest.creator?.trim() ? (
-                                <span className="card-creator-tag">by {latest.creator.trim()}</span>
+                                <span className="card-creator-tag">
+                                  by {latest.creator.trim()}
+                                </span>
                               ) : null}
 
                               {latest.creatorNotes?.trim() ? (
@@ -2515,8 +3043,14 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                               ) : null}
 
                               {(latest.tags ?? []).length > 0 ? (
-                                <div className="tag-chips" onClick={(e) => e.stopPropagation()}>
-                                  {sortTags(latest.tags ?? [], taxonomyConfig).map((tag) => {
+                                <div
+                                  className="tag-chips"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {sortTags(
+                                    latest.tags ?? [],
+                                    taxonomyConfig,
+                                  ).map((tag) => {
                                     const active = isTagActive(tag);
                                     return (
                                       <TagChip
@@ -2538,17 +3072,41 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                               {/* Portrait Footer: Badges on left, Options on right */}
                               <div className="card-portrait-footer">
                                 <div className="card-portrait-badges">
-                                  {badge === "ccv2" ? <span className="ccv2-badge">CCv2</span> : null}
-                                  {badge === "ccv2bl" ? <span className="ccv2bl-badge">CCv2 / BL</span> : null}
-                                  <span className="version-badge">v{latest.cardVersion ?? String(latest.version)}</span>
-                                  {sortBy === "createdAt" && getGroupCreatedAt(group) ? (
-                                    <span className="card-timestamp-badge" title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}>
-                                      <Icon name="Calendar" size={10} /> {formatLibraryDate(getGroupCreatedAt(group))}
+                                  {badge === "ccv2" ? (
+                                    <span className="ccv2-badge">CCv2</span>
+                                  ) : null}
+                                  {badge === "ccv2bl" ? (
+                                    <span className="ccv2bl-badge">
+                                      CCv2 / BL
                                     </span>
                                   ) : null}
-                                  {sortBy === "updatedAt" && getGroupUpdatedAt(group) ? (
-                                    <span className="card-timestamp-badge" title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}>
-                                      <Icon name="Clock" size={10} /> {formatLibraryDate(getGroupUpdatedAt(group))}
+                                  <span className="version-badge">
+                                    v
+                                    {latest.cardVersion ??
+                                      String(latest.version)}
+                                  </span>
+                                  {sortBy === "createdAt" &&
+                                  getGroupCreatedAt(group) ? (
+                                    <span
+                                      className="card-timestamp-badge"
+                                      title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}
+                                    >
+                                      <Icon name="Calendar" size={10} />{" "}
+                                      {formatLibraryDate(
+                                        getGroupCreatedAt(group),
+                                      )}
+                                    </span>
+                                  ) : null}
+                                  {sortBy === "updatedAt" &&
+                                  getGroupUpdatedAt(group) ? (
+                                    <span
+                                      className="card-timestamp-badge"
+                                      title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}
+                                    >
+                                      <Icon name="Clock" size={10} />{" "}
+                                      {formatLibraryDate(
+                                        getGroupUpdatedAt(group),
+                                      )}
                                     </span>
                                   ) : null}
                                 </div>
@@ -2560,7 +3118,12 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                                       ? () => handleConvert(latest)
                                       : undefined
                                   }
-                                  onDelete={() => requestDelete(latest.id, displayTitle(latest))}
+                                  onDelete={() =>
+                                    requestDelete(
+                                      latest.id,
+                                      displayTitle(latest),
+                                    )
+                                  }
                                   converting={isConverting}
                                 />
                               </div>
@@ -2577,7 +3140,8 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                       {paginatedGroups.map((group) => {
                         const latest = group.versions[0];
                         const badge = cardBadgeLabel(latest);
-                        const isConverting = convertingId === latest.id && convertLoading;
+                        const isConverting =
+                          convertingId === latest.id && convertLoading;
                         return (
                           <div
                             key={group.key}
@@ -2593,24 +3157,54 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                             <div className="card-list-content">
                               <div className="card-list-header-row">
                                 <div className="card-list-title-wrap">
-                                  <strong className="card-list-title">{displayTitle(latest)}</strong>
-                                  {badge === "ccv2" ? <span className="ccv2-badge">CCv2</span> : null}
-                                  {badge === "ccv2bl" ? <span className="ccv2bl-badge">CCv2 / BL</span> : null}
-                                  <span className="version-badge">v{latest.cardVersion ?? String(latest.version)}</span>
-                                  {group.versions.length > 1 ? (
-                                    <span className="version-count">({group.versions.length} versions)</span>
+                                  <strong className="card-list-title">
+                                    {displayTitle(latest)}
+                                  </strong>
+                                  {badge === "ccv2" ? (
+                                    <span className="ccv2-badge">CCv2</span>
                                   ) : null}
-                                  {latest.creator?.trim() ? (
-                                    <span className="card-creator-tag">by {latest.creator.trim()}</span>
-                                  ) : null}
-                                  {sortBy === "createdAt" && getGroupCreatedAt(group) ? (
-                                    <span className="card-timestamp-tag" title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}>
-                                      <Icon name="Calendar" size={11} /> {formatLibraryDate(getGroupCreatedAt(group))}
+                                  {badge === "ccv2bl" ? (
+                                    <span className="ccv2bl-badge">
+                                      CCv2 / BL
                                     </span>
                                   ) : null}
-                                  {sortBy === "updatedAt" && getGroupUpdatedAt(group) ? (
-                                    <span className="card-timestamp-tag" title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}>
-                                      <Icon name="Clock" size={11} /> {formatLibraryDate(getGroupUpdatedAt(group))}
+                                  <span className="version-badge">
+                                    v
+                                    {latest.cardVersion ??
+                                      String(latest.version)}
+                                  </span>
+                                  {group.versions.length > 1 ? (
+                                    <span className="version-count">
+                                      ({group.versions.length} versions)
+                                    </span>
+                                  ) : null}
+                                  {latest.creator?.trim() ? (
+                                    <span className="card-creator-tag">
+                                      by {latest.creator.trim()}
+                                    </span>
+                                  ) : null}
+                                  {sortBy === "createdAt" &&
+                                  getGroupCreatedAt(group) ? (
+                                    <span
+                                      className="card-timestamp-tag"
+                                      title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}
+                                    >
+                                      <Icon name="Calendar" size={11} />{" "}
+                                      {formatLibraryDate(
+                                        getGroupCreatedAt(group),
+                                      )}
+                                    </span>
+                                  ) : null}
+                                  {sortBy === "updatedAt" &&
+                                  getGroupUpdatedAt(group) ? (
+                                    <span
+                                      className="card-timestamp-tag"
+                                      title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}
+                                    >
+                                      <Icon name="Clock" size={11} />{" "}
+                                      {formatLibraryDate(
+                                        getGroupUpdatedAt(group),
+                                      )}
                                     </span>
                                   ) : null}
                                 </div>
@@ -2623,7 +3217,12 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                                       ? () => handleConvert(latest)
                                       : undefined
                                   }
-                                  onDelete={() => requestDelete(latest.id, displayTitle(latest))}
+                                  onDelete={() =>
+                                    requestDelete(
+                                      latest.id,
+                                      displayTitle(latest),
+                                    )
+                                  }
                                   converting={isConverting}
                                 />
                               </div>
@@ -2635,8 +3234,14 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                               ) : null}
 
                               {(latest.tags ?? []).length > 0 ? (
-                                <div className="tag-chips" onClick={(e) => e.stopPropagation()}>
-                                  {sortTags(latest.tags ?? [], taxonomyConfig).map((tag) => {
+                                <div
+                                  className="tag-chips"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {sortTags(
+                                    latest.tags ?? [],
+                                    taxonomyConfig,
+                                  ).map((tag) => {
                                     const active = isTagActive(tag);
                                     return (
                                       <TagChip
@@ -2667,7 +3272,8 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                       {paginatedGroups.map((group) => {
                         const latest = group.versions[0];
                         const badge = cardBadgeLabel(latest);
-                        const isConverting = convertingId === latest.id && convertLoading;
+                        const isConverting =
+                          convertingId === latest.id && convertLoading;
                         return (
                           <div
                             key={group.key}
@@ -2680,28 +3286,58 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                             }}
                           >
                             <div className="card-grid-thumb-wrap">
-                              <CharacterAvatar template={latest} variant="grid" />
+                              <CharacterAvatar
+                                template={latest}
+                                variant="grid"
+                              />
                             </div>
                             <div className="card-grid-body">
-                              <strong className="card-grid-title" title={displayTitle(latest)}>
+                              <strong
+                                className="card-grid-title"
+                                title={displayTitle(latest)}
+                              >
                                 {displayTitle(latest)}
                               </strong>
                               <div className="card-grid-footer">
                                 <div className="card-grid-badges">
-                                  {badge === "ccv2" ? <span className="ccv2-badge">CCv2</span> : null}
-                                  {badge === "ccv2bl" ? <span className="ccv2bl-badge">CCv2 / BL</span> : null}
-                                  <span className="version-badge">v{latest.cardVersion ?? String(latest.version)}</span>
-                                  {group.versions.length > 1 ? (
-                                    <span className="version-count">({group.versions.length} v)</span>
+                                  {badge === "ccv2" ? (
+                                    <span className="ccv2-badge">CCv2</span>
                                   ) : null}
-                                  {sortBy === "createdAt" && getGroupCreatedAt(group) ? (
-                                    <span className="card-grid-timestamp" title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}>
-                                      {formatLibraryDate(getGroupCreatedAt(group))}
+                                  {badge === "ccv2bl" ? (
+                                    <span className="ccv2bl-badge">
+                                      CCv2 / BL
                                     </span>
                                   ) : null}
-                                  {sortBy === "updatedAt" && getGroupUpdatedAt(group) ? (
-                                    <span className="card-grid-timestamp" title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}>
-                                      {formatLibraryDate(getGroupUpdatedAt(group))}
+                                  <span className="version-badge">
+                                    v
+                                    {latest.cardVersion ??
+                                      String(latest.version)}
+                                  </span>
+                                  {group.versions.length > 1 ? (
+                                    <span className="version-count">
+                                      ({group.versions.length} v)
+                                    </span>
+                                  ) : null}
+                                  {sortBy === "createdAt" &&
+                                  getGroupCreatedAt(group) ? (
+                                    <span
+                                      className="card-grid-timestamp"
+                                      title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}
+                                    >
+                                      {formatLibraryDate(
+                                        getGroupCreatedAt(group),
+                                      )}
+                                    </span>
+                                  ) : null}
+                                  {sortBy === "updatedAt" &&
+                                  getGroupUpdatedAt(group) ? (
+                                    <span
+                                      className="card-grid-timestamp"
+                                      title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}
+                                    >
+                                      {formatLibraryDate(
+                                        getGroupUpdatedAt(group),
+                                      )}
                                     </span>
                                   ) : null}
                                 </div>
@@ -2713,7 +3349,12 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
                                       ? () => handleConvert(latest)
                                       : undefined
                                   }
-                                  onDelete={() => requestDelete(latest.id, displayTitle(latest))}
+                                  onDelete={() =>
+                                    requestDelete(
+                                      latest.id,
+                                      displayTitle(latest),
+                                    )
+                                  }
                                   converting={isConverting}
                                 />
                               </div>
@@ -2776,27 +3417,56 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
 
       {/* Import notice modal */}
       {importNotice ? (
-        <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setImportNotice(null); }}>
+        <div
+          className="modal-backdrop"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setImportNotice(null);
+          }}
+        >
           <section className="modal import-notice-modal">
             <header className="modal-header">
               <h2>Already Imported</h2>
-              <Button variant="ghost" size="sm" onClick={() => setImportNotice(null)}>Close</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setImportNotice(null)}
+              >
+                Close
+              </Button>
             </header>
             <p>{importNotice.message}</p>
-            <div className="version-group" style={{ margin: "12px 0", padding: "12px", border: "1px solid var(--border-color, #333)", borderRadius: "6px" }}>
+            <div
+              className="version-group"
+              style={{
+                margin: "12px 0",
+                padding: "12px",
+                border: "1px solid var(--border-color, #333)",
+                borderRadius: "6px",
+              }}
+            >
               <div className="version-group-header">
-                <CharacterAvatar template={importNotice.existingRecord} variant="portrait" />
+                <CharacterAvatar
+                  template={importNotice.existingRecord}
+                  variant="portrait"
+                />
                 <div className="version-group-title">
                   <strong>{displayTitle(importNotice.existingRecord)}</strong>
                 </div>
               </div>
             </div>
             <div className="modal-actions">
-              <Button variant="secondary" onClick={() => setImportNotice(null)}>Dismiss</Button>
-              <Button variant="primary" onClick={() => {
-                setImportNotice(null);
-                openEdit(importNotice.existingRecord);
-              }}>View / Edit</Button>
+              <Button variant="secondary" onClick={() => setImportNotice(null)}>
+                Dismiss
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setImportNotice(null);
+                  openEdit(importNotice.existingRecord);
+                }}
+              >
+                View / Edit
+              </Button>
             </div>
           </section>
         </div>
@@ -2812,7 +3482,10 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
           error={tagSuggestError}
           taxonomyConfig={taxonomyConfig}
           onApply={(selectedTags) => {
-            setForm((f) => ({ ...f, tags: sortTags(selectedTags, taxonomyConfig) }));
+            setForm((f) => ({
+              ...f,
+              tags: sortTags(selectedTags, taxonomyConfig),
+            }));
             setTagSuggestModalOpen(false);
             setSuggestedTags([]);
           }}
@@ -2840,7 +3513,10 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
             if (e.target === e.currentTarget) setDiscardConfirm(null);
           }}
         >
-          <section className="modal discard-warning-modal" aria-labelledby="discard-modal-title">
+          <section
+            className="modal discard-warning-modal"
+            aria-labelledby="discard-modal-title"
+          >
             <header className="modal-header discard-warning-header">
               <div className="discard-warning-title-wrap">
                 <span className="discard-warning-icon-badge">
@@ -2861,13 +3537,19 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
             <div className="discard-warning-body">
               {!editingId && aiMessages.length > 0 ? (
                 <p>
-                  <strong>&quot;{form.name || "New Character"}&quot;</strong> has not been saved yet, so its AI
-                  brainstorming session ({aiMessages.length} message{aiMessages.length === 1 ? "" : "s"}) cannot be
-                  kept{isFormDirty ? ", and your edits to the sheet go with it" : ""}.
+                  <strong>&quot;{form.name || "New Character"}&quot;</strong>{" "}
+                  has not been saved yet, so its AI brainstorming session (
+                  {aiMessages.length} message
+                  {aiMessages.length === 1 ? "" : "s"}) cannot be kept
+                  {isFormDirty
+                    ? ", and your edits to the sheet go with it"
+                    : ""}
+                  .
                 </p>
               ) : (
                 <p>
-                  You have unsaved changes to <strong>&quot;{form.name || "New Character"}&quot;</strong>
+                  You have unsaved changes to{" "}
+                  <strong>&quot;{form.name || "New Character"}&quot;</strong>
                   {aiMessages.length > 0
                     ? `, and an AI brainstorming session (${aiMessages.length} message${aiMessages.length === 1 ? "" : "s"}) which is kept`
                     : ""}
@@ -2897,7 +3579,9 @@ export function CharacterLibrary({ isModal, initialEditingId }: CharacterLibrary
       {/* Confirm Delete Character Modal */}
       {brainstormSettingsOpen ? (
         <BrainstormSettingsModal
-          hasOriginalCcv2={!!templates.find((t) => t.id === editingId)?.ccv2Content}
+          hasOriginalCcv2={
+            !!templates.find((t) => t.id === editingId)?.ccv2Content
+          }
           includeOriginalCard={includeOriginalCcv2}
           allowNewSections={brainstormAllowNewSections}
           providerId={brainstormProviderId}

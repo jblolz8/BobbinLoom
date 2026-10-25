@@ -21,13 +21,20 @@ export type BlockNode =
 interface MatchCandidate {
   startIndex: number;
   endIndex: number;
-  type: "inlineCode" | "quote" | "boldItalic" | "bold" | "italic" | "strikethrough";
+  type:
+    | "inlineCode"
+    | "quote"
+    | "boldItalic"
+    | "bold"
+    | "italic"
+    | "strikethrough";
   rawOpen?: string;
   rawClose?: string;
   content: string;
 }
 
-const HR_PATTERN = /^[ \t]*(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/;
+const HR_PATTERN =
+  /^[ \t]*(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/;
 
 export function isHorizontalRule(line: string): boolean {
   return HR_PATTERN.test(line);
@@ -84,7 +91,9 @@ export function parseInline(text: string): InlineNode[] {
     }
 
     // 4. Bold-Italic: ***text*** or ___text___
-    const boldItalicMatch = /(\*\*\*|___)(?!\s)([\s\S]+?)(?<!\s)\1/.exec(remaining);
+    const boldItalicMatch = /(\*\*\*|___)(?!\s)([\s\S]+?)(?<!\s)\1/.exec(
+      remaining,
+    );
     if (boldItalicMatch && boldItalicMatch.index !== undefined) {
       candidates.push({
         startIndex: boldItalicMatch.index,
@@ -117,7 +126,8 @@ export function parseInline(text: string): InlineNode[] {
     }
 
     // 7. Italic: *text* (allows nested **bold** inside *italic*, and avoids matching ** itself)
-    const starItalicMatch = /(?<!\*)\*(?!\*|\s)((?:[^*]|\*\*)+?)(?<!\s|\*)\*(?!\*)/.exec(remaining);
+    const starItalicMatch =
+      /(?<!\*)\*(?!\*|\s)((?:[^*]|\*\*)+?)(?<!\s|\*)\*(?!\*)/.exec(remaining);
     if (starItalicMatch && starItalicMatch.index !== undefined) {
       candidates.push({
         startIndex: starItalicMatch.index,
@@ -127,7 +137,10 @@ export function parseInline(text: string): InlineNode[] {
       });
     }
 
-    const underscoreItalicMatch = /(?:^|[\s(])_([^\s_]|(?:[^\s_](?:[^_]|__)*?[^\s_]))_(?=[\s),.!?:;]|$)/.exec(remaining);
+    const underscoreItalicMatch =
+      /(?:^|[\s(])_([^\s_]|(?:[^\s_](?:[^_]|__)*?[^\s_]))_(?=[\s),.!?:;]|$)/.exec(
+        remaining,
+      );
     if (underscoreItalicMatch && underscoreItalicMatch.index !== undefined) {
       // account for leading character if matched via group
       const offset = underscoreItalicMatch[0].startsWith("_") ? 0 : 1;
@@ -150,7 +163,7 @@ export function parseInline(text: string): InlineNode[] {
     // Pick candidate with earliest startIndex. If tie, pick longer length (e.g. boldItalic before bold before italic)
     candidates.sort((a, b) => {
       if (a.startIndex !== b.startIndex) return a.startIndex - b.startIndex;
-      return (b.endIndex - b.startIndex) - (a.endIndex - a.startIndex);
+      return b.endIndex - b.startIndex - (a.endIndex - a.startIndex);
     });
 
     const best = candidates[0];
@@ -303,7 +316,9 @@ export function parseMarkdown(raw: string): BlockNode[] {
         rawParagraphs.push(currentPara);
       }
 
-      const parsedParagraphs = rawParagraphs.map((p) => parseInline(p.join("\n")));
+      const parsedParagraphs = rawParagraphs.map((p) =>
+        parseInline(p.join("\n")),
+      );
       const flatChildren = parseInline(quoteLines.join("\n"));
 
       blocks.push(
@@ -316,7 +331,7 @@ export function parseMarkdown(raw: string): BlockNode[] {
           : {
               type: "blockquote",
               children: flatChildren,
-            }
+            },
       );
       continue;
     }
@@ -388,7 +403,10 @@ export function parseMarkdown(raw: string): BlockNode[] {
 /**
  * Render inline AST nodes into React nodes.
  */
-export function renderInlineNodes(nodes: InlineNode[], keyPrefix = "inl"): React.ReactNode[] {
+export function renderInlineNodes(
+  nodes: InlineNode[],
+  keyPrefix = "inl",
+): React.ReactNode[] {
   return nodes.map((node, index) => {
     const key = `${keyPrefix}-${index}`;
     switch (node.type) {
@@ -417,11 +435,19 @@ export function renderInlineNodes(nodes: InlineNode[], keyPrefix = "inl"): React
           </strong>
         );
       case "bold":
-        return <strong key={key}>{renderInlineNodes(node.children, `${key}-b`)}</strong>;
+        return (
+          <strong key={key}>
+            {renderInlineNodes(node.children, `${key}-b`)}
+          </strong>
+        );
       case "italic":
-        return <em key={key}>{renderInlineNodes(node.children, `${key}-i`)}</em>;
+        return (
+          <em key={key}>{renderInlineNodes(node.children, `${key}-i`)}</em>
+        );
       case "strikethrough":
-        return <del key={key}>{renderInlineNodes(node.children, `${key}-s`)}</del>;
+        return (
+          <del key={key}>{renderInlineNodes(node.children, `${key}-s`)}</del>
+        );
       default:
         return null;
     }

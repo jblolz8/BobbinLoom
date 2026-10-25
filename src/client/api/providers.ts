@@ -8,7 +8,7 @@ import type {
   ProviderKind,
   RegionDirection,
   TextJsonMode,
-  TextProviderSource
+  TextProviderSource,
 } from "../../schemas";
 // Type-only, so it is erased at build time and the client bundle never reaches
 // `src/server` at runtime. The capability shape is PRODUCED there; hand-copying
@@ -17,7 +17,11 @@ import type { ProviderModelCapabilities } from "../../server/providerRegistry";
 
 /** Re-exported so a consumer can name one model's capability shape without
  *  reaching into the server module itself. */
-export type { ModelCapabilities, ModelStepRange, ProviderModelCapabilities } from "../../server/providerRegistry";
+export type {
+  ModelCapabilities,
+  ModelStepRange,
+  ProviderModelCapabilities,
+} from "../../server/providerRegistry";
 
 /**
  * A connection as the API returns it: the persisted row with the secret
@@ -150,7 +154,11 @@ export type ConnectionModelsResult = {
    *  `forgeCouple` is true only when the WebUI listed the Forge Couple
    *  extension in `/sdapi/v1/script-info`; an absent key means "not detected",
    *  which is what the editor turns into "regions are off". */
-  dialectOptions?: { samplers?: string[]; schedulers?: string[]; forgeCouple?: boolean };
+  dialectOptions?: {
+    samplers?: string[];
+    schedulers?: string[];
+    forgeCouple?: boolean;
+  };
   status?: number;
   message?: string;
   latencyMs?: number;
@@ -202,45 +210,82 @@ export type PromptConfigState = {
 export function listProviderConnections(): Promise<ProviderRegistry> {
   return request<ProviderRegistry>("/api/settings/providers");
 }
-export function createProviderConnection(p: ProviderConnectionPayload): Promise<ProviderConnection> {
-  return request<ProviderConnection>("/api/settings/providers", { method: "POST", body: JSON.stringify(p) });
+export function createProviderConnection(
+  p: ProviderConnectionPayload,
+): Promise<ProviderConnection> {
+  return request<ProviderConnection>("/api/settings/providers", {
+    method: "POST",
+    body: JSON.stringify(p),
+  });
 }
-export function updateProviderConnection(id: string, p: ProviderConnectionPayload): Promise<ProviderConnection> {
-  return request<ProviderConnection>(`/api/settings/providers/${id}`, { method: "PUT", body: JSON.stringify(p) });
+export function updateProviderConnection(
+  id: string,
+  p: ProviderConnectionPayload,
+): Promise<ProviderConnection> {
+  return request<ProviderConnection>(`/api/settings/providers/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(p),
+  });
 }
-export function deleteProviderConnection(id: string): Promise<ProviderRegistry> {
-  return request<ProviderRegistry>(`/api/settings/providers/${id}`, { method: "DELETE" });
+export function deleteProviderConnection(
+  id: string,
+): Promise<ProviderRegistry> {
+  return request<ProviderRegistry>(`/api/settings/providers/${id}`, {
+    method: "DELETE",
+  });
 }
-export function duplicateProviderConnection(id: string): Promise<ProviderConnection> {
-  return request<ProviderConnection>(`/api/settings/providers/${id}/duplicate`, { method: "POST", body: JSON.stringify({}) });
+export function duplicateProviderConnection(
+  id: string,
+): Promise<ProviderConnection> {
+  return request<ProviderConnection>(
+    `/api/settings/providers/${id}/duplicate`,
+    { method: "POST", body: JSON.stringify({}) },
+  );
 }
 /** Activating returns the whole registry (registry v2), so the caller can
  *  replace its state in one call instead of activate-then-reload. */
-export function setActiveProviderConnection(id: string): Promise<ProviderRegistry> {
-  return request<ProviderRegistry>(`/api/settings/providers/${id}/active`, { method: "PUT", body: JSON.stringify({}) });
+export function setActiveProviderConnection(
+  id: string,
+): Promise<ProviderRegistry> {
+  return request<ProviderRegistry>(`/api/settings/providers/${id}/active`, {
+    method: "PUT",
+    body: JSON.stringify({}),
+  });
 }
 /** Remember the text connection new playthroughs are generated with. `null` = follow
  *  whichever connection is active. */
 /** Which text connection closes chapters. `null` follows the active connection. */
-export function setChapterTextProvider(providerId: string | null): Promise<ProviderRegistry> {
+export function setChapterTextProvider(
+  providerId: string | null,
+): Promise<ProviderRegistry> {
   return request<ProviderRegistry>("/api/settings/providers/chapter-provider", {
     method: "PUT",
-    body: JSON.stringify({ providerId })
+    body: JSON.stringify({ providerId }),
   });
 }
 
-export function setGenerationTextProvider(providerId: string | null): Promise<ProviderRegistry> {
-  return request<ProviderRegistry>("/api/settings/providers/generation-provider", {
-    method: "PUT",
-    body: JSON.stringify({ providerId })
-  });
+export function setGenerationTextProvider(
+  providerId: string | null,
+): Promise<ProviderRegistry> {
+  return request<ProviderRegistry>(
+    "/api/settings/providers/generation-provider",
+    {
+      method: "PUT",
+      body: JSON.stringify({ providerId }),
+    },
+  );
 }
 
-export function setCharacterTextProvider(providerId: string | null): Promise<ProviderRegistry> {
-  return request<ProviderRegistry>("/api/settings/providers/character-provider", {
-    method: "PUT",
-    body: JSON.stringify({ providerId })
-  });
+export function setCharacterTextProvider(
+  providerId: string | null,
+): Promise<ProviderRegistry> {
+  return request<ProviderRegistry>(
+    "/api/settings/providers/character-provider",
+    {
+      method: "PUT",
+      body: JSON.stringify({ providerId }),
+    },
+  );
 }
 
 export function testProviderConnection(p: {
@@ -251,10 +296,15 @@ export function testProviderConnection(p: {
    *  connection is not tested against `/v1/models`. */
   apiStyle?: ImageApiStyle;
 }): Promise<ConnectionTestResult> {
-  return request<ConnectionTestResult>("/api/settings/providers/test", { method: "POST", body: JSON.stringify(p) });
+  return request<ConnectionTestResult>("/api/settings/providers/test", {
+    method: "POST",
+    body: JSON.stringify(p),
+  });
 }
 
-export function setProviderTestPrompt(testPrompt: string | null): Promise<ProviderRegistry> {
+export function setProviderTestPrompt(
+  testPrompt: string | null,
+): Promise<ProviderRegistry> {
   return request<ProviderRegistry>("/api/settings/providers/test-prompt", {
     method: "PUT",
     body: JSON.stringify({ testPrompt }),
@@ -280,10 +330,13 @@ export function testProviderResponse(p: {
   stop?: string[] | null;
   prompt?: string | null;
 }): Promise<ConnectionTestResponseResult> {
-  return request<ConnectionTestResponseResult>("/api/settings/providers/test-response", {
-    method: "POST",
-    body: JSON.stringify(p),
-  });
+  return request<ConnectionTestResponseResult>(
+    "/api/settings/providers/test-response",
+    {
+      method: "POST",
+      body: JSON.stringify(p),
+    },
+  );
 }
 /**
  * Probe `<baseUrl>/models`. `type` narrows the listing on servers that expose
@@ -301,7 +354,10 @@ export function fetchProviderModels(p: {
   type?: "text" | "image";
   apiStyle?: ImageApiStyle;
 }): Promise<ConnectionModelsResult> {
-  return request<ConnectionModelsResult>("/api/settings/providers/models", { method: "POST", body: JSON.stringify(p) });
+  return request<ConnectionModelsResult>("/api/settings/providers/models", {
+    method: "POST",
+    body: JSON.stringify(p),
+  });
 }
 
 export type ConnectionStylesResult = {
@@ -330,10 +386,13 @@ export function fetchProviderImageStyles(p: {
   baseUrl?: string;
   apiKey?: string;
 }): Promise<ConnectionStylesResult> {
-  return request<ConnectionStylesResult>("/api/settings/providers/image-styles", {
-    method: "POST",
-    body: JSON.stringify(p)
-  });
+  return request<ConnectionStylesResult>(
+    "/api/settings/providers/image-styles",
+    {
+      method: "POST",
+      body: JSON.stringify(p),
+    },
+  );
 }
 export function getProviderApiKey(id: string): Promise<{ apiKey: string }> {
   return request<{ apiKey: string }>(`/api/settings/providers/${id}/key`);
@@ -344,10 +403,12 @@ export function getPromptConfig(): Promise<PromptConfigState> {
 }
 /** Merge one or more sections into the global config — the other sections are
  *  left untouched. */
-export function patchPromptConfig(patch: Partial<PromptConfig>): Promise<PromptConfigState> {
+export function patchPromptConfig(
+  patch: Partial<PromptConfig>,
+): Promise<PromptConfigState> {
   return request<PromptConfigState>("/api/prompt-config", {
     method: "PATCH",
-    body: JSON.stringify(patch)
+    body: JSON.stringify(patch),
   });
 }
 /** Switch to a preset — or reload the CURRENT one — by copying its config over
@@ -355,7 +416,7 @@ export function patchPromptConfig(patch: Partial<PromptConfig>): Promise<PromptC
 export function setActivePreset(presetId: string): Promise<PromptConfigState> {
   return request<PromptConfigState>("/api/prompt-config/active", {
     method: "PUT",
-    body: JSON.stringify({ presetId })
+    body: JSON.stringify({ presetId }),
   });
 }
 
@@ -376,17 +437,23 @@ export function getPreset(id: string): Promise<Preset> {
   return request<Preset>(`/api/prompt-presets/${id}`);
 }
 
-export function createPreset(name: string, cloneFromId?: string): Promise<Preset> {
+export function createPreset(
+  name: string,
+  cloneFromId?: string,
+): Promise<Preset> {
   return request<Preset>("/api/prompt-presets", {
     method: "POST",
-    body: JSON.stringify({ name, cloneFromId })
+    body: JSON.stringify({ name, cloneFromId }),
   });
 }
 
-export function updatePreset(id: string, payload: PresetUpdatePayload): Promise<Preset> {
+export function updatePreset(
+  id: string,
+  payload: PresetUpdatePayload,
+): Promise<Preset> {
   return request<Preset>(`/api/prompt-presets/${id}`, {
     method: "PUT",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 

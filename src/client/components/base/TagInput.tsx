@@ -8,14 +8,17 @@ export type TagInputProps = {
   disabled?: boolean;
 };
 
-export function TagInput({ value, onChange, placeholder, disabled }: TagInputProps) {
+export function TagInput({
+  value,
+  onChange,
+  placeholder,
+  disabled,
+}: TagInputProps) {
   const [text, setText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   function commit(items: string[]) {
-    const cleaned = items
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const cleaned = items.map((s) => s.trim()).filter(Boolean);
     if (cleaned.length === 0) return;
     const novel = cleaned.filter((s) => !value.includes(s));
     if (novel.length > 0) {

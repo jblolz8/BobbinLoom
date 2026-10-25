@@ -59,12 +59,18 @@ export function repairRawControlChars(text: string): string {
 
 function escapeControlChar(code: number): string {
   switch (code) {
-    case 0x08: return "\\b";
-    case 0x09: return "\\t";
-    case 0x0a: return "\\n";
-    case 0x0c: return "\\f";
-    case 0x0d: return "\\r";
-    default: return "\\u" + code.toString(16).padStart(4, "0");
+    case 0x08:
+      return "\\b";
+    case 0x09:
+      return "\\t";
+    case 0x0a:
+      return "\\n";
+    case 0x0c:
+      return "\\f";
+    case 0x0d:
+      return "\\r";
+    default:
+      return "\\u" + code.toString(16).padStart(4, "0");
   }
 }
 
@@ -100,7 +106,9 @@ export function extractJsonPayload(content: string): unknown | null {
   const firstBrace = trimmed.indexOf("{");
   const lastBrace = trimmed.lastIndexOf("}");
   if (firstBrace >= 0 && lastBrace > firstBrace) {
-    const parsed = parseStrictOrRepaired(trimmed.slice(firstBrace, lastBrace + 1));
+    const parsed = parseStrictOrRepaired(
+      trimmed.slice(firstBrace, lastBrace + 1),
+    );
     if (parsed !== null) return parsed;
   }
 

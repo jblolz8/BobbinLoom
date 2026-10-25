@@ -4,8 +4,10 @@ import { Icon, type IconName } from "./Icon";
 import { Switch, type SwitchProps } from "./Switch";
 import { TooltipIcon } from "./Tooltip/Tooltip";
 
-export interface SwitchRowProps
-  extends Pick<SwitchProps, "checked" | "disabled" | "onChange"> {
+export interface SwitchRowProps extends Pick<
+  SwitchProps,
+  "checked" | "disabled" | "onChange"
+> {
   /** Icon shown in the leading icon tile. */
   icon?: IconName;
   /** Optional leading icon node (e.g. a colored <Icon>) overriding `icon`. */
@@ -41,7 +43,9 @@ export function SwitchRow({
   className = "",
 }: SwitchRowProps) {
   return (
-    <label className={`base-toggle-row ${dirty ? "base-toggle-row--dirty" : ""} ${disabled ? "base-toggle-row--disabled" : ""} ${className}`.trim()}>
+    <label
+      className={`base-toggle-row ${dirty ? "base-toggle-row--dirty" : ""} ${disabled ? "base-toggle-row--disabled" : ""} ${className}`.trim()}
+    >
       <div className="base-toggle-row__main">
         {(iconNode || icon) && (
           <div className="base-toggle-row__icon" aria-hidden="true">
@@ -58,7 +62,9 @@ export function SwitchRow({
               </Badge>
             )}
           </span>
-          {description && <span className="base-toggle-row__desc">{description}</span>}
+          {description && (
+            <span className="base-toggle-row__desc">{description}</span>
+          )}
         </div>
       </div>
       <Switch

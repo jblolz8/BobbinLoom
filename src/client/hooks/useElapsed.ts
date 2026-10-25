@@ -20,10 +20,10 @@ import { useEffect, useState } from "react";
 export function useElapsed(
   startedAt: number | null,
   active: boolean,
-  intervalMs = 200
+  intervalMs = 200,
 ): number | null {
   const [elapsed, setElapsed] = useState<number | null>(() =>
-    startedAt === null ? null : performance.now() - startedAt
+    startedAt === null ? null : performance.now() - startedAt,
   );
 
   useEffect(() => {
@@ -34,7 +34,10 @@ export function useElapsed(
     // Publish immediately: a phase that resolves inside one tick (a fast local
     // text call) still shows a number rather than nothing.
     setElapsed(performance.now() - startedAt);
-    const timer = window.setInterval(() => setElapsed(performance.now() - startedAt), intervalMs);
+    const timer = window.setInterval(
+      () => setElapsed(performance.now() - startedAt),
+      intervalMs,
+    );
     return () => window.clearInterval(timer);
   }, [startedAt, active, intervalMs]);
 

@@ -9,5 +9,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <TooltipProvider delayDuration={250} skipDelayDuration={100}>
       <App />
     </TooltipProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 );

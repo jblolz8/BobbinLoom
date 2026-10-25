@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { createInitialPlaythrough, repairMemoryEventTurns } from "../src/engine/engine";
+import {
+  createInitialPlaythrough,
+  repairMemoryEventTurns,
+} from "../src/engine/engine";
 import type { Playthrough, MemoryEvent, ChatMessage } from "../src/schemas";
 
-function makeMockPlaythrough(events: MemoryEvent[], messages: ChatMessage[]): Playthrough {
+function makeMockPlaythrough(
+  events: MemoryEvent[],
+  messages: ChatMessage[],
+): Playthrough {
   const pt = createInitialPlaythrough("Repair Test Playthrough");
   pt.id = "play_test_repair";
   pt.turn = 11;
@@ -24,7 +30,7 @@ describe("repairMemoryEventTurns", () => {
         summary: "Arrived at the ancient crossroads",
         importance: 2,
         tags: ["Crossroads"],
-        createdAt: "2026-10-10T10:05:00.000Z"
+        createdAt: "2026-10-10T10:05:00.000Z",
       },
       {
         id: "mem_2",
@@ -35,7 +41,7 @@ describe("repairMemoryEventTurns", () => {
         summary: "Fended off highway bandits",
         importance: 3,
         tags: ["Bandits"],
-        createdAt: "2026-10-10T10:20:00.000Z"
+        createdAt: "2026-10-10T10:20:00.000Z",
       },
       {
         id: "mem_3",
@@ -46,7 +52,7 @@ describe("repairMemoryEventTurns", () => {
         summary: "Learned of the secret pass from the tavern keeper",
         importance: 3,
         tags: ["Secret"],
-        createdAt: "2026-10-10T10:35:00.000Z"
+        createdAt: "2026-10-10T10:35:00.000Z",
       },
       {
         id: "mem_4",
@@ -57,8 +63,8 @@ describe("repairMemoryEventTurns", () => {
         summary: "Entered the citadel gates",
         importance: 4,
         tags: ["Citadel"],
-        createdAt: "2026-10-10T10:55:00.000Z"
-      }
+        createdAt: "2026-10-10T10:55:00.000Z",
+      },
     ];
 
     const messages: ChatMessage[] = [
@@ -71,8 +77,8 @@ describe("repairMemoryEventTurns", () => {
         patchInfo: {
           applied: ["memory event added: Arrived at the ancient crossroads"],
           rejected: [],
-          warnings: []
-        }
+          warnings: [],
+        },
       },
       {
         id: "msg_a4",
@@ -83,8 +89,8 @@ describe("repairMemoryEventTurns", () => {
         patchInfo: {
           applied: ["memory event added: Fended off highway bandits"],
           rejected: [],
-          warnings: []
-        }
+          warnings: [],
+        },
       },
       {
         id: "msg_a7",
@@ -93,10 +99,12 @@ describe("repairMemoryEventTurns", () => {
         content: "The tavern keeper leans in and whispers about the pass.",
         createdAt: "2026-10-10T10:35:00.000Z",
         patchInfo: {
-          applied: ["memory event added: Learned of the secret pass from the tavern keeper"],
+          applied: [
+            "memory event added: Learned of the secret pass from the tavern keeper",
+          ],
           rejected: [],
-          warnings: []
-        }
+          warnings: [],
+        },
       },
       {
         id: "msg_a11",
@@ -107,19 +115,19 @@ describe("repairMemoryEventTurns", () => {
         patchInfo: {
           applied: ["memory event added: Entered the citadel gates"],
           rejected: [],
-          warnings: []
-        }
-      }
+          warnings: [],
+        },
+      },
     ];
 
     const pt = makeMockPlaythrough(events, messages);
     const repaired = repairMemoryEventTurns(pt);
 
     expect(repaired).toBe(true);
-    expect(pt.memoryEvents.find(e => e.id === "mem_1")?.turn).toBe(1);
-    expect(pt.memoryEvents.find(e => e.id === "mem_2")?.turn).toBe(4);
-    expect(pt.memoryEvents.find(e => e.id === "mem_3")?.turn).toBe(7);
-    expect(pt.memoryEvents.find(e => e.id === "mem_4")?.turn).toBe(11);
+    expect(pt.memoryEvents.find((e) => e.id === "mem_1")?.turn).toBe(1);
+    expect(pt.memoryEvents.find((e) => e.id === "mem_2")?.turn).toBe(4);
+    expect(pt.memoryEvents.find((e) => e.id === "mem_3")?.turn).toBe(7);
+    expect(pt.memoryEvents.find((e) => e.id === "mem_4")?.turn).toBe(11);
 
     // Idempotent: running again changes nothing
     const secondPass = repairMemoryEventTurns(pt);
@@ -127,20 +135,25 @@ describe("repairMemoryEventTurns", () => {
   });
 
   it("also repairs events stored in memoryLayers.compressed and recent", () => {
-    const pt = makeMockPlaythrough([], [
-      {
-        id: "msg_a2",
-        role: "assistant",
-        turn: 2,
-        content: "Discovered something.",
-        createdAt: "2026-10-10T10:10:00.000Z",
-        patchInfo: {
-          applied: ["memory event added: Discovered glowing crystals in the cave"],
-          rejected: [],
-          warnings: []
-        }
-      }
-    ]);
+    const pt = makeMockPlaythrough(
+      [],
+      [
+        {
+          id: "msg_a2",
+          role: "assistant",
+          turn: 2,
+          content: "Discovered something.",
+          createdAt: "2026-10-10T10:10:00.000Z",
+          patchInfo: {
+            applied: [
+              "memory event added: Discovered glowing crystals in the cave",
+            ],
+            rejected: [],
+            warnings: [],
+          },
+        },
+      ],
+    );
 
     pt.memoryLayers = {
       recent: [],
@@ -154,9 +167,9 @@ describe("repairMemoryEventTurns", () => {
           summary: "Discovered glowing crystals in the cave",
           importance: 2,
           tags: ["Crystals"],
-          createdAt: "2026-10-10T10:10:00.000Z"
-        }
-      ]
+          createdAt: "2026-10-10T10:10:00.000Z",
+        },
+      ],
     };
 
     const repaired = repairMemoryEventTurns(pt);

@@ -55,7 +55,10 @@ export interface TagStyle {
 export function hexToRgba(hex: string, alpha: number): string {
   let clean = hex.trim().replace(/^#/, "");
   if (clean.length === 3) {
-    clean = clean.split("").map((c) => c + c).join("");
+    clean = clean
+      .split("")
+      .map((c) => c + c)
+      .join("");
   }
   if (clean.length !== 6) {
     return `rgba(148, 163, 184, ${alpha})`;
@@ -70,7 +73,10 @@ export function hexToRgba(hex: string, alpha: number): string {
 export function hexToHsl(hex: string): { h: number; s: number; l: number } {
   let clean = hex.trim().replace(/^#/, "");
   if (clean.length === 3) {
-    clean = clean.split("").map((c) => c + c).join("");
+    clean = clean
+      .split("")
+      .map((c) => c + c)
+      .join("");
   }
   if (clean.length !== 6) {
     return { h: 215, s: 16, l: 47 };
@@ -136,13 +142,16 @@ export function deriveLightColor(baseHex: string): string {
 }
 
 /** Generate a complete TagColors set from a base hex color */
-export function deriveTagColors(baseHex: string, isLight: boolean = false): TagColors {
+export function deriveTagColors(
+  baseHex: string,
+  isLight: boolean = false,
+): TagColors {
   if (isLight) {
     return {
       text: baseHex,
-      bg: hexToRgba(baseHex, 0.10),
+      bg: hexToRgba(baseHex, 0.1),
       border: hexToRgba(baseHex, 0.32),
-      glow: hexToRgba(baseHex, 0.20),
+      glow: hexToRgba(baseHex, 0.2),
     };
   }
   return {
@@ -174,7 +183,8 @@ export const BUILT_IN_CATEGORIES: TagCategoryDefinition[] = [
     },
     order: 10,
     isBuiltIn: true,
-    description: "Adult, explicit, or mature content tags (e.g. rating:nsfw, rating:explicit, rating:lewd, or standalone nsfw)",
+    description:
+      "Adult, explicit, or mature content tags (e.g. rating:nsfw, rating:explicit, rating:lewd, or standalone nsfw)",
   },
   {
     id: "rating_sfw",
@@ -196,12 +206,23 @@ export const BUILT_IN_CATEGORIES: TagCategoryDefinition[] = [
     },
     order: 20,
     isBuiltIn: true,
-    description: "Safe for work or general audience tags (e.g. rating:sfw, rating:safe, rating:general, or standalone sfw)",
+    description:
+      "Safe for work or general audience tags (e.g. rating:sfw, rating:safe, rating:general, or standalone sfw)",
   },
   {
     id: "copyright",
     label: "Copyright & Franchise",
-    prefixes: ["copyright", "franchise", "series", "origin", "fandom", "universe", "anime", "game", "novel"],
+    prefixes: [
+      "copyright",
+      "franchise",
+      "series",
+      "origin",
+      "fandom",
+      "universe",
+      "anime",
+      "game",
+      "novel",
+    ],
     color: "#c084fc",
     colorLight: "#7c3aed",
     colors: {
@@ -289,7 +310,18 @@ export const BUILT_IN_CATEGORIES: TagCategoryDefinition[] = [
   {
     id: "theme",
     label: "Theme & Class",
-    prefixes: ["theme", "class", "role", "element", "genre", "setting", "job", "archetype", "style", "magic"],
+    prefixes: [
+      "theme",
+      "class",
+      "role",
+      "element",
+      "genre",
+      "setting",
+      "job",
+      "archetype",
+      "style",
+      "magic",
+    ],
     color: "#facc15",
     colorLight: "#b45309",
     colors: {
@@ -389,7 +421,7 @@ export function cleanTag(tag: string): string {
 export function resolveTagStyle(
   rawTag: string,
   userConfig?: TagTaxonomyConfig | null,
-  themeMode?: "dark" | "light"
+  themeMode?: "dark" | "light",
 ): TagStyle {
   const norm = cleanTag(rawTag);
   const isLight = themeMode === "light";
@@ -400,7 +432,7 @@ export function resolveTagStyle(
     categoryLabel: string,
     colorsDark: TagColors,
     colorsLight: TagColors,
-    namespace?: string
+    namespace?: string,
   ): TagStyle => ({
     raw: norm,
     namespace,
@@ -439,7 +471,14 @@ export function resolveTagStyle(
       const darkColors = deriveTagColors(override, false);
       const lightHex = deriveLightColor(override);
       const lightColors = deriveTagColors(lightHex, true);
-      return makeTagStyle(value, "custom_override", "Custom", darkColors, lightColors, namespace);
+      return makeTagStyle(
+        value,
+        "custom_override",
+        "Custom",
+        darkColors,
+        lightColors,
+        namespace,
+      );
     }
 
     // Match an existing category
@@ -455,10 +494,18 @@ export function resolveTagStyle(
       } else {
         const customCat = cat as CustomCategoryConfig;
         darkColors = deriveTagColors(customCat.color, false);
-        const lightHex = customCat.colorLight || deriveLightColor(customCat.color);
+        const lightHex =
+          customCat.colorLight || deriveLightColor(customCat.color);
         lightColors = deriveTagColors(lightHex, true);
       }
-      return makeTagStyle(value, cat.id, cat.label, darkColors, lightColors, namespace);
+      return makeTagStyle(
+        value,
+        cat.id,
+        cat.label,
+        darkColors,
+        lightColors,
+        namespace,
+      );
     }
   }
 
@@ -475,19 +522,40 @@ export function resolveTagStyle(
       value.includes("lewd") ||
       value.includes("mature");
 
-    const cat = BUILT_IN_CATEGORIES.find((c) => c.id === (isNsfw ? "rating_nsfw" : "rating_sfw"))!;
-    return makeTagStyle(value, cat.id, cat.label, cat.colors, cat.colorsLight, "rating");
+    const cat = BUILT_IN_CATEGORIES.find(
+      (c) => c.id === (isNsfw ? "rating_nsfw" : "rating_sfw"),
+    )!;
+    return makeTagStyle(
+      value,
+      cat.id,
+      cat.label,
+      cat.colors,
+      cat.colorsLight,
+      "rating",
+    );
   }
 
   // Standalone rating values without "rating:" prefix (e.g. "nsfw", "sfw", "explicit", "safe")
   if (KNOWN_NSFW_STANDALONE.has(norm)) {
     const nsfwCat = BUILT_IN_CATEGORIES.find((c) => c.id === "rating_nsfw")!;
-    return makeTagStyle(norm, nsfwCat.id, nsfwCat.label, nsfwCat.colors, nsfwCat.colorsLight);
+    return makeTagStyle(
+      norm,
+      nsfwCat.id,
+      nsfwCat.label,
+      nsfwCat.colors,
+      nsfwCat.colorsLight,
+    );
   }
 
   if (KNOWN_SFW_STANDALONE.has(norm)) {
     const sfwCat = BUILT_IN_CATEGORIES.find((c) => c.id === "rating_sfw")!;
-    return makeTagStyle(norm, sfwCat.id, sfwCat.label, sfwCat.colors, sfwCat.colorsLight);
+    return makeTagStyle(
+      norm,
+      sfwCat.id,
+      sfwCat.label,
+      sfwCat.colors,
+      sfwCat.colorsLight,
+    );
   }
 
   // 3. Prefix extraction (namespace:value)
@@ -503,7 +571,14 @@ export function resolveTagStyle(
           const darkColors = deriveTagColors(custom.color, false);
           const lightHex = custom.colorLight || deriveLightColor(custom.color);
           const lightColors = deriveTagColors(lightHex, true);
-          return makeTagStyle(value, custom.id, custom.label, darkColors, lightColors, prefix);
+          return makeTagStyle(
+            value,
+            custom.id,
+            custom.label,
+            darkColors,
+            lightColors,
+            prefix,
+          );
         }
       }
     }
@@ -511,7 +586,14 @@ export function resolveTagStyle(
     // 3b. Check built-in categories
     for (const builtIn of BUILT_IN_CATEGORIES) {
       if (builtIn.prefixes.map((p) => p.toLowerCase()).includes(prefix)) {
-        return makeTagStyle(value, builtIn.id, builtIn.label, builtIn.colors, builtIn.colorsLight, prefix);
+        return makeTagStyle(
+          value,
+          builtIn.id,
+          builtIn.label,
+          builtIn.colors,
+          builtIn.colorsLight,
+          prefix,
+        );
       }
     }
 
@@ -526,17 +608,26 @@ export function resolveTagStyle(
       prefix.charAt(0).toUpperCase() + prefix.slice(1),
       darkColors,
       lightColors,
-      prefix
+      prefix,
     );
   }
 
   // 4. Default general tag
   const genCat = BUILT_IN_CATEGORIES.find((c) => c.id === "general")!;
-  return makeTagStyle(norm, genCat.id, genCat.label, genCat.colors, genCat.colorsLight);
+  return makeTagStyle(
+    norm,
+    genCat.id,
+    genCat.label,
+    genCat.colors,
+    genCat.colorsLight,
+  );
 }
 
 /** Generate a stable aesthetically pleasing hex color for unknown prefixes (dark or light mode) */
-export function generateStableColor(str: string, isLight: boolean = false): string {
+export function generateStableColor(
+  str: string,
+  isLight: boolean = false,
+): string {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     hash = str.charCodeAt(i) + ((hash << 5) - hash);
@@ -568,7 +659,7 @@ export interface GroupedTagCategory {
  */
 export function groupTagsByCategory(
   tagCounts: Array<{ tag: string; count: number }>,
-  userConfig?: TagTaxonomyConfig | null
+  userConfig?: TagTaxonomyConfig | null,
 ): GroupedTagCategory[] {
   const map = new Map<string, GroupedTagCategory>();
 
@@ -644,7 +735,9 @@ export function groupTagsByCategory(
 /**
  * Scan all tags across a library and return a list of discovered prefix namespaces.
  */
-export function discoverLibraryNamespaces(tags: string[]): Array<{ prefix: string; count: number; sampleTag: string }> {
+export function discoverLibraryNamespaces(
+  tags: string[],
+): Array<{ prefix: string; count: number; sampleTag: string }> {
   const prefixCounts = new Map<string, { count: number; sampleTag: string }>();
 
   for (const raw of tags) {
@@ -652,7 +745,10 @@ export function discoverLibraryNamespaces(tags: string[]): Array<{ prefix: strin
     const colonIdx = norm.indexOf(":");
     if (colonIdx > 0) {
       const prefix = norm.slice(0, colonIdx);
-      const existing = prefixCounts.get(prefix) ?? { count: 0, sampleTag: norm };
+      const existing = prefixCounts.get(prefix) ?? {
+        count: 0,
+        sampleTag: norm,
+      };
       existing.count += 1;
       existing.sampleTag = norm;
       prefixCounts.set(prefix, existing);
@@ -667,12 +763,17 @@ export function discoverLibraryNamespaces(tags: string[]): Array<{ prefix: strin
 /**
  * Return numerical ordering weight for a given categoryId.
  */
-export function getCategoryOrder(categoryId: string, userConfig?: TagTaxonomyConfig | null): number {
+export function getCategoryOrder(
+  categoryId: string,
+  userConfig?: TagTaxonomyConfig | null,
+): number {
   if (categoryId === "custom_override") return 250;
   const builtIn = BUILT_IN_CATEGORIES.find((c) => c.id === categoryId);
   if (builtIn) return builtIn.order;
   if (userConfig?.customCategories) {
-    const idx = userConfig.customCategories.findIndex((c) => c.id === categoryId);
+    const idx = userConfig.customCategories.findIndex(
+      (c) => c.id === categoryId,
+    );
     if (idx >= 0) return 100 + idx;
   }
   if (categoryId.startsWith("ns_")) return 200;
@@ -686,7 +787,10 @@ export function getCategoryOrder(categoryId: string, userConfig?: TagTaxonomyCon
  * 2. Primary sort by taxonomy category order (Ratings first -> Copyright -> Character -> Species -> Artist -> Theme -> Meta -> Custom -> Dynamic -> General).
  * 3. Secondary sort alphabetically by clean tag string.
  */
-export function sortTags(tags: string[], userConfig?: TagTaxonomyConfig | null): string[] {
+export function sortTags(
+  tags: string[],
+  userConfig?: TagTaxonomyConfig | null,
+): string[] {
   if (!tags || tags.length === 0) return [];
   const seen = new Set<string>();
   const normalized: string[] = [];

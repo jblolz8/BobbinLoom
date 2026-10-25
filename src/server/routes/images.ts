@@ -2,19 +2,49 @@ import { createReadStream } from "node:fs";
 import type { FastifyPluginAsync, FastifyPluginOptions } from "fastify";
 import { z } from "zod";
 import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../../engine/imageDefaults";
-import type { ChatMessage, ImageGenerationSettings, MessageImage, Playthrough, ProviderConnection } from "../../schemas";
+import type {
+  ChatMessage,
+  ImageGenerationSettings,
+  MessageImage,
+  Playthrough,
+  ProviderConnection,
+} from "../../schemas";
 import { ImageGenerationSettingsSchema } from "../../schemas";
-import { A1111_IMAGE_PROMPT_CAP, OPENAI_IMAGE_PROMPT_CAP, VENICE_IMAGE_PROMPT_CAP } from "../imageProvider";
+import {
+  A1111_IMAGE_PROMPT_CAP,
+  OPENAI_IMAGE_PROMPT_CAP,
+  VENICE_IMAGE_PROMPT_CAP,
+} from "../imageProvider";
 import { clampChars } from "../imageProvider/shared";
-import { clearImageProgress, publishImageProgress, readImageProgress } from "../imageProgress";
-import { imageFilePath, mimeForFile, saveImageBytes, sweepOrphansInDataDir, IMAGES_DIR } from "../imageStore";
+import {
+  clearImageProgress,
+  publishImageProgress,
+  readImageProgress,
+} from "../imageProgress";
+import {
+  imageFilePath,
+  mimeForFile,
+  saveImageBytes,
+  sweepOrphansInDataDir,
+  IMAGES_DIR,
+} from "../imageStore";
 import type { ProviderManager } from "../providerManager";
-import { buildImageCastBlock, buildImageHistoryBlock, buildImageStateBlock, previousWriterAnswer } from "../provider/imageContext";
+import {
+  buildImageCastBlock,
+  buildImageHistoryBlock,
+  buildImageStateBlock,
+  previousWriterAnswer,
+} from "../provider/imageContext";
 import type { ImagePromptInput } from "../provider/imagePrompt";
 import { generateImagePrompt } from "../provider/imagePrompt";
 import { getPlaythroughRecord, updatePlaythroughRecord } from "../store";
 import { loadPromptConfig } from "../promptConfigStore";
-import { abortOnClientDisconnect, dataDir as defaultDataDir, settingsDir as defaultSettingsDir, providerManager } from "./helpers";
+import {
+  abortOnClientDisconnect,
+  dataDir as defaultDataDir,
+  settingsDir as defaultSettingsDir,
+  providerManager,
+} from "./helpers";
 
 /** Injectable seams (all defaulted) so the routes can be exercised against a
  *  temp data directory with a stub fetch — no test may touch the real store. */
@@ -48,7 +78,7 @@ const GenerateImageBody = z.object({
   rawRequest: z.string().optional(),
   /** The image this generation REPLACES, dropped from the message in the same
    *  write that appends the new one (see the handler). */
-  replaceFile: z.string().optional()
+  replaceFile: z.string().optional(),
 });
 
 const MessageParams = z.object({ id: z.string(), messageId: z.string() });
@@ -64,13 +94,18 @@ const MessageParams = z.object({ id: z.string(), messageId: z.string() });
 function dialectPromptCap(conn: ProviderConnection): number {
   const apiStyle = conn.apiStyle ?? "openai";
   if (apiStyle === "a1111") return A1111_IMAGE_PROMPT_CAP;
-  return apiStyle === "venice" ? VENICE_IMAGE_PROMPT_CAP : OPENAI_IMAGE_PROMPT_CAP;
+  return apiStyle === "venice"
+    ? VENICE_IMAGE_PROMPT_CAP
+    : OPENAI_IMAGE_PROMPT_CAP;
 }
 
 /** Clamp to BOTH the preset's soft limit and the dialect's hard cap, ignoring a
  *  0 limit (the schema allows it and it reads as "unlimited"). This is the
  *  PROMPT's budget: a model-written tag list the preset sizes. */
-function composedLimit(settings: ImageGenerationSettings, conn: ProviderConnection): number {
+function composedLimit(
+  settings: ImageGenerationSettings,
+  conn: ProviderConnection,
+): number {
   return settings.promptCharacterLimit > 0
     ? Math.min(settings.promptCharacterLimit, dialectPromptCap(conn))
     : dialectPromptCap(conn);
@@ -90,7 +125,7 @@ function clampNegative(text: string, conn: ProviderConnection): string {
 function clampComposed(
   text: string,
   settings: ImageGenerationSettings,
-  conn: ProviderConnection
+  conn: ProviderConnection,
 ): { text: string; truncated: boolean } {
   const clamped = clampChars(text, composedLimit(settings, conn));
   return { text: clamped, truncated: clamped.length < text.length };
@@ -100,8 +135,11 @@ function clampComposed(
  *  config (there is no per-playthrough snapshot anymore); a config that carries
  *  no block falls back to the shipped defaults. Parsed (not just copied) so a
  *  partial block always comes back complete. */
-function resolveImageSettings(imageGeneration: ImageGenerationSettings | undefined): ImageGenerationSettings {
-  if (imageGeneration) return ImageGenerationSettingsSchema.parse(imageGeneration);
+function resolveImageSettings(
+  imageGeneration: ImageGenerationSettings | undefined,
+): ImageGenerationSettings {
+  if (imageGeneration)
+    return ImageGenerationSettingsSchema.parse(imageGeneration);
   return { ...DEFAULT_IMAGE_GENERATION_SETTINGS };
 }
 
@@ -121,7 +159,10 @@ function clampStoredPromptResponse(text: string): string {
  *  answering. Hidden (state-only) user messages are skipped. Returns the message
  *  rather than its text so the caller can tell whether the history window already
  *  carries it. */
-function previousUserMessage(playthrough: { messages: ChatMessage[] }, message: ChatMessage): ChatMessage | undefined {
+function previousUserMessage(
+  playthrough: { messages: ChatMessage[] },
+  message: ChatMessage,
+): ChatMessage | undefined {
   const index = playthrough.messages.findIndex((m) => m.id === message.id);
   for (let i = index - 1; i >= 0; i -= 1) {
     const candidate = playthrough.messages[i];
@@ -143,7 +184,8 @@ function parseRawRequestBody(text: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+    return null;
   return parsed as Record<string, unknown>;
 }
 
@@ -152,12 +194,15 @@ function parseRawRequestBody(text: string): Record<string, unknown> | null {
  *  previous-answer reference) reads `image.prompt`, so it has to describe the text
  *  the provider was actually given. No clamping — this path sends the body as it
  *  stands. */
-function promptFromRawBody(rawBody: Record<string, unknown>): { prompt: string; negativePrompt: string } {
+function promptFromRawBody(rawBody: Record<string, unknown>): {
+  prompt: string;
+  negativePrompt: string;
+} {
   const prompt = rawBody.prompt;
   const negative = rawBody.negative_prompt;
   return {
     prompt: typeof prompt === "string" ? prompt : "",
-    negativePrompt: typeof negative === "string" ? negative : ""
+    negativePrompt: typeof negative === "string" ? negative : "",
   };
 }
 
@@ -167,9 +212,13 @@ function promptFromRawBody(rawBody: Record<string, unknown>): { prompt: string; 
 function buildImagePromptInput(
   playthrough: Playthrough,
   message: ChatMessage,
-  settings: ImageGenerationSettings
+  settings: ImageGenerationSettings,
 ): { input: ImagePromptInput; historyMessages: number } {
-  const history = buildImageHistoryBlock(playthrough, message, settings.historyMessages);
+  const history = buildImageHistoryBlock(
+    playthrough,
+    message,
+    settings.historyMessages,
+  );
   const action = previousUserMessage(playthrough, message);
   return {
     input: {
@@ -177,24 +226,32 @@ function buildImagePromptInput(
       // Inside the window the action is already in the history block, and the same
       // prose twice in one user message is waste — so the explicit block is only for
       // the case the window could not reach back that far.
-      previousUserContent: action && !history.messageIds.includes(action.id) ? action.content : undefined,
+      previousUserContent:
+        action && !history.messageIds.includes(action.id)
+          ? action.content
+          : undefined,
       history: history.text || undefined,
       // Gated here as well as in the block: with the toggle off the answer is not
       // even read, so nothing downstream can leak it into a request.
-      previousAnswer: settings.includePreviousAnswer ? previousWriterAnswer(playthrough, message) : undefined,
+      previousAnswer: settings.includePreviousAnswer
+        ? previousWriterAnswer(playthrough, message)
+        : undefined,
       stateSummary: buildImageStateBlock(playthrough),
       // The mode decides whether the player is described at all: in `scene` mode the
       // frame is not seen through their eyes, so naming them is what put their
       // wardrobe on the character.
-      castSummary: buildImageCastBlock(playthrough, settings.instructionMode)
+      castSummary: buildImageCastBlock(playthrough, settings.instructionMode),
     },
     // What the history block ACTUALLY carried — the dry run reports it, so the
     // modal can say what the writer was given rather than what was configured.
-    historyMessages: history.messageIds.length
+    historyMessages: history.messageIds.length,
   };
 }
 
-export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, options = {}) => {
+export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (
+  app,
+  options = {},
+) => {
   const dataDir = options.dataDir ?? defaultDataDir;
   const imagesDir = options.imagesDir ?? IMAGES_DIR;
   const settingsDir = options.settingsDir ?? defaultSettingsDir;
@@ -210,9 +267,14 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
   app.get("/api/images/progress", async (request, reply) => {
     // `?connectionId=` (empty) and a repeated parameter both mean the same as
     // absent: there is no readout to look up, which is a 400 and not a 500.
-    const parsed = z.object({ connectionId: z.string().optional() }).safeParse(request.query);
-    const connectionId = parsed.success ? parsed.data.connectionId?.trim() : undefined;
-    if (!connectionId) return reply.code(400).send({ error: "connectionId is required" });
+    const parsed = z
+      .object({ connectionId: z.string().optional() })
+      .safeParse(request.query);
+    const connectionId = parsed.success
+      ? parsed.data.connectionId?.trim()
+      : undefined;
+    if (!connectionId)
+      return reply.code(400).send({ error: "connectionId is required" });
     return reply.send(readImageProgress(connectionId));
   });
 
@@ -228,87 +290,123 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
 
   // Dry run: compose the prompt without generating — powers the preview modal.
   // Runs the text side call exactly once and persists nothing.
-  app.post("/api/playthroughs/:id/messages/:messageId/image/prompt", async (request, reply) => {
-    const params = MessageParams.parse(request.params);
-    const body = GenerateImageBody.parse(request.body ?? {});
-    const playthrough = getPlaythroughRecord(dataDir, params.id);
-    if (!playthrough) return reply.code(404).send({ error: "Playthrough not found" });
+  app.post(
+    "/api/playthroughs/:id/messages/:messageId/image/prompt",
+    async (request, reply) => {
+      const params = MessageParams.parse(request.params);
+      const body = GenerateImageBody.parse(request.body ?? {});
+      const playthrough = getPlaythroughRecord(dataDir, params.id);
+      if (!playthrough)
+        return reply.code(404).send({ error: "Playthrough not found" });
 
-    const message = playthrough.messages.find((m) => m.id === params.messageId);
-    if (!message) return reply.code(404).send({ error: "Message not found" });
-    if (message.role !== "assistant") return reply.code(400).send({ error: "Images attach to assistant messages only" });
-
-    const imageConn = manager.imageConnection(body.imageProviderId);
-    if (!imageConn) return reply.code(400).send({ error: "No image provider configured — add one in Settings → Provider → Images." });
-
-    const promptConfig = manager.resolveImagePromptConfig(imageConn);
-    if (!promptConfig) return reply.code(400).send({ error: "No text provider available to write the image prompt." });
-
-    const settings = resolveImageSettings(loadPromptConfig(settingsDir).promptConfig.imageGeneration);
-    const controller = abortOnClientDisconnect(reply);
-
-    let prompt: string;
-    let negativePrompt: string;
-    let warnings: string[];
-    let promptTruncated: boolean;
-    let promptDurationMs: number;
-    let writerPrompt: string;
-    let writerNegative: string;
-    const promptContext = buildImagePromptInput(playthrough, message, settings);
-    try {
-      const result = await generateImagePrompt(promptConfig, settings,
-        promptContext.input,
-        fetchImpl, controller.signal);
-      prompt = result.prompt;
-      negativePrompt = result.negativePrompt;
-      warnings = result.warnings;
-      promptTruncated = result.promptTruncated;
-      promptDurationMs = result.durationMs;
-      // The model's own answer, echoed back by the modal so the generate call that
-      // makes no text call of its own can still store what the writer wrote.
-      writerPrompt = result.writerPrompt;
-      writerNegative = result.writerNegative;
-    } catch (error) {
-      if (controller.signal.aborted) return;
-      const reason = error instanceof Error ? error.message : "Image prompt generation failed";
-      return reply.code(502).send({ error: reason });
-    }
-    if (controller.signal.aborted) return;
-
-    // Clamp to the dialect cap here too, so what the modal shows is byte-for-byte
-    // what the generate call will send. The PROMPT keeps the preset's soft limit;
-    // the NEGATIVE is a fixed shipped list and answers to the dialect cap alone.
-    const composedPrompt = clampComposed(prompt, settings, imageConn);
-    const composedNegative = clampNegative(negativePrompt, imageConn);
-    // The cut happens at the END of the text, which is exactly where the tag
-    // list's action and physical-state tags live — say so before the image call
-    // is paid for. The prompt side call clamps to the preset limit first, so
-    // both cuts are reported (a ceiling hit anywhere is a ceiling hit).
-    if (promptTruncated || composedPrompt.truncated) {
-      warnings.push(
-        `The composed prompt is longer than the ${composedLimit(settings, imageConn)}-character limit, so it was cut at the end — where the action and physical-state tags sit. Move the essential tags earlier in the list, or raise the character limit on the Image Generation tab.`
+      const message = playthrough.messages.find(
+        (m) => m.id === params.messageId,
       );
-    }
-    return {
-      prompt: composedPrompt.text,
-      negativePrompt: composedNegative,
-      // Advisory only — the modal shows these above the editable prompt and the
-      // user decides. Never a reason to fail the call.
-      warnings,
-      // The text provider's half of the result. Carried in the dry-run response
-      // so the preview modal can show it AND so the client can hand it back on
-      // the generate request that stores the ref.
-      promptDurationMs,
-      // …and the writer's own answer, which only this call can produce on the
-      // review path.
-      writerPrompt,
-      writerNegative,
-      // What the writer was actually given, for the modal's context line. The count
-      // is what the history block CARRIED, not what the preset asks for — on the
-      // first message of a chat they differ.
-      context: { historyMessages: promptContext.historyMessages, instructionMode: settings.instructionMode }
-    };
-  });
+      if (!message) return reply.code(404).send({ error: "Message not found" });
+      if (message.role !== "assistant")
+        return reply
+          .code(400)
+          .send({ error: "Images attach to assistant messages only" });
+
+      const imageConn = manager.imageConnection(body.imageProviderId);
+      if (!imageConn)
+        return reply
+          .code(400)
+          .send({
+            error:
+              "No image provider configured — add one in Settings → Provider → Images.",
+          });
+
+      const promptConfig = manager.resolveImagePromptConfig(imageConn);
+      if (!promptConfig)
+        return reply
+          .code(400)
+          .send({
+            error: "No text provider available to write the image prompt.",
+          });
+
+      const settings = resolveImageSettings(
+        loadPromptConfig(settingsDir).promptConfig.imageGeneration,
+      );
+      const controller = abortOnClientDisconnect(reply);
+
+      let prompt: string;
+      let negativePrompt: string;
+      let warnings: string[];
+      let promptTruncated: boolean;
+      let promptDurationMs: number;
+      let writerPrompt: string;
+      let writerNegative: string;
+      const promptContext = buildImagePromptInput(
+        playthrough,
+        message,
+        settings,
+      );
+      try {
+        const result = await generateImagePrompt(
+          promptConfig,
+          settings,
+          promptContext.input,
+          fetchImpl,
+          controller.signal,
+        );
+        prompt = result.prompt;
+        negativePrompt = result.negativePrompt;
+        warnings = result.warnings;
+        promptTruncated = result.promptTruncated;
+        promptDurationMs = result.durationMs;
+        // The model's own answer, echoed back by the modal so the generate call that
+        // makes no text call of its own can still store what the writer wrote.
+        writerPrompt = result.writerPrompt;
+        writerNegative = result.writerNegative;
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        const reason =
+          error instanceof Error
+            ? error.message
+            : "Image prompt generation failed";
+        return reply.code(502).send({ error: reason });
+      }
+      if (controller.signal.aborted) return;
+
+      // Clamp to the dialect cap here too, so what the modal shows is byte-for-byte
+      // what the generate call will send. The PROMPT keeps the preset's soft limit;
+      // the NEGATIVE is a fixed shipped list and answers to the dialect cap alone.
+      const composedPrompt = clampComposed(prompt, settings, imageConn);
+      const composedNegative = clampNegative(negativePrompt, imageConn);
+      // The cut happens at the END of the text, which is exactly where the tag
+      // list's action and physical-state tags live — say so before the image call
+      // is paid for. The prompt side call clamps to the preset limit first, so
+      // both cuts are reported (a ceiling hit anywhere is a ceiling hit).
+      if (promptTruncated || composedPrompt.truncated) {
+        warnings.push(
+          `The composed prompt is longer than the ${composedLimit(settings, imageConn)}-character limit, so it was cut at the end — where the action and physical-state tags sit. Move the essential tags earlier in the list, or raise the character limit on the Image Generation tab.`,
+        );
+      }
+      return {
+        prompt: composedPrompt.text,
+        negativePrompt: composedNegative,
+        // Advisory only — the modal shows these above the editable prompt and the
+        // user decides. Never a reason to fail the call.
+        warnings,
+        // The text provider's half of the result. Carried in the dry-run response
+        // so the preview modal can show it AND so the client can hand it back on
+        // the generate request that stores the ref.
+        promptDurationMs,
+        // …and the writer's own answer, which only this call can produce on the
+        // review path.
+        writerPrompt,
+        writerNegative,
+        // What the writer was actually given, for the modal's context line. The count
+        // is what the history block CARRIED, not what the preset asks for — on the
+        // first message of a chat they differ.
+        context: {
+          historyMessages: promptContext.historyMessages,
+          instructionMode: settings.instructionMode,
+        },
+      };
+    },
+  );
 
   // Manual sweep: no record change drives this one — the user asked for it, so a
   // failure is REPORTED (500) instead of swallowed like the two best-effort call
@@ -317,7 +415,8 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
     try {
       return { removed: sweepOrphansInDataDir(dataDir, imagesDir) };
     } catch (error) {
-      const reason = error instanceof Error ? error.message : "Image sweep failed";
+      const reason =
+        error instanceof Error ? error.message : "Image sweep failed";
       return reply.code(500).send({ error: reason });
     }
   });
@@ -328,288 +427,398 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (app, o
   // and the old image stays on screen. The next re-send is what puts it on the
   // wire. `prompt` / `negativePrompt` are left alone on purpose — they describe
   // the image that is actually there, and saving renders nothing.
-  app.patch("/api/playthroughs/:id/messages/:messageId/images/:file", async (request, reply) => {
-    const params = z.object({ id: z.string(), messageId: z.string(), file: z.string() }).parse(request.params);
-    // `safeParse` for the BODY where the rest of this file parses directly: there
-    // is no zod error handler on this server (a `.parse()` throw is Fastify's
-    // generic 500), and this body is the user's own editing surface — a missing
-    // or non-string field is a caller mistake worth a 400 and a sentence, not an
-    // internal error. The URL shape above is ours and stays as it is.
-    const body = z.object({ request: z.string() }).safeParse(request.body ?? {});
-    if (!body.success) {
-      return reply.code(400).send({ error: "A request body string is required." });
-    }
-    // The same shape rule the re-send enforces, for the same reason: the FIELDS
-    // are the provider's business, but a body that is not a JSON object cannot be
-    // sent later either, and finding that out at Save time is the point.
-    const parsed = parseRawRequestBody(body.data.request);
-    if (!parsed) return reply.code(400).send({ error: "The request body must be a JSON object." });
+  app.patch(
+    "/api/playthroughs/:id/messages/:messageId/images/:file",
+    async (request, reply) => {
+      const params = z
+        .object({ id: z.string(), messageId: z.string(), file: z.string() })
+        .parse(request.params);
+      // `safeParse` for the BODY where the rest of this file parses directly: there
+      // is no zod error handler on this server (a `.parse()` throw is Fastify's
+      // generic 500), and this body is the user's own editing surface — a missing
+      // or non-string field is a caller mistake worth a 400 and a sentence, not an
+      // internal error. The URL shape above is ours and stays as it is.
+      const body = z
+        .object({ request: z.string() })
+        .safeParse(request.body ?? {});
+      if (!body.success) {
+        return reply
+          .code(400)
+          .send({ error: "A request body string is required." });
+      }
+      // The same shape rule the re-send enforces, for the same reason: the FIELDS
+      // are the provider's business, but a body that is not a JSON object cannot be
+      // sent later either, and finding that out at Save time is the point.
+      const parsed = parseRawRequestBody(body.data.request);
+      if (!parsed)
+        return reply
+          .code(400)
+          .send({ error: "The request body must be a JSON object." });
 
-    const playthrough = getPlaythroughRecord(dataDir, params.id);
-    if (!playthrough) return reply.code(404).send({ error: "Playthrough not found" });
-    const message = playthrough.messages.find((m) => m.id === params.messageId);
-    if (!message) return reply.code(404).send({ error: "Message not found" });
-    // A ref that is not on the message means the client is looking at a stale
-    // record (a branch, a replay, another window): reported rather than created.
-    const image = (message.images ?? []).find((candidate) => candidate.file === params.file);
-    if (!image) return reply.code(404).send({ error: "Image not found" });
+      const playthrough = getPlaythroughRecord(dataDir, params.id);
+      if (!playthrough)
+        return reply.code(404).send({ error: "Playthrough not found" });
+      const message = playthrough.messages.find(
+        (m) => m.id === params.messageId,
+      );
+      if (!message) return reply.code(404).send({ error: "Message not found" });
+      // A ref that is not on the message means the client is looking at a stale
+      // record (a branch, a replay, another window): reported rather than created.
+      const image = (message.images ?? []).find(
+        (candidate) => candidate.file === params.file,
+      );
+      if (!image) return reply.code(404).send({ error: "Image not found" });
 
-    // Stored the way every other request on the record is: one line, serialized
-    // from the parsed object.
-    image.request = JSON.stringify(parsed);
-    updatePlaythroughRecord(dataDir, playthrough);
-    return reply.send({ playthrough });
-  });
+      // Stored the way every other request on the record is: one line, serialized
+      // from the parsed object.
+      image.request = JSON.stringify(parsed);
+      updatePlaythroughRecord(dataDir, playthrough);
+      return reply.send({ playthrough });
+    },
+  );
 
   // Drop one image ref from a message, then sweep the now-unreferenced file.
   // Idempotent: removing a ref that is already gone still returns the record.
-  app.delete("/api/playthroughs/:id/messages/:messageId/images/:file", async (request, reply) => {
-    const params = z.object({ id: z.string(), messageId: z.string(), file: z.string() }).parse(request.params);
-    const playthrough = getPlaythroughRecord(dataDir, params.id);
-    if (!playthrough) return reply.code(404).send({ error: "Playthrough not found" });
+  app.delete(
+    "/api/playthroughs/:id/messages/:messageId/images/:file",
+    async (request, reply) => {
+      const params = z
+        .object({ id: z.string(), messageId: z.string(), file: z.string() })
+        .parse(request.params);
+      const playthrough = getPlaythroughRecord(dataDir, params.id);
+      if (!playthrough)
+        return reply.code(404).send({ error: "Playthrough not found" });
 
-    const message = playthrough.messages.find((m) => m.id === params.messageId);
-    if (!message) return reply.code(404).send({ error: "Message not found" });
+      const message = playthrough.messages.find(
+        (m) => m.id === params.messageId,
+      );
+      if (!message) return reply.code(404).send({ error: "Message not found" });
 
-    // `file` is only ever compared against stored refs (never joined onto a
-    // path), and the sweep refuses non-hash names — no traversal surface here.
-    const remaining = (message.images ?? []).filter((image) => image.file !== params.file);
-    if (remaining.length !== (message.images ?? []).length) {
-      if (remaining.length) message.images = remaining;
-      else delete message.images;
-      // A cover is a SECOND kind of reference to these bytes. When this is the image the card
-      // wears, the pointer goes in the same write that drops the ref, so the card falls back
-      // down the chain instead of holding a pointer at a file that is about to be swept.
-      if (playthrough.cover?.file === params.file) delete playthrough.cover;
-      updatePlaythroughRecord(dataDir, playthrough);
-      // Best-effort, like the playthrough-delete and truncate sites: the
-      // reference is ALREADY gone from the persisted record, so a failed sweep
-      // must not report the removal as failed (and must not leave the client
-      // showing "nothing was changed" over a change that landed). The file is
-      // collected by the next sweep or the manual endpoint.
-      try {
-        sweepOrphansInDataDir(dataDir, imagesDir);
-      } catch (error) {
-        console.warn(`[images] orphan sweep after removing an image from ${params.messageId} failed:`, error);
+      // `file` is only ever compared against stored refs (never joined onto a
+      // path), and the sweep refuses non-hash names — no traversal surface here.
+      const remaining = (message.images ?? []).filter(
+        (image) => image.file !== params.file,
+      );
+      if (remaining.length !== (message.images ?? []).length) {
+        if (remaining.length) message.images = remaining;
+        else delete message.images;
+        // A cover is a SECOND kind of reference to these bytes. When this is the image the card
+        // wears, the pointer goes in the same write that drops the ref, so the card falls back
+        // down the chain instead of holding a pointer at a file that is about to be swept.
+        if (playthrough.cover?.file === params.file) delete playthrough.cover;
+        updatePlaythroughRecord(dataDir, playthrough);
+        // Best-effort, like the playthrough-delete and truncate sites: the
+        // reference is ALREADY gone from the persisted record, so a failed sweep
+        // must not report the removal as failed (and must not leave the client
+        // showing "nothing was changed" over a change that landed). The file is
+        // collected by the next sweep or the manual endpoint.
+        try {
+          sweepOrphansInDataDir(dataDir, imagesDir);
+        } catch (error) {
+          console.warn(
+            `[images] orphan sweep after removing an image from ${params.messageId} failed:`,
+            error,
+          );
+        }
       }
-    }
-    return reply.send({ playthrough });
-  });
+      return reply.send({ playthrough });
+    },
+  );
 
-  app.post("/api/playthroughs/:id/messages/:messageId/image", async (request, reply) => {
-    const params = MessageParams.parse(request.params);
-    const body = GenerateImageBody.parse(request.body ?? {});
-    const playthrough = getPlaythroughRecord(dataDir, params.id);
-    if (!playthrough) return reply.code(404).send({ error: "Playthrough not found" });
+  app.post(
+    "/api/playthroughs/:id/messages/:messageId/image",
+    async (request, reply) => {
+      const params = MessageParams.parse(request.params);
+      const body = GenerateImageBody.parse(request.body ?? {});
+      const playthrough = getPlaythroughRecord(dataDir, params.id);
+      if (!playthrough)
+        return reply.code(404).send({ error: "Playthrough not found" });
 
-    const message = playthrough.messages.find((m) => m.id === params.messageId);
-    if (!message) return reply.code(404).send({ error: "Message not found" });
-    if (message.role !== "assistant") return reply.code(400).send({ error: "Images attach to assistant messages only" });
+      const message = playthrough.messages.find(
+        (m) => m.id === params.messageId,
+      );
+      if (!message) return reply.code(404).send({ error: "Message not found" });
+      if (message.role !== "assistant")
+        return reply
+          .code(400)
+          .send({ error: "Images attach to assistant messages only" });
 
-    const imageConn = manager.imageConnection(body.imageProviderId);
-    if (!imageConn) return reply.code(400).send({ error: "No image provider configured — add one in Settings → Provider → Images." });
+      const imageConn = manager.imageConnection(body.imageProviderId);
+      if (!imageConn)
+        return reply
+          .code(400)
+          .send({
+            error:
+              "No image provider configured — add one in Settings → Provider → Images.",
+          });
 
-    // The re-send path: the body came from the client, so nothing is composed
-    // and no text provider is called. It therefore needs no prompt writer at all
-    // — an image connection alone can re-issue a stored request.
-    const hasRaw = typeof body.rawRequest === "string";
-    if (hasRaw && (typeof body.promptOverride === "string" || typeof body.negativeOverride === "string")) {
-      return reply.code(400).send({ error: "Send either a raw request body or prompt overrides, not both." });
-    }
-    let rawBody: Record<string, unknown> | null = null;
-    if (hasRaw) {
-      rawBody = parseRawRequestBody(body.rawRequest!);
-      if (!rawBody) return reply.code(400).send({ error: "The request body must be a JSON object." });
-      // …and it must still have a HOME. A body carries a dialect's fields (and,
-      // on a1111, the checkpoint it pinned), so a body whose connection has been
-      // deleted is reported rather than aimed at whatever is active now: the
-      // fallback above exists for the ordinary path, where the connection knows
-      // what to send.
-      if (body.imageProviderId && !manager.imageConnectionById(body.imageProviderId)) {
-        return reply.code(400).send({
-          error: "The image connection this request body belongs to no longer exists."
-        });
+      // The re-send path: the body came from the client, so nothing is composed
+      // and no text provider is called. It therefore needs no prompt writer at all
+      // — an image connection alone can re-issue a stored request.
+      const hasRaw = typeof body.rawRequest === "string";
+      if (
+        hasRaw &&
+        (typeof body.promptOverride === "string" ||
+          typeof body.negativeOverride === "string")
+      ) {
+        return reply
+          .code(400)
+          .send({
+            error:
+              "Send either a raw request body or prompt overrides, not both.",
+          });
       }
-    }
+      let rawBody: Record<string, unknown> | null = null;
+      if (hasRaw) {
+        rawBody = parseRawRequestBody(body.rawRequest!);
+        if (!rawBody)
+          return reply
+            .code(400)
+            .send({ error: "The request body must be a JSON object." });
+        // …and it must still have a HOME. A body carries a dialect's fields (and,
+        // on a1111, the checkpoint it pinned), so a body whose connection has been
+        // deleted is reported rather than aimed at whatever is active now: the
+        // fallback above exists for the ordinary path, where the connection knows
+        // what to send.
+        if (
+          body.imageProviderId &&
+          !manager.imageConnectionById(body.imageProviderId)
+        ) {
+          return reply.code(400).send({
+            error:
+              "The image connection this request body belongs to no longer exists.",
+          });
+        }
+      }
 
-    const promptConfig = manager.resolveImagePromptConfig(imageConn);
-    if (!hasRaw && !promptConfig) return reply.code(400).send({ error: "No text provider available to write the image prompt." });
+      const promptConfig = manager.resolveImagePromptConfig(imageConn);
+      if (!hasRaw && !promptConfig)
+        return reply
+          .code(400)
+          .send({
+            error: "No text provider available to write the image prompt.",
+          });
 
-    const settings = resolveImageSettings(loadPromptConfig(settingsDir).promptConfig.imageGeneration);
-    const controller = abortOnClientDisconnect(reply);
-    const imageProvider = manager.getImageProvider(body.imageProviderId);
+      const settings = resolveImageSettings(
+        loadPromptConfig(settingsDir).promptConfig.imageGeneration,
+      );
+      const controller = abortOnClientDisconnect(reply);
+      const imageProvider = manager.getImageProvider(body.imageProviderId);
 
-    // The seed this generation will use: a per-request seed wins, then the
-    // connection's own. Neither present (or 0, which Venice documents as "pick
-    // one at random") leaves it unset and the provider chooses — and then the
-    // ref stores nothing, because a random image is not reproducible anyway.
-    const seed = body.seed ?? imageConn.seed;
+      // The seed this generation will use: a per-request seed wins, then the
+      // connection's own. Neither present (or 0, which Venice documents as "pick
+      // one at random") leaves it unset and the provider chooses — and then the
+      // ref stores nothing, because a random image is not reproducible anyway.
+      const seed = body.seed ?? imageConn.seed;
 
-    // 1) The prompt. SKIPPED only when BOTH overrides are present — that is the
-    //    preview-modal path: the user already reviewed (and possibly edited) the
-    //    text, so re-running the text model would cost tokens and discard their
-    //    edits. One override alone still runs the text call and then replaces
-    //    just that side. An override is the FINAL composed text (the modal shows
-    //    the composed prompt), so the preset prefix is never applied twice.
-    const hasPrompt = typeof body.promptOverride === "string";
-    const hasNegative = typeof body.negativeOverride === "string";
-    let promptUsed: string;
-    let negativeUsed: string;
-    // The prompt-writing side call's provenance, when that call actually ran.
-    // Undefined on the both-overrides path (no text call was made).
-    let promptCall: { request: string; response: string } | undefined;
-    // The text provider's measured time. Measured here when this request made
-    // the call; taken from the body when the prompt was written earlier (the
-    // review-modal path), so the stored ref carries the number either way.
-    let promptDurationMs: number | undefined = body.promptDurationMs;
-    // The writer's own answer, un-composed — what a LATER image may be handed as a
-    // shape reference. On the review path the dry run wrote it and this request
-    // makes no text call, so the client echoes it back (exactly like the measured
-    // time above); otherwise the call below replaces both with what it just got.
-    let writerPrompt: string | undefined = body.writerPrompt ? clampStoredPromptResponse(body.writerPrompt) : undefined;
-    let writerNegative: string | undefined = body.writerNegative ? clampStoredPromptResponse(body.writerNegative) : undefined;
-    if (rawBody) {
-      // The re-send path: the body IS the request. No text call, no clamping,
-      // and nothing to echo — a re-issued body has no writer's answer behind it,
-      // so the ref carries none of the prompt-call provenance below (and the
-      // chat's `prompt call` disclosure stays absent, exactly as on the
-      // reviewed-prompt path).
-      const parsedPrompt = promptFromRawBody(rawBody);
-      promptUsed = parsedPrompt.prompt;
-      negativeUsed = parsedPrompt.negativePrompt;
-      promptDurationMs = undefined;
-      writerPrompt = undefined;
-      writerNegative = undefined;
-    } else if (hasPrompt && hasNegative) {
-      promptUsed = clampComposed(body.promptOverride!, settings, imageConn).text;
-      negativeUsed = clampNegative(body.negativeOverride!, imageConn);
-    } else {
-      try {
-        const written = await generateImagePrompt(promptConfig!,
+      // 1) The prompt. SKIPPED only when BOTH overrides are present — that is the
+      //    preview-modal path: the user already reviewed (and possibly edited) the
+      //    text, so re-running the text model would cost tokens and discard their
+      //    edits. One override alone still runs the text call and then replaces
+      //    just that side. An override is the FINAL composed text (the modal shows
+      //    the composed prompt), so the preset prefix is never applied twice.
+      const hasPrompt = typeof body.promptOverride === "string";
+      const hasNegative = typeof body.negativeOverride === "string";
+      let promptUsed: string;
+      let negativeUsed: string;
+      // The prompt-writing side call's provenance, when that call actually ran.
+      // Undefined on the both-overrides path (no text call was made).
+      let promptCall: { request: string; response: string } | undefined;
+      // The text provider's measured time. Measured here when this request made
+      // the call; taken from the body when the prompt was written earlier (the
+      // review-modal path), so the stored ref carries the number either way.
+      let promptDurationMs: number | undefined = body.promptDurationMs;
+      // The writer's own answer, un-composed — what a LATER image may be handed as a
+      // shape reference. On the review path the dry run wrote it and this request
+      // makes no text call, so the client echoes it back (exactly like the measured
+      // time above); otherwise the call below replaces both with what it just got.
+      let writerPrompt: string | undefined = body.writerPrompt
+        ? clampStoredPromptResponse(body.writerPrompt)
+        : undefined;
+      let writerNegative: string | undefined = body.writerNegative
+        ? clampStoredPromptResponse(body.writerNegative)
+        : undefined;
+      if (rawBody) {
+        // The re-send path: the body IS the request. No text call, no clamping,
+        // and nothing to echo — a re-issued body has no writer's answer behind it,
+        // so the ref carries none of the prompt-call provenance below (and the
+        // chat's `prompt call` disclosure stays absent, exactly as on the
+        // reviewed-prompt path).
+        const parsedPrompt = promptFromRawBody(rawBody);
+        promptUsed = parsedPrompt.prompt;
+        negativeUsed = parsedPrompt.negativePrompt;
+        promptDurationMs = undefined;
+        writerPrompt = undefined;
+        writerNegative = undefined;
+      } else if (hasPrompt && hasNegative) {
+        promptUsed = clampComposed(
+          body.promptOverride!,
           settings,
-          buildImagePromptInput(playthrough, message, settings).input,
-          fetchImpl, controller.signal);
-        promptUsed = clampComposed(hasPrompt ? body.promptOverride! : written.prompt, settings, imageConn).text;
-        negativeUsed = clampNegative(hasNegative ? body.negativeOverride! : written.negativePrompt, imageConn);
-        promptCall = {
-          request: written.rawInput,
-          response: clampStoredPromptResponse(written.rawOutput)
-        };
-        promptDurationMs = written.durationMs;
-        writerPrompt = written.writerPrompt || undefined;
-        writerNegative = written.writerNegative || undefined;
+          imageConn,
+        ).text;
+        negativeUsed = clampNegative(body.negativeOverride!, imageConn);
+      } else {
+        try {
+          const written = await generateImagePrompt(
+            promptConfig!,
+            settings,
+            buildImagePromptInput(playthrough, message, settings).input,
+            fetchImpl,
+            controller.signal,
+          );
+          promptUsed = clampComposed(
+            hasPrompt ? body.promptOverride! : written.prompt,
+            settings,
+            imageConn,
+          ).text;
+          negativeUsed = clampNegative(
+            hasNegative ? body.negativeOverride! : written.negativePrompt,
+            imageConn,
+          );
+          promptCall = {
+            request: written.rawInput,
+            response: clampStoredPromptResponse(written.rawOutput),
+          };
+          promptDurationMs = written.durationMs;
+          writerPrompt = written.writerPrompt || undefined;
+          writerNegative = written.writerNegative || undefined;
+        } catch (error) {
+          if (controller.signal.aborted) return;
+          const reason =
+            error instanceof Error
+              ? error.message
+              : "Image prompt generation failed";
+          return reply.code(502).send({ error: reason });
+        }
+        if (controller.signal.aborted) return;
+      }
+
+      // 2) Generate. `promptUsed`/`negativeUsed` are exactly what is sent here, so
+      //    the stored ref and the response agree with what the provider received.
+      //    A dialect that can report progress (a1111) publishes it here, keyed by
+      //    the CONNECTION — the id the client polls with. The entry is cleared in
+      //    the `finally`, so a FAILED render clears it too: a crashed generation
+      //    must not leave a permanent phantom progress bar in the user's footer.
+      let result;
+      try {
+        result = await imageProvider.generateImage({
+          prompt: promptUsed,
+          negativePrompt: negativeUsed || undefined,
+          size: imageConn.size,
+          aspectRatio: imageConn.aspectRatio,
+          seed,
+          variants: imageConn.variants,
+          safeMode: imageConn.safeMode,
+          stylePreset: imageConn.stylePreset,
+          hideWatermark: imageConn.hideWatermark,
+          // The re-send path. When this is set the adapter builds no body at all
+          // and ignores every field above that only feeds its own body
+          // construction (size, seed, variants, style preset, safe mode, the
+          // checkpoint) — the body carries them itself.
+          rawBody: rawBody ?? undefined,
+          signal: controller.signal,
+          onProgress: (progress) =>
+            publishImageProgress(imageConn.id, progress),
+        });
       } catch (error) {
         if (controller.signal.aborted) return;
-        const reason = error instanceof Error ? error.message : "Image prompt generation failed";
+        const reason =
+          error instanceof Error ? error.message : "Image generation failed";
         return reply.code(502).send({ error: reason });
+      } finally {
+        clearImageProgress(imageConn.id);
       }
       if (controller.signal.aborted) return;
-    }
 
-    // 2) Generate. `promptUsed`/`negativeUsed` are exactly what is sent here, so
-    //    the stored ref and the response agree with what the provider received.
-    //    A dialect that can report progress (a1111) publishes it here, keyed by
-    //    the CONNECTION — the id the client polls with. The entry is cleared in
-    //    the `finally`, so a FAILED render clears it too: a crashed generation
-    //    must not leave a permanent phantom progress bar in the user's footer.
-    let result;
-    try {
-      result = await imageProvider.generateImage({
-        prompt: promptUsed,
-        negativePrompt: negativeUsed || undefined,
-        size: imageConn.size,
-        aspectRatio: imageConn.aspectRatio,
-        seed,
-        variants: imageConn.variants,
-        safeMode: imageConn.safeMode,
-        stylePreset: imageConn.stylePreset,
-        hideWatermark: imageConn.hideWatermark,
-        // The re-send path. When this is set the adapter builds no body at all
-        // and ignores every field above that only feeds its own body
-        // construction (size, seed, variants, style preset, safe mode, the
-        // checkpoint) — the body carries them itself.
-        rawBody: rawBody ?? undefined,
-        signal: controller.signal,
-        onProgress: (progress) => publishImageProgress(imageConn.id, progress)
+      // 3) Persist the bytes content-addressed, then append the ref(s) to the
+      //    message. Every returned variant is kept; `image` is the first one.
+      if (!result.images.length)
+        return reply
+          .code(502)
+          .send({ error: "Image provider returned no image data" });
+      const createdAt = new Date().toISOString();
+      const refs: MessageImage[] = result.images.map((image) => {
+        const { file } = saveImageBytes(image.bytes, image.mime, imagesDir);
+        return {
+          file,
+          prompt: promptUsed,
+          negativePrompt: negativeUsed || undefined,
+          providerId: result.providerId,
+          model: result.model,
+          // What the adapter ACTUALLY sent (its own report), not what we asked
+          // for: the OpenAI-compatible dialect has no seed field, so asking for
+          // one there must not stamp a seed the provider never saw. Absent when
+          // the provider picked one at random — which is what makes a re-roll
+          // comparable or not, honestly.
+          seed: result.seed,
+          durationMs: result.durationMs,
+          // Optional on the ref: absent when no text call was ever measured (a
+          // ref generated before this field existed, or both overrides supplied
+          // by a client that did not echo a time back).
+          promptDurationMs,
+          // The writer's own answer, when one was produced here or echoed back — the
+          // reference the NEXT image may be given. The composed text is on `prompt`.
+          ...(writerPrompt
+            ? { writerPrompt, writerNegative: writerNegative || undefined }
+            : {}),
+          // Diagnostic provenance: the exact body the adapter sent upstream. Body
+          // only (the adapters never fold headers or the key into it), and every
+          // variant of one call shares it. The raw RESPONSE is deliberately not
+          // stored — it carries the base64 payload and would bloat the record.
+          request: result.rawRequest,
+          // …and the PROMPT side call's provenance, when one ran. Body only, and
+          // the response is capped (`clampStoredPromptResponse`) so a verbose
+          // reasoning model cannot bloat the playthrough record. Absent on the
+          // both-overrides path, which makes no text call at all.
+          ...(promptCall
+            ? {
+                promptRequest: promptCall.request,
+                promptResponse: promptCall.response,
+              }
+            : {}),
+          createdAt,
+        };
       });
-    } catch (error) {
-      if (controller.signal.aborted) return;
-      const reason = error instanceof Error ? error.message : "Image generation failed";
-      return reply.code(502).send({ error: reason });
-    } finally {
-      clearImageProgress(imageConn.id);
-    }
-    if (controller.signal.aborted) return;
+      const existing = message.images ?? [];
+      // The re-send path REPLACES the image it came from. The drop happens here,
+      // in the same write as the append, and never on the client: a render that
+      // fails, is cancelled, or comes back a 400 must leave the message exactly as
+      // it was, and a two-step delete-then-generate would leave it with no image at
+      // all. Note the filter runs over the refs that were ALREADY there — an
+      // identical body and seed produce identical bytes, hence the same file name,
+      // and filtering the appended refs too would delete the image that just
+      // arrived.
+      const kept = body.replaceFile
+        ? existing.filter((image) => image.file !== body.replaceFile)
+        : existing;
+      const next = [...kept, ...refs];
+      if (next.length) message.images = next;
+      else delete message.images;
+      updatePlaythroughRecord(dataDir, playthrough);
 
-    // 3) Persist the bytes content-addressed, then append the ref(s) to the
-    //    message. Every returned variant is kept; `image` is the first one.
-    if (!result.images.length) return reply.code(502).send({ error: "Image provider returned no image data" });
-    const createdAt = new Date().toISOString();
-    const refs: MessageImage[] = result.images.map((image) => {
-      const { file } = saveImageBytes(image.bytes, image.mime, imagesDir);
-      return {
-        file,
-        prompt: promptUsed,
-        negativePrompt: negativeUsed || undefined,
-        providerId: result.providerId,
-        model: result.model,
-        // What the adapter ACTUALLY sent (its own report), not what we asked
-        // for: the OpenAI-compatible dialect has no seed field, so asking for
-        // one there must not stamp a seed the provider never saw. Absent when
-        // the provider picked one at random — which is what makes a re-roll
-        // comparable or not, honestly.
-        seed: result.seed,
-        durationMs: result.durationMs,
-        // Optional on the ref: absent when no text call was ever measured (a
-        // ref generated before this field existed, or both overrides supplied
-        // by a client that did not echo a time back).
-        promptDurationMs,
-        // The writer's own answer, when one was produced here or echoed back — the
-        // reference the NEXT image may be given. The composed text is on `prompt`.
-        ...(writerPrompt ? { writerPrompt, writerNegative: writerNegative || undefined } : {}),
-        // Diagnostic provenance: the exact body the adapter sent upstream. Body
-        // only (the adapters never fold headers or the key into it), and every
-        // variant of one call shares it. The raw RESPONSE is deliberately not
-        // stored — it carries the base64 payload and would bloat the record.
-        request: result.rawRequest,
-        // …and the PROMPT side call's provenance, when one ran. Body only, and
-        // the response is capped (`clampStoredPromptResponse`) so a verbose
-        // reasoning model cannot bloat the playthrough record. Absent on the
-        // both-overrides path, which makes no text call at all.
-        ...(promptCall
-          ? { promptRequest: promptCall.request, promptResponse: promptCall.response }
-          : {}),
-        createdAt
-      };
-    });
-    const existing = message.images ?? [];
-    // The re-send path REPLACES the image it came from. The drop happens here,
-    // in the same write as the append, and never on the client: a render that
-    // fails, is cancelled, or comes back a 400 must leave the message exactly as
-    // it was, and a two-step delete-then-generate would leave it with no image at
-    // all. Note the filter runs over the refs that were ALREADY there — an
-    // identical body and seed produce identical bytes, hence the same file name,
-    // and filtering the appended refs too would delete the image that just
-    // arrived.
-    const kept = body.replaceFile ? existing.filter((image) => image.file !== body.replaceFile) : existing;
-    const next = [...kept, ...refs];
-    if (next.length) message.images = next;
-    else delete message.images;
-    updatePlaythroughRecord(dataDir, playthrough);
-
-    // Best-effort, like the other record-driven sweeps: the original reference is
-    // already off the message, so a failed sweep must not report the generation
-    // as failed (the bytes are collected by the next sweep or the manual
-    // endpoint). Bytes the new ref still points at — the identical-render case
-    // above — are referenced and stay.
-    if (body.replaceFile) {
-      try {
-        sweepOrphansInDataDir(dataDir, imagesDir);
-      } catch (error) {
-        console.warn(`[images] orphan sweep after replacing an image on ${params.messageId} failed:`, error);
+      // Best-effort, like the other record-driven sweeps: the original reference is
+      // already off the message, so a failed sweep must not report the generation
+      // as failed (the bytes are collected by the next sweep or the manual
+      // endpoint). Bytes the new ref still points at — the identical-render case
+      // above — are referenced and stay.
+      if (body.replaceFile) {
+        try {
+          sweepOrphansInDataDir(dataDir, imagesDir);
+        } catch (error) {
+          console.warn(
+            `[images] orphan sweep after replacing an image on ${params.messageId} failed:`,
+            error,
+          );
+        }
       }
-    }
 
-    return reply.send({ playthrough, image: refs[0], promptUsed, negativeUsed, promptDurationMs });
-  });
+      return reply.send({
+        playthrough,
+        image: refs[0],
+        promptUsed,
+        negativeUsed,
+        promptDurationMs,
+      });
+    },
+  );
 };

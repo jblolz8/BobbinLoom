@@ -3,8 +3,10 @@ import { Badge } from "./Badge/Badge";
 import { Icon, type IconName } from "./Icon";
 import { TooltipIcon } from "./Tooltip/Tooltip";
 
-export interface CheckboxRowProps
-  extends Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "title"> {
+export interface CheckboxRowProps extends Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  "type" | "title"
+> {
   /** Icon shown in the leading icon tile. */
   icon?: IconName;
   /** Optional leading icon node (e.g. a colored <Icon>) overriding `icon`. */
@@ -40,7 +42,7 @@ export const CheckboxRow = forwardRef<HTMLInputElement, CheckboxRowProps>(
       className = "",
       ...inputProps
     },
-    ref
+    ref,
   ) {
     return (
       <label
@@ -83,5 +85,5 @@ export const CheckboxRow = forwardRef<HTMLInputElement, CheckboxRowProps>(
         </span>
       </label>
     );
-  }
+  },
 );

@@ -52,9 +52,11 @@ export function imageCaption(image: CaptionImage): string {
     : "";
   return [
     shortModelName(image.model),
-    image.promptDurationMs ? `prompt ${formatDuration(image.promptDurationMs)}` : "",
+    image.promptDurationMs
+      ? `prompt ${formatDuration(image.promptDurationMs)}`
+      : "",
     render,
-    image.seed ? `seed ${image.seed}` : ""
+    image.seed ? `seed ${image.seed}` : "",
   ]
     .filter(Boolean)
     .join(" · ");

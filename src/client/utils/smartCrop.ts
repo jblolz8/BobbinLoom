@@ -1,9 +1,9 @@
 /**
  * smartCrop.ts
- * 
+ *
  * Intelligent focal detection and automated 1:1 square cropping for character artwork,
  * illustrations, and cards in BobbinLoom.
- * 
+ *
  * Combines edge gradient density, skin/face hue affinity, and composition-aware
  * spatial priors (e.g. top-third portrait bias) to identify character faces and heads.
  */
@@ -11,7 +11,7 @@
 export type SmartCropResult = {
   focusX: number; // 0..1 normalized horizontal focal center
   focusY: number; // 0..1 normalized vertical focal center
-  zoom: number;   // Recommended zoom factor (1.0 .. 3.0)
+  zoom: number; // Recommended zoom factor (1.0 .. 3.0)
   offsetX: number; // CropModal offset X in viewport px
   offsetY: number; // CropModal offset Y in viewport px
   cropBox: {
@@ -29,24 +29,26 @@ export function loadImage(src: string): Promise<HTMLImageElement> {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("Failed to load image for smart cropping."));
+    img.onerror = () =>
+      reject(new Error("Failed to load image for smart cropping."));
     img.src = src;
   });
 }
 
 /**
  * Analyze an image and compute the optimal 1:1 focal center and zoom.
- * 
+ *
  * @param imageElementOrSrc HTMLImageElement or image URL string
  * @param viewportSize Interactive crop viewport size in px (defaults to 320 for BobbinLoom's ImageCropModal)
  */
 export async function detectSmartCrop(
   imageElementOrSrc: HTMLImageElement | string,
-  viewportSize = 320
+  viewportSize = 320,
 ): Promise<SmartCropResult> {
-  const img = typeof imageElementOrSrc === "string"
-    ? await loadImage(imageElementOrSrc)
-    : imageElementOrSrc;
+  const img =
+    typeof imageElementOrSrc === "string"
+      ? await loadImage(imageElementOrSrc)
+      : imageElementOrSrc;
 
   const naturalW = img.naturalWidth || 1;
   const naturalH = img.naturalHeight || 1;
@@ -54,7 +56,10 @@ export async function detectSmartCrop(
 
   // Downscale image for fast canvas saliency analysis (< 15ms)
   const sampleW = 160;
-  const sampleH = Math.max(32, Math.min(320, Math.round(sampleW * aspectRatio)));
+  const sampleH = Math.max(
+    32,
+    Math.min(320, Math.round(sampleW * aspectRatio)),
+  );
 
   const canvas = document.createElement("canvas");
   canvas.width = sampleW;
@@ -76,7 +81,8 @@ export async function detectSmartCrop(
     // Compute luminance
     const lum = new Float32Array(sampleW * sampleH);
     for (let i = 0, p = 0; i < data.length; i += 4, p++) {
-      lum[p] = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255;
+      lum[p] =
+        (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255;
     }
 
     for (let y = 1; y < sampleH - 1; y++) {
@@ -123,7 +129,15 @@ export async function detectSmartCrop(
         const maxC = Math.max(r, g, b);
         const minC = Math.min(r, g, b);
         const diff = maxC - minC;
-        if (r > 60 && g > 40 && b > 20 && r > g && g >= b && diff > 15 && diff < 160) {
+        if (
+          r > 60 &&
+          g > 40 &&
+          b > 20 &&
+          r > g &&
+          g >= b &&
+          diff > 15 &&
+          diff < 160
+        ) {
           skinBoost = 1.6;
         }
 
@@ -200,8 +214,12 @@ export async function detectSmartCrop(
   const targetOffsetX = scaledW * (0.5 - focusX);
   const targetOffsetY = scaledH * (0.5 - focusY);
 
-  const clampedOffsetX = Math.round(Math.max(-maxOffsetX, Math.min(maxOffsetX, targetOffsetX)));
-  const clampedOffsetY = Math.round(Math.max(-maxOffsetY, Math.min(maxOffsetY, targetOffsetY)));
+  const clampedOffsetX = Math.round(
+    Math.max(-maxOffsetX, Math.min(maxOffsetX, targetOffsetX)),
+  );
+  const clampedOffsetY = Math.round(
+    Math.max(-maxOffsetY, Math.min(maxOffsetY, targetOffsetY)),
+  );
 
   return {
     focusX,
@@ -219,14 +237,14 @@ export async function detectSmartCrop(
 
 /**
  * Generate a high-resolution 512x512 PNG base64 string from the auto-detected crop.
- * 
+ *
  * @param imageSrc Source portrait image URL / data URL
  * @param outputSize Desired square output dimension (default 512px)
  * @returns Clean base64 string without data:image/png;base64, prefix
  */
 export async function generateAutoCropBase64(
   imageSrc: string,
-  outputSize = 512
+  outputSize = 512,
 ): Promise<string> {
   const img = await loadImage(imageSrc);
   const cropResult = await detectSmartCrop(img);

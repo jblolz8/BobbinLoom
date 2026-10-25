@@ -1,5 +1,9 @@
 import { request } from "./client";
-import type { ImageInstructionMode, MessageImage, Playthrough } from "../../schemas";
+import type {
+  ImageInstructionMode,
+  MessageImage,
+  Playthrough,
+} from "../../schemas";
 
 /** The persisted message attachment, straight from the schema (one source of
  *  truth shared with the server). */
@@ -99,11 +103,11 @@ export type ImageGenerationProgress = {
  */
 export function fetchImageProgress(
   connectionId: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<ImageGenerationProgress> {
   return request<ImageGenerationProgress>(
     `/api/images/progress?connectionId=${encodeURIComponent(connectionId)}`,
-    { signal }
+    { signal },
   );
 }
 
@@ -115,15 +119,15 @@ export function previewImagePrompt(
   playthroughId: string,
   messageId: string,
   imageProviderId?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<ImagePromptPreview> {
   return request<ImagePromptPreview>(
     `/api/playthroughs/${playthroughId}/messages/${messageId}/image/prompt`,
     {
       method: "POST",
       body: JSON.stringify(imageProviderId ? { imageProviderId } : {}),
-      signal
-    }
+      signal,
+    },
   );
 }
 
@@ -135,16 +139,20 @@ export function previewImagePrompt(
 export function generateMessageImage(
   playthroughId: string,
   messageId: string,
-  opts: GenerateMessageImageOptions = {}
+  opts: GenerateMessageImageOptions = {},
 ): Promise<GenerateMessageImageResult> {
   const body: Record<string, unknown> = {};
   if (opts.imageProviderId) body.imageProviderId = opts.imageProviderId;
-  if (opts.promptOverride !== undefined) body.promptOverride = opts.promptOverride;
-  if (opts.negativeOverride !== undefined) body.negativeOverride = opts.negativeOverride;
+  if (opts.promptOverride !== undefined)
+    body.promptOverride = opts.promptOverride;
+  if (opts.negativeOverride !== undefined)
+    body.negativeOverride = opts.negativeOverride;
   if (opts.seed !== undefined) body.seed = opts.seed;
-  if (opts.promptDurationMs !== undefined) body.promptDurationMs = opts.promptDurationMs;
+  if (opts.promptDurationMs !== undefined)
+    body.promptDurationMs = opts.promptDurationMs;
   if (opts.writerPrompt !== undefined) body.writerPrompt = opts.writerPrompt;
-  if (opts.writerNegative !== undefined) body.writerNegative = opts.writerNegative;
+  if (opts.writerNegative !== undefined)
+    body.writerNegative = opts.writerNegative;
   if (opts.rawRequest !== undefined) body.rawRequest = opts.rawRequest;
   if (opts.replaceFile !== undefined) body.replaceFile = opts.replaceFile;
 
@@ -154,8 +162,8 @@ export function generateMessageImage(
       method: "POST",
       body: JSON.stringify(body),
       // Passed through as `init.signal`, exactly like `sendTurn`.
-      signal: opts.signal
-    }
+      signal: opts.signal,
+    },
   );
 }
 
@@ -166,11 +174,11 @@ export function saveMessageImageRequest(
   playthroughId: string,
   messageId: string,
   file: string,
-  requestBody: string
+  requestBody: string,
 ): Promise<{ playthrough: Playthrough }> {
   return request<{ playthrough: Playthrough }>(
     `/api/playthroughs/${playthroughId}/messages/${messageId}/images/${encodeURIComponent(file)}`,
-    { method: "PATCH", body: JSON.stringify({ request: requestBody }) }
+    { method: "PATCH", body: JSON.stringify({ request: requestBody }) },
   );
 }
 
@@ -179,10 +187,10 @@ export function saveMessageImageRequest(
 export function deleteMessageImage(
   playthroughId: string,
   messageId: string,
-  file: string
+  file: string,
 ): Promise<{ playthrough: Playthrough }> {
   return request<{ playthrough: Playthrough }>(
     `/api/playthroughs/${playthroughId}/messages/${messageId}/images/${encodeURIComponent(file)}`,
-    { method: "DELETE" }
+    { method: "DELETE" },
   );
 }

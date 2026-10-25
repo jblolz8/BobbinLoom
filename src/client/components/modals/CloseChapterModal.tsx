@@ -5,9 +5,13 @@ import {
   setChapterOpeningMode,
   setChapterTextProvider,
   type CloseChapterBody,
-  type ProviderConnection
+  type ProviderConnection,
 } from "../../api";
-import { CHAPTER_OPENING_MODES, chapterOpeningModeInfo, chapterOpeningModeNeedsMessage } from "../../../engine/chapterLifecycle";
+import {
+  CHAPTER_OPENING_MODES,
+  chapterOpeningModeInfo,
+  chapterOpeningModeNeedsMessage,
+} from "../../../engine/chapterLifecycle";
 import type { ChapterOpeningMode } from "../../../schemas";
 import { Button, Icon, SimpleSelect, TextArea } from "../base";
 import { Dialog } from "../base/Dialog";
@@ -37,7 +41,7 @@ export function CloseChapterModal({
   isLoading,
   errorMessage,
   onConfirm,
-  onCancel
+  onCancel,
 }: CloseChapterModalProps) {
   const [connections, setConnections] = useState<ProviderConnection[]>([]);
   const [activeTextProviderId, setActiveTextProviderId] = useState("");
@@ -63,7 +67,11 @@ export function CloseChapterModal({
     listProviderConnections()
       .then((registry) => {
         if (cancelled) return;
-        setConnections(registry.connections.filter((connection) => connection.kind === "text"));
+        setConnections(
+          registry.connections.filter(
+            (connection) => connection.kind === "text",
+          ),
+        );
         setActiveTextProviderId(registry.activeTextProviderId ?? "");
         setProviderId(registry.chapterTextProviderId ?? "");
       })
@@ -80,11 +88,14 @@ export function CloseChapterModal({
       value: connection.id,
       label: `${connection.label}${connection.model ? ` — ${connection.model}` : ""}${
         connection.id === activeTextProviderId ? " (active)" : ""
-      }`
+      }`,
     }));
     // A stored choice whose connection is gone stays selectable so it can be re-pointed, and the
     // request still runs — resolution falls back to the active connection at use time.
-    if (providerId && !connections.some((connection) => connection.id === providerId)) {
+    if (
+      providerId &&
+      !connections.some((connection) => connection.id === providerId)
+    ) {
       rows.push({ value: providerId, label: `${providerId} (not found)` });
     }
     return [{ value: "", label: "Active connection" }, ...rows];
@@ -94,7 +105,9 @@ export function CloseChapterModal({
     setMode(next);
     setModeError(null);
     setChapterOpeningMode(next).catch((error: unknown) => {
-      setModeError(error instanceof Error ? error.message : "Could not remember that mode");
+      setModeError(
+        error instanceof Error ? error.message : "Could not remember that mode",
+      );
     });
   }
 
@@ -104,7 +117,11 @@ export function CloseChapterModal({
     // Persisted as soon as it is chosen, like the New Playthrough field: the preference must
     // survive a cancelled dialog, and no preference write is coupled to the close itself.
     setChapterTextProvider(id === "" ? null : id).catch((error: unknown) => {
-      setProviderError(error instanceof Error ? error.message : "Could not save that connection");
+      setProviderError(
+        error instanceof Error
+          ? error.message
+          : "Could not save that connection",
+      );
     });
   }
 
@@ -117,15 +134,20 @@ export function CloseChapterModal({
       isBusy={isLoading}
       initialFocusRef={cancelRef}
       headerAction={
-        <button className="flex items-center gap-1 modal-close-btn" onClick={onCancel} aria-label="Close">
+        <button
+          className="flex items-center gap-1 modal-close-btn"
+          onClick={onCancel}
+          aria-label="Close"
+        >
           <Icon name="X" size={14} /> Close
         </button>
       }
       description={
         <>
-          {visibleMessageCount} message{visibleMessageCount === 1 ? "" : "s"} in the running chapter become
-          an archived volume: the model writes a name, a one-line description and a full summary, then
-          opens the next chapter. The transcript and the memories stay.
+          {visibleMessageCount} message{visibleMessageCount === 1 ? "" : "s"} in
+          the running chapter become an archived volume: the model writes a
+          name, a one-line description and a full summary, then opens the next
+          chapter. The transcript and the memories stay.
         </>
       }
       footer={
@@ -133,19 +155,30 @@ export function CloseChapterModal({
           <Button
             variant="primary"
             size="md"
-            disabled={isLoading || (chapterOpeningModeNeedsMessage(mode) && !openingMessage.trim())}
+            disabled={
+              isLoading ||
+              (chapterOpeningModeNeedsMessage(mode) && !openingMessage.trim())
+            }
             isLoading={isLoading}
             onClick={() =>
               onConfirm({
                 openingMode: mode,
-                ...(openingMessage.trim() ? { openingMessage: openingMessage.trim() } : {}),
-                ...(providerId ? { providerId } : {})
+                ...(openingMessage.trim()
+                  ? { openingMessage: openingMessage.trim() }
+                  : {}),
+                ...(providerId ? { providerId } : {}),
               })
             }
           >
             {isLoading ? "Closing & Summarizing…" : "Confirm & Close"}
           </Button>
-          <Button ref={cancelRef} variant="secondary" size="md" onClick={onCancel} disabled={isLoading}>
+          <Button
+            ref={cancelRef}
+            variant="secondary"
+            size="md"
+            onClick={onCancel}
+            disabled={isLoading}
+          >
             Cancel
           </Button>
         </>
@@ -165,9 +198,12 @@ export function CloseChapterModal({
           aria-label="Text provider"
         />
         <span className="field-hint">
-          Writes the summary and the chapter opening. Remembered for the next chapter.
+          Writes the summary and the chapter opening. Remembered for the next
+          chapter.
         </span>
-        {providerError ? <span className="field-hint error">{providerError}</span> : null}
+        {providerError ? (
+          <span className="field-hint error">{providerError}</span>
+        ) : null}
       </div>
 
       <div className="form-field">
@@ -179,18 +215,24 @@ export function CloseChapterModal({
           fullWidth
           value={mode}
           onChange={handleModeChange}
-          options={CHAPTER_OPENING_MODES.map((entry) => ({ value: entry.id, label: entry.label }))}
+          options={CHAPTER_OPENING_MODES.map((entry) => ({
+            value: entry.id,
+            label: entry.label,
+          }))}
           aria-label="How the next chapter opens"
         />
         <span className="field-hint">{chapterOpeningModeInfo(mode).blurb}</span>
-        {modeError ? <span className="field-hint error">{modeError}</span> : null}
+        {modeError ? (
+          <span className="field-hint error">{modeError}</span>
+        ) : null}
       </div>
 
       {/* The player's own message for the new chapter. It is a normal user message there — the
           chapter's first — so it stays editable and re-readable like any other. */}
       <div className="form-field">
         <label className="field-label-text" htmlFor="close-chapter-message">
-          Opening message{chapterOpeningModeNeedsMessage(mode) ? "" : " (optional)"}
+          Opening message
+          {chapterOpeningModeNeedsMessage(mode) ? "" : " (optional)"}
         </label>
         <TextArea
           id="close-chapter-message"

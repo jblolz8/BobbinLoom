@@ -20,11 +20,14 @@ export function deriveMeterTotals(tokenUsage: TokenUsage): MeterTotals {
   const measuredPrompt = tokenUsage.measured?.promptTokens;
   const measured = typeof measuredPrompt === "number" && measuredPrompt > 0;
   const total = measured ? measuredPrompt! : tokenUsage.estimated;
-  const scale = measured && tokenUsage.estimated > 0 ? measuredPrompt! / tokenUsage.estimated : 1;
+  const scale =
+    measured && tokenUsage.estimated > 0
+      ? measuredPrompt! / tokenUsage.estimated
+      : 1;
   return {
     total,
     scale,
     remaining: Math.max(0, tokenUsage.contextWindow - total),
-    measured
+    measured,
   };
 }

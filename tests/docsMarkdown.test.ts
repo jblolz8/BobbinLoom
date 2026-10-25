@@ -8,19 +8,30 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CodeBlock } from "../src/client/components/base/CodeBlock";
-import { renderDocMarkdown, slugifyHeading } from "../src/client/utils/docsMarkdown";
+import {
+  renderDocMarkdown,
+  slugifyHeading,
+} from "../src/client/utils/docsMarkdown";
 
 describe("slugifyHeading", () => {
   it("matches the anchors the documentation links to", () => {
-    expect(slugifyHeading("Measuring: estimate vs measured")).toBe("measuring-estimate-vs-measured");
-    expect(slugifyHeading("Instruction modes (POV / Scene)")).toBe("instruction-modes-pov--scene");
-    expect(slugifyHeading("Multi-character regions (Forge Couple)")).toBe("multi-character-regions-forge-couple");
+    expect(slugifyHeading("Measuring: estimate vs measured")).toBe(
+      "measuring-estimate-vs-measured",
+    );
+    expect(slugifyHeading("Instruction modes (POV / Scene)")).toBe(
+      "instruction-modes-pov--scene",
+    );
+    expect(slugifyHeading("Multi-character regions (Forge Couple)")).toBe(
+      "multi-character-regions-forge-couple",
+    );
   });
 });
 
 describe("renderDocMarkdown", () => {
   it("gives headings ids so in-doc anchors resolve", () => {
-    expect(renderDocMarkdown("## Measuring: estimate vs measured")).toContain('id="measuring-estimate-vs-measured"');
+    expect(renderDocMarkdown("## Measuring: estimate vs measured")).toContain(
+      'id="measuring-estimate-vs-measured"',
+    );
   });
 
   it("renders GFM tables", () => {
@@ -40,7 +51,9 @@ describe("renderDocMarkdown", () => {
     // up front made marked re-escape the `&`, so the reader saw "&lt;baseUrl&gt;"
     // on screen — the bug this pins shut.
     const html = renderDocMarkdown("Run `GET <baseUrl>/models` first.");
-    expect(html).toContain('<code class="inline-code">GET &lt;baseUrl&gt;/models</code>');
+    expect(html).toContain(
+      '<code class="inline-code">GET &lt;baseUrl&gt;/models</code>',
+    );
     expect(html).not.toContain("&amp;lt;");
     expect(html).not.toContain("&amp;amp;");
   });
@@ -52,7 +65,9 @@ describe("renderDocMarkdown", () => {
   });
 
   it("renders raw HTML in a page as text instead of markup", () => {
-    const html = renderDocMarkdown('<script>alert("x")</script>\n\nand <img src=x onerror=alert(1)>');
+    const html = renderDocMarkdown(
+      '<script>alert("x")</script>\n\nand <img src=x onerror=alert(1)>',
+    );
     expect(html).not.toContain("<script");
     expect(html).not.toContain("<img");
     expect(html).toContain("&lt;script&gt;");
@@ -72,23 +87,31 @@ describe("renderDocMarkdown", () => {
     const listMarkdown = [
       "**Playing**",
       "- [Playthroughs](playthroughs.md) — creating, scenario generation",
-      "- **Opening mode** — *Quick start* uses the generated scenario and `StatePatch`."
+      "- **Opening mode** — *Quick start* uses the generated scenario and `StatePatch`.",
     ].join("\n");
     const html = renderDocMarkdown(listMarkdown);
-    expect(html).toContain('<a href="#" data-doc-link="playthroughs.md">Playthroughs</a>');
+    expect(html).toContain(
+      '<a href="#" data-doc-link="playthroughs.md">Playthroughs</a>',
+    );
     expect(html).toContain("<strong>Opening mode</strong>");
     expect(html).toContain("<em>Quick start</em>");
     expect(html).toContain('<code class="inline-code">StatePatch</code>');
   });
 
   it("opens external links in a new tab", () => {
-    const html = renderDocMarkdown("[Forge Couple](https://github.com/Haoming02/sd-forge-couple)");
+    const html = renderDocMarkdown(
+      "[Forge Couple](https://github.com/Haoming02/sd-forge-couple)",
+    );
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noreferrer"');
   });
 
   it("never emits a javascript: or data: href", () => {
-    for (const bad of ["[x](javascript:alert(1))", "[x](data:text/html,<script>1</script>)", "[x](vbscript:msgbox)"]) {
+    for (const bad of [
+      "[x](javascript:alert(1))",
+      "[x](data:text/html,<script>1</script>)",
+      "[x](vbscript:msgbox)",
+    ]) {
       const html = renderDocMarkdown(bad);
       expect(html, bad).not.toContain('href="javascript:');
       expect(html, bad).not.toContain('href="data:');
@@ -107,9 +130,18 @@ describe("renderDocMarkdown", () => {
  */
 describe("code surfaces share one contract", () => {
   it("emits a fenced block with the same classes the React primitive renders", () => {
-    const react = renderToStaticMarkup(createElement(CodeBlock, { code: "x = 1", language: "ts" }));
+    const react = renderToStaticMarkup(
+      createElement(CodeBlock, { code: "x = 1", language: "ts" }),
+    );
     const docs = renderDocMarkdown("```ts\nx = 1\n```");
-    for (const cls of ["code-block", "code-block-header", "code-lang-label", "code-block-actions", "code-copy-btn", "code-block-pre"]) {
+    for (const cls of [
+      "code-block",
+      "code-block-header",
+      "code-lang-label",
+      "code-block-actions",
+      "code-copy-btn",
+      "code-block-pre",
+    ]) {
       expect(react, `react missing ${cls}`).toContain(cls);
       expect(docs, `docs missing ${cls}`).toContain(cls);
     }
@@ -128,7 +160,9 @@ describe("code surfaces share one contract", () => {
   });
 
   it("renders inline code with the app's canonical class", () => {
-    expect(renderDocMarkdown("a `flag` here")).toContain('<code class="inline-code">flag</code>');
+    expect(renderDocMarkdown("a `flag` here")).toContain(
+      '<code class="inline-code">flag</code>',
+    );
   });
 
   it("carries the state the viewer toggles on click", () => {
@@ -157,30 +191,45 @@ const HL_PAGE = [
   "",
   "```ts",
   "const memoryEvents = []; // fenced code",
-  "```"
+  "```",
 ].join("\n");
 
-const countMarks = (html: string) => (html.match(/<mark class="doc-search-hit">/g) ?? []).length;
+const countMarks = (html: string) =>
+  (html.match(/<mark class="doc-search-hit">/g) ?? []).length;
 
 describe("renderDocMarkdown highlight", () => {
   it("highlights prose, headings, emphasis, links and table cells", () => {
     const html = renderDocMarkdown(HL_PAGE, { highlight: "memory" });
-    expect(html).toContain('<h1 id="memory-rotation"><mark class="doc-search-hit">Memory</mark> rotation</h1>');
-    expect(html).toContain("<strong><mark class=\"doc-search-hit\">memory</mark> events</strong>");
-    expect(html).toContain('<a href="#" data-doc-link="chapters-and-memory.md#memory-events"><mark class="doc-search-hit">memory</mark> events</a>');
-    expect(html).toContain('<td><mark class="doc-search-hit">memory</mark></td>');
+    expect(html).toContain(
+      '<h1 id="memory-rotation"><mark class="doc-search-hit">Memory</mark> rotation</h1>',
+    );
+    expect(html).toContain(
+      '<strong><mark class="doc-search-hit">memory</mark> events</strong>',
+    );
+    expect(html).toContain(
+      '<a href="#" data-doc-link="chapters-and-memory.md#memory-events"><mark class="doc-search-hit">memory</mark> events</a>',
+    );
+    expect(html).toContain(
+      '<td><mark class="doc-search-hit">memory</mark></td>',
+    );
     expect(countMarks(html)).toBeGreaterThanOrEqual(6);
   });
 
   it("highlights inside inline code and fenced blocks too", () => {
     const html = renderDocMarkdown(HL_PAGE, { highlight: "memory" });
-    expect(html).toContain('<code class="inline-code"><mark class="doc-search-hit">memory</mark>Events</code>');
-    expect(html).toContain('<code>const <mark class="doc-search-hit">memory</mark>Events = []; // fenced code');
+    expect(html).toContain(
+      '<code class="inline-code"><mark class="doc-search-hit">memory</mark>Events</code>',
+    );
+    expect(html).toContain(
+      '<code>const <mark class="doc-search-hit">memory</mark>Events = []; // fenced code',
+    );
   });
 
   it("keeps the marked text inside code free of the prose colour, ready for the code's own", () => {
     const html = renderDocMarkdown("`memoryEvents`", { highlight: "memory" });
-    expect(html).toContain('<code class="inline-code"><mark class="doc-search-hit">memory</mark>Events</code>');
+    expect(html).toContain(
+      '<code class="inline-code"><mark class="doc-search-hit">memory</mark>Events</code>',
+    );
   });
 
   it("does not mark anything for an empty or one-character needle", () => {
@@ -199,17 +248,31 @@ describe("renderDocMarkdown highlight", () => {
   });
 
   it("matches an HTML-shaped needle against the escaped text", () => {
-    const html = renderDocMarkdown("A <baseUrl> placeholder.", { highlight: "<baseUrl>" });
-    expect(html).toContain('<mark class="doc-search-hit">&lt;baseUrl&gt;</mark>');
+    const html = renderDocMarkdown("A <baseUrl> placeholder.", {
+      highlight: "<baseUrl>",
+    });
+    expect(html).toContain(
+      '<mark class="doc-search-hit">&lt;baseUrl&gt;</mark>',
+    );
   });
 
   it("treats a regex-shaped needle as literal text", () => {
-    expect(renderDocMarkdown("Use a.b here.", { highlight: "a.b" })).toContain('<mark class="doc-search-hit">a.b</mark>');
-    expect(renderDocMarkdown("Use axb here.", { highlight: "a.b" })).not.toContain("<mark");
+    expect(renderDocMarkdown("Use a.b here.", { highlight: "a.b" })).toContain(
+      '<mark class="doc-search-hit">a.b</mark>',
+    );
+    expect(
+      renderDocMarkdown("Use axb here.", { highlight: "a.b" }),
+    ).not.toContain("<mark");
   });
 
   it("marks every occurrence on the page, not just the first", () => {
-    expect(countMarks(renderDocMarkdown("memory and memory and Memory", { highlight: "memory" }))).toBe(3);
+    expect(
+      countMarks(
+        renderDocMarkdown("memory and memory and Memory", {
+          highlight: "memory",
+        }),
+      ),
+    ).toBe(3);
   });
 });
 
@@ -228,7 +291,9 @@ describe("table wrapper", () => {
   });
 
   it("wraps it once, not twice", () => {
-    expect((renderDocMarkdown(TABLE).match(/doc-table-wrap/g) ?? []).length).toBe(1);
+    expect(
+      (renderDocMarkdown(TABLE).match(/doc-table-wrap/g) ?? []).length,
+    ).toBe(1);
   });
 
   it("still wraps while highlighting", () => {
@@ -244,7 +309,10 @@ describe("table wrapper", () => {
   });
 
   it("emits the very class the stylesheet styles", () => {
-    const css = readFileSync(new URL("../src/client/styles/docs.css", import.meta.url), "utf8");
+    const css = readFileSync(
+      new URL("../src/client/styles/docs.css", import.meta.url),
+      "utf8",
+    );
     expect(css).toContain(".doc-table-wrap");
     expect(css).not.toMatch(/\.doc-markdown table \{[^}]*display: block/);
   });
@@ -261,8 +329,14 @@ describe("table wrapper", () => {
  * right edge stays inside the viewport is in references/ui-verification-cdp.md.
  */
 describe("docs width chain", () => {
-  const docs = readFileSync(new URL("../src/client/styles/docs.css", import.meta.url), "utf8");
-  const views = readFileSync(new URL("../src/client/styles/views.css", import.meta.url), "utf8");
+  const docs = readFileSync(
+    new URL("../src/client/styles/docs.css", import.meta.url),
+    "utf8",
+  );
+  const views = readFileSync(
+    new URL("../src/client/styles/views.css", import.meta.url),
+    "utf8",
+  );
 
   it("lets the viewer shrink inside the overlay's flex sheet", () => {
     expect(docs).toMatch(/\.docs-view \{[^}]*min-width: 0/);

@@ -52,7 +52,8 @@ async function main(): Promise<void> {
     await app.register(fastifyStatic, {
       root: distPath,
       index: false,
-      allowedPath: (pathname: string) => pathname !== "/index.html" && pathname !== "/"
+      allowedPath: (pathname: string) =>
+        pathname !== "/index.html" && pathname !== "/",
     });
     const shellPath = join(distPath, "index.html");
     app.setNotFoundHandler((req, reply) => {
@@ -115,11 +116,17 @@ function openDefaultBrowser(url: string): void {
   try {
     const child =
       process.platform === "win32"
-        ? spawn("cmd", ["/c", "start", "", url], { detached: true, stdio: "ignore" })
+        ? spawn("cmd", ["/c", "start", "", url], {
+            detached: true,
+            stdio: "ignore",
+          })
         : process.platform === "darwin"
           ? spawn("open", [url], { detached: true, stdio: "ignore" })
           : process.env.TERMUX_VERSION
-            ? spawn("termux-open-url", [url], { detached: true, stdio: "ignore" })
+            ? spawn("termux-open-url", [url], {
+                detached: true,
+                stdio: "ignore",
+              })
             : spawn("xdg-open", [url], { detached: true, stdio: "ignore" });
     child.on("error", () => {
       /* Ignore browser launch errors on headless systems */

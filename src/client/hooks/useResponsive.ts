@@ -3,7 +3,9 @@ import { useEffect, useRef, useState } from "react";
 export type MobileTab = "scene" | "chat" | "info";
 
 export function useResponsive(breakpointPx: number = 1100) {
-  const [isMobile, setIsMobile] = useState(() => window.matchMedia(`(max-width: ${breakpointPx}px)`).matches);
+  const [isMobile, setIsMobile] = useState(
+    () => window.matchMedia(`(max-width: ${breakpointPx}px)`).matches,
+  );
   const [mobileTab, setMobileTab] = useState<MobileTab>("chat");
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement>(null);
@@ -20,7 +22,10 @@ export function useResponsive(breakpointPx: number = 1100) {
   useEffect(() => {
     if (!moreMenuOpen) return;
     function handleClick(e: MouseEvent) {
-      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+      if (
+        moreMenuRef.current &&
+        !moreMenuRef.current.contains(e.target as Node)
+      ) {
         setMoreMenuOpen(false);
       }
     }
@@ -41,6 +46,6 @@ export function useResponsive(breakpointPx: number = 1100) {
     setMobileTab,
     moreMenuOpen,
     setMoreMenuOpen,
-    moreMenuRef
+    moreMenuRef,
   };
 }

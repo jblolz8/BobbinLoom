@@ -1,4 +1,10 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -7,9 +13,12 @@ import {
   ImageGenerationSettingsSchema,
   PromptConfigSchema,
   PromptPresetSchema,
-  ProviderConnectionSchema
+  ProviderConnectionSchema,
 } from "../src/schemas";
-import { DEFAULT_IMAGE_GENERATION_SETTINGS, DEFAULT_IMAGE_PROMPT_INSTRUCTION } from "../src/engine/imageDefaults";
+import {
+  DEFAULT_IMAGE_GENERATION_SETTINGS,
+  DEFAULT_IMAGE_PROMPT_INSTRUCTION,
+} from "../src/engine/imageDefaults";
 import { ProviderManager } from "../src/server/providerManager";
 import { MockProvider } from "../src/server/provider";
 import { OpenAICompatibleProvider } from "../src/server/openAiCompatibleProvider";
@@ -26,7 +35,7 @@ import {
   setActiveConnection,
   setGenerationTextProvider,
   testProviderConnection,
-  updateConnection
+  updateConnection,
 } from "../src/server/providerRegistry";
 import type { ProviderConnectionDraft } from "../src/server/providerRegistry";
 
@@ -46,7 +55,9 @@ function readRegistryFile(dir: string): unknown {
   return JSON.parse(readFileSync(join(dir, "providers.json"), "utf8"));
 }
 
-function connInput(overrides: Partial<ProviderConnectionDraft> = {}): ProviderConnectionDraft {
+function connInput(
+  overrides: Partial<ProviderConnectionDraft> = {},
+): ProviderConnectionDraft {
   return {
     label: "Conn",
     baseUrl: "http://x:1",
@@ -54,7 +65,7 @@ function connInput(overrides: Partial<ProviderConnectionDraft> = {}): ProviderCo
     temperature: 0.8,
     maxTokens: 1200,
     contextWindow: 32768,
-    ...overrides
+    ...overrides,
   };
 }
 
@@ -93,7 +104,7 @@ describe("provider registry", () => {
       providerId: "deepseek",
       apiKey: "sk-fake",
       model: "deepseek-v4-pro",
-      contextWindow: 24000
+      contextWindow: 24000,
     });
 
     const reg = seedRegistry(dir);
@@ -103,13 +114,18 @@ describe("provider registry", () => {
 
   it("createConnection persists the new connection to disk", () => {
     const dir = tempDir();
-    const created = createConnection(dir, connInput({ label: "LMO", baseUrl: "http://l:1234" }));
+    const created = createConnection(
+      dir,
+      connInput({ label: "LMO", baseUrl: "http://l:1234" }),
+    );
 
     expect(created.id).toBe("lmo");
     expect(created.hasApiKey).toBe(false);
     expect(created.apiKeyMasked).toBeNull();
 
-    const onDisk = readRegistryFile(dir) as { connections: Array<{ id: string }> };
+    const onDisk = readRegistryFile(dir) as {
+      connections: Array<{ id: string }>;
+    };
     expect(onDisk.connections.some((c) => c.id === "lmo")).toBe(true);
   });
 
@@ -119,27 +135,45 @@ describe("provider registry", () => {
 
     // Overwrite with a new key.
     updateConnection(dir, "conn", connInput({ apiKey: "new-key" }));
-    let disk = readRegistryFile(dir) as { connections: Array<{ id: string; apiKey?: string }> };
-    expect(disk.connections.find((c) => c.id === "conn")?.apiKey).toMatch(/^enc:v1:/);
-    expect(disk.connections.find((c) => c.id === "conn")?.apiKey).not.toContain("new-key");
+    let disk = readRegistryFile(dir) as {
+      connections: Array<{ id: string; apiKey?: string }>;
+    };
+    expect(disk.connections.find((c) => c.id === "conn")?.apiKey).toMatch(
+      /^enc:v1:/,
+    );
+    expect(disk.connections.find((c) => c.id === "conn")?.apiKey).not.toContain(
+      "new-key",
+    );
 
     // Explicit null clears it.
     updateConnection(dir, "conn", connInput({ apiKey: null }));
-    disk = readRegistryFile(dir) as { connections: Array<{ id: string; apiKey?: string }> };
-    expect(disk.connections.find((c) => c.id === "conn")?.apiKey).toBeUndefined();
+    disk = readRegistryFile(dir) as {
+      connections: Array<{ id: string; apiKey?: string }>;
+    };
+    expect(
+      disk.connections.find((c) => c.id === "conn")?.apiKey,
+    ).toBeUndefined();
 
     // Re-set a key, then omit apiKey => keeps the existing key.
     updateConnection(dir, "conn", connInput({ apiKey: "persist" }));
     updateConnection(dir, "conn", connInput());
-    disk = readRegistryFile(dir) as { connections: Array<{ id: string; apiKey?: string }> };
-    expect(disk.connections.find((c) => c.id === "conn")?.apiKey).toMatch(/^enc:v1:/);
-    expect(disk.connections.find((c) => c.id === "conn")?.apiKey).not.toContain("persist");
+    disk = readRegistryFile(dir) as {
+      connections: Array<{ id: string; apiKey?: string }>;
+    };
+    expect(disk.connections.find((c) => c.id === "conn")?.apiKey).toMatch(
+      /^enc:v1:/,
+    );
+    expect(disk.connections.find((c) => c.id === "conn")?.apiKey).not.toContain(
+      "persist",
+    );
   });
 
   it("carries an image connection's seed through create and update, and keeps it absent when never set", () => {
     const dir = tempDir();
     const image = { kind: "image" as const, apiStyle: "venice" as const };
-    const read = () => (readRegistryFile(dir) as { connections: Array<Record<string, unknown>> }).connections;
+    const read = () =>
+      (readRegistryFile(dir) as { connections: Array<Record<string, unknown>> })
+        .connections;
 
     // Never set ⇒ NO key on disk. Not 0: 0 is a real value (Venice reads it as
     // "pick one at random"), so "absent" has to stay distinguishable from it.
@@ -150,9 +184,15 @@ describe("provider registry", () => {
     // keeps them when the row is read back (an unlisted field would be stripped).
     createConnection(dir, connInput({ ...image, label: "Seeded", seed: 4242 }));
     expect(read().find((c) => c.id === "seeded")?.seed).toBe(4242);
-    expect(listConnections(dir).connections.find((c) => c.id === "seeded")?.seed).toBe(4242);
+    expect(
+      listConnections(dir).connections.find((c) => c.id === "seeded")?.seed,
+    ).toBe(4242);
 
-    updateConnection(dir, "seeded", connInput({ ...image, label: "Seeded", seed: 7 }));
+    updateConnection(
+      dir,
+      "seeded",
+      connInput({ ...image, label: "Seeded", seed: 7 }),
+    );
     expect(read().find((c) => c.id === "seeded")?.seed).toBe(7);
 
     // An update that omits the field keeps the stored value…
@@ -161,15 +201,23 @@ describe("provider registry", () => {
 
     // …and an explicit null clears it, so an emptied Seed box really does go
     // back to a random seed (an absent field cannot overwrite a stored one).
-    updateConnection(dir, "seeded", connInput({ ...image, label: "Seeded", seed: null }));
+    updateConnection(
+      dir,
+      "seeded",
+      connInput({ ...image, label: "Seeded", seed: null }),
+    );
     const cleared = read().find((c) => c.id === "seeded")!;
     expect("seed" in cleared).toBe(false);
-    expect(getRegistry(dir).connections.find((c) => c.id === "seeded")?.seed).toBeUndefined();
+    expect(
+      getRegistry(dir).connections.find((c) => c.id === "seeded")?.seed,
+    ).toBeUndefined();
   });
 
   it("carries text sampling, penalty, stop, and jsonMode fields through create, update, and null-clearing", () => {
     const dir = tempDir();
-    const read = () => (readRegistryFile(dir) as { connections: Array<Record<string, unknown>> }).connections;
+    const read = () =>
+      (readRegistryFile(dir) as { connections: Array<Record<string, unknown>> })
+        .connections;
 
     const created = createConnection(
       dir,
@@ -182,8 +230,8 @@ describe("provider registry", () => {
         presencePenalty: 0.4,
         repetitionPenalty: 1.1,
         stop: ["Player:", "User:"],
-        jsonMode: "off"
-      })
+        jsonMode: "off",
+      }),
     );
     expect(created.topP).toBe(0.95);
     expect(created.minP).toBe(0.05);
@@ -207,8 +255,8 @@ describe("provider registry", () => {
         presencePenalty: null,
         repetitionPenalty: null,
         stop: [],
-        jsonMode: null
-      })
+        jsonMode: null,
+      }),
     );
     expect(cleared.topP).toBeUndefined();
     expect(cleared.minP).toBeUndefined();
@@ -226,7 +274,10 @@ describe("provider registry", () => {
 
   it("drops stored keys gracefully when the vault key file is corrupt", () => {
     const dir = tempDir();
-    createConnection(dir, connInput({ label: "A", baseUrl: "http://a:1", apiKey: "sk-secret" }));
+    createConnection(
+      dir,
+      connInput({ label: "A", baseUrl: "http://a:1", apiKey: "sk-secret" }),
+    );
     writeFileSync(join(dir, ".providers-key"), "corrupt-key-file-!!", "utf8");
 
     const pub = listConnections(dir);
@@ -239,7 +290,10 @@ describe("provider registry", () => {
     const dir = tempDir();
 
     // First connection on an empty registry becomes active automatically.
-    createConnection(dir, connInput({ label: "Active", baseUrl: "http://a:1" }));
+    createConnection(
+      dir,
+      connInput({ label: "Active", baseUrl: "http://a:1" }),
+    );
     const disk = readRegistryFile(dir) as { activeTextProviderId: string };
     expect(disk.activeTextProviderId).toBe("active");
 
@@ -260,15 +314,24 @@ describe("provider registry", () => {
 
   it("setActiveConnection persists, updates lastActiveAt, and rejects unknown ids", () => {
     const dir = tempDir();
-    const created = createConnection(dir, connInput({ label: "Pick Me", baseUrl: "http://p:1" }));
+    const created = createConnection(
+      dir,
+      connInput({ label: "Pick Me", baseUrl: "http://p:1" }),
+    );
     expect(created.lastActiveAt).toBeTruthy();
 
-    const second = createConnection(dir, connInput({ label: "Second", baseUrl: "http://p:2" }));
+    const second = createConnection(
+      dir,
+      connInput({ label: "Second", baseUrl: "http://p:2" }),
+    );
     // 'Second' was added when 'pick_me' was already active, so it starts with no lastActiveAt
     expect(second.lastActiveAt).toBeUndefined();
 
     setActiveConnection(dir, "second");
-    const disk = readRegistryFile(dir) as { activeTextProviderId: string; connections: Array<{ id: string; lastActiveAt?: string }> };
+    const disk = readRegistryFile(dir) as {
+      activeTextProviderId: string;
+      connections: Array<{ id: string; lastActiveAt?: string }>;
+    };
     expect(disk.activeTextProviderId).toBe("second");
     const activeConn = disk.connections.find((c) => c.id === "second");
     expect(activeConn?.lastActiveAt).toBeTruthy();
@@ -278,7 +341,14 @@ describe("provider registry", () => {
 
   it("listConnections masks api keys publicly", () => {
     const dir = tempDir();
-    createConnection(dir, connInput({ label: "Sec", baseUrl: "http://s:1", apiKey: "sk-secret-9999" }));
+    createConnection(
+      dir,
+      connInput({
+        label: "Sec",
+        baseUrl: "http://s:1",
+        apiKey: "sk-secret-9999",
+      }),
+    );
 
     const pub = listConnections(dir);
     expect(pub.activeTextProviderId).toBe("sec");
@@ -291,17 +361,25 @@ describe("provider registry", () => {
   describe("testProviderConnection", () => {
     it("returns ok for a 200 response, calling the normalized /models URL", async () => {
       const fetchImpl = vi.fn(async () => new Response("{ }", { status: 200 }));
-      const result = await testProviderConnection({ baseUrl: "http://test.local" }, fetchImpl);
+      const result = await testProviderConnection(
+        { baseUrl: "http://test.local" },
+        fetchImpl,
+      );
       expect(result.ok).toBe(true);
       expect(fetchImpl).toHaveBeenCalledWith(
         "http://test.local/v1/models",
-        expect.objectContaining({ method: "GET" })
+        expect.objectContaining({ method: "GET" }),
       );
     });
 
     it("returns the status and body text on a non-2xx response", async () => {
-      const fetchImpl = vi.fn(async () => new Response("nope", { status: 401 }));
-      const result = await testProviderConnection({ baseUrl: "http://test.local" }, fetchImpl);
+      const fetchImpl = vi.fn(
+        async () => new Response("nope", { status: 401 }),
+      );
+      const result = await testProviderConnection(
+        { baseUrl: "http://test.local" },
+        fetchImpl,
+      );
       expect(result.ok).toBe(false);
       expect(result.status).toBe(401);
       expect(result.message).toBe("nope");
@@ -311,7 +389,10 @@ describe("provider registry", () => {
       const fetchImpl = vi.fn(async () => {
         throw new Error("boom");
       });
-      const result = await testProviderConnection({ baseUrl: "http://test.local" }, fetchImpl);
+      const result = await testProviderConnection(
+        { baseUrl: "http://test.local" },
+        fetchImpl,
+      );
       expect(result.ok).toBe(false);
       expect(result.message).toBeTruthy();
     });
@@ -319,31 +400,56 @@ describe("provider registry", () => {
 
   describe("fetchProviderModels", () => {
     it("parses data[].id into a sorted, deduped list", async () => {
-      const fetchImpl = vi.fn(async () =>
-        new Response(JSON.stringify({ data: [{ id: "b-model" }, { id: "a-model" }, { id: "b-model" }] }), { status: 200 })
+      const fetchImpl = vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              data: [{ id: "b-model" }, { id: "a-model" }, { id: "b-model" }],
+            }),
+            { status: 200 },
+          ),
       );
-      const result = await fetchProviderModels({ baseUrl: "http://test.local" }, fetchImpl);
+      const result = await fetchProviderModels(
+        { baseUrl: "http://test.local" },
+        fetchImpl,
+      );
       expect(result.ok).toBe(true);
       expect(result.models).toEqual(["a-model", "b-model"]);
       expect(fetchImpl).toHaveBeenCalledWith(
         "http://test.local/v1/models",
-        expect.objectContaining({ method: "GET" })
+        expect.objectContaining({ method: "GET" }),
       );
     });
 
     it("accepts a bare array of model ids and a models[] shape", async () => {
-      const fetchImpl = vi.fn(async () => new Response(JSON.stringify(["m1", "m2"]), { status: 200 }));
-      const result = await fetchProviderModels({ baseUrl: "http://test.local" }, fetchImpl);
+      const fetchImpl = vi.fn(
+        async () => new Response(JSON.stringify(["m1", "m2"]), { status: 200 }),
+      );
+      const result = await fetchProviderModels(
+        { baseUrl: "http://test.local" },
+        fetchImpl,
+      );
       expect(result.models).toEqual(["m1", "m2"]);
 
-      const fetchImpl2 = vi.fn(async () => new Response(JSON.stringify({ models: ["x", "y"] }), { status: 200 }));
-      const result2 = await fetchProviderModels({ baseUrl: "http://test.local" }, fetchImpl2);
+      const fetchImpl2 = vi.fn(
+        async () =>
+          new Response(JSON.stringify({ models: ["x", "y"] }), { status: 200 }),
+      );
+      const result2 = await fetchProviderModels(
+        { baseUrl: "http://test.local" },
+        fetchImpl2,
+      );
       expect(result2.models).toEqual(["x", "y"]);
     });
 
     it("returns ok false with the message and an empty list on non-2xx", async () => {
-      const fetchImpl = vi.fn(async () => new Response("unauthorized", { status: 401 }));
-      const result = await fetchProviderModels({ baseUrl: "http://test.local" }, fetchImpl);
+      const fetchImpl = vi.fn(
+        async () => new Response("unauthorized", { status: 401 }),
+      );
+      const result = await fetchProviderModels(
+        { baseUrl: "http://test.local" },
+        fetchImpl,
+      );
       expect(result.ok).toBe(false);
       expect(result.status).toBe(401);
       expect(result.message).toBe("unauthorized");
@@ -354,43 +460,61 @@ describe("provider registry", () => {
       const fetchImpl = vi.fn(async () => {
         throw new Error("boom");
       });
-      const result = await fetchProviderModels({ baseUrl: "http://test.local" }, fetchImpl);
+      const result = await fetchProviderModels(
+        { baseUrl: "http://test.local" },
+        fetchImpl,
+      );
       expect(result.ok).toBe(false);
       expect(result.message).toBeTruthy();
       expect(result.models).toEqual([]);
     });
 
     it("carries the per-model capability map beside the ids, and maps an unpublished model to nothing", async () => {
-      const fetchImpl = vi.fn(async () =>
-        new Response(
-          JSON.stringify({
-            data: [
-              {
-                id: "lustify-v8",
-                model_spec: {
-                  constraints: {
-                    promptCharacterLimit: 7500,
-                    steps: { default: 20, max: 30 },
-                    widthHeightDivisor: 8,
-                    aspectRatios: ["1:1", "3:2", "16:9"],
-                    defaultAspectRatio: "1:1",
-                    resolution: { "1:1": ["1024x1024", "512x512"] }
-                  }
-                }
-              },
-              { id: "aaa-no-spec" },
-              { id: "only-limit", model_spec: { constraints: { promptCharacterLimit: 1200 } } },
-              { id: "ratio-model", model_spec: { constraints: { aspectRatios: "3:2" } } }
-            ]
-          }),
-          { status: 200 }
-        )
+      const fetchImpl = vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              data: [
+                {
+                  id: "lustify-v8",
+                  model_spec: {
+                    constraints: {
+                      promptCharacterLimit: 7500,
+                      steps: { default: 20, max: 30 },
+                      widthHeightDivisor: 8,
+                      aspectRatios: ["1:1", "3:2", "16:9"],
+                      defaultAspectRatio: "1:1",
+                      resolution: { "1:1": ["1024x1024", "512x512"] },
+                    },
+                  },
+                },
+                { id: "aaa-no-spec" },
+                {
+                  id: "only-limit",
+                  model_spec: { constraints: { promptCharacterLimit: 1200 } },
+                },
+                {
+                  id: "ratio-model",
+                  model_spec: { constraints: { aspectRatios: "3:2" } },
+                },
+              ],
+            }),
+            { status: 200 },
+          ),
       );
 
-      const result = await fetchProviderModels({ baseUrl: "http://test.local" }, fetchImpl);
+      const result = await fetchProviderModels(
+        { baseUrl: "http://test.local" },
+        fetchImpl,
+      );
 
       // The id list means exactly what it always meant: deduped + sorted.
-      expect(result.models).toEqual(["aaa-no-spec", "lustify-v8", "only-limit", "ratio-model"]);
+      expect(result.models).toEqual([
+        "aaa-no-spec",
+        "lustify-v8",
+        "only-limit",
+        "ratio-model",
+      ]);
       // Capabilities are read from the SAME response.
       expect(result.modelSpecs["lustify-v8"]).toEqual({
         promptCharacterLimit: 7500,
@@ -398,36 +522,56 @@ describe("provider registry", () => {
         widthHeightDivisor: 8,
         aspectRatios: ["1:1", "3:2", "16:9"],
         defaultAspectRatio: "1:1",
-        resolutions: ["1024x1024", "512x512"]
+        resolutions: ["1024x1024", "512x512"],
       });
       // No model_spec ⇒ no entry at all (not an empty object).
       expect("aaa-no-spec" in result.modelSpecs).toBe(false);
       // A partial constraints block carries only what it published.
-      expect(result.modelSpecs["only-limit"]).toEqual({ promptCharacterLimit: 1200 });
+      expect(result.modelSpecs["only-limit"]).toEqual({
+        promptCharacterLimit: 1200,
+      });
       // A bare string is a one-value list.
-      expect(result.modelSpecs["ratio-model"]).toEqual({ aspectRatios: ["3:2"] });
+      expect(result.modelSpecs["ratio-model"]).toEqual({
+        aspectRatios: ["3:2"],
+      });
     });
 
     it("leaves the capability map empty — and does not throw — on a malformed or failed response", async () => {
-      const garbled = vi.fn(async () => new Response("<html>not json</html>", { status: 200 }));
-      const unparseable = await fetchProviderModels({ baseUrl: "http://test.local" }, garbled);
+      const garbled = vi.fn(
+        async () => new Response("<html>not json</html>", { status: 200 }),
+      );
+      const unparseable = await fetchProviderModels(
+        { baseUrl: "http://test.local" },
+        garbled,
+      );
       expect(unparseable.models).toEqual([]);
       expect(unparseable.modelSpecs).toEqual({});
 
-      const failing = vi.fn(async () => new Response("unauthorized", { status: 401 }));
-      const failed = await fetchProviderModels({ baseUrl: "http://test.local" }, failing);
+      const failing = vi.fn(
+        async () => new Response("unauthorized", { status: 401 }),
+      );
+      const failed = await fetchProviderModels(
+        { baseUrl: "http://test.local" },
+        failing,
+      );
       expect(failed.ok).toBe(false);
       expect(failed.modelSpecs).toEqual({});
 
       const throwing = vi.fn(async () => {
         throw new Error("boom");
       });
-      const thrown = await fetchProviderModels({ baseUrl: "http://test.local" }, throwing);
+      const thrown = await fetchProviderModels(
+        { baseUrl: "http://test.local" },
+        throwing,
+      );
       expect(thrown.modelSpecs).toEqual({});
 
       // The reachability check's own contract is untouched: neither the listing
       // nor its capabilities ride along.
-      const probe = await testProviderConnection({ baseUrl: "http://test.local" }, garbled);
+      const probe = await testProviderConnection(
+        { baseUrl: "http://test.local" },
+        garbled,
+      );
       expect("modelSpecs" in probe).toBe(false);
       expect("models" in probe).toBe(false);
     });
@@ -438,44 +582,81 @@ describe("provider registry", () => {
     // Deliberately NOT alphabetical: a WebUI lists recently-used checkpoints
     // first and that is a curated order the probe must not rearrange.
     const CHECKPOINTS = [
-      { title: "dreamshaper_8.safetensors", model_name: "dreamshaper_8", hash: "abc" },
-      { title: "sd_xl_base_1.0.safetensors", model_name: "sd_xl_base_1.0", hash: "def" },
-      { title: "dreamshaper_8.safetensors", model_name: "dreamshaper_8", hash: "abc" }
+      {
+        title: "dreamshaper_8.safetensors",
+        model_name: "dreamshaper_8",
+        hash: "abc",
+      },
+      {
+        title: "sd_xl_base_1.0.safetensors",
+        model_name: "sd_xl_base_1.0",
+        hash: "def",
+      },
+      {
+        title: "dreamshaper_8.safetensors",
+        model_name: "dreamshaper_8",
+        hash: "abc",
+      },
     ];
-    const SAMPLERS = [{ name: "DPM++ 2M Karras", aliases: [], options: {} }, { name: "Euler a", aliases: [] }];
-    const SCHEDULERS = [{ name: "Karras", aliases: [] }, { name: "Automatic", aliases: [] }];
+    const SAMPLERS = [
+      { name: "DPM++ 2M Karras", aliases: [], options: {} },
+      { name: "Euler a", aliases: [] },
+    ];
+    const SCHEDULERS = [
+      { name: "Karras", aliases: [] },
+      { name: "Automatic", aliases: [] },
+    ];
     /** `/sdapi/v1/script-info`: every script the WebUI has, alwayson or not.
      *  The default list is a build WITHOUT Forge Couple — which is the user's
      *  ReForge today, and the state everything must keep rendering in. */
-    const SCRIPTS = [{ name: "txt2img", is_alwayson: false }, { name: "sampler", is_alwayson: false }];
+    const SCRIPTS = [
+      { name: "txt2img", is_alwayson: false },
+      { name: "sampler", is_alwayson: false },
+    ];
     const SCRIPT_INFO_URL = `${BASE}/sdapi/v1/script-info`;
     const FORGE_COUPLE = [{ name: "Forge Couple", is_alwayson: true }];
 
     /** The WebUI serves four independent lists; each is routed by URL so a
      *  single one can fail in isolation, and every request is recorded. */
-    function a1111Fetch(overrides: {
-      sdModels?: () => Response;
-      samplers?: () => Response;
-      schedulers?: () => Response;
-      scriptInfo?: () => Response;
-    } = {}) {
+    function a1111Fetch(
+      overrides: {
+        sdModels?: () => Response;
+        samplers?: () => Response;
+        schedulers?: () => Response;
+        scriptInfo?: () => Response;
+      } = {},
+    ) {
       const calls: { url: string; headers: Record<string, string> }[] = [];
-      const impl = vi.fn(async (url: string, init?: { headers?: Record<string, string> }) => {
-        calls.push({ url, headers: init?.headers ?? {} });
-        if (url.endsWith("/sdapi/v1/sd-models")) {
-          return overrides.sdModels?.() ?? new Response(JSON.stringify(CHECKPOINTS), { status: 200 });
-        }
-        if (url.endsWith("/sdapi/v1/samplers")) {
-          return overrides.samplers?.() ?? new Response(JSON.stringify(SAMPLERS), { status: 200 });
-        }
-        if (url.endsWith("/sdapi/v1/schedulers")) {
-          return overrides.schedulers?.() ?? new Response(JSON.stringify(SCHEDULERS), { status: 200 });
-        }
-        if (url.endsWith("/sdapi/v1/script-info")) {
-          return overrides.scriptInfo?.() ?? new Response(JSON.stringify(SCRIPTS), { status: 200 });
-        }
-        return new Response("not found", { status: 404 });
-      });
+      const impl = vi.fn(
+        async (url: string, init?: { headers?: Record<string, string> }) => {
+          calls.push({ url, headers: init?.headers ?? {} });
+          if (url.endsWith("/sdapi/v1/sd-models")) {
+            return (
+              overrides.sdModels?.() ??
+              new Response(JSON.stringify(CHECKPOINTS), { status: 200 })
+            );
+          }
+          if (url.endsWith("/sdapi/v1/samplers")) {
+            return (
+              overrides.samplers?.() ??
+              new Response(JSON.stringify(SAMPLERS), { status: 200 })
+            );
+          }
+          if (url.endsWith("/sdapi/v1/schedulers")) {
+            return (
+              overrides.schedulers?.() ??
+              new Response(JSON.stringify(SCHEDULERS), { status: 200 })
+            );
+          }
+          if (url.endsWith("/sdapi/v1/script-info")) {
+            return (
+              overrides.scriptInfo?.() ??
+              new Response(JSON.stringify(SCRIPTS), { status: 200 })
+            );
+          }
+          return new Response("not found", { status: 404 });
+        },
+      );
       return { impl: impl as unknown as typeof fetch, calls };
     }
 
@@ -486,29 +667,41 @@ describe("provider registry", () => {
 
     it("probes http://127.0.0.1:7860/sdapi/v1/sd-models at the WebUI ROOT and keeps the server's checkpoint order", async () => {
       const { impl, calls } = a1111Fetch();
-      const result = await fetchProviderModels({ baseUrl: BASE, apiStyle: "a1111" }, impl);
+      const result = await fetchProviderModels(
+        { baseUrl: BASE, apiStyle: "a1111" },
+        impl,
+      );
 
       // The exact URLs, on the record: no /v1 segment is inserted before sdapi.
       expect(calls.map((c) => c.url)).toEqual([
         "http://127.0.0.1:7860/sdapi/v1/sd-models",
         "http://127.0.0.1:7860/sdapi/v1/samplers",
         "http://127.0.0.1:7860/sdapi/v1/schedulers",
-        "http://127.0.0.1:7860/sdapi/v1/script-info"
+        "http://127.0.0.1:7860/sdapi/v1/script-info",
       ]);
       expect(calls[0].url).not.toContain("/v1/sdapi");
 
       expect(result.ok).toBe(true);
       // Order preserved (NOT sorted) and deduped.
-      expect(result.models).toEqual(["dreamshaper_8.safetensors", "sd_xl_base_1.0.safetensors"]);
+      expect(result.models).toEqual([
+        "dreamshaper_8.safetensors",
+        "sd_xl_base_1.0.safetensors",
+      ]);
       // An A1111 listing publishes no model_spec: the map stays empty, never absent.
       expect(result.modelSpecs).toEqual({});
     });
 
     it("reports the Forge Couple extension the WebUI published, and nothing when it has none", async () => {
       const { impl } = a1111Fetch({
-        scriptInfo: () => new Response(JSON.stringify([...SCRIPTS, ...FORGE_COUPLE]), { status: 200 })
+        scriptInfo: () =>
+          new Response(JSON.stringify([...SCRIPTS, ...FORGE_COUPLE]), {
+            status: 200,
+          }),
       });
-      const found = await fetchProviderModels({ baseUrl: BASE, apiStyle: "a1111" }, impl);
+      const found = await fetchProviderModels(
+        { baseUrl: BASE, apiStyle: "a1111" },
+        impl,
+      );
       expect(found.ok).toBe(true);
       expect(found.dialectOptions?.forgeCouple).toBe(true);
 
@@ -516,49 +709,72 @@ describe("provider registry", () => {
       // editor shows "not installed" instead of a silent no-op.
       clearForgeCoupleCache();
       const { impl: bare } = a1111Fetch();
-      const missing = await fetchProviderModels({ baseUrl: BASE, apiStyle: "a1111" }, bare);
+      const missing = await fetchProviderModels(
+        { baseUrl: BASE, apiStyle: "a1111" },
+        bare,
+      );
       expect(missing.dialectOptions?.forgeCouple).toBeUndefined();
       expect("forgeCouple" in (missing.dialectOptions ?? {})).toBe(false);
 
       // A script-info route that does not exist is the same answer: absent,
       // and the probe itself still succeeds.
       clearForgeCoupleCache();
-      const { impl: broken } = a1111Fetch({ scriptInfo: () => new Response("boom", { status: 500 }) });
-      const errored = await fetchProviderModels({ baseUrl: BASE, apiStyle: "a1111" }, broken);
+      const { impl: broken } = a1111Fetch({
+        scriptInfo: () => new Response("boom", { status: 500 }),
+      });
+      const errored = await fetchProviderModels(
+        { baseUrl: BASE, apiStyle: "a1111" },
+        broken,
+      );
       expect(errored.ok).toBe(true);
       expect(errored.dialectOptions?.forgeCouple).toBeUndefined();
     });
 
     it("normalizes a trailing slash and never doubles the /v1 in the sdapi path", async () => {
       const { impl, calls } = a1111Fetch();
-      const result = await fetchProviderModels({ baseUrl: "http://127.0.0.1:7860///", apiStyle: "a1111" }, impl);
+      const result = await fetchProviderModels(
+        { baseUrl: "http://127.0.0.1:7860///", apiStyle: "a1111" },
+        impl,
+      );
       expect(calls[0].url).toBe("http://127.0.0.1:7860/sdapi/v1/sd-models");
       expect(result.ok).toBe(true);
     });
 
     it("surfaces the WebUI's sampler and scheduler names as dialectOptions", async () => {
       const { impl } = a1111Fetch();
-      const result = await fetchProviderModels({ baseUrl: BASE, apiStyle: "a1111" }, impl);
+      const result = await fetchProviderModels(
+        { baseUrl: BASE, apiStyle: "a1111" },
+        impl,
+      );
       expect(result.dialectOptions).toEqual({
         samplers: ["DPM++ 2M Karras", "Euler a"],
-        schedulers: ["Karras", "Automatic"]
+        schedulers: ["Karras", "Automatic"],
       });
     });
 
     it("sends a `user:pass` key as HTTP Basic on every a1111 call", async () => {
       const { impl, calls } = a1111Fetch();
       const expected = `Basic ${Buffer.from("alice:s3cret").toString("base64")}`;
-      await fetchProviderModels({ baseUrl: BASE, apiKey: "alice:s3cret", apiStyle: "a1111" }, impl);
+      await fetchProviderModels(
+        { baseUrl: BASE, apiKey: "alice:s3cret", apiStyle: "a1111" },
+        impl,
+      );
       // The three lists PLUS the script-info detection, which must not be the
       // one call that forgets the credentials.
       expect(calls).toHaveLength(4);
       expect(calls.some((c) => c.url === SCRIPT_INFO_URL)).toBe(true);
-      for (const call of calls) expect(call.headers.Authorization).toBe(expected);
+      for (const call of calls)
+        expect(call.headers.Authorization).toBe(expected);
     });
 
     it("names the missing --api flag on a 404", async () => {
-      const { impl } = a1111Fetch({ sdModels: () => new Response("Not Found", { status: 404 }) });
-      const result = await fetchProviderModels({ baseUrl: BASE, apiStyle: "a1111" }, impl);
+      const { impl } = a1111Fetch({
+        sdModels: () => new Response("Not Found", { status: 404 }),
+      });
+      const result = await fetchProviderModels(
+        { baseUrl: BASE, apiStyle: "a1111" },
+        impl,
+      );
       expect(result.ok).toBe(false);
       expect(result.status).toBe(404);
       expect(result.message).toContain("--api");
@@ -571,23 +787,39 @@ describe("provider registry", () => {
         samplers: () => {
           throw new Error("boom");
         },
-        schedulers: () => new Response("nope", { status: 500 })
+        schedulers: () => new Response("nope", { status: 500 }),
       });
-      const result = await fetchProviderModels({ baseUrl: BASE, apiStyle: "a1111" }, impl);
+      const result = await fetchProviderModels(
+        { baseUrl: BASE, apiStyle: "a1111" },
+        impl,
+      );
       expect(result.ok).toBe(true);
-      expect(result.models).toEqual(["dreamshaper_8.safetensors", "sd_xl_base_1.0.safetensors"]);
+      expect(result.models).toEqual([
+        "dreamshaper_8.safetensors",
+        "sd_xl_base_1.0.safetensors",
+      ]);
       // Both optional lists are missing here — an absent block, not an empty one.
       expect(result.dialectOptions).toBeUndefined();
 
-      const { impl: oneUp } = a1111Fetch({ samplers: () => new Response("nope", { status: 500 }) });
-      const partial = await fetchProviderModels({ baseUrl: BASE, apiStyle: "a1111" }, oneUp);
+      const { impl: oneUp } = a1111Fetch({
+        samplers: () => new Response("nope", { status: 500 }),
+      });
+      const partial = await fetchProviderModels(
+        { baseUrl: BASE, apiStyle: "a1111" },
+        oneUp,
+      );
       expect(partial.ok).toBe(true);
-      expect(partial.dialectOptions).toEqual({ schedulers: ["Karras", "Automatic"] });
+      expect(partial.dialectOptions).toEqual({
+        schedulers: ["Karras", "Automatic"],
+      });
     });
 
     it("strips dialectOptions from the reachability check, like models and modelSpecs", async () => {
       const { impl } = a1111Fetch();
-      const probe = await testProviderConnection({ baseUrl: BASE, apiStyle: "a1111" }, impl);
+      const probe = await testProviderConnection(
+        { baseUrl: BASE, apiStyle: "a1111" },
+        impl,
+      );
       expect(probe.ok).toBe(true);
       expect("models" in probe).toBe(false);
       expect("modelSpecs" in probe).toBe(false);
@@ -606,8 +838,8 @@ describe("provider registry", () => {
           cfgScale: 6.5,
           sampler: "DPM++ 2M Karras",
           scheduler: "Karras",
-          timeoutMs: 900_000
-        })
+          timeoutMs: 900_000,
+        }),
       );
       expect(created.baseUrl).toBe("http://127.0.0.1:7860");
       expect(created.steps).toBe(28);
@@ -619,7 +851,12 @@ describe("provider registry", () => {
       // An OpenAI-dialect image connection is still /v1-normalized as before.
       const venice = createConnection(
         dir,
-        connInput({ label: "Venice", kind: "image", apiStyle: "venice", baseUrl: "http://localhost:1234" })
+        connInput({
+          label: "Venice",
+          kind: "image",
+          apiStyle: "venice",
+          baseUrl: "http://localhost:1234",
+        }),
       );
       expect(venice.baseUrl).toBe("http://localhost:1234/v1");
     });
@@ -639,7 +876,7 @@ describe("provider registry", () => {
         contextWindow: 32768,
         kind: "image",
         regionsEnabled: false,
-        regionDirection: "Vertical"
+        regionDirection: "Vertical",
       });
       expect(parsed.regionsEnabled).toBe(false);
       expect(parsed.regionDirection).toBe("Vertical");
@@ -653,23 +890,26 @@ describe("provider registry", () => {
           apiStyle: "a1111",
           baseUrl: "http://127.0.0.1:7860",
           regionsEnabled: false,
-          regionDirection: "Vertical"
-        })
+          regionDirection: "Vertical",
+        }),
       );
       expect(created.regionsEnabled).toBe(false);
       expect(created.regionDirection).toBe("Vertical");
 
-      const row = (readRegistryFile(dir) as { connections: Array<{ id: string }> }).connections.find(
-        (c) => c.id === created.id
-      )!;
-      expect(row).toMatchObject({ regionsEnabled: false, regionDirection: "Vertical" });
+      const row = (
+        readRegistryFile(dir) as { connections: Array<{ id: string }> }
+      ).connections.find((c) => c.id === created.id)!;
+      expect(row).toMatchObject({
+        regionsEnabled: false,
+        regionDirection: "Vertical",
+      });
 
       // An update carries them too — and a direction the enum does not take is
       // not silently stored as something else.
       const updated = updateConnection(
         dir,
         created.id,
-        connInput({ regionsEnabled: true, regionDirection: "Horizontal" })
+        connInput({ regionsEnabled: true, regionDirection: "Horizontal" }),
       );
       expect(updated.regionsEnabled).toBe(true);
       expect(updated.regionDirection).toBe("Horizontal");
@@ -679,10 +919,18 @@ describe("provider registry", () => {
       const dir = tempDir();
       const created = createConnection(
         dir,
-        connInput({ kind: "image", apiStyle: "a1111", baseUrl: "http://127.0.0.1:7860" })
+        connInput({
+          kind: "image",
+          apiStyle: "a1111",
+          baseUrl: "http://127.0.0.1:7860",
+        }),
       );
       // The editor PUTs a new base URL without repeating the style.
-      const updated = updateConnection(dir, created.id, connInput({ baseUrl: "http://127.0.0.1:7861" }));
+      const updated = updateConnection(
+        dir,
+        created.id,
+        connInput({ baseUrl: "http://127.0.0.1:7861" }),
+      );
       expect(updated.baseUrl).toBe("http://127.0.0.1:7861");
     });
   });
@@ -690,7 +938,10 @@ describe("provider registry", () => {
   describe("duplicateConnection", () => {
     it("copies all fields including the apiKey, with a new unique id and editable copy", () => {
       const dir = tempDir();
-      const created = createConnection(dir, connInput({ label: "LM Studio", apiKey: "sk-copy" }));
+      const created = createConnection(
+        dir,
+        connInput({ label: "LM Studio", apiKey: "sk-copy" }),
+      );
 
       const dup = duplicateConnection(dir, created.id);
       expect(dup.id).not.toBe(created.id);
@@ -707,7 +958,9 @@ describe("provider registry", () => {
       expect(dup.apiKeyMasked).toBe("••••copy");
 
       // Persisted to disk ENCRYPTED (never plaintext), carrying the real key.
-      const onDisk = readRegistryFile(dir) as { connections: Array<{ id: string; apiKey?: string }> };
+      const onDisk = readRegistryFile(dir) as {
+        connections: Array<{ id: string; apiKey?: string }>;
+      };
       const diskCopy = onDisk.connections.find((c) => c.id === dup.id);
       expect(diskCopy?.apiKey).toMatch(/^enc:v1:/);
       expect(diskCopy?.apiKey).not.toContain("sk-copy");
@@ -716,7 +969,10 @@ describe("provider registry", () => {
     it("duplicates a connection created after an empty seed into an editable copy with its key", () => {
       const dir = tempDir();
       seedRegistry(dir);
-      const created = createConnection(dir, connInput({ label: "X", apiKey: "sk-x-1234" }));
+      const created = createConnection(
+        dir,
+        connInput({ label: "X", apiKey: "sk-x-1234" }),
+      );
 
       const dup = duplicateConnection(dir, created.id);
       expect(dup.id).toBe("x_copy");
@@ -750,7 +1006,7 @@ describe("registry file hardening", () => {
     model: "deepseek-chat",
     temperature: 0.8,
     maxTokens: 1200,
-    contextWindow: 32768
+    contextWindow: 32768,
   };
 
   it("migrates a v1 registry to v2: activeProviderId becomes the text slot, rows gain kind, original archived", () => {
@@ -760,9 +1016,9 @@ describe("registry file hardening", () => {
       JSON.stringify({
         schemaVersion: 1,
         activeProviderId: "ds",
-        connections: [validConn]
+        connections: [validConn],
       }),
-      "utf8"
+      "utf8",
     );
 
     const list = listConnections(dir);
@@ -774,7 +1030,9 @@ describe("registry file hardening", () => {
     expect(list.activeImageProviderId).toBe("");
     expect(list.connections[0].kind).toBe("text");
     expect(existsSync(join(dir, "providers.json.bak"))).toBe(true);
-    const migrated = JSON.parse(readFileSync(join(dir, "providers.json"), "utf8")) as {
+    const migrated = JSON.parse(
+      readFileSync(join(dir, "providers.json"), "utf8"),
+    ) as {
       schemaVersion: number;
       activeTextProviderId: string;
       activeImageProviderId: string;
@@ -791,7 +1049,7 @@ describe("registry file hardening", () => {
     writeFileSync(
       join(dir, "providers.json"),
       JSON.stringify({ activeProviderId: "ds", connections: [validConn] }),
-      "utf8"
+      "utf8",
     );
 
     const list = listConnections(dir);
@@ -800,7 +1058,9 @@ describe("registry file hardening", () => {
     expect(list.warnings[0]).toContain("migrated");
     expect(list.activeTextProviderId).toBe("ds");
     expect(list.activeImageProviderId).toBe("");
-    const onDisk = JSON.parse(readFileSync(join(dir, "providers.json"), "utf8")) as {
+    const onDisk = JSON.parse(
+      readFileSync(join(dir, "providers.json"), "utf8"),
+    ) as {
       schemaVersion: number;
       activeTextProviderId: string;
       activeImageProviderId: string;
@@ -820,9 +1080,9 @@ describe("registry file hardening", () => {
         schemaVersion: 2,
         activeTextProviderId: "ds",
         activeImageProviderId: "",
-        connections: [{ ...validConn, kind: "text" }]
+        connections: [{ ...validConn, kind: "text" }],
       }),
-      "utf8"
+      "utf8",
     );
 
     const list = listConnections(dir);
@@ -837,7 +1097,7 @@ describe("registry file hardening", () => {
     writeFileSync(
       join(dir, "providers.json"),
       JSON.stringify({ activeProviderId: "ds", connections: [validConn] }),
-      "utf8"
+      "utf8",
     );
 
     const list = listConnections(dir);
@@ -846,7 +1106,9 @@ describe("registry file hardening", () => {
     expect(list.warnings).toHaveLength(1);
     expect(list.warnings[0]).toContain("migrated");
     expect(existsSync(join(dir, "providers.json.bak"))).toBe(true);
-    const stamped = JSON.parse(readFileSync(join(dir, "providers.json"), "utf8"));
+    const stamped = JSON.parse(
+      readFileSync(join(dir, "providers.json"), "utf8"),
+    );
     expect(stamped.schemaVersion).toBe(2);
   });
 
@@ -860,18 +1122,31 @@ describe("registry file hardening", () => {
     expect(list.warnings).toHaveLength(1);
     expect(list.warnings[0]).toContain("unreadable");
     expect(existsSync(join(dir, "providers.json.bak"))).toBe(true);
-    const reseeded = JSON.parse(readFileSync(join(dir, "providers.json"), "utf8"));
+    const reseeded = JSON.parse(
+      readFileSync(join(dir, "providers.json"), "utf8"),
+    );
     expect(reseeded.schemaVersion).toBe(2);
     expect(reseeded.connections).toEqual([]);
   });
 
   it("salvages valid connections from a schema-invalid registry, dropping bad ones", () => {
     const dir = tempDir();
-    const bad = { id: "broken", label: "Broken", baseUrl: 42, model: "", temperature: "hot", maxTokens: 1200, contextWindow: 32768 };
+    const bad = {
+      id: "broken",
+      label: "Broken",
+      baseUrl: 42,
+      model: "",
+      temperature: "hot",
+      maxTokens: 1200,
+      contextWindow: 32768,
+    };
     writeFileSync(
       join(dir, "providers.json"),
-      JSON.stringify({ activeProviderId: "broken", connections: [validConn, bad] }),
-      "utf8"
+      JSON.stringify({
+        activeProviderId: "broken",
+        connections: [validConn, bad],
+      }),
+      "utf8",
     );
 
     const list = listConnections(dir);
@@ -881,7 +1156,9 @@ describe("registry file hardening", () => {
     expect(list.warnings).toHaveLength(1);
     expect(list.warnings[0]).toContain("1 invalid connection");
     expect(existsSync(join(dir, "providers.json.bak"))).toBe(true);
-    const onDisk = JSON.parse(readFileSync(join(dir, "providers.json"), "utf8")) as {
+    const onDisk = JSON.parse(
+      readFileSync(join(dir, "providers.json"), "utf8"),
+    ) as {
       schemaVersion: number;
       connections: Array<{ id: string }>;
     };
@@ -891,8 +1168,16 @@ describe("registry file hardening", () => {
 
   it("updateConnection normalizes the baseUrl like create does", () => {
     const dir = tempDir();
-    const created = createConnection(dir, { label: "DS", baseUrl: "https://api.deepseek.com/v1", model: "m" });
-    const updated = updateConnection(dir, created.id, { label: "DS", baseUrl: "https://api.deepseek.com", model: "m" });
+    const created = createConnection(dir, {
+      label: "DS",
+      baseUrl: "https://api.deepseek.com/v1",
+      model: "m",
+    });
+    const updated = updateConnection(dir, created.id, {
+      label: "DS",
+      baseUrl: "https://api.deepseek.com",
+      model: "m",
+    });
     expect(updated.baseUrl).toBe("https://api.deepseek.com/v1");
   });
 });
@@ -900,18 +1185,31 @@ describe("registry file hardening", () => {
 describe("provider connection kind", () => {
   it("parses a legacy text connection without a kind, defaulting to text", () => {
     const parsed = ProviderConnectionSchema.parse({
-      id: "a", label: "A", baseUrl: "http://x/v1", model: "m",
-      temperature: 0.8, maxTokens: 100, contextWindow: 4096
+      id: "a",
+      label: "A",
+      baseUrl: "http://x/v1",
+      model: "m",
+      temperature: 0.8,
+      maxTokens: 100,
+      contextWindow: 4096,
     });
     expect(parsed.kind).toBe("text");
   });
 
   it("accepts an image connection with its own fields", () => {
     const parsed = ProviderConnectionSchema.parse({
-      id: "venice", label: "Venice", baseUrl: "https://api.venice.ai/api/v1", model: "m",
-      temperature: 0.8, maxTokens: 100, contextWindow: 4096,
-      kind: "image", apiStyle: "venice", safeMode: false, size: "1024x1024",
-      promptProviderId: null
+      id: "venice",
+      label: "Venice",
+      baseUrl: "https://api.venice.ai/api/v1",
+      model: "m",
+      temperature: 0.8,
+      maxTokens: 100,
+      contextWindow: 4096,
+      kind: "image",
+      apiStyle: "venice",
+      safeMode: false,
+      size: "1024x1024",
+      promptProviderId: null,
     });
     expect(parsed.kind).toBe("image");
     expect(parsed.apiStyle).toBe("venice");
@@ -921,7 +1219,10 @@ describe("provider connection kind", () => {
 describe("kind-aware registry slots", () => {
   it("keeps independent text and image active slots", () => {
     const dir = tempDir();
-    const text = createConnection(dir, connInput({ label: "Local Text", baseUrl: "http://t:1" }));
+    const text = createConnection(
+      dir,
+      connInput({ label: "Local Text", baseUrl: "http://t:1" }),
+    );
     const image = createConnection(
       dir,
       connInput({
@@ -931,8 +1232,8 @@ describe("kind-aware registry slots", () => {
         apiStyle: "venice",
         safeMode: false,
         size: "1024x1024",
-        promptProviderId: null
-      })
+        promptProviderId: null,
+      }),
     );
 
     const reg = listConnections(dir);
@@ -946,10 +1247,15 @@ describe("kind-aware registry slots", () => {
     expect(imageRow?.safeMode).toBe(false);
     expect(imageRow?.size).toBe("1024x1024");
     expect(imageRow?.promptProviderId).toBeNull();
-    expect(reg.connections.find((c) => c.id === text.id)?.apiStyle).toBeUndefined();
+    expect(
+      reg.connections.find((c) => c.id === text.id)?.apiStyle,
+    ).toBeUndefined();
 
     // Adding a second text connection does not steal the text slot…
-    const text2 = createConnection(dir, connInput({ label: "Second Text", baseUrl: "http://t:2" }));
+    const text2 = createConnection(
+      dir,
+      connInput({ label: "Second Text", baseUrl: "http://t:2" }),
+    );
     expect(listConnections(dir).activeTextProviderId).toBe(text.id);
 
     // …and activating it leaves the image slot alone.
@@ -966,7 +1272,10 @@ describe("kind-aware registry slots", () => {
 
   it("adding a connection of one kind never steals the other kind's slot", () => {
     const dir = tempDir();
-    const image = createConnection(dir, connInput({ label: "Images", kind: "image", apiStyle: "openai" }));
+    const image = createConnection(
+      dir,
+      connInput({ label: "Images", kind: "image", apiStyle: "openai" }),
+    );
     expect(listConnections(dir).activeImageProviderId).toBe(image.id);
     expect(listConnections(dir).activeTextProviderId).toBe("");
 
@@ -980,7 +1289,14 @@ describe("kind-aware registry slots", () => {
     const dir = tempDir();
     const created = createConnection(
       dir,
-      connInput({ label: "Venice", kind: "image", apiStyle: "venice", size: "1024x1024", promptProviderId: null, variants: 2 })
+      connInput({
+        label: "Venice",
+        kind: "image",
+        apiStyle: "venice",
+        size: "1024x1024",
+        promptProviderId: null,
+        variants: 2,
+      }),
     );
 
     const dup = duplicateConnection(dir, created.id);
@@ -993,8 +1309,14 @@ describe("kind-aware registry slots", () => {
 
   it("resolves the active connection per kind, and only per kind", () => {
     const dir = tempDir();
-    const text = createConnection(dir, connInput({ label: "Text", baseUrl: "http://t:1", contextWindow: 8192 }));
-    createConnection(dir, connInput({ label: "Img", kind: "image", contextWindow: 4096 }));
+    const text = createConnection(
+      dir,
+      connInput({ label: "Text", baseUrl: "http://t:1", contextWindow: 8192 }),
+    );
+    createConnection(
+      dir,
+      connInput({ label: "Img", kind: "image", contextWindow: 4096 }),
+    );
 
     const reg = getRegistry(dir);
     expect(activeConnectionOfKind(reg, "text")?.id).toBe(text.id);
@@ -1021,8 +1343,8 @@ describe("provider manager kind resolution", () => {
         kind: "image",
         apiStyle: "venice",
         contextWindow: 4096,
-        maxTokens: 77
-      })
+        maxTokens: 77,
+      }),
     );
 
     const manager = new ProviderManager(dir, {});
@@ -1048,7 +1370,7 @@ describe("provider manager kind resolution", () => {
       promptProviderId: null,
       stylePreset: "cinematic",
       hideWatermark: true,
-      variants: 2
+      variants: 2,
     });
 
     expect(created.kind).toBe("image");
@@ -1061,7 +1383,7 @@ describe("provider manager kind resolution", () => {
       baseUrl: "https://api.venice.ai/api/v1",
       model: "m2",
       safeMode: true,
-      variants: 3
+      variants: 3,
     });
     expect(updated.label).toBe("Venice 2");
     expect(updated.safeMode).toBe(true);
@@ -1071,9 +1393,18 @@ describe("provider manager kind resolution", () => {
 
   it("resolves the image connection: active by default, explicit image id when asked", () => {
     const dir = tempDir();
-    const text = createConnection(dir, connInput({ label: "Text", baseUrl: "http://t:1" }));
-    const first = createConnection(dir, connInput({ label: "Venice One", kind: "image" }));
-    const second = createConnection(dir, connInput({ label: "Venice Two", kind: "image" }));
+    const text = createConnection(
+      dir,
+      connInput({ label: "Text", baseUrl: "http://t:1" }),
+    );
+    const first = createConnection(
+      dir,
+      connInput({ label: "Venice One", kind: "image" }),
+    );
+    const second = createConnection(
+      dir,
+      connInput({ label: "Venice Two", kind: "image" }),
+    );
     const manager = new ProviderManager(dir, {});
 
     expect(manager.imageConnection()?.id).toBe(first.id);
@@ -1095,37 +1426,58 @@ describe("provider manager kind resolution", () => {
     const dir = tempDir();
     const writer = createConnection(
       dir,
-      connInput({ label: "Writer", baseUrl: "http://w:1", model: "writer-model" })
+      connInput({
+        label: "Writer",
+        baseUrl: "http://w:1",
+        model: "writer-model",
+      }),
     );
-    const other = createConnection(dir, connInput({ label: "Other", baseUrl: "http://o:1", model: "other-model" }));
+    const other = createConnection(
+      dir,
+      connInput({
+        label: "Other",
+        baseUrl: "http://o:1",
+        model: "other-model",
+      }),
+    );
     const image = createConnection(
       dir,
-      connInput({ label: "Venice", kind: "image", promptProviderId: writer.id })
+      connInput({
+        label: "Venice",
+        kind: "image",
+        promptProviderId: writer.id,
+      }),
     );
     const manager = new ProviderManager(dir, {});
 
-    const explicit = manager.resolveImagePromptConfig(manager.imageConnection());
+    const explicit = manager.resolveImagePromptConfig(
+      manager.imageConnection(),
+    );
     expect(explicit?.providerId).toBe(writer.id);
     expect(explicit?.model).toBe("writer-model");
 
     // An explicit prompt writer keeps winning after the active text changes.
     setActiveConnection(dir, other.id);
-    expect(manager.resolveImagePromptConfig(manager.imageConnection())?.providerId).toBe(writer.id);
+    expect(
+      manager.resolveImagePromptConfig(manager.imageConnection())?.providerId,
+    ).toBe(writer.id);
 
     // A dangling (or non-text) promptProviderId falls back to the active text one.
     updateConnection(dir, image.id, {
       label: "Venice",
       baseUrl: "https://api.venice.ai/api/v1",
       model: "m",
-      promptProviderId: "ghost"
+      promptProviderId: "ghost",
     });
-    expect(manager.resolveImagePromptConfig(manager.imageConnection())?.providerId).toBe(other.id);
+    expect(
+      manager.resolveImagePromptConfig(manager.imageConnection())?.providerId,
+    ).toBe(other.id);
 
     updateConnection(dir, image.id, {
       label: "Venice",
       baseUrl: "https://api.venice.ai/api/v1",
       model: "m",
-      promptProviderId: writer.id
+      promptProviderId: writer.id,
     });
     setActiveConnection(dir, writer.id);
     // A null image connection still resolves the active TEXT connection: the
@@ -1138,14 +1490,21 @@ describe("provider manager kind resolution", () => {
     createConnection(dir, connInput({ label: "Images", kind: "image" }));
     const manager = new ProviderManager(dir, {});
     expect(manager.imageConnection()).not.toBeNull();
-    expect(manager.resolveImagePromptConfig(manager.imageConnection())).toBeNull();
+    expect(
+      manager.resolveImagePromptConfig(manager.imageConnection()),
+    ).toBeNull();
     expect(manager.resolveImagePromptConfig(null)).toBeNull();
   });
 });
 
 describe("shared schema additions (message images + image generation settings)", () => {
   it("parses a preset and a playthrough snapshot with NO imageGeneration block", () => {
-    const preset = PromptPresetSchema.parse({ id: "p", name: "P", readonly: false, modules: { turn: [] } });
+    const preset = PromptPresetSchema.parse({
+      id: "p",
+      name: "P",
+      readonly: false,
+      modules: { turn: [] },
+    });
     expect(preset.imageGeneration).toBeUndefined();
 
     const snapshot = PromptConfigSchema.parse({ modules: { turn: [] } });
@@ -1158,18 +1517,27 @@ describe("shared schema additions (message images + image generation settings)",
       name: "P",
       readonly: false,
       modules: { turn: [] },
-      imageGeneration: { positivePrefix: "anime style" }
+      imageGeneration: { positivePrefix: "anime style" },
     });
     expect(preset.imageGeneration?.positivePrefix).toBe("anime style");
     expect(preset.imageGeneration?.negativePrefix).toBe("");
-    expect(preset.imageGeneration?.promptCharacterLimit).toBe(DEFAULT_IMAGE_GENERATION_SETTINGS.promptCharacterLimit);
+    expect(preset.imageGeneration?.promptCharacterLimit).toBe(
+      DEFAULT_IMAGE_GENERATION_SETTINGS.promptCharacterLimit,
+    );
     expect(preset.imageGeneration?.includeState).toBe(true);
     expect(preset.imageGeneration?.includeCast).toBe(true);
-    expect((preset.imageGeneration?.instruction ?? "").length).toBeGreaterThan(100);
+    expect((preset.imageGeneration?.instruction ?? "").length).toBeGreaterThan(
+      100,
+    );
   });
 
   it("parses a message with no images, and round-trips one image reference", () => {
-    const bare = ChatMessageSchema.parse({ id: "m", role: "assistant", content: "hi", createdAt: "now" });
+    const bare = ChatMessageSchema.parse({
+      id: "m",
+      role: "assistant",
+      content: "hi",
+      createdAt: "now",
+    });
     expect(bare.images).toBeUndefined();
 
     const hash = "a".repeat(64);
@@ -1187,9 +1555,9 @@ describe("shared schema additions (message images + image generation settings)",
           model: "lustify-v8",
           seed: 42,
           durationMs: 1000,
-          createdAt: "now"
-        }
-      ]
+          createdAt: "now",
+        },
+      ],
     });
     expect(withImage.images).toHaveLength(1);
     expect(withImage.images?.[0].file).toBe(`${hash}.png`);
@@ -1202,7 +1570,7 @@ describe("shared schema additions (message images + image generation settings)",
       role: "assistant",
       content: "hi",
       createdAt: "now",
-      images: [{ file: "x.png", createdAt: "now" }]
+      images: [{ file: "x.png", createdAt: "now" }],
     });
     expect(minimal.images?.[0].prompt).toBe("");
     expect(minimal.images?.[0].providerId).toBe("");
@@ -1213,21 +1581,41 @@ describe("shared schema additions (message images + image generation settings)",
   it("wires the shipped instruction into the schema default without a runtime cycle", () => {
     expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION.length).toBeGreaterThan(100);
     // The constant survives the schemas → imageDefaults → (type-only) schemas trip.
-    expect(ImageGenerationSettingsSchema.parse({}).instruction).toBe(DEFAULT_IMAGE_PROMPT_INSTRUCTION);
+    expect(ImageGenerationSettingsSchema.parse({}).instruction).toBe(
+      DEFAULT_IMAGE_PROMPT_INSTRUCTION,
+    );
     // A preset with no block still gets NO imageGeneration (the fallback is read-site).
     expect(
-      PromptPresetSchema.parse({ id: "p", name: "P", readonly: false, modules: { turn: [] } }).imageGeneration
+      PromptPresetSchema.parse({
+        id: "p",
+        name: "P",
+        readonly: false,
+        modules: { turn: [] },
+      }).imageGeneration,
     ).toBeUndefined();
     // The shipped fallback is itself a complete, parseable settings object.
-    expect(ImageGenerationSettingsSchema.parse(DEFAULT_IMAGE_GENERATION_SETTINGS)).toEqual(DEFAULT_IMAGE_GENERATION_SETTINGS);
+    expect(
+      ImageGenerationSettingsSchema.parse(DEFAULT_IMAGE_GENERATION_SETTINGS),
+    ).toEqual(DEFAULT_IMAGE_GENERATION_SETTINGS);
   });
 });
 
 describe("generation text provider (which connection creates new playthroughs)", () => {
   it("is absent until set, persists, clears back to null, and keeps a dangling id", () => {
     const dir = tempDir();
-    createConnection(dir, connInput({ label: "Writer", baseUrl: "http://w:1" }));
-    createConnection(dir, connInput({ label: "Heavy", baseUrl: "http://h:1", contextWindow: 131072, maxTokens: 4000 }));
+    createConnection(
+      dir,
+      connInput({ label: "Writer", baseUrl: "http://w:1" }),
+    );
+    createConnection(
+      dir,
+      connInput({
+        label: "Heavy",
+        baseUrl: "http://h:1",
+        contextWindow: 131072,
+        maxTokens: 4000,
+      }),
+    );
 
     // Unset on a registry that predates the field: absent from the store, null in public.
     expect(getRegistry(dir).generationTextProviderId ?? null).toBeNull();
@@ -1236,12 +1624,18 @@ describe("generation text provider (which connection creates new playthroughs)",
     setGenerationTextProvider(dir, "heavy");
     expect(getRegistry(dir).generationTextProviderId).toBe("heavy");
     expect(listConnections(dir).generationTextProviderId).toBe("heavy");
-    expect((readRegistryFile(dir) as { generationTextProviderId?: string | null }).generationTextProviderId).toBe("heavy");
+    expect(
+      (readRegistryFile(dir) as { generationTextProviderId?: string | null })
+        .generationTextProviderId,
+    ).toBe("heavy");
 
     // null is a VALUE ("follow the active connection"), so it must survive a round trip.
     setGenerationTextProvider(dir, null);
     expect(getRegistry(dir).generationTextProviderId).toBeNull();
-    expect((readRegistryFile(dir) as { generationTextProviderId?: string | null }).generationTextProviderId).toBeNull();
+    expect(
+      (readRegistryFile(dir) as { generationTextProviderId?: string | null })
+        .generationTextProviderId,
+    ).toBeNull();
 
     // An id whose connection is gone stays saveable — resolution falls back, so refusing the
     // write would only leave a stale choice the user cannot clear.
@@ -1258,10 +1652,18 @@ describe("generation text provider (which connection creates new playthroughs)",
         activeProviderId: "legacy",
         generationTextProviderId: "legacy",
         connections: [
-          { id: "legacy", label: "Legacy", baseUrl: "http://l:1", model: "m", temperature: 0.8, maxTokens: 1200, contextWindow: 32768 }
-        ]
+          {
+            id: "legacy",
+            label: "Legacy",
+            baseUrl: "http://l:1",
+            model: "m",
+            temperature: 0.8,
+            maxTokens: 1200,
+            contextWindow: 32768,
+          },
+        ],
       }),
-      "utf8"
+      "utf8",
     );
 
     const reg = getRegistry(dir);
@@ -1271,9 +1673,30 @@ describe("generation text provider (which connection creates new playthroughs)",
 
   it("resolves the text connection for a request: explicit id, else active, never an image one", () => {
     const dir = tempDir();
-    createConnection(dir, connInput({ label: "Alpha", baseUrl: "http://a:1", model: "model-a", contextWindow: 32000, maxTokens: 800 }));
-    createConnection(dir, connInput({ label: "Beta", baseUrl: "http://b:1", model: "model-b", contextWindow: 200000, maxTokens: 9000 }));
-    createConnection(dir, connInput({ label: "Painter", baseUrl: "http://p:1", kind: "image" }));
+    createConnection(
+      dir,
+      connInput({
+        label: "Alpha",
+        baseUrl: "http://a:1",
+        model: "model-a",
+        contextWindow: 32000,
+        maxTokens: 800,
+      }),
+    );
+    createConnection(
+      dir,
+      connInput({
+        label: "Beta",
+        baseUrl: "http://b:1",
+        model: "model-b",
+        contextWindow: 200000,
+        maxTokens: 9000,
+      }),
+    );
+    createConnection(
+      dir,
+      connInput({ label: "Painter", baseUrl: "http://p:1", kind: "image" }),
+    );
     setActiveConnection(dir, "alpha");
     const manager = new ProviderManager(dir);
 
@@ -1291,7 +1714,9 @@ describe("generation text provider (which connection creates new playthroughs)",
     expect(manager.getMaxTokens()).toBe(800);
 
     expect(manager.getProvider("beta")).not.toBeInstanceOf(MockProvider);
-    expect(manager.getProvider("ghost")).toBeInstanceOf(OpenAICompatibleProvider);
+    expect(manager.getProvider("ghost")).toBeInstanceOf(
+      OpenAICompatibleProvider,
+    );
 
     // The manager is only a reader of the stored preference; writing it goes through the registry.
     expect(manager.generationTextProviderId()).toBeNull();

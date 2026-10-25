@@ -1,5 +1,9 @@
 import React, { useMemo } from "react";
-import { parseMarkdown, renderInlineNodes, type BlockNode } from "../../utils/markdown";
+import {
+  parseMarkdown,
+  renderInlineNodes,
+  type BlockNode,
+} from "../../utils/markdown";
 import { CodeBlock } from "../base";
 
 export interface MarkdownViewProps {
@@ -47,7 +51,8 @@ export const MarkdownView = React.memo(function MarkdownView({
           case "heading": {
             // A reply's headings are a reader's signposts, not document structure: an h1 in a chat
             // bubble would outrank the panel title, so they render three steps down.
-            const HeadingTag = block.level <= 2 ? "h3" : block.level <= 4 ? "h4" : "h5";
+            const HeadingTag =
+              block.level <= 2 ? "h3" : block.level <= 4 ? "h4" : "h5";
             return (
               <HeadingTag
                 key={`block-${index}`}
@@ -61,7 +66,10 @@ export const MarkdownView = React.memo(function MarkdownView({
           case "list":
             if (block.ordered) {
               return (
-                <ol key={`block-${index}`} className="message-list message-ordered-list">
+                <ol
+                  key={`block-${index}`}
+                  className="message-list message-ordered-list"
+                >
                   {block.items.map((item, itemIdx) => (
                     <li key={`li-${itemIdx}`}>
                       {renderInlineNodes(item, `ol-${index}-${itemIdx}`)}
@@ -71,7 +79,10 @@ export const MarkdownView = React.memo(function MarkdownView({
               );
             }
             return (
-              <ul key={`block-${index}`} className="message-list message-unordered-list">
+              <ul
+                key={`block-${index}`}
+                className="message-list message-unordered-list"
+              >
                 {block.items.map((item, itemIdx) => (
                   <li key={`li-${itemIdx}`}>
                     {renderInlineNodes(item, `ul-${index}-${itemIdx}`)}

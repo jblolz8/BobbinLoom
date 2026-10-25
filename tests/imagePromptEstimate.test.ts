@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   CLIP_CHUNK_TOKENS,
   chunkWarning,
-  estimatePromptChunks
+  estimatePromptChunks,
 } from "../src/client/utils/imagePromptEstimate";
 
 /** A prompt of exactly `n` characters — the estimator counts the characters of
@@ -26,7 +26,10 @@ describe("estimatePromptChunks", () => {
   });
 
   it("splits a 700-character prompt into three chunks", () => {
-    expect(estimatePromptChunks(chars(700))).toEqual({ tokens: 175, chunks: 3 });
+    expect(estimatePromptChunks(chars(700))).toEqual({
+      tokens: 175,
+      chunks: 3,
+    });
   });
 
   it("puts the second chunk one character past the first boundary", () => {
@@ -41,7 +44,9 @@ describe("estimatePromptChunks", () => {
   it("sizes a chunk at the exported CLIP constant", () => {
     expect(CLIP_CHUNK_TOKENS).toBe(75);
     // Exactly two chunks' worth of tokens.
-    expect(estimatePromptChunks(chars(CLIP_CHUNK_TOKENS * 2 * 4)).chunks).toBe(2);
+    expect(estimatePromptChunks(chars(CLIP_CHUNK_TOKENS * 2 * 4)).chunks).toBe(
+      2,
+    );
   });
 });
 

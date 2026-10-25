@@ -30,7 +30,11 @@ export function computeLineDiff(oldText: string, newText: string): DiffLine[] {
       // This old line is in LCS → find matching new line
       const oldLine = oldLines[oi];
       while (ni < newLines.length && newLines[ni] !== oldLine) {
-        result.push({ type: "added", content: newLines[ni], newLineNumber: ni + 1 });
+        result.push({
+          type: "added",
+          content: newLines[ni],
+          newLineNumber: ni + 1,
+        });
         ni++;
       }
       if (ni < newLines.length) {
@@ -46,7 +50,11 @@ export function computeLineDiff(oldText: string, newText: string): DiffLine[] {
       li++;
     } else {
       if (oi < oldLines.length) {
-        result.push({ type: "removed", content: oldLines[oi], oldLineNumber: oi + 1 });
+        result.push({
+          type: "removed",
+          content: oldLines[oi],
+          oldLineNumber: oi + 1,
+        });
         oi++;
       } else {
         break; // no more old lines — trailing loop handles remaining new lines
@@ -56,7 +64,11 @@ export function computeLineDiff(oldText: string, newText: string): DiffLine[] {
 
   // Remaining new lines
   while (ni < newLines.length) {
-    result.push({ type: "added", content: newLines[ni], newLineNumber: ni + 1 });
+    result.push({
+      type: "added",
+      content: newLines[ni],
+      newLineNumber: ni + 1,
+    });
     ni++;
   }
 
@@ -67,7 +79,9 @@ export function computeLineDiff(oldText: string, newText: string): DiffLine[] {
 function computeLCS(a: string[], b: string[]): number[] {
   const m = a.length;
   const n = b.length;
-  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  const dp: number[][] = Array.from({ length: m + 1 }, () =>
+    new Array(n + 1).fill(0),
+  );
 
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
@@ -111,7 +125,10 @@ export type DiffPaneRow = {
 /** Convert unified LCS diff lines into aligned two-pane rows. Consecutive
  *  removed→added runs are paired so a "modified" line shows old (left) against
  *  new (right) on the same row; pure deletions and insertions occupy one side. */
-export function computeTwoPaneDiff(oldText: string, newText: string): DiffPaneRow[] {
+export function computeTwoPaneDiff(
+  oldText: string,
+  newText: string,
+): DiffPaneRow[] {
   const lines = computeLineDiff(oldText, newText);
   const rows: DiffPaneRow[] = [];
   let i = 0;
@@ -120,7 +137,11 @@ export function computeTwoPaneDiff(oldText: string, newText: string): DiffPaneRo
     if (l.type === "same") {
       rows.push({
         left: { content: l.content, type: "same", lineNumber: l.oldLineNumber },
-        right: { content: l.content, type: "same", lineNumber: l.newLineNumber },
+        right: {
+          content: l.content,
+          type: "same",
+          lineNumber: l.newLineNumber,
+        },
       });
       i++;
       continue;
@@ -129,12 +150,20 @@ export function computeTwoPaneDiff(oldText: string, newText: string): DiffPaneRo
       // Collect the removed run and any immediately-following added run.
       const removed: DiffPaneCell[] = [];
       while (i < lines.length && lines[i].type === "removed") {
-        removed.push({ content: lines[i].content, type: "removed", lineNumber: lines[i].oldLineNumber });
+        removed.push({
+          content: lines[i].content,
+          type: "removed",
+          lineNumber: lines[i].oldLineNumber,
+        });
         i++;
       }
       const added: DiffPaneCell[] = [];
       while (i < lines.length && lines[i].type === "added") {
-        added.push({ content: lines[i].content, type: "added", lineNumber: lines[i].newLineNumber });
+        added.push({
+          content: lines[i].content,
+          type: "added",
+          lineNumber: lines[i].newLineNumber,
+        });
         i++;
       }
       const max = Math.max(removed.length, added.length);
@@ -147,7 +176,11 @@ export function computeTwoPaneDiff(oldText: string, newText: string): DiffPaneRo
     while (i < lines.length && lines[i].type === "added") {
       rows.push({
         left: null,
-        right: { content: lines[i].content, type: "added", lineNumber: lines[i].newLineNumber },
+        right: {
+          content: lines[i].content,
+          type: "added",
+          lineNumber: lines[i].newLineNumber,
+        },
       });
       i++;
     }

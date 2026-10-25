@@ -19,7 +19,11 @@ import { ProviderManager } from "../src/server/providerManager";
 import { OpenAICompatibleProvider } from "../src/server/openAiCompatibleProvider";
 import { playthroughRoutes } from "../src/server/routes/playthroughs";
 import { providerRoutes } from "../src/server/routes/providers";
-import { createConnection, setActiveConnection, setGenerationTextProvider } from "../src/server/providerRegistry";
+import {
+  createConnection,
+  setActiveConnection,
+  setGenerationTextProvider,
+} from "../src/server/providerRegistry";
 import type { ProviderConnectionDraft } from "../src/server/providerRegistry";
 import { cleanupTempDirs, tempDir } from "./helpers/imageFixtures";
 
@@ -28,17 +32,23 @@ afterEach(cleanupTempDirs);
 /** A real local HTTP server, because the provider fetches with the GLOBAL fetch — a stubbed
  *  transport would never be reached. Its paths are the two endpoints under test, so a recorded
  *  path says which connection the request actually used. */
-function startTransport(options: { fail?: boolean } = {}): Promise<{ server: Server; urls: string[]; base: string }> {
+function startTransport(
+  options: { fail?: boolean } = {},
+): Promise<{ server: Server; urls: string[]; base: string }> {
   const urls: string[] = [];
   const server = createServer((req, res) => {
     urls.push(req.url ?? "");
     req.on("data", () => {});
     req.on("end", () => {
-      res.writeHead(options.fail ? 500 : 200, { "Content-Type": "application/json" });
+      res.writeHead(options.fail ? 500 : 200, {
+        "Content-Type": "application/json",
+      });
       res.end(
         options.fail
           ? JSON.stringify({ error: "stub failure" })
-          : JSON.stringify({ choices: [{ message: { content: JSON.stringify(SEED) } }] })
+          : JSON.stringify({
+              choices: [{ message: { content: JSON.stringify(SEED) } }],
+            }),
       );
     });
   });
@@ -58,10 +68,15 @@ const SEED = {
   items: [],
   startingFlags: [],
   npcs: [],
-  openingText: "Setting the stage: the room is warm and the door is shut."
+  openingText: "Setting the stage: the room is warm and the door is shut.",
 };
 
-function conn(label: string, baseUrl: string, contextWindow: number, maxTokens: number): ProviderConnectionDraft {
+function conn(
+  label: string,
+  baseUrl: string,
+  contextWindow: number,
+  maxTokens: number,
+): ProviderConnectionDraft {
   return {
     label,
     baseUrl,
@@ -69,7 +84,7 @@ function conn(label: string, baseUrl: string, contextWindow: number, maxTokens: 
     temperature: 0.7,
     maxTokens,
     contextWindow,
-    kind: "text"
+    kind: "text",
   };
 }
 
@@ -89,21 +104,42 @@ async function harness(options: { fail?: boolean } = {}) {
   setActiveConnection(settingsDir, "alpha");
 
   const app = Fastify();
-  app.register(playthroughRoutes, { dataDir: join(root, "playthroughs"), imagesDir: join(root, "images"), charactersDir: join(root, "characters"), manager });
+  app.register(playthroughRoutes, {
+    dataDir: join(root, "playthroughs"),
+    imagesDir: join(root, "images"),
+    charactersDir: join(root, "characters"),
+    manager,
+  });
   app.register(providerRoutes, { manager });
 
-  return { app, manager, urls, settingsDir, getProvider, getContextWindow, server };
+  return {
+    app,
+    manager,
+    urls,
+    settingsDir,
+    getProvider,
+    getContextWindow,
+    server,
+  };
 }
 
 function generate(app: FastifyInstance, body: Record<string, unknown>) {
-  return app.inject({ method: "POST", url: "/api/playthroughs/generate", payload: body });
+  return app.inject({
+    method: "POST",
+    url: "/api/playthroughs/generate",
+    payload: body,
+  });
 }
 
 describe("the text connection a new playthrough is generated with", () => {
   it("calls the connection the request names, resolved exactly once", async () => {
     const h = await harness();
 
-    const res = await generate(h.app, { name: "Seeded", providerId: "beta", openingMode: "quick" });
+    const res = await generate(h.app, {
+      name: "Seeded",
+      providerId: "beta",
+      openingMode: "quick",
+    });
 
     expect(res.statusCode).toBe(201);
     expect(h.urls.length).toBeGreaterThan(0);
@@ -123,7 +159,11 @@ describe("the text connection a new playthrough is generated with", () => {
     // ATTEMPTED and the pair it resolved are the chosen one, budget included.
     const h = await harness({ fail: true });
 
-    const res = await generate(h.app, { name: "Fleshed", providerId: "beta", openingMode: "fleshedOut" });
+    const res = await generate(h.app, {
+      name: "Fleshed",
+      providerId: "beta",
+      openingMode: "fleshedOut",
+    });
 
     expect(res.statusCode).toBe(422);
     expect(h.urls[0]!.startsWith("/beta")).toBe(true);
@@ -166,7 +206,11 @@ describe("the text connection a new playthrough is generated with", () => {
   it("degrades to the active connection for a choice whose connection is gone", async () => {
     const h = await harness();
 
-    const res = await generate(h.app, { name: "Ghost", providerId: "ghost", openingMode: "quick" });
+    const res = await generate(h.app, {
+      name: "Ghost",
+      providerId: "ghost",
+      openingMode: "quick",
+    });
 
     expect(res.statusCode).toBe(201);
     expect(h.urls.every((u) => u.startsWith("/alpha"))).toBe(true);
@@ -180,25 +224,44 @@ describe("the generation-provider preference endpoint", () => {
   it("remembers the choice, reports it back, and clears to null", async () => {
     const h = await harness();
 
-    const set = await h.app.inject({ method: "PUT", url: "/api/settings/providers/generation-provider", payload: { providerId: "beta" } });
+    const set = await h.app.inject({
+      method: "PUT",
+      url: "/api/settings/providers/generation-provider",
+      payload: { providerId: "beta" },
+    });
     expect(set.statusCode).toBe(200);
     expect(set.json().generationTextProviderId).toBe("beta");
 
-    const read = await h.app.inject({ method: "GET", url: "/api/settings/providers" });
+    const read = await h.app.inject({
+      method: "GET",
+      url: "/api/settings/providers",
+    });
     expect(read.json().generationTextProviderId).toBe("beta");
 
-    const cleared = await h.app.inject({ method: "PUT", url: "/api/settings/providers/generation-provider", payload: { providerId: null } });
+    const cleared = await h.app.inject({
+      method: "PUT",
+      url: "/api/settings/providers/generation-provider",
+      payload: { providerId: null },
+    });
     expect(cleared.statusCode).toBe(200);
     expect(cleared.json().generationTextProviderId).toBeNull();
 
     // A dangling id is accepted on purpose: the dropdown must be able to re-point a choice whose
     // connection was deleted, and resolution already falls back.
-    const dangling = await h.app.inject({ method: "PUT", url: "/api/settings/providers/generation-provider", payload: { providerId: "gone" } });
+    const dangling = await h.app.inject({
+      method: "PUT",
+      url: "/api/settings/providers/generation-provider",
+      payload: { providerId: "gone" },
+    });
     expect(dangling.statusCode).toBe(200);
     expect(dangling.json().generationTextProviderId).toBe("gone");
 
     // A wrong shape is still a 400, and the write is all-or-nothing.
-    const bad = await h.app.inject({ method: "PUT", url: "/api/settings/providers/generation-provider", payload: { providerId: 42 } });
+    const bad = await h.app.inject({
+      method: "PUT",
+      url: "/api/settings/providers/generation-provider",
+      payload: { providerId: 42 },
+    });
     expect(bad.statusCode).toBe(400);
 
     await h.app.close();

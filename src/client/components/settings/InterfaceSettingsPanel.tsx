@@ -1,8 +1,16 @@
-import { useEffect, useState } from "react";
-import type { AvatarShape, CoverAspect } from "../../../schemas";
+import { useEffect, useRef, useState } from "react";
+import {
+  WORKSPACE_WIDTH_DEFAULT,
+  WORKSPACE_WIDTH_MAX,
+  WORKSPACE_WIDTH_MIN,
+  type AvatarShape,
+  type CoverAspect,
+} from "../../../schemas";
+import { clampWorkspaceWidthPercent } from "../../../engine/theme";
 import {
   applyAvatarShapeTheme,
   applyCoverAspect,
+  applyWorkspaceWidth,
   getAppearanceSettings,
   updateAppearanceSettings,
 } from "../../api";
@@ -14,6 +22,7 @@ import {
   FormGrid,
   Header,
   Separator,
+  Slider,
   Stack,
   SwitchRow,
   Text,
@@ -25,25 +34,25 @@ const SHAPE_OPTIONS: Array<{
   desc: string;
   badgePreviewShape: AvatarShape;
 }> = [
-    {
-      id: "square",
-      title: "Square",
-      desc: "Crisp straight edges with minimal corner softening",
-      badgePreviewShape: "square",
-    },
-    {
-      id: "rounded",
-      title: "Rounded Corner Square",
-      desc: "Balanced modern rounded corners (Default)",
-      badgePreviewShape: "rounded",
-    },
-    {
-      id: "circle",
-      title: "Circle",
-      desc: "Smooth classic circular avatar badges",
-      badgePreviewShape: "circle",
-    },
-  ];
+  {
+    id: "square",
+    title: "Square",
+    desc: "Crisp straight edges with minimal corner softening",
+    badgePreviewShape: "square",
+  },
+  {
+    id: "rounded",
+    title: "Rounded Corner Square",
+    desc: "Balanced modern rounded corners (Default)",
+    badgePreviewShape: "rounded",
+  },
+  {
+    id: "circle",
+    title: "Circle",
+    desc: "Smooth classic circular avatar badges",
+    badgePreviewShape: "circle",
+  },
+];
 
 /** The three cover frame shapes, in the order they are offered. Each previews its own ratio so
  *  the choice reads without knowing what "2:3" looks like. */
@@ -54,34 +63,38 @@ const ASPECT_OPTIONS: Array<{
   frameHint: string;
   desc: string;
 }> = [
-    {
-      id: "landscape",
-      title: "Landscape",
-      ratio: "16:9",
-      frameHint: "Wide banner",
-      desc: "16:9 — the widest banner; suits wide renders and keeps a long shelf compact (Default)",
-    },
-    {
-      id: "square",
-      title: "1:1 Square",
-      ratio: "1:1",
-      frameHint: "Uncropped square",
-      desc: "Square — the shape most image models return, so nothing is cropped",
-    },
-    {
-      id: "portrait",
-      title: "Portrait",
-      ratio: "2:3",
-      frameHint: "Tall portrait",
-      desc: "2:3 — tallest frame; suits character art",
-    },
-  ];
+  {
+    id: "landscape",
+    title: "Landscape",
+    ratio: "16:9",
+    frameHint: "Wide banner",
+    desc: "16:9 — the widest banner; suits wide renders and keeps a long shelf compact (Default)",
+  },
+  {
+    id: "square",
+    title: "1:1 Square",
+    ratio: "1:1",
+    frameHint: "Uncropped square",
+    desc: "Square — the shape most image models return, so nothing is cropped",
+  },
+  {
+    id: "portrait",
+    title: "Portrait",
+    ratio: "2:3",
+    frameHint: "Tall portrait",
+    desc: "2:3 — tallest frame; suits character art",
+  },
+];
 
 export function InterfaceSettingsPanel() {
   // Initial values are the shipped defaults: the server paints these tokens into the first frame and
   // the GET below fills the controls, so the device cache is gone (it desynced across devices).
+  const [workspaceWidthPercent, setWorkspaceWidthPercent] = useState<number>(
+    WORKSPACE_WIDTH_DEFAULT,
+  );
   const [avatarShape, setAvatarShape] = useState<AvatarShape>("rounded");
   const [coverAspect, setCoverAspect] = useState<CoverAspect>("landscape");
+  const widthPersistTimerRef = useRef<number | null>(null);
 
   /** The play view's panel swipe. The panel is the switch's owner; the play view reads the same
    *  setting to decide whether the gesture exists. Nothing is cached locally — see the note on
@@ -91,6 +104,11 @@ export function InterfaceSettingsPanel() {
   useEffect(() => {
     getAppearanceSettings()
       .then((res) => {
+        if (typeof res.workspaceWidthPercent === "number") {
+          const clamped = clampWorkspaceWidthPercent(res.workspaceWidthPercent);
+          setWorkspaceWidthPercent(clamped);
+          applyWorkspaceWidth(clamped);
+        }
         if (res.avatarShape) {
           setAvatarShape(res.avatarShape);
           applyAvatarShapeTheme(res.avatarShape);
@@ -106,9 +124,15 @@ export function InterfaceSettingsPanel() {
       .catch(() => {
         /* fallback to state defaults */
       });
+    return () => {
+      if (widthPersistTimerRef.current !== null) {
+        window.clearTimeout(widthPersistTimerRef.current);
+      }
+    };
   }, []);
 
   async function persistInterfaceSettings(updates: {
+    workspaceWidthPercent?: number;
     avatarShape?: AvatarShape;
     coverAspect?: CoverAspect;
     paneSwipeEnabled?: boolean;
@@ -118,6 +142,21 @@ export function InterfaceSettingsPanel() {
     } catch {
       /* Next read reconciles; local UI state is already applied immediately. */
     }
+  }
+
+  function handleWorkspaceWidthChange(value: number | null | undefined) {
+    const clamped = clampWorkspaceWidthPercent(
+      value ?? WORKSPACE_WIDTH_DEFAULT,
+    );
+    setWorkspaceWidthPercent(clamped);
+    applyWorkspaceWidth(clamped);
+    if (widthPersistTimerRef.current !== null) {
+      window.clearTimeout(widthPersistTimerRef.current);
+    }
+    widthPersistTimerRef.current = window.setTimeout(() => {
+      widthPersistTimerRef.current = null;
+      void persistInterfaceSettings({ workspaceWidthPercent: clamped });
+    }, 200);
   }
 
   function handleSelectShape(shape: AvatarShape) {
@@ -139,6 +178,37 @@ export function InterfaceSettingsPanel() {
 
   return (
     <Stack direction="column" align="stretch" gap="md">
+      {/* ── Workspace Content Width Section ── */}
+      <Stack direction="column" align="stretch" gap="xs">
+        <Header
+          variant="section"
+          icon="SlidersHorizontal"
+          title="Workspace Content Width"
+          badge={
+            <Badge variant="neutral" size="xs">
+              Home Pages &amp; Docs
+            </Badge>
+          }
+          subtitle="Adjust how much horizontal screen space the Playthroughs, Characters, Lorebooks, Personas, and Documentation pages occupy on wide screens (50% to 100%)."
+        />
+
+        <Slider
+          label="Workspace Width"
+          rangeHint={`${WORKSPACE_WIDTH_MIN}% – ${WORKSPACE_WIDTH_MAX}%`}
+          value={workspaceWidthPercent}
+          onChange={handleWorkspaceWidthChange}
+          min={WORKSPACE_WIDTH_MIN}
+          max={WORKSPACE_WIDTH_MAX}
+          step={1}
+          defaultPreview={WORKSPACE_WIDTH_DEFAULT}
+          integer
+          clamp
+          unit="%"
+        />
+      </Stack>
+
+      <Separator spacing="none" />
+
       {/* ── Avatar Badge Shape Section ── */}
       <Stack direction="column" align="stretch" gap="xs">
         <Header
@@ -177,7 +247,12 @@ export function InterfaceSettingsPanel() {
                         shape={opt.badgePreviewShape}
                       />
                       <Stack direction="column" align="start" gap="none">
-                        <Text as="strong" size="xs" weight="semibold" tone="primary">
+                        <Text
+                          as="strong"
+                          size="xs"
+                          weight="semibold"
+                          tone="primary"
+                        >
                           Mira Vane
                         </Text>
                         <Text as="span" variant="caption" tone="muted">
@@ -187,8 +262,18 @@ export function InterfaceSettingsPanel() {
                     </Stack>
                   </Card>
 
-                  <Stack direction="row" align="center" justify="between" gap="xs">
-                    <Text as="strong" size="xs" weight="semibold" tone="primary">
+                  <Stack
+                    direction="row"
+                    align="center"
+                    justify="between"
+                    gap="xs"
+                  >
+                    <Text
+                      as="strong"
+                      size="xs"
+                      weight="semibold"
+                      tone="primary"
+                    >
                       {opt.title}
                     </Text>
                     {isSelected && (
@@ -254,8 +339,18 @@ export function InterfaceSettingsPanel() {
                     </Stack>
                   </Card>
 
-                  <Stack direction="row" align="center" justify="between" gap="xs">
-                    <Text as="strong" size="xs" weight="semibold" tone="primary">
+                  <Stack
+                    direction="row"
+                    align="center"
+                    justify="between"
+                    gap="xs"
+                  >
+                    <Text
+                      as="strong"
+                      size="xs"
+                      weight="semibold"
+                      tone="primary"
+                    >
                       {opt.title}
                     </Text>
                     {isSelected && (

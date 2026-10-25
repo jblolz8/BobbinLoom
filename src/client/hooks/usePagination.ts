@@ -6,9 +6,13 @@ import {
   parsePageSizeInput,
   rangeLabel,
   totalPagesFor,
-  type PageSize
+  type PageSize,
 } from "../engine/pagination";
-import { adoptLocalPreferences, updateViewPreferences, type PageSizeSurface } from "../api";
+import {
+  adoptLocalPreferences,
+  updateViewPreferences,
+  type PageSizeSurface,
+} from "../api";
 import type { ViewPreferences } from "../../schemas";
 
 export type UsePaginationOptions<T> = {
@@ -88,7 +92,7 @@ export function usePersistedPageSize(surface: PageSizeSurface): {
 export function usePagination<T>({
   items,
   persistAs,
-  resetDeps = []
+  resetDeps = [],
 }: UsePaginationOptions<T>): PaginationState<T> {
   const stored = usePersistedPageSize(persistAs);
   const pageSize = stored.pageSize;
@@ -127,7 +131,7 @@ export function usePagination<T>({
 
   const pageItems = useMemo(
     () => pageSlice(items, page, pageSize),
-    [items, page, pageSize]
+    [items, page, pageSize],
   );
 
   return {
@@ -140,6 +144,6 @@ export function usePagination<T>({
     label: rangeLabel(page, pageSize, totalItems),
     setPage,
     setPageSize,
-    commitCustomPageSize
+    commitCustomPageSize,
   };
 }

@@ -17,7 +17,10 @@ import { existsSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { atomicWriteJson } from "./persistence";
 import { CHARACTERS_DIR, characterFolderForId } from "./store";
-import { parseBrainstormSession, type BrainstormSession } from "../engine/brainstorm";
+import {
+  parseBrainstormSession,
+  type BrainstormSession,
+} from "../engine/brainstorm";
 
 /** The session file inside a character's folder (see the note above on why it is a subfolder). */
 export function brainstormSessionPath(folder: string): string {
@@ -26,14 +29,16 @@ export function brainstormSessionPath(folder: string): string {
 
 export function readBrainstormSession(
   characterId: string,
-  dir: string = CHARACTERS_DIR
+  dir: string = CHARACTERS_DIR,
 ): BrainstormSession | null {
   const folder = characterFolderForId(characterId, dir);
   if (!folder) return null;
   const file = brainstormSessionPath(folder);
   if (!existsSync(file)) return null;
   try {
-    return parseBrainstormSession(JSON.parse(readFileSync(file, "utf8")) as unknown);
+    return parseBrainstormSession(
+      JSON.parse(readFileSync(file, "utf8")) as unknown,
+    );
   } catch {
     // An unreadable session is not a reason to lose the character, or the editor around it.
     return null;
@@ -45,7 +50,7 @@ export function readBrainstormSession(
 export function writeBrainstormSession(
   characterId: string,
   session: BrainstormSession,
-  dir: string = CHARACTERS_DIR
+  dir: string = CHARACTERS_DIR,
 ): BrainstormSession | null {
   const folder = characterFolderForId(characterId, dir);
   if (!folder) return null;
@@ -58,7 +63,7 @@ export function writeBrainstormSession(
 /** True when a file was removed, false when there was nothing to remove. */
 export function deleteBrainstormSession(
   characterId: string,
-  dir: string = CHARACTERS_DIR
+  dir: string = CHARACTERS_DIR,
 ): boolean {
   const folder = characterFolderForId(characterId, dir);
   if (!folder) return false;

@@ -13,7 +13,7 @@ export const FOCUSABLE_SELECTOR = [
   "input:not([disabled])",
   "textarea:not([disabled])",
   "select:not([disabled])",
-  '[tabindex]:not([tabindex="-1"])'
+  '[tabindex]:not([tabindex="-1"])',
 ].join(", ");
 
 /**
@@ -24,7 +24,11 @@ export const FOCUSABLE_SELECTOR = [
  * decision testable: an empty ring stays empty, a forward move past the end wraps to the top, a
  * backward move before the start wraps to the bottom, and a ring of one holds its only stop.
  */
-export function wrapIndex(count: number, index: number, backwards: boolean): number {
+export function wrapIndex(
+  count: number,
+  index: number,
+  backwards: boolean,
+): number {
   if (count <= 0) return -1;
   if (index < 0) return backwards ? count - 1 : 0;
   const next = backwards ? index - 1 : index + 1;

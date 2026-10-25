@@ -49,26 +49,33 @@ export function GalleryModal({
   errorMessage,
   onPick,
   onClear,
-  onClose
+  onClose,
 }: GalleryModalProps) {
   const [viewing, setViewing] = useState<CoverMediaItem | null>(null);
   /** "all", "current", or a chapter id. */
   const [selected, setSelected] = useState("all");
   const nav = useSideNavMode();
 
-  const groups = useMemo(() => groupCoverMedia(media, chapters), [media, chapters]);
+  const groups = useMemo(
+    () => groupCoverMedia(media, chapters),
+    [media, chapters],
+  );
   const visible =
     selected === "all"
       ? media
-      : groups.find((group) => group.chapterId === selected)?.items ??
-        (selected === "current" ? groups[0]?.items ?? [] : media);
+      : (groups.find((group) => group.chapterId === selected)?.items ??
+        (selected === "current" ? (groups[0]?.items ?? []) : media));
   const selectedName =
     selected === "all"
       ? "All images"
-      : groups.find((group) => group.chapterId === selected)?.name ?? "Images";
+      : (groups.find((group) => group.chapterId === selected)?.name ??
+        "Images");
 
   const sections = [
-    { label: "Everything", items: [{ id: "all", label: "All images", meta: `${media.length}` }] },
+    {
+      label: "Everything",
+      items: [{ id: "all", label: "All images", meta: `${media.length}` }],
+    },
     {
       label: "By chapter",
       items: groups
@@ -76,9 +83,9 @@ export function GalleryModal({
         .map((group) => ({
           id: group.chapterId ?? "current",
           label: group.name,
-          meta: `${group.items.length}`
-        }))
-    }
+          meta: `${group.items.length}`,
+        })),
+    },
   ];
 
   function choose(id: string) {
@@ -110,11 +117,18 @@ export function GalleryModal({
                       : "") +
                     (hasManualCover ? " · custom cover" : "")}
               </p>
-              {errorMessage ? <p className="gallery-modal-error">{errorMessage}</p> : null}
+              {errorMessage ? (
+                <p className="gallery-modal-error">{errorMessage}</p>
+              ) : null}
             </div>
             <div className="gallery-modal-header-actions">
               {hasManualCover ? (
-                <Button variant="secondary" size="sm" onClick={onClear} disabled={saving}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={onClear}
+                  disabled={saving}
+                >
                   Clear custom cover
                 </Button>
               ) : null}
@@ -130,9 +144,9 @@ export function GalleryModal({
 
           {media.length === 0 ? (
             <p className="info-empty-state">
-              Images generated from the chat are collected here, newest first and grouped by
-              chapter. Generate one from an assistant message and it becomes both a cover and a
-              choice.
+              Images generated from the chat are collected here, newest first
+              and grouped by chapter. Generate one from an assistant message and
+              it becomes both a cover and a choice.
             </p>
           ) : (
             <div className="gallery-body">
@@ -143,7 +157,11 @@ export function GalleryModal({
                 <IconButton
                   icon={nav.shown ? "PanelLeftClose" : "PanelLeft"}
                   size="sm"
-                  label={nav.shown ? "Hide the chapter list" : "Show the chapter list"}
+                  label={
+                    nav.shown
+                      ? "Hide the chapter list"
+                      : "Show the chapter list"
+                  }
                   aria-expanded={nav.shown}
                   aria-controls="gallery-nav"
                   onClick={nav.toggle}
@@ -175,7 +193,10 @@ export function GalleryModal({
 
                 <div className="gallery-grid">
                   {visible.map((item) => (
-                    <figure key={item.file} className={`gallery-item ${currentFile === item.file ? "current" : ""}`}>
+                    <figure
+                      key={item.file}
+                      className={`gallery-item ${currentFile === item.file ? "current" : ""}`}
+                    >
                       <button
                         type="button"
                         className="gallery-item-thumb"
@@ -191,15 +212,24 @@ export function GalleryModal({
                         />
                       </button>
                       <figcaption className="gallery-item-meta">
-                        {currentFile === item.file ? <Badge variant="accent" size="xs" pill>Cover</Badge> : null}
+                        {currentFile === item.file ? (
+                          <Badge variant="accent" size="xs" pill>
+                            Cover
+                          </Badge>
+                        ) : null}
                         <span className="gallery-item-when">
                           {item.chapterName ? `${item.chapterName} · ` : ""}
-                          {item.turn !== undefined ? `Turn ${item.turn} · ` : ""}
-                          {new Date(item.createdAt).toLocaleDateString(undefined, {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric"
-                          })}
+                          {item.turn !== undefined
+                            ? `Turn ${item.turn} · `
+                            : ""}
+                          {new Date(item.createdAt).toLocaleDateString(
+                            undefined,
+                            {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            },
+                          )}
                         </span>
                       </figcaption>
                       <div className="gallery-item-actions">
@@ -230,11 +260,13 @@ export function GalleryModal({
                 title: viewing.prompt,
                 caption: [
                   viewing.chapterName,
-                  viewing.turn !== undefined ? `Turn ${viewing.turn}` : undefined,
-                  new Date(viewing.createdAt).toLocaleString()
+                  viewing.turn !== undefined
+                    ? `Turn ${viewing.turn}`
+                    : undefined,
+                  new Date(viewing.createdAt).toLocaleString(),
                 ]
                   .filter(Boolean)
-                  .join(" · ")
+                  .join(" · "),
               }
             : null
         }

@@ -14,20 +14,30 @@ import {
   restoreCharacterOriginalAvatar,
   saveCharacterAvatar,
   updateCharacterTemplateRecord,
-  updatePlaythroughRecord
+  updatePlaythroughRecord,
 } from "../store";
 import { parseCard } from "../characterCards/parseCard";
 import {
   deleteBrainstormSession,
   readBrainstormSession,
-  writeBrainstormSession
+  writeBrainstormSession,
 } from "../brainstormSessions";
-import { buildBrainstormSession, BRAINSTORM_MESSAGE_LIMIT } from "../../engine/brainstorm";
-import { convertCardApply, convertCardGenerate } from "../characterCards/convertCard";
+import {
+  buildBrainstormSession,
+  BRAINSTORM_MESSAGE_LIMIT,
+} from "../../engine/brainstorm";
+import {
+  convertCardApply,
+  convertCardGenerate,
+} from "../characterCards/convertCard";
 import { resolveCharacterFormat } from "../../engine/characterFormat";
 import { PNG_SIG } from "../characterCards/pngText";
 import { saveToLibraryAction } from "../stateActions";
-import { abortOnClientDisconnect, dataDir as defaultDataDir, providerManager } from "./helpers";
+import {
+  abortOnClientDisconnect,
+  dataDir as defaultDataDir,
+  providerManager,
+} from "./helpers";
 import type { CharacterFormat } from "../../schemas";
 
 const UpdateCharacterBody = z.object({
@@ -35,11 +45,15 @@ const UpdateCharacterBody = z.object({
   content: z.string().optional(),
   creatorNotes: z.string().optional(),
   tags: z.array(z.string()).optional(),
-  startingClothing: z.array(z.object({
-    slot: z.string(),
-    name: z.string(),
-    state: z.string().optional(),
-  })).optional(),
+  startingClothing: z
+    .array(
+      z.object({
+        slot: z.string(),
+        name: z.string(),
+        state: z.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 const EditCharacterBody = z.object({
@@ -48,20 +62,28 @@ const EditCharacterBody = z.object({
   memorySummary: z.string().optional(),
   conditions: z.array(z.string()).optional(),
   flags: z.array(z.string()).optional(),
-  clothing: z.array(z.object({
-    slot: z.string(),
-    name: z.string(),
-  })).optional(),
+  clothing: z
+    .array(
+      z.object({
+        slot: z.string(),
+        name: z.string(),
+      }),
+    )
+    .optional(),
   storyRole: z.string().optional(),
   description: z.string().optional(),
   name: z.string().min(1).optional(),
   content: z.string().optional(),
   summary: z.string().optional(),
-  startingClothing: z.array(z.object({
-    slot: z.string(),
-    name: z.string(),
-    state: z.string().optional(),
-  })).optional(),
+  startingClothing: z
+    .array(
+      z.object({
+        slot: z.string(),
+        name: z.string(),
+        state: z.string().optional(),
+      }),
+    )
+    .optional(),
   inScene: z.boolean().optional(),
 });
 
@@ -69,7 +91,9 @@ export type CharacterRoutesOptions = {
   dataDir?: string;
 };
 
-export const characterRoutes: FastifyPluginAsync<CharacterRoutesOptions> = async (app, options = {}) => {
+export const characterRoutes: FastifyPluginAsync<
+  CharacterRoutesOptions
+> = async (app, options = {}) => {
   const dataDir = options.dataDir ?? defaultDataDir;
   app.get("/api/characters", async () => {
     return listCharacterTemplates();
@@ -78,12 +102,15 @@ export const characterRoutes: FastifyPluginAsync<CharacterRoutesOptions> = async
   app.get("/api/characters/:id", async (request, reply) => {
     const params = z.object({ id: z.string() }).parse(request.params);
     const template = getCharacterTemplate(params.id);
-    if (!template) return reply.code(404).send({ error: "Character not found" });
+    if (!template)
+      return reply.code(404).send({ error: "Character not found" });
     return template;
   });
 
   app.post("/api/characters", async (request, reply) => {
-    const body = z.object({ name: z.string().min(1) }).parse(request.body ?? {});
+    const body = z
+      .object({ name: z.string().min(1) })
+      .parse(request.body ?? {});
     const template = createCharacterTemplateRecord(body.name);
     return reply.code(201).send(template);
   });
@@ -106,45 +133,68 @@ export const characterRoutes: FastifyPluginAsync<CharacterRoutesOptions> = async
   // Import a CCv2 card (PNG with embedded `chara` JSON, or standalone JSON).
   // Route-level bodyLimit override: Fastify 4 only honors the TOP-LEVEL option,
   // so multi-MB card PNGs are accepted here even though the default is 1MB.
-  app.post("/api/characters/import", { bodyLimit: 10 * 1024 * 1024 }, async (request, reply) => {
-    const body = z.object({
-      fileName: z.string().min(1),
-      dataBase64: z.string().min(1),   // base64 of the raw PNG or JSON file
-    }).parse(request.body ?? {});
-    const bytes = Buffer.from(body.dataBase64, "base64");
-    const kind = bytes.length >= 8 && bytes.subarray(0, 8).equals(PNG_SIG) ? "png" : "json";
-    try {
-      const card = parseCard(body.fileName, bytes);
+  app.post(
+    "/api/characters/import",
+    { bodyLimit: 10 * 1024 * 1024 },
+    async (request, reply) => {
+      const body = z
+        .object({
+          fileName: z.string().min(1),
+          dataBase64: z.string().min(1), // base64 of the raw PNG or JSON file
+        })
+        .parse(request.body ?? {});
+      const bytes = Buffer.from(body.dataBase64, "base64");
+      const kind =
+        bytes.length >= 8 && bytes.subarray(0, 8).equals(PNG_SIG)
+          ? "png"
+          : "json";
+      try {
+        const card = parseCard(body.fileName, bytes);
 
-      // Check if a BL-converted record with matching name+creator already exists.
-      // Importing a CCv2 card that was already converted would be a no-op.
-      const existingConverted = listCharacterTemplates().find(
-        (t) => t.name === card.name && t.format !== "ccv2" && t.ccv2Content !== undefined
-      );
-      if (existingConverted) {
-        return reply.code(200).send({
-          record: existingConverted,
-          created: false,
-          notice: "already_converted",
-          existingRecord: existingConverted,
-        });
+        // Check if a BL-converted record with matching name+creator already exists.
+        // Importing a CCv2 card that was already converted would be a no-op.
+        const existingConverted = listCharacterTemplates().find(
+          (t) =>
+            t.name === card.name &&
+            t.format !== "ccv2" &&
+            t.ccv2Content !== undefined,
+        );
+        if (existingConverted) {
+          return reply.code(200).send({
+            record: existingConverted,
+            created: false,
+            notice: "already_converted",
+            existingRecord: existingConverted,
+          });
+        }
+
+        const result = importCharacterCard(card, bytes, kind);
+        return reply
+          .code(result.created ? 201 : 200)
+          .send({ record: result.record, created: result.created });
+      } catch (e) {
+        return reply
+          .code(400)
+          .send({ error: e instanceof Error ? e.message : "Import failed." });
       }
-
-      const result = importCharacterCard(card, bytes, kind);
-      return reply.code(result.created ? 201 : 200).send({ record: result.record, created: result.created });
-    } catch (e) {
-      return reply.code(400).send({ error: e instanceof Error ? e.message : "Import failed." });
-    }
-  });
+    },
+  );
 
   // Serve character avatar (portrait / profile / original)
   app.get("/api/characters/:id/avatar", async (request, reply) => {
     const params = z.object({ id: z.string() }).parse(request.params);
-    const query = z.object({ type: z.enum(["portrait", "profile", "original"]).optional() }).parse(request.query ?? {});
+    const query = z
+      .object({ type: z.enum(["portrait", "profile", "original"]).optional() })
+      .parse(request.query ?? {});
     const file = getCharacterAvatarPath(params.id, query.type ?? "portrait");
     if (!file) return reply.code(404).send({ error: "No avatar" });
     const ext = file.split(".").pop()?.toLowerCase();
-    const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "webp" ? "image/webp" : "image/png";
+    const mime =
+      ext === "jpg" || ext === "jpeg"
+        ? "image/jpeg"
+        : ext === "webp"
+          ? "image/webp"
+          : "image/png";
     return reply.type(mime).send(createReadStream(file));
   });
 
@@ -155,15 +205,20 @@ export const characterRoutes: FastifyPluginAsync<CharacterRoutesOptions> = async
     fileName: z.string().optional(),
   });
 
-  app.post("/api/characters/:id/avatar", { bodyLimit: 10 * 1024 * 1024 }, async (request, reply) => {
-    const params = z.object({ id: z.string() }).parse(request.params);
-    const body = UploadAvatarBody.parse(request.body ?? {});
-    const bytes = Buffer.from(body.dataBase64, "base64");
-    const ext = body.fileName?.split(".").pop() || "png";
-    const updated = saveCharacterAvatar(params.id, body.type, bytes, ext);
-    if (!updated) return reply.code(404).send({ error: "Character not found" });
-    return { record: updated };
-  });
+  app.post(
+    "/api/characters/:id/avatar",
+    { bodyLimit: 10 * 1024 * 1024 },
+    async (request, reply) => {
+      const params = z.object({ id: z.string() }).parse(request.params);
+      const body = UploadAvatarBody.parse(request.body ?? {});
+      const bytes = Buffer.from(body.dataBase64, "base64");
+      const ext = body.fileName?.split(".").pop() || "png";
+      const updated = saveCharacterAvatar(params.id, body.type, bytes, ext);
+      if (!updated)
+        return reply.code(404).send({ error: "Character not found" });
+      return { record: updated };
+    },
+  );
 
   // Restore original CCv2 card portrait
   app.post("/api/characters/:id/avatar/restore", async (request, reply) => {
@@ -184,10 +239,10 @@ export const characterRoutes: FastifyPluginAsync<CharacterRoutesOptions> = async
   // ── CCv2 → BL conversion ──
   const ConvertActionBody = z.object({
     action: z.enum(["generate", "apply"]),
-    content: z.string().optional(),        // required for "apply"
+    content: z.string().optional(), // required for "apply"
     currentContent: z.string().optional(), // active draft for targeted retry "generate"
-    feedback: z.string().optional(),       // optional retry feedback for "generate"
-    format: z.record(z.any()).optional(),  // target character format (from the active preset)
+    feedback: z.string().optional(), // optional retry feedback for "generate"
+    format: z.record(z.any()).optional(), // target character format (from the active preset)
   });
 
   app.post("/api/characters/:id/convert", async (request, reply) => {
@@ -195,25 +250,34 @@ export const characterRoutes: FastifyPluginAsync<CharacterRoutesOptions> = async
     const body = ConvertActionBody.parse(request.body ?? {});
 
     if (body.action === "apply" && !body.content) {
-      return reply.code(400).send({ error: "content is required for apply action" });
+      return reply
+        .code(400)
+        .send({ error: "content is required for apply action" });
     }
 
     const template = getCharacterTemplate(params.id);
-    if (!template) return reply.code(404).send({ error: "Character not found" });
+    if (!template)
+      return reply.code(404).send({ error: "Character not found" });
     if (template.format !== "ccv2") {
-      return reply.code(400).send({ error: "Only CCv2 cards can be converted" });
+      return reply
+        .code(400)
+        .send({ error: "Only CCv2 cards can be converted" });
     }
 
     if (body.action === "generate") {
       try {
         const controller = abortOnClientDisconnect(reply);
         const provider = providerManager.getProvider();
-        const result = await convertCardGenerate(provider, {
-          template,
-          feedback: body.feedback,
-          currentContent: body.currentContent,
-          format: body.format as CharacterFormat | undefined,
-        }, controller.signal);
+        const result = await convertCardGenerate(
+          provider,
+          {
+            template,
+            feedback: body.feedback,
+            currentContent: body.currentContent,
+            format: body.format as CharacterFormat | undefined,
+          },
+          controller.signal,
+        );
         return {
           content: result.content,
           originalContent: template.content,
@@ -241,10 +305,10 @@ export const characterRoutes: FastifyPluginAsync<CharacterRoutesOptions> = async
   // ── Reformat an existing BL sheet into a target character format ──
   const ReformatActionBody = z.object({
     action: z.enum(["generate", "apply"]),
-    content: z.string().optional(),        // required for "apply"
-    format: z.record(z.any()).optional(),  // target character format
+    content: z.string().optional(), // required for "apply"
+    format: z.record(z.any()).optional(), // target character format
     currentContent: z.string().optional(), // source sheet for retry-with-feedback
-    feedback: z.string().optional(),       // user guidance for a retry
+    feedback: z.string().optional(), // user guidance for a retry
   });
 
   app.post("/api/characters/:id/reformat", async (request, reply) => {
@@ -252,23 +316,38 @@ export const characterRoutes: FastifyPluginAsync<CharacterRoutesOptions> = async
     const body = ReformatActionBody.parse(request.body ?? {});
 
     if (body.action === "apply" && !body.content) {
-      return reply.code(400).send({ error: "content is required for apply action" });
+      return reply
+        .code(400)
+        .send({ error: "content is required for apply action" });
     }
 
     const template = getCharacterTemplate(params.id);
-    if (!template) return reply.code(404).send({ error: "Character not found" });
+    if (!template)
+      return reply.code(404).send({ error: "Character not found" });
     if (template.format === "ccv2") {
-      return reply.code(400).send({ error: "Read-only CCv2 sheets cannot be reformatted — convert to BL format first" });
+      return reply
+        .code(400)
+        .send({
+          error:
+            "Read-only CCv2 sheets cannot be reformatted — convert to BL format first",
+        });
     }
 
     if (body.action === "generate") {
       try {
         const controller = abortOnClientDisconnect(reply);
         const provider = providerManager.getProvider();
-        const format = resolveCharacterFormat(body.format as CharacterFormat | undefined);
+        const format = resolveCharacterFormat(
+          body.format as CharacterFormat | undefined,
+        );
         // On retry the client sends the previously-generated sheet plus feedback.
         const source = body.currentContent ?? template.content;
-        const content = await provider.reformatCharacterSheet(source, format, controller.signal, body.feedback);
+        const content = await provider.reformatCharacterSheet(
+          source,
+          format,
+          controller.signal,
+          body.feedback,
+        );
         return { content, originalContent: template.content, record: template };
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
@@ -280,7 +359,9 @@ export const characterRoutes: FastifyPluginAsync<CharacterRoutesOptions> = async
     }
 
     // action === "apply"
-    const updated = updateCharacterTemplateRecord(params.id, { content: body.content! });
+    const updated = updateCharacterTemplateRecord(params.id, {
+      content: body.content!,
+    });
     if (!updated) return reply.code(404).send({ error: "Character not found" });
     return { record: updated };
   });
@@ -308,7 +389,7 @@ export const characterRoutes: FastifyPluginAsync<CharacterRoutesOptions> = async
           guidance: body.guidance,
         },
         body.libraryTags ?? [],
-        controller.signal
+        controller.signal,
       );
       return { tags };
     } catch (e) {
@@ -316,7 +397,9 @@ export const characterRoutes: FastifyPluginAsync<CharacterRoutesOptions> = async
       if (message.includes("abort")) {
         return reply.code(499).send({ error: "Request aborted" });
       }
-      return reply.code(502).send({ error: `Tag suggestion failed: ${message}` });
+      return reply
+        .code(502)
+        .send({ error: `Tag suggestion failed: ${message}` });
     }
   });
 
@@ -328,12 +411,14 @@ export const characterRoutes: FastifyPluginAsync<CharacterRoutesOptions> = async
       tags: z.array(z.string()).optional(),
       ccv2Content: z.string().optional(),
     }),
-    chatHistory: z.array(
-      z.object({
-        role: z.enum(["user", "assistant"]),
-        content: z.string(),
-      })
-    ).default([]),
+    chatHistory: z
+      .array(
+        z.object({
+          role: z.enum(["user", "assistant"]),
+          content: z.string(),
+        }),
+      )
+      .default([]),
     userMessage: z.string().min(1),
     includeOriginalCard: z.boolean().optional(),
     allowNewSections: z.boolean().optional(),
@@ -348,18 +433,24 @@ export const characterRoutes: FastifyPluginAsync<CharacterRoutesOptions> = async
   app.get("/api/characters/:id/brainstorm", async (request, reply) => {
     const params = z.object({ id: z.string() }).parse(request.params);
     const session = readBrainstormSession(params.id);
-    if (!session) return reply.code(404).send({ error: "No brainstorm session" });
+    if (!session)
+      return reply.code(404).send({ error: "No brainstorm session" });
     return session;
   });
 
   app.put("/api/characters/:id/brainstorm", async (request, reply) => {
     const params = z.object({ id: z.string() }).parse(request.params);
     const body = z
-      .object({ messages: z.array(z.unknown()).max(BRAINSTORM_MESSAGE_LIMIT * 2) })
+      .object({
+        messages: z.array(z.unknown()).max(BRAINSTORM_MESSAGE_LIMIT * 2),
+      })
       .parse(request.body ?? {});
     // Unusable messages are dropped rather than refused — one bad entry must not cost the reader the
     // whole conversation — while the cap keeps a runaway thread out of the file.
-    const saved = writeBrainstormSession(params.id, buildBrainstormSession(body.messages));
+    const saved = writeBrainstormSession(
+      params.id,
+      buildBrainstormSession(body.messages),
+    );
     if (!saved) return reply.code(404).send({ error: "Character not found" });
     return saved;
   });
@@ -385,7 +476,7 @@ export const characterRoutes: FastifyPluginAsync<CharacterRoutesOptions> = async
           allowNewSections: body.allowNewSections,
           format: body.format as CharacterFormat | undefined,
         },
-        controller.signal
+        controller.signal,
       );
       return result;
     } catch (e) {
@@ -393,84 +484,119 @@ export const characterRoutes: FastifyPluginAsync<CharacterRoutesOptions> = async
       if (message.includes("abort")) {
         return reply.code(499).send({ error: "Request aborted" });
       }
-      return reply.code(502).send({ error: `Brainstorming failed: ${message}` });
+      return reply
+        .code(502)
+        .send({ error: `Brainstorming failed: ${message}` });
     }
   });
 
-  app.post("/api/playthroughs/:id/characters/:characterId/save-to-library", async (request, reply) => {
-    const params = z.object({ id: z.string(), characterId: z.string() }).parse(request.params);
-    const body = z.object({ mode: z.enum(["update", "newVersion"]).optional() }).parse(request.body ?? {});
-    const result = saveToLibraryAction(dataDir, params.id, params.characterId, body.mode ?? "update");
-    if (!result.ok) return reply.code(result.status).send({ error: result.error });
-    return { template: result.template, created: result.created };
-  });
+  app.post(
+    "/api/playthroughs/:id/characters/:characterId/save-to-library",
+    async (request, reply) => {
+      const params = z
+        .object({ id: z.string(), characterId: z.string() })
+        .parse(request.params);
+      const body = z
+        .object({ mode: z.enum(["update", "newVersion"]).optional() })
+        .parse(request.body ?? {});
+      const result = saveToLibraryAction(
+        dataDir,
+        params.id,
+        params.characterId,
+        body.mode ?? "update",
+      );
+      if (!result.ok)
+        return reply.code(result.status).send({ error: result.error });
+      return { template: result.template, created: result.created };
+    },
+  );
 
-  app.put("/api/playthroughs/:id/characters/:characterId", async (request, reply) => {
-    const params = z.object({ id: z.string(), characterId: z.string() }).parse(request.params);
-    const body = EditCharacterBody.parse(request.body ?? {});
+  app.put(
+    "/api/playthroughs/:id/characters/:characterId",
+    async (request, reply) => {
+      const params = z
+        .object({ id: z.string(), characterId: z.string() })
+        .parse(request.params);
+      const body = EditCharacterBody.parse(request.body ?? {});
 
-    const playthrough = getPlaythroughRecord(dataDir, params.id);
-    if (!playthrough) return reply.code(404).send({ error: "Playthrough not found" });
+      const playthrough = getPlaythroughRecord(dataDir, params.id);
+      if (!playthrough)
+        return reply.code(404).send({ error: "Playthrough not found" });
 
-    const character = playthrough.characters.find((c) => c.id === params.characterId);
-    if (!character) return reply.code(404).send({ error: "Character not found" });
+      const character = playthrough.characters.find(
+        (c) => c.id === params.characterId,
+      );
+      if (!character)
+        return reply.code(404).send({ error: "Character not found" });
 
-    // CCv2 sheets are read-only (D9/C3): the PUT route applies content/clothing
-    // edits directly, bypassing applyStatePatch, so guard here — but only the
-    // sheet fields. Name and runtime fields (mood, towardPlayer, memorySummary,
-    // conditions, flags) remain editable.
-    const template = playthrough.characterTemplates.find((t) => t.id === character.templateId);
-    const attemptsSheetEdit =
-      body.content !== undefined || body.startingClothing !== undefined || body.clothing !== undefined;
-    if (template?.format === "ccv2" && attemptsSheetEdit) {
-      return reply.code(400).send({
-        error: "Character has a read-only CCv2 sheet — content/clothing edits are not allowed."
-      });
-    }
-
-    const updated = { ...character, updatedAt: new Date().toISOString() };
-
-    if (body.name !== undefined) updated.name = body.name;
-    if (body.mood !== undefined) updated.mood = body.mood;
-    if (body.towardPlayer !== undefined) updated.towardPlayer = body.towardPlayer;
-    if (body.memorySummary !== undefined) updated.memorySummary = body.memorySummary;
-    if (body.conditions !== undefined) updated.conditions = body.conditions;
-    if (body.flags !== undefined) updated.flags = body.flags;
-    if (body.clothing !== undefined) updated.clothing = body.clothing;
-    if (body.storyRole !== undefined) updated.storyRole = body.storyRole;
-    if (body.description !== undefined) updated.description = body.description;
-
-    const hasTemplateUpdate =
-      body.name !== undefined || body.content !== undefined ||
-      body.startingClothing !== undefined || body.summary !== undefined;
-
-    if (hasTemplateUpdate) {
-      const tpl = template;
-      if (tpl) {
-        if (body.name !== undefined) tpl.name = body.name;
-        if (body.content !== undefined) tpl.content = body.content;
-        if (body.summary !== undefined) tpl.summary = body.summary;
-        if (body.startingClothing !== undefined) tpl.startingClothing = body.startingClothing;
+      // CCv2 sheets are read-only (D9/C3): the PUT route applies content/clothing
+      // edits directly, bypassing applyStatePatch, so guard here — but only the
+      // sheet fields. Name and runtime fields (mood, towardPlayer, memorySummary,
+      // conditions, flags) remain editable.
+      const template = playthrough.characterTemplates.find(
+        (t) => t.id === character.templateId,
+      );
+      const attemptsSheetEdit =
+        body.content !== undefined ||
+        body.startingClothing !== undefined ||
+        body.clothing !== undefined;
+      if (template?.format === "ccv2" && attemptsSheetEdit) {
+        return reply.code(400).send({
+          error:
+            "Character has a read-only CCv2 sheet — content/clothing edits are not allowed.",
+        });
       }
-    }
 
-    playthrough.characters = playthrough.characters.map((c) =>
-      c.id === params.characterId ? updated : c
-    );
+      const updated = { ...character, updatedAt: new Date().toISOString() };
 
-    if (body.inScene !== undefined) {
-      const activeSet = new Set(playthrough.activeCharacters ?? []);
-      if (body.inScene) {
-        activeSet.add(params.characterId);
-      } else {
-        activeSet.delete(params.characterId);
+      if (body.name !== undefined) updated.name = body.name;
+      if (body.mood !== undefined) updated.mood = body.mood;
+      if (body.towardPlayer !== undefined)
+        updated.towardPlayer = body.towardPlayer;
+      if (body.memorySummary !== undefined)
+        updated.memorySummary = body.memorySummary;
+      if (body.conditions !== undefined) updated.conditions = body.conditions;
+      if (body.flags !== undefined) updated.flags = body.flags;
+      if (body.clothing !== undefined) updated.clothing = body.clothing;
+      if (body.storyRole !== undefined) updated.storyRole = body.storyRole;
+      if (body.description !== undefined)
+        updated.description = body.description;
+
+      const hasTemplateUpdate =
+        body.name !== undefined ||
+        body.content !== undefined ||
+        body.startingClothing !== undefined ||
+        body.summary !== undefined;
+
+      if (hasTemplateUpdate) {
+        const tpl = template;
+        if (tpl) {
+          if (body.name !== undefined) tpl.name = body.name;
+          if (body.content !== undefined) tpl.content = body.content;
+          if (body.summary !== undefined) tpl.summary = body.summary;
+          if (body.startingClothing !== undefined)
+            tpl.startingClothing = body.startingClothing;
+        }
       }
-      playthrough.activeCharacters = Array.from(activeSet);
-    }
 
-    playthrough.updatedAt = updated.updatedAt;
-    updatePlaythroughRecord(dataDir, playthrough);
+      playthrough.characters = playthrough.characters.map((c) =>
+        c.id === params.characterId ? updated : c,
+      );
 
-    return playthrough;
-  });
-}
+      if (body.inScene !== undefined) {
+        const activeSet = new Set(playthrough.activeCharacters ?? []);
+        if (body.inScene) {
+          activeSet.add(params.characterId);
+        } else {
+          activeSet.delete(params.characterId);
+        }
+        playthrough.activeCharacters = Array.from(activeSet);
+      }
+
+      playthrough.updatedAt = updated.updatedAt;
+      updatePlaythroughRecord(dataDir, playthrough);
+
+      return playthrough;
+    },
+  );
+};

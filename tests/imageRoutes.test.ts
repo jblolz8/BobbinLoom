@@ -5,21 +5,38 @@ import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../src/engine/imageDefaults";
-import type { ImageGenerationSettings, MessageImage, Playthrough } from "../src/schemas";
+import type {
+  ImageGenerationSettings,
+  MessageImage,
+  Playthrough,
+} from "../src/schemas";
 import type { ProviderConnectionDraft } from "../src/server/providerRegistry";
 import { createConnection } from "../src/server/providerRegistry";
 import { A1111_IMAGE_PROMPT_CAP } from "../src/server/imageProvider/a1111Provider";
 import { OPENAI_IMAGE_PROMPT_CAP } from "../src/server/imageProvider/openaiImagesProvider";
 import { VENICE_IMAGE_PROMPT_CAP } from "../src/server/imageProvider/veniceImageProvider";
-import { clearImageProgress, publishImageProgress, readImageProgress } from "../src/server/imageProgress";
+import {
+  clearImageProgress,
+  publishImageProgress,
+  readImageProgress,
+} from "../src/server/imageProgress";
 import { saveImageBytes } from "../src/server/imageStore";
 import { clearForgeCoupleCache } from "../src/server/imageProvider/shared";
 import { ProviderManager } from "../src/server/providerManager";
 import { imageRoutes } from "../src/server/routes/images";
 import { providerRoutes } from "../src/server/routes/providers";
-import { getPlaythroughRecord, updatePlaythroughRecord } from "../src/server/store";
+import {
+  getPlaythroughRecord,
+  updatePlaythroughRecord,
+} from "../src/server/store";
 import { saveAppSettings } from "../src/server/appSettingsStore";
-import { cleanupTempDirs, imageRef, pngBytes, tempDir, writePlaythroughWithImages } from "./helpers/imageFixtures";
+import {
+  cleanupTempDirs,
+  imageRef,
+  pngBytes,
+  tempDir,
+  writePlaythroughWithImages,
+} from "./helpers/imageFixtures";
 
 afterEach(cleanupTempDirs);
 
@@ -30,7 +47,8 @@ afterEach(cleanupTempDirs);
 beforeEach(() => clearForgeCoupleCache());
 
 const PNG_B64 = pngBytes("routes").toString("base64");
-const TEXT_ANSWER = '{"prompt": "a woman in the rain", "negative_prompt": "blurry"}';
+const TEXT_ANSWER =
+  '{"prompt": "a woman in the rain", "negative_prompt": "blurry"}';
 
 type Call = { url: string; body: any };
 
@@ -51,7 +69,12 @@ type HarnessOptions = {
   /** The `/models` body, when the default (two bare ids) is not enough. */
   modelsPayload?: unknown;
   /** A1111's own lists (`/sdapi/v1/…`), when a test needs to change one. */
-  a1111Payload?: { checkpoints?: unknown; samplers?: unknown; schedulers?: unknown; scripts?: unknown };
+  a1111Payload?: {
+    checkpoints?: unknown;
+    samplers?: unknown;
+    schedulers?: unknown;
+    scripts?: unknown;
+  };
 };
 
 function harness(options: HarnessOptions = {}) {
@@ -66,46 +89,97 @@ function harness(options: HarnessOptions = {}) {
 
   const fetchImpl = (async (url: any, init: any) => {
     const href = String(url);
-    calls.push({ url: href, body: init?.body ? JSON.parse(init.body) : undefined });
+    calls.push({
+      url: href,
+      body: init?.body ? JSON.parse(init.body) : undefined,
+    });
     if (href.includes("/chat/completions")) {
-      return new Response(JSON.stringify({ choices: [{ message: { content: options.textContent ?? TEXT_ANSWER } }] }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
-      });
+      return new Response(
+        JSON.stringify({
+          choices: [
+            { message: { content: options.textContent ?? TEXT_ANSWER } },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
     if (href.includes("/image/generate")) {
-      return new Response(JSON.stringify(options.imagePayload ?? { id: "gen_1", images: [PNG_B64], timing: { total: 1234 } }), { status: 200 });
+      return new Response(
+        JSON.stringify(
+          options.imagePayload ?? {
+            id: "gen_1",
+            images: [PNG_B64],
+            timing: { total: 1234 },
+          },
+        ),
+        { status: 200 },
+      );
     }
     if (href.includes("/images/generations")) {
-      return new Response(JSON.stringify({ created: 1, data: [{ b64_json: PNG_B64 }] }), { status: 200 });
+      return new Response(
+        JSON.stringify({ created: 1, data: [{ b64_json: PNG_B64 }] }),
+        { status: 200 },
+      );
     }
     if (href.includes("/sdapi/v1/")) {
       const a1111 = options.a1111Payload ?? {};
       // A real WebUI's shapes: checkpoints carry `title`, samplers/schedulers `name`.
       if (href.endsWith("/sdapi/v1/txt2img")) {
         // `info` is a JSON STRING in the real API; the seed that was used lives there.
-        return new Response(JSON.stringify({ images: [PNG_B64], info: JSON.stringify({ seed: 12345 }) }), { status: 200 });
+        return new Response(
+          JSON.stringify({
+            images: [PNG_B64],
+            info: JSON.stringify({ seed: 12345 }),
+          }),
+          { status: 200 },
+        );
       }
       if (href.endsWith("/sdapi/v1/sd-models")) {
         return new Response(
-          JSON.stringify(a1111.checkpoints ?? [{ title: "dreamshaper_8.safetensors" }, { title: "sd_xl_base_1.0.safetensors" }]),
-          { status: 200 }
+          JSON.stringify(
+            a1111.checkpoints ?? [
+              { title: "dreamshaper_8.safetensors" },
+              { title: "sd_xl_base_1.0.safetensors" },
+            ],
+          ),
+          { status: 200 },
         );
       }
       if (href.endsWith("/sdapi/v1/samplers")) {
-        return new Response(JSON.stringify(a1111.samplers ?? [{ name: "DPM++ 2M Karras" }]), { status: 200 });
+        return new Response(
+          JSON.stringify(a1111.samplers ?? [{ name: "DPM++ 2M Karras" }]),
+          { status: 200 },
+        );
       }
       if (href.endsWith("/sdapi/v1/schedulers")) {
-        return new Response(JSON.stringify(a1111.schedulers ?? [{ name: "Karras" }]), { status: 200 });
+        return new Response(
+          JSON.stringify(a1111.schedulers ?? [{ name: "Karras" }]),
+          { status: 200 },
+        );
       }
       // The installed-scripts listing. The default build has no Forge Couple —
       // the user's ReForge today — so detection answers "not installed".
       if (href.endsWith("/sdapi/v1/script-info")) {
-        return new Response(JSON.stringify(a1111.scripts ?? [{ name: "txt2img", is_alwayson: false }]), { status: 200 });
+        return new Response(
+          JSON.stringify(
+            a1111.scripts ?? [{ name: "txt2img", is_alwayson: false }],
+          ),
+          { status: 200 },
+        );
       }
     }
     if (href.includes("/models")) {
-      return new Response(JSON.stringify(options.modelsPayload ?? { data: [{ id: "lustify-v8" }, { id: "wai-nsfw" }] }), { status: 200 });
+      return new Response(
+        JSON.stringify(
+          options.modelsPayload ?? {
+            data: [{ id: "lustify-v8" }, { id: "wai-nsfw" }],
+          },
+        ),
+        { status: 200 },
+      );
     }
     return new Response("not found", { status: 404 });
   }) as unknown as typeof fetch;
@@ -114,7 +188,7 @@ function harness(options: HarnessOptions = {}) {
     label: "Local Text",
     baseUrl: "http://localhost:1234/v1",
     model: "text-model",
-    kind: "text"
+    kind: "text",
   };
   const imageConn: ProviderConnectionDraft = {
     label: "Venice Images",
@@ -123,7 +197,7 @@ function harness(options: HarnessOptions = {}) {
     kind: "image",
     apiStyle: options.imageApiStyle ?? "venice",
     size: "1024x1024",
-    ...(options.imageSeed === undefined ? {} : { seed: options.imageSeed })
+    ...(options.imageSeed === undefined ? {} : { seed: options.imageSeed }),
   };
   if (options.withText !== false) createConnection(settingsDir, textConn);
   if (options.withImage !== false) createConnection(settingsDir, imageConn);
@@ -134,27 +208,54 @@ function harness(options: HarnessOptions = {}) {
     activePresetId: "default",
     promptConfig: {
       modules: { turn: [] },
-      imageGeneration: { ...DEFAULT_IMAGE_GENERATION_SETTINGS, ...(options.imageSettings ?? {}) }
-    }
+      imageGeneration: {
+        ...DEFAULT_IMAGE_GENERATION_SETTINGS,
+        ...(options.imageSettings ?? {}),
+      },
+    },
   });
 
   const manager = new ProviderManager(settingsDir, {}, fetchImpl);
   const app = Fastify();
-  app.register(imageRoutes, { dataDir, imagesDir, settingsDir, manager, fetchImpl });
+  app.register(imageRoutes, {
+    dataDir,
+    imagesDir,
+    settingsDir,
+    manager,
+    fetchImpl,
+  });
   app.register(providerRoutes, { manager });
 
   const playthrough = writePlaythroughWithImages(dataDir, "Run", [[], [], []]);
   const assistantMessageId = playthrough.messages[2].id;
   const userMessageId = playthrough.messages[1].id;
 
-  return { app, dataDir, settingsDir, imagesDir, calls, manager, playthroughId: playthrough.id, assistantMessageId, userMessageId };
+  return {
+    app,
+    dataDir,
+    settingsDir,
+    imagesDir,
+    calls,
+    manager,
+    playthroughId: playthrough.id,
+    assistantMessageId,
+    userMessageId,
+  };
 }
 
-function imageUrl(h: ReturnType<typeof harness>, messageId = h.assistantMessageId, suffix = "") {
+function imageUrl(
+  h: ReturnType<typeof harness>,
+  messageId = h.assistantMessageId,
+  suffix = "",
+) {
   return `/api/playthroughs/${h.playthroughId}/messages/${messageId}/image${suffix}`;
 }
 
-function deleteUrl(h: ReturnType<typeof harness>, file: string, messageId = h.assistantMessageId) {
+function deleteUrl(
+  h: ReturnType<typeof harness>,
+  file: string,
+  messageId = h.assistantMessageId,
+) {
   return `/api/playthroughs/${h.playthroughId}/messages/${messageId}/images/${file}`;
 }
 
@@ -163,7 +264,11 @@ function storedFiles(dir: string): string[] {
 }
 
 async function post(app: FastifyInstance, url: string, payload: unknown) {
-  return app.inject({ method: "POST", url, payload: payload as Record<string, unknown> });
+  return app.inject({
+    method: "POST",
+    url,
+    payload: payload as Record<string, unknown>,
+  });
 }
 
 describe("GET /api/images/:file", () => {
@@ -173,17 +278,30 @@ describe("GET /api/images/:file", () => {
     const file = `${createHash("sha256").update(bytes).digest("hex")}.png`;
     saveImageBytes(bytes, "image/png", h.imagesDir);
 
-    const res = await h.app.inject({ method: "GET", url: `/api/images/${file}` });
+    const res = await h.app.inject({
+      method: "GET",
+      url: `/api/images/${file}`,
+    });
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toBe("image/png");
-    expect(res.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
+    expect(res.headers["cache-control"]).toBe(
+      "public, max-age=31536000, immutable",
+    );
     expect(Buffer.compare(res.rawPayload, bytes)).toBe(0);
   });
 
   it("404s a malformed, traversal, or missing name instead of throwing", async () => {
     const h = harness();
-    for (const name of ["notahash.png", "..%2F..%2Fdata%2Fsettings.json", `${"a".repeat(64)}.png`, `${"a".repeat(64)}.gif`]) {
-      const res = await h.app.inject({ method: "GET", url: `/api/images/${name}` });
+    for (const name of [
+      "notahash.png",
+      "..%2F..%2Fdata%2Fsettings.json",
+      `${"a".repeat(64)}.png`,
+      `${"a".repeat(64)}.gif`,
+    ]) {
+      const res = await h.app.inject({
+        method: "GET",
+        url: `/api/images/${name}`,
+      });
       expect(res.statusCode, name).toBe(404);
       expect(res.json().error).toBe("Image not found");
     }
@@ -193,21 +311,30 @@ describe("GET /api/images/:file", () => {
 describe("GET /api/images/progress", () => {
   it("400s when the connectionId query parameter is absent", async () => {
     const h = harness();
-    const res = await h.app.inject({ method: "GET", url: "/api/images/progress" });
+    const res = await h.app.inject({
+      method: "GET",
+      url: "/api/images/progress",
+    });
     expect(res.statusCode).toBe(400);
     expect(res.json()).toEqual({ error: "connectionId is required" });
   });
 
   it("400s an empty connectionId — the same thing as absent", async () => {
     const h = harness();
-    const res = await h.app.inject({ method: "GET", url: "/api/images/progress?connectionId=" });
+    const res = await h.app.inject({
+      method: "GET",
+      url: "/api/images/progress?connectionId=",
+    });
     expect(res.statusCode).toBe(400);
     expect(res.json()).toEqual({ error: "connectionId is required" });
   });
 
   it("answers {active: false} for a connection with nothing running", async () => {
     const h = harness();
-    const res = await h.app.inject({ method: "GET", url: "/api/images/progress?connectionId=venice_images" });
+    const res = await h.app.inject({
+      method: "GET",
+      url: "/api/images/progress?connectionId=venice_images",
+    });
     expect(res.statusCode).toBe(200);
     // The frozen shape: `active` is always present, the numbers only when known.
     expect(res.json()).toEqual({ active: false });
@@ -216,18 +343,38 @@ describe("GET /api/images/progress", () => {
   it("serves the snapshot published under that connection id", async () => {
     const h = harness();
     const connId = h.manager.imageConnection()!.id;
-    publishImageProgress(connId, { progress: 0.43, step: 12, steps: 28, etaSeconds: 5 });
+    publishImageProgress(connId, {
+      progress: 0.43,
+      step: 12,
+      steps: 28,
+      etaSeconds: 5,
+    });
 
-    const res = await h.app.inject({ method: "GET", url: `/api/images/progress?connectionId=${connId}` });
+    const res = await h.app.inject({
+      method: "GET",
+      url: `/api/images/progress?connectionId=${connId}`,
+    });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ active: true, progress: 0.43, step: 12, steps: 28, etaSeconds: 5 });
+    expect(res.json()).toEqual({
+      active: true,
+      progress: 0.43,
+      step: 12,
+      steps: 28,
+      etaSeconds: 5,
+    });
 
     // A different connection is a different readout — the key is the CONNECTION.
-    const other = await h.app.inject({ method: "GET", url: "/api/images/progress?connectionId=some_other_conn" });
+    const other = await h.app.inject({
+      method: "GET",
+      url: "/api/images/progress?connectionId=some_other_conn",
+    });
     expect(other.json()).toEqual({ active: false });
 
     clearImageProgress(connId);
-    const cleared = await h.app.inject({ method: "GET", url: `/api/images/progress?connectionId=${connId}` });
+    const cleared = await h.app.inject({
+      method: "GET",
+      url: `/api/images/progress?connectionId=${connId}`,
+    });
     expect(cleared.json()).toEqual({ active: false });
   });
 });
@@ -235,7 +382,11 @@ describe("GET /api/images/progress", () => {
 describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
   it("404s an unknown playthrough and an unknown message", async () => {
     const h = harness();
-    const missing = await post(h.app, "/api/playthroughs/nope/messages/x/image", {});
+    const missing = await post(
+      h.app,
+      "/api/playthroughs/nope/messages/x/image",
+      {},
+    );
     expect(missing.statusCode).toBe(404);
     expect(missing.json().error).toBe("Playthrough not found");
 
@@ -275,9 +426,11 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
     // One text call + one image call, in that order.
     expect(h.calls.map((c) => c.url)).toEqual([
       "http://localhost:1234/v1/chat/completions",
-      "https://api.venice.ai/api/v1/image/generate"
+      "https://api.venice.ai/api/v1/image/generate",
     ]);
-    expect(h.calls[1].body.negative_prompt).toBe(`${DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix}, blurry`);
+    expect(h.calls[1].body.negative_prompt).toBe(
+      `${DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix}, blurry`,
+    );
     expect(h.calls[1].body.width).toBe(1024);
 
     const body = res.json();
@@ -297,7 +450,9 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
     // message in the returned (and persisted) record.
     expect(storedFiles(h.imagesDir)).toEqual([body.image.file]);
     expect(body.playthrough.messages[2].images).toHaveLength(1);
-    expect(getPlaythroughRecord(h.dataDir, h.playthroughId)!.messages[2].images).toHaveLength(1);
+    expect(
+      getPlaythroughRecord(h.dataDir, h.playthroughId)!.messages[2].images,
+    ).toHaveLength(1);
   });
 
   it("uses the connection's seed, sends it, and stamps it on the ref", async () => {
@@ -311,7 +466,10 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
     // compared with a later re-roll.
     expect(res.json().image.seed).toBe(4242);
     expect(res.json().playthrough.messages[2].images[0].seed).toBe(4242);
-    expect(getPlaythroughRecord(h.dataDir, h.playthroughId)!.messages[2].images![0].seed).toBe(4242);
+    expect(
+      getPlaythroughRecord(h.dataDir, h.playthroughId)!.messages[2].images![0]
+        .seed,
+    ).toBe(4242);
   });
 
   it("lets a per-request seed beat the connection's", async () => {
@@ -351,7 +509,7 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
     const h = harness();
     const res = await post(h.app, imageUrl(h), {
       promptOverride: "edited prompt",
-      negativeOverride: "edited negative"
+      negativeOverride: "edited negative",
     });
     expect(res.statusCode).toBe(200);
     expect(h.calls).toHaveLength(1);
@@ -365,15 +523,23 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
 
   it("still runs the text call when only one override is present, replacing just that side", async () => {
     const h = harness();
-    const res = await post(h.app, imageUrl(h), { promptOverride: "only the positive was edited" });
+    const res = await post(h.app, imageUrl(h), {
+      promptOverride: "only the positive was edited",
+    });
     expect(res.statusCode).toBe(200);
     expect(h.calls).toHaveLength(2);
     expect(h.calls[1].body.prompt).toBe("only the positive was edited");
-    expect(h.calls[1].body.negative_prompt).toBe(`${DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix}, blurry`);
+    expect(h.calls[1].body.negative_prompt).toBe(
+      `${DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix}, blurry`,
+    );
 
-    const negativeOnly = await post(h.app, imageUrl(h), { negativeOverride: "only the negative" });
+    const negativeOnly = await post(h.app, imageUrl(h), {
+      negativeOverride: "only the negative",
+    });
     expect(negativeOnly.statusCode).toBe(200);
-    expect(negativeOnly.json().promptUsed).toBe("anime style a woman in the rain");
+    expect(negativeOnly.json().promptUsed).toBe(
+      "anime style a woman in the rain",
+    );
     expect(negativeOnly.json().negativeUsed).toBe("only the negative");
   });
 
@@ -396,7 +562,7 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
     const res = await post(h.app, imageUrl(h), {
       promptOverride: "p",
       negativeOverride: "n",
-      promptDurationMs: 3210
+      promptDurationMs: 3210,
     });
     expect(res.statusCode).toBe(200);
     expect(h.calls).toHaveLength(1);
@@ -406,7 +572,10 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
 
   it("omits the text time when nobody measured it, and still stores a valid ref", async () => {
     const h = harness();
-    const res = await post(h.app, imageUrl(h), { promptOverride: "p", negativeOverride: "n" });
+    const res = await post(h.app, imageUrl(h), {
+      promptOverride: "p",
+      negativeOverride: "n",
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json().promptDurationMs).toBeUndefined();
     // Absent, not null/zero — the shape every ref written before the field
@@ -418,21 +587,32 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
     const h = harness({ imageApiStyle: "openai" });
     const res = await post(h.app, imageUrl(h), {
       promptOverride: "x".repeat(OPENAI_IMAGE_PROMPT_CAP + 400),
-      negativeOverride: ""
+      negativeOverride: "",
     });
     expect(res.statusCode).toBe(200);
-    expect(h.calls[0].url).toBe("https://api.venice.ai/api/v1/images/generations");
+    expect(h.calls[0].url).toBe(
+      "https://api.venice.ai/api/v1/images/generations",
+    );
     // The shipped promptCharacterLimit (1200) is tighter than the dialect cap.
-    expect((h.calls[0].body.prompt as string).length).toBe(DEFAULT_IMAGE_GENERATION_SETTINGS.promptCharacterLimit);
-    expect(res.json().promptUsed.length).toBe(DEFAULT_IMAGE_GENERATION_SETTINGS.promptCharacterLimit);
+    expect((h.calls[0].body.prompt as string).length).toBe(
+      DEFAULT_IMAGE_GENERATION_SETTINGS.promptCharacterLimit,
+    );
+    expect(res.json().promptUsed.length).toBe(
+      DEFAULT_IMAGE_GENERATION_SETTINGS.promptCharacterLimit,
+    );
 
-    const unlimited = harness({ imageApiStyle: "openai", imageSettings: { promptCharacterLimit: 0 } });
+    const unlimited = harness({
+      imageApiStyle: "openai",
+      imageSettings: { promptCharacterLimit: 0 },
+    });
     const second = await post(unlimited.app, imageUrl(unlimited), {
       promptOverride: "x".repeat(OPENAI_IMAGE_PROMPT_CAP + 400),
-      negativeOverride: ""
+      negativeOverride: "",
     });
     expect(second.statusCode).toBe(200);
-    expect((unlimited.calls[0].body.prompt as string).length).toBe(OPENAI_IMAGE_PROMPT_CAP);
+    expect((unlimited.calls[0].body.prompt as string).length).toBe(
+      OPENAI_IMAGE_PROMPT_CAP,
+    );
   });
 
   it("clamps the composed prompt to the preset limit but NOT the composed negative", async () => {
@@ -445,7 +625,7 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
     const h = harness();
     const res = await post(h.app, imageUrl(h), {
       promptOverride: "p".repeat(limit + 200),
-      negativeOverride: longNegative
+      negativeOverride: longNegative,
     });
     expect(res.statusCode).toBe(200);
     // The prompt is still cut to the preset's soft limit…
@@ -462,7 +642,9 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
     const limit = DEFAULT_IMAGE_GENERATION_SETTINGS.promptCharacterLimit;
     const longNegative = "n".repeat(limit + 200);
     const h = harness();
-    const res = await post(h.app, imageUrl(h), { negativeOverride: longNegative });
+    const res = await post(h.app, imageUrl(h), {
+      negativeOverride: longNegative,
+    });
     expect(res.statusCode).toBe(200);
     expect(h.calls).toHaveLength(2);
     expect(h.calls[1].body.negative_prompt).toBe(longNegative);
@@ -476,22 +658,33 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
     const h = harness();
     const res = await post(h.app, imageUrl(h), {
       promptOverride: "p",
-      negativeOverride: "n".repeat(VENICE_IMAGE_PROMPT_CAP + 100)
+      negativeOverride: "n".repeat(VENICE_IMAGE_PROMPT_CAP + 100),
     });
     expect(res.statusCode).toBe(200);
-    expect((h.calls[0].body.negative_prompt as string).length).toBe(VENICE_IMAGE_PROMPT_CAP);
+    expect((h.calls[0].body.negative_prompt as string).length).toBe(
+      VENICE_IMAGE_PROMPT_CAP,
+    );
     expect(res.json().negativeUsed.length).toBe(VENICE_IMAGE_PROMPT_CAP);
   });
 
   it("keeps every returned variant", async () => {
     const h = harness({
-      imagePayload: { images: [PNG_B64, pngBytes("variant-2").toString("base64"), pngBytes("variant-3").toString("base64")], timing: { total: 99 } }
+      imagePayload: {
+        images: [
+          PNG_B64,
+          pngBytes("variant-2").toString("base64"),
+          pngBytes("variant-3").toString("base64"),
+        ],
+        timing: { total: 99 },
+      },
     });
     const res = await post(h.app, imageUrl(h), {});
     expect(res.statusCode).toBe(200);
     expect(res.json().playthrough.messages[2].images).toHaveLength(3);
     expect(storedFiles(h.imagesDir)).toHaveLength(3);
-    expect(res.json().image.file).toBe(res.json().playthrough.messages[2].images[0].file);
+    expect(res.json().image.file).toBe(
+      res.json().playthrough.messages[2].images[0].file,
+    );
   });
 
   it("502s a provider failure instead of attaching a broken ref", async () => {
@@ -500,7 +693,9 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
     expect(res.statusCode).toBe(502);
     expect(res.json().error).toMatch(/no image prompt/i);
     expect(storedFiles(h.imagesDir)).toHaveLength(0);
-    expect(getPlaythroughRecord(h.dataDir, h.playthroughId)!.messages[2].images).toBeUndefined();
+    expect(
+      getPlaythroughRecord(h.dataDir, h.playthroughId)!.messages[2].images,
+    ).toBeUndefined();
   });
 
   it("sends an a1111 connection's long tag list uncut, up to the WebUI's own cap", async () => {
@@ -511,13 +706,18 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
     const h = harness({
       imageApiStyle: "a1111",
       imageBaseUrl: "http://127.0.0.1:7860",
-      imageSettings: { promptCharacterLimit: 0 }
+      imageSettings: { promptCharacterLimit: 0 },
     });
     const long = "p".repeat(OPENAI_IMAGE_PROMPT_CAP + 500); // 2000: past the OpenAI cap
-    const res = await post(h.app, imageUrl(h), { promptOverride: long, negativeOverride: "n" });
+    const res = await post(h.app, imageUrl(h), {
+      promptOverride: long,
+      negativeOverride: "n",
+    });
     expect(res.statusCode).toBe(200);
 
-    const sent = h.calls.find((c) => c.url === "http://127.0.0.1:7860/sdapi/v1/txt2img");
+    const sent = h.calls.find(
+      (c) => c.url === "http://127.0.0.1:7860/sdapi/v1/txt2img",
+    );
     expect(sent).toBeDefined();
     expect(sent!.body.prompt).toBe(long);
     expect(res.json().promptUsed).toBe(long);
@@ -526,11 +726,11 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
     const overCap = harness({
       imageApiStyle: "a1111",
       imageBaseUrl: "http://127.0.0.1:7860",
-      imageSettings: { promptCharacterLimit: 0 }
+      imageSettings: { promptCharacterLimit: 0 },
     });
     const huge = await post(overCap.app, imageUrl(overCap), {
       promptOverride: "x".repeat(A1111_IMAGE_PROMPT_CAP + 50),
-      negativeOverride: "n"
+      negativeOverride: "n",
     });
     expect(huge.statusCode).toBe(200);
     expect(huge.json().promptUsed.length).toBe(A1111_IMAGE_PROMPT_CAP);
@@ -539,7 +739,10 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
   it("still cuts the same text on a Venice connection at the preset's limit", async () => {
     const h = harness({ imageSettings: { promptCharacterLimit: 1200 } });
     const long = "p".repeat(2000);
-    const res = await post(h.app, imageUrl(h), { promptOverride: long, negativeOverride: "n" });
+    const res = await post(h.app, imageUrl(h), {
+      promptOverride: long,
+      negativeOverride: "n",
+    });
     expect(res.statusCode).toBe(200);
     expect((h.calls[0].body.prompt as string).length).toBe(1200);
     expect(res.json().promptUsed.length).toBe(1200);
@@ -551,9 +754,18 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image", () => {
  *  its `finally`-clear are what is under test, not the adapter. */
 function stubProvider(
   h: ReturnType<typeof harness>,
-  generateImage: (request: { onProgress?: (p: { progress: number; step?: number; steps?: number; etaSeconds?: number }) => void }) => Promise<unknown>
+  generateImage: (request: {
+    onProgress?: (p: {
+      progress: number;
+      step?: number;
+      steps?: number;
+      etaSeconds?: number;
+    }) => void;
+  }) => Promise<unknown>,
 ) {
-  h.manager.getImageProvider = () => ({ generateImage: generateImage as never });
+  h.manager.getImageProvider = () => ({
+    generateImage: generateImage as never,
+  });
 }
 
 function progressUrl(connId: string) {
@@ -568,30 +780,53 @@ describe("image progress during a generation", () => {
     let decoy: Awaited<ReturnType<FastifyInstance["inject"]>> | undefined;
 
     stubProvider(h, async (request) => {
-      request.onProgress?.({ progress: 0.43, step: 12, steps: 28, etaSeconds: 5 });
-      midFlight = await h.app.inject({ method: "GET", url: progressUrl(connId) });
+      request.onProgress?.({
+        progress: 0.43,
+        step: 12,
+        steps: 28,
+        etaSeconds: 5,
+      });
+      midFlight = await h.app.inject({
+        method: "GET",
+        url: progressUrl(connId),
+      });
       // The key is the CONNECTION that generated; a sibling reads nothing.
-      decoy = await h.app.inject({ method: "GET", url: progressUrl("some_other_conn") });
+      decoy = await h.app.inject({
+        method: "GET",
+        url: progressUrl("some_other_conn"),
+      });
       return {
         images: [{ bytes: pngBytes("progress"), mime: "image/png" }],
         model: "stub-model",
         providerId: "venice_images",
         durationMs: 1,
         rawRequest: "{}",
-        rawOutput: "{}"
+        rawOutput: "{}",
       };
     });
 
-    const res = await post(h.app, imageUrl(h), { promptOverride: "p", negativeOverride: "n" });
+    const res = await post(h.app, imageUrl(h), {
+      promptOverride: "p",
+      negativeOverride: "n",
+    });
     expect(res.statusCode).toBe(200);
 
     // While the POST was still being served, the endpoint showed the readout.
     expect(midFlight!.statusCode).toBe(200);
-    expect(midFlight!.json()).toEqual({ active: true, progress: 0.43, step: 12, steps: 28, etaSeconds: 5 });
+    expect(midFlight!.json()).toEqual({
+      active: true,
+      progress: 0.43,
+      step: 12,
+      steps: 28,
+      etaSeconds: 5,
+    });
     expect(decoy!.json()).toEqual({ active: false });
 
     // …and once the reply went out, it is cleared: no phantom bar in the footer.
-    const after = await h.app.inject({ method: "GET", url: progressUrl(connId) });
+    const after = await h.app.inject({
+      method: "GET",
+      url: progressUrl(connId),
+    });
     expect(after.json()).toEqual({ active: false });
   });
 
@@ -602,18 +837,27 @@ describe("image progress during a generation", () => {
 
     stubProvider(h, async (request) => {
       request.onProgress?.({ progress: 0.5, step: 14, steps: 28 });
-      midFlight = await h.app.inject({ method: "GET", url: progressUrl(connId) });
+      midFlight = await h.app.inject({
+        method: "GET",
+        url: progressUrl(connId),
+      });
       throw new Error("the WebUI died mid-render");
     });
 
-    const res = await post(h.app, imageUrl(h), { promptOverride: "p", negativeOverride: "n" });
+    const res = await post(h.app, imageUrl(h), {
+      promptOverride: "p",
+      negativeOverride: "n",
+    });
     expect(res.statusCode).toBe(502);
     expect(res.json().error).toBe("the WebUI died mid-render");
     // It WAS active (the failure is not what the readout says)…
     expect(midFlight!.json()).toMatchObject({ active: true, progress: 0.5 });
     // …and the failed render cleared it. A crashed generation must not leave a
     // permanent phantom progress bar behind.
-    const after = await h.app.inject({ method: "GET", url: progressUrl(connId) });
+    const after = await h.app.inject({
+      method: "GET",
+      url: progressUrl(connId),
+    });
     expect(after.json()).toEqual({ active: false });
   });
 });
@@ -635,11 +879,14 @@ const SHEET = [
   "",
   "[Clothing]",
   "- Top: blue silk gown",
-  ""
+  "",
 ].join("\n");
 
 /** Put one character, active in the scene, behind a resolvable template. */
-function withPresentCast(h: ReturnType<typeof harness>, templateContent = SHEET) {
+function withPresentCast(
+  h: ReturnType<typeof harness>,
+  templateContent = SHEET,
+) {
   const record = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
   record.characterTemplates = [
     {
@@ -648,8 +895,8 @@ function withPresentCast(h: ReturnType<typeof harness>, templateContent = SHEET)
       version: 1,
       content: templateContent,
       summary: "",
-      startingClothing: []
-    }
+      startingClothing: [],
+    },
   ];
   record.activeCharacters = ["char_mira"];
   record.characters = [
@@ -667,8 +914,8 @@ function withPresentCast(h: ReturnType<typeof harness>, templateContent = SHEET)
       flags: [],
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
-      clothing: [{ slot: "top", name: "white shirt" }]
-    }
+      clothing: [{ slot: "top", name: "white shirt" }],
+    },
   ];
   updatePlaythroughRecord(h.dataDir, record);
 }
@@ -676,7 +923,11 @@ function withPresentCast(h: ReturnType<typeof harness>, templateContent = SHEET)
 describe("POST /api/playthroughs/:id/messages/:messageId/image/prompt", () => {
   it("returns the composed prompt and generates nothing", async () => {
     const h = harness();
-    const res = await post(h.app, imageUrl(h, h.assistantMessageId, "/prompt"), {});
+    const res = await post(
+      h.app,
+      imageUrl(h, h.assistantMessageId, "/prompt"),
+      {},
+    );
     expect(res.statusCode).toBe(200);
     // `toMatchObject`, not `toEqual`: the dry run also reports how long the text
     // provider took, which is a real measurement rather than a fixed value.
@@ -684,7 +935,7 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image/prompt", () => {
       prompt: "anime style a woman in the rain",
       negativePrompt: `${DEFAULT_IMAGE_GENERATION_SETTINGS.negativePrefix}, blurry`,
       // Advisory notes travel with the dry run; none for a clean answer.
-      warnings: []
+      warnings: [],
     });
     // The text provider's half of the result, measured by this call.
     expect(typeof res.json().promptDurationMs).toBe("number");
@@ -692,26 +943,56 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image/prompt", () => {
     expect(h.calls).toHaveLength(1);
     expect(h.calls[0].url).toBe("http://localhost:1234/v1/chat/completions");
     expect(storedFiles(h.imagesDir)).toHaveLength(0);
-    expect(getPlaythroughRecord(h.dataDir, h.playthroughId)!.messages[2].images).toBeUndefined();
+    expect(
+      getPlaythroughRecord(h.dataDir, h.playthroughId)!.messages[2].images,
+    ).toBeUndefined();
   });
 
   it("validates the target and the two providers", async () => {
     const h = harness();
-    expect((await post(h.app, imageUrl(h, "msg_missing", "/prompt"), {})).statusCode).toBe(404);
-    expect((await post(h.app, imageUrl(h, h.userMessageId, "/prompt"), {})).statusCode).toBe(400);
-    expect((await post(h.app, "/api/playthroughs/nope/messages/m/image/prompt", {})).statusCode).toBe(404);
+    expect(
+      (await post(h.app, imageUrl(h, "msg_missing", "/prompt"), {})).statusCode,
+    ).toBe(404);
+    expect(
+      (await post(h.app, imageUrl(h, h.userMessageId, "/prompt"), {}))
+        .statusCode,
+    ).toBe(400);
+    expect(
+      (await post(h.app, "/api/playthroughs/nope/messages/m/image/prompt", {}))
+        .statusCode,
+    ).toBe(404);
 
     const noImage = harness({ withImage: false });
-    expect((await post(noImage.app, imageUrl(noImage, noImage.assistantMessageId, "/prompt"), {})).statusCode).toBe(400);
+    expect(
+      (
+        await post(
+          noImage.app,
+          imageUrl(noImage, noImage.assistantMessageId, "/prompt"),
+          {},
+        )
+      ).statusCode,
+    ).toBe(400);
 
     const noText = harness({ withText: false });
-    expect((await post(noText.app, imageUrl(noText, noText.assistantMessageId, "/prompt"), {})).statusCode).toBe(400);
+    expect(
+      (
+        await post(
+          noText.app,
+          imageUrl(noText, noText.assistantMessageId, "/prompt"),
+          {},
+        )
+      ).statusCode,
+    ).toBe(400);
   });
 
   it("injects each present character's stable sheet identity into the cast block", async () => {
     const h = harness();
     withPresentCast(h);
-    const res = await post(h.app, imageUrl(h, h.assistantMessageId, "/prompt"), {});
+    const res = await post(
+      h.app,
+      imageUrl(h, h.assistantMessageId, "/prompt"),
+      {},
+    );
     expect(res.statusCode).toBe(200);
 
     const block = h.calls[0].body.messages[1].content as string;
@@ -732,11 +1013,16 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image/prompt", () => {
 
   it("caps the injected identity so one long sheet cannot dominate the prompt", async () => {
     const h = harness();
-    withPresentCast(h, `[Species]: Human\n\n[Body]\n- Build: ${"x".repeat(600)}\n`);
+    withPresentCast(
+      h,
+      `[Species]: Human\n\n[Body]\n- Build: ${"x".repeat(600)}\n`,
+    );
     await post(h.app, imageUrl(h, h.assistantMessageId, "/prompt"), {});
     const block = h.calls[0].body.messages[1].content as string;
     expect(block).toContain("Species: Human");
-    const identity = block.split("\n").find((line) => line.includes("'s sheet"))!;
+    const identity = block
+      .split("\n")
+      .find((line) => line.includes("'s sheet"))!;
     expect(identity).toBeDefined();
     // `CAST_IDENTITY_CHARS` is 600: the 320 it used to be starved `[Appearance]`
     // whenever `[Body]` ran long, which is how hair went missing from a render.
@@ -747,9 +1033,13 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image/prompt", () => {
   it("warns when the composed prompt is cut at the character limit", async () => {
     const h = harness({
       imageSettings: { promptCharacterLimit: 60 },
-      textContent: `{"prompt": "${"tag, ".repeat(40)}done"}`
+      textContent: `{"prompt": "${"tag, ".repeat(40)}done"}`,
     });
-    const res = await post(h.app, imageUrl(h, h.assistantMessageId, "/prompt"), {});
+    const res = await post(
+      h.app,
+      imageUrl(h, h.assistantMessageId, "/prompt"),
+      {},
+    );
     expect(res.statusCode).toBe(200);
     const body = res.json();
     // The preview still shows the clamped text — the warning is advisory only.
@@ -763,7 +1053,11 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image/prompt", () => {
 
   it("does not warn when the composed prompt fits", async () => {
     const h = harness({ imageSettings: { promptCharacterLimit: 200 } });
-    const res = await post(h.app, imageUrl(h, h.assistantMessageId, "/prompt"), {});
+    const res = await post(
+      h.app,
+      imageUrl(h, h.assistantMessageId, "/prompt"),
+      {},
+    );
     expect(res.statusCode).toBe(200);
     expect(res.json().warnings).toEqual([]);
   });
@@ -776,12 +1070,17 @@ describe("DELETE /api/playthroughs/:id/messages/:messageId/images/:file", () => 
     const file = created.image.file;
     expect(storedFiles(h.imagesDir)).toEqual([file]);
 
-    const res = await h.app.inject({ method: "DELETE", url: deleteUrl(h, file) });
+    const res = await h.app.inject({
+      method: "DELETE",
+      url: deleteUrl(h, file),
+    });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.playthrough.messages[2].images).toBeUndefined();
     expect(storedFiles(h.imagesDir)).toHaveLength(0);
-    expect(getPlaythroughRecord(h.dataDir, h.playthroughId)!.messages[2].images).toBeUndefined();
+    expect(
+      getPlaythroughRecord(h.dataDir, h.playthroughId)!.messages[2].images,
+    ).toBeUndefined();
   });
 
   it("is idempotent for a ref that is already gone", async () => {
@@ -801,13 +1100,21 @@ describe("DELETE /api/playthroughs/:id/messages/:messageId/images/:file", () => 
 
     // A second message in the same record takes the same content-addressed file.
     const record = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
-    record.messages[0] = { ...record.messages[0], images: [{ ...created.image, file }] };
+    record.messages[0] = {
+      ...record.messages[0],
+      images: [{ ...created.image, file }],
+    };
     updatePlaythroughRecord(h.dataDir, record);
 
-    const res = await h.app.inject({ method: "DELETE", url: deleteUrl(h, file) });
+    const res = await h.app.inject({
+      method: "DELETE",
+      url: deleteUrl(h, file),
+    });
     expect(res.statusCode).toBe(200);
     expect(storedFiles(h.imagesDir)).toEqual([file]);
-    expect(saveImageBytes(pngBytes("routes"), "image/png", h.imagesDir).created).toBe(false);
+    expect(
+      saveImageBytes(pngBytes("routes"), "image/png", h.imagesDir).created,
+    ).toBe(false);
   });
 
   it("spares a file a surviving timeline branch still references", async () => {
@@ -818,16 +1125,24 @@ describe("DELETE /api/playthroughs/:id/messages/:messageId/images/:file", () => 
     // The branch holds the same content-addressed name (branching clones the
     // message by value). It is EXCLUDED from the default playthrough list, so a
     // sweep that did not ask for branches would eat this file.
-    writePlaythroughWithImages(h.dataDir, "Branch", [[file]], { isTimelineBranch: true });
+    writePlaythroughWithImages(h.dataDir, "Branch", [[file]], {
+      isTimelineBranch: true,
+    });
 
-    const res = await h.app.inject({ method: "DELETE", url: deleteUrl(h, file) });
+    const res = await h.app.inject({
+      method: "DELETE",
+      url: deleteUrl(h, file),
+    });
     expect(res.statusCode).toBe(200);
     expect(storedFiles(h.imagesDir)).toEqual([file]);
   });
 
   it("404s an unknown playthrough", async () => {
     const h = harness();
-    const res = await h.app.inject({ method: "DELETE", url: "/api/playthroughs/nope/messages/m/images/x.png" });
+    const res = await h.app.inject({
+      method: "DELETE",
+      url: "/api/playthroughs/nope/messages/m/images/x.png",
+    });
     expect(res.statusCode).toBe(404);
   });
 });
@@ -835,15 +1150,22 @@ describe("DELETE /api/playthroughs/:id/messages/:messageId/images/:file", () => 
 describe("POST /api/settings/providers/models", () => {
   it("forwards an optional type as the upstream query parameter", async () => {
     const h = harness();
-    const res = await post(h.app, "/api/settings/providers/models", { baseUrl: "https://api.venice.ai/api/v1", type: "image" });
+    const res = await post(h.app, "/api/settings/providers/models", {
+      baseUrl: "https://api.venice.ai/api/v1",
+      type: "image",
+    });
     expect(res.statusCode).toBe(200);
-    expect(h.calls[0].url).toBe("https://api.venice.ai/api/v1/models?type=image");
+    expect(h.calls[0].url).toBe(
+      "https://api.venice.ai/api/v1/models?type=image",
+    );
     expect(res.json().models).toEqual(["lustify-v8", "wai-nsfw"]);
   });
 
   it("omits the query parameter when no type is given", async () => {
     const h = harness();
-    await post(h.app, "/api/settings/providers/models", { baseUrl: "http://localhost:1234/v1" });
+    await post(h.app, "/api/settings/providers/models", {
+      baseUrl: "http://localhost:1234/v1",
+    });
     expect(h.calls[0].url).toBe("http://localhost:1234/v1/models");
   });
 
@@ -853,15 +1175,20 @@ describe("POST /api/settings/providers/models", () => {
         data: [
           {
             id: "lustify-v8",
-            model_spec: { constraints: { promptCharacterLimit: 7500, widthHeightDivisor: 8 } }
+            model_spec: {
+              constraints: {
+                promptCharacterLimit: 7500,
+                widthHeightDivisor: 8,
+              },
+            },
           },
-          { id: "wai-nsfw" }
-        ]
-      }
+          { id: "wai-nsfw" },
+        ],
+      },
     });
     const res = await post(h.app, "/api/settings/providers/models", {
       baseUrl: "https://api.venice.ai/api/v1",
-      type: "image"
+      type: "image",
     });
     expect(res.statusCode).toBe(200);
     // The id list is unchanged…
@@ -869,7 +1196,7 @@ describe("POST /api/settings/providers/models", () => {
     // …and the per-model constraints ride along, with no entry for the model
     // that published no `model_spec`.
     expect(res.json().modelSpecs).toEqual({
-      "lustify-v8": { promptCharacterLimit: 7500, widthHeightDivisor: 8 }
+      "lustify-v8": { promptCharacterLimit: 7500, widthHeightDivisor: 8 },
     });
   });
 
@@ -883,7 +1210,7 @@ describe("POST /api/settings/providers/models", () => {
       apiStyle: "venice",
       safeMode: false,
       size: "1024x1024",
-      variants: 2
+      variants: 2,
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -892,8 +1219,12 @@ describe("POST /api/settings/providers/models", () => {
     expect(body.variants).toBe(2);
 
     // The harness already has a text connection, so the new row is second.
-    const onDisk = JSON.parse(readFileSync(join(h.settingsDir, "providers.json"), "utf8"));
-    const created = onDisk.connections.find((c: { id: string }) => c.id === "venice_images");
+    const onDisk = JSON.parse(
+      readFileSync(join(h.settingsDir, "providers.json"), "utf8"),
+    );
+    const created = onDisk.connections.find(
+      (c: { id: string }) => c.id === "venice_images",
+    );
     expect(created.kind).toBe("image");
     expect(created.apiStyle).toBe("venice");
     expect(created.variants).toBe(2);
@@ -906,14 +1237,18 @@ describe("POST /api/settings/providers/models", () => {
       baseUrl: "https://api.venice.ai/api/v1",
       model: "lustify-v8",
       kind: "image",
-      apiStyle: "venice"
+      apiStyle: "venice",
     } as const;
 
     // On the body schema or zod strips the field silently.
-    const created = await post(h.app, "/api/settings/providers", { ...base, seed: 4242 });
+    const created = await post(h.app, "/api/settings/providers", {
+      ...base,
+      seed: 4242,
+    });
     expect(created.statusCode).toBe(200);
     expect(created.json().seed).toBe(4242);
-    const onDisk = () => JSON.parse(readFileSync(join(h.settingsDir, "providers.json"), "utf8"));
+    const onDisk = () =>
+      JSON.parse(readFileSync(join(h.settingsDir, "providers.json"), "utf8"));
     const row = (raw: { connections: Array<{ id: string; seed?: number }> }) =>
       raw.connections.find((c) => c.id === "venice_images")!;
     expect(row(onDisk()).seed).toBe(4242);
@@ -922,7 +1257,7 @@ describe("POST /api/settings/providers/models", () => {
     const cleared = await h.app.inject({
       method: "PUT",
       url: "/api/settings/providers/venice_images",
-      payload: { ...base, seed: null }
+      payload: { ...base, seed: null },
     });
     expect(cleared.statusCode).toBe(200);
     expect("seed" in cleared.json()).toBe(false);
@@ -934,7 +1269,7 @@ describe("POST /api/settings/providers/models", () => {
     const h = harness();
     const res = await post(h.app, "/api/settings/providers/models", {
       baseUrl: "http://127.0.0.1:7860",
-      apiStyle: "a1111"
+      apiStyle: "a1111",
     });
     expect(res.statusCode).toBe(200);
     // The exact URLs, so a stray /v1 prefix cannot hide behind a suffix match.
@@ -942,10 +1277,16 @@ describe("POST /api/settings/providers/models", () => {
       "http://127.0.0.1:7860/sdapi/v1/sd-models",
       "http://127.0.0.1:7860/sdapi/v1/samplers",
       "http://127.0.0.1:7860/sdapi/v1/schedulers",
-      "http://127.0.0.1:7860/sdapi/v1/script-info"
+      "http://127.0.0.1:7860/sdapi/v1/script-info",
     ]);
-    expect(res.json().models).toEqual(["dreamshaper_8.safetensors", "sd_xl_base_1.0.safetensors"]);
-    expect(res.json().dialectOptions).toEqual({ samplers: ["DPM++ 2M Karras"], schedulers: ["Karras"] });
+    expect(res.json().models).toEqual([
+      "dreamshaper_8.safetensors",
+      "sd_xl_base_1.0.safetensors",
+    ]);
+    expect(res.json().dialectOptions).toEqual({
+      samplers: ["DPM++ 2M Karras"],
+      schedulers: ["Karras"],
+    });
   });
 
   it("keeps the A1111 controls an image connection is created with, and probes it by its STORED style", async () => {
@@ -962,14 +1303,18 @@ describe("POST /api/settings/providers/models", () => {
       cfgScale: 6.5,
       sampler: "DPM++ 2M Karras",
       scheduler: "Karras",
-      timeoutMs: 900_000
+      timeoutMs: 900_000,
     });
     expect(created.statusCode).toBe(200);
 
     // zod strips what the body schema does not declare, and createConnection
     // copies field by field: a missing one is a silently lost setting.
-    const onDisk = JSON.parse(readFileSync(join(h.settingsDir, "providers.json"), "utf8"));
-    const row = onDisk.connections.find((c: { id: string }) => c.id === "local_sd");
+    const onDisk = JSON.parse(
+      readFileSync(join(h.settingsDir, "providers.json"), "utf8"),
+    );
+    const row = onDisk.connections.find(
+      (c: { id: string }) => c.id === "local_sd",
+    );
     expect(row).toMatchObject({
       apiStyle: "a1111",
       // The Forge Couple region fields are settings the editor saves through
@@ -980,26 +1325,35 @@ describe("POST /api/settings/providers/models", () => {
       cfgScale: 6.5,
       sampler: "DPM++ 2M Karras",
       scheduler: "Karras",
-      timeoutMs: 900_000
+      timeoutMs: 900_000,
     });
     // The stored base URL stays at the WebUI ROOT — no /v1 is appended to it.
     expect(row.baseUrl).toBe("http://127.0.0.1:7860");
 
-    const res = await post(h.app, "/api/settings/providers/models", { id: "local_sd" });
+    const res = await post(h.app, "/api/settings/providers/models", {
+      id: "local_sd",
+    });
     expect(res.statusCode).toBe(200);
     expect(h.calls.map((c) => c.url)).toEqual([
       "http://127.0.0.1:7860/sdapi/v1/sd-models",
       "http://127.0.0.1:7860/sdapi/v1/samplers",
       "http://127.0.0.1:7860/sdapi/v1/schedulers",
-      "http://127.0.0.1:7860/sdapi/v1/script-info"
+      "http://127.0.0.1:7860/sdapi/v1/script-info",
     ]);
-    expect(res.json().models).toEqual(["dreamshaper_8.safetensors", "sd_xl_base_1.0.safetensors"]);
+    expect(res.json().models).toEqual([
+      "dreamshaper_8.safetensors",
+      "sd_xl_base_1.0.safetensors",
+    ]);
 
     // The reachability check follows the same style.
-    const tested = await post(h.app, "/api/settings/providers/test", { id: "local_sd" });
+    const tested = await post(h.app, "/api/settings/providers/test", {
+      id: "local_sd",
+    });
     expect(tested.statusCode).toBe(200);
     expect(tested.json().ok).toBe(true);
-    expect(h.calls.some((c) => c.url === "http://127.0.0.1:7860/sdapi/v1/sd-models")).toBe(true);
+    expect(
+      h.calls.some((c) => c.url === "http://127.0.0.1:7860/sdapi/v1/sd-models"),
+    ).toBe(true);
   });
 });
 
@@ -1009,8 +1363,19 @@ describe("image progress registry", () => {
   });
 
   it("keeps each connection's snapshot separate, and clears it", () => {
-    publishImageProgress("conn_a", { progress: 0.43, step: 12, steps: 28, etaSeconds: 5 });
-    expect(readImageProgress("conn_a")).toEqual({ active: true, progress: 0.43, step: 12, steps: 28, etaSeconds: 5 });
+    publishImageProgress("conn_a", {
+      progress: 0.43,
+      step: 12,
+      steps: 28,
+      etaSeconds: 5,
+    });
+    expect(readImageProgress("conn_a")).toEqual({
+      active: true,
+      progress: 0.43,
+      step: 12,
+      steps: 28,
+      etaSeconds: 5,
+    });
     // Keyed by connection: another connection's readout is untouched.
     expect(readImageProgress("conn_b")).toEqual({ active: false });
 
@@ -1055,12 +1420,17 @@ describe("provider connections — the model field", () => {
         cfgScale: 6,
         sampler: "Euler a",
         scheduler: "Karras",
-        timeoutMs: 600000
-      }
+        timeoutMs: 600000,
+      },
     });
 
     expect(res.statusCode).toBe(200);
-    const saved = res.json() as { model: string; apiStyle: string; steps?: number; timeoutMs?: number };
+    const saved = res.json() as {
+      model: string;
+      apiStyle: string;
+      steps?: number;
+      timeoutMs?: number;
+    };
     expect(saved.model).toBe("");
     expect(saved.apiStyle).toBe("a1111");
     expect(saved.steps).toBe(28);
@@ -1072,7 +1442,12 @@ describe("provider connections — the model field", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/settings/providers",
-      payload: { kind: "text", label: "Local Text", baseUrl: "http://localhost:1234/v1", model: "" }
+      payload: {
+        kind: "text",
+        label: "Local Text",
+        baseUrl: "http://localhost:1234/v1",
+        model: "",
+      },
     });
 
     // 500, not 400: a ZodError thrown in a handler reaches Fastify's default
@@ -1092,7 +1467,12 @@ describe("provider connections — the model field", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/settings/providers",
-      payload: { label: "Draft", baseUrl: "http://192.168.1.2:7860", model: "", apiStyle: "a1111" }
+      payload: {
+        label: "Draft",
+        baseUrl: "http://192.168.1.2:7860",
+        model: "",
+        apiStyle: "a1111",
+      },
     });
 
     expect(res.statusCode).toBe(200);
@@ -1111,7 +1491,9 @@ describe("image prompt context: the history window and the instruction mode", ()
     // This fixture's nearest user message is INSIDE the window, so the
     // single-action block would be the same prose twice.
     expect(block).not.toContain("PLAYER'S LAST ACTION");
-    expect(block.indexOf("SCENE TEXT:")).toBeGreaterThan(block.indexOf("PREVIOUS MESSAGES"));
+    expect(block.indexOf("SCENE TEXT:")).toBeGreaterThan(
+      block.indexOf("PREVIOUS MESSAGES"),
+    );
   });
 
   it("sends no history block at count 0, and keeps the action block", async () => {
@@ -1139,13 +1521,21 @@ describe("image prompt context: the history window and the instruction mode", ()
     // …and the player is one of the people in the frame: the same two lines anyone
     // else gets. (This harness's player brings no wardrobe, so the instance line says
     // so rather than inventing one.)
-    expect(block).toContain("Anon — wearing White Long Sleeve Shirt, Necktie, Black Slacks, Black Shoes");
-    expect(block).toContain("Anon's sheet — A male human | average | Fair skin. Black hair. Black eye color.");
+    expect(block).toContain(
+      "Anon — wearing White Long Sleeve Shirt, Necktie, Black Slacks, Black Shoes",
+    );
+    expect(block).toContain(
+      "Anon's sheet — A male human | average | Fair skin. Black hair. Black eye color.",
+    );
   });
 
   it("sends the dry run and the generate call byte-identical context", async () => {
     const h = harness();
-    const preview = await post(h.app, imageUrl(h, h.assistantMessageId, "/prompt"), {});
+    const preview = await post(
+      h.app,
+      imageUrl(h, h.assistantMessageId, "/prompt"),
+      {},
+    );
     expect(preview.statusCode).toBe(200);
     const dryBlock = h.calls[0].body.messages[1].content as string;
 
@@ -1160,7 +1550,7 @@ describe("image prompt context: the history window and the instruction mode", ()
 function seedAnswer(
   h: ReturnType<typeof harness>,
   messageIndex: number,
-  answer: { writerPrompt?: string; writerNegative?: string }
+  answer: { writerPrompt?: string; writerNegative?: string },
 ) {
   const record = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
   const message = record.messages[messageIndex];
@@ -1172,8 +1562,8 @@ function seedAnswer(
       providerId: "venice_images",
       model: "test-image-model",
       createdAt: new Date().toISOString(),
-      ...answer
-    }
+      ...answer,
+    },
   ];
   updatePlaythroughRecord(h.dataDir, record);
 }
@@ -1198,7 +1588,7 @@ describe("image prompt context: the writer's answer and the reference", () => {
       promptOverride: "reviewed tags",
       negativeOverride: "reviewed negative",
       writerPrompt: "model tags",
-      writerNegative: "model negative"
+      writerNegative: "model negative",
     });
     const image = res.json().image;
 
@@ -1213,19 +1603,29 @@ describe("image prompt context: the writer's answer and the reference", () => {
 
   it("stores no answer at all on the reviewed path without an echo", async () => {
     const h = harness();
-    const res = await post(h.app, imageUrl(h), { promptOverride: "reviewed", negativeOverride: "neg" });
+    const res = await post(h.app, imageUrl(h), {
+      promptOverride: "reviewed",
+      negativeOverride: "neg",
+    });
     expect("writerPrompt" in res.json().image).toBe(false);
   });
 
   it("reports the answer and the context it was given from the dry run", async () => {
     const h = harness();
-    const res = await post(h.app, imageUrl(h, h.assistantMessageId, "/prompt"), {});
+    const res = await post(
+      h.app,
+      imageUrl(h, h.assistantMessageId, "/prompt"),
+      {},
+    );
 
     expect(res.statusCode).toBe(200);
     expect(res.json().writerPrompt).toBe("a woman in the rain");
     // The count is what the window CARRIED: this fixture's frame is the third
     // message, so two. The modal says that rather than what the preset asks for.
-    expect(res.json().context).toEqual({ historyMessages: 2, instructionMode: "pov" });
+    expect(res.json().context).toEqual({
+      historyMessages: 2,
+      instructionMode: "pov",
+    });
   });
 
   it("offers one earlier answer as a reference when the preset asks for it", async () => {
@@ -1237,14 +1637,18 @@ describe("image prompt context: the writer's answer and the reference", () => {
     expect(block).toContain("PREVIOUS IMAGE PROMPT");
     expect(block).toContain(ANSWER);
     expect(block).toContain("Negative: bad hands");
-    expect(block.indexOf("PREVIOUS IMAGE PROMPT")).toBeLessThan(block.indexOf("SCENE TEXT:"));
+    expect(block.indexOf("PREVIOUS IMAGE PROMPT")).toBeLessThan(
+      block.indexOf("SCENE TEXT:"),
+    );
   });
 
   it("sends no reference when the toggle is off, even with an answer stored", async () => {
     const h = harness();
     seedAnswer(h, 0, { writerPrompt: ANSWER });
     await post(h.app, imageUrl(h), {});
-    expect(h.calls[0].body.messages[1].content).not.toContain("PREVIOUS IMAGE PROMPT");
+    expect(h.calls[0].body.messages[1].content).not.toContain(
+      "PREVIOUS IMAGE PROMPT",
+    );
   });
 
   it("prefers the closest prior answer: an earlier variant on the same message", async () => {
@@ -1276,7 +1680,7 @@ function seedImageRef(
   h: ReturnType<typeof harness>,
   messageId: string,
   seed: string,
-  overrides: Partial<MessageImage> = {}
+  overrides: Partial<MessageImage> = {},
 ): string {
   const bytes = pngBytes(seed);
   const file = `${createHash("sha256").update(bytes).digest("hex")}.png`;
@@ -1300,7 +1704,7 @@ describe("re-sending a stored request body", () => {
     negative_prompt: "blurry",
     variants: 1,
     seed: 777,
-    safe_mode: false
+    safe_mode: false,
   };
 
   it("sends the body verbatim and makes no text call at all", async () => {
@@ -1311,7 +1715,7 @@ describe("re-sending a stored request body", () => {
     const res = await post(h.app, imageUrl(h), {
       rawRequest: JSON.stringify(BODY),
       replaceFile: file,
-      imageProviderId: connectionId
+      imageProviderId: connectionId,
     });
 
     // ONE call, and it is the image one: the whole point of the path is that the
@@ -1328,7 +1732,7 @@ describe("re-sending a stored request body", () => {
     const res = await post(h.app, imageUrl(h), {
       rawRequest: JSON.stringify(BODY),
       replaceFile: file,
-      imageProviderId: h.manager.imageConnection()!.id
+      imageProviderId: h.manager.imageConnection()!.id,
     });
     const image = res.json().image;
 
@@ -1356,7 +1760,7 @@ describe("re-sending a stored request body", () => {
     const res = await post(h.app, imageUrl(h), {
       rawRequest: JSON.stringify(BODY),
       replaceFile: file,
-      imageProviderId: h.manager.imageConnection()!.id
+      imageProviderId: h.manager.imageConnection()!.id,
     });
     const images = imagesOf(res.json().playthrough, h.assistantMessageId);
 
@@ -1374,13 +1778,19 @@ describe("re-sending a stored request body", () => {
     // therefore only touch the refs that were already there — filtering the
     // appended ones too would leave the message with no image at all, and then
     // the sweep would take the file with it.
-    const body = JSON.stringify({ model: "flux-dev", prompt: "identical", seed: 5 });
-    const file = seedImageRef(h, h.assistantMessageId, "routes", { request: body });
+    const body = JSON.stringify({
+      model: "flux-dev",
+      prompt: "identical",
+      seed: 5,
+    });
+    const file = seedImageRef(h, h.assistantMessageId, "routes", {
+      request: body,
+    });
 
     const res = await post(h.app, imageUrl(h), {
       rawRequest: body,
       replaceFile: file,
-      imageProviderId: h.manager.imageConnection()!.id
+      imageProviderId: h.manager.imageConnection()!.id,
     });
     const images = imagesOf(res.json().playthrough, h.assistantMessageId);
 
@@ -1398,7 +1808,7 @@ describe("re-sending a stored request body", () => {
     const res = await post(h.app, imageUrl(h), {
       rawRequest: JSON.stringify(BODY),
       replaceFile: file,
-      imageProviderId: h.manager.imageConnection()!.id
+      imageProviderId: h.manager.imageConnection()!.id,
     });
 
     expect(res.statusCode).toBe(502);
@@ -1413,11 +1823,13 @@ describe("re-sending a stored request body", () => {
     const res = await post(h.app, imageUrl(h), {
       rawRequest: JSON.stringify(BODY),
       replaceFile: `${"c".repeat(64)}.png`,
-      imageProviderId: h.manager.imageConnection()!.id
+      imageProviderId: h.manager.imageConnection()!.id,
     });
 
     expect(res.statusCode).toBe(200);
-    expect(imagesOf(res.json().playthrough, h.assistantMessageId)).toHaveLength(1);
+    expect(imagesOf(res.json().playthrough, h.assistantMessageId)).toHaveLength(
+      1,
+    );
   });
 
   it("refuses a raw body and prompt overrides together", async () => {
@@ -1425,17 +1837,19 @@ describe("re-sending a stored request body", () => {
     const res = await post(h.app, imageUrl(h), {
       rawRequest: JSON.stringify(BODY),
       promptOverride: "reviewed",
-      negativeOverride: "neg"
+      negativeOverride: "neg",
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json().error).toBe("Send either a raw request body or prompt overrides, not both.");
+    expect(res.json().error).toBe(
+      "Send either a raw request body or prompt overrides, not both.",
+    );
     expect(h.calls).toHaveLength(0);
   });
 
   it("refuses a body that is not a JSON object", async () => {
     const h = harness();
-    for (const bad of ["not json at all", "[]", "\"a string\"", "42"]) {
+    for (const bad of ["not json at all", "[]", '"a string"', "42"]) {
       const res = await post(h.app, imageUrl(h), { rawRequest: bad });
       expect(res.statusCode, bad).toBe(400);
       expect(res.json().error).toBe("The request body must be a JSON object.");
@@ -1450,7 +1864,7 @@ describe("re-sending a stored request body", () => {
     const fallback = await post(h.app, imageUrl(h), {
       promptOverride: "reviewed",
       negativeOverride: "neg",
-      imageProviderId: "no_such_connection"
+      imageProviderId: "no_such_connection",
     });
     expect(fallback.statusCode).toBe(200);
 
@@ -1458,10 +1872,12 @@ describe("re-sending a stored request body", () => {
     // is reported rather than aimed at whatever is active now.
     const res = await post(h.app, imageUrl(h), {
       rawRequest: JSON.stringify(BODY),
-      imageProviderId: "no_such_connection"
+      imageProviderId: "no_such_connection",
     });
     expect(res.statusCode).toBe(400);
-    expect(res.json().error).toBe("The image connection this request body belongs to no longer exists.");
+    expect(res.json().error).toBe(
+      "The image connection this request body belongs to no longer exists.",
+    );
   });
 
   it("needs no text connection to re-send a body", async () => {
@@ -1470,7 +1886,7 @@ describe("re-sending a stored request body", () => {
     const h = harness({ withText: false });
     const res = await post(h.app, imageUrl(h), {
       rawRequest: JSON.stringify(BODY),
-      imageProviderId: h.manager.imageConnection()!.id
+      imageProviderId: h.manager.imageConnection()!.id,
     });
 
     expect(res.statusCode).toBe(200);
@@ -1485,24 +1901,31 @@ describe("re-sending a stored request body", () => {
     const long = "x".repeat(VENICE_IMAGE_PROMPT_CAP + 500);
     const res = await post(h.app, imageUrl(h), {
       rawRequest: JSON.stringify({ ...BODY, prompt: long }),
-      imageProviderId: h.manager.imageConnection()!.id
+      imageProviderId: h.manager.imageConnection()!.id,
     });
 
     expect(res.statusCode).toBe(200);
-    expect((h.calls[0].body as { prompt: string }).prompt).toHaveLength(long.length);
+    expect((h.calls[0].body as { prompt: string }).prompt).toHaveLength(
+      long.length,
+    );
   });
 
   it("carries the body's own model onto the ref, not the connection's", async () => {
     // A body can name a checkpoint the connection has since changed away from,
     // and the caption must not relabel the image with a model it never used.
-    const h = harness({ imageApiStyle: "a1111", imageBaseUrl: "http://127.0.0.1:7860" });
+    const h = harness({
+      imageApiStyle: "a1111",
+      imageBaseUrl: "http://127.0.0.1:7860",
+    });
     const res = await post(h.app, imageUrl(h), {
       rawRequest: JSON.stringify({
         prompt: "tag list",
         seed: 3,
-        override_settings: { sd_model_checkpoint: "waiANINSFWPONYXL_v140.safetensors" }
+        override_settings: {
+          sd_model_checkpoint: "waiANINSFWPONYXL_v140.safetensors",
+        },
       }),
-      imageProviderId: h.manager.imageConnection()!.id
+      imageProviderId: h.manager.imageConnection()!.id,
     });
 
     expect(res.statusCode).toBe(200);
@@ -1512,25 +1935,34 @@ describe("re-sending a stored request body", () => {
 
 /** The editor's Save: replace one image's stored body, rendering nothing. */
 describe("saving an edited request body", () => {
-  function patchRequest(h: ReturnType<typeof harness>, file: string, payload: unknown, messageId?: string) {
+  function patchRequest(
+    h: ReturnType<typeof harness>,
+    file: string,
+    payload: unknown,
+    messageId?: string,
+  ) {
     return h.app.inject({
       method: "PATCH",
       url: deleteUrl(h, file, messageId),
-      payload: payload as Record<string, unknown>
+      payload: payload as Record<string, unknown>,
     });
   }
 
   it("replaces the stored body and renders absolutely nothing", async () => {
     const h = harness();
     const file = seedImageRef(h, h.assistantMessageId, "save", {
-      request: JSON.stringify({ prompt: "the original body", seed: 1 })
+      request: JSON.stringify({ prompt: "the original body", seed: 1 }),
     });
     const edited = { prompt: "the edited body", seed: 4242, steps: 30 };
 
-    const res = await patchRequest(h, file, { request: JSON.stringify(edited, null, 2) });
+    const res = await patchRequest(h, file, {
+      request: JSON.stringify(edited, null, 2),
+    });
 
     expect(res.statusCode).toBe(200);
-    const ref = imagesOf(res.json().playthrough, h.assistantMessageId).find((i) => i.file === file)!;
+    const ref = imagesOf(res.json().playthrough, h.assistantMessageId).find(
+      (i) => i.file === file,
+    )!;
     // Stored in the one shape every other request on a record has: a single line.
     expect(ref.request).toBe(JSON.stringify(edited));
     // NOTHING was called: no image provider, no text provider. This button is a
@@ -1538,7 +1970,9 @@ describe("saving an edited request body", () => {
     expect(h.calls).toHaveLength(0);
     // …and it survives to disk.
     const stored = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
-    expect(imagesOf(stored, h.assistantMessageId)[0].request).toBe(JSON.stringify(edited));
+    expect(imagesOf(stored, h.assistantMessageId)[0].request).toBe(
+      JSON.stringify(edited),
+    );
   });
 
   it("keeps the image, its bytes and the fields that describe it", async () => {
@@ -1547,10 +1981,12 @@ describe("saving an edited request body", () => {
       request: JSON.stringify({ prompt: "original", seed: 1 }),
       prompt: "the prompt that rendered this image",
       negativePrompt: "the negative that rendered it",
-      seed: 99
+      seed: 99,
     });
 
-    const res = await patchRequest(h, file, { request: JSON.stringify({ prompt: "different", seed: 7 }) });
+    const res = await patchRequest(h, file, {
+      request: JSON.stringify({ prompt: "different", seed: 7 }),
+    });
     const ref = imagesOf(res.json().playthrough, h.assistantMessageId)[0];
 
     // The image on screen did not change, so what describes it must not either:
@@ -1566,7 +2002,7 @@ describe("saving an edited request body", () => {
   it("saves the body a later re-send actually posts", async () => {
     const h = harness();
     const file = seedImageRef(h, h.assistantMessageId, "roundtrip", {
-      request: JSON.stringify({ prompt: "before", seed: 1 })
+      request: JSON.stringify({ prompt: "before", seed: 1 }),
     });
     const edited = { model: "flux-dev", prompt: "after", seed: 31337 };
 
@@ -1574,18 +2010,20 @@ describe("saving an edited request body", () => {
     const res = await post(h.app, imageUrl(h), {
       rawRequest: JSON.stringify(edited),
       replaceFile: file,
-      imageProviderId: h.manager.imageConnection()!.id
+      imageProviderId: h.manager.imageConnection()!.id,
     });
 
     expect(res.statusCode).toBe(200);
     expect(h.calls[0].body).toEqual(edited);
-    expect(imagesOf(res.json().playthrough, h.assistantMessageId)).toHaveLength(1);
+    expect(imagesOf(res.json().playthrough, h.assistantMessageId)).toHaveLength(
+      1,
+    );
   });
 
   it("refuses a body that is not a JSON object, and writes nothing", async () => {
     const h = harness();
     const file = seedImageRef(h, h.assistantMessageId, "bad", {
-      request: JSON.stringify({ prompt: "untouched" })
+      request: JSON.stringify({ prompt: "untouched" }),
     });
 
     for (const bad of ["not json", "[]", "null", "7"]) {
@@ -1594,25 +2032,34 @@ describe("saving an edited request body", () => {
       expect(res.json().error).toBe("The request body must be a JSON object.");
     }
     const stored = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
-    expect(imagesOf(stored, h.assistantMessageId)[0].request).toBe(JSON.stringify({ prompt: "untouched" }));
+    expect(imagesOf(stored, h.assistantMessageId)[0].request).toBe(
+      JSON.stringify({ prompt: "untouched" }),
+    );
   });
 
   it("404s an unknown ref, message or playthrough instead of creating one", async () => {
     const h = harness();
     seedImageRef(h, h.assistantMessageId, "known");
 
-    const gone = await patchRequest(h, `${"d".repeat(64)}.png`, { request: "{}" });
+    const gone = await patchRequest(h, `${"d".repeat(64)}.png`, {
+      request: "{}",
+    });
     expect(gone.statusCode).toBe(404);
     expect(gone.json().error).toBe("Image not found");
 
-    const noMessage = await patchRequest(h, `${"d".repeat(64)}.png`, { request: "{}" }, "msg_nope");
+    const noMessage = await patchRequest(
+      h,
+      `${"d".repeat(64)}.png`,
+      { request: "{}" },
+      "msg_nope",
+    );
     expect(noMessage.statusCode).toBe(404);
     expect(noMessage.json().error).toBe("Message not found");
 
     const noPlaythrough = await h.app.inject({
       method: "PATCH",
       url: `/api/playthroughs/nope/messages/${h.assistantMessageId}/images/${"d".repeat(64)}.png`,
-      payload: { request: "{}" }
+      payload: { request: "{}" },
     });
     expect(noPlaythrough.statusCode).toBe(404);
     expect(noPlaythrough.json().error).toBe("Playthrough not found");

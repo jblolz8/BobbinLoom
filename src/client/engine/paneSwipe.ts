@@ -56,12 +56,18 @@ export function swipeVelocity(samples: SwipeSample[], windowSize = 3): number {
  * short lazy drag goes back where it came from.
  */
 export function commitSwipe(
-  { offset, velocity, width }: { offset: number; velocity: number; width: number },
-  { ratio = SWIPE_COMMIT_RATIO, flick = SWIPE_FLICK_VELOCITY } = {}
+  {
+    offset,
+    velocity,
+    width,
+  }: { offset: number; velocity: number; width: number },
+  { ratio = SWIPE_COMMIT_RATIO, flick = SWIPE_FLICK_VELOCITY } = {},
 ): boolean {
   if (width <= 0) return false;
   if (Math.abs(offset) >= width * ratio) return true;
-  return Math.abs(velocity) >= flick && Math.sign(velocity) === Math.sign(offset);
+  return (
+    Math.abs(velocity) >= flick && Math.sign(velocity) === Math.sign(offset)
+  );
 }
 
 /**
@@ -70,7 +76,12 @@ export function commitSwipe(
  * Within a panel's width of the drag, on the far side: dragging left brings the next panel in from
  * the right, and the two arrive together.
  */
-export function incomingOffset(offset: number, from: number, to: number, width: number): number {
+export function incomingOffset(
+  offset: number,
+  from: number,
+  to: number,
+  width: number,
+): number {
   return to > from ? offset + width : offset - width;
 }
 
@@ -92,7 +103,7 @@ export type DragAxis = "pending" | "horizontal" | "vertical";
  */
 export function swipeIntent(
   { dx, dy }: SwipeVector,
-  { threshold = SWIPE_THRESHOLD_PX, dominance = SWIPE_DOMINANCE } = {}
+  { threshold = SWIPE_THRESHOLD_PX, dominance = SWIPE_DOMINANCE } = {},
 ): SwipeIntent | null {
   if (Math.abs(dx) < threshold) return null;
   if (Math.abs(dx) <= dominance * Math.abs(dy)) return null;
@@ -111,7 +122,7 @@ export function swipeIntent(
  */
 export function dragAxis(
   { dx, dy }: SwipeVector,
-  { axisLock = SWIPE_AXIS_LOCK_PX, dominance = SWIPE_DOMINANCE } = {}
+  { axisLock = SWIPE_AXIS_LOCK_PX, dominance = SWIPE_DOMINANCE } = {},
 ): DragAxis {
   // Until it has travelled, a small movement is neither axis: the panel's own scrolling must stay
   // free to be the answer.
@@ -138,7 +149,11 @@ export function stillPaneDrag({ dx, dy }: SwipeVector): boolean {
  * Clamped rather than wrapped: a right swipe on the first panel stays on the first panel, because
  * wrapping from Scene straight to Info would read as a hole in the model rather than a shortcut.
  */
-export function stepPane(index: number, intent: SwipeIntent, count: number = PANE_ORDER.length): number {
+export function stepPane(
+  index: number,
+  intent: SwipeIntent,
+  count: number = PANE_ORDER.length,
+): number {
   if (count <= 0) return 0;
   const target = intent === "next" ? index + 1 : index - 1;
   return Math.min(count - 1, Math.max(0, target));
@@ -151,7 +166,10 @@ export function stepPane(index: number, intent: SwipeIntent, count: number = PAN
  * error box — and the rule is simply whether there is anywhere to scroll: an element with no room
  * left or right has nothing to own, and the swipe belongs to the panels.
  */
-export function ownsHorizontalGesture(scrollWidth: number, clientWidth: number): boolean {
+export function ownsHorizontalGesture(
+  scrollWidth: number,
+  clientWidth: number,
+): boolean {
   return scrollWidth > clientWidth + 1;
 }
 

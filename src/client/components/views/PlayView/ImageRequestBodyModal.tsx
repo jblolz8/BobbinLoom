@@ -7,7 +7,11 @@ import { ConfirmModal } from "../../common/ConfirmModal";
  *  that connection no longer exists — the body can still be SAVED (a save renders
  *  nothing and needs no provider at all), but the re-send it is preparing for
  *  cannot be aimed anywhere, so the editor says so. */
-export type ImageRequestBodyConnection = { label: string; model: string; apiStyle: ImageApiStyle } | null;
+export type ImageRequestBodyConnection = {
+  label: string;
+  model: string;
+  apiStyle: ImageApiStyle;
+} | null;
 
 export type ImageRequestBodyModalProps = {
   /** The stored body, pretty-printed — what the field is seeded with, and what
@@ -28,7 +32,7 @@ const DIALECT_NOTES: Record<ImageApiStyle, string> = {
   venice:
     "When it is re-sent it goes to /image/generate. variants, seed, style_preset, aspect_ratio and safe_mode are whatever this body says — an empty field is omitted rather than sent as an empty value.",
   openai:
-    "When it is re-sent it goes to /images/generations. This dialect has no negative prompt, and the endpoint rejects a prompt over 1500 characters with its own error — the text is not clamped here, so that error is what you would see."
+    "When it is re-sent it goes to /images/generations. This dialect has no negative prompt, and the endpoint rejects a prompt over 1500 characters with its own error — the text is not clamped here, so that error is what you would see.",
 };
 
 /**
@@ -96,8 +100,9 @@ export function ImageRequestBodyModal(props: ImageRequestBodyModalProps) {
           <div>
             <h2>Edit Image Request</h2>
             <p className="image-prompt-subtitle">
-              The JSON body that went to the image provider. Saving it renders nothing — the image
-              stays as it is, and this body becomes what Retry sends.
+              The JSON body that went to the image provider. Saving it renders
+              nothing — the image stays as it is, and this body becomes what
+              Retry sends.
             </p>
           </div>
           <Button
@@ -137,15 +142,24 @@ export function ImageRequestBodyModal(props: ImageRequestBodyModalProps) {
             </p>
           ) : (
             <p className="image-request-missing-connection" role="status">
-              <Icon name="AlertTriangle" size={13} className="image-prompt-warning-icon" />
+              <Icon
+                name="AlertTriangle"
+                size={13}
+                className="image-prompt-warning-icon"
+              />
               <span>
-                The connection this image was made with no longer exists. The body can still be
-                saved, but a re-send has nowhere to go until it is restored.
+                The connection this image was made with no longer exists. The
+                body can still be saved, but a re-send has nowhere to go until
+                it is restored.
               </span>
             </p>
           )}
 
-          {connection ? <p className="image-prompt-caption">{DIALECT_NOTES[connection.apiStyle]}</p> : null}
+          {connection ? (
+            <p className="image-prompt-caption">
+              {DIALECT_NOTES[connection.apiStyle]}
+            </p>
+          ) : null}
 
           <div className="settings-actions image-prompt-actions">
             <Button
@@ -185,7 +199,12 @@ export function ImageRequestBodyModal(props: ImageRequestBodyModalProps) {
             </Button>
             {/* Cancel last: the row's order is a contract — the confirming action, then the
                 secondary actions beside it, then the way out. */}
-            <Button size="sm" variant="secondary" onClick={attemptClose} disabled={saving}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={attemptClose}
+              disabled={saving}
+            >
               Cancel
             </Button>
           </div>

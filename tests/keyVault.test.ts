@@ -2,7 +2,11 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { decryptApiKey, encryptApiKey, loadOrCreateVaultKey } from "../src/server/keyVault";
+import {
+  decryptApiKey,
+  encryptApiKey,
+  loadOrCreateVaultKey,
+} from "../src/server/keyVault";
 
 const tempDirs: string[] = [];
 
@@ -51,7 +55,11 @@ describe("keyVault", () => {
   it("regenerates a corrupt key file", () => {
     const dir = tempDir();
     loadOrCreateVaultKey(dir);
-    writeFileSync(join(dir, ".providers-key"), "not-a-valid-32-byte-key-!!", "utf8");
+    writeFileSync(
+      join(dir, ".providers-key"),
+      "not-a-valid-32-byte-key-!!",
+      "utf8",
+    );
     const key = loadOrCreateVaultKey(dir);
     expect(key.length).toBe(32);
   });

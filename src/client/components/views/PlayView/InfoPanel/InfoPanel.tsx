@@ -25,7 +25,12 @@ export type InfoPanelProps = {
   /** Re-runs the summarizer on an archived chapter, and which chapter is mid-summarize. */
   onResummarizeChapter: (chapterId: string) => void;
   resummarizingChapterId: string | null;
-  onStartNewWithSameScenario: (scenarioDescription: string, personaId: string | undefined, initialCastIds: string[] | undefined, originalName: string) => void;
+  onStartNewWithSameScenario: (
+    scenarioDescription: string,
+    personaId: string | undefined,
+    initialCastIds: string[] | undefined,
+    originalName: string,
+  ) => void;
   onOpenLibrary?: (templateId: string) => void;
   onOpenTimelines?: () => void;
   actionLoading: boolean;
@@ -38,7 +43,10 @@ export function InfoPanel(props: InfoPanelProps) {
   const [activeTab, setActiveTab] = useState<TabId>("player");
 
   return (
-    <aside className={`panel info-panel${className ? ` ${className}` : ""}`} style={style}>
+    <aside
+      className={`panel info-panel${className ? ` ${className}` : ""}`}
+      style={style}
+    >
       <div className="info-panel-tabs-header">
         <Tabs<TabId>
           tabs={INFO_TABS}

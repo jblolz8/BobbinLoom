@@ -1,10 +1,29 @@
-import { joinContentSections, splitContentSections, summaryFromContent } from "../../engine/characterSections";
-import { formatSectionHeaders, formatSections } from "../../engine/characterFormat";
+import {
+  joinContentSections,
+  splitContentSections,
+  summaryFromContent,
+} from "../../engine/characterSections";
+import {
+  formatSectionHeaders,
+  formatSections,
+} from "../../engine/characterFormat";
 import { ITEMS } from "../../engine/demoData";
-import { retrieveMemoriesVector, scanLorebooks, type ActivatedEntry } from "../../engine/engine";
+import {
+  retrieveMemoriesVector,
+  scanLorebooks,
+  type ActivatedEntry,
+} from "../../engine/engine";
 import { expandMacros, expandUserMacro } from "../../engine/macros";
 import type { EntryTimingState, LorebookEntry } from "../../schemas";
-import type { CharacterFormat, CharacterInstance, CharacterTemplate, ParsedUserInput, Playthrough, PromptConfig, PromptPresetModule } from "../../schemas";
+import type {
+  CharacterFormat,
+  CharacterInstance,
+  CharacterTemplate,
+  ParsedUserInput,
+  Playthrough,
+  PromptConfig,
+  PromptPresetModule,
+} from "../../schemas";
 import type { PromptUsage, PromptUsageBreakdown } from "../provider";
 import { VERBATIM_CHAPTER_LIMIT } from "../provider";
 import { getLorebook } from "../store";
@@ -16,7 +35,11 @@ import { getLorebook } from "../store";
  * structured clothing). Macros are expanded at prompt-build time only — source
  * and stored data are never modified.
  */
-function renderCharacterSheet(tpl: CharacterTemplate | undefined, instance: CharacterInstance, playerName: string): string {
+function renderCharacterSheet(
+  tpl: CharacterTemplate | undefined,
+  instance: CharacterInstance,
+  playerName: string,
+): string {
   if (!tpl) return "(no character data)";
   let blob = tpl.content ?? "(no character data)";
   // Structured clothing is the single source of truth, so the [Clothing] section
@@ -29,7 +52,7 @@ function renderCharacterSheet(tpl: CharacterTemplate | undefined, instance: Char
     const { preamble, sections } = splitContentSections(blob);
     blob = joinContentSections(
       sections.filter((s) => s.header.toLowerCase() !== "clothing"),
-      preamble
+      preamble,
     );
   }
   return expandMacros(blob, instance.name, playerName); // D10: runtime-only
@@ -56,8 +79,14 @@ export function summarizePlaythrough(state: Playthrough): string {
     }
 
     if (character.templateId) {
-      const tpl = state.characterTemplates.find((t) => t.id === character.templateId);
-      const contentBlob = renderCharacterSheet(tpl, character, state.playerCharacter.name);
+      const tpl = state.characterTemplates.find(
+        (t) => t.id === character.templateId,
+      );
+      const contentBlob = renderCharacterSheet(
+        tpl,
+        character,
+        state.playerCharacter.name,
+      );
 
       const runtimeBlock = [
         "[RUNTIME STATE]",
@@ -65,14 +94,20 @@ export function summarizePlaythrough(state: Playthrough): string {
         `Mood: ${character.mood}`,
         `Toward Player: ${character.towardPlayer}`,
         clothingLine,
-        character.conditions.length > 0 ? `Conditions: ${character.conditions.join(", ")}` : "",
-        character.flags.length > 0 ? `Flags: ${character.flags.join(", ")}` : "",
+        character.conditions.length > 0
+          ? `Conditions: ${character.conditions.join(", ")}`
+          : "",
+        character.flags.length > 0
+          ? `Flags: ${character.flags.join(", ")}`
+          : "",
         // The memory anchor is model-written, so it is the one runtime field that can
         // plausibly carry a macro, and it belongs to THIS character — so both macros
         // resolve. mood / towardPlayer / conditions / flags are engine labels, and are
         // deliberately left alone.
         `Memory: ${expandMacros(character.memorySummary, character.name, state.playerCharacter.name)}`,
-      ].filter(Boolean).join("\n");
+      ]
+        .filter(Boolean)
+        .join("\n");
 
       return [
         `ACTIVE CHARACTER [Detailed Character]: ${character.name} (${character.id})`,
@@ -87,10 +122,16 @@ export function summarizePlaythrough(state: Playthrough): string {
         `Mood: ${character.mood}`,
         `Toward Player: ${character.towardPlayer}`,
         clothingLine,
-        character.conditions.length > 0 ? `Conditions: ${character.conditions.join(", ")}` : "",
-        character.flags.length > 0 ? `Flags: ${character.flags.join(", ")}` : "",
+        character.conditions.length > 0
+          ? `Conditions: ${character.conditions.join(", ")}`
+          : "",
+        character.flags.length > 0
+          ? `Flags: ${character.flags.join(", ")}`
+          : "",
         `Memory: ${expandMacros(character.memorySummary, character.name, state.playerCharacter.name)}`,
-      ].filter(Boolean).join("\n");
+      ]
+        .filter(Boolean)
+        .join("\n");
 
       return [
         `ACTIVE CHARACTER [Simple Character]: ${character.name} (${character.id})`,
@@ -104,37 +145,63 @@ export function summarizePlaythrough(state: Playthrough): string {
 
   const inactiveLines = inactiveChars.map((character) => {
     if (character.templateId) {
-      const tpl = state.characterTemplates.find((t) => t.id === character.templateId);
-      const summary = expandMacros(tpl?.summary || summaryFromContent(tpl?.content ?? "") || "no details", character.name, state.playerCharacter.name);
+      const tpl = state.characterTemplates.find(
+        (t) => t.id === character.templateId,
+      );
+      const summary = expandMacros(
+        tpl?.summary || summaryFromContent(tpl?.content ?? "") || "no details",
+        character.name,
+        state.playerCharacter.name,
+      );
       return [
         `- [Detailed Character] ${character.name} (${character.id}) [Role: ${character.storyRole}]`,
-        character.towardPlayer !== "neutral" ? ` [${character.towardPlayer}]` : "",
+        character.towardPlayer !== "neutral"
+          ? ` [${character.towardPlayer}]`
+          : "",
         ` — ${summary}`,
-        character.conditions.length > 0 ? `, ${character.conditions.join(", ")}` : "",
-        character.flags.length > 0 ? ` [Flags: ${character.flags.join(", ")}]` : "",
+        character.conditions.length > 0
+          ? `, ${character.conditions.join(", ")}`
+          : "",
+        character.flags.length > 0
+          ? ` [Flags: ${character.flags.join(", ")}]`
+          : "",
       ].join("");
     } else {
       return [
         `- [Simple Character] ${character.name} (${character.id}) [Role: ${character.storyRole}]`,
-        character.towardPlayer !== "neutral" ? ` [${character.towardPlayer}]` : "",
+        character.towardPlayer !== "neutral"
+          ? ` [${character.towardPlayer}]`
+          : "",
         ` — ${character.description || "no details"}`,
-        character.conditions.length > 0 ? `, ${character.conditions.join(", ")}` : "",
-        character.flags.length > 0 ? ` [Flags: ${character.flags.join(", ")}]` : "",
+        character.conditions.length > 0
+          ? `, ${character.conditions.join(", ")}`
+          : "",
+        character.flags.length > 0
+          ? ` [Flags: ${character.flags.join(", ")}]`
+          : "",
       ].join("");
     }
   });
-  const inactiveBlock = inactiveLines.length > 0
-    ? ["INACTIVE CHARACTERS (off-screen — full details withheld):", ...inactiveLines]
-    : [];
+  const inactiveBlock =
+    inactiveLines.length > 0
+      ? [
+          "INACTIVE CHARACTERS (off-screen — full details withheld):",
+          ...inactiveLines,
+        ]
+      : [];
 
-  const worldStateLines = state.worldState.map((ws) => `- ${ws.id}: ${ws.name} — ${ws.description}`);
+  const worldStateLines = state.worldState.map(
+    (ws) => `- ${ws.id}: ${ws.name} — ${ws.description}`,
+  );
 
   const inventoryLines = state.inventory.map((item) => {
     const def = (state.itemCatalog ?? ITEMS).find((i) => i.id === item.itemId);
     const displayName = def?.name ?? item.itemId;
     return `- ${displayName} x${item.quantity}`;
   });
-  const allowedItems = (state.itemCatalog ?? ITEMS).map((item) => item.id).join(", ");
+  const allowedItems = (state.itemCatalog ?? ITEMS)
+    .map((item) => item.id)
+    .join(", ");
 
   return [
     `Turn: ${state.turn}`,
@@ -148,7 +215,9 @@ export function summarizePlaythrough(state: Playthrough): string {
     `Player Flags: ${state.playerCharacter.flags.length ? state.playerCharacter.flags.join(", ") : "none"}`,
     "",
     "ACTIVE CHARACTERS (in the scene):",
-    ...(activeCharacterLines.length ? activeCharacterLines : ["(none currently in the scene)"]),
+    ...(activeCharacterLines.length
+      ? activeCharacterLines
+      : ["(none currently in the scene)"]),
     "",
     ...inactiveBlock,
     ...(inactiveBlock.length > 0 ? [""] : []),
@@ -160,13 +229,19 @@ export function summarizePlaythrough(state: Playthrough): string {
     "",
     "Allowed IDs:",
     `Items: ${allowedItems}`,
-    `Characters: ${state.characters.map((character) => character.id).join(", ")}`
+    `Characters: ${state.characters.map((character) => character.id).join(", ")}`,
   ].join("\n");
 }
 
-type SystemPromptSegments = { modules: number; outputFormat: number; lorebook: number };
+type SystemPromptSegments = {
+  modules: number;
+  outputFormat: number;
+  lorebook: number;
+};
 
-export function renderModules(modules: PromptPresetModule[] | undefined): string {
+export function renderModules(
+  modules: PromptPresetModule[] | undefined,
+): string {
   return (modules ?? [])
     .filter((m) => m.enabled)
     .sort((a, b) => a.order - b.order)
@@ -175,32 +250,48 @@ export function renderModules(modules: PromptPresetModule[] | undefined): string
 }
 
 /** Stable, cache-friendly prefix: preset modules then lorebook "before" entries. */
-export function buildStableSystemBlock(modules: PromptPresetModule[], lorebookBefore: string): string {
+export function buildStableSystemBlock(
+  modules: PromptPresetModule[],
+  lorebookBefore: string,
+): string {
   return [renderModules(modules), lorebookBefore].filter(Boolean).join("\n\n");
 }
 
-export function buildSystemPrompt(choicesEnabled: boolean, modules: PromptPresetModule[], lorebookBefore: string, lorebookAfter: string, format?: CharacterFormat): { text: string; segments: SystemPromptSegments } {
+export function buildSystemPrompt(
+  choicesEnabled: boolean,
+  modules: PromptPresetModule[],
+  lorebookBefore: string,
+  lorebookAfter: string,
+  format?: CharacterFormat,
+): { text: string; segments: SystemPromptSegments } {
   const enabledModules = modules
     .filter((m) => m.enabled)
     .sort((a, b) => a.order - b.order);
 
   const moduleContents = enabledModules.map((m) => m.content).join("\n\n");
-  const lorebookSection = [lorebookBefore, lorebookAfter].filter(Boolean).join("\n\n");
+  const lorebookSection = [lorebookBefore, lorebookAfter]
+    .filter(Boolean)
+    .join("\n\n");
   const outputInstructions = buildOutputContract(choicesEnabled, format);
 
-  const parts = [lorebookSection, moduleContents, outputInstructions].filter(Boolean);
+  const parts = [lorebookSection, moduleContents, outputInstructions].filter(
+    Boolean,
+  );
   return {
     text: parts.join("\n\n"),
     segments: {
       modules: moduleContents.length,
       outputFormat: outputInstructions.length,
-      lorebook: lorebookSection.length
-    }
+      lorebook: lorebookSection.length,
+    },
   };
 }
 
 /** Volatile output contract: JSON shape, per-field guidance, choice rules. */
-export function buildOutputContract(choicesEnabled: boolean, format?: CharacterFormat): string {
+export function buildOutputContract(
+  choicesEnabled: boolean,
+  format?: CharacterFormat,
+): string {
   const sectionHeaders = formatSectionHeaders(format);
   const sectionNamesList = sectionHeaders.join(", ");
   const bulletedSections = formatSections(format)
@@ -216,7 +307,9 @@ export function buildOutputContract(choicesEnabled: boolean, format?: CharacterF
     "Return ONLY a JSON object with this shape:",
     "{",
     '  "narrative": "story text shown to the user",',
-    choicesEnabled ? '  "choices": ["optional suggested choice 1", "optional suggested choice 2"],' : "",
+    choicesEnabled
+      ? '  "choices": ["optional suggested choice 1", "optional suggested choice 2"],'
+      : "",
     '  "statePatch": {',
     '    "worldStateAdd": [{ "name": "🌧️ Heavy Rain", "description": "A torrential downpour affects visibility." }],',
     '    "worldStateRemove": ["ws_id_or_name"],',
@@ -283,7 +376,7 @@ export function buildOutputContract(choicesEnabled: boolean, format?: CharacterF
     choicesEnabled
       ? "Include 2-4 concise, meaningfully different suggested choices."
       : "Do NOT include a choices field.",
-    "Keep narrative under 350 words."
+    "Keep narrative under 350 words.",
   ].join("\n");
 
   return outputInstructions;
@@ -322,8 +415,12 @@ export const MAX_TOKEN_CALIBRATION = 4;
  * truncation, while under-admitting only costs a little context.
  */
 export function clampCalibration(value?: number): number {
-  if (value === undefined || !Number.isFinite(value)) return MIN_TOKEN_CALIBRATION;
-  return Math.min(MAX_TOKEN_CALIBRATION, Math.max(MIN_TOKEN_CALIBRATION, value));
+  if (value === undefined || !Number.isFinite(value))
+    return MIN_TOKEN_CALIBRATION;
+  return Math.min(
+    MAX_TOKEN_CALIBRATION,
+    Math.max(MIN_TOKEN_CALIBRATION, value),
+  );
 }
 
 /** `scale` is the self-calibration ratio: it adjusts budget maths only, never
@@ -341,7 +438,7 @@ export function estimateTokens(chars: number, scale = 1): number {
 export function selectHistory(
   state: Playthrough,
   budgetTokens: number,
-  scale = 1
+  scale = 1,
 ): { history: PromptMessage[]; droppedChars: number } {
   const visible = state.messages.filter((m) => !m.hidden);
   const kept: PromptMessage[] = [];
@@ -350,9 +447,13 @@ export function selectHistory(
 
   for (let i = visible.length - 1; i >= 0; i -= 1) {
     const message = visible[i];
-    const cost = estimateTokens(message.content.length, scale) + PROMPT_MESSAGE_OVERHEAD_TOKENS;
+    const cost =
+      estimateTokens(message.content.length, scale) +
+      PROMPT_MESSAGE_OVERHEAD_TOKENS;
     if (kept.length >= MIN_HISTORY_MESSAGES && used + cost > budgetTokens) {
-      droppedChars = visible.slice(0, i + 1).reduce((n, m) => n + m.content.length, 0);
+      droppedChars = visible
+        .slice(0, i + 1)
+        .reduce((n, m) => n + m.content.length, 0);
       break;
     }
     kept.push({ role: message.role, content: message.content });
@@ -379,7 +480,9 @@ function buildStorySoFarSection(state: Playthrough): string {
     if (recent.length) {
       parts.push(
         "RECENT CHAPTERS:\n" +
-          recent.map((ch) => `Chapter: ${ch.name} — ${ch.fullSummary}`).join("\n\n")
+          recent
+            .map((ch) => `Chapter: ${ch.name} — ${ch.fullSummary}`)
+            .join("\n\n"),
       );
     }
     storySoFarSection = "STORY SO FAR:\n" + parts.join("\n\n");
@@ -411,16 +514,28 @@ type LorebookSegments = { before: string; after: string; depth: string };
  *  Exported for tests — the collector around it reads lorebooks from the real data
  *  dir, which is not a seam a test may use. */
 export function renderLorebookSegments(
-  activated: Array<{ entry: Pick<LorebookEntry, "content" | "position" | "depth" | "order"> }>,
-  playerName: string
+  activated: Array<{
+    entry: Pick<LorebookEntry, "content" | "position" | "depth" | "order">;
+  }>,
+  playerName: string,
 ): LorebookSegments {
-  const expand = (a: (typeof activated)[number]) => expandUserMacro(a.entry.content, playerName);
+  const expand = (a: (typeof activated)[number]) =>
+    expandUserMacro(a.entry.content, playerName);
   return {
-    before: activated.filter((a) => a.entry.position === 0).map(expand).join("\n\n"),
-    after: activated.filter((a) => a.entry.position === 1).map(expand).join("\n\n"),
+    before: activated
+      .filter((a) => a.entry.position === 0)
+      .map(expand)
+      .join("\n\n"),
+    after: activated
+      .filter((a) => a.entry.position === 1)
+      .map(expand)
+      .join("\n\n"),
     depth: activated
       .filter((a) => a.entry.position >= 2)
-      .sort((a, b) => a.entry.depth - b.entry.depth || a.entry.order - b.entry.order)
+      .sort(
+        (a, b) =>
+          a.entry.depth - b.entry.depth || a.entry.order - b.entry.order,
+      )
       .map(expand)
       .join("\n\n"),
   };
@@ -429,14 +544,20 @@ export function renderLorebookSegments(
 function collectLorebookSegments(state: Playthrough): LorebookSegments {
   if (state.lorebookIds && state.lorebookIds.length > 0) {
     const allEntries: LorebookEntry[] = [];
-    const lorebookDefaults = { scanDepth: 2, caseSensitive: false, matchWholeWords: false };
+    const lorebookDefaults = {
+      scanDepth: 2,
+      caseSensitive: false,
+      matchWholeWords: false,
+    };
 
     for (const lbId of state.lorebookIds) {
       const lb = getLorebook(lbId);
       if (!lb) continue;
       if (lb.scanDepth !== undefined) lorebookDefaults.scanDepth = lb.scanDepth;
-      if (lb.caseSensitive !== undefined) lorebookDefaults.caseSensitive = lb.caseSensitive;
-      if (lb.matchWholeWords !== undefined) lorebookDefaults.matchWholeWords = lb.matchWholeWords;
+      if (lb.caseSensitive !== undefined)
+        lorebookDefaults.caseSensitive = lb.caseSensitive;
+      if (lb.matchWholeWords !== undefined)
+        lorebookDefaults.matchWholeWords = lb.matchWholeWords;
       for (const entry of Object.values(lb.entries)) {
         allEntries.push(entry);
       }
@@ -444,8 +565,8 @@ function collectLorebookSegments(state: Playthrough): LorebookSegments {
 
     if (allEntries.length > 0) {
       const scanMessages = state.messages
-        .filter(m => !m.hidden)
-        .map(m => ({ role: m.role, content: m.content }));
+        .filter((m) => !m.hidden)
+        .map((m) => ({ role: m.role, content: m.content }));
 
       const timingStates = new Map<number, EntryTimingState>();
       if (state.lorebookTimingStates) {
@@ -474,12 +595,16 @@ export function assembleTurnPrompt(
   choicesEnabled: boolean,
   queryEmbedding: number[] = [],
   budget: PromptBudget = { contextWindow: 65536, reserveOutputTokens: 1200 },
-  promptConfig: PromptConfig
+  promptConfig: PromptConfig,
 ): AssembledTurnPrompt {
   const modules = promptConfig.modules.turn ?? [];
   const format = promptConfig.characterFormat;
 
-  const { before: lorebookBefore, after: lorebookAfter, depth: lorebookDepth } = collectLorebookSegments(state);
+  const {
+    before: lorebookBefore,
+    after: lorebookAfter,
+    depth: lorebookDepth,
+  } = collectLorebookSegments(state);
 
   const stableBlock = buildStableSystemBlock(modules, lorebookBefore);
   const outputContract = buildOutputContract(choicesEnabled, format);
@@ -490,7 +615,9 @@ export function assembleTurnPrompt(
 
   const actionLine = `Action: ${input.actionText || "none"}`;
   const spokenLine = `Spoken: ${input.spokenText.length ? input.spokenText.join(" | ") : "none"}`;
-  const depthSection = lorebookDepth ? `[Current context]\n${lorebookDepth}` : "";
+  const depthSection = lorebookDepth
+    ? `[Current context]\n${lorebookDepth}`
+    : "";
 
   // Volatile tail: everything that changes every turn, ordered most-stable-first.
   const tailBlock = [
@@ -503,12 +630,14 @@ export function assembleTurnPrompt(
     "PARSED INPUT",
     actionLine,
     spokenLine,
-    outputContract
-  ].filter(Boolean).join("\n\n");
+    outputContract,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   const usable = Math.max(
     0,
-    budget.contextWindow - budget.reserveOutputTokens - CONTEXT_SAFETY_RESERVE
+    budget.contextWindow - budget.reserveOutputTokens - CONTEXT_SAFETY_RESERVE,
   );
   // Self-calibration: only the budget maths below is scaled. The reported
   // `breakdown`/`estimated` stay on the unscaled basis (the ratio stored back is
@@ -519,42 +648,55 @@ export function assembleTurnPrompt(
     estimateTokens(stableBlock.length, tokenScale) +
     estimateTokens(tailBlock.length, tokenScale) +
     estimateTokens(input.raw.length, tokenScale);
-  const { history, droppedChars } = selectHistory(state, Math.max(0, usable - fixedCost), tokenScale);
+  const { history, droppedChars } = selectHistory(
+    state,
+    Math.max(0, usable - fixedCost),
+    tokenScale,
+  );
 
-  const messages: PromptMessage[] = history.length > 0
-    ? [
-        { role: "system", content: stableBlock },
-        ...history,
-        { role: "system", content: tailBlock },
-        { role: "user", content: input.raw }
-      ]
-    : [
-        // No transcript to send (fresh playthrough, or right after a chapter
-        // close): merge the tail into the leading system message so the array
-        // never opens with two consecutive system messages.
-        { role: "system", content: [stableBlock, tailBlock].filter(Boolean).join("\n\n") },
-        { role: "user", content: input.raw }
-      ];
+  const messages: PromptMessage[] =
+    history.length > 0
+      ? [
+          { role: "system", content: stableBlock },
+          ...history,
+          { role: "system", content: tailBlock },
+          { role: "user", content: input.raw },
+        ]
+      : [
+          // No transcript to send (fresh playthrough, or right after a chapter
+          // close): merge the tail into the leading system message so the array
+          // never opens with two consecutive system messages.
+          {
+            role: "system",
+            content: [stableBlock, tailBlock].filter(Boolean).join("\n\n"),
+          },
+          { role: "user", content: input.raw },
+        ];
 
   const est = estimateTokens;
   const breakdown: PromptUsageBreakdown = {
     modules: est(renderModules(modules).length),
     outputFormat: est(outputContract.length),
-    lorebook: est([lorebookBefore, lorebookAfter].filter(Boolean).join("\n\n").length),
+    lorebook: est(
+      [lorebookBefore, lorebookAfter].filter(Boolean).join("\n\n").length,
+    ),
     storySoFar: est(storySoFarSection.length),
     stateSummary: est(stateSummary.length),
     chatHistory: est(history.reduce((n, m) => n + m.content.length, 0)),
     memoryEvents: est(memories.length),
     lorebookDepth: est(depthSection.length),
-    userInput: est(input.raw.length + actionLine.length + spokenLine.length)
+    userInput: est(input.raw.length + actionLine.length + spokenLine.length),
   };
   // Meter tiling: sum-of-segments remains `estimated` so the bar's segments add
   // up exactly, as they do today. Budget math above used its own char total.
-  const estimated = (Object.values(breakdown) as number[]).reduce((sum, n) => sum + n, 0);
+  const estimated = (Object.values(breakdown) as number[]).reduce(
+    (sum, n) => sum + n,
+    0,
+  );
 
   return {
     messages,
     promptUsage: { estimated, breakdown },
-    droppedHistoryChars: droppedChars
+    droppedHistoryChars: droppedChars,
   };
 }

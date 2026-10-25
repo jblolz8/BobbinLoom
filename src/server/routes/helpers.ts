@@ -2,7 +2,11 @@ import type { FastifyReply } from "fastify";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { PromptPreset } from "../../schemas";
-import { loadAppSettings, saveAppSettings, saveViewPreferences } from "../appSettingsStore";
+import {
+  loadAppSettings,
+  saveAppSettings,
+  saveViewPreferences,
+} from "../appSettingsStore";
 import { createProviderManager } from "../providerManager";
 import { atomicWriteJson } from "../persistence";
 

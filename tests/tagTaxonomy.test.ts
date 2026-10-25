@@ -12,7 +12,10 @@ import {
   hslToHex,
   type TagTaxonomyConfig,
 } from "../src/engine/tagTaxonomy";
-import { loadAppSettings, saveAppSettings } from "../src/server/appSettingsStore";
+import {
+  loadAppSettings,
+  saveAppSettings,
+} from "../src/server/appSettingsStore";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -341,11 +344,7 @@ describe("tagTaxonomy engine", () => {
 
     it("puts NSFW ratings at the very top (priority order 10)", () => {
       const tags = ["blue_eyes", "nsfw", "species:cat-girl"];
-      expect(sortTags(tags)).toEqual([
-        "nsfw",
-        "species:cat-girl",
-        "blue_eyes",
-      ]);
+      expect(sortTags(tags)).toEqual(["nsfw", "species:cat-girl", "blue_eyes"]);
     });
 
     it("handles custom categories and dynamic namespaces correctly", () => {
@@ -361,7 +360,13 @@ describe("tagTaxonomy engine", () => {
         tagOverrides: {},
       };
 
-      const tags = ["solo", "unknown_ns:val", "clan:uchiha", "rating:sfw", "species:human"];
+      const tags = [
+        "solo",
+        "unknown_ns:val",
+        "clan:uchiha",
+        "rating:sfw",
+        "species:human",
+      ];
       const sorted = sortTags(tags, config);
 
       // Rating (20) -> Species (50) -> Custom clan (100) -> Dynamic unknown_ns (200) -> General (999)
@@ -375,12 +380,14 @@ describe("tagTaxonomy engine", () => {
     });
 
     it("deduplicates and normalizes tags during sort", () => {
-      const tags = [" SPECIES:Elf ", "species:elf", "Rating:SFW", "solo", " SOLO "];
-      expect(sortTags(tags)).toEqual([
-        "rating:sfw",
+      const tags = [
+        " SPECIES:Elf ",
         "species:elf",
+        "Rating:SFW",
         "solo",
-      ]);
+        " SOLO ",
+      ];
+      expect(sortTags(tags)).toEqual(["rating:sfw", "species:elf", "solo"]);
     });
   });
 });

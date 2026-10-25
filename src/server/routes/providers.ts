@@ -16,75 +16,78 @@ export type ProviderRoutesOptions = FastifyPluginOptions & {
   manager?: ProviderManager;
 };
 
-const ProviderConnectionBody = z.object({
-  id: z.string().optional(),
-  label: z.string().min(1),
-  baseUrl: z.string().min(1),
-  apiKey: z.string().nullable().optional(),
-  /** NOT `.min(1)`: an IMAGE connection may legitimately have NO model. On the
-   *  a1111 dialect an empty model means "whatever checkpoint the WebUI already
-   *  has loaded" (the adapter then omits `override_settings` entirely), and the
-   *  WebUI's checkpoint list is not always populated — demanding one made a
-   *  valid local connection unsaveable with a 500. Text connections still
-   *  require a model: see the superRefine on this schema. */
-  model: z.string().optional(),
-  temperature: z.number().optional(),
-  maxTokens: z.number().optional(),
-  contextWindow: z.number().optional(),
-  textSource: TextProviderSourceSchema.nullable().optional(),
-  topP: z.number().min(0).max(1).nullable().optional(),
-  minP: z.number().min(0).max(1).nullable().optional(),
-  topA: z.number().min(0).max(1).nullable().optional(),
-  topK: z.number().int().min(1).nullable().optional(),
-  frequencyPenalty: z.number().min(-2).max(2).nullable().optional(),
-  presencePenalty: z.number().min(-2).max(2).nullable().optional(),
-  repetitionPenalty: z.number().min(0).max(3).nullable().optional(),
-  stop: z.array(z.string()).nullable().optional(),
-  jsonMode: TextJsonModeSchema.nullable().optional(),
-  // ── registry v2 + image-only fields ──
-  // These MUST be on the body schema: zod strips unknown keys, so without them
-  // an image connection created through the API would silently become a text
-  // connection (and lose every image setting).
-  kind: ProviderKindSchema.optional(),
-  apiStyle: ImageApiStyleSchema.optional(),
-  safeMode: z.boolean().optional(),
-  size: z.string().optional(),
-  aspectRatio: z.string().optional(),
-  promptProviderId: z.string().nullable().optional(),
-  stylePreset: z.string().optional(),
-  hideWatermark: z.boolean().optional(),
-  variants: z.number().int().min(1).max(4).optional(),
-  /** Venice `seed` for every generation this connection makes. On the body
-   *  schema or zod strips it and the saved connection silently loses it.
-   *  `null` clears a stored seed (the editor's emptied field). */
-  seed: z.number().int().nullable().optional(),
-  /** A1111 sampling controls and its per-connection timeout. On the body
-   *  schema for the same reason as every field above: zod strips what is not
-   *  declared, so an undeclared field is a setting the editor can never save. */
-  steps: z.number().int().min(1).max(150).optional(),
-  cfgScale: z.number().min(0).max(30).optional(),
-  sampler: z.string().optional(),
-  scheduler: z.string().optional(),
-  timeoutMs: z.number().int().min(1000).nullable().optional(),
-  /** Forge Couple regions (a1111 only). On the body schema for the same reason
-   *  as every field above: zod strips what is not declared, so an undeclared
-   *  field is a setting the editor can never save. */
-  regionsEnabled: z.boolean().optional(),
-  regionDirection: RegionDirectionSchema.optional()
-}).superRefine((value, ctx) => {
-  // A text connection cannot work without a model id. An image connection can
-  // (see `model` above). `kind` is always sent by the client; a body with no
-  // kind but an apiStyle is still an image connection, and a body with neither
-  // keeps the pre-existing rule so nothing that used to validate now sneaks by.
-  const isText = (value.kind ?? (value.apiStyle ? "image" : "text")) === "text";
-  if (isText && !value.model?.trim()) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["model"],
-      message: "A text connection needs a model id."
-    });
-  }
-});
+const ProviderConnectionBody = z
+  .object({
+    id: z.string().optional(),
+    label: z.string().min(1),
+    baseUrl: z.string().min(1),
+    apiKey: z.string().nullable().optional(),
+    /** NOT `.min(1)`: an IMAGE connection may legitimately have NO model. On the
+     *  a1111 dialect an empty model means "whatever checkpoint the WebUI already
+     *  has loaded" (the adapter then omits `override_settings` entirely), and the
+     *  WebUI's checkpoint list is not always populated — demanding one made a
+     *  valid local connection unsaveable with a 500. Text connections still
+     *  require a model: see the superRefine on this schema. */
+    model: z.string().optional(),
+    temperature: z.number().optional(),
+    maxTokens: z.number().optional(),
+    contextWindow: z.number().optional(),
+    textSource: TextProviderSourceSchema.nullable().optional(),
+    topP: z.number().min(0).max(1).nullable().optional(),
+    minP: z.number().min(0).max(1).nullable().optional(),
+    topA: z.number().min(0).max(1).nullable().optional(),
+    topK: z.number().int().min(1).nullable().optional(),
+    frequencyPenalty: z.number().min(-2).max(2).nullable().optional(),
+    presencePenalty: z.number().min(-2).max(2).nullable().optional(),
+    repetitionPenalty: z.number().min(0).max(3).nullable().optional(),
+    stop: z.array(z.string()).nullable().optional(),
+    jsonMode: TextJsonModeSchema.nullable().optional(),
+    // ── registry v2 + image-only fields ──
+    // These MUST be on the body schema: zod strips unknown keys, so without them
+    // an image connection created through the API would silently become a text
+    // connection (and lose every image setting).
+    kind: ProviderKindSchema.optional(),
+    apiStyle: ImageApiStyleSchema.optional(),
+    safeMode: z.boolean().optional(),
+    size: z.string().optional(),
+    aspectRatio: z.string().optional(),
+    promptProviderId: z.string().nullable().optional(),
+    stylePreset: z.string().optional(),
+    hideWatermark: z.boolean().optional(),
+    variants: z.number().int().min(1).max(4).optional(),
+    /** Venice `seed` for every generation this connection makes. On the body
+     *  schema or zod strips it and the saved connection silently loses it.
+     *  `null` clears a stored seed (the editor's emptied field). */
+    seed: z.number().int().nullable().optional(),
+    /** A1111 sampling controls and its per-connection timeout. On the body
+     *  schema for the same reason as every field above: zod strips what is not
+     *  declared, so an undeclared field is a setting the editor can never save. */
+    steps: z.number().int().min(1).max(150).optional(),
+    cfgScale: z.number().min(0).max(30).optional(),
+    sampler: z.string().optional(),
+    scheduler: z.string().optional(),
+    timeoutMs: z.number().int().min(1000).nullable().optional(),
+    /** Forge Couple regions (a1111 only). On the body schema for the same reason
+     *  as every field above: zod strips what is not declared, so an undeclared
+     *  field is a setting the editor can never save. */
+    regionsEnabled: z.boolean().optional(),
+    regionDirection: RegionDirectionSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    // A text connection cannot work without a model id. An image connection can
+    // (see `model` above). `kind` is always sent by the client; a body with no
+    // kind but an apiStyle is still an image connection, and a body with neither
+    // keeps the pre-existing rule so nothing that used to validate now sneaks by.
+    const isText =
+      (value.kind ?? (value.apiStyle ? "image" : "text")) === "text";
+    if (isText && !value.model?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["model"],
+        message: "A text connection needs a model id.",
+      });
+    }
+  });
 
 const ProviderIdParam = z.object({ id: z.string() });
 
@@ -95,7 +98,7 @@ const TestConnectionBody = z.object({
   /** Same dialect rule as the models probe: a saved `id` wins, a draft states
    *  its own style so an unsaved a1111 connection is not tested against
    *  `/v1/models`. */
-  apiStyle: ImageApiStyleSchema.optional()
+  apiStyle: ImageApiStyleSchema.optional(),
 });
 
 /** Body of POST /api/settings/providers/image-styles. Every field is optional,
@@ -105,7 +108,7 @@ const TestConnectionBody = z.object({
 const ImageStylesBody = z.object({
   id: z.string().optional(),
   baseUrl: z.string().min(1).optional(),
-  apiKey: z.string().optional()
+  apiKey: z.string().optional(),
 });
 
 const ModelsBody = z.object({
@@ -118,15 +121,15 @@ const ModelsBody = z.object({
   /** The connection's dialect: an a1111 probe must reach `/sdapi/v1/sd-models`
    *  instead of the OpenAI-compatible `/v1/models`. A saved `id` uses the
    *  STORED style (authoritative); this covers the unsaved draft. */
-  apiStyle: ImageApiStyleSchema.optional()
+  apiStyle: ImageApiStyleSchema.optional(),
 });
 
 const GenerationProviderBody = z.object({
-  providerId: z.string().nullable()
+  providerId: z.string().nullable(),
 });
 
 const TestPromptBody = z.object({
-  testPrompt: z.string().nullable()
+  testPrompt: z.string().nullable(),
 });
 
 const TestResponseBody = z.object({
@@ -147,7 +150,10 @@ const TestResponseBody = z.object({
   prompt: z.string().nullable().optional(),
 });
 
-export const providerRoutes: FastifyPluginAsync<ProviderRoutesOptions> = async (app, options = {}) => {
+export const providerRoutes: FastifyPluginAsync<ProviderRoutesOptions> = async (
+  app,
+  options = {},
+) => {
   const manager = options.manager ?? providerManager;
 
   app.get("/api/settings/providers", async () => {
@@ -184,26 +190,44 @@ export const providerRoutes: FastifyPluginAsync<ProviderRoutesOptions> = async (
    *  active connection" and an id that no longer exists is still accepted — resolution
    *  falls back at generation time, and refusing the write would leave a stale choice
    *  unsaveable. */
-  app.put("/api/settings/providers/generation-provider", async (request, reply) => {
-    const parsedBody = GenerationProviderBody.safeParse(request.body ?? {});
-    if (!parsedBody.success) return reply.code(400).send({ error: "providerId must be a string or null" });
-    return manager.setGenerationTextProvider(parsedBody.data.providerId);
-  });
+  app.put(
+    "/api/settings/providers/generation-provider",
+    async (request, reply) => {
+      const parsedBody = GenerationProviderBody.safeParse(request.body ?? {});
+      if (!parsedBody.success)
+        return reply
+          .code(400)
+          .send({ error: "providerId must be a string or null" });
+      return manager.setGenerationTextProvider(parsedBody.data.providerId);
+    },
+  );
 
   /** Which text connection CLOSES chapters (the summary and the opening turn). Same contract as
    *  the generation preference above: `{ providerId: null }` means "follow the active connection",
    *  and a dangling id is accepted because resolution falls back at use time. */
-  app.put("/api/settings/providers/chapter-provider", async (request, reply) => {
-    const parsedBody = GenerationProviderBody.safeParse(request.body ?? {});
-    if (!parsedBody.success) return reply.code(400).send({ error: "providerId must be a string or null" });
-    return manager.setChapterTextProvider(parsedBody.data.providerId);
-  });
+  app.put(
+    "/api/settings/providers/chapter-provider",
+    async (request, reply) => {
+      const parsedBody = GenerationProviderBody.safeParse(request.body ?? {});
+      if (!parsedBody.success)
+        return reply
+          .code(400)
+          .send({ error: "providerId must be a string or null" });
+      return manager.setChapterTextProvider(parsedBody.data.providerId);
+    },
+  );
 
-  app.put("/api/settings/providers/character-provider", async (request, reply) => {
-    const parsedBody = GenerationProviderBody.safeParse(request.body ?? {});
-    if (!parsedBody.success) return reply.code(400).send({ error: "providerId must be a string or null" });
-    return manager.setCharacterTextProvider(parsedBody.data.providerId);
-  });
+  app.put(
+    "/api/settings/providers/character-provider",
+    async (request, reply) => {
+      const parsedBody = GenerationProviderBody.safeParse(request.body ?? {});
+      if (!parsedBody.success)
+        return reply
+          .code(400)
+          .send({ error: "providerId must be a string or null" });
+      return manager.setCharacterTextProvider(parsedBody.data.providerId);
+    },
+  );
 
   app.post("/api/settings/providers/test", async (request) => {
     const body = TestConnectionBody.parse(request.body ?? {});
@@ -212,7 +236,10 @@ export const providerRoutes: FastifyPluginAsync<ProviderRoutesOptions> = async (
 
   app.put("/api/settings/providers/test-prompt", async (request, reply) => {
     const parsedBody = TestPromptBody.safeParse(request.body ?? {});
-    if (!parsedBody.success) return reply.code(400).send({ error: "testPrompt must be a string or null" });
+    if (!parsedBody.success)
+      return reply
+        .code(400)
+        .send({ error: "testPrompt must be a string or null" });
     return manager.setTestPrompt(parsedBody.data.testPrompt);
   });
 

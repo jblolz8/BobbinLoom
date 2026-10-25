@@ -54,14 +54,7 @@ export function ThreadIcon({
       />
 
       {/* Wound Thread Body */}
-      <rect
-        x="6"
-        y="5"
-        width="12"
-        height="14"
-        rx="1.5"
-        fill={threadColor}
-      />
+      <rect x="6" y="5" width="12" height="14" rx="1.5" fill={threadColor} />
 
       {/* Thread Texture / Ridge Highlights & Shadows */}
       <path

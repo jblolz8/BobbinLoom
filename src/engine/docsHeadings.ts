@@ -17,7 +17,10 @@ const FENCE_LINE = /^(```|~~~)/;
 /** The last real heading at or before `index`, or null when the hit precedes
  *  every heading. Lines inside a fenced block are skipped: a `#` in a shell
  *  snippet is a comment, not a heading. */
-export function nearestHeading(body: string, index: number): { text: string; slug: string } | null {
+export function nearestHeading(
+  body: string,
+  index: number,
+): { text: string; slug: string } | null {
   let found: { text: string; slug: string } | null = null;
   let offset = 0;
   let inFence = false;

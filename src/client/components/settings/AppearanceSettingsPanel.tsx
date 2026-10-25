@@ -499,7 +499,7 @@ export function AppearanceSettingsPanel() {
   const activePresetObj = THEME_PRESETS.find((p) => p.id === themePreset);
   const totalShowcaseTokens = THEME_SHOWCASE_GROUPS.reduce(
     (sum, g) => sum + g.items.length,
-    0
+    0,
   );
 
   return (
@@ -571,10 +571,26 @@ export function AppearanceSettingsPanel() {
                 aria-pressed={isSelected}
                 onClick={() => handleSelectPreset(preset)}
               >
-                <Stack direction="column" align="stretch" justify="between" gap="xs" fullHeight>
+                <Stack
+                  direction="column"
+                  align="stretch"
+                  justify="between"
+                  gap="xs"
+                  fullHeight
+                >
                   <Stack direction="column" align="stretch" gap="xs">
-                    <Stack direction="row" align="center" justify="between" gap="xs">
-                      <Text as="strong" size="sm" weight="semibold" tone="primary">
+                    <Stack
+                      direction="row"
+                      align="center"
+                      justify="between"
+                      gap="xs"
+                    >
+                      <Text
+                        as="strong"
+                        size="sm"
+                        weight="semibold"
+                        tone="primary"
+                      >
                         {preset.name}
                       </Text>
                       <Stack direction="row" align="center" gap="2xs">
@@ -607,7 +623,11 @@ export function AppearanceSettingsPanel() {
                       borderColor: "var(--chat-ai-border)",
                     }}
                   >
-                    <Text as="p" size="xs" style={{ color: "var(--story-text)" }}>
+                    <Text
+                      as="p"
+                      size="xs"
+                      style={{ color: "var(--story-text)" }}
+                    >
                       <Text
                         as="span"
                         weight="semibold"
@@ -617,7 +637,10 @@ export function AppearanceSettingsPanel() {
                       </Text>{" "}
                       <Text
                         as="em"
-                        style={{ color: "var(--story-italic)", fontStyle: "italic" }}
+                        style={{
+                          color: "var(--story-italic)",
+                          fontStyle: "italic",
+                        }}
                       >
                         she whispers
                       </Text>{" "}
@@ -687,9 +710,13 @@ export function AppearanceSettingsPanel() {
                     </Text>{" "}
                     <Text
                       as="em"
-                      style={{ color: "var(--story-italic)", fontStyle: "italic" }}
+                      style={{
+                        color: "var(--story-italic)",
+                        fontStyle: "italic",
+                      }}
                     >
-                      she whispers softly, tracing the worn leather edge of the parchment.
+                      she whispers softly, tracing the worn leather edge of the
+                      parchment.
                     </Text>
                   </Text>
                   <Text as="p" size="sm" style={{ color: "var(--story-text)" }}>
@@ -711,12 +738,14 @@ export function AppearanceSettingsPanel() {
                       borderLeft:
                         "3px solid var(--story-blockquote-border, var(--accent-base))",
                       background: "var(--story-blockquote-bg, var(--bg-panel))",
-                      color: "var(--story-blockquote-text, var(--text-secondary))",
+                      color:
+                        "var(--story-blockquote-text, var(--text-secondary))",
                       fontStyle: "italic",
                     }}
                   >
                     <Text as="span" size="xs">
-                      &ldquo;Every thread remembers the hand that spun it.&rdquo;
+                      &ldquo;Every thread remembers the hand that spun
+                      it.&rdquo;
                     </Text>
                   </Card>
                 </Stack>
@@ -786,11 +815,7 @@ export function AppearanceSettingsPanel() {
         <Stack direction="column" align="stretch" gap="md">
           {THEME_SHOWCASE_GROUPS.map((group) => (
             <Stack key={group.id} direction="column" align="stretch" gap="xs">
-              <Header
-                variant="section"
-                icon={group.icon}
-                title={group.title}
-              />
+              <Header variant="section" icon={group.icon} title={group.title} />
 
               <FormGrid cols={2} gap="xs">
                 {group.items.map((item) => (
@@ -810,7 +835,12 @@ export function AppearanceSettingsPanel() {
                           gap="xs"
                           wrap
                         >
-                          <Text as="strong" size="xs" weight="semibold" tone="primary">
+                          <Text
+                            as="strong"
+                            size="xs"
+                            weight="semibold"
+                            tone="primary"
+                          >
                             {item.name}
                           </Text>
                           <Text as="code" mono size="xs" tone="muted">

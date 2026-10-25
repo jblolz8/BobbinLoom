@@ -2,7 +2,17 @@ import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { atomicWriteJson, quarantineFile, readJsonFile } from "./persistence";
 import { AppSettingsSchema, ViewPreferencesSchema } from "../schemas";
-import type { AppSettings, AvatarShape, ChapterOpeningMode, CustomThemeColors, PromptConfig, TagTaxonomyConfig, ThemeMode, ViewPreferences } from "../schemas";
+import type {
+  AppSettings,
+  AvatarShape,
+  ChapterOpeningMode,
+  CoverAspect,
+  CustomThemeColors,
+  PromptConfig,
+  TagTaxonomyConfig,
+  ThemeMode,
+  ViewPreferences,
+} from "../schemas";
 
 /**
  * Shipped product defaults — the single source of truth for a fresh install
@@ -15,6 +25,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   activePresetId: "default",
   avatarShape: "rounded",
   coverAspect: "landscape",
+  workspaceWidthPercent: 80,
   themeMode: "dark",
   themePreset: "default-dark",
   customThemeColors: {},
@@ -52,14 +63,18 @@ export function loadAppSettings(dataDir: string): AppSettings {
   const result = readJsonFile(path);
   if (!result.ok) {
     const backup = quarantineFile(path, "settings unreadable");
-    console.warn(`[settings] user-settings.json unreadable — quarantined to ${backup ?? "?"}; using defaults.`);
+    console.warn(
+      `[settings] user-settings.json unreadable — quarantined to ${backup ?? "?"}; using defaults.`,
+    );
     return { ...DEFAULT_APP_SETTINGS };
   }
 
   const parsed = AppSettingsSchema.safeParse(result.data);
   if (!parsed.success || parsed.data.schemaVersion > 1) {
     const backup = quarantineFile(path, "settings invalid");
-    console.warn(`[settings] user-settings.json invalid — quarantined to ${backup ?? "?"}; using defaults.`);
+    console.warn(
+      `[settings] user-settings.json invalid — quarantined to ${backup ?? "?"}; using defaults.`,
+    );
     return { ...DEFAULT_APP_SETTINGS };
   }
   const merged: AppSettings = { ...DEFAULT_APP_SETTINGS, ...parsed.data };
@@ -68,7 +83,11 @@ export function loadAppSettings(dataDir: string): AppSettings {
   // Adopting it once keeps a user whose preset was e.g. Default (NSFW) from
   // silently reverting to the vanilla Default on the first read after the change.
   const legacy = result.data as { defaultPresetId?: unknown };
-  if (parsed.data.activePresetId === undefined && typeof legacy.defaultPresetId === "string" && legacy.defaultPresetId) {
+  if (
+    parsed.data.activePresetId === undefined &&
+    typeof legacy.defaultPresetId === "string" &&
+    legacy.defaultPresetId
+  ) {
     merged.activePresetId = legacy.defaultPresetId;
   }
   return merged;
@@ -85,14 +104,19 @@ export function loadAppSettings(dataDir: string): AppSettings {
  * A group the reader has never chosen stays ABSENT rather than becoming an empty object: absent is
  * what the one-shot adoption reads as "not migrated yet".
  */
-export function saveViewPreferences(dataDir: string, patch: ViewPreferences): AppSettings {
+export function saveViewPreferences(
+  dataDir: string,
+  patch: ViewPreferences,
+): AppSettings {
   const current = loadAppSettings(dataDir);
   const stored = current.viewPreferences ?? {};
 
   // One level deep, keyed by the SCHEMA's own groups: this list used to be spelled out by hand, and a
   // group added to the schema was then silently dropped on the way to disk (the page-size group was).
   const merged: Record<string, unknown> = {};
-  for (const key of Object.keys(ViewPreferencesSchema.shape) as (keyof ViewPreferences)[]) {
+  for (const key of Object.keys(
+    ViewPreferencesSchema.shape,
+  ) as (keyof ViewPreferences)[]) {
     const patchValue = patch[key];
     const storedValue = stored[key];
     // A group the patch does not mention is carried forward untouched — a write for one group must never
@@ -106,7 +130,9 @@ export function saveViewPreferences(dataDir: string, patch: ViewPreferences): Ap
     if (next !== undefined) merged[key] = next;
   }
 
-  return saveAppSettings(dataDir, { viewPreferences: merged as ViewPreferences });
+  return saveAppSettings(dataDir, {
+    viewPreferences: merged as ViewPreferences,
+  });
 }
 
 export function saveAppSettings(
@@ -116,6 +142,8 @@ export function saveAppSettings(
     promptConfig?: PromptConfig;
     tagTaxonomy?: TagTaxonomyConfig;
     avatarShape?: AvatarShape;
+    coverAspect?: CoverAspect;
+    workspaceWidthPercent?: number;
     themeMode?: ThemeMode;
     themePreset?: string;
     customThemeColors?: CustomThemeColors;
@@ -127,7 +155,7 @@ export function saveAppSettings(
      *  settings beside the avatar shape, and why nothing reads it from a playthrough. */
     paneSwipeEnabled?: boolean;
     viewPreferences?: ViewPreferences;
-  }
+  },
 ): AppSettings {
   mkdirSync(dataDir, { recursive: true });
   const current = loadAppSettings(dataDir);

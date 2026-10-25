@@ -35,7 +35,7 @@ export function ApiKeyField({
   isKeyCleared,
   isStoredKeyActive,
   onClearKey,
-  onRestoreKey
+  onRestoreKey,
 }: ApiKeyFieldProps) {
   return (
     <Stack direction="column" align="stretch" gap="2xs">
@@ -67,7 +67,13 @@ export function ApiKeyField({
           <StatusMessage variant="inline" tone="warn" icon="AlertTriangle">
             Key marked for removal on Save
           </StatusMessage>
-          <Button type="button" variant="ghost" size="xs" onClick={onRestoreKey} leftIcon="RotateCcw">
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={onRestoreKey}
+            leftIcon="RotateCcw"
+          >
             Undo
           </Button>
         </Stack>
@@ -76,7 +82,13 @@ export function ApiKeyField({
           <StatusMessage variant="inline" tone="neutral" icon="LockKeyhole">
             Stored in encrypted vault
           </StatusMessage>
-          <Button type="button" variant="ghost" size="xs" onClick={onClearKey} leftIcon="Trash2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={onClearKey}
+            leftIcon="Trash2"
+          >
             Clear stored key
           </Button>
         </Stack>

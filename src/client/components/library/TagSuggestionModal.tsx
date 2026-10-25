@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, Icon } from "../base";
-import { resolveTagStyle, sortTags, type TagTaxonomyConfig } from "../../../engine/tagTaxonomy";
+import {
+  resolveTagStyle,
+  sortTags,
+  type TagTaxonomyConfig,
+} from "../../../engine/tagTaxonomy";
 
 export type TagSuggestionModalProps = {
   characterName: string;
@@ -15,18 +19,48 @@ export type TagSuggestionModalProps = {
 };
 
 const GUIDANCE_PRESETS = [
-  { label: "🧬 Species & Race", text: "Focus on species, race, origin, and physiological traits" },
-  { label: "⚔️ Combat & Powers", text: "Focus on magic, powers, fighting style, weapons, and abilities" },
-  { label: "🎭 Personality", text: "Focus on personality archetypes, demeanor, and psychological traits" },
-  { label: "👗 Outfits & Style", text: "Focus on clothing, visual aesthetic, colors, and outfit style" },
-  { label: "🏷️ Namespaces", text: "Strictly enforce taxonomy namespaces (e.g. species:, role:, style:, rating:)" },
+  {
+    label: "🧬 Species & Race",
+    text: "Focus on species, race, origin, and physiological traits",
+  },
+  {
+    label: "⚔️ Combat & Powers",
+    text: "Focus on magic, powers, fighting style, weapons, and abilities",
+  },
+  {
+    label: "🎭 Personality",
+    text: "Focus on personality archetypes, demeanor, and psychological traits",
+  },
+  {
+    label: "👗 Outfits & Style",
+    text: "Focus on clothing, visual aesthetic, colors, and outfit style",
+  },
+  {
+    label: "🏷️ Namespaces",
+    text: "Strictly enforce taxonomy namespaces (e.g. species:, role:, style:, rating:)",
+  },
 ];
 
 // Predefined widths for realistic skeleton tag cloud
 const SKELETON_WIDTHS = [
-  "85px", "120px", "95px", "140px", "75px", "110px",
-  "130px", "80px", "105px", "150px", "90px", "115px",
-  "100px", "70px", "125px", "135px", "88px", "108px"
+  "85px",
+  "120px",
+  "95px",
+  "140px",
+  "75px",
+  "110px",
+  "130px",
+  "80px",
+  "105px",
+  "150px",
+  "90px",
+  "115px",
+  "100px",
+  "70px",
+  "125px",
+  "135px",
+  "88px",
+  "108px",
 ];
 
 export function TagSuggestionModal({
@@ -53,7 +87,9 @@ export function TagSuggestionModal({
   // Sync selectedTags whenever new suggestedTags arrive from the server for this character
   useEffect(() => {
     if (!loading && suggestedTags.length > 0) {
-      setSelectedTags(new Set([...suggestedTags, ...currentTags, ...customTags]));
+      setSelectedTags(
+        new Set([...suggestedTags, ...currentTags, ...customTags]),
+      );
     }
   }, [suggestedTags, currentTags, customTags, loading]);
 
@@ -74,7 +110,10 @@ export function TagSuggestionModal({
   }, [onClose]);
 
   const allAvailableTags = useMemo(() => {
-    return sortTags(Array.from(new Set([...suggestedTags, ...currentTags, ...customTags])), taxonomyConfig);
+    return sortTags(
+      Array.from(new Set([...suggestedTags, ...currentTags, ...customTags])),
+      taxonomyConfig,
+    );
   }, [suggestedTags, currentTags, customTags, taxonomyConfig]);
 
   const filteredTags = useMemo(() => {
@@ -198,7 +237,10 @@ export function TagSuggestionModal({
     onRegenerate(guidanceInput.trim() || undefined);
   }
 
-  function renderTagToggle(tag: string, source: "ai_new" | "ai_confirmed" | "saved" | "custom") {
+  function renderTagToggle(
+    tag: string,
+    source: "ai_new" | "ai_confirmed" | "saved" | "custom",
+  ) {
     const isChecked = selectedTags.has(tag);
     const tagStyle = resolveTagStyle(tag, taxonomyConfig);
     const dark = tagStyle.colorsDark || tagStyle.colors;
@@ -209,13 +251,15 @@ export function TagSuggestionModal({
     // base TagChip and the Tags & Taxonomy preview color tag chips.
     const toggleVars = {
       "--tag-text": dark.text,
-      "--tag-bg": isChecked ? (dark.glow || dark.bg) : dark.bg,
+      "--tag-bg": isChecked ? dark.glow || dark.bg : dark.bg,
       "--tag-border": isChecked ? dark.text : dark.border,
       "--tag-glow": isChecked ? `0 0 8px ${dark.glow || dark.border}` : "none",
       "--tag-text-light": light.text,
-      "--tag-bg-light": isChecked ? (light.glow || light.bg) : light.bg,
+      "--tag-bg-light": isChecked ? light.glow || light.bg : light.bg,
       "--tag-border-light": isChecked ? light.text : light.border,
-      "--tag-glow-light": isChecked ? `0 0 8px ${light.glow || light.border}` : "none",
+      "--tag-glow-light": isChecked
+        ? `0 0 8px ${light.glow || light.border}`
+        : "none",
     } as React.CSSProperties;
 
     return (
@@ -233,9 +277,7 @@ export function TagSuggestionModal({
         }}
         style={toggleVars}
       >
-        <span
-          className={`tag-checkbox-indicator ${isChecked ? "active" : ""}`}
-        >
+        <span className={`tag-checkbox-indicator ${isChecked ? "active" : ""}`}>
           {isChecked ? <Icon name="Check" size={12} strokeWidth={3} /> : null}
         </span>
         <span className="tag-label-text">
@@ -252,15 +294,24 @@ export function TagSuggestionModal({
             <Icon name="Sparkles" size={10} /> New AI
           </span>
         ) : source === "ai_confirmed" ? (
-          <span className="tag-source-badge confirmed" title="AI also recommends keeping this tag">
+          <span
+            className="tag-source-badge confirmed"
+            title="AI also recommends keeping this tag"
+          >
             <Icon name="CheckCircle2" size={10} /> Confirmed
           </span>
         ) : source === "saved" ? (
-          <span className="tag-source-badge current" title="Previously saved on character card">
+          <span
+            className="tag-source-badge current"
+            title="Previously saved on character card"
+          >
             <Icon name="Tag" size={10} /> Saved
           </span>
         ) : (
-          <span className="tag-source-badge custom" title="Custom tag added in this session">
+          <span
+            className="tag-source-badge custom"
+            title="Custom tag added in this session"
+          >
             <Icon name="Plus" size={10} /> Custom
           </span>
         )}
@@ -289,7 +340,10 @@ export function TagSuggestionModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <section className="modal tag-suggestion-modal" aria-labelledby="tag-modal-title">
+      <section
+        className="modal tag-suggestion-modal"
+        aria-labelledby="tag-modal-title"
+      >
         <header className="modal-header tag-suggestion-header">
           <div className="tag-modal-title-wrap">
             <div className="tag-modal-title-row">
@@ -299,7 +353,10 @@ export function TagSuggestionModal({
               <h2 id="tag-modal-title">AI Tag Suggestions</h2>
             </div>
             <p className="tag-modal-subtitle">
-              Review and select tags for <strong className="tag-char-name-badge">&quot;{characterName || "New Character"}&quot;</strong>
+              Review and select tags for{" "}
+              <strong className="tag-char-name-badge">
+                &quot;{characterName || "New Character"}&quot;
+              </strong>
             </p>
           </div>
           <button
@@ -321,8 +378,15 @@ export function TagSuggestionModal({
               className="tag-guidance-toggle-btn"
               onClick={() => setShowGuidanceInput(!showGuidanceInput)}
             >
-              <Icon name={showGuidanceInput ? "ChevronUp" : "Sliders"} size={13} />
-              <span>{showGuidanceInput ? "Hide AI Prompt Focus / Guidance" : "Add Custom Focus / Instructions for AI"}</span>
+              <Icon
+                name={showGuidanceInput ? "ChevronUp" : "Sliders"}
+                size={13}
+              />
+              <span>
+                {showGuidanceInput
+                  ? "Hide AI Prompt Focus / Guidance"
+                  : "Add Custom Focus / Instructions for AI"}
+              </span>
             </button>
             {!loading && (
               <button
@@ -340,7 +404,11 @@ export function TagSuggestionModal({
             <div className="tag-guidance-content-wrap">
               <div className="tag-guidance-input-row">
                 <div className="tag-guidance-input-inner">
-                  <Icon name="Sparkles" size={14} className="tag-guidance-inner-icon" />
+                  <Icon
+                    name="Sparkles"
+                    size={14}
+                    className="tag-guidance-inner-icon"
+                  />
                   <input
                     type="text"
                     className="tag-guidance-input"
@@ -376,7 +444,9 @@ export function TagSuggestionModal({
 
               {/* Quick Guidance Preset Pills */}
               <div className="tag-guidance-presets-row">
-                <span className="tag-guidance-presets-label">Quick Presets:</span>
+                <span className="tag-guidance-presets-label">
+                  Quick Presets:
+                </span>
                 <div className="tag-guidance-presets-list">
                   {GUIDANCE_PRESETS.map((preset) => (
                     <button
@@ -403,15 +473,22 @@ export function TagSuggestionModal({
               <div className="tag-pulse-ring ring-1" />
               <div className="tag-pulse-ring ring-2" />
               <div className="tag-loading-orb">
-                <Icon name="Sparkles" size={30} className="tag-loading-sparkle-icon" />
+                <Icon
+                  name="Sparkles"
+                  size={30}
+                  className="tag-loading-sparkle-icon"
+                />
               </div>
             </div>
 
             {/* Clear and honest title and subtitle */}
             <div className="tag-loading-status-wrap">
-              <h3 className="tag-loading-stage-title">Analyzing Character Sheet…</h3>
+              <h3 className="tag-loading-stage-title">
+                Analyzing Character Sheet…
+              </h3>
               <p className="tag-loading-stage-desc">
-                Evaluating character lore and matching taxonomy to curate relevant tags.
+                Evaluating character lore and matching taxonomy to curate
+                relevant tags.
               </p>
             </div>
 
@@ -424,13 +501,17 @@ export function TagSuggestionModal({
             {guidanceInput.trim() ? (
               <div className="tag-loading-guidance-pill">
                 <Icon name="Sliders" size={12} />
-                <span>Applying focus: <em>&ldquo;{guidanceInput.trim()}&rdquo;</em></span>
+                <span>
+                  Applying focus: <em>&ldquo;{guidanceInput.trim()}&rdquo;</em>
+                </span>
               </div>
             ) : null}
 
             {/* Tag Skeleton Cloud Preview */}
             <div className="tag-loading-skeleton-preview">
-              <span className="tag-skeleton-caption">Incoming Tag Recommendations</span>
+              <span className="tag-skeleton-caption">
+                Incoming Tag Recommendations
+              </span>
               <div className="tag-skeleton-grid">
                 {SKELETON_WIDTHS.map((width, i) => (
                   <div
@@ -492,12 +573,18 @@ export function TagSuggestionModal({
             <div className="tag-suggestion-toolbar">
               <div className="tag-count-indicator">
                 <span className="tag-count-number">{selectedTags.size}</span>
-                <span className="tag-count-text">of {allAvailableTags.length} tags selected</span>
+                <span className="tag-count-text">
+                  of {allAvailableTags.length} tags selected
+                </span>
               </div>
 
               {/* Tag Search Filter */}
               <div className="tag-filter-search-wrap">
-                <Icon name="Search" size={12} className="tag-filter-search-icon" />
+                <Icon
+                  name="Search"
+                  size={12}
+                  className="tag-filter-search-icon"
+                />
                 <input
                   type="text"
                   className="tag-filter-search-input"
@@ -553,12 +640,17 @@ export function TagSuggestionModal({
               <div className="tag-modal-group ai-group">
                 <div className="tag-modal-group-title">
                   <Icon name="Sparkles" size={13} />
-                  <span>AI Recommended Tags ({aiSuggestedTagsList.length})</span>
+                  <span>
+                    AI Recommended Tags ({aiSuggestedTagsList.length})
+                  </span>
                 </div>
                 <div className="tag-suggestion-chips-grid">
                   {aiSuggestedTagsList.map((tag) => {
                     const isNew = !currentTags.includes(tag);
-                    return renderTagToggle(tag, isNew ? "ai_new" : "ai_confirmed");
+                    return renderTagToggle(
+                      tag,
+                      isNew ? "ai_new" : "ai_confirmed",
+                    );
                   })}
                 </div>
               </div>
@@ -594,7 +686,10 @@ export function TagSuggestionModal({
             {filteredTags.length === 0 ? (
               <div className="tag-empty-filter-state">
                 <Icon name="SearchX" size={24} className="tag-empty-icon" />
-                <p>No matching tags found for &ldquo;<strong>{filterQuery}</strong>&rdquo;.</p>
+                <p>
+                  No matching tags found for &ldquo;
+                  <strong>{filterQuery}</strong>&rdquo;.
+                </p>
                 <div className="tag-empty-actions">
                   <button
                     type="button"
@@ -604,7 +699,8 @@ export function TagSuggestionModal({
                       setFilterQuery("");
                     }}
                   >
-                    <Icon name="Plus" size={12} /> Add &ldquo;{filterQuery}&rdquo; as Custom Tag
+                    <Icon name="Plus" size={12} /> Add &ldquo;{filterQuery}
+                    &rdquo; as Custom Tag
                   </button>
                   <button
                     type="button"
@@ -652,9 +748,24 @@ export function TagSuggestionModal({
             {!loading && (
               <span className="tag-footer-breakdown">
                 <strong>{selectedTags.size}</strong> selected
-                {aiSelectedCount > 0 && <span className="tag-breakdown-sub"> · {aiSelectedCount} AI</span>}
-                {savedSelectedCount > 0 && <span className="tag-breakdown-sub"> · {savedSelectedCount} Saved</span>}
-                {customSelectedCount > 0 && <span className="tag-breakdown-sub"> · {customSelectedCount} Custom</span>}
+                {aiSelectedCount > 0 && (
+                  <span className="tag-breakdown-sub">
+                    {" "}
+                    · {aiSelectedCount} AI
+                  </span>
+                )}
+                {savedSelectedCount > 0 && (
+                  <span className="tag-breakdown-sub">
+                    {" "}
+                    · {savedSelectedCount} Saved
+                  </span>
+                )}
+                {customSelectedCount > 0 && (
+                  <span className="tag-breakdown-sub">
+                    {" "}
+                    · {customSelectedCount} Custom
+                  </span>
+                )}
               </span>
             )}
           </div>

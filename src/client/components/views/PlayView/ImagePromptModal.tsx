@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../../../../engine/imageDefaults";
 import type { ImageApiStyle, ImageInstructionMode } from "../../../../schemas";
-import { CLIP_CHUNK_TOKENS, chunkWarning, estimatePromptChunks } from "../../../utils/imagePromptEstimate";
+import {
+  CLIP_CHUNK_TOKENS,
+  chunkWarning,
+  estimatePromptChunks,
+} from "../../../utils/imagePromptEstimate";
 import { Button, Icon, TextArea } from "../../base";
 import { formatDuration } from "../../../engine/displayFormat";
 
@@ -68,7 +72,7 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
     apiStyle,
     onGenerate,
     onRerun,
-    onClose
+    onClose,
   } = props;
 
   const [promptDraft, setPromptDraft] = useState(prompt);
@@ -101,13 +105,18 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
 
   return (
     <div className="modal-backdrop">
-      <section className="modal module-edit-modal image-prompt-modal" role="dialog" aria-label="Review image prompt">
+      <section
+        className="modal module-edit-modal image-prompt-modal"
+        role="dialog"
+        aria-label="Review image prompt"
+      >
         <header className="modal-header">
           <div>
             <h2>Review Image Prompt</h2>
             <p className="image-prompt-subtitle">
-              Written by the text model, sent to the image provider verbatim — edit it and the image
-              model gets your text (the text model is not called a second time).
+              Written by the text model, sent to the image provider verbatim —
+              edit it and the image model gets your text (the text model is not
+              called a second time).
             </p>
           </div>
           <Button
@@ -129,7 +138,11 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
             <div className="image-prompt-warnings" role="status">
               {warnings.map((warning) => (
                 <p key={warning} className="image-prompt-warning">
-                  <Icon name="AlertTriangle" size={13} className="image-prompt-warning-icon" />
+                  <Icon
+                    name="AlertTriangle"
+                    size={13}
+                    className="image-prompt-warning-icon"
+                  />
                   <span>{warning}</span>
                 </p>
               ))}
@@ -146,7 +159,9 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
             disabled={generating}
             characterCount={promptDraft.length}
             maxCharacterCount={limit}
-            containerClassName={overLimit ? "image-prompt-over-limit" : undefined}
+            containerClassName={
+              overLimit ? "image-prompt-over-limit" : undefined
+            }
             helperText={
               overLimit
                 ? `Over the ${limit}-character limit — the server clamps the composed prompt before sending.`
@@ -158,9 +173,14 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
           {estimate ? (
             <div className="image-prompt-estimate" role="status">
               <p className="image-prompt-estimate-line">
-                <Icon name="Ruler" size={13} className="image-prompt-estimate-icon" />
+                <Icon
+                  name="Ruler"
+                  size={13}
+                  className="image-prompt-estimate-icon"
+                />
                 <span>
-                  About <strong>{estimate.tokens}</strong> tokens — {estimate.chunks} CLIP chunk
+                  About <strong>{estimate.tokens}</strong> tokens —{" "}
+                  {estimate.chunks} CLIP chunk
                   {estimate.chunks === 1 ? "" : "s"} of {CLIP_CHUNK_TOKENS}.{" "}
                   {estimate.chunks === 1
                     ? "The whole prompt fits the first chunk."
@@ -169,13 +189,17 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
               </p>
               {estimateWarning ? (
                 <p className="image-prompt-estimate-warning">
-                  <Icon name="AlertTriangle" size={13} className="image-prompt-warning-icon" />
+                  <Icon
+                    name="AlertTriangle"
+                    size={13}
+                    className="image-prompt-warning-icon"
+                  />
                   <span>{estimateWarning}</span>
                 </p>
               ) : null}
               <p className="image-prompt-estimate-note">
-                An approximation (~4 characters per token), not a tokenizer — and never a limit: the text is
-                sent unchanged.
+                An approximation (~4 characters per token), not a tokenizer —
+                and never a limit: the text is sent unchanged.
               </p>
             </div>
           ) : null}
@@ -194,7 +218,9 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
             }
           />
 
-          {caption ? <p className="image-prompt-caption">Image provider: {caption}</p> : null}
+          {caption ? (
+            <p className="image-prompt-caption">Image provider: {caption}</p>
+          ) : null}
           {/* What the writer was actually given. The prompt above can look wrong
               for reasons that have nothing to do with the model — the window is
               empty on a first message, or the scene instruction is in force — and
@@ -204,7 +230,9 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
               {context.historyMessages > 0
                 ? `Context: ${context.historyMessages} previous message${context.historyMessages === 1 ? "" : "s"}`
                 : "Context: this message only"}
-              {context.instructionMode === "scene" ? " · Scene instruction (third-person)" : " · POV instruction"}
+              {context.instructionMode === "scene"
+                ? " · Scene instruction (third-person)"
+                : " · POV instruction"}
             </p>
           ) : null}
 
@@ -243,7 +271,9 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
               Cancel
             </Button>
             {rerunning && promptElapsedMs !== null ? (
-              <span className="image-prompt-elapsed">{formatDuration(promptElapsedMs)}</span>
+              <span className="image-prompt-elapsed">
+                {formatDuration(promptElapsedMs)}
+              </span>
             ) : null}
           </div>
         </div>

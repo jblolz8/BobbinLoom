@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CharacterInstance, ClothingItem, Playthrough } from "../../../schemas";
+import type {
+  CharacterInstance,
+  ClothingItem,
+  Playthrough,
+} from "../../../schemas";
 import {
   Badge,
   Button,
@@ -10,7 +14,7 @@ import {
   Tabs,
   TagInput,
   TextArea,
-  TextInput
+  TextInput,
 } from "../base";
 import { Dialog } from "../base/Dialog";
 import { TwoPaneDiff } from "../library/TwoPaneDiff";
@@ -19,7 +23,7 @@ import {
   applySectionChanges,
   parseClothingFromContent,
   splitContentSections,
-  type ContentSection
+  type ContentSection,
 } from "../../../engine/characterSections";
 import { CharacterSheetSections } from "../views/PlayView/InfoPanel/CharacterSheetSections";
 import { sectionProvenance } from "../../engine/sheetProvenance";
@@ -34,7 +38,9 @@ export type CharacterEditorProps = {
   initialMode?: "view" | "edit";
   inScene?: boolean;
   onSave: (payload: CharacterEditPayload) => Promise<void>;
-  onSaveToLibrary?: (mode: "update" | "newVersion") => Promise<{ version: number; created: boolean }>;
+  onSaveToLibrary?: (
+    mode: "update" | "newVersion",
+  ) => Promise<{ version: number; created: boolean }>;
   onClose: () => void;
 };
 
@@ -71,10 +77,13 @@ type EditorForm = {
 function instanceToForm(
   char: CharacterInstance,
   playthrough: Playthrough,
-  inSceneOverride?: boolean
+  inSceneOverride?: boolean,
 ): EditorForm {
-  const tpl = playthrough.characterTemplates.find((t) => t.id === char.templateId);
-  const activeInScene = inSceneOverride ?? (playthrough.activeCharacters ?? []).includes(char.id);
+  const tpl = playthrough.characterTemplates.find(
+    (t) => t.id === char.templateId,
+  );
+  const activeInScene =
+    inSceneOverride ?? (playthrough.activeCharacters ?? []).includes(char.id);
   return {
     name: char.name,
     storyRole: char.storyRole || "Stranger",
@@ -136,18 +145,27 @@ export function CharacterEditor({
   onSaveToLibrary,
   onClose,
 }: CharacterEditorProps) {
-  const template = playthrough.characterTemplates.find((t) => t.id === character.templateId);
+  const template = playthrough.characterTemplates.find(
+    (t) => t.id === character.templateId,
+  );
   // CCv2-backed sheets are read-only in play (D9): content + clothing are locked.
   const isReadOnlySheet = template?.format === "ccv2";
-  const initialForm = useRef<EditorForm>(instanceToForm(character, playthrough, inScene));
+  const initialForm = useRef<EditorForm>(
+    instanceToForm(character, playthrough, inScene),
+  );
   const [form, setForm] = useState<EditorForm>(initialForm.current);
 
   const [mode, setMode] = useState<"view" | "edit">(initialMode);
   const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState<{ text: string; isError: boolean } | null>(null);
+  const [status, setStatus] = useState<{
+    text: string;
+    isError: boolean;
+  } | null>(null);
   const [saveToLib, setSaveToLib] = useState(false);
   const [libMode, setLibMode] = useState<"update" | "newVersion">("update");
-  const [pendingDiscard, setPendingDiscard] = useState<"close" | "view" | null>(null);
+  const [pendingDiscard, setPendingDiscard] = useState<"close" | "view" | null>(
+    null,
+  );
   const [showRaw, setShowRaw] = useState(false);
   const [showDiff, setShowDiff] = useState(false);
 
@@ -169,11 +187,17 @@ export function CharacterEditor({
   /** What the story changed, per section — read from the turn log, never stored a second time. */
   const marks = useMemo(
     () => sectionProvenance(playthrough.messages, character.name),
-    [playthrough.messages, character.name]
+    [playthrough.messages, character.name],
   );
 
-  const sheetSections = useMemo(() => splitContentSections(form.content).sections, [form.content]);
-  const sectionHeaders = useMemo(() => sheetSections.map((s) => s.header), [sheetSections]);
+  const sheetSections = useMemo(
+    () => splitContentSections(form.content).sections,
+    [form.content],
+  );
+  const sectionHeaders = useMemo(
+    () => sheetSections.map((s) => s.header),
+    [sheetSections],
+  );
 
   /** The library card's sections by header: the drift check and the per-section restore both need it. */
   const originSections = useMemo(() => {
@@ -185,7 +209,9 @@ export function CharacterEditor({
     return map;
   }, [originalSheet]);
 
-  const divergedFromLibrary = originalSheet !== null && (template?.content ?? "").trim() !== originalSheet.trim();
+  const divergedFromLibrary =
+    originalSheet !== null &&
+    (template?.content ?? "").trim() !== originalSheet.trim();
 
   const driftOf = useCallback(
     (section: ContentSection): "added" | "changed" | "same" | null => {
@@ -194,18 +220,21 @@ export function CharacterEditor({
       if (original === undefined) return "added";
       return original === section.body.trim() ? "same" : "changed";
     },
-    [originSections]
+    [originSections],
   );
 
   function restoreSection(header: string) {
     if (!originalSheet) return;
     const original = splitContentSections(originalSheet).sections.find(
-      (section) => section.header.trim().toLowerCase() === header.trim().toLowerCase()
+      (section) =>
+        section.header.trim().toLowerCase() === header.trim().toLowerCase(),
     );
     if (!original) return;
     setForm((f) => ({
       ...f,
-      content: applySectionChanges(f.content, [{ header, body: original.body }])
+      content: applySectionChanges(f.content, [
+        { header, body: original.body },
+      ]),
     }));
   }
 
@@ -229,7 +258,7 @@ export function CharacterEditor({
       }
       setMode(next);
     },
-    [mode, isDirty]
+    [mode, isDirty],
   );
 
   function confirmDiscard() {
@@ -270,7 +299,9 @@ export function CharacterEditor({
         // The reader chooses: overwrite the card, or mint a version beside it. The choice only means
         // anything once the card exists and this sheet has moved on from it.
         const result = await onSaveToLibrary(libMode);
-        libMsg = result.created ? ` + saved to the library as v${result.version}` : " + library card updated";
+        libMsg = result.created
+          ? ` + saved to the library as v${result.version}`
+          : " + library card updated";
       }
 
       initialForm.current = {
@@ -285,7 +316,10 @@ export function CharacterEditor({
         setTimeout(onClose, 1000);
       }
     } catch (e) {
-      setStatus({ text: e instanceof Error ? e.message : String(e), isError: true });
+      setStatus({
+        text: e instanceof Error ? e.message : String(e),
+        isError: true,
+      });
     } finally {
       setSaving(false);
     }
@@ -295,9 +329,9 @@ export function CharacterEditor({
   const modeTabs = useMemo(
     () => [
       { id: "view" as const, label: "View" },
-      { id: "edit" as const, label: "Edit" }
+      { id: "edit" as const, label: "Edit" },
     ],
-    []
+    [],
   );
 
   const renderSectionExtra = (section: ContentSection) => {
@@ -306,7 +340,9 @@ export function CharacterEditor({
     return (
       <p className="sheet-section-drift">
         <Badge variant={drift === "added" ? "info" : "warning"} size="xs">
-          {drift === "added" ? "new since the library" : "changed since the library"}
+          {drift === "added"
+            ? "new since the library"
+            : "changed since the library"}
         </Badge>
         {/* Read-only CCv2 sheets never submit their blob, so restoring one would look like it worked
             and quietly not persist. The marker still shows; only the action is withheld. */}
@@ -329,7 +365,10 @@ export function CharacterEditor({
       <section className="sheet-drift">
         <h4>
           Against the library card
-          <Badge variant={divergedFromLibrary ? "warning" : "neutral"} size="xs">
+          <Badge
+            variant={divergedFromLibrary ? "warning" : "neutral"}
+            size="xs"
+          >
             {divergedFromLibrary ? "changed" : "identical"}
           </Badge>
         </h4>
@@ -340,7 +379,11 @@ export function CharacterEditor({
         </p>
         {divergedFromLibrary ? (
           <>
-            <Button size="sm" variant="ghost" onClick={() => setShowDiff((v) => !v)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowDiff((v) => !v)}
+            >
               {showDiff ? "Hide the comparison" : "Compare with the original"}
             </Button>
             {showDiff ? (
@@ -362,7 +405,9 @@ export function CharacterEditor({
         <dt>Story role</dt>
         <dd>
           {form.storyRole ? (
-            <Badge variant="accent" size="xs">{form.storyRole}</Badge>
+            <Badge variant="accent" size="xs">
+              {form.storyRole}
+            </Badge>
           ) : (
             <span className="empty-value">—</span>
           )}
@@ -372,9 +417,13 @@ export function CharacterEditor({
         <dt>Presence</dt>
         <dd>
           {form.inScene ? (
-            <Badge variant="success" size="xs">● In Scene (Active)</Badge>
+            <Badge variant="success" size="xs">
+              ● In Scene (Active)
+            </Badge>
           ) : (
-            <Badge variant="neutral" size="xs">○ Off-Screen (Inactive)</Badge>
+            <Badge variant="neutral" size="xs">
+              ○ Off-Screen (Inactive)
+            </Badge>
           )}
         </dd>
       </div>
@@ -396,25 +445,47 @@ export function CharacterEditor({
       </div>
       <div>
         <dt>Conditions</dt>
-        <dd>{form.conditions.length > 0 ? form.conditions.join(", ") : <span className="empty-value">—</span>}</dd>
+        <dd>
+          {form.conditions.length > 0 ? (
+            form.conditions.join(", ")
+          ) : (
+            <span className="empty-value">—</span>
+          )}
+        </dd>
       </div>
       <div>
         <dt>Flags</dt>
-        <dd>{form.flags.length > 0 ? form.flags.join(", ") : <span className="empty-value">—</span>}</dd>
+        <dd>
+          {form.flags.length > 0 ? (
+            form.flags.join(", ")
+          ) : (
+            <span className="empty-value">—</span>
+          )}
+        </dd>
       </div>
       <div>
         <dt>Clothing</dt>
         <dd>
-          {form.clothing.length > 0
-            ? form.clothing.map((c) => `${c.slot}: ${c.name}${c.state ? ` (${c.state})` : ""}`).join("; ")
-            : <span className="empty-value">—</span>}
+          {form.clothing.length > 0 ? (
+            form.clothing
+              .map(
+                (c) => `${c.slot}: ${c.name}${c.state ? ` (${c.state})` : ""}`,
+              )
+              .join("; ")
+          ) : (
+            <span className="empty-value">—</span>
+          )}
         </dd>
       </div>
     </dl>
   );
 
   const readOnlyBadge = isReadOnlySheet ? (
-    <Badge variant="info" size="xs" title="CCv2 sheets are read-only in play — conversion coming later">
+    <Badge
+      variant="info"
+      size="xs"
+      title="CCv2 sheets are read-only in play — conversion coming later"
+    >
       read-only CCv2 sheet
     </Badge>
   ) : null;
@@ -434,7 +505,9 @@ export function CharacterEditor({
             <Badge variant={form.inScene ? "success" : "neutral"} size="xs">
               {form.inScene ? "● In Scene" : "○ Off-Screen"}
             </Badge>
-            {isDirty ? <span className="dirty-indicator"> — unsaved changes</span> : null}
+            {isDirty ? (
+              <span className="dirty-indicator"> — unsaved changes</span>
+            ) : null}
           </span>
         }
         className="character-editor-modal"
@@ -463,18 +536,26 @@ export function CharacterEditor({
                 variant="primary"
                 isLoading={saving}
                 disabled={saving || !isDirty}
-                onClick={() => { void handleSave(true); }}
+                onClick={() => {
+                  void handleSave(true);
+                }}
               >
                 Save & Close
               </Button>
               <Button
                 variant="secondary"
                 disabled={saving || !isDirty}
-                onClick={() => { void handleSave(false); }}
+                onClick={() => {
+                  void handleSave(false);
+                }}
               >
                 Save
               </Button>
-              <Button variant="secondary" disabled={saving} onClick={requestClose}>
+              <Button
+                variant="secondary"
+                disabled={saving}
+                onClick={requestClose}
+              >
                 Cancel
               </Button>
             </>
@@ -488,7 +569,9 @@ export function CharacterEditor({
                   variant="primary"
                   isLoading={saving}
                   disabled={saving}
-                  onClick={() => { void handleSave(false); }}
+                  onClick={() => {
+                    void handleSave(false);
+                  }}
                 >
                   Save
                 </Button>
@@ -501,7 +584,11 @@ export function CharacterEditor({
         }
       >
         <div className="character-editor-body">
-          {status ? <p className={status.isError ? "status-error" : "status-ok"}>{status.text}</p> : null}
+          {status ? (
+            <p className={status.isError ? "status-error" : "status-ok"}>
+              {status.text}
+            </p>
+          ) : null}
 
           {mode === "view" ? (
             <>
@@ -518,15 +605,28 @@ export function CharacterEditor({
                 />
               ) : (
                 <p className="sheet-empty">
-                  No character data. <span className="empty-value">This character has no sheet yet.</span>
+                  No character data.{" "}
+                  <span className="empty-value">
+                    This character has no sheet yet.
+                  </span>
                 </p>
               )}
               <div className="sheet-raw">
-                <Button size="sm" variant="ghost" onClick={() => setShowRaw((v) => !v)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowRaw((v) => !v)}
+                >
                   {showRaw ? "Hide the raw sheet" : "Show the raw sheet"}
                 </Button>
                 {showRaw ? (
-                  <CodeBlock code={form.content || "(empty)"} label="Raw sheet" wrap maxHeight={320} showCopy />
+                  <CodeBlock
+                    code={form.content || "(empty)"}
+                    label="Raw sheet"
+                    wrap
+                    maxHeight={320}
+                    showCopy
+                  />
                 ) : null}
               </div>
 
@@ -539,7 +639,9 @@ export function CharacterEditor({
                 label="Name"
                 value={form.name}
                 required
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, name: e.target.value }))
+                }
               />
 
               <TextInput
@@ -547,14 +649,18 @@ export function CharacterEditor({
                 placeholder="e.g. Companion, Mentor, Rival, Local Blacksmith"
                 helperText="Their narrative role or occupation in the story"
                 value={form.storyRole}
-                onChange={(e) => setForm((f) => ({ ...f, storyRole: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, storyRole: e.target.value }))
+                }
               />
 
               <TextInput
                 label="Summary"
                 helperText="One-line description used when the character is away from the scene"
                 value={form.summary}
-                onChange={(e) => setForm((f) => ({ ...f, summary: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, summary: e.target.value }))
+                }
               />
 
               <SwitchRow
@@ -566,7 +672,9 @@ export function CharacterEditor({
                     : "Off-Screen: This character is currently elsewhere or in the background."
                 }
                 checked={form.inScene}
-                onChange={(e) => setForm((f) => ({ ...f, inScene: e.target.checked }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, inScene: e.target.checked }))
+                }
               />
 
               <h4>
@@ -578,7 +686,9 @@ export function CharacterEditor({
                 helperText="Full character sheet text — [Section] headers, in the order your current preset's Character Sheet format defines. [Clothing] slot bullets here are the character's current outfit."
                 rows={18}
                 value={form.content}
-                onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, content: e.target.value }))
+                }
                 placeholder={"[Species]: ..."}
                 disabled={isReadOnlySheet}
                 containerClassName="sheet-content-field"
@@ -589,14 +699,18 @@ export function CharacterEditor({
                 label="Mood"
                 helperText="Current emotional state"
                 value={form.mood}
-                onChange={(e) => setForm((f) => ({ ...f, mood: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, mood: e.target.value }))
+                }
                 placeholder="e.g. curious, wary, hostile"
               />
               <TextInput
                 label="Toward player"
                 helperText="How the character feels about the player"
                 value={form.towardPlayer}
-                onChange={(e) => setForm((f) => ({ ...f, towardPlayer: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, towardPlayer: e.target.value }))
+                }
                 placeholder="e.g. friendly but guarded"
               />
               <TextArea
@@ -606,7 +720,9 @@ export function CharacterEditor({
                 autoGrow
                 autoGrowMax={180}
                 value={form.memorySummary}
-                onChange={(e) => setForm((f) => ({ ...f, memorySummary: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, memorySummary: e.target.value }))
+                }
               />
               <label className="editor-field">
                 <span className="editor-field-label">Conditions</span>
@@ -639,12 +755,18 @@ export function CharacterEditor({
                   />
                   <p className="sheet-library-state">
                     {inLibrary ? (
-                      <Badge variant="success" size="xs">in the library</Badge>
+                      <Badge variant="success" size="xs">
+                        in the library
+                      </Badge>
                     ) : (
-                      <Badge variant="neutral" size="xs">not in the library</Badge>
+                      <Badge variant="neutral" size="xs">
+                        not in the library
+                      </Badge>
                     )}
                     {inLibrary && divergedFromLibrary ? (
-                      <Badge variant="warning" size="xs">this copy has changed since</Badge>
+                      <Badge variant="warning" size="xs">
+                        this copy has changed since
+                      </Badge>
                     ) : null}
                   </p>
                   {saveToLib && inLibrary && divergedFromLibrary ? (
@@ -656,13 +778,22 @@ export function CharacterEditor({
                         fullWidth
                         aria-label="How to save this sheet to the library"
                         options={[
-                          { value: "update", label: "Overwrite the library card", description: "The card becomes this sheet" },
-                          { value: "newVersion", label: "Save as a new version", description: "The original card is kept" }
+                          {
+                            value: "update",
+                            label: "Overwrite the library card",
+                            description: "The card becomes this sheet",
+                          },
+                          {
+                            value: "newVersion",
+                            label: "Save as a new version",
+                            description: "The original card is kept",
+                          },
                         ]}
                       />
                       <p className="sheet-note">
-                        Overwriting replaces the card every future playthrough starts from — the comparison
-                        above shows exactly what would change.
+                        Overwriting replaces the card every future playthrough
+                        starts from — the comparison above shows exactly what
+                        would change.
                       </p>
                     </div>
                   ) : null}

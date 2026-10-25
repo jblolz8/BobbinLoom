@@ -19,9 +19,20 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProviderManager } from "../src/server/providerManager";
 import { playthroughRoutes } from "../src/server/routes/playthroughs";
 import { providerRoutes } from "../src/server/routes/providers";
-import { createConnection, getRegistry, setActiveConnection, setChapterTextProvider } from "../src/server/providerRegistry";
-import type { ProviderConnectionDraft, PublicProviderRegistry } from "../src/server/providerRegistry";
-import { createBlankPlaythroughRecord, updatePlaythroughRecord } from "../src/server/store";
+import {
+  createConnection,
+  getRegistry,
+  setActiveConnection,
+  setChapterTextProvider,
+} from "../src/server/providerRegistry";
+import type {
+  ProviderConnectionDraft,
+  PublicProviderRegistry,
+} from "../src/server/providerRegistry";
+import {
+  createBlankPlaythroughRecord,
+  updatePlaythroughRecord,
+} from "../src/server/store";
 import { cleanupTempDirs, tempDir } from "./helpers/imageFixtures";
 
 afterEach(cleanupTempDirs);
@@ -33,10 +44,15 @@ const MODEL_CONTENT = JSON.stringify({
   shortDescription: "A chapter that ended.",
   fullSummary: "Everything that happened in the chapter that ended.",
   narrative: "The next chapter opens.",
-  choices: []
+  choices: [],
 });
 
-type Transport = { server: Server; urls: string[]; bodies: string[]; base: string };
+type Transport = {
+  server: Server;
+  urls: string[];
+  bodies: string[];
+  base: string;
+};
 
 function startTransport(): Promise<Transport> {
   const urls: string[] = [];
@@ -44,11 +60,13 @@ function startTransport(): Promise<Transport> {
   const server = createServer((req, res) => {
     urls.push(req.url ?? "");
     let body = "";
-    req.on("data", (chunk) => { body += String(chunk); });
+    req.on("data", (chunk) => {
+      body += String(chunk);
+    });
     req.on("end", () => {
       bodies.push(body);
       res.writeHead(200, { "Content-Type": "application/json" });
-      const payload = body.includes("\"input\"")
+      const payload = body.includes('"input"')
         ? { data: [{ embedding: [0.1, 0.2, 0.3] }] }
         : { choices: [{ message: { content: MODEL_CONTENT } }] };
       res.end(JSON.stringify(payload));
@@ -63,7 +81,12 @@ function startTransport(): Promise<Transport> {
   });
 }
 
-function conn(label: string, baseUrl: string, contextWindow: number, maxTokens: number): ProviderConnectionDraft {
+function conn(
+  label: string,
+  baseUrl: string,
+  contextWindow: number,
+  maxTokens: number,
+): ProviderConnectionDraft {
   return {
     label,
     baseUrl,
@@ -71,7 +94,7 @@ function conn(label: string, baseUrl: string, contextWindow: number, maxTokens: 
     temperature: 0.7,
     maxTokens,
     contextWindow,
-    kind: "text"
+    kind: "text",
   };
 }
 
@@ -83,7 +106,7 @@ function seedPlaythrough(dir: string): string {
     role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
     content: `message ${index}`,
     createdAt: `2026-01-0${index + 1}T00:00:00.000Z`,
-    turn: Math.floor(index / 2) + 1
+    turn: Math.floor(index / 2) + 1,
   }));
   playthrough.turn = 4;
   updatePlaythroughRecord(dir, playthrough);
@@ -101,8 +124,14 @@ async function harness() {
   const getContextWindow = vi.spyOn(manager, "getContextWindow");
   const getMaxTokens = vi.spyOn(manager, "getMaxTokens");
 
-  createConnection(settingsDir, conn("Alpha", `${transport.base}/alpha`, 32000, 800));
-  createConnection(settingsDir, conn("Beta", `${transport.base}/beta`, 200000, 9000));
+  createConnection(
+    settingsDir,
+    conn("Alpha", `${transport.base}/alpha`, 32000, 800),
+  );
+  createConnection(
+    settingsDir,
+    conn("Beta", `${transport.base}/beta`, 200000, 9000),
+  );
   setActiveConnection(settingsDir, "alpha");
 
   const playthroughId = seedPlaythrough(dataDir);
@@ -112,12 +141,21 @@ async function harness() {
     dataDir,
     imagesDir: join(root, "images"),
     charactersDir: join(root, "characters"),
-    manager
+    manager,
   });
   app.register(providerRoutes, { manager });
   await app.ready();
 
-  return { app, manager, playthroughId, settingsDir, ...transport, getProvider, getContextWindow, getMaxTokens };
+  return {
+    app,
+    manager,
+    playthroughId,
+    settingsDir,
+    ...transport,
+    getProvider,
+    getContextWindow,
+    getMaxTokens,
+  };
 }
 
 async function teardown(h: Awaited<ReturnType<typeof harness>>) {
@@ -125,11 +163,15 @@ async function teardown(h: Awaited<ReturnType<typeof harness>>) {
   await new Promise<void>((resolve) => h.server.close(() => resolve()));
 }
 
-function closeChapter(app: FastifyInstance, playthroughId: string, body: Record<string, unknown> = {}) {
+function closeChapter(
+  app: FastifyInstance,
+  playthroughId: string,
+  body: Record<string, unknown> = {},
+) {
   return app.inject({
     method: "POST",
     url: `/api/playthroughs/${playthroughId}/close-chapter`,
-    payload: body
+    payload: body,
   });
 }
 
@@ -137,7 +179,9 @@ describe("the text connection a chapter is closed with", () => {
   it("uses the connection the request names, resolved exactly once", async () => {
     const h = await harness();
 
-    const res = await closeChapter(h.app, h.playthroughId, { providerId: "beta" });
+    const res = await closeChapter(h.app, h.playthroughId, {
+      providerId: "beta",
+    });
 
     expect(res.statusCode).toBe(200);
     expect(h.urls.length).toBeGreaterThan(0);
@@ -160,13 +204,15 @@ describe("the text connection a chapter is closed with", () => {
     const res = await closeChapter(h.app, h.playthroughId, {
       providerId: "beta",
       openingMode: "custom",
-      openingMessage: note
+      openingMessage: note,
     });
 
     expect(res.statusCode).toBe(200);
     // The chat calls in order: the summary first, then the opening turn. Embed requests carry the
     // memory text and are not chat calls.
-    const chats = h.bodies.filter((body) => body.includes('"messages"') && !body.includes('"input"'));
+    const chats = h.bodies.filter(
+      (body) => body.includes('"messages"') && !body.includes('"input"'),
+    );
     expect(chats.length).toBeGreaterThanOrEqual(2);
     // The summary describes the PAST: it must not know about the transition.
     expect(chats[0]).not.toContain("Rime");
@@ -179,11 +225,15 @@ describe("the text connection a chapter is closed with", () => {
   it("refuses an unknown mode, and a Custom close with no message", async () => {
     const h = await harness();
 
-    const unknownMode = await closeChapter(h.app, h.playthroughId, { openingMode: "teleport" });
+    const unknownMode = await closeChapter(h.app, h.playthroughId, {
+      openingMode: "teleport",
+    });
     expect(unknownMode.statusCode).toBe(400);
     expect(unknownMode.json().error).toContain("openingMode");
 
-    const noMessage = await closeChapter(h.app, h.playthroughId, { openingMode: "custom" });
+    const noMessage = await closeChapter(h.app, h.playthroughId, {
+      openingMode: "custom",
+    });
     expect(noMessage.statusCode).toBe(400);
     expect(noMessage.json().error).toContain("Custom");
 
@@ -206,7 +256,9 @@ describe("the text connection a chapter is closed with", () => {
   it("falls back to the active connection when the named one no longer exists", async () => {
     const h = await harness();
 
-    const res = await closeChapter(h.app, h.playthroughId, { providerId: "deleted-connection" });
+    const res = await closeChapter(h.app, h.playthroughId, {
+      providerId: "deleted-connection",
+    });
 
     expect(res.statusCode).toBe(200);
     expect(h.urls.every((url) => url.startsWith("/alpha"))).toBe(true);
@@ -222,24 +274,33 @@ describe("PUT /api/settings/providers/chapter-provider", () => {
     const saved = await h.app.inject({
       method: "PUT",
       url: "/api/settings/providers/chapter-provider",
-      payload: { providerId: "beta" }
+      payload: { providerId: "beta" },
     });
     expect(saved.statusCode).toBe(200);
-    expect((saved.json() as PublicProviderRegistry).chapterTextProviderId).toBe("beta");
+    expect((saved.json() as PublicProviderRegistry).chapterTextProviderId).toBe(
+      "beta",
+    );
 
     // Read back through the registry, not the response: a field written by hand and forgotten in
     // one of the hand-built read paths comes back undefined here and nowhere else.
-    const listed = await h.app.inject({ method: "GET", url: "/api/settings/providers" });
-    expect((listed.json() as PublicProviderRegistry).chapterTextProviderId).toBe("beta");
+    const listed = await h.app.inject({
+      method: "GET",
+      url: "/api/settings/providers",
+    });
+    expect(
+      (listed.json() as PublicProviderRegistry).chapterTextProviderId,
+    ).toBe("beta");
     expect(getRegistry(h.settingsDir).chapterTextProviderId).toBe("beta");
 
     // `null` is a VALUE ("follow the active connection"), not "unset" — it must survive too.
     const cleared = await h.app.inject({
       method: "PUT",
       url: "/api/settings/providers/chapter-provider",
-      payload: { providerId: null }
+      payload: { providerId: null },
     });
-    expect((cleared.json() as PublicProviderRegistry).chapterTextProviderId).toBeNull();
+    expect(
+      (cleared.json() as PublicProviderRegistry).chapterTextProviderId,
+    ).toBeNull();
 
     await teardown(h);
   });
@@ -250,7 +311,7 @@ describe("PUT /api/settings/providers/chapter-provider", () => {
     const res = await h.app.inject({
       method: "PUT",
       url: "/api/settings/providers/chapter-provider",
-      payload: { providerId: 7 }
+      payload: { providerId: 7 },
     });
     expect(res.statusCode).toBe(400);
 

@@ -6,7 +6,7 @@ import {
   readFileSync,
   renameSync,
   unlinkSync,
-  writeFileSync
+  writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
 
@@ -131,7 +131,7 @@ export function readJsonFile(path: string): ReadJsonResult {
   } catch (e) {
     return {
       ok: false,
-      reason: `unparseable: ${e instanceof Error ? e.message : String(e)}`
+      reason: `unparseable: ${e instanceof Error ? e.message : String(e)}`,
     };
   }
 }

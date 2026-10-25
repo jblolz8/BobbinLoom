@@ -8,7 +8,12 @@ import { Badge, Button, Icon, TextArea, TextInput } from "../../base";
 export type ScenePanelProps = {
   playthrough: Playthrough;
   actionLoading: boolean;
-  onWorldStateAction: (wsId: string, action: WorldStateAction, name?: string, description?: string) => void;
+  onWorldStateAction: (
+    wsId: string,
+    action: WorldStateAction,
+    name?: string,
+    description?: string,
+  ) => void;
   className?: string;
   style?: CSSProperties;
 };
@@ -24,7 +29,13 @@ type DeleteConfirm = {
   name: string;
 } | null;
 
-export function ScenePanel({ playthrough, actionLoading, onWorldStateAction, className, style }: ScenePanelProps) {
+export function ScenePanel({
+  playthrough,
+  actionLoading,
+  onWorldStateAction,
+  className,
+  style,
+}: ScenePanelProps) {
   const [editing, setEditing] = useState<EditState>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [addName, setAddName] = useState("");
@@ -52,13 +63,18 @@ export function ScenePanel({ playthrough, actionLoading, onWorldStateAction, cla
 
   const worldState = playthrough.worldState || [];
   const activeCount = (playthrough.activeCharacters ?? []).length;
-  const storyMessages = (playthrough.messages ?? []).filter((m) => !m.hidden || m.chapterId);
+  const storyMessages = (playthrough.messages ?? []).filter(
+    (m) => !m.hidden || m.chapterId,
+  );
   const userMsgCount = storyMessages.filter((m) => m.role === "user").length;
   const aiMsgCount = storyMessages.filter((m) => m.role === "assistant").length;
   const totalMsgCount = storyMessages.length;
 
   return (
-    <aside className={`panel left-panel${className ? ` ${className}` : ""}`} style={style}>
+    <aside
+      className={`panel left-panel${className ? ` ${className}` : ""}`}
+      style={style}
+    >
       <div className="scene-panel-content">
         <article className="card scene-overview-card">
           <div className="scene-card-header">
@@ -73,21 +89,35 @@ export function ScenePanel({ playthrough, actionLoading, onWorldStateAction, cla
 
           <div className="scene-meta-grid">
             <div className="scene-meta-item">
-              <span className="meta-label"><Icon name="Clock" size={13} /> Turn</span>
-              <Badge variant="accent" size="sm">#{playthrough.turn}</Badge>
+              <span className="meta-label">
+                <Icon name="Clock" size={13} /> Turn
+              </span>
+              <Badge variant="accent" size="sm">
+                #{playthrough.turn}
+              </Badge>
             </div>
 
             <div className="scene-meta-item scene-meta-messages">
-              <span className="meta-label"><Icon name="MessageSquare" size={13} /> Messages</span>
+              <span className="meta-label">
+                <Icon name="MessageSquare" size={13} /> Messages
+              </span>
               <div className="scene-meta-stat-group">
-                <Badge variant="neutral" size="sm">{totalMsgCount} msgs</Badge>
-                <span className="scene-meta-subtext">({userMsgCount} You · {aiMsgCount} AI)</span>
+                <Badge variant="neutral" size="sm">
+                  {totalMsgCount} msgs
+                </Badge>
+                <span className="scene-meta-subtext">
+                  ({userMsgCount} You · {aiMsgCount} AI)
+                </span>
               </div>
             </div>
 
             <div className="scene-meta-item">
-              <span className="meta-label"><Icon name="Users" size={13} /> In Scene</span>
-              <Badge variant="neutral" size="sm">{activeCount} active</Badge>
+              <span className="meta-label">
+                <Icon name="Users" size={13} /> In Scene
+              </span>
+              <Badge variant="neutral" size="sm">
+                {activeCount} active
+              </Badge>
             </div>
           </div>
         </article>
@@ -96,12 +126,18 @@ export function ScenePanel({ playthrough, actionLoading, onWorldStateAction, cla
           <h3 className="section-subtitle flex items-center justify-between">
             <span className="flex items-center gap-1.5">
               <Icon name="Globe" size={15} /> World State
-              <Badge variant="neutral" size="xs" pill>{worldState.length}</Badge>
+              <Badge variant="neutral" size="xs" pill>
+                {worldState.length}
+              </Badge>
             </span>
             <Button
               variant="ghost"
               size="xs"
-              onClick={() => { setIsAdding(true); setAddName(""); setAddDescription(""); }}
+              onClick={() => {
+                setIsAdding(true);
+                setAddName("");
+                setAddDescription("");
+              }}
               disabled={actionLoading}
               leftIcon={<Icon name="Plus" size={12} />}
             >
@@ -116,14 +152,22 @@ export function ScenePanel({ playthrough, actionLoading, onWorldStateAction, cla
                     <strong className="quest-title">{ws.name}</strong>
                   </div>
 
-                  {ws.description ? <p className="quest-summary">{ws.description}</p> : null}
+                  {ws.description ? (
+                    <p className="quest-summary">{ws.description}</p>
+                  ) : null}
 
                   <div className="quest-card-actions">
                     <Button
                       size="xs"
                       variant="ghost"
                       disabled={actionLoading}
-                      onClick={() => setEditing({ id: ws.id, name: ws.name, description: ws.description })}
+                      onClick={() =>
+                        setEditing({
+                          id: ws.id,
+                          name: ws.name,
+                          description: ws.description,
+                        })
+                      }
                       leftIcon={<Icon name="Pencil" size={12} />}
                       title="Edit state"
                     >
@@ -174,7 +218,9 @@ export function ScenePanel({ playthrough, actionLoading, onWorldStateAction, cla
             <TextArea
               label="Description"
               value={editing.description}
-              onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+              onChange={(e) =>
+                setEditing({ ...editing, description: e.target.value })
+              }
               rows={3}
               disabled={actionLoading}
             />
@@ -185,7 +231,12 @@ export function ScenePanel({ playthrough, actionLoading, onWorldStateAction, cla
       {deleting ? (
         <ConfirmModal
           title="Delete World State?"
-          message={<>This will permanently remove <strong>{deleting.name}</strong> from your active world state.</>}
+          message={
+            <>
+              This will permanently remove <strong>{deleting.name}</strong> from
+              your active world state.
+            </>
+          }
           confirmLabel="Yes, delete"
           danger
           isLoading={actionLoading}

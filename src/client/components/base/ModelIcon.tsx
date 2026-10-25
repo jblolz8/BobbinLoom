@@ -39,8 +39,11 @@ export function resolveModelInfo(rawModel?: string | null): ModelInfo {
   } else if (lower.includes("claude") || lower.includes("anthropic")) {
     family = "anthropic";
   } else if (
-    lower.startsWith("o1") || lower.startsWith("o3") ||
-    lower.includes("gpt") || lower.includes("chatgpt") || lower.includes("openai")
+    lower.startsWith("o1") ||
+    lower.startsWith("o3") ||
+    lower.includes("gpt") ||
+    lower.includes("chatgpt") ||
+    lower.includes("openai")
   ) {
     family = "openai";
   } else if (lower.includes("gemini") || lower.includes("gemma")) {
@@ -48,13 +51,24 @@ export function resolveModelInfo(rawModel?: string | null): ModelInfo {
   } else if (lower.includes("llama") || lower.includes("meta")) {
     family = "meta";
   } else if (
-    lower.includes("mistral") || lower.includes("mixtral") ||
-    lower.includes("codestral") || lower.includes("ministral") || lower.includes("pixtral")
+    lower.includes("mistral") ||
+    lower.includes("mixtral") ||
+    lower.includes("codestral") ||
+    lower.includes("ministral") ||
+    lower.includes("pixtral")
   ) {
     family = "mistral";
-  } else if (lower.includes("qwen") || lower.includes("alibaba") || lower.includes("tongyi")) {
+  } else if (
+    lower.includes("qwen") ||
+    lower.includes("alibaba") ||
+    lower.includes("tongyi")
+  ) {
     family = "qwen";
-  } else if (lower.includes("command") || lower.includes("cohere") || lower.includes("aya")) {
+  } else if (
+    lower.includes("command") ||
+    lower.includes("cohere") ||
+    lower.includes("aya")
+  ) {
     family = "cohere";
   } else if (lower.includes("grok") || lower.includes("xai")) {
     family = "grok";
@@ -78,14 +92,24 @@ export type ModelIconProps = {
   style?: React.CSSProperties;
 };
 
-export function ModelIcon({ family, size = 12, className = "", style }: ModelIconProps) {
+export function ModelIcon({
+  family,
+  size = 12,
+  className = "",
+  style,
+}: ModelIconProps) {
   const commonProps = {
     width: size,
     height: size,
     viewBox: "0 0 24 24",
     fill: "currentColor",
     className: `model-svg-icon ${className}`.trim(),
-    style: { display: "inline-block", verticalAlign: "middle", flexShrink: 0, ...style },
+    style: {
+      display: "inline-block",
+      verticalAlign: "middle",
+      flexShrink: 0,
+      ...style,
+    },
     "aria-hidden": true as const,
   };
 
@@ -142,8 +166,14 @@ export function ModelIcon({ family, size = 12, className = "", style }: ModelIco
     case "cohere":
       return (
         <svg {...commonProps}>
-          <path clipRule="evenodd" d="M8.128 14.099c.592 0 1.77-.033 3.398-.703 1.897-.781 5.672-2.2 8.395-3.656 1.905-1.018 2.74-2.366 2.74-4.18A4.56 4.56 0 0018.1 1H7.549A6.55 6.55 0 001 7.55c0 3.617 2.745 6.549 7.128 6.549z" />
-          <path clipRule="evenodd" d="M9.912 18.61a4.387 4.387 0 012.705-4.052l3.323-1.38c3.361-1.394 7.06 1.076 7.06 4.715a5.104 5.104 0 01-5.105 5.104l-3.597-.001a4.386 4.386 0 01-4.386-4.387z" />
+          <path
+            clipRule="evenodd"
+            d="M8.128 14.099c.592 0 1.77-.033 3.398-.703 1.897-.781 5.672-2.2 8.395-3.656 1.905-1.018 2.74-2.366 2.74-4.18A4.56 4.56 0 0018.1 1H7.549A6.55 6.55 0 001 7.55c0 3.617 2.745 6.549 7.128 6.549z"
+          />
+          <path
+            clipRule="evenodd"
+            d="M9.912 18.61a4.387 4.387 0 012.705-4.052l3.323-1.38c3.361-1.394 7.06 1.076 7.06 4.715a5.104 5.104 0 01-5.105 5.104l-3.597-.001a4.386 4.386 0 01-4.386-4.387z"
+          />
           <path d="M4.776 14.962A3.775 3.775 0 001 18.738v.489a3.776 3.776 0 007.551 0v-.49a3.775 3.775 0 00-3.775-3.775z" />
         </svg>
       );
@@ -171,7 +201,9 @@ export function ModelIcon({ family, size = 12, className = "", style }: ModelIco
 
     case "generic":
     default:
-      return <Icon name="Sparkles" size={size} className={className} style={style} />;
+      return (
+        <Icon name="Sparkles" size={size} className={className} style={style} />
+      );
   }
 }
 

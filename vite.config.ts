@@ -16,16 +16,16 @@ export default defineConfig({
       apply: "serve",
       transformIndexHtml(html) {
         return injectThemeFirstPaint(html, loadAppSettings(settingsDir));
-      }
-    }
+      },
+    },
   ],
   server: {
     port: 5173,
     watch: {
-      ignored: ["**/data/**", "**/*.bak"]
+      ignored: ["**/data/**", "**/*.bak"],
     },
     proxy: {
-      "/api": "http://localhost:8787"
-    }
-  }
+      "/api": "http://localhost:8787",
+    },
+  },
 });

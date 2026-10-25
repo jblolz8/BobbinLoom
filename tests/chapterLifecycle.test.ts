@@ -11,9 +11,13 @@ import {
   chapterOpeningModeInfo,
   chapterOpeningModeNeedsMessage,
   chapterStaleSignature,
-  chapterSummaryIsStale
+  chapterSummaryIsStale,
 } from "../src/engine/chapterLifecycle";
-import { ChapterOpeningModeSchema, type Chapter, type ChatMessage } from "../src/schemas";
+import {
+  ChapterOpeningModeSchema,
+  type Chapter,
+  type ChatMessage,
+} from "../src/schemas";
 
 function chapter(overrides: Partial<Chapter> = {}): Chapter {
   return {
@@ -25,17 +29,20 @@ function chapter(overrides: Partial<Chapter> = {}): Chapter {
     messageIds: [],
     memoryEventIds: [],
     createdAt: "2026-01-01T00:00:00.000Z",
-    ...overrides
+    ...overrides,
   };
 }
 
-function message(id: string, overrides: Partial<ChatMessage> = {}): ChatMessage {
+function message(
+  id: string,
+  overrides: Partial<ChatMessage> = {},
+): ChatMessage {
   return {
     id,
     role: "assistant",
     content: `content of ${id}`,
     createdAt: "2026-01-01T00:00:00.000Z",
-    ...overrides
+    ...overrides,
   };
 }
 
@@ -67,7 +74,9 @@ describe("the opening modes", () => {
     expect(continuation).toContain("resumes the story seamlessly");
     expect(continuation).toContain("STORY SO FAR");
 
-    expect(buildChapterOpeningInstruction("shortJump")).toContain("MOMENTS LATER");
+    expect(buildChapterOpeningInstruction("shortJump")).toContain(
+      "MOMENTS LATER",
+    );
     const long = buildChapterOpeningInstruction("longJump");
     expect(long).toContain("LONG STRETCH OF TIME");
     expect(long).toContain("days, weeks or months");
@@ -76,7 +85,9 @@ describe("the opening modes", () => {
     // handed back to them.
     for (const entry of CHAPTER_OPENING_MODES) {
       const instruction = buildChapterOpeningInstruction(entry.id, "whatever");
-      expect(instruction).toContain("Do not take actions on behalf of the player");
+      expect(instruction).toContain(
+        "Do not take actions on behalf of the player",
+      );
       expect(instruction).toContain("invitation for the player to act");
     }
   });
@@ -84,8 +95,8 @@ describe("the opening modes", () => {
   it("inlines the player's message verbatim, whatever it contains", () => {
     const messy = [
       "Three weeks later.",
-      "He said \"we are leaving\", and meant it — the quotes and the em dash survive.",
-      "  trailing space  "
+      'He said "we are leaving", and meant it — the quotes and the em dash survive.',
+      "  trailing space  ",
     ].join(String.fromCharCode(10));
 
     const instruction = buildChapterOpeningInstruction("custom", messy);
@@ -94,7 +105,9 @@ describe("the opening modes", () => {
     // read as further instructions.
     expect(instruction).toContain(messy.trim());
     expect(instruction).toContain("<<<");
-    expect(instruction.indexOf("<<<")).toBeLessThan(instruction.indexOf(messy.trim()));
+    expect(instruction.indexOf("<<<")).toBeLessThan(
+      instruction.indexOf(messy.trim()),
+    );
     // A mode without a message simply has no fence.
     expect(buildChapterOpeningInstruction("continuation")).not.toContain("<<<");
   });
@@ -107,8 +120,11 @@ describe("summary freshness", () => {
     expect(
       chapterSummaryIsStale(ch, [
         message("m1", { chapterId: ch.id }),
-        message("m2", { chapterId: ch.id, editedAt: "2025-12-31T00:00:00.000Z" })
-      ])
+        message("m2", {
+          chapterId: ch.id,
+          editedAt: "2025-12-31T00:00:00.000Z",
+        }),
+      ]),
     ).toBe(false);
   });
 
@@ -116,18 +132,32 @@ describe("summary freshness", () => {
     const ch = chapter({ createdAt: "2026-01-01T00:00:00.000Z" });
     expect(
       chapterSummaryIsStale(ch, [
-        message("m1", { chapterId: ch.id, editedAt: "2026-01-02T00:00:00.000Z" })
-      ])
+        message("m1", {
+          chapterId: ch.id,
+          editedAt: "2026-01-02T00:00:00.000Z",
+        }),
+      ]),
     ).toBe(true);
   });
 
   it("uses the re-summarize stamp, so re-summarizing clears it", () => {
-    const ch = chapter({ createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-03T00:00:00.000Z" });
-    const edited = message("m1", { chapterId: ch.id, editedAt: "2026-01-02T00:00:00.000Z" });
+    const ch = chapter({
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-03T00:00:00.000Z",
+    });
+    const edited = message("m1", {
+      chapterId: ch.id,
+      editedAt: "2026-01-02T00:00:00.000Z",
+    });
     expect(chapterSummaryIsStale(ch, [edited])).toBe(false);
     // A later edit is stale again.
     expect(
-      chapterSummaryIsStale(ch, [message("m1", { chapterId: ch.id, editedAt: "2026-01-04T00:00:00.000Z" })])
+      chapterSummaryIsStale(ch, [
+        message("m1", {
+          chapterId: ch.id,
+          editedAt: "2026-01-04T00:00:00.000Z",
+        }),
+      ]),
     ).toBe(true);
   });
 
@@ -136,19 +166,22 @@ describe("summary freshness", () => {
     expect(
       chapterSummaryIsStale(ch, [
         message("m1", { editedAt: "2026-09-09T00:00:00.000Z" }),
-        message("m2", { chapterId: "ch_other", editedAt: "2026-09-09T00:00:00.000Z" })
-      ])
+        message("m2", {
+          chapterId: "ch_other",
+          editedAt: "2026-09-09T00:00:00.000Z",
+        }),
+      ]),
     ).toBe(false);
   });
 
   it("signs the dismissal with the LATEST edit, so a new edit warns again", () => {
     const ch = chapter();
     const first = chapterStaleSignature(ch, [
-      message("m1", { chapterId: ch.id, editedAt: "2026-01-02T00:00:00.000Z" })
+      message("m1", { chapterId: ch.id, editedAt: "2026-01-02T00:00:00.000Z" }),
     ]);
     const second = chapterStaleSignature(ch, [
       message("m1", { chapterId: ch.id, editedAt: "2026-01-02T00:00:00.000Z" }),
-      message("m2", { chapterId: ch.id, editedAt: "2026-01-05T00:00:00.000Z" })
+      message("m2", { chapterId: ch.id, editedAt: "2026-01-05T00:00:00.000Z" }),
     ]);
     expect(first).not.toBe(second);
     expect(second).toBe(`${ch.id}:2026-01-05T00:00:00.000Z`);

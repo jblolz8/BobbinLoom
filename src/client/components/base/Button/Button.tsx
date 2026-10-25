@@ -45,7 +45,10 @@ const SIZE_ICON_MAP: Record<ButtonSize, number> = {
   lg: 18,
 };
 
-function renderButtonIcon(icon: IconName | ReactNode | undefined, size: number): ReactNode {
+function renderButtonIcon(
+  icon: IconName | ReactNode | undefined,
+  size: number,
+): ReactNode {
   if (!icon) return null;
   if (typeof icon === "string") {
     return <Icon name={icon} size={size} />;
@@ -53,97 +56,103 @@ function renderButtonIcon(icon: IconName | ReactNode | undefined, size: number):
   return icon;
 }
 
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  {
-    children,
-    className = "",
-    variant = "secondary",
-    size = "md",
-    iconOnly = false,
-    round = false,
-    fullWidth = false,
-    isLoading = false,
-    active = false,
-    collapseBelow,
-    tooltip,
-    tooltipSide = "top",
-    leftIcon,
-    rightIcon,
-    disabled = false,
-    type = "button",
-    ...props
-  },
-  ref
-) {
-  const isActuallyDisabled = disabled || isLoading;
-  const iconSize = SIZE_ICON_MAP[size];
-  const resolvedAriaLabel =
-    props["aria-label"] ??
-    (collapseBelow || iconOnly
-      ? typeof tooltip === "string"
-        ? tooltip
-        : typeof children === "string"
-          ? children
-          : undefined
-      : undefined);
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
+  function Button(
+    {
+      children,
+      className = "",
+      variant = "secondary",
+      size = "md",
+      iconOnly = false,
+      round = false,
+      fullWidth = false,
+      isLoading = false,
+      active = false,
+      collapseBelow,
+      tooltip,
+      tooltipSide = "top",
+      leftIcon,
+      rightIcon,
+      disabled = false,
+      type = "button",
+      ...props
+    },
+    ref,
+  ) {
+    const isActuallyDisabled = disabled || isLoading;
+    const iconSize = SIZE_ICON_MAP[size];
+    const resolvedAriaLabel =
+      props["aria-label"] ??
+      (collapseBelow || iconOnly
+        ? typeof tooltip === "string"
+          ? tooltip
+          : typeof children === "string"
+            ? children
+            : undefined
+        : undefined);
 
-  const classNames = [
-    "base-btn",
-    `base-btn--${variant}`,
-    `base-btn--${size}`,
-    iconOnly ? "base-btn--icon" : "",
-    round ? "base-btn--round" : "",
-    fullWidth ? "base-btn--full-width" : "",
-    active ? "base-btn--active" : "",
-    collapseBelow ? `base-btn--collapse-${collapseBelow}` : "",
-    isLoading ? "is-loading" : "",
-    className,
-  ]
-    .filter(Boolean)
-    .join(" ");
+    const classNames = [
+      "base-btn",
+      `base-btn--${variant}`,
+      `base-btn--${size}`,
+      iconOnly ? "base-btn--icon" : "",
+      round ? "base-btn--round" : "",
+      fullWidth ? "base-btn--full-width" : "",
+      active ? "base-btn--active" : "",
+      collapseBelow ? `base-btn--collapse-${collapseBelow}` : "",
+      isLoading ? "is-loading" : "",
+      className,
+    ]
+      .filter(Boolean)
+      .join(" ");
 
-  const buttonElement = (
-    <button
-      ref={ref}
-      type={type}
-      className={classNames}
-      disabled={isActuallyDisabled}
-      aria-busy={isLoading ? "true" : undefined}
-      aria-disabled={isActuallyDisabled ? "true" : undefined}
-      aria-label={resolvedAriaLabel}
-      {...props}
-    >
-      {isLoading ? (
-        <span className="base-btn__spinner">
-          <Icon name="Loader2" size={iconSize} />
-        </span>
-      ) : leftIcon ? (
-        <span className="base-btn__icon base-btn__icon--left">
-          {renderButtonIcon(leftIcon, iconSize)}
-        </span>
-      ) : null}
+    const buttonElement = (
+      <button
+        ref={ref}
+        type={type}
+        className={classNames}
+        disabled={isActuallyDisabled}
+        aria-busy={isLoading ? "true" : undefined}
+        aria-disabled={isActuallyDisabled ? "true" : undefined}
+        aria-label={resolvedAriaLabel}
+        {...props}
+      >
+        {isLoading ? (
+          <span className="base-btn__spinner">
+            <Icon name="Loader2" size={iconSize} />
+          </span>
+        ) : leftIcon ? (
+          <span className="base-btn__icon base-btn__icon--left">
+            {renderButtonIcon(leftIcon, iconSize)}
+          </span>
+        ) : null}
 
-      {children !== undefined && children !== null ? (
-        <span className="base-btn__label">{children}</span>
-      ) : null}
+        {children !== undefined && children !== null ? (
+          <span className="base-btn__label">{children}</span>
+        ) : null}
 
-      {!isLoading && rightIcon ? (
-        <span className="base-btn__icon base-btn__icon--right">
-          {renderButtonIcon(rightIcon, iconSize)}
-        </span>
-      ) : null}
-    </button>
-  );
-
-  if (tooltip) {
-    return (
-      <Tooltip content={tooltip} side={tooltipSide} collapseBelow={collapseBelow}>
-        {buttonElement}
-      </Tooltip>
+        {!isLoading && rightIcon ? (
+          <span className="base-btn__icon base-btn__icon--right">
+            {renderButtonIcon(rightIcon, iconSize)}
+          </span>
+        ) : null}
+      </button>
     );
-  }
 
-  return buttonElement;
-});
+    if (tooltip) {
+      return (
+        <Tooltip
+          content={tooltip}
+          side={tooltipSide}
+          collapseBelow={collapseBelow}
+        >
+          {buttonElement}
+        </Tooltip>
+      );
+    }
+
+    return buttonElement;
+  },
+);
 
 export default Button;

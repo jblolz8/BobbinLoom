@@ -39,14 +39,20 @@ function entry(overrides: Partial<LorebookEntry> = {}): LorebookEntry {
   };
 }
 
-function scanOpts(overrides: Partial<LorebookScanOptions> = {}): LorebookScanOptions {
+function scanOpts(
+  overrides: Partial<LorebookScanOptions> = {},
+): LorebookScanOptions {
   return {
     messages: [
       { role: "user", content: "The knight enters the castle." },
       { role: "assistant", content: "The throne room is dark and silent." },
     ],
     entries: [],
-    lorebookDefaults: { scanDepth: 2, caseSensitive: false, matchWholeWords: false },
+    lorebookDefaults: {
+      scanDepth: 2,
+      caseSensitive: false,
+      matchWholeWords: false,
+    },
     ...overrides,
   };
 }
@@ -55,25 +61,31 @@ function scanOpts(overrides: Partial<LorebookScanOptions> = {}): LorebookScanOpt
 
 describe("scanLorebooks - keyword matching", () => {
   it("activates on primary key match", () => {
-    const result = scanLorebooks(scanOpts({
-      entries: [entry({ uid: 1, key: ["knight"] })],
-    }));
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [entry({ uid: 1, key: ["knight"] })],
+      }),
+    );
     expect(result.length).toBe(1);
     expect(result[0].entry.uid).toBe(1);
     expect(result[0].matchedKeys).toContain("knight");
   });
 
   it("activates on case-insensitive match by default", () => {
-    const result = scanLorebooks(scanOpts({
-      entries: [entry({ uid: 1, key: ["KNIGHT"] })],
-    }));
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [entry({ uid: 1, key: ["KNIGHT"] })],
+      }),
+    );
     expect(result.length).toBe(1);
   });
 
   it("does not activate on case-sensitive mismatch", () => {
-    const result = scanLorebooks(scanOpts({
-      entries: [entry({ uid: 1, key: ["KNIGHT"], caseSensitive: true })],
-    }));
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [entry({ uid: 1, key: ["KNIGHT"], caseSensitive: true })],
+      }),
+    );
     expect(result.length).toBe(0);
   });
 
@@ -88,9 +100,7 @@ describe("scanLorebooks - keyword matching", () => {
 
   it("matches whole words when word boundaries present", () => {
     const opts = scanOpts({
-      messages: [
-        { role: "user", content: "I cast a spell." },
-      ],
+      messages: [{ role: "user", content: "I cast a spell." }],
       entries: [entry({ uid: 1, key: ["cast"], matchWholeWords: true })],
     });
     const result = scanLorebooks(opts);
@@ -98,16 +108,20 @@ describe("scanLorebooks - keyword matching", () => {
   });
 
   it("activates on regex key", () => {
-    const result = scanLorebooks(scanOpts({
-      entries: [entry({ uid: 1, key: ["kni.+ht"], useRegex: true })],
-    }));
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [entry({ uid: 1, key: ["kni.+ht"], useRegex: true })],
+      }),
+    );
     expect(result.length).toBe(1);
   });
 
   it("multiple primary keys: any match activates", () => {
-    const result = scanLorebooks(scanOpts({
-      entries: [entry({ uid: 1, key: ["dragon", "knight", "wizard"] })],
-    }));
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [entry({ uid: 1, key: ["dragon", "knight", "wizard"] })],
+      }),
+    );
     expect(result.length).toBe(1);
     expect(result[0].matchedKeys).toContain("knight");
   });
@@ -117,72 +131,121 @@ describe("scanLorebooks - keyword matching", () => {
 
 describe("scanLorebooks - selective logic", () => {
   it("AND_ANY: primary match + at least one secondary passes", () => {
-    const result = scanLorebooks(scanOpts({
-      entries: [entry({
-        uid: 1, key: ["knight"], keysecondary: ["castle", "dragon"],
-        selective: true, selectiveLogic: 0,
-      })],
-    }));
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [
+          entry({
+            uid: 1,
+            key: ["knight"],
+            keysecondary: ["castle", "dragon"],
+            selective: true,
+            selectiveLogic: 0,
+          }),
+        ],
+      }),
+    );
     expect(result.length).toBe(1);
   });
 
   it("AND_ANY: primary match but no secondary match fails", () => {
-    const result = scanLorebooks(scanOpts({
-      entries: [entry({
-        uid: 1, key: ["knight"], keysecondary: ["dragon", "wizard"],
-        selective: true, selectiveLogic: 0,
-      })],
-    }));
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [
+          entry({
+            uid: 1,
+            key: ["knight"],
+            keysecondary: ["dragon", "wizard"],
+            selective: true,
+            selectiveLogic: 0,
+          }),
+        ],
+      }),
+    );
     expect(result.length).toBe(0);
   });
 
   it("AND_ALL: all secondaries must match", () => {
-    const result = scanLorebooks(scanOpts({
-      entries: [entry({
-        uid: 1, key: ["knight"], keysecondary: ["castle", "throne"],
-        selective: true, selectiveLogic: 3,
-      })],
-    }));
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [
+          entry({
+            uid: 1,
+            key: ["knight"],
+            keysecondary: ["castle", "throne"],
+            selective: true,
+            selectiveLogic: 3,
+          }),
+        ],
+      }),
+    );
     expect(result.length).toBe(1);
   });
 
   it("AND_ALL: partial secondary match fails", () => {
-    const result = scanLorebooks(scanOpts({
-      entries: [entry({
-        uid: 1, key: ["knight"], keysecondary: ["castle", "ocean"],
-        selective: true, selectiveLogic: 3,
-      })],
-    }));
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [
+          entry({
+            uid: 1,
+            key: ["knight"],
+            keysecondary: ["castle", "ocean"],
+            selective: true,
+            selectiveLogic: 3,
+          }),
+        ],
+      }),
+    );
     expect(result.length).toBe(0);
   });
 
   it("NOT_ANY: no secondaries matching passes", () => {
-    const result = scanLorebooks(scanOpts({
-      entries: [entry({
-        uid: 1, key: ["knight"], keysecondary: ["ocean", "space"],
-        selective: true, selectiveLogic: 2,
-      })],
-    }));
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [
+          entry({
+            uid: 1,
+            key: ["knight"],
+            keysecondary: ["ocean", "space"],
+            selective: true,
+            selectiveLogic: 2,
+          }),
+        ],
+      }),
+    );
     expect(result.length).toBe(1);
   });
 
   it("NOT_ANY: a secondary match fails", () => {
-    const result = scanLorebooks(scanOpts({
-      entries: [entry({
-        uid: 1, key: ["knight"], keysecondary: ["castle", "space"],
-        selective: true, selectiveLogic: 2,
-      })],
-    }));
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [
+          entry({
+            uid: 1,
+            key: ["knight"],
+            keysecondary: ["castle", "space"],
+            selective: true,
+            selectiveLogic: 2,
+          }),
+        ],
+      }),
+    );
     expect(result.length).toBe(0);
   });
 
   it("NOT_ALL: at least one secondary missing passes", () => {
-    const result = scanLorebooks(scanOpts({
-      entries: [entry({
-        uid: 1, key: ["knight"], keysecondary: ["castle", "ocean"],
-        selective: true, selectiveLogic: 1,
-      })],
-    }));
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [
+          entry({
+            uid: 1,
+            key: ["knight"],
+            keysecondary: ["castle", "ocean"],
+            selective: true,
+            selectiveLogic: 1,
+          }),
+        ],
+      }),
+    );
     expect(result.length).toBe(1);
   });
 });
@@ -191,17 +254,28 @@ describe("scanLorebooks - selective logic", () => {
 
 describe("scanLorebooks - constant", () => {
   it("activates constant entry without keywords", () => {
-    const result = scanLorebooks(scanOpts({
-      entries: [entry({ uid: 1, constant: true })],
-    }));
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [entry({ uid: 1, constant: true })],
+      }),
+    );
     expect(result.length).toBe(1);
     expect(result[0].activationSource).toBe("constant");
   });
 
   it("constant entry still obeys probability", () => {
-    const result = scanLorebooks(scanOpts({
-      entries: [entry({ uid: 1, constant: true, useProbability: true, probability: 0 })],
-    }));
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [
+          entry({
+            uid: 1,
+            constant: true,
+            useProbability: true,
+            probability: 0,
+          }),
+        ],
+      }),
+    );
     expect(result.length).toBe(0);
   });
 });
@@ -210,9 +284,11 @@ describe("scanLorebooks - constant", () => {
 
 describe("scanLorebooks - disabled", () => {
   it("disabled entry never activates", () => {
-    const result = scanLorebooks(scanOpts({
-      entries: [entry({ uid: 1, key: ["knight"], disable: true })],
-    }));
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [entry({ uid: 1, key: ["knight"], disable: true })],
+      }),
+    );
     expect(result.length).toBe(0);
   });
 });
@@ -228,10 +304,12 @@ describe("scanLorebooks - sticky", () => {
       cooldownRemaining: 0,
       delayRemaining: 0,
     });
-    const result = scanLorebooks(scanOpts({
-      entries: [entry({ uid: 1, sticky: 3 })],
-      timingStates,
-    }));
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [entry({ uid: 1, sticky: 3 })],
+        timingStates,
+      }),
+    );
     expect(result.length).toBe(1);
     expect(result[0].activationSource).toBe("sticky");
   });
@@ -248,10 +326,12 @@ describe("scanLorebooks - cooldown", () => {
       cooldownRemaining: 2,
       delayRemaining: 0,
     });
-    const result = scanLorebooks(scanOpts({
-      entries: [entry({ uid: 1, key: ["knight"], cooldown: 3 })],
-      timingStates,
-    }));
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [entry({ uid: 1, key: ["knight"], cooldown: 3 })],
+        timingStates,
+      }),
+    );
     expect(result.length).toBe(0);
   });
 
@@ -263,10 +343,12 @@ describe("scanLorebooks - cooldown", () => {
       cooldownRemaining: 0,
       delayRemaining: 0,
     });
-    const result = scanLorebooks(scanOpts({
-      entries: [entry({ uid: 1, key: ["knight"], cooldown: 3 })],
-      timingStates,
-    }));
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [entry({ uid: 1, key: ["knight"], cooldown: 3 })],
+        timingStates,
+      }),
+    );
     expect(result.length).toBe(1);
   });
 });
@@ -282,10 +364,12 @@ describe("scanLorebooks - delay", () => {
       cooldownRemaining: 0,
       delayRemaining: 2,
     });
-    const result = scanLorebooks(scanOpts({
-      entries: [entry({ uid: 1, key: ["knight"], delay: 3 })],
-      timingStates,
-    }));
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [entry({ uid: 1, key: ["knight"], delay: 3 })],
+        timingStates,
+      }),
+    );
     expect(result.length).toBe(0);
   });
 
@@ -297,10 +381,12 @@ describe("scanLorebooks - delay", () => {
       cooldownRemaining: 0,
       delayRemaining: 0,
     });
-    const result = scanLorebooks(scanOpts({
-      entries: [entry({ uid: 1, key: ["knight"], delay: 3 })],
-      timingStates,
-    }));
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [entry({ uid: 1, key: ["knight"], delay: 3 })],
+        timingStates,
+      }),
+    );
     expect(result.length).toBe(1);
   });
 });
@@ -309,12 +395,14 @@ describe("scanLorebooks - delay", () => {
 
 describe("scanLorebooks - ordering", () => {
   it("sorts results by entry order", () => {
-    const result = scanLorebooks(scanOpts({
-      entries: [
-        entry({ uid: 2, key: ["castle"], order: 200 }),
-        entry({ uid: 1, key: ["knight"], order: 50 }),
-      ],
-    }));
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [
+          entry({ uid: 2, key: ["castle"], order: 200 }),
+          entry({ uid: 1, key: ["knight"], order: 50 }),
+        ],
+      }),
+    );
     expect(result.length).toBe(2);
     expect(result[0].entry.uid).toBe(1);
     expect(result[1].entry.uid).toBe(2);
@@ -327,7 +415,11 @@ describe("updateTimingStates", () => {
   it("sets sticky and cooldown on activation", () => {
     const entries = [entry({ uid: 1, sticky: 3, cooldown: 2 })];
     const activated: ActivatedEntry[] = [
-      { entry: entries[0], matchedKeys: ["knight"], activationSource: "keyword" },
+      {
+        entry: entries[0],
+        matchedKeys: ["knight"],
+        activationSource: "keyword",
+      },
     ];
     const prev = new Map<number, EntryTimingState>();
     const next = updateTimingStates(entries, activated, prev, 5);
@@ -342,10 +434,19 @@ describe("updateTimingStates", () => {
   it("sticky does not refresh from sticky activation", () => {
     const entries = [entry({ uid: 1, sticky: 3, cooldown: 1 })];
     const activated: ActivatedEntry[] = [
-      { entry: entries[0], matchedKeys: ["[sticky]"], activationSource: "sticky" },
+      {
+        entry: entries[0],
+        matchedKeys: ["[sticky]"],
+        activationSource: "sticky",
+      },
     ];
     const prev = new Map<number, EntryTimingState>();
-    prev.set(1, { lastActivatedAt: 2, stickyCount: 2, cooldownRemaining: 1, delayRemaining: 0 });
+    prev.set(1, {
+      lastActivatedAt: 2,
+      stickyCount: 2,
+      cooldownRemaining: 1,
+      delayRemaining: 0,
+    });
     const next = updateTimingStates(entries, activated, prev, 5);
 
     const state = next.get(1)!;
@@ -359,7 +460,12 @@ describe("updateTimingStates", () => {
   it("decrements sticky count when not activated", () => {
     const entries = [entry({ uid: 1, sticky: 3 })];
     const prev = new Map<number, EntryTimingState>();
-    prev.set(1, { lastActivatedAt: 2, stickyCount: 2, cooldownRemaining: 0, delayRemaining: 0 });
+    prev.set(1, {
+      lastActivatedAt: 2,
+      stickyCount: 2,
+      cooldownRemaining: 0,
+      delayRemaining: 0,
+    });
     const next = updateTimingStates(entries, [], prev, 5);
 
     const state = next.get(1)!;
@@ -369,7 +475,12 @@ describe("updateTimingStates", () => {
   it("decrements cooldown when sticky is zero", () => {
     const entries = [entry({ uid: 1, cooldown: 3 })];
     const prev = new Map<number, EntryTimingState>();
-    prev.set(1, { lastActivatedAt: 2, stickyCount: 0, cooldownRemaining: 2, delayRemaining: 0 });
+    prev.set(1, {
+      lastActivatedAt: 2,
+      stickyCount: 0,
+      cooldownRemaining: 2,
+      delayRemaining: 0,
+    });
     const next = updateTimingStates(entries, [], prev, 5);
 
     const state = next.get(1)!;
@@ -379,7 +490,12 @@ describe("updateTimingStates", () => {
   it("decrements delay when not activated", () => {
     const entries = [entry({ uid: 1, delay: 3 })];
     const prev = new Map<number, EntryTimingState>();
-    prev.set(1, { lastActivatedAt: null, stickyCount: 0, cooldownRemaining: 0, delayRemaining: 2 });
+    prev.set(1, {
+      lastActivatedAt: null,
+      stickyCount: 0,
+      cooldownRemaining: 0,
+      delayRemaining: 2,
+    });
     const next = updateTimingStates(entries, [], prev, 5);
 
     const state = next.get(1)!;
@@ -389,7 +505,12 @@ describe("updateTimingStates", () => {
   it("clears stale timing state when all counters reach zero", () => {
     const entries = [entry({ uid: 1, sticky: 2, cooldown: 1 })];
     const prev = new Map<number, EntryTimingState>();
-    prev.set(1, { lastActivatedAt: 1, stickyCount: 0, cooldownRemaining: 0, delayRemaining: 0 });
+    prev.set(1, {
+      lastActivatedAt: 1,
+      stickyCount: 0,
+      cooldownRemaining: 0,
+      delayRemaining: 0,
+    });
     const next = updateTimingStates(entries, [], prev, 5);
 
     expect(next.has(1)).toBe(false);
@@ -407,19 +528,31 @@ describe("updateTimingStates", () => {
 describe("LorebookEntrySchema", () => {
   it("validates a minimal ST entry", async () => {
     const { LorebookEntrySchema } = await import("../src/schemas");
-    const result = LorebookEntrySchema.safeParse({ uid: 12345, key: ["test"], content: "hello" });
+    const result = LorebookEntrySchema.safeParse({
+      uid: 12345,
+      key: ["test"],
+      content: "hello",
+    });
     expect(result.success).toBe(true);
   });
 
   it("rejects entry with missing uid", async () => {
     const { LorebookEntrySchema } = await import("../src/schemas");
-    const result = LorebookEntrySchema.safeParse({ key: ["test"], content: "hello" });
+    const result = LorebookEntrySchema.safeParse({
+      key: ["test"],
+      content: "hello",
+    });
     expect(result.success).toBe(false);
   });
 
   it("defaults selectiveLogic to 0", async () => {
     const { LorebookEntrySchema } = await import("../src/schemas");
-    const result = LorebookEntrySchema.parse({ uid: 1, key: ["test"], content: "hello", selective: true });
+    const result = LorebookEntrySchema.parse({
+      uid: 1,
+      key: ["test"],
+      content: "hello",
+      selective: true,
+    });
     expect(result.selectiveLogic).toBe(0);
   });
 });

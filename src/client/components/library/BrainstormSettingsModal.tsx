@@ -33,7 +33,7 @@ export function BrainstormSettingsModal({
   onToggleIncludeOriginalCard,
   onToggleAllowNewSections,
   onProviderChange,
-  onClose
+  onClose,
 }: BrainstormSettingsModalProps) {
   const [connections, setConnections] = useState<ProviderConnection[]>([]);
   const [activeTextProviderId, setActiveTextProviderId] = useState("");
@@ -43,7 +43,11 @@ export function BrainstormSettingsModal({
     listProviderConnections()
       .then((registry) => {
         if (cancelled) return;
-        setConnections(registry.connections.filter((connection) => connection.kind === "text"));
+        setConnections(
+          registry.connections.filter(
+            (connection) => connection.kind === "text",
+          ),
+        );
         setActiveTextProviderId(registry.activeTextProviderId ?? "");
       })
       .catch(() => {
@@ -57,11 +61,15 @@ export function BrainstormSettingsModal({
   const options = useMemo(() => {
     const rows = connections.map((connection) => ({
       value: connection.id,
-      label: `${connection.label}${connection.model ? ` — ${connection.model}` : ""}${connection.id === activeTextProviderId ? " (active)" : ""
-        }`
+      label: `${connection.label}${connection.model ? ` — ${connection.model}` : ""}${
+        connection.id === activeTextProviderId ? " (active)" : ""
+      }`,
     }));
     // A stored choice whose connection is gone stays selectable so it can be re-pointed.
-    if (providerId && !connections.some((connection) => connection.id === providerId)) {
+    if (
+      providerId &&
+      !connections.some((connection) => connection.id === providerId)
+    ) {
       rows.push({ value: providerId, label: `${providerId} (not found)` });
     }
     return [{ value: "", label: "Active connection" }, ...rows];
@@ -86,7 +94,9 @@ export function BrainstormSettingsModal({
             type="checkbox"
             checked={includeOriginalCard}
             disabled={!hasOriginalCcv2}
-            onChange={(event) => onToggleIncludeOriginalCard(event.target.checked)}
+            onChange={(event) =>
+              onToggleIncludeOriginalCard(event.target.checked)
+            }
           />
           <span>Include Original Card Context</span>
         </label>
@@ -107,9 +117,10 @@ export function BrainstormSettingsModal({
           <span>Allow sections outside the current structure</span>
         </label>
         <span className="field-hint">
-          The assistant may propose a section the format does not list — [Daily Life], [Cat Traits] —
-          and it is added at the end of the sheet. A name that nearly matches one of the format's own
-          sections is applied to that section instead.
+          The assistant may propose a section the format does not list — [Daily
+          Life], [Cat Traits] — and it is added at the end of the sheet. A name
+          that nearly matches one of the format's own sections is applied to
+          that section instead.
         </span>
       </div>
 
@@ -126,8 +137,12 @@ export function BrainstormSettingsModal({
           placeholder="Active connection"
           aria-label="Text provider"
         />
-        <span className="field-hint">Writes the brainstorm replies. Remembered for the next one.</span>
-        {errorMessage ? <span className="field-hint error">{errorMessage}</span> : null}
+        <span className="field-hint">
+          Writes the brainstorm replies. Remembered for the next one.
+        </span>
+        {errorMessage ? (
+          <span className="field-hint error">{errorMessage}</span>
+        ) : null}
       </div>
     </Dialog>
   );

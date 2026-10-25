@@ -11,7 +11,11 @@ import {
 } from "../../base";
 import type { ProviderConnection } from "../../../api";
 
-export type ProviderSortBy = "lastActiveAt" | "label" | "updatedAt" | "createdAt";
+export type ProviderSortBy =
+  | "lastActiveAt"
+  | "label"
+  | "updatedAt"
+  | "createdAt";
 export type SortDirection = "asc" | "desc";
 
 const SORT_OPTIONS: Array<{ value: ProviderSortBy; label: string }> = [
@@ -29,7 +33,7 @@ function formatConnDate(isoOrStr?: string): string {
     return d.toLocaleDateString(undefined, {
       month: "short",
       day: "numeric",
-      year: "numeric"
+      year: "numeric",
     });
   } catch {
     return "";
@@ -59,7 +63,7 @@ export function ProviderConnectionCard({
   onRemove,
   headerTags,
   detailTags,
-  overrideTags
+  overrideTags,
 }: ProviderConnectionCardProps) {
   return (
     <Card variant={isActive ? "active" : "elevated"} padding="sm" hoverable>
@@ -81,7 +85,13 @@ export function ProviderConnectionCard({
 
         {/* 2. Action Buttons + Activity/Date Timestamp */}
         <Stack direction="row" align="center" justify="between" gap="xs" wrap>
-          <Stack direction="row" align="center" gap="2xs" wrap className="conn-actions">
+          <Stack
+            direction="row"
+            align="center"
+            gap="2xs"
+            wrap
+            className="conn-actions"
+          >
             <Button
               variant="primary"
               size="xs"
@@ -89,7 +99,9 @@ export function ProviderConnectionCard({
               disabled={isActive}
               collapseBelow="xs"
               tooltip={isActive ? "Active connection" : "Activate connection"}
-              aria-label={isActive ? "Active connection" : "Activate connection"}
+              aria-label={
+                isActive ? "Active connection" : "Activate connection"
+              }
               leftIcon={isActive ? "Check" : "Zap"}
             >
               {isActive ? "Active" : "Activate"}
@@ -134,9 +146,15 @@ export function ProviderConnectionCard({
               variant="neutral"
               size="xs"
               leftIcon="Activity"
-              title={c.lastActiveAt ? `Last active: ${new Date(c.lastActiveAt).toLocaleString()}` : "Currently active"}
+              title={
+                c.lastActiveAt
+                  ? `Last active: ${new Date(c.lastActiveAt).toLocaleString()}`
+                  : "Currently active"
+              }
             >
-              {isActive ? "Active now" : `Active: ${formatConnDate(c.lastActiveAt)}`}
+              {isActive
+                ? "Active now"
+                : `Active: ${formatConnDate(c.lastActiveAt)}`}
             </Badge>
           ) : sortBy === "updatedAt" && c.updatedAt ? (
             <Badge
@@ -152,7 +170,11 @@ export function ProviderConnectionCard({
               variant="neutral"
               size="xs"
               leftIcon="Calendar"
-              title={c.createdAt ? `Created: ${new Date(c.createdAt).toLocaleString()}` : "Provider connection"}
+              title={
+                c.createdAt
+                  ? `Created: ${new Date(c.createdAt).toLocaleString()}`
+                  : "Provider connection"
+              }
             >
               {c.createdAt ? `Added ${formatConnDate(c.createdAt)}` : "Added"}
             </Badge>
@@ -243,7 +265,7 @@ export function ProviderConnectionList({
   emptyLabel,
   renderHeaderTags,
   renderDetailTags,
-  renderOverrideTags
+  renderOverrideTags,
 }: ProviderConnectionListProps) {
   return (
     <>
@@ -260,13 +282,19 @@ export function ProviderConnectionList({
               New Connection
             </Button>
             <Badge variant="info" size="xs" leftIcon="Zap">
-              {connections.length} {connections.length === 1 ? "provider" : "providers"}
+              {connections.length}{" "}
+              {connections.length === 1 ? "provider" : "providers"}
             </Badge>
           </Stack>
 
           {connections.length > 0 && (
             <Stack direction="row" align="center" gap="2xs">
-              <Text as="label" htmlFor="conn-sort-select" size="xs" tone="secondary">
+              <Text
+                as="label"
+                htmlFor="conn-sort-select"
+                size="xs"
+                tone="secondary"
+              >
                 <Stack direction="row" align="center" gap="2xs" inline>
                   <Icon name="ArrowUpDown" size={13} />
                   <span>Sort:</span>

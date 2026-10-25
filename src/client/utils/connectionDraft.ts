@@ -32,7 +32,7 @@ function normalize(value: unknown): unknown {
 
 export function isConnectionDirty(
   form: ProviderConnectionPayload,
-  baseline: ProviderConnectionPayload
+  baseline: ProviderConnectionPayload,
 ): boolean {
   const left = form as Record<string, unknown>;
   const right = baseline as Record<string, unknown>;
@@ -65,7 +65,7 @@ export function isConnectionDirty(
 export function cleanStateAfterSave(
   storedForm: ProviderConnectionPayload,
   current: ProviderConnectionPayload,
-  storedHasApiKey: boolean
+  storedHasApiKey: boolean,
 ): ProviderConnectionPayload {
   return { ...storedForm, apiKey: storedHasApiKey ? current.apiKey : "" };
 }

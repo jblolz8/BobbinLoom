@@ -1,7 +1,9 @@
 import { forwardRef, type InputHTMLAttributes } from "react";
 
-export interface SwitchProps
-  extends Omit<InputHTMLAttributes<HTMLInputElement>, "type"> {
+export interface SwitchProps extends Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  "type"
+> {
   /** Optional text rendered to the right of the slider. When set, the control
    *  wraps in its own <label>; when omitted it renders a bare control that
    *  relies on an enclosing label (e.g. a SwitchRow) for its accessible name. */
@@ -25,12 +27,16 @@ export const Switch = forwardRef<HTMLInputElement, SwitchProps>(function Switch(
     disabled,
     ...inputProps
   },
-  ref
+  ref,
 ) {
   const inputId =
-    id || (typeof label === "string" ? `switch-${label.toLowerCase().replace(/\s+/g, "-")}` : undefined);
+    id ||
+    (typeof label === "string"
+      ? `switch-${label.toLowerCase().replace(/\s+/g, "-")}`
+      : undefined);
 
-  const classes = `base-switch ${disabled ? "base-switch--disabled" : ""} ${containerClassName}`.trim();
+  const classes =
+    `base-switch ${disabled ? "base-switch--disabled" : ""} ${containerClassName}`.trim();
 
   const inner = (
     <>

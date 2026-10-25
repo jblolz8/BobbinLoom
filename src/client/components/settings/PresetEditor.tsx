@@ -59,12 +59,22 @@ const PERSIST_DEBOUNCE_MS = 400;
 /** Order-insensitive module comparison: reordering is a real change, so order is
  *  compared, but the array is canonicalised by `order` first so a re-fetch that
  *  returns the same modules in a different array position is not "dirty". */
-export function modulesEqual(a: PromptModuleSet | undefined, b: PromptModuleSet | undefined): boolean {
+export function modulesEqual(
+  a: PromptModuleSet | undefined,
+  b: PromptModuleSet | undefined,
+): boolean {
   const norm = (set?: PromptModuleSet) =>
     JSON.stringify(
       [...(set?.turn ?? [])]
         .sort((x, y) => x.order - y.order)
-        .map((m) => [m.id, m.name, m.description, m.content, m.order, m.enabled])
+        .map((m) => [
+          m.id,
+          m.name,
+          m.description,
+          m.content,
+          m.order,
+          m.enabled,
+        ]),
     );
   return norm(a) === norm(b);
 }
@@ -84,7 +94,10 @@ function canonicalSectionTuple(s: CharacterFormatSection) {
  *  reconstructs sections in schema key order when `user-settings.json` is read back,
  *  whereas `prompt-presets.json` may list `"inline"` before `"exampleBody"`.
  *  Comparing canonical field tuples ensures key order never causes a false dirty state. */
-export function formatEqual(a: CharacterFormat | undefined, b: CharacterFormat | undefined): boolean {
+export function formatEqual(
+  a: CharacterFormat | undefined,
+  b: CharacterFormat | undefined,
+): boolean {
   if (!a?.sections?.length && !b?.sections?.length) return true;
   const norm = (fmt?: CharacterFormat) => {
     const resolved = cloneFormat(fmt);
@@ -93,7 +106,9 @@ export function formatEqual(a: CharacterFormat | undefined, b: CharacterFormat |
   return norm(a) === norm(b);
 }
 
-function resolveImageSettings(block?: ImageGenerationSettings): ImageGenerationSettings {
+function resolveImageSettings(
+  block?: ImageGenerationSettings,
+): ImageGenerationSettings {
   return { ...DEFAULT_IMAGE_GENERATION_SETTINGS, ...(block ?? {}) };
 }
 
@@ -116,15 +131,21 @@ function canonicalImageTuple(block?: ImageGenerationSettings) {
  *  key order in `prompt-presets.json` vs `user-settings.json` never causes a false diff. */
 export function imageEqual(
   a: ImageGenerationSettings | undefined,
-  b: ImageGenerationSettings | undefined
+  b: ImageGenerationSettings | undefined,
 ): boolean {
-  return JSON.stringify(canonicalImageTuple(a)) === JSON.stringify(canonicalImageTuple(b));
+  return (
+    JSON.stringify(canonicalImageTuple(a)) ===
+    JSON.stringify(canonicalImageTuple(b))
+  );
 }
 
 /** Whether the live global config differs from the preset it is backing — the
  *  single definition of "dirty", driving both the Save-enable and the
  *  Load/Reload discard-confirm. */
-export function promptConfigDiffers(config: PromptConfig, preset: Preset): boolean {
+export function promptConfigDiffers(
+  config: PromptConfig,
+  preset: Preset,
+): boolean {
   if (!modulesEqual(config.modules, preset.modules)) return true;
   if (!formatEqual(config.characterFormat, preset.characterFormat)) return true;
   if (!imageEqual(config.imageGeneration, preset.imageGeneration)) return true;
@@ -133,7 +154,9 @@ export function promptConfigDiffers(config: PromptConfig, preset: Preset): boole
 
 function cloneFormat(format?: CharacterFormat): CharacterFormat {
   if (!format || format.sections.length === 0)
-    return JSON.parse(JSON.stringify(DEFAULT_CHARACTER_FORMAT)) as CharacterFormat;
+    return JSON.parse(
+      JSON.stringify(DEFAULT_CHARACTER_FORMAT),
+    ) as CharacterFormat;
   return JSON.parse(JSON.stringify(format)) as CharacterFormat;
 }
 
@@ -160,7 +183,10 @@ function getScrollParent(el: HTMLElement | null): HTMLElement | null {
   let node = el?.parentElement ?? null;
   while (node) {
     const style = window.getComputedStyle(node);
-    if (/(auto|scroll|overlay)/.test(style.overflowY) && node.scrollHeight > node.clientHeight) {
+    if (
+      /(auto|scroll|overlay)/.test(style.overflowY) &&
+      node.scrollHeight > node.clientHeight
+    ) {
       return node;
     }
     node = node.parentElement;
@@ -182,9 +208,14 @@ const CONTEXT_TABS: Array<{ value: EditorTab; label: string }> = [
 
 /** The two perspectives, as a base SimpleSelect option list (it is string-generic,
  *  so the union type rides along and the handler gets a clean "pov" | "scene"). */
-const INSTRUCTION_MODE_OPTIONS: Array<SimpleSelectOption<ImageInstructionMode>> = [
+const INSTRUCTION_MODE_OPTIONS: Array<
+  SimpleSelectOption<ImageInstructionMode>
+> = [
   { value: "pov", label: "POV — the scene is seen through the player's eyes" },
-  { value: "scene", label: "Scene — third-person frame, everyone in it is a character" },
+  {
+    value: "scene",
+    label: "Scene — third-person frame, everyone in it is a character",
+  },
 ];
 
 /** One dialog at a time. A union rather than a pile of booleans, and one render
@@ -230,7 +261,9 @@ function CharacterFormatRow({
   onRemove,
 }: CharacterFormatRowProps) {
   const [draft, setDraft] = useState(() => examplesToText(section.examples));
-  const lastCommittedExamplesRef = useRef<string>(JSON.stringify(section.examples ?? []));
+  const lastCommittedExamplesRef = useRef<string>(
+    JSON.stringify(section.examples ?? []),
+  );
 
   // Reseed the draft only when `section.examples` changes externally (preset
   // switch, reload, or section reorder). While the user is typing in this
@@ -245,20 +278,26 @@ function CharacterFormatRow({
   }, [section.examples]);
 
   const isNewSection = hasBaseline && !baselineSection;
-  const nameDirty = hasBaseline && (!baselineSection || section.name !== baselineSection.name);
-  const orderDirty = hasBaseline && !!baselineSection && section.order !== baselineSection.order;
+  const nameDirty =
+    hasBaseline && (!baselineSection || section.name !== baselineSection.name);
+  const orderDirty =
+    hasBaseline && !!baselineSection && section.order !== baselineSection.order;
   const inlineDirty =
-    hasBaseline && (!baselineSection || !!section.inline !== !!baselineSection.inline);
+    hasBaseline &&
+    (!baselineSection || !!section.inline !== !!baselineSection.inline);
   const instructionDirty =
     hasBaseline &&
-    (!baselineSection || (section.instruction ?? "") !== (baselineSection.instruction ?? ""));
+    (!baselineSection ||
+      (section.instruction ?? "") !== (baselineSection.instruction ?? ""));
   const examplesDirty =
     hasBaseline &&
     (!baselineSection ||
-      JSON.stringify(section.examples ?? []) !== JSON.stringify(baselineSection.examples ?? []));
+      JSON.stringify(section.examples ?? []) !==
+        JSON.stringify(baselineSection.examples ?? []));
   const bodyDirty =
     hasBaseline &&
-    (!baselineSection || (section.exampleBody ?? "") !== (baselineSection.exampleBody ?? ""));
+    (!baselineSection ||
+      (section.exampleBody ?? "") !== (baselineSection.exampleBody ?? ""));
   const sectionDirty =
     isNewSection ||
     nameDirty ||
@@ -396,7 +435,11 @@ export function PresetEditor() {
   // Character Sheet sections (works for both mouse and touch).
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
-  const [dragGhost, setDragGhost] = useState<{ x: number; y: number; name: string } | null>(null);
+  const [dragGhost, setDragGhost] = useState<{
+    x: number;
+    y: number;
+    name: string;
+  } | null>(null);
   const moduleRowRefs = useRef<(HTMLElement | null)[]>([]);
   const sectionRowRefs = useRef<(HTMLElement | null)[]>([]);
   const overIndexRef = useRef<number | null>(null);
@@ -442,7 +485,10 @@ export function PresetEditor() {
     const seq = ++opSeqRef.current;
     void (async () => {
       try {
-        const [summaries, state] = await Promise.all([listPresets(), getPromptConfig()]);
+        const [summaries, state] = await Promise.all([
+          listPresets(),
+          getPromptConfig(),
+        ]);
         if (cancelled || seq !== opSeqRef.current) return;
         const full = await getPreset(state.activePresetId).catch(() => null);
         if (cancelled || seq !== opSeqRef.current) return;
@@ -470,7 +516,7 @@ export function PresetEditor() {
     () => () => {
       flushPendingPersist();
     },
-    []
+    [],
   );
 
   /** Apply a change to the local config immediately (so the UI is responsive)
@@ -484,12 +530,14 @@ export function PresetEditor() {
     persistTimer.current = setTimeout(() => {
       persistTimer.current = null;
       void patchPromptConfig(next).catch((e) =>
-        reportStatus(e instanceof Error ? e.message : String(e), true)
+        reportStatus(e instanceof Error ? e.message : String(e), true),
       );
     }, PERSIST_DEBOUNCE_MS);
   }
 
-  const turnDirty = activePreset ? !modulesEqual(config.modules, activePreset.modules) : false;
+  const turnDirty = activePreset
+    ? !modulesEqual(config.modules, activePreset.modules)
+    : false;
   const sheetDirty = activePreset
     ? !formatEqual(config.characterFormat, activePreset.characterFormat)
     : false;
@@ -500,20 +548,26 @@ export function PresetEditor() {
 
   const activePresetReadonly = activePreset?.readonly ?? false;
   const activePresetName =
-    activePreset?.name ?? presets.find((p) => p.id === activePresetId)?.name ?? activePresetId;
+    activePreset?.name ??
+    presets.find((p) => p.id === activePresetId)?.name ??
+    activePresetId;
 
   const format = config.characterFormat ?? cloneFormat(undefined);
   const image = config.imageGeneration ?? DEFAULT_IMAGE_GENERATION_SETTINGS;
 
   // Baseline lookups from the saved preset for granular per-item dirty indicators
   const presetModulesById = new Map<string, PresetModule>(
-    (activePreset?.modules.turn ?? []).map((m) => [m.id, m])
+    (activePreset?.modules.turn ?? []).map((m) => [m.id, m]),
   );
-  const baselineFormat = activePreset ? cloneFormat(activePreset.characterFormat) : null;
+  const baselineFormat = activePreset
+    ? cloneFormat(activePreset.characterFormat)
+    : null;
   const baselineSectionsByName = new Map<string, CharacterFormatSection>(
-    (baselineFormat?.sections ?? []).map((s) => [s.name, s])
+    (baselineFormat?.sections ?? []).map((s) => [s.name, s]),
   );
-  const baseImage = activePreset ? resolveImageSettings(activePreset.imageGeneration) : null;
+  const baseImage = activePreset
+    ? resolveImageSettings(activePreset.imageGeneration)
+    : null;
 
   /** Load a preset's saved config over the global config. Switch and reload are
    *  the same server operation — both discard unsaved edits. */
@@ -727,14 +781,18 @@ export function PresetEditor() {
   function toggleModule(moduleId: string) {
     persistModules(
       configRef.current.modules.turn.map((m) =>
-        m.id === moduleId ? { ...m, enabled: !m.enabled } : m
-      )
+        m.id === moduleId ? { ...m, enabled: !m.enabled } : m,
+      ),
     );
   }
 
   function openEditModule(mod: PresetModule) {
     setEditingModule(mod);
-    setEditModuleForm({ name: mod.name, description: mod.description, content: mod.content });
+    setEditModuleForm({
+      name: mod.name,
+      description: mod.description,
+      content: mod.content,
+    });
   }
 
   function saveEditModule() {
@@ -748,8 +806,8 @@ export function PresetEditor() {
               description: editModuleForm.description,
               content: editModuleForm.content,
             }
-          : m
-      )
+          : m,
+      ),
     );
     setEditingModule(null);
   }
@@ -759,7 +817,9 @@ export function PresetEditor() {
   }
 
   function applyModuleDelete(moduleId: string) {
-    persistModules(configRef.current.modules.turn.filter((m) => m.id !== moduleId));
+    persistModules(
+      configRef.current.modules.turn.filter((m) => m.id !== moduleId),
+    );
     setDialog(null);
   }
 
@@ -783,8 +843,13 @@ export function PresetEditor() {
     persist({ characterFormat: next });
   }
 
-  function updateFormatSection(index: number, patch: Partial<CharacterFormatSection>) {
-    const sections = format.sections.map((s, i) => (i === index ? { ...s, ...patch } : s));
+  function updateFormatSection(
+    index: number,
+    patch: Partial<CharacterFormatSection>,
+  ) {
+    const sections = format.sections.map((s, i) =>
+      i === index ? { ...s, ...patch } : s,
+    );
     persistFormat({ ...format, sections });
   }
 
@@ -806,11 +871,18 @@ export function PresetEditor() {
   }
 
   function removeFormatSection(index: number) {
-    setDialog({ kind: "deleteSection", index, name: format.sections[index]?.name ?? "" });
+    setDialog({
+      kind: "deleteSection",
+      index,
+      name: format.sections[index]?.name ?? "",
+    });
   }
 
   function applySectionDelete(index: number) {
-    persistFormat({ ...format, sections: reindex(format.sections.filter((_, i) => i !== index)) });
+    persistFormat({
+      ...format,
+      sections: reindex(format.sections.filter((_, i) => i !== index)),
+    });
     setDialog(null);
   }
 
@@ -830,7 +902,11 @@ export function PresetEditor() {
     sectionRowRefs.current[index] = el;
   };
 
-  function handleModuleGripPointerDown(e: React.PointerEvent, index: number, name: string) {
+  function handleModuleGripPointerDown(
+    e: React.PointerEvent,
+    index: number,
+    name: string,
+  ) {
     e.preventDefault();
     setDragState({ list: "turn", fromIndex: index });
     overIndexRef.current = null;
@@ -843,12 +919,18 @@ export function PresetEditor() {
     setDragState({ list: "sheet", fromIndex: index });
     overIndexRef.current = null;
     setOverIndex(null);
-    setDragGhost({ x: e.clientX, y: e.clientY, name: format.sections[index]?.name ?? "" });
+    setDragGhost({
+      x: e.clientX,
+      y: e.clientY,
+      name: format.sections[index]?.name ?? "",
+    });
   }
 
   function handleReorderModules(fromIndex: number, toIndex: number) {
     if (fromIndex === toIndex) return;
-    const sorted = [...configRef.current.modules.turn].sort((a, b) => a.order - b.order);
+    const sorted = [...configRef.current.modules.turn].sort(
+      (a, b) => a.order - b.order,
+    );
     const [moved] = sorted.splice(fromIndex, 1);
     if (!moved) return;
     sorted.splice(toIndex, 0, moved);
@@ -889,7 +971,9 @@ export function PresetEditor() {
       const el = document.elementFromPoint(e.clientX, e.clientY);
       const row = el && (el.closest(`[${rowAttr}]`) as HTMLElement | null);
       if (row) {
-        const idx = Number(list === "turn" ? row.dataset.moduleRow : row.dataset.sectionRow);
+        const idx = Number(
+          list === "turn" ? row.dataset.moduleRow : row.dataset.sectionRow,
+        );
         overIndexRef.current = idx;
         setOverIndex(idx);
       }
@@ -939,11 +1023,16 @@ export function PresetEditor() {
     }
     if (dialog.kind === "confirmLoad") {
       const targetId = dialog.presetId;
-      const targetName = presets.find((p) => p.id === targetId)?.name ?? targetId;
+      const targetName =
+        presets.find((p) => p.id === targetId)?.name ?? targetId;
       const isReload = targetId === activePresetId;
       return (
         <ConfirmModal
-          title={isReload ? "Reload the saved configuration?" : `Load "${targetName}"?`}
+          title={
+            isReload
+              ? "Reload the saved configuration?"
+              : `Load "${targetName}"?`
+          }
           message="Are you sure to load the saved preset configuration? Your temporary changes will be discarded."
           confirmLabel={isReload ? "Reload" : "Load"}
           danger
@@ -984,10 +1073,15 @@ export function PresetEditor() {
     return (
       <ConfirmModal
         title={isNew ? "Save as new preset" : "Rename preset"}
-        message={isNew ? "Saves the current configuration under its own name." : undefined}
+        message={
+          isNew
+            ? "Saves the current configuration under its own name."
+            : undefined
+        }
         confirmLabel={isNew ? "Create" : "Rename"}
         confirmDisabled={
-          !dialog.value.trim() || (!isNew && dialog.value.trim() === activePresetName)
+          !dialog.value.trim() ||
+          (!isNew && dialog.value.trim() === activePresetName)
         }
         isLoading={saving}
         onConfirm={() => {
@@ -1007,8 +1101,12 @@ export function PresetEditor() {
     );
   }
 
-  const sortedModules = [...config.modules.turn].sort((a, b) => a.order - b.order);
-  const editingBaseModule = editingModule ? presetModulesById.get(editingModule.id) : undefined;
+  const sortedModules = [...config.modules.turn].sort(
+    (a, b) => a.order - b.order,
+  );
+  const editingBaseModule = editingModule
+    ? presetModulesById.get(editingModule.id)
+    : undefined;
 
   return (
     <>
@@ -1016,10 +1114,22 @@ export function PresetEditor() {
         <Stack direction="column" align="stretch" gap="xs" sticky>
           <Card variant="panel" padding="xs" dirty={dirty}>
             <Stack direction="column" align="stretch" gap="xs">
-              <Stack direction="row" align="center" justify="between" gap="xs" wrap>
+              <Stack
+                direction="row"
+                align="center"
+                justify="between"
+                gap="xs"
+                wrap
+              >
                 <Stack direction="row" align="center" gap="xs" wrap>
                   <Stack direction="row" align="center" gap="2xs">
-                    <Text as="span" variant="label" size="xs" weight="semibold" tone="secondary">
+                    <Text
+                      as="span"
+                      variant="label"
+                      size="xs"
+                      weight="semibold"
+                      tone="secondary"
+                    >
                       Prompt Preset
                     </Text>
                     <TooltipIcon
@@ -1170,8 +1280,12 @@ export function PresetEditor() {
                     baselineSection={baselineSec}
                     hasBaseline={!!activePreset}
                     index={idx}
-                    isDragging={dragState?.list === "sheet" && dragState.fromIndex === idx}
-                    isDropTarget={dragState?.list === "sheet" && overIndex === idx}
+                    isDragging={
+                      dragState?.list === "sheet" && dragState.fromIndex === idx
+                    }
+                    isDropTarget={
+                      dragState?.list === "sheet" && overIndex === idx
+                    }
                     rowRef={setSectionRowRef(idx)}
                     onGripPointerDown={handleSectionGripPointerDown}
                     onChange={updateFormatSection}
@@ -1180,7 +1294,12 @@ export function PresetEditor() {
                 );
               })}
               <Stack direction="row" align="center" justify="start">
-                <Button variant="outline" size="sm" leftIcon="Plus" onClick={addFormatSection}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  leftIcon="Plus"
+                  onClick={addFormatSection}
+                >
                   Add Section
                 </Button>
               </Stack>
@@ -1201,12 +1320,18 @@ export function PresetEditor() {
                       ? "This instruction carries neither the POV nor the Scene perspective rules, so the mode does not change it — it is your own custom text."
                       : "Switching rewrites the instruction below: Scene makes the player a person in the frame (their own clothing and appearance, like any character), and POV makes the frame the player's own eyes, with no player tags at all. The cast block the writer receives follows the mode too."
                   }
-                  dirty={!!baseImage && image.instructionMode !== baseImage.instructionMode}
+                  dirty={
+                    !!baseImage &&
+                    image.instructionMode !== baseImage.instructionMode
+                  }
                   value={image.instructionMode}
                   onChange={(mode) =>
                     updateImage({
                       instructionMode: mode,
-                      instruction: applyInstructionMode(image.instruction, mode),
+                      instruction: applyInstructionMode(
+                        image.instruction,
+                        mode,
+                      ),
                     })
                   }
                   options={INSTRUCTION_MODE_OPTIONS}
@@ -1219,7 +1344,9 @@ export function PresetEditor() {
                 <TextArea
                   label="Instruction"
                   tooltip="How the text model should describe the current moment as one still image."
-                  dirty={!!baseImage && image.instruction !== baseImage.instruction}
+                  dirty={
+                    !!baseImage && image.instruction !== baseImage.instruction
+                  }
                   rows={12}
                   size="sm"
                   value={image.instruction}
@@ -1235,18 +1362,28 @@ export function PresetEditor() {
                 <TextInput
                   label="Positive Prefix"
                   tooltip="Prefixed to every generated prompt — the one place art direction lives, so the instruction itself stays style-free."
-                  dirty={!!baseImage && image.positivePrefix !== baseImage.positivePrefix}
+                  dirty={
+                    !!baseImage &&
+                    image.positivePrefix !== baseImage.positivePrefix
+                  }
                   value={image.positivePrefix}
-                  onChange={(e) => updateImage({ positivePrefix: e.target.value })}
+                  onChange={(e) =>
+                    updateImage({ positivePrefix: e.target.value })
+                  }
                   placeholder="anime style"
                   size="sm"
                 />
                 <TextInput
                   label="Negative Prefix"
                   tooltip="Appended after the shipped negative tags, not instead of them."
-                  dirty={!!baseImage && image.negativePrefix !== baseImage.negativePrefix}
+                  dirty={
+                    !!baseImage &&
+                    image.negativePrefix !== baseImage.negativePrefix
+                  }
                   value={image.negativePrefix}
-                  onChange={(e) => updateImage({ negativePrefix: e.target.value })}
+                  onChange={(e) =>
+                    updateImage({ negativePrefix: e.target.value })
+                  }
                   placeholder="lowres, bad anatomy, watermark, text…"
                   size="sm"
                 />
@@ -1257,34 +1394,44 @@ export function PresetEditor() {
                     description="A soft cap on the composed prompt: the writer is told it and the composer cuts the tag line to it. 0 leaves the provider's own cap as the only limit."
                     dirty={
                       !!baseImage &&
-                      image.promptCharacterLimit !== baseImage.promptCharacterLimit
+                      image.promptCharacterLimit !==
+                        baseImage.promptCharacterLimit
                     }
                     min={0}
                     max={4000}
                     step={50}
                     value={image.promptCharacterLimit}
-                    defaultPreview={DEFAULT_IMAGE_GENERATION_SETTINGS.promptCharacterLimit}
+                    defaultPreview={
+                      DEFAULT_IMAGE_GENERATION_SETTINGS.promptCharacterLimit
+                    }
                     integer
                     onChange={(val) =>
-                      updateImage({ promptCharacterLimit: Math.max(0, Math.floor(val ?? 0)) })
+                      updateImage({
+                        promptCharacterLimit: Math.max(0, Math.floor(val ?? 0)),
+                      })
                     }
                   />
 
                   <Slider
                     label="Previous Messages of History"
                     description="How many messages behind the frame the writer sees as continuity. 0 turns the block off."
-                    dirty={!!baseImage && image.historyMessages !== baseImage.historyMessages}
+                    dirty={
+                      !!baseImage &&
+                      image.historyMessages !== baseImage.historyMessages
+                    }
                     min={0}
                     max={IMAGE_HISTORY_MESSAGES_MAX}
                     step={1}
                     value={image.historyMessages}
-                    defaultPreview={DEFAULT_IMAGE_GENERATION_SETTINGS.historyMessages}
+                    defaultPreview={
+                      DEFAULT_IMAGE_GENERATION_SETTINGS.historyMessages
+                    }
                     integer
                     onChange={(val) =>
                       updateImage({
                         historyMessages: Math.min(
                           IMAGE_HISTORY_MESSAGES_MAX,
-                          Math.max(0, Math.floor(val ?? 0))
+                          Math.max(0, Math.floor(val ?? 0)),
                         ),
                       })
                     }
@@ -1304,18 +1451,26 @@ export function PresetEditor() {
                   title="Include current state"
                   tooltip="Sends the player's visible conditions and current narrative state to the image prompt writer."
                   description="The player's visible conditions and current narrative state."
-                  dirty={!!baseImage && image.includeState !== baseImage.includeState}
+                  dirty={
+                    !!baseImage && image.includeState !== baseImage.includeState
+                  }
                   checked={image.includeState}
-                  onChange={(e) => updateImage({ includeState: e.target.checked })}
+                  onChange={(e) =>
+                    updateImage({ includeState: e.target.checked })
+                  }
                 />
                 <SwitchRow
                   icon="Users"
                   title="Include present characters"
                   tooltip="Sends who is in frame, along with their clothing, mood, and character sheet identity."
                   description="Who is in frame, with their clothing, mood and sheet identity."
-                  dirty={!!baseImage && image.includeCast !== baseImage.includeCast}
+                  dirty={
+                    !!baseImage && image.includeCast !== baseImage.includeCast
+                  }
                   checked={image.includeCast}
-                  onChange={(e) => updateImage({ includeCast: e.target.checked })}
+                  onChange={(e) =>
+                    updateImage({ includeCast: e.target.checked })
+                  }
                 />
                 <SwitchRow
                   icon="History"
@@ -1323,10 +1478,14 @@ export function PresetEditor() {
                   tooltip="One earlier answer, for shape reference only — its scene, clothing and pose belong to that earlier moment. Off by default because an in-context example can anchor a tag model."
                   description="One earlier answer, for shape reference only. Off by default."
                   dirty={
-                    !!baseImage && image.includePreviousAnswer !== baseImage.includePreviousAnswer
+                    !!baseImage &&
+                    image.includePreviousAnswer !==
+                      baseImage.includePreviousAnswer
                   }
                   checked={image.includePreviousAnswer}
-                  onChange={(e) => updateImage({ includePreviousAnswer: e.target.checked })}
+                  onChange={(e) =>
+                    updateImage({ includePreviousAnswer: e.target.checked })
+                  }
                 />
               </Stack>
             </FormSection>
@@ -1339,12 +1498,15 @@ export function PresetEditor() {
           >
             <Stack direction="column" align="stretch" gap="xs">
               {sortedModules.map((mod, idx) => {
-                const isDragging = dragState?.list === "turn" && dragState.fromIndex === idx;
-                const isDropTarget = dragState?.list === "turn" && overIndex === idx;
+                const isDragging =
+                  dragState?.list === "turn" && dragState.fromIndex === idx;
+                const isDropTarget =
+                  dragState?.list === "turn" && overIndex === idx;
                 const hasDescription = mod.description.trim().length > 0;
                 const baseMod = presetModulesById.get(mod.id);
                 const isNewModule = !!activePreset && !baseMod;
-                const isOrderModified = !!activePreset && !!baseMod && mod.order !== baseMod.order;
+                const isOrderModified =
+                  !!activePreset && !!baseMod && mod.order !== baseMod.order;
                 const isContentModified =
                   !!activePreset &&
                   !!baseMod &&
@@ -1352,7 +1514,8 @@ export function PresetEditor() {
                     mod.description !== baseMod.description ||
                     mod.content !== baseMod.content ||
                     mod.enabled !== baseMod.enabled);
-                const isModuleDirty = isNewModule || isOrderModified || isContentModified;
+                const isModuleDirty =
+                  isNewModule || isOrderModified || isContentModified;
 
                 return (
                   <Card
@@ -1365,9 +1528,17 @@ export function PresetEditor() {
                     dropTarget={isDropTarget}
                     data-module-row={idx}
                   >
-                    <Stack direction="row" align="center" justify="between" gap="xs">
+                    <Stack
+                      direction="row"
+                      align="center"
+                      justify="between"
+                      gap="xs"
+                    >
                       <Stack direction="row" align="center" gap="xs" flex1>
-                        <Badge variant={isOrderModified ? "warning" : "neutral"} size="xs">
+                        <Badge
+                          variant={isOrderModified ? "warning" : "neutral"}
+                          size="xs"
+                        >
                           {idx + 1}
                         </Badge>
                         <Checkbox
@@ -1384,7 +1555,9 @@ export function PresetEditor() {
                             </Text>
                           }
                         />
-                        {hasDescription && <TooltipIcon content={mod.description} />}
+                        {hasDescription && (
+                          <TooltipIcon content={mod.description} />
+                        )}
                         {isModuleDirty && (
                           <Badge variant="warning" size="xs">
                             {isNewModule ? "New" : "Modified"}
@@ -1394,7 +1567,9 @@ export function PresetEditor() {
 
                       <Stack direction="row" align="center" gap="2xs">
                         <DragHandle
-                          onPointerDown={(e) => handleModuleGripPointerDown(e, idx, mod.name)}
+                          onPointerDown={(e) =>
+                            handleModuleGripPointerDown(e, idx, mod.name)
+                          }
                         />
                         <Button
                           variant="ghost"
@@ -1421,7 +1596,12 @@ export function PresetEditor() {
               })}
 
               <Stack direction="row" align="center" justify="start">
-                <Button variant="outline" size="sm" leftIcon="Plus" onClick={addNewModule}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  leftIcon="Plus"
+                  onClick={addNewModule}
+                >
                   Add Module
                 </Button>
               </Stack>
@@ -1429,7 +1609,9 @@ export function PresetEditor() {
           </FormSection>
         )}
 
-        {dragGhost ? <DragGhost x={dragGhost.x} y={dragGhost.y} name={dragGhost.name} /> : null}
+        {dragGhost ? (
+          <DragGhost x={dragGhost.x} y={dragGhost.y} name={dragGhost.name} />
+        ) : null}
       </Stack>
 
       <Modal
@@ -1440,7 +1622,9 @@ export function PresetEditor() {
       >
         <Header
           variant="modal"
-          title={editingModule ? `Edit Module: ${editingModule.name}` : "Edit Module"}
+          title={
+            editingModule ? `Edit Module: ${editingModule.name}` : "Edit Module"
+          }
           bordered
           actions={
             <Button
@@ -1460,9 +1644,14 @@ export function PresetEditor() {
               <TextInput
                 label="Name"
                 size="sm"
-                dirty={!!editingBaseModule && editModuleForm.name !== editingBaseModule.name}
+                dirty={
+                  !!editingBaseModule &&
+                  editModuleForm.name !== editingBaseModule.name
+                }
                 value={editModuleForm.name}
-                onChange={(e) => setEditModuleForm((f) => ({ ...f, name: e.target.value }))}
+                onChange={(e) =>
+                  setEditModuleForm((f) => ({ ...f, name: e.target.value }))
+                }
               />
               <TextArea
                 label="Description"
@@ -1475,7 +1664,10 @@ export function PresetEditor() {
                 }
                 value={editModuleForm.description}
                 onChange={(e) =>
-                  setEditModuleForm((f) => ({ ...f, description: e.target.value }))
+                  setEditModuleForm((f) => ({
+                    ...f,
+                    description: e.target.value,
+                  }))
                 }
               />
               <TextArea
@@ -1484,19 +1676,31 @@ export function PresetEditor() {
                 size="sm"
                 rows={10}
                 dirty={
-                  !!editingBaseModule && editModuleForm.content !== editingBaseModule.content
+                  !!editingBaseModule &&
+                  editModuleForm.content !== editingBaseModule.content
                 }
                 value={editModuleForm.content}
-                onChange={(e) => setEditModuleForm((f) => ({ ...f, content: e.target.value }))}
+                onChange={(e) =>
+                  setEditModuleForm((f) => ({ ...f, content: e.target.value }))
+                }
               />
             </Stack>
           </Modal.Content>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" size="sm" onClick={() => setEditingModule(null)}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setEditingModule(null)}
+          >
             Cancel
           </Button>
-          <Button variant="primary" size="sm" leftIcon="Check" onClick={saveEditModule}>
+          <Button
+            variant="primary"
+            size="sm"
+            leftIcon="Check"
+            onClick={saveEditModule}
+          >
             Save
           </Button>
         </Modal.Footer>

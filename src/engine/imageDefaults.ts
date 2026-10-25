@@ -74,20 +74,25 @@ export const LEGACY_SCENE_SIDES: ReadonlyArray<string> = [
   `CAMERA AND FRAMING
 - The frame is third-person: never tag pov, male pov, female pov or viewer's anything.
 - Take the framing and the angle from what the scene itself implies — wide shot, medium shot, close-up, from above, from below, dutch angle — and place them early, right after the rating and the character count.
-- Everyone visible is a character and is tagged as one.`
+- Everyone visible is a character and is tagged as one.`,
 ];
 
-export const PERSPECTIVE_PAIRS: ReadonlyArray<readonly [pov: string, scene: string]> = [
+export const PERSPECTIVE_PAIRS: ReadonlyArray<
+  readonly [pov: string, scene: string]
+> = [
   [POV_PLAYER_RULES, SCENE_PLAYER_RULES],
   [POV_REFERENCE_LINE, SCENE_REFERENCE_LINE],
   [POV_REGION_LINE, SCENE_REGION_LINE],
-  [POV_CAMERA_SECTION, SCENE_CAMERA_SECTION]
+  [POV_CAMERA_SECTION, SCENE_CAMERA_SECTION],
 ];
 
 /** The instruction as it reads in `mode`. Scans every pair and swaps whichever
  *  side is present, which makes this its own inverse and a no-op on text that
  *  carries neither side. */
-export function applyInstructionMode(instruction: string, mode: ImageInstructionMode): string {
+export function applyInstructionMode(
+  instruction: string,
+  mode: ImageInstructionMode,
+): string {
   let out = instruction;
   PERSPECTIVE_PAIRS.forEach(([pov, scene], index) => {
     if (mode === "scene") {
@@ -99,7 +104,8 @@ export function applyInstructionMode(instruction: string, mode: ImageInstruction
     // then actually holds. ONE-WAY on purpose: a document switched back to Scene
     // gets today's text.
     const legacy = LEGACY_SCENE_SIDES[index];
-    if (legacy !== undefined && out.includes(legacy)) out = out.replace(legacy, () => pov);
+    if (legacy !== undefined && out.includes(legacy))
+      out = out.replace(legacy, () => pov);
   });
   // The FUNCTION form of `replace` is deliberate: a string replacement treats
   // `$&`, `$1` and `` $` `` in the replacement as capture patterns, and the
@@ -304,5 +310,5 @@ export const DEFAULT_IMAGE_GENERATION_SETTINGS: ImageGenerationSettings = {
   includeState: true,
   includeCast: true,
   historyMessages: IMAGE_HISTORY_MESSAGES,
-  includePreviousAnswer: false
+  includePreviousAnswer: false,
 };

@@ -4,7 +4,7 @@ import {
   popDialog,
   pushDialog,
   resetDialogStack,
-  topDialogId
+  topDialogId,
 } from "../src/client/engine/dialogStack";
 
 describe("the dialog stack", () => {

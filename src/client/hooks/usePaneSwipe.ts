@@ -8,7 +8,7 @@ import {
   stillPaneDrag,
   swipeIntent,
   swipeVelocity,
-  type SwipeSample
+  type SwipeSample,
 } from "../engine/paneSwipe";
 
 /** The browser's own edge gesture (back, history) lives here; a panel swipe starts further in. */
@@ -24,7 +24,10 @@ const VELOCITY_SAMPLES = 8;
  * (`.base-tabs`), code blocks inside chat messages (`.code-block-pre`), and the error box. A swipe on
  * any of them must scroll them, not change panel.
  */
-function startsInHorizontalScroller(node: Element, boundary: Element | null): boolean {
+function startsInHorizontalScroller(
+  node: Element,
+  boundary: Element | null,
+): boolean {
   let current: Element | null = node;
   while (current && current !== boundary?.parentElement) {
     const style = window.getComputedStyle(current);
@@ -90,7 +93,7 @@ export function usePaneSwipe({
   count = PANE_ORDER.length,
   paneWidth,
   onDrag,
-  onSettle
+  onSettle,
 }: UsePaneSwipeOptions) {
   const gesture = useRef<Gesture | null>(null);
 
@@ -99,7 +102,7 @@ export function usePaneSwipe({
       gesture.current = null;
       if (!keepVisual) onDrag(null);
     },
-    [onDrag]
+    [onDrag],
   );
 
   const onTouchStart = useCallback(
@@ -122,10 +125,10 @@ export function usePaneSwipe({
         dropped: false,
         concluded: false,
         targetIndex: index,
-        samples: [{ x: touch.clientX, t: event.timeStamp }]
+        samples: [{ x: touch.clientX, t: event.timeStamp }],
       };
     },
-    [enabled, index, onDrag]
+    [enabled, index, onDrag],
   );
 
   const onTouchMove = useCallback(
@@ -148,7 +151,11 @@ export function usePaneSwipe({
           return;
         }
         // Dragging toward a panel that does not exist is not a drag: the ends do not wrap.
-        const targetIndex = stepPane(index, dx < 0 ? "next" : "previous", count);
+        const targetIndex = stepPane(
+          index,
+          dx < 0 ? "next" : "previous",
+          count,
+        );
         if (targetIndex === index) {
           current.dropped = true;
           return;
@@ -170,9 +177,12 @@ export function usePaneSwipe({
       if (current.samples.length > VELOCITY_SAMPLES) current.samples.shift();
       if (!live) return;
       const width = paneWidth();
-      onDrag({ offset: Math.max(-width, Math.min(width, dx)), targetIndex: current.targetIndex });
+      onDrag({
+        offset: Math.max(-width, Math.min(width, dx)),
+        targetIndex: current.targetIndex,
+      });
     },
-    [enabled, live, index, count, paneWidth, onDrag, onSettle]
+    [enabled, live, index, count, paneWidth, onDrag, onSettle],
   );
 
   const onTouchEnd = useCallback(
@@ -200,7 +210,10 @@ export function usePaneSwipe({
         }
         const width = paneWidth();
         const offset = Math.max(-width, Math.min(width, dx));
-        const velocity = swipeVelocity([...current.samples, { x: touch.clientX, t: event.timeStamp }]);
+        const velocity = swipeVelocity([
+          ...current.samples,
+          { x: touch.clientX, t: event.timeStamp },
+        ]);
         const committed = commitSwipe({ offset, velocity, width });
         // The visual is kept while the release animates; the caller clears it afterwards.
         reset(committed);
@@ -217,7 +230,7 @@ export function usePaneSwipe({
       if (targetIndex === index) return;
       onSettle({ targetIndex, committed: true });
     },
-    [enabled, live, index, count, paneWidth, onSettle, reset]
+    [enabled, live, index, count, paneWidth, onSettle, reset],
   );
 
   const onTouchCancel = useCallback(() => {

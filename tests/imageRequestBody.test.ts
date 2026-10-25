@@ -3,7 +3,10 @@
  *  React renderer — the repo has no component test harness, and this is the part
  *  of the editor that can silently do the wrong thing. */
 import { describe, expect, it } from "vitest";
-import { checkImageRequestBody, formatImageRequestBody } from "../src/client/utils/imageRequestBody";
+import {
+  checkImageRequestBody,
+  formatImageRequestBody,
+} from "../src/client/utils/imageRequestBody";
 
 describe("checkImageRequestBody", () => {
   it("accepts any JSON object, whatever fields it carries", () => {
@@ -27,7 +30,8 @@ describe("checkImageRequestBody", () => {
     for (const bad of ["[]", '"a string"', "42", "null", "true"]) {
       const result = checkImageRequestBody(bad);
       expect(result.ok, bad).toBe(false);
-      if (!result.ok) expect(result.error).toBe("The request body must be a JSON object.");
+      if (!result.ok)
+        expect(result.error).toBe("The request body must be a JSON object.");
     }
   });
 
@@ -42,7 +46,9 @@ describe("checkImageRequestBody", () => {
 
 describe("formatImageRequestBody", () => {
   it("pretty-prints a stored body so it can be read and edited", () => {
-    expect(formatImageRequestBody('{"a":1,"b":[2,3]}')).toBe('{\n  "a": 1,\n  "b": [\n    2,\n    3\n  ]\n}');
+    expect(formatImageRequestBody('{"a":1,"b":[2,3]}')).toBe(
+      '{\n  "a": 1,\n  "b": [\n    2,\n    3\n  ]\n}',
+    );
   });
 
   it("hands back a body that does not parse, rather than blanking it", () => {

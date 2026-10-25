@@ -25,7 +25,10 @@ import { MIN_QUERY_LENGTH } from "../../engine/docsSearch";
 export { slugifyHeading };
 
 function escapeHtml(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 const SAFE_PROTOCOL = /^(https?:|mailto:)/i;
@@ -52,7 +55,7 @@ function copyButton(title: string): string {
     stateIcon(CHECK_ICON, "copied"),
     '<span class="code-copy-label" data-state="idle">Copy</span>',
     '<span class="code-copy-label" data-state="copied">Copied</span>',
-    "</button>"
+    "</button>",
   ].join("");
 }
 
@@ -75,7 +78,9 @@ function hitPattern(needle: string | undefined): RegExp | null {
 /** Wraps every occurrence in a mark. The mark carries theme tokens of its own
  *  (`--doc-hit-*`), so this function never decides a colour. */
 function mark(escaped: string, pattern: RegExp | null): string {
-  return pattern ? escaped.replace(pattern, '<mark class="doc-search-hit">$1</mark>') : escaped;
+  return pattern
+    ? escaped.replace(pattern, '<mark class="doc-search-hit">$1</mark>')
+    : escaped;
 }
 
 function renderer(pattern: RegExp | null): Renderer {
@@ -127,7 +132,7 @@ function renderer(pattern: RegExp | null): Renderer {
       "</div>",
       "</div>",
       `<pre class="code-block-pre"><code>${mark(escapeHtml(text), pattern)}</code></pre>`,
-      "</div>"
+      "</div>",
     ].join("");
   };
 
@@ -193,6 +198,11 @@ function wrapTables(html: string): string {
 }
 
 /** Markdown → HTML for a documentation page. */
-export function renderDocMarkdown(markdown: string, options: RenderDocOptions = {}): string {
-  return wrapTables(markedFor(hitPattern(options.highlight)).parse(markdown) as string);
+export function renderDocMarkdown(
+  markdown: string,
+  options: RenderDocOptions = {},
+): string {
+  return wrapTables(
+    markedFor(hitPattern(options.highlight)).parse(markdown) as string,
+  );
 }

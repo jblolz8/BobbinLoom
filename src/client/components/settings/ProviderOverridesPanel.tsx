@@ -75,30 +75,40 @@ export type ProviderOverridesPanelProps = {
   active?: boolean;
 };
 
-export function ProviderOverridesPanel({ active = true }: ProviderOverridesPanelProps) {
+export function ProviderOverridesPanel({
+  active = true,
+}: ProviderOverridesPanelProps) {
   const [registry, setRegistry] = useState<ProviderRegistry | null>(null);
-  const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [status, setStatus] = useState<{
+    kind: "ok" | "err";
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!active) return;
     listProviderConnections()
       .then(setRegistry)
-      .catch((err) => setStatus({ kind: "err", text: err instanceof Error ? err.message : String(err) }));
+      .catch((err) =>
+        setStatus({
+          kind: "err",
+          text: err instanceof Error ? err.message : String(err),
+        }),
+      );
   }, [active]);
 
   const textConnections = useMemo(
     () => (registry?.connections ?? []).filter((c) => c.kind === "text"),
-    [registry]
+    [registry],
   );
 
   const imageConnections = useMemo(
     () => (registry?.connections ?? []).filter((c) => c.kind === "image"),
-    [registry]
+    [registry],
   );
 
   const activeText = useMemo(
     () => textConnections.find((c) => c.id === registry?.activeTextProviderId),
-    [textConnections, registry?.activeTextProviderId]
+    [textConnections, registry?.activeTextProviderId],
   );
 
   const textOptions = useMemo(
@@ -111,10 +121,13 @@ export function ProviderOverridesPanel({ active = true }: ProviderOverridesPanel
       },
       ...textConnections.map((c) => ({ value: c.id, label: c.label })),
     ],
-    [textConnections, activeText]
+    [textConnections, activeText],
   );
 
-  async function handleImagePromptWriterChange(img: ProviderConnection, nextProviderId: string) {
+  async function handleImagePromptWriterChange(
+    img: ProviderConnection,
+    nextProviderId: string,
+  ) {
     setStatus(null);
     try {
       await updateProviderConnection(img.id, {
@@ -145,11 +158,17 @@ export function ProviderOverridesPanel({ active = true }: ProviderOverridesPanel
       const updated = await listProviderConnections();
       setRegistry(updated);
     } catch (err) {
-      setStatus({ kind: "err", text: err instanceof Error ? err.message : String(err) });
+      setStatus({
+        kind: "err",
+        text: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
-  function renderOverrideStatusBadge(selectedId?: string | null, missing = false) {
+  function renderOverrideStatusBadge(
+    selectedId?: string | null,
+    missing = false,
+  ) {
     if (missing) {
       return (
         <Badge variant="warning" size="xs" leftIcon="AlertTriangle">
@@ -178,7 +197,11 @@ export function ProviderOverridesPanel({ active = true }: ProviderOverridesPanel
   return (
     <Stack direction="column" align="stretch" gap="sm">
       {status && (
-        <StatusMessage variant="banner" tone={status.kind} onDismiss={() => setStatus(null)}>
+        <StatusMessage
+          variant="banner"
+          tone={status.kind}
+          onDismiss={() => setStatus(null)}
+        >
           {status.text}
         </StatusMessage>
       )}
@@ -199,7 +222,8 @@ export function ProviderOverridesPanel({ active = true }: ProviderOverridesPanel
           >
             {textConnections.length === 0 ? (
               <Text as="p" size="sm" tone="secondary">
-                No text providers configured yet. Add a text provider in the Text Providers tab first.
+                No text providers configured yet. Add a text provider in the
+                Text Providers tab first.
               </Text>
             ) : (
               <Stack direction="column" align="stretch" gap="xs">
@@ -214,7 +238,11 @@ export function ProviderOverridesPanel({ active = true }: ProviderOverridesPanel
                     void setGenerationTextProvider(val || null)
                       .then(setRegistry)
                       .catch((err) =>
-                        setStatus({ kind: "err", text: err instanceof Error ? err.message : String(err) })
+                        setStatus({
+                          kind: "err",
+                          text:
+                            err instanceof Error ? err.message : String(err),
+                        }),
                       );
                   }}
                 />
@@ -230,7 +258,11 @@ export function ProviderOverridesPanel({ active = true }: ProviderOverridesPanel
                     void setChapterTextProvider(val || null)
                       .then(setRegistry)
                       .catch((err) =>
-                        setStatus({ kind: "err", text: err instanceof Error ? err.message : String(err) })
+                        setStatus({
+                          kind: "err",
+                          text:
+                            err instanceof Error ? err.message : String(err),
+                        }),
                       );
                   }}
                 />
@@ -246,7 +278,11 @@ export function ProviderOverridesPanel({ active = true }: ProviderOverridesPanel
                     void setCharacterTextProvider(val || null)
                       .then(setRegistry)
                       .catch((err) =>
-                        setStatus({ kind: "err", text: err instanceof Error ? err.message : String(err) })
+                        setStatus({
+                          kind: "err",
+                          text:
+                            err instanceof Error ? err.message : String(err),
+                        }),
                       );
                   }}
                 />
@@ -263,15 +299,20 @@ export function ProviderOverridesPanel({ active = true }: ProviderOverridesPanel
           >
             {imageConnections.length === 0 ? (
               <Text as="p" size="sm" tone="secondary">
-                No image providers configured yet. Add an image provider in the Image Providers tab to configure its prompt writer.
+                No image providers configured yet. Add an image provider in the
+                Image Providers tab to configure its prompt writer.
               </Text>
             ) : (
               <Stack direction="column" align="stretch" gap="xs">
                 {imageConnections.map((img) => {
-                  const isActiveImg = img.id === registry?.activeImageProviderId;
+                  const isActiveImg =
+                    img.id === registry?.activeImageProviderId;
                   const missingWriter =
-                    !!img.promptProviderId && !textConnections.some((t) => t.id === img.promptProviderId);
-                  const selectedWriterId = missingWriter ? "" : (img.promptProviderId ?? "");
+                    !!img.promptProviderId &&
+                    !textConnections.some((t) => t.id === img.promptProviderId);
+                  const selectedWriterId = missingWriter
+                    ? ""
+                    : (img.promptProviderId ?? "");
                   return (
                     <OverrideFieldRow
                       key={img.id}
@@ -287,10 +328,15 @@ export function ProviderOverridesPanel({ active = true }: ProviderOverridesPanel
                               Active
                             </Badge>
                           )}
-                          {renderOverrideStatusBadge(img.promptProviderId, missingWriter)}
+                          {renderOverrideStatusBadge(
+                            img.promptProviderId,
+                            missingWriter,
+                          )}
                         </>
                       }
-                      onChange={(val) => void handleImagePromptWriterChange(img, val)}
+                      onChange={(val) =>
+                        void handleImagePromptWriterChange(img, val)
+                      }
                     />
                   );
                 })}

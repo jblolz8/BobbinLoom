@@ -3,13 +3,29 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { describeDeletion, planDeletion, planRevert, retryAnchorMessageId, toRevertAnchor, toRevertRequestAnchor } from "../src/engine/chapterRevert";
+import {
+  describeDeletion,
+  planDeletion,
+  planRevert,
+  retryAnchorMessageId,
+  toRevertAnchor,
+  toRevertRequestAnchor,
+} from "../src/engine/chapterRevert";
 import { takeTurnSnapshot } from "../src/engine/engine";
-import { createBlankPlaythroughRecord, getPlaythroughRecord, updatePlaythroughRecord } from "../src/server/store";
+import {
+  createBlankPlaythroughRecord,
+  getPlaythroughRecord,
+  updatePlaythroughRecord,
+} from "../src/server/store";
 import type { TurnSnapshot } from "../src/schemas";
 import { revertAction } from "../src/server/turnActions";
 import { RevertBody, turnRoutes } from "../src/server/routes/turns";
-import type { Chapter, MemoryEvent, MessageImage, Playthrough } from "../src/schemas";
+import type {
+  Chapter,
+  MemoryEvent,
+  MessageImage,
+  Playthrough,
+} from "../src/schemas";
 
 function image(file: string): MessageImage {
   return {
@@ -17,7 +33,7 @@ function image(file: string): MessageImage {
     prompt: `prompt for ${file}`,
     providerId: "venice_images",
     model: "probe",
-    createdAt: "2026-01-01T00:00:00.000Z"
+    createdAt: "2026-01-01T00:00:00.000Z",
   };
 }
 
@@ -49,7 +65,10 @@ function buildStory(dir: string, options: { snapshots?: boolean } = {}) {
   pt.turn = 0;
   if (!keepSnapshots) pt.snapshots = {};
 
-  function turn(label: string, flags: { hiddenUser?: boolean; chapterOpening?: boolean } = {}) {
+  function turn(
+    label: string,
+    flags: { hiddenUser?: boolean; chapterOpening?: boolean } = {},
+  ) {
     const turnNumber = pt.turn + 1;
     const snapshot: TurnSnapshot = takeTurnSnapshot(pt);
     const userId = `msg_u${turnNumber}`;
@@ -60,7 +79,7 @@ function buildStory(dir: string, options: { snapshots?: boolean } = {}) {
       content: `user ${label} ${turnNumber}`,
       createdAt: `2026-01-${String(turnNumber).padStart(2, "0")}T00:00:00.000Z`,
       turn: turnNumber,
-      ...(flags.hiddenUser ? { hidden: true } : {})
+      ...(flags.hiddenUser ? { hidden: true } : {}),
     });
     pt.messages.push({
       id: assistantId,
@@ -68,10 +87,11 @@ function buildStory(dir: string, options: { snapshots?: boolean } = {}) {
       content: `assistant ${label} ${turnNumber}`,
       createdAt: `2026-01-${String(turnNumber).padStart(2, "0")}T00:00:01.000Z`,
       turn: turnNumber,
-      ...(flags.chapterOpening ? { chapterOpening: true } : {})
+      ...(flags.chapterOpening ? { chapterOpening: true } : {}),
     });
     pt.turn = turnNumber;
-    if (keepSnapshots) pt.snapshots = { ...(pt.snapshots ?? {}), [assistantId]: snapshot };
+    if (keepSnapshots)
+      pt.snapshots = { ...(pt.snapshots ?? {}), [assistantId]: snapshot };
     return assistantId;
   }
 
@@ -84,7 +104,12 @@ function buildStory(dir: string, options: { snapshots?: boolean } = {}) {
     }
   }
 
-  function chapter(id: string, name: string, start: number, end: number): Chapter {
+  function chapter(
+    id: string,
+    name: string,
+    start: number,
+    end: number,
+  ): Chapter {
     return {
       id,
       name,
@@ -93,11 +118,15 @@ function buildStory(dir: string, options: { snapshots?: boolean } = {}) {
       turnRange: { start, end },
       messageIds: [],
       memoryEventIds: [],
-      createdAt: `2026-02-${String(start).padStart(2, "0")}T00:00:00.000Z`
+      createdAt: `2026-02-${String(start).padStart(2, "0")}T00:00:00.000Z`,
     };
   }
 
-  function event(id: string, turnNumber: number, chapterId?: string): MemoryEvent {
+  function event(
+    id: string,
+    turnNumber: number,
+    chapterId?: string,
+  ): MemoryEvent {
     return {
       id,
       playthroughId: pt.id,
@@ -108,7 +137,7 @@ function buildStory(dir: string, options: { snapshots?: boolean } = {}) {
       importance: 4,
       tags: [],
       ...(chapterId ? { chapterId } : {}),
-      createdAt: `2026-03-${String(turnNumber).padStart(2, "0")}T00:00:00.000Z`
+      createdAt: `2026-03-${String(turnNumber).padStart(2, "0")}T00:00:00.000Z`,
     };
   }
 
@@ -125,7 +154,10 @@ function buildStory(dir: string, options: { snapshots?: boolean } = {}) {
   pt.worldState = [{ id: "ws_ch1", name: "after-ch1", description: "" }];
 
   // ── Chapter 2: opening turn 5, then turns 6-9 ──
-  const ch2OpeningAssistant = turn("ch2 opening", { hiddenUser: true, chapterOpening: true });
+  const ch2OpeningAssistant = turn("ch2 opening", {
+    hiddenUser: true,
+    chapterOpening: true,
+  });
   turn("ch2");
   turn("ch2");
   turn("ch2");
@@ -144,12 +176,15 @@ function buildStory(dir: string, options: { snapshots?: boolean } = {}) {
       turnRange: { start: 1, end: 9 },
       summary: "Everything so far, compacted.",
       createdAt: "2026-04-01T00:00:00.000Z",
-      updatedAt: "2026-04-01T00:00:00.000Z"
-    }
+      updatedAt: "2026-04-01T00:00:00.000Z",
+    },
   ];
 
   // ── Chapter 3 (running): opening turn 10, then turns 11-12 ──
-  const ch3OpeningAssistant = turn("ch3 opening", { hiddenUser: true, chapterOpening: true });
+  const ch3OpeningAssistant = turn("ch3 opening", {
+    hiddenUser: true,
+    chapterOpening: true,
+  });
   turn("ch3");
   turn("ch3");
   pt.memoryEvents = [...pt.memoryEvents, event("evt_ch3", 11)];
@@ -169,8 +204,8 @@ function buildStory(dir: string, options: { snapshots?: boolean } = {}) {
       ch2LastAssistant: "msg_a9",
       ch3OpeningUser: "msg_u10",
       ch3OpeningAssistant,
-      ch3LastAssistant: "msg_a12"
-    }
+      ch3LastAssistant: "msg_a12",
+    },
   };
 }
 
@@ -183,7 +218,7 @@ describe("describeDeletion: what happens to the character sheets", () => {
       version: 1,
       content,
       summary: "A mechanic",
-      startingClothing: []
+      startingClothing: [],
     };
   }
 
@@ -202,14 +237,17 @@ describe("describeDeletion: what happens to the character sheets", () => {
       flags: [],
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
-      clothing: []
+      clothing: [],
     };
   }
 
   it("names the sheets a revert takes back with it", () => {
     const dir = tempDir();
     const { playthrough, ch2 } = buildStory(dir);
-    const plan = planRevert(playthrough, { kind: "chapter", chapterId: ch2.id });
+    const plan = planRevert(playthrough, {
+      kind: "chapter",
+      chapterId: ch2.id,
+    });
     const restoreId = plan?.restorePointMessageId;
     expect(restoreId).toBeTruthy();
 
@@ -218,37 +256,51 @@ describe("describeDeletion: what happens to the character sheets", () => {
       ...playthrough.snapshots,
       [restoreId as string]: {
         ...(playthrough.snapshots?.[restoreId as string] as TurnSnapshot),
-        characterTemplates: [sheet("[Personality]:\n- guarded")]
-      }
+        characterTemplates: [sheet("[Personality]:\n- guarded")],
+      },
     };
-    playthrough.characterTemplates = [sheet("[Personality]:\n- openly curious")];
+    playthrough.characterTemplates = [
+      sheet("[Personality]:\n- openly curious"),
+    ];
     playthrough.characters = [castMember()];
 
-    expect(describeDeletion(plan as NonNullable<typeof plan>, playthrough).sheetsRewound).toEqual(["Mika"]);
+    expect(
+      describeDeletion(plan as NonNullable<typeof plan>, playthrough)
+        .sheetsRewound,
+    ).toEqual(["Mika"]);
   });
 
   it("says nothing when the sheet is the one the restore point holds", () => {
     const dir = tempDir();
     const { playthrough, ch2 } = buildStory(dir);
-    const plan = planRevert(playthrough, { kind: "chapter", chapterId: ch2.id });
+    const plan = planRevert(playthrough, {
+      kind: "chapter",
+      chapterId: ch2.id,
+    });
     const restoreId = plan?.restorePointMessageId as string;
     playthrough.snapshots = {
       ...playthrough.snapshots,
       [restoreId]: {
         ...(playthrough.snapshots?.[restoreId] as TurnSnapshot),
-        characterTemplates: [sheet("[Personality]:\n- guarded")]
-      }
+        characterTemplates: [sheet("[Personality]:\n- guarded")],
+      },
     };
     playthrough.characterTemplates = [sheet("[Personality]:\n- guarded")];
     playthrough.characters = [castMember()];
 
-    expect(describeDeletion(plan as NonNullable<typeof plan>, playthrough).sheetsRewound).toEqual([]);
+    expect(
+      describeDeletion(plan as NonNullable<typeof plan>, playthrough)
+        .sheetsRewound,
+    ).toEqual([]);
   });
 
   it("says a sheet that did not exist at the restore point GOES instead of 'rewinding'", () => {
     const dir = tempDir();
     const { playthrough, ch2 } = buildStory(dir);
-    const plan = planRevert(playthrough, { kind: "chapter", chapterId: ch2.id });
+    const plan = planRevert(playthrough, {
+      kind: "chapter",
+      chapterId: ch2.id,
+    });
     const restoreId = plan?.restorePointMessageId as string;
     // The restore point's cast had no Mika at all — she was added later, so the revert takes her away.
     playthrough.snapshots = {
@@ -256,13 +308,18 @@ describe("describeDeletion: what happens to the character sheets", () => {
       [restoreId]: {
         ...(playthrough.snapshots?.[restoreId] as TurnSnapshot),
         characterTemplates: [],
-        characters: []
-      }
+        characters: [],
+      },
     };
-    playthrough.characterTemplates = [sheet("[Personality]:\n- openly curious")];
+    playthrough.characterTemplates = [
+      sheet("[Personality]:\n- openly curious"),
+    ];
     playthrough.characters = [castMember()];
 
-    const facts = describeDeletion(plan as NonNullable<typeof plan>, playthrough);
+    const facts = describeDeletion(
+      plan as NonNullable<typeof plan>,
+      playthrough,
+    );
     expect(facts.sheetsRemoved).toEqual(["Mika"]);
     expect(facts.sheetsRewound).toEqual([]);
   });
@@ -270,21 +327,27 @@ describe("describeDeletion: what happens to the character sheets", () => {
   it("says a sheet the restore point had comes back", () => {
     const dir = tempDir();
     const { playthrough, ch2 } = buildStory(dir);
-    const plan = planRevert(playthrough, { kind: "chapter", chapterId: ch2.id });
+    const plan = planRevert(playthrough, {
+      kind: "chapter",
+      chapterId: ch2.id,
+    });
     const restoreId = plan?.restorePointMessageId as string;
     playthrough.snapshots = {
       ...playthrough.snapshots,
       [restoreId]: {
         ...(playthrough.snapshots?.[restoreId] as TurnSnapshot),
         characterTemplates: [sheet("[Personality]:\n- guarded")],
-        characters: [castMember()]
-      }
+        characters: [castMember()],
+      },
     };
     // She is off the cast now, sheet and all.
     playthrough.characterTemplates = [];
     playthrough.characters = [];
 
-    const facts = describeDeletion(plan as NonNullable<typeof plan>, playthrough);
+    const facts = describeDeletion(
+      plan as NonNullable<typeof plan>,
+      playthrough,
+    );
     expect(facts.sheetsRestored).toEqual(["Mika"]);
     expect(facts.sheetsRewound).toEqual([]);
   });
@@ -292,11 +355,19 @@ describe("describeDeletion: what happens to the character sheets", () => {
   it("claims nothing without a snapshot — the sheets stay, and the dialog says so", () => {
     const dir = tempDir();
     const { playthrough, ch2 } = buildStory(dir, { snapshots: false });
-    const plan = planRevert(playthrough, { kind: "chapter", chapterId: ch2.id });
-    playthrough.characterTemplates = [sheet("[Personality]:\n- openly curious")];
+    const plan = planRevert(playthrough, {
+      kind: "chapter",
+      chapterId: ch2.id,
+    });
+    playthrough.characterTemplates = [
+      sheet("[Personality]:\n- openly curious"),
+    ];
     playthrough.characters = [castMember()];
 
-    const facts = describeDeletion(plan as NonNullable<typeof plan>, playthrough);
+    const facts = describeDeletion(
+      plan as NonNullable<typeof plan>,
+      playthrough,
+    );
     expect(facts.sheetsRewound).toEqual([]);
     expect(facts.approximate).toBe(true);
   });
@@ -307,7 +378,10 @@ describe("planRevert", () => {
     const dir = tempDir();
     const { playthrough, ch1, ch2, ids } = buildStory(dir);
 
-    const plan = planRevert(playthrough, { kind: "chapter", chapterId: ch2.id });
+    const plan = planRevert(playthrough, {
+      kind: "chapter",
+      chapterId: ch2.id,
+    });
     expect(plan).not.toBeNull();
     if (!plan) return;
 
@@ -323,7 +397,10 @@ describe("planRevert", () => {
     expect(plan.currentChapterStartedAtTurn).toBe(5);
     expect(plan.keptTailTurn).toBe(9);
 
-    const plan1 = planRevert(playthrough, { kind: "chapter", chapterId: ch1.id });
+    const plan1 = planRevert(playthrough, {
+      kind: "chapter",
+      chapterId: ch1.id,
+    });
     expect(plan1?.truncationIndex).toBe(8);
     expect(plan1?.droppedChapterIds).toEqual([ch1.id, ch2.id]);
     expect(plan1?.unarchivedChapterIds).toEqual([ch1.id]);
@@ -334,11 +411,16 @@ describe("planRevert", () => {
     const dir = tempDir();
     const { playthrough, ch2, ids } = buildStory(dir);
 
-    const plan = planRevert(playthrough, { kind: "message", messageId: ids.ch2LastAssistant });
+    const plan = planRevert(playthrough, {
+      kind: "message",
+      messageId: ids.ch2LastAssistant,
+    });
     expect(plan).not.toBeNull();
     if (!plan) return;
 
-    expect(playthrough.messages[plan.truncationIndex].id).toBe(ids.ch2LastAssistant);
+    expect(playthrough.messages[plan.truncationIndex].id).toBe(
+      ids.ch2LastAssistant,
+    );
     // The clicked response is the first assistant in the deleted block: the world returns to
     // before it, which is the state right after the previous response.
     expect(plan.restorePointMessageId).toBe(ids.ch2LastAssistant);
@@ -352,7 +434,10 @@ describe("planRevert", () => {
     const dir = tempDir();
     const { playthrough, ch2, ids } = buildStory(dir);
 
-    const plan = planRevert(playthrough, { kind: "message", messageId: ids.ch2OpeningAssistant });
+    const plan = planRevert(playthrough, {
+      kind: "message",
+      messageId: ids.ch2OpeningAssistant,
+    });
     expect(plan).not.toBeNull();
     if (!plan) return;
 
@@ -367,17 +452,29 @@ describe("planRevert", () => {
     const dir = tempDir();
     const { playthrough, ids } = buildStory(dir);
 
-    expect(planRevert(playthrough, { kind: "chapter", chapterId: "ch_nope" })).toBeNull();
-    expect(planRevert(playthrough, { kind: "message", messageId: "msg_nope" })).toBeNull();
+    expect(
+      planRevert(playthrough, { kind: "chapter", chapterId: "ch_nope" }),
+    ).toBeNull();
+    expect(
+      planRevert(playthrough, { kind: "message", messageId: "msg_nope" }),
+    ).toBeNull();
     // A live response is the live chat's own delete, never a revert.
-    expect(planRevert(playthrough, { kind: "message", messageId: ids.ch3LastAssistant })).toBeNull();
+    expect(
+      planRevert(playthrough, {
+        kind: "message",
+        messageId: ids.ch3LastAssistant,
+      }),
+    ).toBeNull();
   });
 
   it("counts what the confirm dialog shows", () => {
     const dir = tempDir();
     const { playthrough, ch2 } = buildStory(dir);
 
-    const plan = planRevert(playthrough, { kind: "chapter", chapterId: ch2.id });
+    const plan = planRevert(playthrough, {
+      kind: "chapter",
+      chapterId: ch2.id,
+    });
     expect(plan).not.toBeNull();
     if (!plan) return;
 
@@ -395,9 +492,15 @@ describe("planRevert", () => {
     // One file shared by a surviving message and a discarded one, one that only the cut holds.
     // Index 1 survives a revert to chapter 2; the cut starts at 18 (chapter 3's opening).
     playthrough.messages[1].images = [image("shared.png")];
-    playthrough.messages[19].images = [image("shared.png"), image("doomed.png")];
+    playthrough.messages[19].images = [
+      image("shared.png"),
+      image("doomed.png"),
+    ];
 
-    const plan = planRevert(playthrough, { kind: "chapter", chapterId: ch2.id });
+    const plan = planRevert(playthrough, {
+      kind: "chapter",
+      chapterId: ch2.id,
+    });
     expect(plan).not.toBeNull();
     if (!plan) return;
 
@@ -409,7 +512,10 @@ describe("planRevert", () => {
     const dir = tempDir();
     const { playthrough, ch2 } = buildStory(dir, { snapshots: false });
 
-    const plan = planRevert(playthrough, { kind: "chapter", chapterId: ch2.id });
+    const plan = planRevert(playthrough, {
+      kind: "chapter",
+      chapterId: ch2.id,
+    });
     expect(plan?.approximate).toBe(true);
   });
 });
@@ -419,9 +525,13 @@ describe("planDeletion and the retry anchor", () => {
     const dir = tempDir();
     const { playthrough, ids } = buildStory(dir);
 
-    expect(retryAnchorMessageId(playthrough, ids.ch3LastAssistant)).toBe("msg_u12");
+    expect(retryAnchorMessageId(playthrough, ids.ch3LastAssistant)).toBe(
+      "msg_u12",
+    );
     // A chapter opening's response anchors on its hidden instruction — the message a retry re-runs.
-    expect(retryAnchorMessageId(playthrough, ids.ch3OpeningAssistant)).toBe(ids.ch3OpeningUser);
+    expect(retryAnchorMessageId(playthrough, ids.ch3OpeningAssistant)).toBe(
+      ids.ch3OpeningUser,
+    );
     expect(retryAnchorMessageId(playthrough, "msg_nope")).toBeNull();
     // Only a RESPONSE has a user message before it. Asking about a user message is a caller bug, and
     // the answer must be "nothing" rather than the previous turn's message.
@@ -433,7 +543,12 @@ describe("planDeletion and the retry anchor", () => {
     const { playthrough, ids } = buildStory(dir);
 
     // The live chat's own delete is not a revert anchor…
-    expect(planRevert(playthrough, { kind: "message", messageId: ids.ch3LastAssistant })).toBeNull();
+    expect(
+      planRevert(playthrough, {
+        kind: "message",
+        messageId: ids.ch3LastAssistant,
+      }),
+    ).toBeNull();
 
     // …but it is exactly what a retry deletes: the user message, the response, and everything after.
     const anchorId = retryAnchorMessageId(playthrough, ids.ch3LastAssistant);
@@ -445,7 +560,10 @@ describe("planDeletion and the retry anchor", () => {
     expect(plan?.approximate).toBe(false);
 
     // The count the dialog shows is the count that goes — and a retry drops no chapter record.
-    const facts = describeDeletion(plan as NonNullable<typeof plan>, playthrough);
+    const facts = describeDeletion(
+      plan as NonNullable<typeof plan>,
+      playthrough,
+    );
     expect(facts.messages).toBe(playthrough.messages.length - 22);
     expect(facts.chapters).toBe(0);
     expect(facts.turns).toBe(1);
@@ -456,7 +574,9 @@ describe("planDeletion and the retry anchor", () => {
     const { playthrough, ids } = buildStory(dir, { snapshots: false });
 
     const anchorId = retryAnchorMessageId(playthrough, ids.ch3LastAssistant);
-    expect(planDeletion(playthrough, anchorId as string)?.approximate).toBe(true);
+    expect(planDeletion(playthrough, anchorId as string)?.approximate).toBe(
+      true,
+    );
   });
 
   it("folds a dangling synthetic instruction into the cut", () => {
@@ -471,7 +591,9 @@ describe("planDeletion and the retry anchor", () => {
     // cut: both paths land on the same index, which is the point of sharing the walk.
     const anchorId = retryAnchorMessageId(playthrough, "msg_a3");
     expect(anchorId).toBe("msg_u3");
-    expect(planDeletion(playthrough, anchorId as string)?.truncationIndex).toBe(4);
+    expect(planDeletion(playthrough, anchorId as string)?.truncationIndex).toBe(
+      4,
+    );
   });
 });
 
@@ -480,18 +602,25 @@ describe("revertAction", () => {
     const dir = tempDir();
     const { playthrough, ch1, ch2, ids } = buildStory(dir);
 
-    const result = revertAction(dir, playthrough.id, { kind: "chapter", chapterId: ch2.id });
+    const result = revertAction(dir, playthrough.id, {
+      kind: "chapter",
+      chapterId: ch2.id,
+    });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const state: Playthrough = result.state;
 
     // Everything from the running chapter's opening is gone.
     expect(state.messages).toHaveLength(18);
-    expect(state.messages.some((message) => message.id === ids.ch3OpeningUser)).toBe(false);
+    expect(
+      state.messages.some((message) => message.id === ids.ch3OpeningUser),
+    ).toBe(false);
 
     // The world is as chapter 2 left it — captured by the following chapter's opening snapshot,
     // which is why the close's own effects are part of it.
-    expect(state.worldState).toEqual([{ id: "ws_ch2", name: "after-ch2", description: "" }]);
+    expect(state.worldState).toEqual([
+      { id: "ws_ch2", name: "after-ch2", description: "" },
+    ]);
     expect(state.turn).toBe(9);
 
     // Chapter 2 is un-closed: its messages are live, its record and summary are gone.
@@ -503,19 +632,27 @@ describe("revertAction", () => {
       expect(message.hidden).toBeFalsy();
     }
     // Chapter 1 stays archived.
-    const archived = state.messages.filter((message) => message.chapterId === ch1.id);
+    const archived = state.messages.filter(
+      (message) => message.chapterId === ch1.id,
+    );
     expect(archived).toHaveLength(7);
 
     // The synthetic instruction inside chapter 1 was never tagged, so it stays hidden.
-    expect(state.messages.find((message) => message.id === ids.ch1Synthetic)?.hidden).toBe(true);
+    expect(
+      state.messages.find((message) => message.id === ids.ch1Synthetic)?.hidden,
+    ).toBe(true);
 
     // The meta lost chapter 2's id but kept chapter 1's, so it survives.
     expect(state.storyMetaSummaries).toHaveLength(1);
     expect(state.storyMetaSummaries[0].chapterIds).toEqual([ch1.id]);
 
     // The surviving event of a dropped chapter belongs to the running chapter now.
-    expect(state.memoryEvents.find((event) => event.id === "evt_ch2")?.chapterId).toBeUndefined();
-    expect(state.memoryEvents.some((event) => event.id === "evt_ch3")).toBe(false);
+    expect(
+      state.memoryEvents.find((event) => event.id === "evt_ch2")?.chapterId,
+    ).toBeUndefined();
+    expect(state.memoryEvents.some((event) => event.id === "evt_ch3")).toBe(
+      false,
+    );
 
     // Snapshots of the deleted messages are gone; the kept ones are intact.
     expect(state.snapshots?.[ids.ch3OpeningAssistant]).toBeUndefined();
@@ -526,7 +663,10 @@ describe("revertAction", () => {
     const dir = tempDir();
     const { playthrough, ch1, ids } = buildStory(dir);
 
-    const result = revertAction(dir, playthrough.id, { kind: "chapter", chapterId: ch1.id });
+    const result = revertAction(dir, playthrough.id, {
+      kind: "chapter",
+      chapterId: ch1.id,
+    });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const state = result.state;
@@ -535,12 +675,18 @@ describe("revertAction", () => {
     expect(state.chapters).toEqual([]);
     expect(state.currentChapterStartedAtTurn).toBe(1);
     expect(state.turn).toBe(4);
-    expect(state.worldState).toEqual([{ id: "ws_ch1", name: "after-ch1", description: "" }]);
+    expect(state.worldState).toEqual([
+      { id: "ws_ch1", name: "after-ch1", description: "" },
+    ]);
     // Every folded chapter went, so the meta has nothing left to say.
     expect(state.storyMetaSummaries).toEqual([]);
     // Chapter 1's own run is live again, its summary gone.
-    expect(state.messages.every((message) => message.chapterId === undefined)).toBe(true);
-    expect(state.messages.find((message) => message.id === ids.ch1Synthetic)?.hidden).toBe(true);
+    expect(
+      state.messages.every((message) => message.chapterId === undefined),
+    ).toBe(true);
+    expect(
+      state.messages.find((message) => message.id === ids.ch1Synthetic)?.hidden,
+    ).toBe(true);
     expect(state.memoryEvents.map((event) => event.id)).toEqual(["evt_ch1"]);
     expect(state.memoryEvents[0].chapterId).toBeUndefined();
   });
@@ -549,7 +695,10 @@ describe("revertAction", () => {
     const dir = tempDir();
     const { playthrough, ch1, ch2, ids } = buildStory(dir);
 
-    const result = revertAction(dir, playthrough.id, { kind: "message", messageId: ids.ch2LastAssistant });
+    const result = revertAction(dir, playthrough.id, {
+      kind: "message",
+      messageId: ids.ch2LastAssistant,
+    });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const state = result.state;
@@ -561,18 +710,27 @@ describe("revertAction", () => {
     // The restore point is the clicked response's own snapshot: the state before its turn. The
     // counter stays at the surviving message's turn so the next turn cannot reuse its number.
     expect(state.turn).toBe(9);
-    expect(state.worldState).toEqual([{ id: "ws_ch1", name: "after-ch1", description: "" }]);
+    expect(state.worldState).toEqual([
+      { id: "ws_ch1", name: "after-ch1", description: "" },
+    ]);
     // Its chapter is un-closed and every later chapter is gone.
     expect(state.chapters.map((chapter) => chapter.id)).toEqual([ch1.id]);
     expect(state.currentChapterStartedAtTurn).toBe(5);
-    expect(state.messages.filter((message) => message.chapterId === ch2.id)).toEqual([]);
+    expect(
+      state.messages.filter((message) => message.chapterId === ch2.id),
+    ).toEqual([]);
   });
 
   it("reverts without a snapshot: history and chapters go, the world stays, and it says so", () => {
     const dir = tempDir();
-    const { playthrough, ch1, ch2, ids } = buildStory(dir, { snapshots: false });
+    const { playthrough, ch1, ch2, ids } = buildStory(dir, {
+      snapshots: false,
+    });
 
-    const result = revertAction(dir, playthrough.id, { kind: "chapter", chapterId: ch2.id });
+    const result = revertAction(dir, playthrough.id, {
+      kind: "chapter",
+      chapterId: ch2.id,
+    });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const state = result.state;
@@ -582,11 +740,17 @@ describe("revertAction", () => {
     expect(state.currentChapterStartedAtTurn).toBe(5);
     // No rewind happened — and the turn counter still moves back to the kept tail, so the next
     // turn does not claim turns that no longer exist.
-    expect(state.worldState).toEqual([{ id: "ws_ch2", name: "after-ch2", description: "" }]);
+    expect(state.worldState).toEqual([
+      { id: "ws_ch2", name: "after-ch2", description: "" },
+    ]);
     expect(state.turn).toBe(9);
     // Memory the deleted turns recorded is pruned by turn, since no snapshot could replace it.
-    expect(state.memoryEvents.some((event) => event.id === "evt_ch3")).toBe(false);
-    expect(state.memoryEvents.find((event) => event.id === "evt_ch2")?.chapterId).toBeUndefined();
+    expect(state.memoryEvents.some((event) => event.id === "evt_ch3")).toBe(
+      false,
+    );
+    expect(
+      state.memoryEvents.find((event) => event.id === "evt_ch2")?.chapterId,
+    ).toBeUndefined();
     expect(state.snapshots).toEqual({});
   });
 
@@ -594,7 +758,10 @@ describe("revertAction", () => {
     const dir = tempDir();
     const { playthrough, ids } = buildStory(dir);
 
-    const result = revertAction(dir, playthrough.id, { kind: "message", messageId: ids.ch3LastAssistant });
+    const result = revertAction(dir, playthrough.id, {
+      kind: "message",
+      messageId: ids.ch3LastAssistant,
+    });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.status).toBe(400);
@@ -614,16 +781,25 @@ describe("the body the client sends is the body the route accepts", () => {
   it("validates the wire anchor for both kinds against the route's own schema", () => {
     for (const target of [
       { kind: "chapter" as const, id: "ch_1", label: "The First Volume" },
-      { kind: "message" as const, id: "msg_a9", label: "a response" }
+      { kind: "message" as const, id: "msg_a9", label: "a response" },
     ]) {
-      const parsed = RevertBody.safeParse({ anchor: toRevertRequestAnchor(target) });
+      const parsed = RevertBody.safeParse({
+        anchor: toRevertRequestAnchor(target),
+      });
       expect(parsed.success).toBe(true);
-      expect(parsed.success && parsed.data.anchor).toEqual({ kind: target.kind, id: target.id });
+      expect(parsed.success && parsed.data.anchor).toEqual({
+        kind: target.kind,
+        id: target.id,
+      });
     }
   });
 
   it("rejects the engine's own anchor shape — the bug these two types exist to prevent", () => {
-    const engineAnchor = toRevertAnchor({ kind: "chapter", id: "ch_1", label: "The First Volume" });
+    const engineAnchor = toRevertAnchor({
+      kind: "chapter",
+      id: "ch_1",
+      label: "The First Volume",
+    });
     expect(engineAnchor).toEqual({ kind: "chapter", chapterId: "ch_1" });
     // Falsification: shipping the engine shape over the wire is precisely the 400 users hit.
     const parsed = RevertBody.safeParse({ anchor: engineAnchor });
@@ -647,7 +823,7 @@ describe("POST /api/playthroughs/:id/revert", () => {
     const response = await app.inject({
       method: "POST",
       url: `/api/playthroughs/${playthrough.id}/revert`,
-      payload: { anchor: { kind: "chapter", id: ch2.id } }
+      payload: { anchor: { kind: "chapter", id: ch2.id } },
     });
 
     expect(response.statusCode).toBe(200);
@@ -665,7 +841,7 @@ describe("POST /api/playthroughs/:id/revert", () => {
     const bad = await app.inject({
       method: "POST",
       url: `/api/playthroughs/${playthrough.id}/revert`,
-      payload: { anchor: { kind: "chapter" } }
+      payload: { anchor: { kind: "chapter" } },
     });
     expect(bad.statusCode).toBe(400);
     expect(bad.json().error).toContain("Invalid revert request");
@@ -673,7 +849,7 @@ describe("POST /api/playthroughs/:id/revert", () => {
     const wrongKind = await app.inject({
       method: "POST",
       url: `/api/playthroughs/${playthrough.id}/revert`,
-      payload: { anchor: { kind: "turn", id: "x" } }
+      payload: { anchor: { kind: "turn", id: "x" } },
     });
     expect(wrongKind.statusCode).toBe(400);
     await app.close();
@@ -687,7 +863,7 @@ describe("POST /api/playthroughs/:id/revert", () => {
     const response = await app.inject({
       method: "POST",
       url: `/api/playthroughs/${playthrough.id}/revert`,
-      payload: { anchor: { kind: "message", id: ids.ch3LastAssistant } }
+      payload: { anchor: { kind: "message", id: ids.ch3LastAssistant } },
     });
 
     expect(response.statusCode).toBe(400);
@@ -703,14 +879,14 @@ describe("POST /api/playthroughs/:id/revert", () => {
     const missing = await app.inject({
       method: "POST",
       url: "/api/playthroughs/play_nope/revert",
-      payload: { anchor: { kind: "chapter", id: "ch_1" } }
+      payload: { anchor: { kind: "chapter", id: "ch_1" } },
     });
     expect(missing.statusCode).toBe(404);
 
     const unknownChapter = await app.inject({
       method: "POST",
       url: `/api/playthroughs/${playthrough.id}/revert`,
-      payload: { anchor: { kind: "chapter", id: "ch_nope" } }
+      payload: { anchor: { kind: "chapter", id: "ch_nope" } },
     });
     expect(unknownChapter.statusCode).toBe(400);
     await app.close();

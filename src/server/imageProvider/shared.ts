@@ -4,7 +4,7 @@
 export const MIME_BY_EXT: Record<string, string> = {
   png: "image/png",
   jpg: "image/jpeg",
-  webp: "image/webp"
+  webp: "image/webp",
 };
 
 /** Clamp to the endpoint's character cap. The compat endpoint 400s above 1500,
@@ -14,13 +14,17 @@ export function clampChars(text: string, limit: number): string {
 }
 
 /** "1024x1024" → dims; "auto"/absent/invalid → null. */
-export function parseSize(size?: string): { width: number; height: number } | null {
+export function parseSize(
+  size?: string,
+): { width: number; height: number } | null {
   if (!size || size === "auto") return null;
   const m = /^(\d{2,5})x(\d{2,5})$/.exec(size);
   return m ? { width: Number(m[1]), height: Number(m[2]) } : null;
 }
 
-const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const PNG_SIGNATURE = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+]);
 
 /** Magic-byte sniff, falling back to png (the format both dialects are asked
  *  for by default, so the fallback is the common truth). */
@@ -60,14 +64,19 @@ export function composePrompt(prefix: string, body: string): string {
  *  Two shapes, because the dialects disagree: `model` on the OpenAI-compatible
  *  and Venice bodies, `override_settings.sd_model_checkpoint` on a1111's (which
  *  pins the checkpoint for ONE request and carries no `model` field at all). */
-export function modelFromRawBody(rawBody: Record<string, unknown> | undefined): string | undefined {
+export function modelFromRawBody(
+  rawBody: Record<string, unknown> | undefined,
+): string | undefined {
   if (!rawBody) return undefined;
   const direct = rawBody.model;
   if (typeof direct === "string" && direct.trim()) return direct.trim();
   const settings = rawBody.override_settings;
   if (!settings || typeof settings !== "object") return undefined;
-  const checkpoint = (settings as { sd_model_checkpoint?: unknown }).sd_model_checkpoint;
-  return typeof checkpoint === "string" && checkpoint.trim() ? checkpoint.trim() : undefined;
+  const checkpoint = (settings as { sd_model_checkpoint?: unknown })
+    .sd_model_checkpoint;
+  return typeof checkpoint === "string" && checkpoint.trim()
+    ? checkpoint.trim()
+    : undefined;
 }
 
 // ── Forge Couple detection ──────────────────────────────────────────────────
@@ -99,7 +108,10 @@ export type ForgeCoupleDetection = {
 
 /** Per base URL, including NEGATIVE answers: a WebUI without the extension is
  *  the common case and must not be asked again on every generation. */
-const forgeCoupleCache = new Map<string, { until: number; value: ForgeCoupleDetection }>();
+const forgeCoupleCache = new Map<
+  string,
+  { until: number; value: ForgeCoupleDetection }
+>();
 
 /** Tests only: this cache lives for the life of the process, so a test must not
  *  inherit another test's answer. */
@@ -125,7 +137,7 @@ export async function detectForgeCouple(
     fetchImpl?: typeof fetch;
     headers?: Record<string, string>;
     now?: () => number;
-  } = {}
+  } = {},
 ): Promise<ForgeCoupleDetection> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const now = options.now ?? Date.now;
@@ -141,7 +153,7 @@ export async function detectForgeCouple(
 async function probeForgeCouple(
   base: string,
   headers: Record<string, string>,
-  fetchImpl: typeof fetch
+  fetchImpl: typeof fetch,
 ): Promise<ForgeCoupleDetection> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FORGE_COUPLE_TIMEOUT_MS);
@@ -149,11 +161,13 @@ async function probeForgeCouple(
     const res = await fetchImpl(`${base}/sdapi/v1/script-info`, {
       method: "GET",
       headers,
-      signal: controller.signal
+      signal: controller.signal,
     });
     if (!res.ok) return { detected: false };
     const title = forgeCoupleTitle(await res.text());
-    return title === undefined ? { detected: false } : { detected: true, title };
+    return title === undefined
+      ? { detected: false }
+      : { detected: true, title };
   } catch {
     return { detected: false };
   } finally {

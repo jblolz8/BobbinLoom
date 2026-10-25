@@ -5,8 +5,8 @@ export async function request<T>(url: string, init?: RequestInit): Promise<T> {
     headers: {
       // Only declare JSON when sending a body (Fastify rejects empty body with JSON header)
       ...(hasBody ? { "Content-Type": "application/json" } : {}),
-      ...init?.headers
-    }
+      ...init?.headers,
+    },
   });
 
   const text = await response.text();

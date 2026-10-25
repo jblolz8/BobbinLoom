@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import type { AutoScrollBehavior, ChatMessage, ImageApiStyle, ImageInstructionMode, Playthrough } from "../../schemas";
+import type {
+  AutoScrollBehavior,
+  ChatMessage,
+  ImageApiStyle,
+  ImageInstructionMode,
+  Playthrough,
+} from "../../schemas";
 import {
   adoptLocalPreferences,
   CHAT_PREFERENCE_DEFAULTS,
@@ -25,10 +31,16 @@ import {
   updateViewPreferences,
   type ImageGenerationProgress,
   type WorldStateAction,
-  type TokenUsage
+  type TokenUsage,
 } from "../api";
-import { checkImageRequestBody, formatImageRequestBody } from "../utils/imageRequestBody";
-import { toRevertRequestAnchor, type RevertTarget } from "../../engine/chapterRevert";
+import {
+  checkImageRequestBody,
+  formatImageRequestBody,
+} from "../utils/imageRequestBody";
+import {
+  toRevertRequestAnchor,
+  type RevertTarget,
+} from "../../engine/chapterRevert";
 
 const DRAFT_KEY_PREFIX = "bobbinloom_draft_";
 
@@ -42,7 +54,11 @@ const CONTINUE_INSTRUCTION =
 /** One generated image queued for removal: the thumbnail's X sets it, PlayView's
  *  ConfirmModal renders it, `confirmDeleteImage` consumes it. `prompt` is only the
  *  preview's alt text — the content-addressed file name is the identity. */
-export type DeleteImageTarget = { messageId: string; file: string; prompt: string };
+export type DeleteImageTarget = {
+  messageId: string;
+  file: string;
+  prompt: string;
+};
 
 function draftKey(playthroughId: string): string {
   return `${DRAFT_KEY_PREFIX}${playthroughId}`;
@@ -172,12 +188,18 @@ const IMAGE_PROGRESS_POLL_MS = 700;
  * Never throws: a failed registry read means "unknown dialect", which costs the
  * dialect-specific extras (the estimate and the progress poll) and nothing else.
  */
-async function resolveImageConnection(overrideId?: string): Promise<ResolvedImageConnection | null> {
+async function resolveImageConnection(
+  overrideId?: string,
+): Promise<ResolvedImageConnection | null> {
   try {
     const registry = await listProviderConnections();
-    const imageConnections = registry.connections.filter((c) => c.kind === "image");
+    const imageConnections = registry.connections.filter(
+      (c) => c.kind === "image",
+    );
     const active =
-      (overrideId ? imageConnections.find((c) => c.id === overrideId) : undefined) ??
+      (overrideId
+        ? imageConnections.find((c) => c.id === overrideId)
+        : undefined) ??
       imageConnections.find((c) => c.id === registry.activeImageProviderId) ??
       imageConnections[0] ??
       null;
@@ -197,7 +219,7 @@ function toResolvedImageConnection(connection: {
     id: connection.id,
     label: connection.label,
     model: connection.model,
-    apiStyle: connection.apiStyle ?? "openai"
+    apiStyle: connection.apiStyle ?? "openai",
   };
 }
 
@@ -216,23 +238,30 @@ function toResolvedImageConnection(connection: {
  * owner to miss, and the active connection is the only reading the server has
  * either.
  */
-async function resolveImageOwner(providerId: string | undefined): Promise<ResolvedImageConnection | null> {
+async function resolveImageOwner(
+  providerId: string | undefined,
+): Promise<ResolvedImageConnection | null> {
   if (!providerId) return resolveImageConnection();
   try {
     const registry = await listProviderConnections();
-    const owner = registry.connections.find((c) => c.id === providerId && c.kind === "image");
+    const owner = registry.connections.find(
+      (c) => c.id === providerId && c.kind === "image",
+    );
     return owner ? toResolvedImageConnection(owner) : null;
   } catch {
     return null;
   }
 }
 
-function readLocalDraft(playthroughId: string): { text: string; at: number } | null {
+function readLocalDraft(
+  playthroughId: string,
+): { text: string; at: number } | null {
   try {
     const raw = localStorage.getItem(draftKey(playthroughId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { text?: unknown; at?: unknown };
-    if (typeof parsed.text !== "string" || typeof parsed.at !== "number") return null;
+    if (typeof parsed.text !== "string" || typeof parsed.at !== "number")
+      return null;
     return { text: parsed.text, at: parsed.at };
   } catch {
     return null;
@@ -241,10 +270,16 @@ function readLocalDraft(playthroughId: string): { text: string; at: number } | n
 
 /** Persists the draft to both copies: localStorage (immediate) and the server
  *  record (fire-and-forget; failures are fine — the local copy covers). */
-async function persistDraft(playthroughId: string, text: string): Promise<void> {
+async function persistDraft(
+  playthroughId: string,
+  text: string,
+): Promise<void> {
   try {
     if (text) {
-      localStorage.setItem(draftKey(playthroughId), JSON.stringify({ text, at: Date.now() }));
+      localStorage.setItem(
+        draftKey(playthroughId),
+        JSON.stringify({ text, at: Date.now() }),
+      );
     } else {
       localStorage.removeItem(draftKey(playthroughId));
     }
@@ -257,11 +292,16 @@ async function persistDraft(playthroughId: string, text: string): Promise<void> 
 }
 
 /** Newer-wins resolution between the local and server draft copies. */
-function resolveDraft(playthrough: Playthrough | null): { text: string; localWins: boolean } {
+function resolveDraft(playthrough: Playthrough | null): {
+  text: string;
+  localWins: boolean;
+} {
   if (!playthrough) return { text: "", localWins: false };
   const local = readLocalDraft(playthrough.id);
   const serverText = playthrough.draft ?? "";
-  const serverAt = playthrough.draftUpdatedAt ? new Date(playthrough.draftUpdatedAt).getTime() : 0;
+  const serverAt = playthrough.draftUpdatedAt
+    ? new Date(playthrough.draftUpdatedAt).getTime()
+    : 0;
   if (local) {
     return local.at > serverAt
       ? { text: local.text, localWins: true }
@@ -273,7 +313,9 @@ function resolveDraft(playthrough: Playthrough | null): { text: string; localWin
 export function usePlaythrough() {
   const [playthrough, setPlaythrough] = useState<Playthrough | null>(null);
   const [input, setInput] = useState("");
-  const [chatSettings, setChatSettingsState] = useState<ChatSettings>(CHAT_PREFERENCE_DEFAULTS);
+  const [chatSettings, setChatSettingsState] = useState<ChatSettings>(
+    CHAT_PREFERENCE_DEFAULTS,
+  );
 
   // The chat toggles live on the server now, so this is a read — adopting anything still on the device
   // first — rather than a localStorage parse. Defaults paint immediately and the read replaces them,
@@ -315,58 +357,84 @@ export function usePlaythrough() {
   const alwaysDiscardOldImage = chatSettings.alwaysDiscardOldImage;
   const autoScrollBehavior = chatSettings.autoScrollBehavior;
 
-  const setChoicesEnabled = (val: boolean) => setChatSetting({ choicesEnabled: val });
+  const setChoicesEnabled = (val: boolean) =>
+    setChatSetting({ choicesEnabled: val });
 
-  const setAutoImageAfterTurn = (val: boolean) => setChatSetting({ autoImageAfterTurn: val });
+  const setAutoImageAfterTurn = (val: boolean) =>
+    setChatSetting({ autoImageAfterTurn: val });
 
   const setShowDebug = (val: boolean) => setChatSetting({ showDebug: val });
 
-  const setShowContextUsage = (val: boolean) => setChatSetting({ showContextUsage: val });
+  const setShowContextUsage = (val: boolean) =>
+    setChatSetting({ showContextUsage: val });
 
-  const setShowGenerationTime = (val: boolean) => setChatSetting({ showGenerationTime: val });
+  const setShowGenerationTime = (val: boolean) =>
+    setChatSetting({ showGenerationTime: val });
 
-  const setShowMessageTimestamps = (val: boolean) => setChatSetting({ showMessageTimestamps: val });
+  const setShowMessageTimestamps = (val: boolean) =>
+    setChatSetting({ showMessageTimestamps: val });
 
-  const setShowModelName = (val: boolean) => setChatSetting({ showModelName: val });
+  const setShowModelName = (val: boolean) =>
+    setChatSetting({ showModelName: val });
 
-  const setShowMessageNumbers = (val: boolean) => setChatSetting({ showMessageNumbers: val });
+  const setShowMessageNumbers = (val: boolean) =>
+    setChatSetting({ showMessageNumbers: val });
 
-  const setImagePromptPreview = (val: boolean) => setChatSetting({ imagePromptPreview: val });
+  const setImagePromptPreview = (val: boolean) =>
+    setChatSetting({ imagePromptPreview: val });
 
-  const setAlwaysDiscardOldImage = (val: boolean) => setChatSetting({ alwaysDiscardOldImage: val });
+  const setAlwaysDiscardOldImage = (val: boolean) =>
+    setChatSetting({ alwaysDiscardOldImage: val });
 
-  const setAutoScrollBehavior = (val: AutoScrollBehavior) => setChatSetting({ autoScrollBehavior: val });
+  const setAutoScrollBehavior = (val: AutoScrollBehavior) =>
+    setChatSetting({ autoScrollBehavior: val });
   const [choices, setChoices] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastPatchInfo, setLastPatchInfo] = useState<{ applied: string[]; rejected: string[]; warnings: string[] }>({
+  const [lastPatchInfo, setLastPatchInfo] = useState<{
+    applied: string[];
+    rejected: string[];
+    warnings: string[];
+  }>({
     applied: [],
     rejected: [],
-    warnings: []
+    warnings: [],
   });
   const [sendingMessage, setSendingMessage] = useState<string | null>(null);
   const [cancelledNotice, setCancelledNotice] = useState<string | null>(null);
-  const [failedNotice, setFailedNotice] = useState<FailedResponseNotice | null>(null);
+  const [failedNotice, setFailedNotice] = useState<FailedResponseNotice | null>(
+    null,
+  );
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // ── Generated images (per message) ──
   // One message at a time: the id of the message whose image (or whose prompt)
   // is in flight drives the ChatPanel footer, and one abort ref covers both
   // requests, so "Cancel" always kills whichever call is running.
-  const [imageGeneratingId, setImageGeneratingId] = useState<string | null>(null);
+  const [imageGeneratingId, setImageGeneratingId] = useState<string | null>(
+    null,
+  );
   /** When each in-flight phase began, for the live counters. Set ONCE per phase
    *  and never derived from the ids beside them: `imageProgress` lands every
    *  700ms (and the prompt/response state flips more often than that), so a
    *  derived clock would restart on every update. */
-  const [imagePromptStartedAt, setImagePromptStartedAt] = useState<number | null>(null);
-  const [imageGeneratingStartedAt, setImageGeneratingStartedAt] = useState<number | null>(null);
-  const [imagePreviewMessageId, setImagePreviewMessageId] = useState<string | null>(null);
+  const [imagePromptStartedAt, setImagePromptStartedAt] = useState<
+    number | null
+  >(null);
+  const [imageGeneratingStartedAt, setImageGeneratingStartedAt] = useState<
+    number | null
+  >(null);
+  const [imagePreviewMessageId, setImagePreviewMessageId] = useState<
+    string | null
+  >(null);
   const [imageDeletingId, setImageDeletingId] = useState<string | null>(null);
-  const [imagePromptRequest, setImagePromptRequest] = useState<ImagePromptRequest | null>(null);
+  const [imagePromptRequest, setImagePromptRequest] =
+    useState<ImagePromptRequest | null>(null);
   const imageAbortRef = useRef<AbortController | null>(null);
   // Live sampling progress while an a1111 generation renders. `null` reads as
   // "nothing to show" — only a dialect that can report progress ever fills it.
-  const [imageProgress, setImageProgress] = useState<ImageGenerationProgress | null>(null);
+  const [imageProgress, setImageProgress] =
+    useState<ImageGenerationProgress | null>(null);
   const imageProgressStopRef = useRef<(() => void) | null>(null);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
   const [rawInput, setRawInput] = useState<string | null>(null);
@@ -377,24 +445,33 @@ export function usePlaythrough() {
   const [retryTarget, setRetryTarget] = useState<ChatMessage | null>(null);
   /** The response a retry is replacing, while it is in flight. In-flight UI only: nothing is
    *  persisted and a reload forgets it — the same way `sendingMessage` behaves. */
-  const [retryingTarget, setRetryingTarget] = useState<{ messageId: string } | null>(null);
-  const [truncateTarget, setTruncateTarget] = useState<ChatMessage | null>(null);
+  const [retryingTarget, setRetryingTarget] = useState<{
+    messageId: string;
+  } | null>(null);
+  const [truncateTarget, setTruncateTarget] = useState<ChatMessage | null>(
+    null,
+  );
   // The pending revert (a chapter, or an archived response). The dialog derives its numbers from
   // the plan itself, so what is stored here is only the anchor and how to name it.
   const [revertTarget, setRevertTarget] = useState<RevertTarget | null>(null);
   const [branchTarget, setBranchTarget] = useState<ChatMessage | null>(null);
-  const [deleteImageTarget, setDeleteImageTarget] = useState<DeleteImageTarget | null>(null);
+  const [deleteImageTarget, setDeleteImageTarget] =
+    useState<DeleteImageTarget | null>(null);
   // The re-send path: the image queued for replacement, and the body editor when
   // it is open. Both live here rather than in the components for the same reason
   // the review modal's text lives in the hook — so a re-render, or a confirmation
   // opening on top, never loses what the user typed.
-  const [retryImageTarget, setRetryImageTarget] = useState<RetryImageTarget | null>(null);
-  const [imageRequestEditor, setImageRequestEditor] = useState<ImageRequestEditorState | null>(null);
+  const [retryImageTarget, setRetryImageTarget] =
+    useState<RetryImageTarget | null>(null);
+  const [imageRequestEditor, setImageRequestEditor] =
+    useState<ImageRequestEditorState | null>(null);
   /** The editor's Save is in flight. Its own flag, not the generation one: a save
    *  renders nothing, so there is no message phase to hang it off. */
   const [imageSaving, setImageSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-  const [resummarizingChapterId, setResummarizingChapterId] = useState<string | null>(null);
+  const [resummarizingChapterId, setResummarizingChapterId] = useState<
+    string | null
+  >(null);
   const [viewingChapterId, setViewingChapterId] = useState<string | null>(null);
 
   const activePlaythroughId = playthrough?.id ?? null;
@@ -402,7 +479,9 @@ export function usePlaythrough() {
     if (!activePlaythroughId) return;
     getContextUsage(activePlaythroughId, choicesEnabled)
       .then(setTokenUsage)
-      .catch(() => { /* meter keeps last known value on failure */ });
+      .catch(() => {
+        /* meter keeps last known value on failure */
+      });
   }, [activePlaythroughId, choicesEnabled]);
 
   // ── Per-playthrough input draft ──
@@ -441,9 +520,12 @@ export function usePlaythrough() {
         // so the Debug panel is the only view of it. Seeding from the newest message
         // that recorded one keeps the last turn's applied/rejected lists visible
         // across a reload instead of silently showing an empty panel.
-        const lastPatched = [...(found.messages ?? [])].reverse()
+        const lastPatched = [...(found.messages ?? [])]
+          .reverse()
           .find((m) => m.role === "assistant" && m.patchInfo);
-        setLastPatchInfo(lastPatched?.patchInfo ?? { applied: [], rejected: [], warnings: [] });
+        setLastPatchInfo(
+          lastPatched?.patchInfo ?? { applied: [], rejected: [], warnings: [] },
+        );
         setRawInput(null);
         setRawOutput(null);
         setCancelledNotice(null);
@@ -452,7 +534,8 @@ export function usePlaythrough() {
         setImagePromptRequest(null);
         const { text, localWins } = resolveDraft(found);
         setInput(text);
-        if (localWins && text && text !== found.draft) void persistDraft(found.id, text);
+        if (localWins && text && text !== found.draft)
+          void persistDraft(found.id, text);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -483,22 +566,32 @@ export function usePlaythrough() {
         currentInput,
         choicesEnabled,
         controller.signal,
-        isContinue ? { hideUserMessage: true } : undefined
+        isContinue ? { hideUserMessage: true } : undefined,
       );
       setPlaythrough(response.state);
       setChoices(response.choices ?? []);
-      setLastPatchInfo({ applied: response.applied, rejected: response.rejected, warnings: response.warnings });
+      setLastPatchInfo({
+        applied: response.applied,
+        rejected: response.rejected,
+        warnings: response.warnings,
+      });
       setTokenUsage(response.tokenUsage ?? null);
       setRawInput(response.rawInput ?? null);
       setRawOutput(response.rawOutput ?? null);
       if (!isContinue) void persistDraft(playthrough.id, "");
       // Continuations included; chapter openings are excluded in the guard.
-      void maybeAutoGenerateImage(response.state.messages[response.state.messages.length - 1]);
+      void maybeAutoGenerateImage(
+        response.state.messages[response.state.messages.length - 1],
+      );
     } catch (e) {
       const durationMs = Math.round(performance.now() - startTime);
       if (!isContinue) setInput(currentInput);
       if (e instanceof DOMException && e.name === "AbortError") {
-        setCancelledNotice(isContinue ? "Response cancelled." : "Response cancelled — message restored to input.");
+        setCancelledNotice(
+          isContinue
+            ? "Response cancelled."
+            : "Response cancelled — message restored to input.",
+        );
         setFailedNotice(null);
       } else {
         const rawErr = e instanceof Error ? e.message : String(e);
@@ -507,7 +600,7 @@ export function usePlaythrough() {
             ? "Continue failed — nothing was sent."
             : "Generation failed — your message was restored to the input box.",
           rawError: rawErr,
-          durationMs
+          durationMs,
         });
       }
     } finally {
@@ -527,14 +620,17 @@ export function usePlaythrough() {
     setFailedNotice({
       message,
       rawError: e instanceof Error ? e.message : String(e),
-      durationMs: Math.round(performance.now() - startTime)
+      durationMs: Math.round(performance.now() - startTime),
     });
   }
 
   /** True when both reviewed fields are present, i.e. the server will skip the
    *  text call and use the user's text verbatim (modulo prefix + clamping). */
   function hasPromptOverrides(overrides?: ImageGenerationOverrides): boolean {
-    return overrides?.promptOverride !== undefined && overrides?.negativeOverride !== undefined;
+    return (
+      overrides?.promptOverride !== undefined &&
+      overrides?.negativeOverride !== undefined
+    );
   }
 
   /** True when the request re-sends a stored body. Not a review caller either —
@@ -558,19 +654,32 @@ export function usePlaythrough() {
    *    body IS the reviewed text, and the editor that can change it is its own
    *    surface (see `openImageRequestEditor`).
    */
-  async function handleGenerateImage(message: ChatMessage, overrides?: ImageGenerationOverrides) {
+  async function handleGenerateImage(
+    message: ChatMessage,
+    overrides?: ImageGenerationOverrides,
+  ) {
     // The abort ref is part of the guard, not just the state: the registry read
     // below happens BEFORE either in-flight marker is set, so state alone would
     // let a double-click start two generations.
-    if (!playthrough || imageGeneratingId || imagePreviewMessageId || imageAbortRef.current) return;
-    const reviewing = imagePromptPreview && !hasPromptOverrides(overrides) && !hasRawRequest(overrides);
+    if (
+      !playthrough ||
+      imageGeneratingId ||
+      imagePreviewMessageId ||
+      imageAbortRef.current
+    )
+      return;
+    const reviewing =
+      imagePromptPreview &&
+      !hasPromptOverrides(overrides) &&
+      !hasRawRequest(overrides);
     // Accepting the review modal hands the prompt straight to the renderer, and
     // the message itself already shows the progress bar and the Cancel control —
     // so the modal has nothing left to say and closes now, rather than sitting
     // there until the render finishes. (The modal's own close ABORTS a preview;
     // this path must not touch the abort ref: the render is the point. Same for
     // a re-send, which can only start from behind the editor.)
-    if (hasPromptOverrides(overrides) || hasRawRequest(overrides)) setImagePromptRequest(null);
+    if (hasPromptOverrides(overrides) || hasRawRequest(overrides))
+      setImagePromptRequest(null);
     setCancelledNotice(null);
     setFailedNotice(null);
 
@@ -594,7 +703,12 @@ export function usePlaythrough() {
       setImagePreviewMessageId(message.id);
       setImagePromptStartedAt(performance.now());
       try {
-        const preview = await previewImagePrompt(playthrough.id, message.id, overrides?.imageProviderId, controller.signal);
+        const preview = await previewImagePrompt(
+          playthrough.id,
+          message.id,
+          overrides?.imageProviderId,
+          controller.signal,
+        );
         // A preview the user cancelled must not pop the modal open again.
         if (controller.signal.aborted) return;
         setImagePromptRequest({
@@ -606,13 +720,17 @@ export function usePlaythrough() {
           promptDurationMs: preview.promptDurationMs,
           writerPrompt: preview.writerPrompt,
           writerNegative: preview.writerNegative,
-          context: preview.context
+          context: preview.context,
         });
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") {
           setCancelledNotice("Image prompt cancelled.");
         } else {
-          reportImageFailure(e, startTime, "Image generation failed — nothing was changed.");
+          reportImageFailure(
+            e,
+            startTime,
+            "Image generation failed — nothing was changed.",
+          );
         }
       } finally {
         setImagePreviewMessageId(null);
@@ -632,19 +750,22 @@ export function usePlaythrough() {
         // The reviewed path: the prompt was written by the dry run, so THIS
         // request makes no text call and can measure nothing — hand the number
         // the modal already showed back so the stored ref can report it.
-        promptDurationMs: overrides && imagePromptRequest?.message.id === message.id
-          ? imagePromptRequest.promptDurationMs
-          : undefined,
+        promptDurationMs:
+          overrides && imagePromptRequest?.message.id === message.id
+            ? imagePromptRequest.promptDurationMs
+            : undefined,
         // The writer's own answer, echoed for the same reason as the measured time:
         // this request makes no text call, so it can only come from the dry run that
         // wrote it — and without it the ref cannot serve as a later reference.
-        writerPrompt: overrides && imagePromptRequest?.message.id === message.id
-          ? imagePromptRequest.writerPrompt
-          : undefined,
-        writerNegative: overrides && imagePromptRequest?.message.id === message.id
-          ? imagePromptRequest.writerNegative
-          : undefined,
-        signal: controller.signal
+        writerPrompt:
+          overrides && imagePromptRequest?.message.id === message.id
+            ? imagePromptRequest.writerPrompt
+            : undefined,
+        writerNegative:
+          overrides && imagePromptRequest?.message.id === message.id
+            ? imagePromptRequest.writerNegative
+            : undefined,
+        signal: controller.signal,
       });
       // The response carries the authoritative record — set it exactly like
       // `handleSend` does with `response.state`.
@@ -654,7 +775,11 @@ export function usePlaythrough() {
       if (e instanceof DOMException && e.name === "AbortError") {
         setCancelledNotice("Image generation cancelled.");
       } else {
-        reportImageFailure(e, startTime, "Image generation failed — nothing was changed.");
+        reportImageFailure(
+          e,
+          startTime,
+          "Image generation failed — nothing was changed.",
+        );
       }
     } finally {
       // Settled — success, failure or cancel — so the readout goes with it.
@@ -679,11 +804,18 @@ export function usePlaythrough() {
    */
   async function maybeAutoGenerateImage(message: ChatMessage | undefined) {
     if (!autoImageAfterTurn || !playthrough) return;
-    if (!message || message.role !== "assistant" || message.chapterOpening) return;
+    if (!message || message.role !== "assistant" || message.chapterOpening)
+      return;
     // Already has an image (a re-run, a branch copy) — one answer, one image.
     if (message.images?.length) return;
     // Never fight a manual press or another phase.
-    if (imageGeneratingId || imagePreviewMessageId || imageDeletingId || imageAbortRef.current) return;
+    if (
+      imageGeneratingId ||
+      imagePreviewMessageId ||
+      imageDeletingId ||
+      imageAbortRef.current
+    )
+      return;
     // Resolved before anything is touched: no state, no notice, no marker.
     if (!(await resolveImageConnection())) return;
     await handleGenerateImage(message);
@@ -714,7 +846,10 @@ export function usePlaythrough() {
    * resurrect a stale readout. `signal` is the generation's own: cancelling the
    * generation also cancels the progress read in flight.
    */
-  function startImageProgress(connection: ResolvedImageConnection | null, signal?: AbortSignal) {
+  function startImageProgress(
+    connection: ResolvedImageConnection | null,
+    signal?: AbortSignal,
+  ) {
     stopImageProgress();
     if (connection?.apiStyle !== "a1111") return;
     const connectionId = connection.id;
@@ -732,7 +867,9 @@ export function usePlaythrough() {
         if (stopped || signal?.aborted) return;
       }
       if (stopped) return;
-      timer = window.setTimeout(() => { void tick(); }, IMAGE_PROGRESS_POLL_MS);
+      timer = window.setTimeout(() => {
+        void tick();
+      }, IMAGE_PROGRESS_POLL_MS);
     };
 
     imageProgressStopRef.current = () => {
@@ -754,7 +891,8 @@ export function usePlaythrough() {
   /** Fresh draft from the text model without leaving the modal. */
   async function rerunImagePrompt() {
     const request = imagePromptRequest;
-    if (!playthrough || !request || imageGeneratingId || imagePreviewMessageId) return;
+    if (!playthrough || !request || imageGeneratingId || imagePreviewMessageId)
+      return;
     const controller = new AbortController();
     imageAbortRef.current = controller;
     setImagePreviewMessageId(request.message.id);
@@ -763,14 +901,32 @@ export function usePlaythrough() {
     setFailedNotice(null);
     const startTime = performance.now();
     try {
-      const preview = await previewImagePrompt(playthrough.id, request.message.id, undefined, controller.signal);
+      const preview = await previewImagePrompt(
+        playthrough.id,
+        request.message.id,
+        undefined,
+        controller.signal,
+      );
       if (controller.signal.aborted) return;
-      setImagePromptRequest({ ...request, prompt: preview.prompt, negativePrompt: preview.negativePrompt, warnings: preview.warnings, promptDurationMs: preview.promptDurationMs, writerPrompt: preview.writerPrompt, writerNegative: preview.writerNegative, context: preview.context });
+      setImagePromptRequest({
+        ...request,
+        prompt: preview.prompt,
+        negativePrompt: preview.negativePrompt,
+        warnings: preview.warnings,
+        promptDurationMs: preview.promptDurationMs,
+        writerPrompt: preview.writerPrompt,
+        writerNegative: preview.writerNegative,
+        context: preview.context,
+      });
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
         setCancelledNotice("Image prompt cancelled.");
       } else {
-        reportImageFailure(e, startTime, "Image generation failed — nothing was changed.");
+        reportImageFailure(
+          e,
+          startTime,
+          "Image generation failed — nothing was changed.",
+        );
       }
     } finally {
       setImagePreviewMessageId(null);
@@ -787,9 +943,19 @@ export function usePlaythrough() {
    * trying to count references on the client.
    */
   function requestDeleteImage(message: ChatMessage, file: string) {
-    if (!playthrough || imageGeneratingId || imagePreviewMessageId || imageDeletingId) return;
+    if (
+      !playthrough ||
+      imageGeneratingId ||
+      imagePreviewMessageId ||
+      imageDeletingId
+    )
+      return;
     const image = (message.images ?? []).find((i) => i.file === file);
-    setDeleteImageTarget({ messageId: message.id, file, prompt: image?.prompt ?? "" });
+    setDeleteImageTarget({
+      messageId: message.id,
+      file,
+      prompt: image?.prompt ?? "",
+    });
   }
 
   /** The confirmed half of `requestDeleteImage`: the body the X button used to run
@@ -803,12 +969,20 @@ export function usePlaythrough() {
     setImageDeletingId(target.messageId);
     const startTime = performance.now();
     try {
-      const res = await deleteMessageImage(playthrough.id, target.messageId, target.file);
+      const res = await deleteMessageImage(
+        playthrough.id,
+        target.messageId,
+        target.file,
+      );
       setPlaythrough(res.playthrough);
       setDeleteImageTarget(null);
     } catch (e) {
       setDeleteImageTarget(null);
-      reportImageFailure(e, startTime, "Removing the image failed — nothing was changed.");
+      reportImageFailure(
+        e,
+        startTime,
+        "Removing the image failed — nothing was changed.",
+      );
     } finally {
       setImageDeletingId(null);
     }
@@ -817,7 +991,12 @@ export function usePlaythrough() {
   /** True while ANY image request is in flight for this playthrough — one
    *  generation at a time, and a re-send also waits for a removal in flight. */
   function imageActionBusy(): boolean {
-    return Boolean(imageGeneratingId || imagePreviewMessageId || imageDeletingId || imageAbortRef.current);
+    return Boolean(
+      imageGeneratingId ||
+      imagePreviewMessageId ||
+      imageDeletingId ||
+      imageAbortRef.current,
+    );
   }
 
   /**
@@ -837,7 +1016,12 @@ export function usePlaythrough() {
       void runImageRetry(message, image.file, image.request);
       return;
     }
-    setRetryImageTarget({ message, file: image.file, body: image.request, prompt: image.prompt ?? "" });
+    setRetryImageTarget({
+      message,
+      file: image.file,
+      body: image.request,
+      prompt: image.prompt ?? "",
+    });
   }
 
   /** The confirmed half of `requestImageRetry`. `discardAlways` is the
@@ -877,8 +1061,12 @@ export function usePlaythrough() {
       file: image.file,
       body: formatImageRequestBody(image.request),
       connection: connection
-        ? { label: connection.label, model: connection.model, apiStyle: connection.apiStyle }
-        : null
+        ? {
+            label: connection.label,
+            model: connection.model,
+            apiStyle: connection.apiStyle,
+          }
+        : null,
     });
   }
 
@@ -893,14 +1081,18 @@ export function usePlaythrough() {
    * progress readout, Cancel and the failure notice all come from the code that
    * already owns them.
    */
-  async function runImageRetry(message: ChatMessage, file: string, body: string) {
+  async function runImageRetry(
+    message: ChatMessage,
+    file: string,
+    body: string,
+  ) {
     const image = (message.images ?? []).find((i) => i.file === file);
     await handleGenerateImage(message, {
       rawRequest: body,
       replaceFile: file,
       // The image's OWN connection. A body carries a dialect's fields, so the
       // server reports a missing owner instead of re-aiming it.
-      imageProviderId: image?.providerId || undefined
+      imageProviderId: image?.providerId || undefined,
     });
   }
 
@@ -932,7 +1124,7 @@ export function usePlaythrough() {
         playthrough.id,
         editor.message.id,
         editor.file,
-        JSON.stringify(check.value)
+        JSON.stringify(check.value),
       );
       setPlaythrough(res.playthrough);
       setImageRequestEditor(null);
@@ -959,7 +1151,11 @@ export function usePlaythrough() {
     setActionLoading(true);
     setError(null);
     try {
-      const updated = await editMessage(playthrough.id, editingMessageId, editDraft);
+      const updated = await editMessage(
+        playthrough.id,
+        editingMessageId,
+        editDraft,
+      );
       setPlaythrough(updated);
       cancelEdit();
     } catch (e) {
@@ -993,15 +1189,26 @@ export function usePlaythrough() {
     abortControllerRef.current = controller;
     const startTime = performance.now();
     try {
-      const response = await retryTurn(playthrough.id, target.id, choicesEnabled, controller.signal);
+      const response = await retryTurn(
+        playthrough.id,
+        target.id,
+        choicesEnabled,
+        controller.signal,
+      );
       setPlaythrough(response.state);
       setChoices(response.choices ?? []);
-      setLastPatchInfo({ applied: response.applied, rejected: response.rejected, warnings: response.warnings });
+      setLastPatchInfo({
+        applied: response.applied,
+        rejected: response.rejected,
+        warnings: response.warnings,
+      });
       setTokenUsage(response.tokenUsage ?? null);
       setRawInput(response.rawInput ?? null);
       setRawOutput(response.rawOutput ?? null);
       cancelEdit();
-      void maybeAutoGenerateImage(response.state.messages[response.state.messages.length - 1]);
+      void maybeAutoGenerateImage(
+        response.state.messages[response.state.messages.length - 1],
+      );
     } catch (e) {
       const durationMs = Math.round(performance.now() - startTime);
       if (e instanceof DOMException && e.name === "AbortError") {
@@ -1016,9 +1223,14 @@ export function usePlaythrough() {
         } catch {
           latest = null;
         }
-        if (latest && !latest.messages.some((message) => message.id === target.id)) {
+        if (
+          latest &&
+          !latest.messages.some((message) => message.id === target.id)
+        ) {
           setPlaythrough(latest);
-          setCancelledNotice("The retry finished before the cancel landed — the story already has the new response.");
+          setCancelledNotice(
+            "The retry finished before the cancel landed — the story already has the new response.",
+          );
         } else {
           setCancelledNotice("Retry cancelled — nothing was deleted.");
         }
@@ -1027,7 +1239,7 @@ export function usePlaythrough() {
         setFailedNotice({
           message: "Retry failed — the response is unchanged.",
           rawError: e instanceof Error ? e.message : String(e),
-          durationMs
+          durationMs,
         });
       }
     } finally {
@@ -1044,7 +1256,10 @@ export function usePlaythrough() {
     setFailedNotice(null);
     setCancelledNotice(null);
     try {
-      const updated = await truncatePlaythrough(playthrough.id, truncateTarget.id);
+      const updated = await truncatePlaythrough(
+        playthrough.id,
+        truncateTarget.id,
+      );
       setPlaythrough(updated);
       setTruncateTarget(null);
       cancelEdit();
@@ -1057,7 +1272,7 @@ export function usePlaythrough() {
       setTruncateTarget(null);
       setFailedNotice({
         message: "Delete up to here failed — nothing was changed.",
-        rawError: rawErr
+        rawError: rawErr,
       });
     } finally {
       setActionLoading(false);
@@ -1079,7 +1294,10 @@ export function usePlaythrough() {
     setFailedNotice(null);
     setCancelledNotice(null);
     try {
-      const updated = await revertToAnchor(playthrough.id, toRevertRequestAnchor(revertTarget));
+      const updated = await revertToAnchor(
+        playthrough.id,
+        toRevertRequestAnchor(revertTarget),
+      );
       setPlaythrough(updated);
       setRevertTarget(null);
       setRetryTarget(null);
@@ -1091,13 +1309,18 @@ export function usePlaythrough() {
       setRawInput(null);
       setRawOutput(null);
       // The story is shorter now; the meter must not keep measuring the old one.
-      getContextUsage(updated.id, choicesEnabled).then(setTokenUsage).catch(() => {
-        /* the meter keeps its last value on failure */
-      });
+      getContextUsage(updated.id, choicesEnabled)
+        .then(setTokenUsage)
+        .catch(() => {
+          /* the meter keeps its last value on failure */
+        });
     } catch (e) {
       const rawErr = e instanceof Error ? e.message : String(e);
       setRevertTarget(null);
-      setFailedNotice({ message: "Revert failed — nothing was changed.", rawError: rawErr });
+      setFailedNotice({
+        message: "Revert failed — nothing was changed.",
+        rawError: rawErr,
+      });
     } finally {
       setActionLoading(false);
     }
@@ -1108,7 +1331,12 @@ export function usePlaythrough() {
     setActionLoading(true);
     setError(null);
     try {
-      const branched = await branchPlaythrough(playthrough.id, branchTarget.id, branchName, asStandalone);
+      const branched = await branchPlaythrough(
+        playthrough.id,
+        branchTarget.id,
+        branchName,
+        asStandalone,
+      );
       setBranchTarget(null);
       resetTurnState(branched);
     } catch (e) {
@@ -1116,7 +1344,7 @@ export function usePlaythrough() {
       setBranchTarget(null);
       setFailedNotice({
         message: "Branch failed — nothing was changed.",
-        rawError: rawErr
+        rawError: rawErr,
       });
     } finally {
       setActionLoading(false);
@@ -1139,12 +1367,25 @@ export function usePlaythrough() {
     }
   }
 
-  async function handleWorldStateAction(worldStateId: string, action: WorldStateAction, name?: string, description?: string) {
+  async function handleWorldStateAction(
+    worldStateId: string,
+    action: WorldStateAction,
+    name?: string,
+    description?: string,
+  ) {
     if (!playthrough || actionLoading) return;
     setActionLoading(true);
     setError(null);
     try {
-      setPlaythrough(await worldStateAction(playthrough.id, worldStateId, action, name, description));
+      setPlaythrough(
+        await worldStateAction(
+          playthrough.id,
+          worldStateId,
+          action,
+          name,
+          description,
+        ),
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1168,7 +1409,8 @@ export function usePlaythrough() {
       const { text, localWins } = resolveDraft(newPlaythrough);
       setInput(text);
       // Sync a newer local draft up to the server even if the user never types again.
-      if (localWins && text && text !== newPlaythrough.draft) void persistDraft(newPlaythrough.id, text);
+      if (localWins && text && text !== newPlaythrough.draft)
+        void persistDraft(newPlaythrough.id, text);
     } else {
       setInput("");
     }
@@ -1272,6 +1514,6 @@ export function usePlaythrough() {
     confirmRevert,
     confirmBranch,
     handleResummarizeChapter,
-    handleWorldStateAction
+    handleWorldStateAction,
   };
 }

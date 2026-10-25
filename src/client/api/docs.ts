@@ -12,7 +12,9 @@ export type DocPageMeta = {
 export type DocPage = DocPageMeta & { markdown: string };
 
 export function listDocs(): Promise<DocPageMeta[]> {
-  return request<{ pages: DocPageMeta[] }>("/api/docs").then((res) => res.pages);
+  return request<{ pages: DocPageMeta[] }>("/api/docs").then(
+    (res) => res.pages,
+  );
 }
 
 export function getDoc(slug: string): Promise<DocPage> {
@@ -20,7 +22,11 @@ export function getDoc(slug: string): Promise<DocPage> {
 }
 /** A search hit's context: the heading it sits under (its anchor is the id
  *  the renderer writes for that heading) and one collapsed line around it. */
-export type DocSearchHit = { anchor: string | null; heading: string | null; snippet: string };
+export type DocSearchHit = {
+  anchor: string | null;
+  heading: string | null;
+  snippet: string;
+};
 
 export type DocSearchPage = {
   slug: string;
@@ -32,10 +38,16 @@ export type DocSearchPage = {
   hits: DocSearchHit[];
 };
 
-export type DocSearchResult = { query: string; total: number; pages: DocSearchPage[] };
+export type DocSearchResult = {
+  query: string;
+  total: number;
+  pages: DocSearchPage[];
+};
 
 /** Exact-phrase, case-insensitive search across every page's body. Queries
  *  shorter than two characters come back empty rather than matching the app. */
 export function searchDocs(query: string): Promise<DocSearchResult> {
-  return request<DocSearchResult>(`/api/docs/search?q=${encodeURIComponent(query)}`);
+  return request<DocSearchResult>(
+    `/api/docs/search?q=${encodeURIComponent(query)}`,
+  );
 }

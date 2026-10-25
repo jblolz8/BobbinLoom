@@ -3,8 +3,18 @@ import { authHeaders } from "../httpAuth";
 import type { ResolvedProviderConfig } from "../providerConfig";
 import { linkExternalAbort } from "../provider/openaiClient";
 import { A1111_API_MISSING_HINT } from "../providerRegistry";
-import { clampChars, detectForgeCouple, modelFromRawBody, parseSize, sniffMime } from "./shared";
-import type { ImageGenerationRequest, ImageGenerationResult, ImageProvider } from "./types";
+import {
+  clampChars,
+  detectForgeCouple,
+  modelFromRawBody,
+  parseSize,
+  sniffMime,
+} from "./shared";
+import type {
+  ImageGenerationRequest,
+  ImageGenerationResult,
+  ImageProvider,
+} from "./types";
 
 /** A1111 publishes NO prompt cap — a prompt is chunked at 75 CLIP tokens and
  *  everything past the first chunk is simply weighted less. This is a sanity
@@ -28,7 +38,10 @@ export const A1111_PROGRESS_TIMEOUT_MS = 3_000;
 /** An `AbortSignal` that fires after `ms`, with the timer handed back so the
  *  caller can cancel it — a leaked timer would keep a test's event loop alive.
  *  (No `AbortSignal.timeout`: one shape, works on every Node this app runs.) */
-function timeoutSignal(ms: number): { signal: AbortSignal; cancel: () => void } {
+function timeoutSignal(ms: number): {
+  signal: AbortSignal;
+  cancel: () => void;
+} {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
   return { signal: controller.signal, cancel: () => clearTimeout(timer) };
@@ -45,7 +58,9 @@ type A1111ProgressResponse = {
 /** A finite number, or nothing — a string, null, NaN and Infinity all mean the
  *  WebUI did not report that field. */
 function optionalNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 /** A1111 answers with `info` as a JSON STRING (not an object), and it is the only
@@ -70,13 +85,16 @@ function seedFromInfo(info: unknown): number | undefined {
   const record = parsed as { seed?: unknown; all_seeds?: unknown };
   const direct = lenientNumber(record.seed);
   if (direct !== undefined) return direct;
-  return Array.isArray(record.all_seeds) ? lenientNumber(record.all_seeds[0]) : undefined;
+  return Array.isArray(record.all_seeds)
+    ? lenientNumber(record.all_seeds[0])
+    : undefined;
 }
 
 /** Numbers, and numeric strings (some forks stringify the whole info object).
  *  Anything else — including NaN and Infinity — is "not reported". */
 function lenientNumber(value: unknown): number | undefined {
-  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value === "number")
+    return Number.isFinite(value) ? value : undefined;
   if (typeof value === "string" && value.trim() !== "") {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : undefined;
@@ -118,10 +136,12 @@ export class A1111Provider implements ImageProvider {
   constructor(
     private readonly config: ResolvedProviderConfig,
     private readonly connection: ProviderConnection,
-    private readonly fetchImpl: typeof fetch = fetch
+    private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
-  async generateImage(req: ImageGenerationRequest): Promise<ImageGenerationResult> {
+  async generateImage(
+    req: ImageGenerationRequest,
+  ): Promise<ImageGenerationResult> {
     const start = Date.now();
     // The re-send path skips region planning entirely: `regionPlan` exists to
     // decide whether to ADD the extension's `alwayson_scripts` entry, and a body
@@ -147,11 +167,14 @@ export class A1111Provider implements ImageProvider {
     const pollProgress = async (): Promise<void> => {
       const { signal, cancel } = timeoutSignal(A1111_PROGRESS_TIMEOUT_MS);
       try {
-        const res = await this.fetchImpl(`${this.config.baseUrl}/sdapi/v1/progress?skip_current_image=true`, {
-          method: "GET",
-          headers: authHeaders(this.config.apiKey, "a1111"),
-          signal
-        });
+        const res = await this.fetchImpl(
+          `${this.config.baseUrl}/sdapi/v1/progress?skip_current_image=true`,
+          {
+            method: "GET",
+            headers: authHeaders(this.config.apiKey, "a1111"),
+            signal,
+          },
+        );
         if (!res.ok || settled) return;
         const data = (await res.json()) as A1111ProgressResponse;
         if (settled) return;
@@ -159,7 +182,7 @@ export class A1111Provider implements ImageProvider {
           progress: optionalNumber(data?.progress) ?? 0,
           step: optionalNumber(data?.state?.sampling_step),
           steps: optionalNumber(data?.state?.sampling_steps),
-          etaSeconds: optionalNumber(data?.eta_relative)
+          etaSeconds: optionalNumber(data?.eta_relative),
         });
       } catch {
         // Progress is a nicety. The route can be missing on an old build, slow
@@ -195,7 +218,8 @@ export class A1111Provider implements ImageProvider {
 
       const parsed = JSON.parse(text) as { images?: string[]; info?: unknown };
       const payloads = Array.isArray(parsed.images) ? parsed.images : [];
-      if (!payloads.length) throw new Error("Image provider returned no image data");
+      if (!payloads.length)
+        throw new Error("Image provider returned no image data");
 
       return {
         images: payloads.map((b64) => {
@@ -212,7 +236,7 @@ export class A1111Provider implements ImageProvider {
         seed: seedFromInfo(parsed.info),
         durationMs: Date.now() - start,
         rawRequest: JSON.stringify(body),
-        rawOutput: text
+        rawOutput: text,
       };
     } finally {
       settled = true;
@@ -224,16 +248,25 @@ export class A1111Provider implements ImageProvider {
   /** One POST to the native endpoint, with the connection's own timeout and the
    *  caller's abort linked through — no retry: a 60-second generation is not
    *  something to repeat on a 5xx. */
-  private async postTxt2Img(body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
+  private async postTxt2Img(
+    body: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<Response> {
     const controller = new AbortController();
-    const requestTimeout = setTimeout(() => controller.abort(), this.config.timeoutMs);
+    const requestTimeout = setTimeout(
+      () => controller.abort(),
+      this.config.timeoutMs,
+    );
     const unlink = linkExternalAbort(signal, controller);
     try {
       return await this.fetchImpl(`${this.config.baseUrl}/sdapi/v1/txt2img`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders(this.config.apiKey, "a1111") },
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders(this.config.apiKey, "a1111"),
+        },
         body: JSON.stringify(body),
-        signal: controller.signal
+        signal: controller.signal,
       });
     } finally {
       clearTimeout(requestTimeout);
@@ -249,7 +282,7 @@ export class A1111Provider implements ImageProvider {
       await this.fetchImpl(`${this.config.baseUrl}/sdapi/v1/interrupt`, {
         method: "POST",
         headers: authHeaders(this.config.apiKey, "a1111"),
-        signal
+        signal,
       });
     } catch {
       // Swallowed on purpose — see above.
@@ -277,14 +310,14 @@ export class A1111Provider implements ImageProvider {
     if (groups.length < 3) return null;
     const detection = await detectForgeCouple(this.config.baseUrl, {
       fetchImpl: this.fetchImpl,
-      headers: authHeaders(this.config.apiKey, "a1111")
+      headers: authHeaders(this.config.apiKey, "a1111"),
     });
     if (!detection.detected || !detection.title) return null;
     return {
       // The server's OWN spelling: A1111 resolves the key by exact name.
       script: detection.title,
       direction: this.connection.regionDirection ?? REGION_DIRECTION_DEFAULT,
-      groups
+      groups,
     };
   }
 }
@@ -297,19 +330,26 @@ export class A1111Provider implements ImageProvider {
 function buildTxt2ImgBody(
   req: ImageGenerationRequest,
   conn: ProviderConnection,
-  plan: RegionPlan = null
+  plan: RegionPlan = null,
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {
     // With regions engaged the prompt is REBUILT from the groups, so the
     // separator we hand the extension is literally the one it will find — a
     // prompt normalized one way and advertised another way would silently be a
     // single region.
-    prompt: clampChars(plan ? plan.groups.join(FORGE_COUPLE_SEPARATOR) : req.prompt, A1111_IMAGE_PROMPT_CAP),
+    prompt: clampChars(
+      plan ? plan.groups.join(FORGE_COUPLE_SEPARATOR) : req.prompt,
+      A1111_IMAGE_PROMPT_CAP,
+    ),
     seed: req.seed ?? -1, // A1111: -1 = random (0 is a real seed)
     n_iter: 1,
-    batch_size: Math.min(Math.max(req.variants ?? 1, 1), 4)
+    batch_size: Math.min(Math.max(req.variants ?? 1, 1), 4),
   };
-  if (req.negativePrompt) body.negative_prompt = clampChars(req.negativePrompt, A1111_IMAGE_PROMPT_CAP);
+  if (req.negativePrompt)
+    body.negative_prompt = clampChars(
+      req.negativePrompt,
+      A1111_IMAGE_PROMPT_CAP,
+    );
   // "auto" / absent / unparseable → no width/height at all, so the WebUI's own
   // canvas size applies rather than a size this app invented.
   const dims = parseSize(req.size);
@@ -327,7 +367,11 @@ function buildTxt2ImgBody(
     body.override_settings_restore_afterwards = true;
   }
   if (plan) {
-    body.alwayson_scripts = { [plan.script]: { args: forgeCoupleArgs(plan.direction, plan.groups.length) } };
+    body.alwayson_scripts = {
+      [plan.script]: {
+        args: forgeCoupleArgs(plan.direction, plan.groups.length),
+      },
+    };
   }
   return body;
 }
@@ -354,7 +398,11 @@ export function promptGroups(prompt: string): string[] {
  *  `alwayson_scripts` key), the direction, and the groups the prompt is
  *  rebuilt from. `null` means "no regions" — the body is then byte-identical to
  *  a render that never heard of the extension. */
-type RegionPlan = { script: string; direction: RegionDirection; groups: string[] } | null;
+type RegionPlan = {
+  script: string;
+  direction: RegionDirection;
+  groups: string[];
+} | null;
 
 /** Forge Couple's 17 arguments, in the extension's own order:
  *  `enable, disable_hr, mode, separator, direction, background,
@@ -370,7 +418,7 @@ type RegionPlan = { script: string; direction: RegionDirection; groups: string[]
  *  from an array of boxes. */
 export function forgeCoupleArgs(
   direction: RegionDirection,
-  groupCount: number
+  groupCount: number,
 ): Array<boolean | string | number | number[][] | null> {
   return [
     true, // enable
@@ -389,7 +437,7 @@ export function forgeCoupleArgs(
     null,
     null,
     null,
-    null
+    null,
   ];
 }
 
@@ -418,13 +466,18 @@ export const FORGE_COUPLE_BACKGROUND_WEIGHT = 0.5;
  *  character and gets an equal slice — columns when Horizontal, rows when
  *  Vertical. A lone character takes the whole frame, since there is nothing to
  *  separate it from. */
-export function forgeCoupleMapping(direction: RegionDirection, groupCount: number): number[][] {
+export function forgeCoupleMapping(
+  direction: RegionDirection,
+  groupCount: number,
+): number[][] {
   const boxes: number[][] = [[0, 1, 0, 1, FORGE_COUPLE_BACKGROUND_WEIGHT]];
   const characters = Math.max(1, groupCount - 1);
   for (let index = 0; index < characters; index += 1) {
     const from = index / characters;
     const to = (index + 1) / characters;
-    boxes.push(direction === "Vertical" ? [0, 1, from, to, 1] : [from, to, 0, 1, 1]);
+    boxes.push(
+      direction === "Vertical" ? [0, 1, from, to, 1] : [from, to, 0, 1, 1],
+    );
   }
   return boxes;
 }

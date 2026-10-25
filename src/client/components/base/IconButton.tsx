@@ -4,8 +4,16 @@ import { Icon } from "./Icon";
 
 export type IconButtonVariant = "ghost" | "secondary" | "overlay" | "danger";
 
-export interface IconButtonProps
-  extends Omit<ButtonProps, "children" | "leftIcon" | "rightIcon" | "iconOnly" | "isLoading" | "variant" | "size"> {
+export interface IconButtonProps extends Omit<
+  ButtonProps,
+  | "children"
+  | "leftIcon"
+  | "rightIcon"
+  | "iconOnly"
+  | "isLoading"
+  | "variant"
+  | "size"
+> {
   /** Lucide icon name. */
   icon: string;
   /** REQUIRED: the button's only text. Becomes aria-label and the tooltip. */
@@ -18,7 +26,12 @@ export interface IconButtonProps
   busy?: boolean;
 }
 
-const ICON_SIZE: Record<ButtonSize, number> = { xs: 11, sm: 13, md: 15, lg: 17 };
+const ICON_SIZE: Record<ButtonSize, number> = {
+  xs: 11,
+  sm: 13,
+  md: 15,
+  lg: 17,
+};
 
 /**
  * An icon-only control — a thin wrapper over `Button`, not a second styling
@@ -30,27 +43,38 @@ const ICON_SIZE: Record<ButtonSize, number> = { xs: 11, sm: 13, md: 15, lg: 17 }
  * because a theme's surface and text tokens are only mutually consistent over
  * the page, not over arbitrary media.
  */
-export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { icon, label, variant = "ghost", size = "sm", round = false, busy = false, title, ...props },
-  ref
-) {
-  return (
-    <Button
-      ref={ref}
-      variant={variant}
-      size={size}
-      iconOnly
-      round={round}
-      aria-label={label}
-      title={title ?? label}
-      leftIcon={
-        <Icon
-          name={busy ? "Loader" : icon}
-          size={ICON_SIZE[size]}
-          className={busy ? "animate-spin" : undefined}
-        />
-      }
-      {...props}
-    />
-  );
-});
+export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
+  function IconButton(
+    {
+      icon,
+      label,
+      variant = "ghost",
+      size = "sm",
+      round = false,
+      busy = false,
+      title,
+      ...props
+    },
+    ref,
+  ) {
+    return (
+      <Button
+        ref={ref}
+        variant={variant}
+        size={size}
+        iconOnly
+        round={round}
+        aria-label={label}
+        title={title ?? label}
+        leftIcon={
+          <Icon
+            name={busy ? "Loader" : icon}
+            size={ICON_SIZE[size]}
+            className={busy ? "animate-spin" : undefined}
+          />
+        }
+        {...props}
+      />
+    );
+  },
+);

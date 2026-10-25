@@ -5,15 +5,21 @@ import {
   createInitialPlaythrough,
   createPlaythroughFromSeed,
   instantiateTemplate,
-  parseUserInput
+  parseUserInput,
 } from "../src/engine/engine";
 import { EMPTY_MODULE_SET } from "../src/schemas";
-import type { CharacterTemplate, Playthrough, ScenarioSeed } from "../src/schemas";
+import type {
+  CharacterTemplate,
+  Playthrough,
+  ScenarioSeed,
+} from "../src/schemas";
 import { DEMO_TEMPLATE } from "../src/engine/demoData";
 
 describe("parseUserInput", () => {
   it("separates plain text actions from quoted dialogue", () => {
-    const parsed = parseUserInput('I look around the room and say, "Anyone here?"');
+    const parsed = parseUserInput(
+      'I look around the room and say, "Anyone here?"',
+    );
 
     expect(parsed.raw).toContain("Anyone here?");
     expect(parsed.actionText).toContain("I look around the room");
@@ -47,40 +53,48 @@ describe("applyStatePatch", () => {
 
     const result = applyStatePatch(playthrough, {
       worldStateAdd: [{ name: "Met Mira", description: "You met her." }],
-      inventoryAdd: [{ itemId: "potion", quantity: 2 }]
+      inventoryAdd: [{ itemId: "potion", quantity: 2 }],
     });
 
     expect(result.rejected).toEqual([]);
-    expect(result.state.worldState.find(w => w.name === "Met Mira")).toBeDefined();
-    expect(result.state.inventory.find((item) => item.itemId === "potion")?.quantity).toBeGreaterThanOrEqual(2);
+    expect(
+      result.state.worldState.find((w) => w.name === "Met Mira"),
+    ).toBeDefined();
+    expect(
+      result.state.inventory.find((item) => item.itemId === "potion")?.quantity,
+    ).toBeGreaterThanOrEqual(2);
   });
 
   it("rejects unknown world state updates", () => {
     const playthrough = createInitialPlaythrough("Reject Test");
 
     const result = applyStatePatch(playthrough, {
-      worldStateUpdate: [{ id: "missing_ws", description: "completed" }]
+      worldStateUpdate: [{ id: "missing_ws", description: "completed" }],
     });
 
-    expect(result.state.worldState.every((w: any) => w.id !== "missing_ws")).toBe(true);
+    expect(
+      result.state.worldState.every((w: any) => w.id !== "missing_ws"),
+    ).toBe(true);
     expect(result.rejected.length).toBeGreaterThan(0);
   });
 
   it("manages player clothing add/remove/setState", () => {
     const playthrough = createInitialPlaythrough("Clothing Test");
     const result = applyStatePatch(playthrough, {
-      playerClothingAdd: [{ slot: "Top", name: "Leather Jacket", state: "pristine" }]
+      playerClothingAdd: [
+        { slot: "Top", name: "Leather Jacket", state: "pristine" },
+      ],
     });
     expect(result.state.playerCharacter.clothing.length).toBe(1);
     expect(result.state.playerCharacter.clothing[0].slot).toBe("Top");
 
     const result2 = applyStatePatch(result.state, {
-      playerClothingSetState: [{ slot: "Top", state: "torn" }]
+      playerClothingSetState: [{ slot: "Top", state: "torn" }],
     });
     expect(result2.state.playerCharacter.clothing[0].state).toBe("torn");
 
     const result3 = applyStatePatch(result2.state, {
-      playerClothingRemove: [{ slot: "Top" }]
+      playerClothingRemove: [{ slot: "Top" }],
     });
     expect(result3.state.playerCharacter.clothing.length).toBe(0);
   });
@@ -89,14 +103,14 @@ describe("applyStatePatch", () => {
     const playthrough = createInitialPlaythrough("Conditions Test");
     const result = applyStatePatch(playthrough, {
       playerConditionsAdd: ["wounded"],
-      playerFlagsAdd: ["found_secret"]
+      playerFlagsAdd: ["found_secret"],
     });
     expect(result.state.playerCharacter.conditions).toContain("wounded");
     expect(result.state.playerCharacter.flags).toContain("found_secret");
 
     const result2 = applyStatePatch(result.state, {
       playerConditionsRemove: ["wounded"],
-      playerFlagsRemove: ["found_secret"]
+      playerFlagsRemove: ["found_secret"],
     });
     expect(result2.state.playerCharacter.conditions).not.toContain("wounded");
     expect(result2.state.playerCharacter.flags).not.toContain("found_secret");
@@ -105,11 +119,15 @@ describe("applyStatePatch", () => {
   it("coerces string arrays in worldStateAdd into objects with descriptions", () => {
     const playthrough = createInitialPlaythrough("World State Coercion Test");
     const result = applyStatePatch(playthrough, {
-      worldStateAdd: ["🌧️ Heavy Rain", "🚨 Town on Alert"] as any
+      worldStateAdd: ["🌧️ Heavy Rain", "🚨 Town on Alert"] as any,
     });
     expect(result.rejected).toEqual([]);
-    const rain = result.state.worldState.find(w => w.name === "🌧️ Heavy Rain");
-    const alert = result.state.worldState.find(w => w.name === "🚨 Town on Alert");
+    const rain = result.state.worldState.find(
+      (w) => w.name === "🌧️ Heavy Rain",
+    );
+    const alert = result.state.worldState.find(
+      (w) => w.name === "🚨 Town on Alert",
+    );
     expect(rain).toBeDefined();
     expect(rain?.description).toBe("");
     expect(alert).toBeDefined();
@@ -117,25 +135,35 @@ describe("applyStatePatch", () => {
   });
 
   it("coerces single strings and aliases for characterConditionsAdd and characterFlagsAdd", () => {
-    const playthrough = createInitialPlaythrough("Char Conditions Coercion Test");
+    const playthrough = createInitialPlaythrough(
+      "Char Conditions Coercion Test",
+    );
     const char = playthrough.characters[0];
 
     // Testing singular 'condition' as string, and singular 'flag' as string
     const result = applyStatePatch(playthrough, {
-      characterConditionsAdd: [{ characterId: char.id, condition: "🤕 Wounded" } as any],
-      characterFlagsAdd: [{ characterId: char.id, flag: "knows_secret" } as any]
+      characterConditionsAdd: [
+        { characterId: char.id, condition: "🤕 Wounded" } as any,
+      ],
+      characterFlagsAdd: [
+        { characterId: char.id, flag: "knows_secret" } as any,
+      ],
     });
     expect(result.rejected).toEqual([]);
-    const updatedChar = result.state.characters.find(c => c.id === char.id);
+    const updatedChar = result.state.characters.find((c) => c.id === char.id);
     expect(updatedChar?.conditions).toContain("🤕 Wounded");
     expect(updatedChar?.flags).toContain("knows_secret");
 
     // Remove with singular aliases
     const result2 = applyStatePatch(result.state, {
-      characterConditionsRemove: [{ characterId: char.id, condition: "🤕 Wounded" } as any],
-      characterFlagsRemove: [{ characterId: char.id, flag: "knows_secret" } as any]
+      characterConditionsRemove: [
+        { characterId: char.id, condition: "🤕 Wounded" } as any,
+      ],
+      characterFlagsRemove: [
+        { characterId: char.id, flag: "knows_secret" } as any,
+      ],
     });
-    const updatedChar2 = result2.state.characters.find(c => c.id === char.id);
+    const updatedChar2 = result2.state.characters.find((c) => c.id === char.id);
     expect(updatedChar2?.conditions).not.toContain("🤕 Wounded");
     expect(updatedChar2?.flags).not.toContain("knows_secret");
   });
@@ -144,7 +172,7 @@ describe("applyStatePatch", () => {
     const playthrough = createInitialPlaythrough("Player Coercion Test");
     const result = applyStatePatch(playthrough, {
       playerConditionsAdd: "🤕 Bruised" as any,
-      playerFlagsAdd: "🗝️ Key Found" as any
+      playerFlagsAdd: "🗝️ Key Found" as any,
     });
     expect(result.rejected).toEqual([]);
     expect(result.state.playerCharacter.conditions).toContain("🤕 Bruised");
@@ -155,13 +183,17 @@ describe("applyStatePatch", () => {
     const playthrough = createInitialPlaythrough("Partial Resilience Test");
     // inventoryAdd has invalid item schema ({ invalidField: true })
     const result = applyStatePatch(playthrough, {
-      worldStateAdd: [{ name: "🏰 Ancient Keep", description: "Looming walls." }],
+      worldStateAdd: [
+        { name: "🏰 Ancient Keep", description: "Looming walls." },
+      ],
       playerConditionsAdd: ["⚡ Inspired"],
-      inventoryAdd: [{ nonExistentField: 123 }] as any
+      inventoryAdd: [{ nonExistentField: 123 }] as any,
     });
 
     // Valid fields must STILL be applied!
-    expect(result.state.worldState.find(w => w.name === "🏰 Ancient Keep")).toBeDefined();
+    expect(
+      result.state.worldState.find((w) => w.name === "🏰 Ancient Keep"),
+    ).toBeDefined();
     expect(result.state.playerCharacter.conditions).toContain("⚡ Inspired");
     // Invalid field must be recorded in rejected array with descriptive message
     expect(result.rejected.length).toBeGreaterThan(0);
@@ -169,21 +201,25 @@ describe("applyStatePatch", () => {
   });
 
   it("applies memoryEvents with omitted type, string importance, and single string tag", () => {
-    const playthrough = createInitialPlaythrough("Memory Event Resilience Test");
+    const playthrough = createInitialPlaythrough(
+      "Memory Event Resilience Test",
+    );
     const result = applyStatePatch(playthrough, {
       memoryEvents: [
         {
           summary: "Discovered the hidden passage behind the bookcase",
           importance: "high" as any,
-          tags: "Library" as any
-        } as any
-      ]
+          tags: "Library" as any,
+        } as any,
+      ],
     });
 
     expect(result.rejected).toEqual([]);
     expect(result.state.memoryEvents.length).toBe(1);
     const event = result.state.memoryEvents[0];
-    expect(event.summary).toBe("Discovered the hidden passage behind the bookcase");
+    expect(event.summary).toBe(
+      "Discovered the hidden passage behind the bookcase",
+    );
     expect(event.type).toBe("event"); // defaulted
     expect(event.importance).toBe(4); // "high" coerced to 4
     expect(event.tags).toEqual(["Library"]); // single string coerced to array
@@ -199,9 +235,9 @@ describe("applyStatePatch", () => {
           type: "dialogue",
           summary: "Conversed with the companion",
           importance: 2,
-          tags: [char.name]
-        }
-      ]
+          tags: [char.name],
+        },
+      ],
     });
 
     expect(result.rejected).toEqual([]);
@@ -254,8 +290,17 @@ describe("structured clothing", () => {
   });
 
   it("instantiateTemplate does not mutate the template's startingClothing", () => {
-    const startingClothing: CharacterTemplate["startingClothing"] = [{ slot: "Top", name: "Vest" }];
-    const template: CharacterTemplate = { id: "t_cloth3", name: "Raya", version: 1, content: "", summary: "", startingClothing };
+    const startingClothing: CharacterTemplate["startingClothing"] = [
+      { slot: "Top", name: "Vest" },
+    ];
+    const template: CharacterTemplate = {
+      id: "t_cloth3",
+      name: "Raya",
+      version: 1,
+      content: "",
+      summary: "",
+      startingClothing,
+    };
     const instance = instantiateTemplate(template, "p", "b", "loc");
     instance.clothing[0].state = "torn";
     expect(startingClothing[0].state).toBeUndefined();
@@ -263,9 +308,9 @@ describe("structured clothing", () => {
 
   it("createInitialPlaythrough seeds clothing from the demo template's startingClothing (no [Clothing] section in content)", () => {
     const playthrough = createInitialPlaythrough("Clothing Seed Test");
-    expect(playthrough.characters[0].clothing.map((c) => c.slot).sort()).toEqual(
-      DEMO_TEMPLATE.startingClothing.map((c) => c.slot).sort()
-    );
+    expect(
+      playthrough.characters[0].clothing.map((c) => c.slot).sort(),
+    ).toEqual(DEMO_TEMPLATE.startingClothing.map((c) => c.slot).sort());
   });
 });
 
@@ -278,16 +323,26 @@ describe("applyStatePatch — character clothing", () => {
     const pt = withClothing();
     const initial = pt.characters[0].clothing.length;
     const r = applyStatePatch(pt, {
-      characterClothingAdd: [{ characterId: pt.characters[0].id, items: [
-        { slot: "Head", name: "Hood" },
-        { slot: "Neck", name: "Scarf" },
-      ] }],
+      characterClothingAdd: [
+        {
+          characterId: pt.characters[0].id,
+          items: [
+            { slot: "Head", name: "Hood" },
+            { slot: "Neck", name: "Scarf" },
+          ],
+        },
+      ],
     });
     expect(r.rejected).toEqual([]);
     expect(r.state.characters[0].clothing).toHaveLength(initial + 2);
 
     const again = applyStatePatch(r.state, {
-      characterClothingAdd: [{ characterId: r.state.characters[0].id, items: [{ slot: "Head", name: "Second hood" }] }],
+      characterClothingAdd: [
+        {
+          characterId: r.state.characters[0].id,
+          items: [{ slot: "Head", name: "Second hood" }],
+        },
+      ],
     });
     expect(again.state.characters[0].clothing).toHaveLength(initial + 2); // occupied slot not re-added
   });
@@ -295,24 +350,46 @@ describe("applyStatePatch — character clothing", () => {
   it("resolves characters by case-insensitive name for clothing patches", () => {
     const pt = withClothing();
     const r = applyStatePatch(pt, {
-      characterClothingAdd: [{ characterId: pt.characters[0].name.toUpperCase(), items: [{ slot: "Head", name: "Cloak" }] }],
+      characterClothingAdd: [
+        {
+          characterId: pt.characters[0].name.toUpperCase(),
+          items: [{ slot: "Head", name: "Cloak" }],
+        },
+      ],
     });
     expect(r.rejected).toEqual([]);
-    expect(r.state.characters[0].clothing.find((c) => c.slot === "Head")?.name).toBe("Cloak");
+    expect(
+      r.state.characters[0].clothing.find((c) => c.slot === "Head")?.name,
+    ).toBe("Cloak");
   });
 
   it("characterClothingSetState sets state on a worn slot and rejects unknown slots", () => {
     const pt = withClothing();
     const r = applyStatePatch(pt, {
-      characterClothingAdd: [{ characterId: pt.characters[0].id, items: [{ slot: "Top", name: "Blouse" }] }],
+      characterClothingAdd: [
+        {
+          characterId: pt.characters[0].id,
+          items: [{ slot: "Top", name: "Blouse" }],
+        },
+      ],
     });
     const s = applyStatePatch(r.state, {
-      characterClothingSetState: [{ characterId: r.state.characters[0].id, items: [{ slot: "Top", state: "torn" }] }],
+      characterClothingSetState: [
+        {
+          characterId: r.state.characters[0].id,
+          items: [{ slot: "Top", state: "torn" }],
+        },
+      ],
     });
     expect(s.state.characters[0].clothing[0].state).toBe("torn");
 
     const bad = applyStatePatch(s.state, {
-      characterClothingSetState: [{ characterId: s.state.characters[0].id, items: [{ slot: "Gloves", state: "wet" }] }],
+      characterClothingSetState: [
+        {
+          characterId: s.state.characters[0].id,
+          items: [{ slot: "Gloves", state: "wet" }],
+        },
+      ],
     });
     expect(bad.rejected.length).toBeGreaterThan(0);
   });
@@ -320,17 +397,28 @@ describe("applyStatePatch — character clothing", () => {
   it("characterClothingRemove removes by slot and rejects unknown slots", () => {
     const pt = withClothing();
     const r = applyStatePatch(pt, {
-      characterClothingAdd: [{ characterId: pt.characters[0].id, items: [{ slot: "Head", name: "Hood" }] }],
+      characterClothingAdd: [
+        {
+          characterId: pt.characters[0].id,
+          items: [{ slot: "Head", name: "Hood" }],
+        },
+      ],
     });
     const before = r.state.characters[0].clothing;
     const s = applyStatePatch(r.state, {
-      characterClothingRemove: [{ characterId: r.state.characters[0].id, slots: ["Head"] }],
+      characterClothingRemove: [
+        { characterId: r.state.characters[0].id, slots: ["Head"] },
+      ],
     });
-    expect(s.state.characters[0].clothing.map((c) => c.slot)).not.toContain("Head");
+    expect(s.state.characters[0].clothing.map((c) => c.slot)).not.toContain(
+      "Head",
+    );
     expect(s.state.characters[0].clothing).toHaveLength(before.length - 1);
 
     const bad = applyStatePatch(s.state, {
-      characterClothingRemove: [{ characterId: s.state.characters[0].id, slots: ["Hat"] }],
+      characterClothingRemove: [
+        { characterId: s.state.characters[0].id, slots: ["Hat"] },
+      ],
     });
     expect(bad.rejected.length).toBeGreaterThan(0);
   });
@@ -338,33 +426,58 @@ describe("applyStatePatch — character clothing", () => {
   it("characterClothingSet replaces the outfit wholesale", () => {
     const pt = withClothing();
     const r = applyStatePatch(pt, {
-      characterClothingAdd: [{ characterId: pt.characters[0].id, items: [{ slot: "Top", name: "Blouse" }] }],
+      characterClothingAdd: [
+        {
+          characterId: pt.characters[0].id,
+          items: [{ slot: "Top", name: "Blouse" }],
+        },
+      ],
     });
     const s = applyStatePatch(r.state, {
-      characterClothingSet: [{ characterId: r.state.characters[0].id, items: [{ slot: "Dress", name: "Evening gown", state: "pristine" }] }],
+      characterClothingSet: [
+        {
+          characterId: r.state.characters[0].id,
+          items: [{ slot: "Dress", name: "Evening gown", state: "pristine" }],
+        },
+      ],
     });
-    expect(s.state.characters[0].clothing).toEqual([{ slot: "Dress", name: "Evening gown", state: "pristine" }]);
+    expect(s.state.characters[0].clothing).toEqual([
+      { slot: "Dress", name: "Evening gown", state: "pristine" },
+    ]);
   });
 
   it("rejects clothing patches for unknown characters", () => {
     const pt = withClothing();
     const r = applyStatePatch(pt, {
-      characterClothingAdd: [{ characterId: "no_such_char", items: [{ slot: "Top", name: "X" }] }],
+      characterClothingAdd: [
+        { characterId: "no_such_char", items: [{ slot: "Top", name: "X" }] },
+      ],
     });
     expect(r.rejected.length).toBeGreaterThan(0);
   });
 
-  it("characterSectionUpdate with section \"Clothing\" redirects into structured clothing", () => {
+  it('characterSectionUpdate with section "Clothing" redirects into structured clothing', () => {
     const pt = withClothing();
     const r = applyStatePatch(pt, {
-      characterSectionUpdate: [{ characterId: pt.characters[0].id, section: "Clothing", content: "[Clothing]\n- Top: New vest\n- Feet: Boots" }],
+      characterSectionUpdate: [
+        {
+          characterId: pt.characters[0].id,
+          section: "Clothing",
+          content: "[Clothing]\n- Top: New vest\n- Feet: Boots",
+        },
+      ],
     });
     expect(r.rejected).toEqual([]);
     expect(r.state.characters[0].clothing).toEqual([
       { slot: "Top", name: "New vest" },
       { slot: "Feet", name: "Boots" },
     ]);
-    expect(r.applied.some((m) => m.includes("clothing updated") && m.includes("via section redirect"))).toBe(true);
+    expect(
+      r.applied.some(
+        (m) =>
+          m.includes("clothing updated") && m.includes("via section redirect"),
+      ),
+    ).toBe(true);
     // the content blob is untouched by the redirect (structured data wins)
     expect(r.state.characterTemplates[0].content).not.toContain("New vest");
   });
@@ -378,7 +491,7 @@ describe("applyStatePatch — CCv2 read-only sheets (D9)", () => {
     summary: "",
     startingClothing: [],
     content: "{{char}} is a mysterious wanderer.",
-    format: "ccv2"
+    format: "ccv2",
   };
 
   function withCcV2Cast(): Playthrough {
@@ -395,8 +508,12 @@ describe("applyStatePatch — CCv2 read-only sheets (D9)", () => {
     const clothingBefore = ccv2.clothing.map((c) => ({ ...c }));
 
     const r = applyStatePatch(pt, {
-      characterSectionUpdate: [{ characterId: ccv2.id, section: "Appearance", content: "- Tall" }],
-      characterClothingAdd: [{ characterId: ccv2.id, items: [{ slot: "Top", name: "Cloak" }] }]
+      characterSectionUpdate: [
+        { characterId: ccv2.id, section: "Appearance", content: "- Tall" },
+      ],
+      characterClothingAdd: [
+        { characterId: ccv2.id, items: [{ slot: "Top", name: "Cloak" }] },
+      ],
     });
 
     expect(r.applied).toEqual([]);
@@ -413,12 +530,18 @@ describe("applyStatePatch — CCv2 read-only sheets (D9)", () => {
     const ccv2 = pt.characters[1];
     const r = applyStatePatch(pt, {
       characterClothingRemove: [{ characterId: ccv2.id, slots: ["Top"] }],
-      characterClothingSetState: [{ characterId: ccv2.id, items: [{ slot: "Top", state: "torn" }] }],
-      characterClothingSet: [{ characterId: ccv2.id, items: [{ slot: "Dress", name: "Gown" }] }]
+      characterClothingSetState: [
+        { characterId: ccv2.id, items: [{ slot: "Top", state: "torn" }] },
+      ],
+      characterClothingSet: [
+        { characterId: ccv2.id, items: [{ slot: "Dress", name: "Gown" }] },
+      ],
     });
     expect(r.applied).toEqual([]);
     expect(r.rejected).toHaveLength(3);
-    expect(r.rejected.every((m) => m.includes("read-only CCv2 sheet"))).toBe(true);
+    expect(r.rejected.every((m) => m.includes("read-only CCv2 sheet"))).toBe(
+      true,
+    );
     expect(r.state.characters[1].clothing).toEqual([]);
   });
 
@@ -426,39 +549,90 @@ describe("applyStatePatch — CCv2 read-only sheets (D9)", () => {
     const pt = withCcV2Cast();
     const bl = pt.characters[0]; // Mira (DEMO_TEMPLATE, BL)
     const r = applyStatePatch(pt, {
-      characterSectionUpdate: [{ characterId: bl.id, section: "Appearance", content: "- Tall and weathered" }],
-      characterClothingAdd: [{ characterId: bl.id, items: [{ slot: "Head", name: "Hood" }] }]
+      characterSectionUpdate: [
+        {
+          characterId: bl.id,
+          section: "Appearance",
+          content: "- Tall and weathered",
+        },
+      ],
+      characterClothingAdd: [
+        { characterId: bl.id, items: [{ slot: "Head", name: "Hood" }] },
+      ],
     });
     expect(r.rejected).toEqual([]);
-    expect(r.state.characterTemplates[0].content).toContain("- Tall and weathered");
-    expect(r.state.characters[0].clothing.find((c) => c.slot === "Head")?.name).toBe("Hood");
+    expect(r.state.characterTemplates[0].content).toContain(
+      "- Tall and weathered",
+    );
+    expect(
+      r.state.characters[0].clothing.find((c) => c.slot === "Head")?.name,
+    ).toBe("Hood");
   });
 });
 
 describe("createPlaythroughFromSeed — cast reuse", () => {
   it("reuses the selected library template as the lead instead of a fresh AI clone", () => {
-    const cast = [{ id: "tmpl_mira", name: "Mira", version: 1, content: "[Species]: Fox\n\n[Personality]\n- Original library sheet", summary: "the fox companion", startingClothing: [] }];
+    const cast = [
+      {
+        id: "tmpl_mira",
+        name: "Mira",
+        version: 1,
+        content: "[Species]: Fox\n\n[Personality]\n- Original library sheet",
+        summary: "the fox companion",
+        startingClothing: [],
+      },
+    ];
     const seed = {
-      character: { name: "Mira", content: "[Species]: Fox\n\n[Personality]\n- AI-paraphrased clone sheet" },
-      startingWorldState: [], items: [], additionalCharacters: [], openingText: "",
+      character: {
+        name: "Mira",
+        content:
+          "[Species]: Fox\n\n[Personality]\n- AI-paraphrased clone sheet",
+      },
+      startingWorldState: [],
+      items: [],
+      additionalCharacters: [],
+      openingText: "",
     } as ScenarioSeed;
     const pt = createPlaythroughFromSeed("T", seed, undefined, cast);
     expect(pt.characters).toHaveLength(1);
     expect(pt.characters[0].name).toBe("Mira");
     expect(pt.characterTemplates).toHaveLength(1);
     expect(pt.characterTemplates[0].id).toBe("tmpl_mira");
-    expect(pt.characterTemplates[0].content).toContain("Original library sheet");
+    expect(pt.characterTemplates[0].content).toContain(
+      "Original library sheet",
+    );
   });
 
   it("includeOpening=false does not seed the opening message even when openingText is set", () => {
-    const cast = [{ id: "tmpl_x", name: "X", version: 1, content: "[Species]: Human", summary: "", startingClothing: [] }];
-    const seed = { character: { name: "X", content: "c" }, startingWorldState: [], items: [], additionalCharacters: [], openingText: "A seeded opening." } as ScenarioSeed;
+    const cast = [
+      {
+        id: "tmpl_x",
+        name: "X",
+        version: 1,
+        content: "[Species]: Human",
+        summary: "",
+        startingClothing: [],
+      },
+    ];
+    const seed = {
+      character: { name: "X", content: "c" },
+      startingWorldState: [],
+      items: [],
+      additionalCharacters: [],
+      openingText: "A seeded opening.",
+    } as ScenarioSeed;
     const pt = createPlaythroughFromSeed("T", seed, undefined, cast, false);
     expect(pt.messages).toHaveLength(0);
   });
 
   it("no cast => still seeds the AI lead and uses the seed opening text by default", () => {
-    const seed = { character: { name: "Mira", content: "c" }, startingWorldState: [], items: [], additionalCharacters: [], openingText: "Open." } as ScenarioSeed;
+    const seed = {
+      character: { name: "Mira", content: "c" },
+      startingWorldState: [],
+      items: [],
+      additionalCharacters: [],
+      openingText: "Open.",
+    } as ScenarioSeed;
     const pt = createPlaythroughFromSeed("T", seed, undefined, undefined);
     expect(pt.characters).toHaveLength(1);
     expect(pt.characters[0].name).toBe("Mira");
@@ -471,10 +645,14 @@ describe("applyStatePatch — character section item ops", () => {
     const mira = pt.characters[0];
     expect(pt.activeCharacters).toContain(mira.id);
     const res = applyStatePatch(pt, {
-      characterSectionItemAdd: [{ characterId: mira.id, section: "Likes", item: "Stargazing" }]
+      characterSectionItemAdd: [
+        { characterId: mira.id, section: "Likes", item: "Stargazing" },
+      ],
     });
     expect(res.rejected).toEqual([]);
-    const tpl = res.state.characterTemplates.find((t) => t.id === mira.templateId)!;
+    const tpl = res.state.characterTemplates.find(
+      (t) => t.id === mira.templateId,
+    )!;
     expect(tpl.content).toContain("- Stargazing");
   });
 
@@ -482,13 +660,19 @@ describe("applyStatePatch — character section item ops", () => {
     const pt = createInitialPlaythrough("Absent Test");
     const mira = pt.characters[0];
     const absentPt = structuredClone(pt);
-    absentPt.activeCharacters = absentPt.activeCharacters.filter((id: string) => id !== mira.id);
+    absentPt.activeCharacters = absentPt.activeCharacters.filter(
+      (id: string) => id !== mira.id,
+    );
     expect(absentPt.activeCharacters).not.toContain(mira.id);
     const res = applyStatePatch(absentPt, {
-      characterSectionItemAdd: [{ characterId: mira.id, section: "Likes", item: "Stargazing" }]
+      characterSectionItemAdd: [
+        { characterId: mira.id, section: "Likes", item: "Stargazing" },
+      ],
     });
     expect(res.rejected.some((r) => /absent/i.test(r))).toBe(true);
-    const tpl = res.state.characterTemplates.find((t) => t.id === mira.templateId)!;
+    const tpl = res.state.characterTemplates.find(
+      (t) => t.id === mira.templateId,
+    )!;
     expect(tpl.content).not.toContain("- Stargazing");
   });
 
@@ -498,11 +682,13 @@ describe("applyStatePatch — character section item ops", () => {
     const state = {
       ...pt,
       characterTemplates: pt.characterTemplates.map((t) =>
-        t.id === mira.templateId ? { ...t, format: "ccv2" as const } : t
+        t.id === mira.templateId ? { ...t, format: "ccv2" as const } : t,
       ),
     };
     const res = applyStatePatch(state, {
-      characterSectionItemRemove: [{ characterId: mira.id, section: "Likes", item: "x" }]
+      characterSectionItemRemove: [
+        { characterId: mira.id, section: "Likes", item: "x" },
+      ],
     });
     expect(res.rejected.some((r) => /read-only/i.test(r))).toBe(true);
   });
@@ -511,7 +697,9 @@ describe("applyStatePatch — character section item ops", () => {
     const pt = createInitialPlaythrough("Clothing Test");
     const mira = pt.characters[0];
     const res = applyStatePatch(pt, {
-      characterSectionItemAdd: [{ characterId: mira.id, section: "Clothing", item: "Hat" }]
+      characterSectionItemAdd: [
+        { characterId: mira.id, section: "Clothing", item: "Hat" },
+      ],
     });
     expect(res.rejected.some((r) => /clothing/i.test(r))).toBe(true);
   });
@@ -520,8 +708,17 @@ describe("applyStatePatch — character section item ops", () => {
     const pt = createInitialPlaythrough("No Match");
     const mira = pt.characters[0];
     const res = applyStatePatch(pt, {
-      characterSectionItemRemove: [{ characterId: mira.id, section: "Likes", item: "Skydiving" }],
-      characterSectionItemReplace: [{ characterId: mira.id, section: "Personality", from: "Nope", to: "Yes" }]
+      characterSectionItemRemove: [
+        { characterId: mira.id, section: "Likes", item: "Skydiving" },
+      ],
+      characterSectionItemReplace: [
+        {
+          characterId: mira.id,
+          section: "Personality",
+          from: "Nope",
+          to: "Yes",
+        },
+      ],
     });
     expect(res.rejected.length).toBeGreaterThan(0);
   });
@@ -530,11 +727,26 @@ describe("applyStatePatch — character section item ops", () => {
     const pt = createInitialPlaythrough("Mutate");
     const mira = pt.characters[0];
     const res = applyStatePatch(pt, {
-      characterSectionItemReplace: [{ characterId: mira.id, section: "Personality", from: "Disciplined, guarded, fair, and direct.", to: "Cautious, slow to trust" }],
-      characterSectionItemRemove: [{ characterId: mira.id, section: "Likes", item: "Competence and quick thinking" }]
+      characterSectionItemReplace: [
+        {
+          characterId: mira.id,
+          section: "Personality",
+          from: "Disciplined, guarded, fair, and direct.",
+          to: "Cautious, slow to trust",
+        },
+      ],
+      characterSectionItemRemove: [
+        {
+          characterId: mira.id,
+          section: "Likes",
+          item: "Competence and quick thinking",
+        },
+      ],
     });
     expect(res.rejected).toEqual([]);
-    const tpl = res.state.characterTemplates.find((t) => t.id === mira.templateId)!;
+    const tpl = res.state.characterTemplates.find(
+      (t) => t.id === mira.templateId,
+    )!;
     expect(tpl.content).toContain("- Cautious, slow to trust");
     expect(tpl.content).not.toContain("- Competence and quick thinking");
   });

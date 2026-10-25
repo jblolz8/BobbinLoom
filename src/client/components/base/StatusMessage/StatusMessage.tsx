@@ -36,7 +36,7 @@ const DEFAULT_ICON_BY_TONE: Record<StatusMessageTone, IconName> = {
 function resolveStatusSummary(
   children: ReactNode,
   detail: string | undefined,
-  autoCollapseDetail: boolean
+  autoCollapseDetail: boolean,
 ): { summary: ReactNode; resolvedDetail?: string; isCompact: boolean } {
   if (detail) {
     return { summary: children, resolvedDetail: detail, isCompact: true };
@@ -47,7 +47,8 @@ function resolveStatusSummary(
       return { summary: trimmed, isCompact: true };
     }
     const firstLine = trimmed.split("\n")[0].trim();
-    const summary = firstLine.length > 96 ? `${firstLine.slice(0, 93)}…` : firstLine;
+    const summary =
+      firstLine.length > 96 ? `${firstLine.slice(0, 93)}…` : firstLine;
     return { summary, resolvedDetail: trimmed, isCompact: true };
   }
   return { summary: children, isCompact: false };
@@ -67,7 +68,7 @@ export const StatusMessage = forwardRef<HTMLDivElement, StatusMessageProps>(
       children,
       ...props
     },
-    ref
+    ref,
   ) {
     const [expandedDetail, setExpandedDetail] = useState(false);
 
@@ -78,15 +79,20 @@ export const StatusMessage = forwardRef<HTMLDivElement, StatusMessageProps>(
     const { summary, resolvedDetail, isCompact } = resolveStatusSummary(
       children,
       detail,
-      autoCollapseDetail
+      autoCollapseDetail,
     );
 
     const iconSize = variant === "inline" ? 12 : 13;
     const resolvedIconName: IconName | ReactNode | false =
-      icon !== undefined ? icon : loading ? "Loader2" : DEFAULT_ICON_BY_TONE[tone];
+      icon !== undefined
+        ? icon
+        : loading
+          ? "Loader2"
+          : DEFAULT_ICON_BY_TONE[tone];
 
     const iconElement =
-      resolvedIconName === false ? null : typeof resolvedIconName === "string" ? (
+      resolvedIconName === false ? null : typeof resolvedIconName ===
+        "string" ? (
         <span
           className={[
             "base-status__icon",
@@ -113,7 +119,13 @@ export const StatusMessage = forwardRef<HTMLDivElement, StatusMessageProps>(
 
     if (variant === "inline") {
       return (
-        <div ref={ref} role="status" aria-live="polite" className={classNames} {...props}>
+        <div
+          ref={ref}
+          role="status"
+          aria-live="polite"
+          className={classNames}
+          {...props}
+        >
           {iconElement}
           <span>{summary}</span>
         </div>
@@ -121,7 +133,13 @@ export const StatusMessage = forwardRef<HTMLDivElement, StatusMessageProps>(
     }
 
     return (
-      <div ref={ref} role="status" aria-live="polite" className={classNames} {...props}>
+      <div
+        ref={ref}
+        role="status"
+        aria-live="polite"
+        className={classNames}
+        {...props}
+      >
         <div className="base-status__main">
           {iconElement}
           <div className="base-status__text">{summary}</div>
@@ -153,7 +171,7 @@ export const StatusMessage = forwardRef<HTMLDivElement, StatusMessageProps>(
         )}
       </div>
     );
-  }
+  },
 );
 
 export default StatusMessage;

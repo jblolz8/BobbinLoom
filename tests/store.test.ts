@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -25,7 +33,7 @@ import {
   setDefaultPersonaRecord,
   updateCharacterTemplateRecord,
   updatePersonaRecord,
-  updatePlaythroughRecord
+  updatePlaythroughRecord,
 } from "../src/server/store";
 import type { ParsedCard } from "../src/server/characterCards/parseCard";
 
@@ -46,11 +54,17 @@ describe("playthrough store", () => {
 
     expect(loaded?.name).toBe("Stored Run");
 
-    loaded!.worldState.push({ id: "flag1", name: "stored_flag", description: "" });
+    loaded!.worldState.push({
+      id: "flag1",
+      name: "stored_flag",
+      description: "",
+    });
     updatePlaythroughRecord(dir, loaded!);
 
     const reloaded = getPlaythroughRecord(dir, created.id);
-    expect(reloaded?.worldState.find(w => w.name === "stored_flag")).toBeDefined();
+    expect(
+      reloaded?.worldState.find((w) => w.name === "stored_flag"),
+    ).toBeDefined();
   });
 
   it("round-trips the per-playthrough input draft fields (draft + draftUpdatedAt)", () => {
@@ -80,7 +94,7 @@ describe("createPlaythroughFromSeedRecord (scenario generation)", () => {
     character: { name: "Mira", content: "[Species]: Human" },
     startingWorldState: [],
     items: [],
-    additionalCharacters: []
+    additionalCharacters: [],
   };
 
   it("does not persist — the route commits only after the opening turn succeeds", () => {
@@ -147,7 +161,11 @@ describe("playthrough store — load hardening", () => {
 
     createPlaythroughRecord(dir, "Good Run");
     // Valid JSON, but not a playthrough — migration fails, name is salvaged pre-quarantine.
-    writeFileSync(join(dir, "junk.json"), JSON.stringify({ name: "Junk File", notAPlaythrough: true }), "utf8");
+    writeFileSync(
+      join(dir, "junk.json"),
+      JSON.stringify({ name: "Junk File", notAPlaythrough: true }),
+      "utf8",
+    );
 
     const { playthroughs, failures } = listPlaythroughRecords(dir);
 
@@ -176,8 +194,13 @@ describe("playthrough list projection", () => {
     const records = listPlaythroughRecords(dir);
 
     // One reader, two views: the projection must not reorder or drop anything the full read keeps.
-    expect(summaries.playthroughs.map((p) => p.id)).toEqual(records.playthroughs.map((p) => p.id));
-    expect(summaries.playthroughs.map((p) => p.id)).toEqual([newer.id, older.id]);
+    expect(summaries.playthroughs.map((p) => p.id)).toEqual(
+      records.playthroughs.map((p) => p.id),
+    );
+    expect(summaries.playthroughs.map((p) => p.id)).toEqual([
+      newer.id,
+      older.id,
+    ]);
     expect(summaries.total).toBe(summaries.playthroughs.length);
     // The full-document reader is the one that still walks state; the projection never does.
     expect(records.playthroughs[0].messages).toBeDefined();
@@ -191,15 +214,46 @@ describe("character library — folder-per-entity", () => {
     tempDirs.push(dir);
     const miraDir = join(dir, "mira");
     mkdirSync(miraDir, { recursive: true });
-    writeFileSync(join(miraDir, "mira.json"), JSON.stringify({ id: "char_mira", name: "Mira", version: 2, content: "latest" }), "utf8");
-    writeFileSync(join(miraDir, "mira.v1.json"), JSON.stringify({ id: "char_mira_v1", name: "Mira", version: 1, content: "old" }), "utf8");
+    writeFileSync(
+      join(miraDir, "mira.json"),
+      JSON.stringify({
+        id: "char_mira",
+        name: "Mira",
+        version: 2,
+        content: "latest",
+      }),
+      "utf8",
+    );
+    writeFileSync(
+      join(miraDir, "mira.v1.json"),
+      JSON.stringify({
+        id: "char_mira_v1",
+        name: "Mira",
+        version: 1,
+        content: "old",
+      }),
+      "utf8",
+    );
     const floraDir = join(dir, "flora");
     mkdirSync(floraDir, { recursive: true });
-    writeFileSync(join(floraDir, "flora.json"), JSON.stringify({ id: "char_flora", name: "Flora", version: 1, content: "x" }), "utf8");
+    writeFileSync(
+      join(floraDir, "flora.json"),
+      JSON.stringify({
+        id: "char_flora",
+        name: "Flora",
+        version: 1,
+        content: "x",
+      }),
+      "utf8",
+    );
 
     const list = listCharacterTemplates(dir);
 
-    expect(list.map((t) => t.id).sort()).toEqual(["char_flora", "char_mira", "char_mira_v1"]);
+    expect(list.map((t) => t.id).sort()).toEqual([
+      "char_flora",
+      "char_mira",
+      "char_mira_v1",
+    ]);
   });
 
   it("quarantines a corrupt file inside a folder and still loads the rest", () => {
@@ -207,7 +261,16 @@ describe("character library — folder-per-entity", () => {
     tempDirs.push(dir);
     const folder = join(dir, "mira");
     mkdirSync(folder, { recursive: true });
-    writeFileSync(join(folder, "mira.json"), JSON.stringify({ id: "char_mira", name: "Mira", version: 1, content: "ok" }), "utf8");
+    writeFileSync(
+      join(folder, "mira.json"),
+      JSON.stringify({
+        id: "char_mira",
+        name: "Mira",
+        version: 1,
+        content: "ok",
+      }),
+      "utf8",
+    );
     writeFileSync(join(folder, "broken.json"), "{ nope", "utf8");
 
     const list = listCharacterTemplates(dir);
@@ -247,7 +310,11 @@ describe("character library — folder-per-entity", () => {
     tempDirs.push(dir);
     const created = createCharacterTemplateRecord("Mira", dir);
 
-    const renamed = updateCharacterTemplateRecord(created.id, { name: "Mira II" }, dir);
+    const renamed = updateCharacterTemplateRecord(
+      created.id,
+      { name: "Mira II" },
+      dir,
+    );
 
     expect(renamed?.name).toBe("Mira II");
     expect(existsSync(join(dir, "mira"))).toBe(false);
@@ -260,10 +327,16 @@ describe("character library — folder-per-entity", () => {
     tempDirs.push(dir);
     const created = createCharacterTemplateRecord("Mira", dir);
 
-    const updated = updateCharacterTemplateRecord(created.id, { creatorNotes: "Author comments and lore notes." }, dir);
+    const updated = updateCharacterTemplateRecord(
+      created.id,
+      { creatorNotes: "Author comments and lore notes." },
+      dir,
+    );
 
     expect(updated?.creatorNotes).toBe("Author comments and lore notes.");
-    expect(getCharacterTemplate(created.id, dir)?.creatorNotes).toBe("Author comments and lore notes.");
+    expect(getCharacterTemplate(created.id, dir)?.creatorNotes).toBe(
+      "Author comments and lore notes.",
+    );
   });
 
   it("delete quarantines the folder to .bak", () => {
@@ -290,7 +363,11 @@ describe("character library — folder-per-entity", () => {
 
     // 2. Update refreshes updatedAt and preserves createdAt
     const origCreated = created.createdAt;
-    const updated = updateCharacterTemplateRecord(created.id, { summary: "Updated summary" }, dir);
+    const updated = updateCharacterTemplateRecord(
+      created.id,
+      { summary: "Updated summary" },
+      dir,
+    );
     expect(updated?.createdAt).toBe(origCreated);
     expect(updated?.updatedAt).toBeDefined();
 
@@ -299,11 +376,18 @@ describe("character library — folder-per-entity", () => {
     mkdirSync(legacyDir, { recursive: true });
     writeFileSync(
       join(legacyDir, "legacy-char.json"),
-      JSON.stringify({ id: "char_1700000000000", name: "Legacy Char", version: 1, content: "legacy" }),
-      "utf8"
+      JSON.stringify({
+        id: "char_1700000000000",
+        name: "Legacy Char",
+        version: 1,
+        content: "legacy",
+      }),
+      "utf8",
     );
 
-    const loaded = listCharacterTemplates(dir).find((t) => t.id === "char_1700000000000");
+    const loaded = listCharacterTemplates(dir).find(
+      (t) => t.id === "char_1700000000000",
+    );
     expect(loaded).toBeDefined();
     expect(loaded?.createdAt).toBe("2023-11-14T22:13:20.000Z");
     expect(loaded?.updatedAt).toBeDefined();
@@ -354,10 +438,14 @@ describe("playthrough store — validate on write", () => {
     const created = createPlaythroughRecord(dir, "Valid Run");
 
     const invalid = { ...created, name: 123 } as unknown as Playthrough;
-    expect(() => updatePlaythroughRecord(dir, invalid)).toThrow(/refusing to persist invalid playthrough/);
+    expect(() => updatePlaythroughRecord(dir, invalid)).toThrow(
+      /refusing to persist invalid playthrough/,
+    );
 
     // The original good file is untouched — the invalid object was never written.
-    const onDisk = JSON.parse(readFileSync(join(dir, `${created.id}.json`), "utf8"));
+    const onDisk = JSON.parse(
+      readFileSync(join(dir, `${created.id}.json`), "utf8"),
+    );
     expect(onDisk.name).toBe("Valid Run");
   });
 });
@@ -421,7 +509,9 @@ describe("character library — CCv2 import (A5)", () => {
     // The .bl.json record round-trips through the schema and the scanner.
     const listed = listCharacterTemplates(dir);
     expect(listed.map((t) => t.id)).toEqual([record.id]);
-    const raw = JSON.parse(readFileSync(join(dir, "mira", "mira.bl.json"), "utf8"));
+    const raw = JSON.parse(
+      readFileSync(join(dir, "mira", "mira.bl.json"), "utf8"),
+    );
     expect(CharacterTemplateSchema.safeParse(raw).success).toBe(true);
   });
 
@@ -429,10 +519,18 @@ describe("character library — CCv2 import (A5)", () => {
     const dir = mkdtempSync(join(tmpdir(), "bobbinloom-ccv2-json-"));
     tempDirs.push(dir);
     const rawCard = Buffer.from(
-      JSON.stringify({ spec: "chara_card_v2", data: { name: "Flora", description: "hi" } }),
-      "utf8"
+      JSON.stringify({
+        spec: "chara_card_v2",
+        data: { name: "Flora", description: "hi" },
+      }),
+      "utf8",
     );
-    const result = importCharacterCard({ ...card, name: "Flora", creator: "" }, rawCard, "json", dir);
+    const result = importCharacterCard(
+      { ...card, name: "Flora", creator: "" },
+      rawCard,
+      "json",
+      dir,
+    );
 
     const sidecar = join(dir, "flora", "flora.card.json");
     expect(existsSync(sidecar)).toBe(true);
@@ -450,20 +548,32 @@ describe("character library — CCv2 import (A5)", () => {
     const dir = mkdtempSync(join(tmpdir(), "bobbinloom-ccv2-upsert-"));
     tempDirs.push(dir);
     const first = importCharacterCard(card, Buffer.from("png-v1"), "png", dir);
-    const second = importCharacterCard({ ...card, description: "updated" }, Buffer.from("png-v2"), "png", dir);
+    const second = importCharacterCard(
+      { ...card, description: "updated" },
+      Buffer.from("png-v2"),
+      "png",
+      dir,
+    );
 
     expect(second.created).toBe(false); // D11
     expect(second.record.id).toBe(first.record.id);
     expect(second.record.content).toBe("updated");
     expect(listCharacterTemplates(dir)).toHaveLength(1);
-    expect(readdirSync(join(dir, "mira"))).toEqual(expect.arrayContaining(["mira.png", "mira.bl.json"]));
+    expect(readdirSync(join(dir, "mira"))).toEqual(
+      expect.arrayContaining(["mira.png", "mira.bl.json"]),
+    );
   });
 
   it("a different creator gets a new unique slug", () => {
     const dir = mkdtempSync(join(tmpdir(), "bobbinloom-ccv2-slug-"));
     tempDirs.push(dir);
     const a = importCharacterCard(card, Buffer.from("a"), "png", dir);
-    const b = importCharacterCard({ ...card, creator: "Someone Else" }, Buffer.from("b"), "png", dir);
+    const b = importCharacterCard(
+      { ...card, creator: "Someone Else" },
+      Buffer.from("b"),
+      "png",
+      dir,
+    );
 
     expect(existsSync(join(dir, "mira"))).toBe(true);
     expect(existsSync(join(dir, "mira-2"))).toBe(true);
@@ -478,11 +588,20 @@ describe("character library — CCv2 import (A5)", () => {
     // Simulate an older BL version file inside the imported folder.
     writeFileSync(
       join(dir, "mira", "mira.v2.json"),
-      JSON.stringify({ id: "char_old_v2", name: "Mira", version: 2, content: "old" }),
-      "utf8"
+      JSON.stringify({
+        id: "char_old_v2",
+        name: "Mira",
+        version: 2,
+        content: "old",
+      }),
+      "utf8",
     );
 
-    const renamed = updateCharacterTemplateRecord(imported.record.id, { name: "Mira II" }, dir);
+    const renamed = updateCharacterTemplateRecord(
+      imported.record.id,
+      { name: "Mira II" },
+      dir,
+    );
 
     expect(renamed?.name).toBe("Mira II");
     expect(existsSync(join(dir, "mira"))).toBe(false);
@@ -502,14 +621,20 @@ describe("character library — CCv2 import (A5)", () => {
 
     // Simulate the conversion apply: write the BL record to <slug>.json while
     // the original <slug>.bl.json (format "ccv2", same id) is still on disk.
-    updateCharacterTemplateRecord(imported.record.id, {
-      content: "[Species]: Fox Girl\n[Personality]\nFriendly",
-      format: undefined,
-      ccv2Content: card.description,
-    }, dir);
+    updateCharacterTemplateRecord(
+      imported.record.id,
+      {
+        content: "[Species]: Fox Girl\n[Personality]\nFriendly",
+        format: undefined,
+        ccv2Content: card.description,
+      },
+      dir,
+    );
 
     // Before cleanup: the scanner reads both records (the duplicate bug).
-    expect(readdirSync(join(dir, "mira")).filter((f) => f.endsWith(".json"))).toContain("mira.bl.json");
+    expect(
+      readdirSync(join(dir, "mira")).filter((f) => f.endsWith(".json")),
+    ).toContain("mira.bl.json");
     expect(listCharacterTemplates(dir)).toHaveLength(2);
 
     removeCharacterImportRecord(imported.record.id, dir);
@@ -544,7 +669,12 @@ describe("resolveCast — CCv2 guard", () => {
     const dir = mkdtempSync(join(tmpdir(), "bobbinloom-cast-guard-"));
     tempDirs.push(dir);
     const normal = createCharacterTemplateRecord("Normal Gal", dir);
-    const ccv2 = importCharacterCard(makeCard("CCv2 Gal"), Buffer.from("{}"), "json", dir).record;
+    const ccv2 = importCharacterCard(
+      makeCard("CCv2 Gal"),
+      Buffer.from("{}"),
+      "json",
+      dir,
+    ).record;
     const result = resolveCast([ccv2.id, normal.id], dir);
     const names = (result ?? []).map((t) => t.name);
     expect(names).toContain("Normal Gal");
@@ -557,7 +687,9 @@ describe("resolveCast — CCv2 guard", () => {
     // (Hermetic: use a temp playthroughs dir and assert no throw + empty-safe result.)
     const dir = mkdtempSync(join(tmpdir(), "bobbinloom-cast-default-"));
     tempDirs.push(dir);
-    const pt = createPlaythroughRecord(dir, "Cast Default", undefined, ["char_nonexistent_xyz"]);
+    const pt = createPlaythroughRecord(dir, "Cast Default", undefined, [
+      "char_nonexistent_xyz",
+    ]);
     expect(Array.isArray(pt.characters)).toBe(true);
   });
 });

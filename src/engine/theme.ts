@@ -8,7 +8,12 @@
  * resolve through the functions below, which is what keeps the painted frame and the hydrated frame
  * identical — a difference between them is worse than the flash this replaced.
  */
-import type { AvatarShape, CoverAspect, CustomThemeColors, ThemeMode } from "../schemas";
+import type {
+  AvatarShape,
+  CoverAspect,
+  CustomThemeColors,
+  ThemeMode,
+} from "../schemas";
 
 export interface ThemePreset {
   id: string;
@@ -138,7 +143,8 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     id: "polar-mist",
     name: "Polar Mist",
-    description: "Crisp glacial light paper with razor-sharp arctic fjord accents",
+    description:
+      "Crisp glacial light paper with razor-sharp arctic fjord accents",
     mode: "light",
     counterpartId: "nord-frost",
     colors: {
@@ -223,7 +229,8 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     id: "amber-hearth",
     name: "Amber Hearth",
-    description: "Cozy candlelit espresso slate with glowing honey amber accents",
+    description:
+      "Cozy candlelit espresso slate with glowing honey amber accents",
     mode: "dark",
     counterpartId: "warm-parchment",
     colors: {
@@ -378,7 +385,8 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     id: "emerald-archive",
     name: "Emerald Archive",
-    description: "Phosphor-green CRT terminal slate with luminous matrix accents",
+    description:
+      "Phosphor-green CRT terminal slate with luminous matrix accents",
     mode: "dark",
     counterpartId: "matcha-cream",
     colors: {
@@ -448,7 +456,8 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     id: "matcha-cream",
     name: "Matcha & Cream",
-    description: "Warm steamed cream paper with ceremonial matcha and roasted hojicha accents",
+    description:
+      "Warm steamed cream paper with ceremonial matcha and roasted hojicha accents",
     mode: "light",
     counterpartId: "emerald-archive",
     colors: {
@@ -681,7 +690,6 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
 ];
 
-
 const BASE_SCHEME_TOKENS: Record<"dark" | "light", Record<string, string>> = {
   dark: {
     "--bg-app": "#101216",
@@ -748,13 +756,16 @@ export function presetCardTokens(preset: ThemePreset): Record<string, string> {
 export const COVER_ASPECT_VALUES: Record<CoverAspect, string> = {
   portrait: "2 / 3",
   square: "1 / 1",
-  landscape: "16 / 9"
+  landscape: "16 / 9",
 };
 
 function hexToAlpha(hex: string, alpha: number): string {
   let clean = hex.trim().replace(/^#/, "");
   if (clean.length === 3) {
-    clean = clean.split("").map((c) => c + c).join("");
+    clean = clean
+      .split("")
+      .map((c) => c + c)
+      .join("");
   }
   if (clean.length !== 6) return `rgba(150, 89, 56, ${alpha})`;
   const r = parseInt(clean.slice(0, 2), 16);
@@ -768,19 +779,33 @@ export function avatarBadgeRadius(shape: AvatarShape): string {
   return shape === "circle" ? "50%" : shape === "square" ? "2px" : "8px";
 }
 
+/** Clamps a workspace width percentage to the valid [50, 100] range (defaulting to 80%). */
+export function clampWorkspaceWidthPercent(value?: number | null): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 80;
+  return Math.min(100, Math.max(50, Math.round(value)));
+}
+
 /**
  * Dark or light, resolved. `system` has no answer the SERVER can compute, which is why the caller passes
  * the preference in: the client asks `matchMedia`, and the server emits both schemes (the dark one as the
  * base, the light one inside `@media (prefers-color-scheme: light)`).
  */
-export function effectiveThemeMode(mode: ThemeMode, prefersLight: boolean): "dark" | "light" {
+export function effectiveThemeMode(
+  mode: ThemeMode,
+  prefersLight: boolean,
+): "dark" | "light" {
   if (mode === "system") return prefersLight ? "light" : "dark";
   return mode;
 }
 
 /** The preset a mode falls back to when the reader has not chosen one. */
-export function themePresetFor(mode: "dark" | "light", presetId?: string): ThemePreset {
-  const chosen = presetId ? THEME_PRESETS.find((p) => p.id === presetId) : undefined;
+export function themePresetFor(
+  mode: "dark" | "light",
+  presetId?: string,
+): ThemePreset {
+  const chosen = presetId
+    ? THEME_PRESETS.find((p) => p.id === presetId)
+    : undefined;
   if (chosen) return chosen;
   const fallbackId = mode === "light" ? "default-light" : "default-dark";
   return THEME_PRESETS.find((p) => p.id === fallbackId) ?? THEME_PRESETS[0];
@@ -791,7 +816,10 @@ export function themePresetFor(mode: "dark" | "light", presetId?: string): Theme
  * If the current preset already matches `targetMode`, it is kept as-is; otherwise its
  * `counterpartId` (or the target mode's default preset) is returned.
  */
-export function counterpartPresetId(presetId: string, targetMode: "dark" | "light"): string {
+export function counterpartPresetId(
+  presetId: string,
+  targetMode: "dark" | "light",
+): string {
   const current = THEME_PRESETS.find((p) => p.id === presetId);
   if (!current) {
     return targetMode === "light" ? "default-light" : "default-dark";
@@ -799,7 +827,10 @@ export function counterpartPresetId(presetId: string, targetMode: "dark" | "ligh
   if (current.mode === targetMode) {
     return current.id;
   }
-  return current.counterpartId ?? (targetMode === "light" ? "default-light" : "default-dark");
+  return (
+    current.counterpartId ??
+    (targetMode === "light" ? "default-light" : "default-dark")
+  );
 }
 
 /**
@@ -809,9 +840,11 @@ export function counterpartPresetId(presetId: string, targetMode: "dark" | "ligh
  */
 export function themeTokens(
   settings: { themePreset?: string; customThemeColors?: CustomThemeColors },
-  mode: "dark" | "light"
+  mode: "dark" | "light",
 ): Record<string, string> {
-  const combinedColors: Record<string, string> = { ...themePresetFor(mode, settings.themePreset).colors };
+  const combinedColors: Record<string, string> = {
+    ...themePresetFor(mode, settings.themePreset).colors,
+  };
 
   if (settings.customThemeColors) {
     for (const [key, value] of Object.entries(settings.customThemeColors)) {
@@ -820,11 +853,21 @@ export function themeTokens(
   }
 
   // If --accent-base is set but --accent-translucent is not explicitly supplied, derive it.
-  if (combinedColors["--accent-base"] && !combinedColors["--accent-translucent"] && combinedColors["--accent-base"].startsWith("#")) {
-    combinedColors["--accent-translucent"] = hexToAlpha(combinedColors["--accent-base"], 0.14);
+  if (
+    combinedColors["--accent-base"] &&
+    !combinedColors["--accent-translucent"] &&
+    combinedColors["--accent-base"].startsWith("#")
+  ) {
+    combinedColors["--accent-translucent"] = hexToAlpha(
+      combinedColors["--accent-base"],
+      0.14,
+    );
   }
   // --accent-highlight is guaranteed for every preset and custom palette.
-  if (!combinedColors["--accent-highlight"] && combinedColors["--accent-base"]) {
+  if (
+    !combinedColors["--accent-highlight"] &&
+    combinedColors["--accent-base"]
+  ) {
     combinedColors["--accent-highlight"] = combinedColors["--accent-base"];
   }
   // An explicitly customised --accent-base also drives the input focus border and ring.
@@ -832,20 +875,37 @@ export function themeTokens(
     if (!combinedColors["--input-focus-border"]) {
       combinedColors["--input-focus-border"] = combinedColors["--accent-base"];
     }
-    if (!combinedColors["--input-focus-ring"] && combinedColors["--accent-base"].startsWith("#")) {
-      combinedColors["--input-focus-ring"] = hexToAlpha(combinedColors["--accent-base"], 0.25);
+    if (
+      !combinedColors["--input-focus-ring"] &&
+      combinedColors["--accent-base"].startsWith("#")
+    ) {
+      combinedColors["--input-focus-ring"] = hexToAlpha(
+        combinedColors["--accent-base"],
+        0.25,
+      );
     }
   }
   // If --ai-accent is set but --ai-accent-translucent is not explicitly supplied, derive it.
-  if (combinedColors["--ai-accent"] && !combinedColors["--ai-accent-translucent"] && combinedColors["--ai-accent"].startsWith("#")) {
-    combinedColors["--ai-accent-translucent"] = hexToAlpha(combinedColors["--ai-accent"], 0.14);
+  if (
+    combinedColors["--ai-accent"] &&
+    !combinedColors["--ai-accent-translucent"] &&
+    combinedColors["--ai-accent"].startsWith("#")
+  ) {
+    combinedColors["--ai-accent-translucent"] = hexToAlpha(
+      combinedColors["--ai-accent"],
+      0.14,
+    );
   }
   // Story text, interface text and chat typography stay consistent.
   if (!combinedColors["--story-text"]) {
-    combinedColors["--story-text"] = combinedColors["--text-primary"] || (mode === "light" ? "#0f172a" : "#eceff4");
+    combinedColors["--story-text"] =
+      combinedColors["--text-primary"] ||
+      (mode === "light" ? "#0f172a" : "#eceff4");
   }
   if (!combinedColors["--text-primary"]) {
-    combinedColors["--text-primary"] = combinedColors["--story-text"] || (mode === "light" ? "#0f172a" : "#eceff4");
+    combinedColors["--text-primary"] =
+      combinedColors["--story-text"] ||
+      (mode === "light" ? "#0f172a" : "#eceff4");
   }
   if (!combinedColors["--chat-ai-text"]) {
     combinedColors["--chat-ai-text"] = combinedColors["--story-text"];
@@ -854,7 +914,8 @@ export function themeTokens(
     combinedColors["--chat-user-text"] = combinedColors["--story-text"];
   }
   if (!combinedColors["--story-emphasis"]) {
-    combinedColors["--story-emphasis"] = mode === "light" ? "#163f73" : "#bcd8ff";
+    combinedColors["--story-emphasis"] =
+      mode === "light" ? "#163f73" : "#bcd8ff";
   }
   return combinedColors;
 }
@@ -868,17 +929,22 @@ export function themeRootAttributes(settings: {
   return {
     "data-theme": settings.mode,
     "data-avatar-shape": settings.avatarShape ?? "rounded",
-    "data-cover-aspect": settings.coverAspect ?? "landscape"
+    "data-cover-aspect": settings.coverAspect ?? "landscape",
   };
 }
 
-/** The two shape values, as custom properties the stylesheet reads. */
+/** The shape and layout values, as custom properties the stylesheet reads. */
 export function themeShapeTokens(settings: {
   avatarShape?: AvatarShape;
   coverAspect?: CoverAspect;
+  workspaceWidthPercent?: number;
 }): Record<string, string> {
   return {
-    "--avatar-badge-radius": avatarBadgeRadius(settings.avatarShape ?? "rounded"),
-    "--cover-art-aspect": COVER_ASPECT_VALUES[settings.coverAspect ?? "landscape"]
+    "--avatar-badge-radius": avatarBadgeRadius(
+      settings.avatarShape ?? "rounded",
+    ),
+    "--cover-art-aspect":
+      COVER_ASPECT_VALUES[settings.coverAspect ?? "landscape"],
+    "--workspace-max-width": `${clampWorkspaceWidthPercent(settings.workspaceWidthPercent)}%`,
   };
 }

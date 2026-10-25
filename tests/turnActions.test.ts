@@ -1,8 +1,19 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { describeDeletion, planDeletion, retryAnchorMessageId } from "../src/engine/chapterRevert";
+import {
+  describeDeletion,
+  planDeletion,
+  retryAnchorMessageId,
+} from "../src/engine/chapterRevert";
 import { applyStatePatch } from "../src/engine/stateMutations";
 import { MockProvider } from "../src/server/provider";
 import type { ProviderTurn, TurnProvider } from "../src/server/provider";
@@ -10,14 +21,14 @@ import type { ScenarioSeed } from "../src/schemas";
 import {
   createPlaythroughRecord,
   getPlaythroughRecord,
-  updatePlaythroughRecord
+  updatePlaythroughRecord,
 } from "../src/server/store";
 import {
   buildOpeningPrompt,
   editChatMessage,
   executeTurn,
   retryAssistantTurn,
-  truncateChat
+  truncateChat,
 } from "../src/server/turnActions";
 
 const tempDirs: string[] = [];
@@ -41,7 +52,12 @@ describe("executeTurn", () => {
     const playthrough = createPlaythroughRecord(dir, "Execute Turn Test");
     const provider = new MockProvider();
 
-    const result = await executeTurn(playthrough, 'I wave and say, "Hello."', provider, false);
+    const result = await executeTurn(
+      playthrough,
+      'I wave and say, "Hello."',
+      provider,
+      false,
+    );
 
     expect(result.state.messages).toHaveLength(2);
     expect(result.state.messages[0].role).toBe("user");
@@ -71,14 +87,21 @@ describe("executeTurn", () => {
             ...out.turn,
             statePatch: {
               characterMood: [{ characterId, mood: "amused" }],
-              characterTowardPlayer: [{ characterId: "no_such_character", towardPlayer: "wary" }]
-            }
-          }
+              characterTowardPlayer: [
+                { characterId: "no_such_character", towardPlayer: "wary" },
+              ],
+            },
+          },
         };
       }
     }
 
-    const result = await executeTurn(playthrough, "I look around.", new PatchProvider(), false);
+    const result = await executeTurn(
+      playthrough,
+      "I look around.",
+      new PatchProvider(),
+      false,
+    );
     const assistant = result.state.messages[1];
     expect(assistant.patchInfo?.applied.length).toBeGreaterThan(0);
     expect(assistant.patchInfo?.rejected.length).toBeGreaterThan(0);
@@ -99,7 +122,12 @@ describe("executeTurn", () => {
       }
     }
 
-    const result = await executeTurn(playthrough, "I look around.", new NoPatchProvider(), false);
+    const result = await executeTurn(
+      playthrough,
+      "I look around.",
+      new NoPatchProvider(),
+      false,
+    );
     expect(result.state.messages[1].patchInfo).toBeUndefined();
   });
 
@@ -122,22 +150,37 @@ describe("executeTurn", () => {
                 {
                   summary: "Player weathered the sudden storm safely",
                   importance: "2" as any,
-                  tags: "Storm" as any
-                } as any
-              ]
-            }
-          }
+                  tags: "Storm" as any,
+                } as any,
+              ],
+            },
+          },
         };
       }
     }
 
-    const result = await executeTurn(playthrough, "I seek shelter from the rain.", new ResilientPatchProvider(), false);
+    const result = await executeTurn(
+      playthrough,
+      "I seek shelter from the rain.",
+      new ResilientPatchProvider(),
+      false,
+    );
     const assistant = result.state.messages[1];
-    expect(assistant.patchInfo?.applied).toContain("world state added: 🌧️ Sudden Downpour");
-    expect(assistant.patchInfo?.applied).toContain("player condition added: ⚡ Invigorated");
-    expect(assistant.patchInfo?.applied.some(a => a.includes("memory event added"))).toBe(true);
+    expect(assistant.patchInfo?.applied).toContain(
+      "world state added: 🌧️ Sudden Downpour",
+    );
+    expect(assistant.patchInfo?.applied).toContain(
+      "player condition added: ⚡ Invigorated",
+    );
+    expect(
+      assistant.patchInfo?.applied.some((a) =>
+        a.includes("memory event added"),
+      ),
+    ).toBe(true);
     expect(result.state.memoryEvents.length).toBeGreaterThan(0);
-    const event = result.state.memoryEvents.find(e => e.summary === "Player weathered the sudden storm safely");
+    const event = result.state.memoryEvents.find(
+      (e) => e.summary === "Player weathered the sudden storm safely",
+    );
     expect(event).toBeDefined();
     expect(event?.turn).toBe(result.state.turn);
   });
@@ -165,40 +208,65 @@ describe("executeTurn", () => {
                   summary: `Milestone reached at step ${this.step}`,
                   type: "milestone",
                   importance: 3,
-                  tags: ["Progress"]
-                }
-              ]
-            }
-          }
+                  tags: ["Progress"],
+                },
+              ],
+            },
+          },
         };
       }
     }
 
     // Turn 1
-    const res1 = await executeTurn(pt, "Step one", new EventStepProvider(1), false);
+    const res1 = await executeTurn(
+      pt,
+      "Step one",
+      new EventStepProvider(1),
+      false,
+    );
     pt = res1.state;
     expect(pt.turn).toBe(1);
     expect(pt.memoryEvents).toHaveLength(1);
     expect(pt.memoryEvents[0].turn).toBe(1);
 
     // Turn 2
-    const res2 = await executeTurn(pt, "Step two", new EventStepProvider(2), false);
+    const res2 = await executeTurn(
+      pt,
+      "Step two",
+      new EventStepProvider(2),
+      false,
+    );
     pt = res2.state;
     expect(pt.turn).toBe(2);
     expect(pt.memoryEvents).toHaveLength(2);
-    const ev1AtTurn2 = pt.memoryEvents.find(e => e.summary === "Milestone reached at step 1");
-    const ev2AtTurn2 = pt.memoryEvents.find(e => e.summary === "Milestone reached at step 2");
+    const ev1AtTurn2 = pt.memoryEvents.find(
+      (e) => e.summary === "Milestone reached at step 1",
+    );
+    const ev2AtTurn2 = pt.memoryEvents.find(
+      (e) => e.summary === "Milestone reached at step 2",
+    );
     expect(ev1AtTurn2?.turn).toBe(1); // Crucial: must NOT be overwritten to 2!
     expect(ev2AtTurn2?.turn).toBe(2);
 
     // Turn 3
-    const res3 = await executeTurn(pt, "Step three", new EventStepProvider(3), false);
+    const res3 = await executeTurn(
+      pt,
+      "Step three",
+      new EventStepProvider(3),
+      false,
+    );
     pt = res3.state;
     expect(pt.turn).toBe(3);
     expect(pt.memoryEvents).toHaveLength(3);
-    const ev1AtTurn3 = pt.memoryEvents.find(e => e.summary === "Milestone reached at step 1");
-    const ev2AtTurn3 = pt.memoryEvents.find(e => e.summary === "Milestone reached at step 2");
-    const ev3AtTurn3 = pt.memoryEvents.find(e => e.summary === "Milestone reached at step 3");
+    const ev1AtTurn3 = pt.memoryEvents.find(
+      (e) => e.summary === "Milestone reached at step 1",
+    );
+    const ev2AtTurn3 = pt.memoryEvents.find(
+      (e) => e.summary === "Milestone reached at step 2",
+    );
+    const ev3AtTurn3 = pt.memoryEvents.find(
+      (e) => e.summary === "Milestone reached at step 3",
+    );
     expect(ev1AtTurn3?.turn).toBe(1);
     expect(ev2AtTurn3?.turn).toBe(2);
     expect(ev3AtTurn3?.turn).toBe(3);
@@ -214,10 +282,17 @@ describe("executeTurn", () => {
       }
     }
 
-    const result = await executeTurn(playthrough, "hello", new EmptyNarrativeProvider(), false);
+    const result = await executeTurn(
+      playthrough,
+      "hello",
+      new EmptyNarrativeProvider(),
+      false,
+    );
 
     expect(result.state.messages[1].role).toBe("assistant");
-    expect(result.state.messages[1].content).toBe("The provider returned an empty response.");
+    expect(result.state.messages[1].content).toBe(
+      "The provider returned an empty response.",
+    );
     expect(result.narrative).toBe("The provider returned an empty response.");
   });
 
@@ -233,14 +308,21 @@ describe("executeTurn", () => {
         _state: Parameters<MockProvider["generateTurn"]>[1],
         _choicesEnabled: Parameters<MockProvider["generateTurn"]>[2],
         _promptConfig: Parameters<MockProvider["generateTurn"]>[3],
-        signal?: AbortSignal
+        signal?: AbortSignal,
       ): Promise<ProviderTurn> {
         receivedSignal = signal;
         return { turn: { narrative: "ok" } };
       }
     }
 
-    await executeTurn(playthrough, "hi", new SignalProbeProvider(), false, 65536, { signal: controller.signal });
+    await executeTurn(
+      playthrough,
+      "hi",
+      new SignalProbeProvider(),
+      false,
+      65536,
+      { signal: controller.signal },
+    );
 
     expect(receivedSignal).toBe(controller.signal);
   });
@@ -250,7 +332,14 @@ describe("executeTurn", () => {
     const playthrough = createPlaythroughRecord(dir, "Hide User Message Test");
     const provider = new MockProvider();
 
-    const result = await executeTurn(playthrough, "*continue*", provider, false, 65536, { hideUserMessage: true });
+    const result = await executeTurn(
+      playthrough,
+      "*continue*",
+      provider,
+      false,
+      65536,
+      { hideUserMessage: true },
+    );
 
     expect(result.state.messages).toHaveLength(2);
     expect(result.state.messages[0].role).toBe("user");
@@ -274,19 +363,24 @@ describe("executeTurn", () => {
       chatHistory: 20,
       memoryEvents: 0,
       lorebookDepth: 0,
-      userInput: 20
+      userInput: 20,
     };
     class MeasuredProvider extends MockProvider {
       override async generateTurn(): Promise<ProviderTurn> {
         return {
           turn: { narrative: "measured" },
           promptUsage: { estimated: 1000, breakdown },
-          measuredUsage: { promptTokens: 2500 }
+          measuredUsage: { promptTokens: 2500 },
         };
       }
     }
 
-    const result = await executeTurn(playthrough, "hi", new MeasuredProvider(), false);
+    const result = await executeTurn(
+      playthrough,
+      "hi",
+      new MeasuredProvider(),
+      false,
+    );
 
     expect(result.state.tokenCalibration).toBe(2.5);
     // Calibration is world-external: it must not be rewound by a retry snapshot.
@@ -297,9 +391,17 @@ describe("executeTurn", () => {
 
   it("(f) leaves the calibration absent when the provider reports no measurement", async () => {
     const dir = tempDir();
-    const playthrough = createPlaythroughRecord(dir, "Unmeasured Calibration Test");
+    const playthrough = createPlaythroughRecord(
+      dir,
+      "Unmeasured Calibration Test",
+    );
 
-    const result = await executeTurn(playthrough, "hi", new MockProvider(), false);
+    const result = await executeTurn(
+      playthrough,
+      "hi",
+      new MockProvider(),
+      false,
+    );
 
     expect(result.state.tokenCalibration).toBeUndefined();
   });
@@ -312,15 +414,29 @@ describe("retryAssistantTurn", () => {
     let playthrough = createPlaythroughRecord(dir, "Retry Test");
 
     // Build two full turns.
-    playthrough = (await executeTurn(playthrough, "first input", provider, false)).state;
-    playthrough = (await executeTurn(playthrough, "second input", provider, false)).state;
+    playthrough = (
+      await executeTurn(playthrough, "first input", provider, false)
+    ).state;
+    playthrough = (
+      await executeTurn(playthrough, "second input", provider, false)
+    ).state;
 
     // Simulate extra state that turn 2 produced.
-    playthrough.worldState.push({ id: "flag_from_turn_2", name: "flag_from_turn_2", description: "flag_from_turn_2" });
+    playthrough.worldState.push({
+      id: "flag_from_turn_2",
+      name: "flag_from_turn_2",
+      description: "flag_from_turn_2",
+    });
     updatePlaythroughRecord(dir, playthrough);
 
     const secondAssistantId = playthrough.messages[3].id;
-    const result = await retryAssistantTurn(dir, playthrough.id, secondAssistantId, provider, false);
+    const result = await retryAssistantTurn(
+      dir,
+      playthrough.id,
+      secondAssistantId,
+      provider,
+      false,
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -351,12 +467,22 @@ describe("retryAssistantTurn", () => {
     const provider = new MockProvider();
     let playthrough = createPlaythroughRecord(dir, "Retry Early Test");
 
-    playthrough = (await executeTurn(playthrough, "first input", provider, false)).state;
-    playthrough = (await executeTurn(playthrough, "second input", provider, false)).state;
+    playthrough = (
+      await executeTurn(playthrough, "first input", provider, false)
+    ).state;
+    playthrough = (
+      await executeTurn(playthrough, "second input", provider, false)
+    ).state;
     updatePlaythroughRecord(dir, playthrough);
 
     const firstAssistantId = playthrough.messages[1].id;
-    const result = await retryAssistantTurn(dir, playthrough.id, firstAssistantId, provider, false);
+    const result = await retryAssistantTurn(
+      dir,
+      playthrough.id,
+      firstAssistantId,
+      provider,
+      false,
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -370,17 +496,33 @@ describe("retryAssistantTurn", () => {
   it("captures and restores itemCatalog and lorebookTimingStates across turns and retry", async () => {
     const dir = tempDir();
     const provider = new MockProvider();
-    let playthrough = createPlaythroughRecord(dir, "Item and Timing Snapshot Test");
+    let playthrough = createPlaythroughRecord(
+      dir,
+      "Item and Timing Snapshot Test",
+    );
 
     playthrough.itemCatalog = [
-      { id: "item_sword", name: "Iron Sword", type: "weapon", description: "A simple blade", stackable: false }
+      {
+        id: "item_sword",
+        name: "Iron Sword",
+        type: "weapon",
+        description: "A simple blade",
+        stackable: false,
+      },
     ];
     playthrough.lorebookTimingStates = {
-      "100": { lastActivatedAt: 1, stickyCount: 0, delayRemaining: 0, cooldownRemaining: 2 }
+      "100": {
+        lastActivatedAt: 1,
+        stickyCount: 0,
+        delayRemaining: 0,
+        cooldownRemaining: 2,
+      },
     };
     updatePlaythroughRecord(dir, playthrough);
 
-    playthrough = (await executeTurn(playthrough, "first input", provider, false)).state;
+    playthrough = (
+      await executeTurn(playthrough, "first input", provider, false)
+    ).state;
     const firstAssistantId = playthrough.messages[1].id;
     const snapshot1 = playthrough.snapshots?.[firstAssistantId];
     expect(snapshot1?.itemCatalog).toHaveLength(1);
@@ -393,24 +535,32 @@ describe("retryAssistantTurn", () => {
       name: "Wooden Shield",
       type: "armor",
       description: "A wooden shield",
-      stackable: false
+      stackable: false,
     });
     playthrough.lorebookTimingStates!["200"] = {
       lastActivatedAt: 2,
       stickyCount: 1,
       delayRemaining: 0,
-      cooldownRemaining: 0
+      cooldownRemaining: 0,
     };
     updatePlaythroughRecord(dir, playthrough);
 
-    playthrough = (await executeTurn(playthrough, "second input", provider, false)).state;
+    playthrough = (
+      await executeTurn(playthrough, "second input", provider, false)
+    ).state;
     updatePlaythroughRecord(dir, playthrough);
     const secondAssistantId = playthrough.messages[3].id;
     expect(playthrough.itemCatalog).toHaveLength(2);
     expect(playthrough.lorebookTimingStates?.["200"]).toBeDefined();
 
     // Retry turn 1: should restore turn 1's snapshot (1 item, only timing for 100)
-    const result = await retryAssistantTurn(dir, playthrough.id, firstAssistantId, provider, false);
+    const result = await retryAssistantTurn(
+      dir,
+      playthrough.id,
+      firstAssistantId,
+      provider,
+      false,
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -429,11 +579,22 @@ describe("retryAssistantTurn", () => {
     playthrough.turn = 5;
     playthrough.messages.push(
       { id: "u1", role: "user", content: "legacy input", createdAt: now },
-      { id: "a1", role: "assistant", content: "legacy response", createdAt: now }
+      {
+        id: "a1",
+        role: "assistant",
+        content: "legacy response",
+        createdAt: now,
+      },
     );
     updatePlaythroughRecord(dir, playthrough);
 
-    const result = await retryAssistantTurn(dir, playthrough.id, "a1", provider, false);
+    const result = await retryAssistantTurn(
+      dir,
+      playthrough.id,
+      "a1",
+      provider,
+      false,
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -445,20 +606,39 @@ describe("retryAssistantTurn", () => {
     const dir = tempDir();
     const provider = new MockProvider();
     let playthrough = createPlaythroughRecord(dir, "Retry Errors Test");
-    playthrough = (await executeTurn(playthrough, "hello", provider, false)).state;
+    playthrough = (await executeTurn(playthrough, "hello", provider, false))
+      .state;
     updatePlaythroughRecord(dir, playthrough);
 
     const userMessageId = playthrough.messages[0].id;
 
-    const onUser = await retryAssistantTurn(dir, playthrough.id, userMessageId, provider, false);
+    const onUser = await retryAssistantTurn(
+      dir,
+      playthrough.id,
+      userMessageId,
+      provider,
+      false,
+    );
     expect(onUser.ok).toBe(false);
     if (!onUser.ok) expect(onUser.status).toBe(400);
 
-    const onMissing = await retryAssistantTurn(dir, playthrough.id, "msg_missing", provider, false);
+    const onMissing = await retryAssistantTurn(
+      dir,
+      playthrough.id,
+      "msg_missing",
+      provider,
+      false,
+    );
     expect(onMissing.ok).toBe(false);
     if (!onMissing.ok) expect(onMissing.status).toBe(404);
 
-    const onMissingPlaythrough = await retryAssistantTurn(dir, "play_missing", userMessageId, provider, false);
+    const onMissingPlaythrough = await retryAssistantTurn(
+      dir,
+      "play_missing",
+      userMessageId,
+      provider,
+      false,
+    );
     expect(onMissingPlaythrough.ok).toBe(false);
     if (!onMissingPlaythrough.ok) expect(onMissingPlaythrough.status).toBe(404);
   });
@@ -468,15 +648,27 @@ describe("retryAssistantTurn", () => {
     const provider = new MockProvider();
     let playthrough = createPlaythroughRecord(dir, "Abort Retry Test");
 
-    playthrough = (await executeTurn(playthrough, "first input", provider, false)).state;
-    playthrough = (await executeTurn(playthrough, "second input", provider, false)).state;
+    playthrough = (
+      await executeTurn(playthrough, "first input", provider, false)
+    ).state;
+    playthrough = (
+      await executeTurn(playthrough, "second input", provider, false)
+    ).state;
     updatePlaythroughRecord(dir, playthrough);
 
     const secondAssistantId = playthrough.messages[3].id;
     const controller = new AbortController();
     controller.abort();
 
-    const result = await retryAssistantTurn(dir, playthrough.id, secondAssistantId, provider, false, 65536, controller.signal);
+    const result = await retryAssistantTurn(
+      dir,
+      playthrough.id,
+      secondAssistantId,
+      provider,
+      false,
+      65536,
+      controller.signal,
+    );
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.status).toBe(499);
@@ -495,8 +687,12 @@ describe("retryAssistantTurn", () => {
     const dir = tempDir();
     const provider = new MockProvider();
     let playthrough = createPlaythroughRecord(dir, "Retry Failure Test");
-    playthrough = (await executeTurn(playthrough, "first input", provider, false)).state;
-    playthrough = (await executeTurn(playthrough, "second input", provider, false)).state;
+    playthrough = (
+      await executeTurn(playthrough, "first input", provider, false)
+    ).state;
+    playthrough = (
+      await executeTurn(playthrough, "second input", provider, false)
+    ).state;
     updatePlaythroughRecord(dir, playthrough);
 
     const file = join(dir, `${playthrough.id}.json`);
@@ -509,7 +705,13 @@ describe("retryAssistantTurn", () => {
     }
 
     await expect(
-      retryAssistantTurn(dir, playthrough.id, playthrough.messages[3].id, new FailingProvider(), false)
+      retryAssistantTurn(
+        dir,
+        playthrough.id,
+        playthrough.messages[3].id,
+        new FailingProvider(),
+        false,
+      ),
     ).rejects.toThrow("provider exploded");
 
     expect(readFileSync(file, "utf8")).toBe(before);
@@ -522,8 +724,12 @@ describe("retryAssistantTurn", () => {
     const dir = tempDir();
     const provider = new MockProvider();
     let playthrough = createPlaythroughRecord(dir, "Plan Agreement Test");
-    playthrough = (await executeTurn(playthrough, "first input", provider, false)).state;
-    playthrough = (await executeTurn(playthrough, "second input", provider, false)).state;
+    playthrough = (
+      await executeTurn(playthrough, "first input", provider, false)
+    ).state;
+    playthrough = (
+      await executeTurn(playthrough, "second input", provider, false)
+    ).state;
     updatePlaythroughRecord(dir, playthrough);
 
     const secondAssistantId = playthrough.messages[3].id;
@@ -536,7 +742,13 @@ describe("retryAssistantTurn", () => {
     const promised = describeDeletion(plan, playthrough).messages;
     expect(promised).toBe(playthrough.messages.length - plan.truncationIndex);
 
-    const result = await retryAssistantTurn(dir, playthrough.id, secondAssistantId, provider, false);
+    const result = await retryAssistantTurn(
+      dir,
+      playthrough.id,
+      secondAssistantId,
+      provider,
+      false,
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -564,15 +776,19 @@ describe("retryAssistantTurn", () => {
 
     const provider = new MockProvider();
     let playthrough = createPlaythroughRecord(dir, "Retry Sweep Test");
-    playthrough = (await executeTurn(playthrough, "first input", provider, false)).state;
-    playthrough = (await executeTurn(playthrough, "second input", provider, false)).state;
+    playthrough = (
+      await executeTurn(playthrough, "first input", provider, false)
+    ).state;
+    playthrough = (
+      await executeTurn(playthrough, "second input", provider, false)
+    ).state;
 
     const image = (file: string) => ({
       file,
       prompt: `prompt for ${file}`,
       providerId: "venice_images",
       model: "probe",
-      createdAt: "2026-01-01T00:00:00.000Z"
+      createdAt: "2026-01-01T00:00:00.000Z",
     });
     // Turn 1's response keeps its image; turn 2's response shares that file and owns another.
     playthrough.messages[1].images = [image(shared)];
@@ -588,7 +804,7 @@ describe("retryAssistantTurn", () => {
       65536,
       undefined,
       undefined,
-      imagesDir
+      imagesDir,
     );
     expect(result.ok).toBe(true);
 
@@ -604,11 +820,16 @@ describe("editChatMessage", () => {
     const now = new Date().toISOString();
     playthrough.messages.push(
       { id: "u1", role: "user", content: "original", createdAt: now },
-      { id: "a1", role: "assistant", content: "response", createdAt: now }
+      { id: "a1", role: "assistant", content: "response", createdAt: now },
     );
     updatePlaythroughRecord(dir, playthrough);
 
-    const result = editChatMessage(dir, playthrough.id, "u1", "rewritten content");
+    const result = editChatMessage(
+      dir,
+      playthrough.id,
+      "u1",
+      "rewritten content",
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -624,7 +845,12 @@ describe("editChatMessage", () => {
     const dir = tempDir();
     const playthrough = createPlaythroughRecord(dir, "Edit Assistant Test");
     const now = new Date().toISOString();
-    playthrough.messages.push({ id: "a1", role: "assistant", content: "old narrative", createdAt: now });
+    playthrough.messages.push({
+      id: "a1",
+      role: "assistant",
+      content: "old narrative",
+      createdAt: now,
+    });
     updatePlaythroughRecord(dir, playthrough);
 
     const result = editChatMessage(dir, playthrough.id, "a1", "new narrative");
@@ -649,26 +875,57 @@ describe("executeTurn tokenUsage", () => {
     const usage = {
       estimated: 1234,
       breakdown: {
-        modules: 500, outputFormat: 400, lorebook: 0, storySoFar: 0, stateSummary: 200,
-        chatHistory: 100, memoryEvents: 20, lorebookDepth: 0, userInput: 14
-      }
+        modules: 500,
+        outputFormat: 400,
+        lorebook: 0,
+        storySoFar: 0,
+        stateSummary: 200,
+        chatHistory: 100,
+        memoryEvents: 20,
+        lorebookDepth: 0,
+        userInput: 14,
+      },
     };
     const provider: TurnProvider = {
       async generateTurn() {
         return { turn: { narrative: "stub narrative" }, promptUsage: usage };
       },
-      async generateScenarioSeed() { throw new Error("not needed"); },
-      async summarizeChapter() { throw new Error("not needed"); },
-      async compactStorySoFar() { throw new Error("not needed"); },
-      async embedTexts() { return []; },
-      async generateCharacterSheet() { throw new Error("not needed"); },
-      async refineCharacterSheet() { throw new Error("not needed"); },
-      async reformatCharacterSheet() { throw new Error("not needed"); },
-      async suggestCharacterTags() { return []; },
-      async brainstormCharacter() { throw new Error("not needed"); }
+      async generateScenarioSeed() {
+        throw new Error("not needed");
+      },
+      async summarizeChapter() {
+        throw new Error("not needed");
+      },
+      async compactStorySoFar() {
+        throw new Error("not needed");
+      },
+      async embedTexts() {
+        return [];
+      },
+      async generateCharacterSheet() {
+        throw new Error("not needed");
+      },
+      async refineCharacterSheet() {
+        throw new Error("not needed");
+      },
+      async reformatCharacterSheet() {
+        throw new Error("not needed");
+      },
+      async suggestCharacterTags() {
+        return [];
+      },
+      async brainstormCharacter() {
+        throw new Error("not needed");
+      },
     };
 
-    const result = await executeTurn(playthrough, "hello", provider, false, 65536);
+    const result = await executeTurn(
+      playthrough,
+      "hello",
+      provider,
+      false,
+      65536,
+    );
 
     expect(result.tokenUsage.estimated).toBe(1234);
     expect(result.tokenUsage.contextWindow).toBe(65536);
@@ -678,7 +935,13 @@ describe("executeTurn tokenUsage", () => {
   it("falls back to a fixed estimate when the provider supplies no usage (mock)", async () => {
     const dir = tempDir();
     const playthrough = createPlaythroughRecord(dir, "Usage Fallback Test");
-    const result = await executeTurn(playthrough, "hello", new MockProvider(), false, 32768);
+    const result = await executeTurn(
+      playthrough,
+      "hello",
+      new MockProvider(),
+      false,
+      32768,
+    );
 
     const { tokenUsage } = result;
     expect(tokenUsage.contextWindow).toBe(32768);
@@ -686,7 +949,7 @@ describe("executeTurn tokenUsage", () => {
     expect(tokenUsage.breakdown.outputFormat).toBeGreaterThan(100);
     expect(tokenUsage.breakdown.stateSummary).toBeGreaterThan(10);
     expect(tokenUsage.estimated).toBe(
-      Object.values(tokenUsage.breakdown).reduce((a, b) => a + b, 0)
+      Object.values(tokenUsage.breakdown).reduce((a, b) => a + b, 0),
     );
   });
 
@@ -694,17 +957,35 @@ describe("executeTurn tokenUsage", () => {
     const dir = tempDir();
 
     const presentPt = createPlaythroughRecord(dir, "Usage Present Cast Test");
-    const presentResult = await executeTurn(presentPt, "hello", new MockProvider(), false, 32768);
-    expect(presentResult.tokenUsage.castPresence).toEqual({ present: 1, absent: 0 });
+    const presentResult = await executeTurn(
+      presentPt,
+      "hello",
+      new MockProvider(),
+      false,
+      32768,
+    );
+    expect(presentResult.tokenUsage.castPresence).toEqual({
+      present: 1,
+      absent: 0,
+    });
 
     const absentPt = createPlaythroughRecord(dir, "Usage Absent Cast Test");
     absentPt.activeCharacters = [];
-    const absentResult = await executeTurn(absentPt, "hello", new MockProvider(), false, 32768);
-    expect(absentResult.tokenUsage.castPresence).toEqual({ present: 0, absent: 1 });
+    const absentResult = await executeTurn(
+      absentPt,
+      "hello",
+      new MockProvider(),
+      false,
+      32768,
+    );
+    expect(absentResult.tokenUsage.castPresence).toEqual({
+      present: 0,
+      absent: 1,
+    });
 
     // Present chars pay for the full sheet; absent chars are capped one-liners.
     expect(absentResult.tokenUsage.breakdown.stateSummary).toBeLessThan(
-      presentResult.tokenUsage.breakdown.stateSummary
+      presentResult.tokenUsage.breakdown.stateSummary,
     );
   });
 
@@ -717,8 +998,10 @@ describe("executeTurn tokenUsage", () => {
     expect(result.durationMs).toBeTypeOf("number");
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
 
-    const userMsg = result.state.messages.find(m => m.role === "user");
-    const assistantMsg = result.state.messages.find(m => m.role === "assistant");
+    const userMsg = result.state.messages.find((m) => m.role === "user");
+    const assistantMsg = result.state.messages.find(
+      (m) => m.role === "assistant",
+    );
 
     expect(userMsg).toBeDefined();
     expect(userMsg?.createdAt).toBeDefined();
@@ -736,16 +1019,23 @@ describe("executeTurn tokenUsage", () => {
       override async generateTurn(): Promise<ProviderTurn> {
         return {
           turn: { narrative: "A turn from deepseek." },
-          model: "deepseek/deepseek-chat"
+          model: "deepseek/deepseek-chat",
         };
       }
     }
 
     const pt = createPlaythroughRecord(dir, "Model Test");
-    const result = await executeTurn(pt, "hello", new NamedModelProvider(), false);
+    const result = await executeTurn(
+      pt,
+      "hello",
+      new NamedModelProvider(),
+      false,
+    );
 
     expect(result.model).toBe("deepseek/deepseek-chat");
-    const assistantMsg = result.state.messages.find(m => m.role === "assistant");
+    const assistantMsg = result.state.messages.find(
+      (m) => m.role === "assistant",
+    );
     expect(assistantMsg?.model).toBe("deepseek/deepseek-chat");
   });
 });
@@ -755,7 +1045,9 @@ describe("buildOpeningPrompt", () => {
     const seed = {
       character: { name: "Mira", content: "x" },
       startingWorldState: [],
-      items: [], additionalCharacters: [], openingText: "",
+      items: [],
+      additionalCharacters: [],
+      openingText: "",
     } as ScenarioSeed;
     const out = buildOpeningPrompt("A fog-wrapped valley.", seed);
     expect(out).toContain("A fog-wrapped valley.");
@@ -764,8 +1056,11 @@ describe("buildOpeningPrompt", () => {
 
   it("omits the world context when no setting is given", () => {
     const seed = {
-      character: { name: "Mira", content: "x" }, startingWorldState: [],
-      items: [], additionalCharacters: [], openingText: "",
+      character: { name: "Mira", content: "x" },
+      startingWorldState: [],
+      items: [],
+      additionalCharacters: [],
+      openingText: "",
     } as ScenarioSeed;
     const out = buildOpeningPrompt(undefined, seed);
     expect(out).not.toContain("World context");
@@ -781,11 +1076,23 @@ describe("truncateChat (Delete up to here)", () => {
   async function buildTwoTurns(dir: string) {
     const provider = new MockProvider();
     let playthrough = createPlaythroughRecord(dir, "Truncate Test");
-    playthrough = (await executeTurn(playthrough, "first input", provider, false)).state;
-    playthrough.worldState.push({ id: "flag_before_turn_2", name: "flag_before_turn_2", description: "flag_before_turn_2" });
+    playthrough = (
+      await executeTurn(playthrough, "first input", provider, false)
+    ).state;
+    playthrough.worldState.push({
+      id: "flag_before_turn_2",
+      name: "flag_before_turn_2",
+      description: "flag_before_turn_2",
+    });
     updatePlaythroughRecord(dir, playthrough);
-    playthrough = (await executeTurn(playthrough, "second input", provider, false)).state;
-    playthrough.worldState.push({ id: "flag_after_turn_2", name: "flag_after_turn_2", description: "flag_after_turn_2" });
+    playthrough = (
+      await executeTurn(playthrough, "second input", provider, false)
+    ).state;
+    playthrough.worldState.push({
+      id: "flag_after_turn_2",
+      name: "flag_after_turn_2",
+      description: "flag_after_turn_2",
+    });
     updatePlaythroughRecord(dir, playthrough);
     return { playthrough, provider };
   }
@@ -800,11 +1107,19 @@ describe("truncateChat (Delete up to here)", () => {
     if (!result.ok) return;
 
     // U1 A1 U2 remain; A2 and its effects are gone.
-    expect(result.state.messages.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
+    expect(result.state.messages.map((m) => m.role)).toEqual([
+      "user",
+      "assistant",
+      "user",
+    ]);
     expect(result.state.messages[2].content).toBe("second input");
     expect(result.state.turn).toBe(1);
-    expect(result.state.worldState.find(w => w.id === "flag_before_turn_2")).toBeDefined();
-    expect(result.state.worldState.find(w => w.id === "flag_after_turn_2")).toBeUndefined();
+    expect(
+      result.state.worldState.find((w) => w.id === "flag_before_turn_2"),
+    ).toBeDefined();
+    expect(
+      result.state.worldState.find((w) => w.id === "flag_after_turn_2"),
+    ).toBeUndefined();
 
     // Snapshot of the deleted assistant message is pruned.
     expect(result.state.snapshots?.[assistant2Id]).toBeUndefined();
@@ -819,10 +1134,17 @@ describe("truncateChat (Delete up to here)", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.state.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(result.state.messages.map((m) => m.role)).toEqual([
+      "user",
+      "assistant",
+    ]);
     expect(result.state.turn).toBe(1);
-    expect(result.state.worldState.find(w => w.id === "flag_before_turn_2")).toBeDefined();
-    expect(result.state.worldState.find(w => w.id === "flag_after_turn_2")).toBeUndefined();
+    expect(
+      result.state.worldState.find((w) => w.id === "flag_before_turn_2"),
+    ).toBeDefined();
+    expect(
+      result.state.worldState.find((w) => w.id === "flag_after_turn_2"),
+    ).toBeUndefined();
   });
 
   it("deleting the last assistant message reverts that turn's effects (its own snapshot)", async () => {
@@ -836,16 +1158,25 @@ describe("truncateChat (Delete up to here)", () => {
 
     expect(result.state.messages).toHaveLength(3); // U1 A1 U2
     expect(result.state.turn).toBe(1);
-    expect(result.state.worldState.find(w => w.id === "flag_after_turn_2")).toBeUndefined();
+    expect(
+      result.state.worldState.find((w) => w.id === "flag_after_turn_2"),
+    ).toBeUndefined();
   });
 
   it("deleting a trailing user message with no reply keeps live state (nothing happened after it)", async () => {
     const dir = tempDir();
     const provider = new MockProvider();
     let playthrough = createPlaythroughRecord(dir, "Trailing User Test");
-    playthrough = (await executeTurn(playthrough, "first input", provider, false)).state;
+    playthrough = (
+      await executeTurn(playthrough, "first input", provider, false)
+    ).state;
     // Queue a user message with no reply yet.
-    playthrough.messages.push({ id: "msg_trailing_user", role: "user", content: "queued input", createdAt: new Date().toISOString() });
+    playthrough.messages.push({
+      id: "msg_trailing_user",
+      role: "user",
+      content: "queued input",
+      createdAt: new Date().toISOString(),
+    });
     updatePlaythroughRecord(dir, playthrough);
 
     const result = truncateChat(dir, playthrough.id, "msg_trailing_user");
@@ -867,7 +1198,9 @@ describe("truncateChat (Delete up to here)", () => {
 
     expect(result.state.messages).toHaveLength(0);
     expect(result.state.turn).toBe(0);
-    expect(result.state.worldState.find(w => w.id === "flag_before_turn_2")).toBeUndefined();
+    expect(
+      result.state.worldState.find((w) => w.id === "flag_before_turn_2"),
+    ).toBeUndefined();
     expect(result.state.snapshots).toEqual({});
   });
 
@@ -877,16 +1210,40 @@ describe("truncateChat (Delete up to here)", () => {
     let playthrough = createPlaythroughRecord(dir, "Truncate Items Test");
 
     playthrough.itemCatalog = [
-      { id: "item_sword", name: "Iron Sword", type: "weapon", description: "A simple blade", stackable: false }
+      {
+        id: "item_sword",
+        name: "Iron Sword",
+        type: "weapon",
+        description: "A simple blade",
+        stackable: false,
+      },
     ];
     playthrough.lorebookTimingStates = {
-      "100": { lastActivatedAt: 1, stickyCount: 0, delayRemaining: 0, cooldownRemaining: 2 }
+      "100": {
+        lastActivatedAt: 1,
+        stickyCount: 0,
+        delayRemaining: 0,
+        cooldownRemaining: 2,
+      },
     };
     updatePlaythroughRecord(dir, playthrough);
 
-    playthrough = (await executeTurn(playthrough, "first input", provider, false)).state;
-    playthrough.itemCatalog!.push({ id: "item_shield", name: "Wooden Shield", type: "armor", description: "A wooden shield", stackable: false });
-    playthrough.lorebookTimingStates!["200"] = { lastActivatedAt: 2, stickyCount: 1, delayRemaining: 0, cooldownRemaining: 0 };
+    playthrough = (
+      await executeTurn(playthrough, "first input", provider, false)
+    ).state;
+    playthrough.itemCatalog!.push({
+      id: "item_shield",
+      name: "Wooden Shield",
+      type: "armor",
+      description: "A wooden shield",
+      stackable: false,
+    });
+    playthrough.lorebookTimingStates!["200"] = {
+      lastActivatedAt: 2,
+      stickyCount: 1,
+      delayRemaining: 0,
+      cooldownRemaining: 0,
+    };
     updatePlaythroughRecord(dir, playthrough);
 
     const lastId = playthrough.messages[1].id; // A1 — deleting it reverts turn 1's snapshot
@@ -917,30 +1274,42 @@ describe("truncateChat (Delete up to here)", () => {
     const dir = tempDir();
     let playthrough = createPlaythroughRecord(dir, "Mid-Turn Flesh Out Test");
     const withChar = applyStatePatch(playthrough, {
-      characterAddSimple: [{ name: "Borg", description: "Gruff blacksmith", storyRole: "Blacksmith" }]
+      characterAddSimple: [
+        {
+          name: "Borg",
+          description: "Gruff blacksmith",
+          storyRole: "Blacksmith",
+        },
+      ],
     });
     playthrough = withChar.state;
     const borg = playthrough.characters.find((c) => c.name === "Borg")!;
     expect(borg.templateId).toBeUndefined();
 
     class FleshOutTurnProvider extends MockProvider {
-      async generateTurn(...args: Parameters<MockProvider["generateTurn"]>): Promise<ProviderTurn> {
+      async generateTurn(
+        ...args: Parameters<MockProvider["generateTurn"]>
+      ): Promise<ProviderTurn> {
         const out = await super.generateTurn(...args);
         return {
           ...out,
           turn: {
             ...out.turn,
             statePatch: {
-              characterFleshOut: { characterId: borg.id }
-            }
-          }
+              characterFleshOut: { characterId: borg.id },
+            },
+          },
         };
       }
     }
 
     let sheetGeneratedFor = "";
     class DedicatedCharProvider extends MockProvider {
-      async generateCharacterSheet(npc: { name: string; description: string; storyRole?: string }): Promise<string> {
+      async generateCharacterSheet(npc: {
+        name: string;
+        description: string;
+        storyRole?: string;
+      }): Promise<string> {
         sheetGeneratedFor = npc.name;
         return "[Species]: Dwarf\n\n[Body]\n- Build: Sturdy\n\n[Personality]\n- Quiet and diligent";
       }
@@ -952,15 +1321,19 @@ describe("truncateChat (Delete up to here)", () => {
       new FleshOutTurnProvider(),
       false,
       65536,
-      { characterProvider: new DedicatedCharProvider() }
+      { characterProvider: new DedicatedCharProvider() },
     );
 
     expect(sheetGeneratedFor).toBe("Borg");
     const updatedBorg = result.state.characters.find((c) => c.id === borg.id)!;
     expect(updatedBorg.templateId).toBeDefined();
-    const template = result.state.characterTemplates.find((t) => t.id === updatedBorg.templateId);
+    const template = result.state.characterTemplates.find(
+      (t) => t.id === updatedBorg.templateId,
+    );
     expect(template).toBeDefined();
     expect(template?.content).toContain("Dwarf");
-    expect(result.applied.some((a) => a.includes("character fleshed out: Borg"))).toBe(true);
+    expect(
+      result.applied.some((a) => a.includes("character fleshed out: Borg")),
+    ).toBe(true);
   });
 });

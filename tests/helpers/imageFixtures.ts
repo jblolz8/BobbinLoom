@@ -5,7 +5,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type MessageImage, type Playthrough } from "../../src/schemas";
-import { createBlankPlaythroughRecord, updatePlaythroughRecord } from "../../src/server/store";
+import {
+  createBlankPlaythroughRecord,
+  updatePlaythroughRecord,
+} from "../../src/server/store";
 import { makePng } from "./pngBuilder";
 
 const tempDirs: string[] = [];
@@ -28,7 +31,10 @@ export function pngBytes(seed: string): Buffer {
   return makePng(`fixture-${seed}`);
 }
 
-export function imageRef(file: string, overrides: Partial<MessageImage> = {}): MessageImage {
+export function imageRef(
+  file: string,
+  overrides: Partial<MessageImage> = {},
+): MessageImage {
   return {
     file,
     prompt: "a test prompt",
@@ -37,7 +43,7 @@ export function imageRef(file: string, overrides: Partial<MessageImage> = {}): M
     model: "test-image-model",
     durationMs: 1200,
     createdAt: new Date().toISOString(),
-    ...overrides
+    ...overrides,
   };
 }
 
@@ -52,15 +58,22 @@ export function writePlaythroughWithImages(
   dir: string,
   name: string,
   filesPerMessage: string[][] = [],
-  overrides: Partial<Playthrough> = {}
+  overrides: Partial<Playthrough> = {},
 ): Playthrough {
-  const pt = createBlankPlaythroughRecord(dir, name, undefined, [], undefined, undefined);
+  const pt = createBlankPlaythroughRecord(
+    dir,
+    name,
+    undefined,
+    [],
+    undefined,
+    undefined,
+  );
   pt.messages = filesPerMessage.map((files, i) => ({
     id: `msg_${name.replace(/\W+/g, "_")}_${i}`,
     role: i % 2 === 0 ? ("assistant" as const) : ("user" as const),
     content: `message ${i} of ${name}`,
     createdAt: new Date(2026, 0, 1, 0, i).toISOString(),
-    ...(files.length ? { images: files.map((file) => imageRef(file)) } : {})
+    ...(files.length ? { images: files.map((file) => imageRef(file)) } : {}),
   }));
   Object.assign(pt, overrides);
   updatePlaythroughRecord(dir, pt);

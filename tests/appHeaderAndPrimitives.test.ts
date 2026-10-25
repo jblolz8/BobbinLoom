@@ -23,12 +23,20 @@ import { SettingsModal } from "../src/client/components/modals/SettingsModal";
 import { AppearanceSettingsPanel } from "../src/client/components/settings/AppearanceSettingsPanel";
 import { ChatSettingsPanel } from "../src/client/components/settings/ChatSettingsPanel";
 import { InterfaceSettingsPanel } from "../src/client/components/settings/InterfaceSettingsPanel";
-import { formatEqual, imageEqual, PresetEditor, promptConfigDiffers } from "../src/client/components/settings/PresetEditor";
+import {
+  formatEqual,
+  imageEqual,
+  PresetEditor,
+  promptConfigDiffers,
+} from "../src/client/components/settings/PresetEditor";
 import { ProviderConnectionCard } from "../src/client/components/settings/providers/ProviderConnectionList";
 import { ImageConnectionEditor } from "../src/client/components/settings/providers/ImageConnectionEditor";
 import { TextConnectionEditor } from "../src/client/components/settings/providers/TextConnectionEditor";
 import { AppHeader } from "../src/client/components/navigation/AppHeader";
-import { buildTextSamplingParams, resolveConnectionConfig } from "../src/server/providerConfig";
+import {
+  buildTextSamplingParams,
+  resolveConnectionConfig,
+} from "../src/server/providerConfig";
 import { testProviderResponse } from "../src/server/providerRegistry";
 
 const noop = () => {};
@@ -48,13 +56,15 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
           onNewPlaythrough: noop,
           onOpenSettings: noop,
           onOpenDocs: noop,
-        })
-      )
+        }),
+      ),
     );
 
     expect(html).toContain("base-header base-header--app app-header");
     expect(html).toContain("base-header__brand");
-    expect(html).toContain('<h1 class="base-header__logo"><button type="button" class="base-header__logo-btn">');
+    expect(html).toContain(
+      '<h1 class="base-header__logo"><button type="button" class="base-header__logo-btn">',
+    );
     expect(html).toContain("base-header__nav");
     expect(html).toContain("base-tabs--segmented");
     expect(html).toContain("base-header__actions");
@@ -82,8 +92,8 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
           onNewPlaythrough: noop,
           onOpenSettings: noop,
           onOpenDocs: noop,
-        })
-      )
+        }),
+      ),
     );
 
     expect(html).toContain("base-header--compact");
@@ -93,9 +103,13 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
     expect(html).toContain("base-btn--collapse-always");
     // In compact play view, Home, New Playthrough, Settings, and Nav are icon-only and all have active tooltip triggers
     expect(html).toMatch(/aria-label="Return to Home"[^>]*data-state="closed"/);
-    expect(html).toMatch(/aria-label="New Playthrough"[^>]*data-state="closed"/);
+    expect(html).toMatch(
+      /aria-label="New Playthrough"[^>]*data-state="closed"/,
+    );
     expect(html).toMatch(/aria-label="Settings"[^>]*data-state="closed"/);
-    expect(html).toMatch(/aria-label="Toggle navigation bar"[^>]*data-state="closed"/);
+    expect(html).toMatch(
+      /aria-label="Toggle navigation bar"[^>]*data-state="closed"/,
+    );
   });
 
   it("renders Header page variant with structured title, subtitle, and actions", () => {
@@ -104,14 +118,20 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
         variant: "page",
         title: "Character Library",
         subtitle: "Manage character templates for scenario generation.",
-        actions: createElement(Button, { variant: "primary", size: "sm" }, "Create"),
-      })
+        actions: createElement(
+          Button,
+          { variant: "primary", size: "sm" },
+          "Create",
+        ),
+      }),
     );
 
     expect(html).toContain("base-header base-header--page");
     expect(html).toContain('<h2 class="base-text base-header__title">');
     expect(html).toContain("Character Library");
-    expect(html).toContain("Manage character templates for scenario generation.");
+    expect(html).toContain(
+      "Manage character templates for scenario generation.",
+    );
     expect(html).toContain("base-header__actions");
   });
 
@@ -122,15 +142,23 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
         { direction: "row", align: "center", gap: "sm" },
         createElement(
           Text,
-          { as: "p", size: "sm", tone: "secondary", weight: "semibold", truncate: true },
-          "Theme-aware text"
-        )
-      )
+          {
+            as: "p",
+            size: "sm",
+            tone: "secondary",
+            weight: "semibold",
+            truncate: true,
+          },
+          "Theme-aware text",
+        ),
+      ),
     );
 
-    expect(html).toContain("base-stack base-stack--row base-stack--align-center base-stack--gap-sm");
     expect(html).toContain(
-      '<p class="base-text base-text--size-sm base-text--tone-secondary base-text--weight-semibold base-text--truncate">Theme-aware text</p>'
+      "base-stack base-stack--row base-stack--align-center base-stack--gap-sm",
+    );
+    expect(html).toContain(
+      '<p class="base-text base-text--size-sm base-text--tone-secondary base-text--weight-semibold base-text--truncate">Theme-aware text</p>',
     );
   });
 
@@ -139,12 +167,27 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
       createElement(
         Stack,
         { gap: "sm" },
-        createElement(Badge, { variant: "accent", size: "sm", leftIcon: "BookOpen" }, "Story"),
-        createElement(Button, { variant: "primary", size: "md", leftIcon: "Plus", rightIcon: "ArrowRight" }, "New")
-      )
+        createElement(
+          Badge,
+          { variant: "accent", size: "sm", leftIcon: "BookOpen" },
+          "Story",
+        ),
+        createElement(
+          Button,
+          {
+            variant: "primary",
+            size: "md",
+            leftIcon: "Plus",
+            rightIcon: "ArrowRight",
+          },
+          "New",
+        ),
+      ),
     );
 
-    expect(html).toContain('class="base-badge__icon base-badge__icon--left"><svg');
+    expect(html).toContain(
+      'class="base-badge__icon base-badge__icon--left"><svg',
+    );
     expect(html).toContain('width="14" height="14"');
     expect(html).toContain('class="base-btn__icon base-btn__icon--left"><svg');
     expect(html).toContain('class="base-btn__icon base-btn__icon--right"><svg');
@@ -161,17 +204,27 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
         showContextUsage: true,
         setShowContextUsage: noop,
         autoScrollBehavior: "start",
-      })
+      }),
     );
 
     expect(html).toContain("base-header base-header--section");
     expect(html).toContain("base-header__title-icon");
     expect(html).toContain("base-header__subtitle");
-    expect(html).toContain("Choose which badges, metadata, and interactive controls appear on chat turns.");
-    expect(html).toContain("Control where the chat viewport scrolls when a new AI response arrives.");
-    expect(html).toContain("Configure how scene renders are prompted, triggered, and replaced in chat.");
-    expect(html).toContain("Inspect raw prompt payloads, model responses, and state patches.");
-    expect(html).toContain("base-card base-card--elevated base-card--pad-xs base-card--active base-card--hoverable");
+    expect(html).toContain(
+      "Choose which badges, metadata, and interactive controls appear on chat turns.",
+    );
+    expect(html).toContain(
+      "Control where the chat viewport scrolls when a new AI response arrives.",
+    );
+    expect(html).toContain(
+      "Configure how scene renders are prompted, triggered, and replaced in chat.",
+    );
+    expect(html).toContain(
+      "Inspect raw prompt payloads, model responses, and state patches.",
+    );
+    expect(html).toContain(
+      "base-card base-card--elevated base-card--pad-xs base-card--active base-card--hoverable",
+    );
     expect(html).toContain("base-badge base-badge--accent base-badge--xs");
     expect(html).toContain("Top of Message");
     expect(html).not.toContain("autoscroll-option-card");
@@ -192,12 +245,16 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
           setShowDebug: noop,
           showContextUsage: true,
           setShowContextUsage: noop,
-        })
-      )
+        }),
+      ),
     );
 
-    expect(html).toContain("base-modal-backdrop base-modal-backdrop--fullscreen-mobile");
-    expect(html).toContain("base-modal base-modal--wide base-modal--fullscreen-mobile");
+    expect(html).toContain(
+      "base-modal-backdrop base-modal-backdrop--fullscreen-mobile",
+    );
+    expect(html).toContain(
+      "base-modal base-modal--wide base-modal--fullscreen-mobile",
+    );
     expect(html).toContain("base-modal__body base-modal__body--split");
     expect(html).toContain("base-modal__content");
     expect(html).toContain('role="tabpanel"');
@@ -251,8 +308,8 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
           onTest: noop as never,
           onCancel: noop,
           onDelete: noop,
-        })
-      )
+        }),
+      ),
     );
 
     expect(deepseekHtml).toContain("base-slider");
@@ -271,7 +328,9 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
     expect(deepseekHtml).not.toContain('aria-label="Top K slider"');
     expect(deepseekHtml).not.toContain('aria-label="Min P slider"');
     expect(deepseekHtml).not.toContain('aria-label="Top A slider"');
-    expect(deepseekHtml).not.toContain('aria-label="Repetition Penalty slider"');
+    expect(deepseekHtml).not.toContain(
+      'aria-label="Repetition Penalty slider"',
+    );
 
     const openrouterHtml = renderToStaticMarkup(
       createElement(
@@ -311,8 +370,8 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
           onTest: noop as never,
           onCancel: noop,
           onDelete: noop,
-        })
-      )
+        }),
+      ),
     );
 
     expect(openrouterHtml).toContain("Top K");
@@ -345,7 +404,7 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
     };
 
     const deepseekParams = buildTextSamplingParams(
-      resolveConnectionConfig({ ...baseConn, textSource: "deepseek" })
+      resolveConnectionConfig({ ...baseConn, textSource: "deepseek" }),
     );
     expect(deepseekParams).toEqual({
       top_p: 0.9,
@@ -354,7 +413,11 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
     });
 
     const openrouterParams = buildTextSamplingParams(
-      resolveConnectionConfig({ ...baseConn, baseUrl: "https://openrouter.ai/api/v1", textSource: "openrouter" })
+      resolveConnectionConfig({
+        ...baseConn,
+        baseUrl: "https://openrouter.ai/api/v1",
+        textSource: "openrouter",
+      }),
     );
     expect(openrouterParams).toEqual({
       top_p: 0.9,
@@ -429,8 +492,8 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
           onTestResponse: noop as never,
           onCancel: noop,
           onDelete: noop,
-        })
-      )
+        }),
+      ),
     );
 
     expect(html).toContain("base-status base-status--inline base-status--ok");
@@ -450,7 +513,10 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
     let capturedUrl = "";
     let capturedBody: Record<string, unknown> = {};
 
-    const mockFetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    const mockFetch = (async (
+      url: string | URL | Request,
+      init?: RequestInit,
+    ) => {
       capturedUrl = String(url);
       capturedBody = JSON.parse(String(init?.body ?? "{}"));
       return new Response(
@@ -459,7 +525,7 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
           choices: [{ message: { content: "Online and ready!" } }],
           usage: { prompt_tokens: 14, completion_tokens: 5, total_tokens: 19 },
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        { status: 200, headers: { "Content-Type": "application/json" } },
       );
     }) as typeof fetch;
 
@@ -474,7 +540,7 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
         topP: 0.9,
         topK: 50, // Unsupported by DeepSeek — should be stripped on the wire
       },
-      mockFetch
+      mockFetch,
     );
 
     expect(capturedUrl).toBe("https://api.deepseek.com/v1/chat/completions");
@@ -516,11 +582,23 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
           onEdit: noop,
           onDuplicate: noop,
           onRemove: noop,
-          headerTags: createElement(Badge, { variant: "info", size: "xs", leftIcon: "MessageSquare" }, "OpenRouter"),
-          detailTags: createElement(Badge, { variant: "neutral", size: "xs", leftIcon: "Timer" }, "120s timeout"),
-          overrideTags: createElement(Badge, { variant: "accent", size: "xs", leftIcon: "Sparkles" }, "New Story"),
-        })
-      )
+          headerTags: createElement(
+            Badge,
+            { variant: "info", size: "xs", leftIcon: "MessageSquare" },
+            "OpenRouter",
+          ),
+          detailTags: createElement(
+            Badge,
+            { variant: "neutral", size: "xs", leftIcon: "Timer" },
+            "120s timeout",
+          ),
+          overrideTags: createElement(
+            Badge,
+            { variant: "accent", size: "xs", leftIcon: "Sparkles" },
+            "New Story",
+          ),
+        }),
+      ),
     );
 
     expect(html).toContain("OpenRouter — Claude 3.7 Sonnet");
@@ -588,8 +666,8 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
           onCancel: noop,
           onDelete: noop,
           textConnections: [],
-        })
-      )
+        }),
+      ),
     );
 
     expect(veniceHtml).toContain("API Style &amp; Connection");
@@ -640,8 +718,8 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
           onCancel: noop,
           onDelete: noop,
           textConnections: [],
-        })
-      )
+        }),
+      ),
     );
 
     expect(a1111Html).toContain("Checkpoint");
@@ -663,7 +741,12 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
           createElement(PresetEditor),
           createElement(
             Card,
-            { variant: "elevated", padding: "xs", dragging: true, dropTarget: true },
+            {
+              variant: "elevated",
+              padding: "xs",
+              dragging: true,
+              dropTarget: true,
+            },
             createElement(Checkbox, {
               label: "Core Rules",
               tooltip: "Always sent at the top of the prompt.",
@@ -676,11 +759,11 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
               tooltip: "One line per bullet.",
               value: "Example bullet",
               onChange: noop,
-            })
+            }),
           ),
-          createElement(DragGhost, { x: 120, y: 240, name: "Core Rules" })
-        )
-      )
+          createElement(DragGhost, { x: 120, y: 240, name: "Core Rules" }),
+        ),
+      ),
     );
 
     expect(html).toContain("base-stack--sticky");
@@ -757,7 +840,11 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
     expect(imageEqual(imageA, imageB)).toBe(true);
     expect(
       promptConfigDiffers(
-        { modules: { turn: [] }, characterFormat: formatFromZod, imageGeneration: imageA },
+        {
+          modules: { turn: [] },
+          characterFormat: formatFromZod,
+          imageGeneration: imageA,
+        },
         {
           id: "default-nsfw",
           name: "Default NSFW",
@@ -765,8 +852,8 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
           modules: { turn: [] },
           characterFormat: formatFromRawJson,
           imageGeneration: imageB,
-        }
-      )
+        },
+      ),
     ).toBe(false);
   });
 
@@ -823,14 +910,15 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
             createElement(CheckboxRow, {
               icon: "UserPlus",
               title: "Allow AI to invent additional characters",
-              description: "Let the story introduce new characters organically.",
+              description:
+                "Let the story introduce new characters organically.",
               checked: true,
               dirty: true,
               onChange: noop,
-            })
-          )
-        )
-      )
+            }),
+          ),
+        ),
+      ),
     );
 
     expect(html).toContain("base-card--dirty");
@@ -853,7 +941,9 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
     expect(html).toContain("Narrow Screens");
     expect(html).toContain("base-separator base-separator--horizontal");
     expect(html).toContain("base-form-grid base-form-grid--cols-3");
-    expect(html).toContain("base-card base-card--elevated base-card--pad-sm base-card--active base-card--hoverable");
+    expect(html).toContain(
+      "base-card base-card--elevated base-card--pad-sm base-card--active base-card--hoverable",
+    );
     expect(html).toContain("base-card base-card--panel base-card--pad-xs");
     expect(html).toContain("base-stack--mobile-only");
     expect(html).toContain("cover-aspect-preview");

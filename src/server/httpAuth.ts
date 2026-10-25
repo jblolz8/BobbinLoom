@@ -8,7 +8,10 @@ import type { ImageApiStyle } from "../schemas";
  *  disagree about how a key is presented. Non-a1111 dialects are always
  *  Bearer: an OpenAI-compatible or Venice key that happens to contain a colon
  *  is still a token, not a credential pair. */
-export function authHeaders(apiKey: string | undefined, apiStyle: ImageApiStyle = "openai"): Record<string, string> {
+export function authHeaders(
+  apiKey: string | undefined,
+  apiStyle: ImageApiStyle = "openai",
+): Record<string, string> {
   const key = apiKey?.trim();
   if (!key) return {};
   if (apiStyle === "a1111" && key.includes(":")) {

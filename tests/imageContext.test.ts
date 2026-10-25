@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_IMAGE_PROMPT_INSTRUCTION } from "../src/engine/imageDefaults";
 import type { ImageGenerationSettings, Playthrough } from "../src/schemas";
-import { IMAGE_HISTORY_HEADER, buildImageCastBlock, buildImageHistoryBlock, buildImageStateBlock, previousWriterAnswer } from "../src/server/provider/imageContext";
+import {
+  IMAGE_HISTORY_HEADER,
+  buildImageCastBlock,
+  buildImageHistoryBlock,
+  buildImageStateBlock,
+  previousWriterAnswer,
+} from "../src/server/provider/imageContext";
 
 /** A playthrough carrying exactly what the two builders read, plus the material
  *  they must NOT emit: the player's wardrobe and appearance, an absent
@@ -13,19 +19,28 @@ function fixture() {
     activeCharacters: ["char_j"],
     playerCharacter: {
       name: "Anon",
-      description: "A male human. Wears glasses since he is short-sighted. Prefers a long sleeve shirt, slacks and a necktie.",
+      description:
+        "A male human. Wears glasses since he is short-sighted. Prefers a long sleeve shirt, slacks and a necktie.",
       bodyType: "average",
       appearance: "Fair skin. Black hair. Black eye color.",
       clothing: [
         { slot: "Torso", name: "White Long Sleeve Shirt" },
         { slot: "Neck", name: "Necktie" },
-        { slot: "Legs", name: "Black Slacks" }
+        { slot: "Legs", name: "Black Slacks" },
       ],
       conditions: ["handcuffed"],
-      flags: ["tied_up"]
+      flags: ["tied_up"],
     },
     inventory: [{ itemId: "item_rope", quantity: 1 }],
-    quests: [{ id: "q1", name: "Escape", summary: "Get out of the apartment.", status: "active", tracking: true }],
+    quests: [
+      {
+        id: "q1",
+        name: "Escape",
+        summary: "Get out of the apartment.",
+        status: "active",
+        tracking: true,
+      },
+    ],
     flags: ["tied_up"],
     turn: 4,
     characters: [
@@ -36,7 +51,7 @@ function fixture() {
         clothing: [{ slot: "Torso", name: "Faded gray hoodie" }],
         mood: "overwhelmed_content",
         conditions: ["flushed"],
-        flags: []
+        flags: [],
       },
       {
         id: "char_ghost",
@@ -45,8 +60,8 @@ function fixture() {
         clothing: [],
         mood: "wary",
         conditions: [],
-        flags: []
-      }
+        flags: [],
+      },
     ],
     characterTemplates: [
       {
@@ -55,15 +70,21 @@ function fixture() {
         content:
           "[Species]: Human\n\n[Gender]: Female\n\n[Body]\n- Build: slim, athletic\n\n" +
           "[Appearance]\n- Eyes: tired blue eyes\n- Hair: light brown, loose ponytail\n\n" +
-          "[Clothing]\n- Top: black training top\n- Bottom: loose cotton shorts\n\n[Personality]\n- Guarded"
+          "[Clothing]\n- Top: black training top\n- Bottom: loose cotton shorts\n\n[Personality]\n- Guarded",
       },
-      { id: "tpl_g", name: "Ghost", content: "[Species]: Human" }
-    ]
+      { id: "tpl_g", name: "Ghost", content: "[Species]: Human" },
+    ],
   } as unknown as Parameters<typeof buildImageStateBlock>[0];
 }
 
-const settings = (overrides: Partial<ImageGenerationSettings> = {}): ImageGenerationSettings =>
-  ({ includeState: true, includeCast: true, ...overrides } as ImageGenerationSettings);
+const settings = (
+  overrides: Partial<ImageGenerationSettings> = {},
+): ImageGenerationSettings =>
+  ({
+    includeState: true,
+    includeCast: true,
+    ...overrides,
+  }) as ImageGenerationSettings;
 
 /** A bare message list for the history-block tests: roles, prose, and the two
  *  shapes the window must skip (a hidden state-only user message, a system one).
@@ -75,7 +96,7 @@ function conversation(
     content: string;
     hidden?: boolean;
     images?: Array<{ writerPrompt?: string; writerNegative?: string }>;
-  }>
+  }>,
 ): Playthrough {
   return {
     messages: entries.map((entry, i) => ({
@@ -92,11 +113,11 @@ function conversation(
               providerId: "p",
               model: "m",
               createdAt: "2026-01-01T00:00:00.000Z",
-              ...image
-            }))
+              ...image,
+            })),
           }
-        : {})
-    }))
+        : {}),
+    })),
   } as unknown as Playthrough;
 }
 
@@ -110,13 +131,29 @@ describe("buildImageStateBlock", () => {
 
   it("withholds the player's wardrobe and appearance at the source", () => {
     // These were the exact items that came back as tags on the character.
-    for (const leak of ["White Long Sleeve Shirt", "Necktie", "Black Slacks", "Fair skin", "Black hair", "average"]) {
+    for (const leak of [
+      "White Long Sleeve Shirt",
+      "Necktie",
+      "Black Slacks",
+      "Fair skin",
+      "Black hair",
+      "average",
+    ]) {
       expect(block, leak).not.toContain(leak);
     }
   });
 
   it("withholds every turn-only category a frame cannot show", () => {
-    for (const gone of ["Turn:", "Inventory", "Quests", "Allowed IDs", "REACHABLE", "Memory", "ABSENT CHARACTERS", "exits"]) {
+    for (const gone of [
+      "Turn:",
+      "Inventory",
+      "Quests",
+      "Allowed IDs",
+      "REACHABLE",
+      "Memory",
+      "ABSENT CHARACTERS",
+      "exits",
+    ]) {
       expect(block, gone).not.toContain(gone);
     }
     // No character sheet text either: the cast block owns that.
@@ -129,27 +166,52 @@ describe("previousWriterAnswer", () => {
 
   it("takes the newest answer stored before this frame", () => {
     const pt = conversation([
-      { role: "assistant", content: "a", images: [{ writerPrompt: "OLD ANSWER" }] },
+      {
+        role: "assistant",
+        content: "a",
+        images: [{ writerPrompt: "OLD ANSWER" }],
+      },
       { role: "user", content: "b" },
-      { role: "assistant", content: "c", images: [{ writerPrompt: "NEW ANSWER", writerNegative: "bad hands" }] },
-      { role: "assistant", content: "the frame" }
+      {
+        role: "assistant",
+        content: "c",
+        images: [{ writerPrompt: "NEW ANSWER", writerNegative: "bad hands" }],
+      },
+      { role: "assistant", content: "the frame" },
     ]);
-    expect(previousWriterAnswer(pt, target(pt))).toEqual({ prompt: "NEW ANSWER", negative: "bad hands" });
+    expect(previousWriterAnswer(pt, target(pt))).toEqual({
+      prompt: "NEW ANSWER",
+      negative: "bad hands",
+    });
   });
 
   it("counts an earlier variant on the SAME message — a re-roll's closest reference", () => {
     const pt = conversation([
-      { role: "assistant", content: "a", images: [{ writerPrompt: "EARLIER MESSAGE ANSWER" }] },
-      { role: "assistant", content: "the frame", images: [{ writerPrompt: "SAME FRAME VARIANT" }] }
+      {
+        role: "assistant",
+        content: "a",
+        images: [{ writerPrompt: "EARLIER MESSAGE ANSWER" }],
+      },
+      {
+        role: "assistant",
+        content: "the frame",
+        images: [{ writerPrompt: "SAME FRAME VARIANT" }],
+      },
     ]);
-    expect(previousWriterAnswer(pt, target(pt))).toEqual({ prompt: "SAME FRAME VARIANT" });
+    expect(previousWriterAnswer(pt, target(pt))).toEqual({
+      prompt: "SAME FRAME VARIANT",
+    });
   });
 
   it("skips refs that stored no answer, and answers nothing when none exists", () => {
     const pt = conversation([
-      { role: "assistant", content: "a", images: [{}, { writerPrompt: "   " }] },
+      {
+        role: "assistant",
+        content: "a",
+        images: [{}, { writerPrompt: "   " }],
+      },
       { role: "assistant", content: "b", images: [{}] },
-      { role: "assistant", content: "the frame" }
+      { role: "assistant", content: "the frame" },
     ]);
     expect(previousWriterAnswer(pt, target(pt))).toBeUndefined();
   });
@@ -157,7 +219,11 @@ describe("previousWriterAnswer", () => {
   it("never looks FORWARD: a later message's answer is not this frame's reference", () => {
     const pt = conversation([
       { role: "assistant", content: "the frame" },
-      { role: "assistant", content: "later", images: [{ writerPrompt: "LATER ANSWER" }] }
+      {
+        role: "assistant",
+        content: "later",
+        images: [{ writerPrompt: "LATER ANSWER" }],
+      },
     ]);
     expect(previousWriterAnswer(pt, pt.messages[0])).toBeUndefined();
   });
@@ -174,7 +240,7 @@ describe("buildImageHistoryBlock", () => {
       { role: "user", content: "second beat" },
       { role: "system", content: "a system note" },
       { role: "assistant", content: "third beat" },
-      { role: "assistant", content: "the frame to render" }
+      { role: "assistant", content: "the frame to render" },
     ]);
 
     const block = buildImageHistoryBlock(pt, target(pt), 6);
@@ -189,7 +255,9 @@ describe("buildImageHistoryBlock", () => {
     expect(block.text).not.toContain("Assistant: the frame to render");
     expect(block.messageIds).toHaveLength(3);
     // Chronological: the oldest picked message comes first.
-    expect(block.text.indexOf("first beat")).toBeLessThan(block.text.indexOf("third beat"));
+    expect(block.text.indexOf("first beat")).toBeLessThan(
+      block.text.indexOf("third beat"),
+    );
   });
 
   it("honours the count, and gives the first message in a chat no history at all", () => {
@@ -197,9 +265,11 @@ describe("buildImageHistoryBlock", () => {
       { role: "user", content: "a" },
       { role: "assistant", content: "b" },
       { role: "assistant", content: "c" },
-      { role: "assistant", content: "frame" }
+      { role: "assistant", content: "frame" },
     ]);
-    expect(buildImageHistoryBlock(pt, target(pt), 2).messageIds).toHaveLength(2);
+    expect(buildImageHistoryBlock(pt, target(pt), 2).messageIds).toHaveLength(
+      2,
+    );
     expect(buildImageHistoryBlock(pt, target(pt), 0).text).toBe("");
     expect(buildImageHistoryBlock(pt, pt.messages[0], 6).text).toBe("");
   });
@@ -210,7 +280,7 @@ describe("buildImageHistoryBlock", () => {
       { role: "assistant", content: long("oldest beat") },
       { role: "assistant", content: long("middle beat") },
       { role: "assistant", content: long("newest beat") },
-      { role: "assistant", content: "frame" }
+      { role: "assistant", content: "frame" },
     ]);
     // 3 x 2500 = 7500 > the 6000 budget: the oldest goes WHOLE, and what is left
     // is under the budget, so nothing is cut mid-sentence.
@@ -224,7 +294,7 @@ describe("buildImageHistoryBlock", () => {
   it("keeps the TAIL of one message bigger than the whole budget", () => {
     const pt = conversation([
       { role: "assistant", content: `${"y".repeat(7000)} the end of the beat` },
-      { role: "assistant", content: "frame" }
+      { role: "assistant", content: "frame" },
     ]);
     const block = buildImageHistoryBlock(pt, target(pt), 6);
     // The end of an earlier message is the state it left the scene in — that is
@@ -239,10 +309,14 @@ describe("buildImageCastBlock — the scene mode", () => {
     const scene = buildImageCastBlock(fixture(), "scene");
     expect(scene).not.toContain("THE CAMERA");
     // The instance line: what the frame shows NOW, wardrobe and state included.
-    expect(scene).toContain("Anon — wearing White Long Sleeve Shirt, Necktie, Black Slacks, handcuffed");
+    expect(scene).toContain(
+      "Anon — wearing White Long Sleeve Shirt, Necktie, Black Slacks, handcuffed",
+    );
     // The sheet line: the stable facts, straight off the persona (there is no sheet
     // template for the player).
-    expect(scene).toContain("Anon's sheet — A male human | average | Fair skin. Black hair. Black eye color.");
+    expect(scene).toContain(
+      "Anon's sheet — A male human | average | Fair skin. Black hair. Black eye color.",
+    );
     // …and the characters keep the same shape beside them.
     expect(scene).toContain("Jeneine — wearing Faded gray hoodie");
   });
@@ -278,10 +352,14 @@ describe("buildImageCastBlock", () => {
   });
 
   it("describes in-frame characters with clothing, a readable mood, and their identity", () => {
-    expect(block).toContain("Jeneine — wearing Faded gray hoodie, overwhelmed content, flushed");
+    expect(block).toContain(
+      "Jeneine — wearing Faded gray hoodie, overwhelmed content, flushed",
+    );
     // The raw slug never reaches the writer.
     expect(block).not.toContain("overwhelmed_content");
-    expect(block).toContain("Jeneine's sheet — Species: Human | Gender: Female | Body:");
+    expect(block).toContain(
+      "Jeneine's sheet — Species: Human | Gender: Female | Body:",
+    );
     // Read through the engine's own parser: the wanted headers in order, the
     // sheet's [Clothing] and [Personality] left out entirely.
     expect(block).toContain("Build: slim, athletic");
@@ -300,19 +378,34 @@ describe("buildImageCastBlock", () => {
 
 describe("the shipped instruction's player rules", () => {
   it("scopes the player explicitly, and keeps the rules that make it bite", () => {
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("THE PLAYER IS NOT A CHARACTER");
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("NEVER tag the player's stored or visible appearance and wardrobe");
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain('The player NEVER opens a " | " group');
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(
+      "THE PLAYER IS NOT A CHARACTER",
+    );
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(
+      "NEVER tag the player's stored or visible appearance and wardrobe",
+    );
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(
+      'The player NEVER opens a " | " group',
+    );
     // The rule must arrive BEFORE the section that licenses copying character
     // data, and before the player section it constrains.
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION.indexOf("THE PLAYER IS NOT A CHARACTER"))
-      .toBeLessThan(DEFAULT_IMAGE_PROMPT_INSTRUCTION.indexOf("CHARACTER REFERENCE"));
+    expect(
+      DEFAULT_IMAGE_PROMPT_INSTRUCTION.indexOf("THE PLAYER IS NOT A CHARACTER"),
+    ).toBeLessThan(
+      DEFAULT_IMAGE_PROMPT_INSTRUCTION.indexOf("CHARACTER REFERENCE"),
+    );
     // The group-1 line may no longer read as "the player's tags go in group 1".
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).not.toContain("the player's visible body tags (male pov, viewer's hands) go in the first group");
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("that is ALL the player contributes");
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).not.toContain(
+      "the player's visible body tags (male pov, viewer's hands) go in the first group",
+    );
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(
+      "that is ALL the player contributes",
+    );
     // The good shapes survive: interaction tags referencing the edge of the
     // player's clothing are still allowed.
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("viewer's waistband gripped");
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(
+      "viewer's waistband gripped",
+    );
   });
 });
 
@@ -323,10 +416,17 @@ function bodyHeavyFixture() {
   const pt = fixture() as any;
   // Sized on purpose: the sheet line lands above the old 320-character cap and
   // below the 600 one, so the test proves the difference rather than the cap.
-  const body = "[Body]\n" + Array.from({ length: 5 }, (_, i) => `- Measurement ${i}: ${"x".repeat(22)}`).join("\n");
-  const details = Array.from({ length: 4 }, (_, i) => `- Detail ${i}: ${"y".repeat(18)}`).join("\n");
-  pt.characterTemplates[0].content =
-    `[Species]: Human\n\n[Gender]: Female\n\n${body}\n\n[Appearance]\n- Skin: pale\n${details}\n- Hair: black, twin tails`;
+  const body =
+    "[Body]\n" +
+    Array.from(
+      { length: 5 },
+      (_, i) => `- Measurement ${i}: ${"x".repeat(22)}`,
+    ).join("\n");
+  const details = Array.from(
+    { length: 4 },
+    (_, i) => `- Detail ${i}: ${"y".repeat(18)}`,
+  ).join("\n");
+  pt.characterTemplates[0].content = `[Species]: Human\n\n[Gender]: Female\n\n${body}\n\n[Appearance]\n- Skin: pale\n${details}\n- Hair: black, twin tails`;
   return pt;
 }
 
@@ -334,12 +434,16 @@ describe("hair survives the identity budget", () => {
   it("headlines the character's hair before the sheet line", () => {
     const block = buildImageCastBlock(fixture());
     expect(block).toContain("Jeneine's hair — light brown, loose ponytail");
-    expect(block.indexOf("Jeneine's hair")).toBeLessThan(block.indexOf("Jeneine's sheet"));
+    expect(block.indexOf("Jeneine's hair")).toBeLessThan(
+      block.indexOf("Jeneine's sheet"),
+    );
   });
 
   it("keeps hair in the sheet line past the old 320-character cut", () => {
     const block = buildImageCastBlock(bodyHeavyFixture());
-    const sheetLine = block.split("\n").find((line) => line.includes("'s sheet"))!;
+    const sheetLine = block
+      .split("\n")
+      .find((line) => line.includes("'s sheet"))!;
     // The proof this is a regression guard and not a tautology: hair sits past
     // the point where the old cap stopped reading.
     expect(sheetLine.length).toBeGreaterThan(320);
@@ -350,7 +454,8 @@ describe("hair survives the identity budget", () => {
 
   it("claims nothing about hair when the sheet has none", () => {
     const pt = fixture() as any;
-    pt.characterTemplates[0].content = "[Species]: Human\n\n[Gender]: Female\n\n[Appearance]\n- Eyes: green eyes";
+    pt.characterTemplates[0].content =
+      "[Species]: Human\n\n[Gender]: Female\n\n[Appearance]\n- Eyes: green eyes";
     const block = buildImageCastBlock(pt);
     expect(block).not.toContain("'s hair —");
     expect(block).toContain("green eyes");
@@ -361,16 +466,23 @@ describe("the shipped rating bullet", () => {
   it("allows exactly one word and forbids a blend", () => {
     // A live generation answered `nsensitive` — not a booru rating tag, and the
     // bullet that asked for the rating was the only place it could have come from.
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("exactly one word from safe, sensitive, nsfw, explicit");
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("Never a blend of two, never a new word");
-    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain("1. Rating: one word from safe, sensitive, nsfw, explicit");
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(
+      "exactly one word from safe, sensitive, nsfw, explicit",
+    );
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(
+      "Never a blend of two, never a new word",
+    );
+    expect(DEFAULT_IMAGE_PROMPT_INSTRUCTION).toContain(
+      "1. Rating: one word from safe, sensitive, nsfw, explicit",
+    );
   });
 });
 
 describe("macro expansion in the image cast block", () => {
   it("expands {{user}} in the player's identity text", () => {
     const pt = fixture() as unknown as Playthrough;
-    pt.playerCharacter.description = "{{user}} is a drifter. {{char}} is meaningless here.";
+    pt.playerCharacter.description =
+      "{{user}} is a drifter. {{char}} is meaningless here.";
     pt.playerCharacter.appearance = "{{ user }} wears a worn coat.";
 
     const scene = buildImageCastBlock(pt, "scene");
@@ -391,7 +503,7 @@ describe("macro expansion in the image cast block", () => {
     const tpl = pt.characterTemplates.find((t) => t.id === "tpl_j")!;
     tpl.content = tpl.content.replace(
       "- Eyes: tired blue eyes",
-      "- Eyes: {{char}}'s tired blue eyes that {{user}} knows"
+      "- Eyes: {{char}}'s tired blue eyes that {{user}} knows",
     );
     const block = buildImageCastBlock(pt, "scene");
     expect(block).toContain("Jeneine's tired blue eyes that Anon knows");

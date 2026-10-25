@@ -22,15 +22,21 @@ interface ShippedModule {
   enabled: boolean;
 }
 
-const presets: Array<{ id: string; name: string; modules: { turn: ShippedModule[] } }> = JSON.parse(
-  readFileSync(SHIPPED, "utf8")
-);
+const presets: Array<{
+  id: string;
+  name: string;
+  modules: { turn: ShippedModule[] };
+}> = JSON.parse(readFileSync(SHIPPED, "utf8"));
 
 describe("shipped prompt presets", () => {
   it("every preset satisfies the schema", () => {
     for (const preset of presets) {
       const result = PromptPresetSchema.safeParse(preset);
-      expect(result.success ? null : result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`)).toBeNull();
+      expect(
+        result.success
+          ? null
+          : result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`),
+      ).toBeNull();
     }
   });
 
@@ -51,7 +57,9 @@ describe("shipped prompt presets", () => {
       });
 
       it("orders are contiguous from 1", () => {
-        expect(modules.map((m) => m.order)).toEqual(modules.map((_, index) => index + 1));
+        expect(modules.map((m) => m.order)).toEqual(
+          modules.map((_, index) => index + 1),
+        );
       });
 
       it("every enabled module has a name and content", () => {
@@ -63,8 +71,12 @@ describe("shipped prompt presets", () => {
 
       it("does not describe the product or itself as an RPG", () => {
         for (const module of modules) {
-          expect(`${module.name} ${module.content}`, module.id).not.toMatch(/\bRPG\b/i);
-          expect(`${module.name} ${module.content}`, module.id).not.toContain("BobbinLoom");
+          expect(`${module.name} ${module.content}`, module.id).not.toMatch(
+            /\bRPG\b/i,
+          );
+          expect(`${module.name} ${module.content}`, module.id).not.toContain(
+            "BobbinLoom",
+          );
         }
       });
     });
@@ -72,9 +84,13 @@ describe("shipped prompt presets", () => {
 
   it("relationship-dynamics tells the model that a character's details change and must be recorded", () => {
     for (const preset of presets) {
-      const rel = preset.modules.turn.find((m) => m.id === "relationship-dynamics");
+      const rel = preset.modules.turn.find(
+        (m) => m.id === "relationship-dynamics",
+      );
       expect(rel, preset.id).toBeDefined();
-      expect(rel!.content, preset.id).toContain("Record those changes in the character themselves");
+      expect(rel!.content, preset.id).toContain(
+        "Record those changes in the character themselves",
+      );
       // The clause must not trip the product/mechanics guards.
       expect(rel!.content, preset.id).not.toMatch(/\bRPG\b/i);
       expect(rel!.content, preset.id).not.toContain("BobbinLoom");

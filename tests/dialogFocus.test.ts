@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { FOCUSABLE_SELECTOR, isRenameable, wrapIndex } from "../src/client/engine/dialogFocus";
+import {
+  FOCUSABLE_SELECTOR,
+  isRenameable,
+  wrapIndex,
+} from "../src/client/engine/dialogFocus";
 
 /** The dialog shell's pure half. The DOM half (querying stops, moving focus) is verified in the
  *  browser: this suite has no jsdom, and pretending otherwise would test a fake. */
@@ -52,7 +56,13 @@ describe("the rename guard", () => {
 
 describe("the focus-stop selector", () => {
   it("names every interactive kind, and never a programmatic tabindex", () => {
-    for (const fragment of ["a[href]", "button:not([disabled])", "input:not([disabled])", "textarea:not([disabled])", "select:not([disabled])"]) {
+    for (const fragment of [
+      "a[href]",
+      "button:not([disabled])",
+      "input:not([disabled])",
+      "textarea:not([disabled])",
+      "select:not([disabled])",
+    ]) {
       expect(FOCUSABLE_SELECTOR).toContain(fragment);
     }
     expect(FOCUSABLE_SELECTOR).toContain('[tabindex]:not([tabindex="-1"])');

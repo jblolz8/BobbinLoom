@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { CHAT_PREFERENCE_DEFAULTS, resolveChatPreferences } from "../src/client/api/settings";
-import { ADOPTION_SOURCES, planAdoption } from "../src/client/api/settingsAdoption";
+import {
+  CHAT_PREFERENCE_DEFAULTS,
+  resolveChatPreferences,
+} from "../src/client/api/settings";
+import {
+  ADOPTION_SOURCES,
+  planAdoption,
+} from "../src/client/api/settingsAdoption";
 
 /** A device blob shaped like the old `bobbinloom_chat_settings` value. */
 const blob = (values: Record<string, boolean>) => JSON.stringify(values);
 
-const device = (values: Record<string, string | null>) => (key: string) => values[key] ?? null;
+const device = (values: Record<string, string | null>) => (key: string) =>
+  values[key] ?? null;
 
 describe("the chat toggles, resolved", () => {
   it("gives every leaf its default when nothing was ever chosen", () => {
@@ -22,7 +29,9 @@ describe("the chat toggles, resolved", () => {
   });
 
   it("lets a stored true beat a default false", () => {
-    const resolved = resolveChatPreferences({ chat: { autoImageAfterTurn: true } });
+    const resolved = resolveChatPreferences({
+      chat: { autoImageAfterTurn: true },
+    });
     expect(resolved.autoImageAfterTurn).toBe(true);
     expect(resolved.alwaysDiscardOldImage).toBe(false);
   });
@@ -34,13 +43,22 @@ describe("the chat toggles, resolved", () => {
 
   it("resolves autoScrollBehavior with default 'start' and honors stored values", () => {
     expect(resolveChatPreferences(undefined).autoScrollBehavior).toBe("start");
-    expect(resolveChatPreferences({ chat: { autoScrollBehavior: "bottom" } }).autoScrollBehavior).toBe("bottom");
-    expect(resolveChatPreferences({ chat: { autoScrollBehavior: "none" } }).autoScrollBehavior).toBe("none");
+    expect(
+      resolveChatPreferences({ chat: { autoScrollBehavior: "bottom" } })
+        .autoScrollBehavior,
+    ).toBe("bottom");
+    expect(
+      resolveChatPreferences({ chat: { autoScrollBehavior: "none" } })
+        .autoScrollBehavior,
+    ).toBe("none");
   });
 
   it("resolves showMessageNumbers with default true and honors stored false", () => {
     expect(resolveChatPreferences(undefined).showMessageNumbers).toBe(true);
-    expect(resolveChatPreferences({ chat: { showMessageNumbers: false } }).showMessageNumbers).toBe(false);
+    expect(
+      resolveChatPreferences({ chat: { showMessageNumbers: false } })
+        .showMessageNumbers,
+    ).toBe(false);
   });
 
   it("covers every leaf the chat preferences carry", () => {
@@ -54,12 +72,20 @@ describe("adopting the chat blob", () => {
     const plan = planAdoption(
       {},
       device({
-        bobbinloom_chat_settings: blob({ choicesEnabled: false, showDebug: false, autoImageAfterTurn: true })
-      })
+        bobbinloom_chat_settings: blob({
+          choicesEnabled: false,
+          showDebug: false,
+          autoImageAfterTurn: true,
+        }),
+      }),
     );
 
     expect(plan.write).toEqual({
-      chat: { choicesEnabled: false, showDebug: false, autoImageAfterTurn: true }
+      chat: {
+        choicesEnabled: false,
+        showDebug: false,
+        autoImageAfterTurn: true,
+      },
     });
     // Nine registry entries point at this key; the key must come out of the plan exactly once.
     expect(plan.removeKeys).toEqual(["bobbinloom_chat_settings"]);
@@ -68,7 +94,12 @@ describe("adopting the chat blob", () => {
   it("adopts only the leaves the server does not already hold", () => {
     const plan = planAdoption(
       { chat: { showDebug: true } },
-      device({ bobbinloom_chat_settings: blob({ choicesEnabled: false, showDebug: false }) })
+      device({
+        bobbinloom_chat_settings: blob({
+          choicesEnabled: false,
+          showDebug: false,
+        }),
+      }),
     );
 
     expect(plan.write).toEqual({ chat: { choicesEnabled: false } });
@@ -77,7 +108,10 @@ describe("adopting the chat blob", () => {
 
   it("adopts the ONE leaf a partial blob holds, and drops the key", () => {
     // The real shape that matters: whatever the blob holds, an adoptable leaf takes the key with it.
-    const plan = planAdoption({}, device({ bobbinloom_chat_settings: blob({ choicesEnabled: false }) }));
+    const plan = planAdoption(
+      {},
+      device({ bobbinloom_chat_settings: blob({ choicesEnabled: false }) }),
+    );
     expect(plan.write).toEqual({ chat: { choicesEnabled: false } });
     expect(plan.removeKeys).toEqual(["bobbinloom_chat_settings"]);
   });
@@ -86,21 +120,31 @@ describe("adopting the chat blob", () => {
     // A synthetic shape (the hook's writer always wrote all nine leaves): a blob with no readable
     // boolean holds no preference, so nothing is adopted and the key is not scheduled for removal.
     // Any leaf that IS readable brings the key with it, as the case above shows.
-    const plan = planAdoption({}, device({ bobbinloom_chat_settings: blob({}) }));
+    const plan = planAdoption(
+      {},
+      device({ bobbinloom_chat_settings: blob({}) }),
+    );
     expect(plan.write).toEqual({});
     expect(plan.removeKeys).toEqual([]);
   });
 
   it("leaves a corrupt blob alone", () => {
-    const plan = planAdoption({}, device({ bobbinloom_chat_settings: "{not json" }));
+    const plan = planAdoption(
+      {},
+      device({ bobbinloom_chat_settings: "{not json" }),
+    );
     expect(plan.write).toEqual({});
     expect(plan.removeKeys).toEqual([]);
   });
 
   it("reads every leaf through the real registry", () => {
     // The registry is the contract with the hook: all nine leaves, one key.
-    const chatSources = ADOPTION_SOURCES.filter((source) => source.group === "chat");
+    const chatSources = ADOPTION_SOURCES.filter(
+      (source) => source.group === "chat",
+    );
     expect(chatSources).toHaveLength(11);
-    expect(new Set(chatSources.map((source) => source.key))).toEqual(new Set(["bobbinloom_chat_settings"]));
+    expect(new Set(chatSources.map((source) => source.key))).toEqual(
+      new Set(["bobbinloom_chat_settings"]),
+    );
   });
 });

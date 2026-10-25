@@ -1,8 +1,17 @@
 import type { ProviderConnection } from "../../schemas";
 import type { ResolvedProviderConfig } from "../providerConfig";
 import { requestWithRetry } from "../provider/openaiClient";
-import type { ImageGenerationRequest, ImageGenerationResult, ImageProvider } from "./types";
-import { clampChars, dataUrlPayload, modelFromRawBody, sniffMime } from "./shared";
+import type {
+  ImageGenerationRequest,
+  ImageGenerationResult,
+  ImageProvider,
+} from "./types";
+import {
+  clampChars,
+  dataUrlPayload,
+  modelFromRawBody,
+  sniffMime,
+} from "./shared";
 
 /** POST /images/generations has a hard 1500-character prompt cap. Applied to
  *  the COMPOSED prompt (prefix + body), so a long prefix can never 400. */
@@ -15,10 +24,12 @@ export class OpenAIImagesProvider implements ImageProvider {
   constructor(
     private readonly config: ResolvedProviderConfig,
     private readonly connection: ProviderConnection,
-    private readonly fetchImpl: typeof fetch = fetch
+    private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
-  async generateImage(req: ImageGenerationRequest): Promise<ImageGenerationResult> {
+  async generateImage(
+    req: ImageGenerationRequest,
+  ): Promise<ImageGenerationResult> {
     const start = Date.now();
     // The re-send path: a body the user re-issued is sent as given — no clamp,
     // no connection settings re-applied — and the provider's own limit error
@@ -31,15 +42,28 @@ export class OpenAIImagesProvider implements ImageProvider {
       output_format: "png",
       // Venice maps moderation "low" → no adult-content blur; OpenAI ignores the
       // field. safeMode is opt-in and defaults off (see the schema comment).
-      moderation: (req.safeMode ?? this.connection.safeMode ?? false) ? "auto" : "low",
-      n: 1
+      moderation:
+        (req.safeMode ?? this.connection.safeMode ?? false) ? "auto" : "low",
+      n: 1,
     };
 
-    const res = await requestWithRetry(this.config, this.fetchImpl, body, "/images/generations", undefined, req.signal);
+    const res = await requestWithRetry(
+      this.config,
+      this.fetchImpl,
+      body,
+      "/images/generations",
+      undefined,
+      req.signal,
+    );
     const text = await res.text();
-    if (!res.ok) throw new Error(`Image provider error ${res.status}: ${text.slice(0, 300)}`);
+    if (!res.ok)
+      throw new Error(
+        `Image provider error ${res.status}: ${text.slice(0, 300)}`,
+      );
 
-    const first = (JSON.parse(text) as { data?: Array<{ b64_json?: string; url?: string }> }).data?.[0];
+    const first = (
+      JSON.parse(text) as { data?: Array<{ b64_json?: string; url?: string }> }
+    ).data?.[0];
     // `url` in this dialect is a data URL; a plain http URL is treated as no
     // image data (we do not chase remote URLs).
     const b64 = first?.b64_json ?? dataUrlPayload(first?.url);
@@ -53,7 +77,7 @@ export class OpenAIImagesProvider implements ImageProvider {
       providerId: this.config.providerId,
       durationMs: Date.now() - start,
       rawRequest: JSON.stringify(body),
-      rawOutput: text
+      rawOutput: text,
     };
   }
 }

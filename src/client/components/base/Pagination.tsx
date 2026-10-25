@@ -7,7 +7,7 @@ import {
   parsePageSizeInput,
   rangeParts,
   totalPagesFor,
-  type PageSize
+  type PageSize,
 } from "../../engine/pagination";
 import { Button } from "./Button/Button";
 import { Icon } from "./Icon";
@@ -49,15 +49,19 @@ export function Pagination({
   itemLabel,
   className = "",
   ariaLabel = "Pagination",
-  showPageSize = true
+  showPageSize = true,
 }: PaginationProps) {
   const totalPages = totalPagesFor(total, pageSize);
   // `customMode` is explicit state: deriving it from `pageSize` meant selecting "Custom…" while a
   // preset was active did nothing (the input never appeared). It has to FOLLOW the size as well, so a
   // custom size still shows the input — including one that arrives after the first paint, which is how
   // the size comes back now that it is read from the server rather than from the device.
-  const [customMode, setCustomMode] = useState<boolean>(() => !isPresetPageSize(pageSize));
-  const [draft, setDraft] = useState<string>(() => (isPresetPageSize(pageSize) ? "" : String(pageSize)));
+  const [customMode, setCustomMode] = useState<boolean>(
+    () => !isPresetPageSize(pageSize),
+  );
+  const [draft, setDraft] = useState<string>(() =>
+    isPresetPageSize(pageSize) ? "" : String(pageSize),
+  );
 
   const [pageDraft, setPageDraft] = useState<string>(String(page));
 
@@ -74,8 +78,12 @@ export function Pagination({
 
   const { from, to, all } = rangeParts(page, pageSize, total);
 
-  const progressLeft = total === 0 ? 0 : Math.max(0, ((from - 1) / total) * 100);
-  const progressWidth = total === 0 ? 0 : Math.min(100 - progressLeft, ((to - from + 1) / total) * 100);
+  const progressLeft =
+    total === 0 ? 0 : Math.max(0, ((from - 1) / total) * 100);
+  const progressWidth =
+    total === 0
+      ? 0
+      : Math.min(100 - progressLeft, ((to - from + 1) / total) * 100);
 
   function handleSelectChange(val: string) {
     if (val === "custom") {
@@ -117,20 +125,57 @@ export function Pagination({
   }
 
   return (
-    <div className={`base-pagination ${className}`.trim()} style={{ position: 'relative' }}>
-      <div className="pagination-progress-track" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: 'var(--border-main)', borderTopLeftRadius: '9px', borderTopRightRadius: '9px', overflow: 'hidden' }}>
+    <div
+      className={`base-pagination ${className}`.trim()}
+      style={{ position: "relative" }}
+    >
+      <div
+        className="pagination-progress-track"
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: "4px",
+          background: "var(--border-main)",
+          borderTopLeftRadius: "9px",
+          borderTopRightRadius: "9px",
+          overflow: "hidden",
+        }}
+      >
         <div
           className="pagination-progress-fill"
-          style={{ position: 'absolute', top: 0, bottom: 0, background: 'var(--accent-highlight)', left: `${progressLeft}%`, width: `${progressWidth}%`, transition: 'all 0.2s ease-out' }}
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            background: "var(--accent-highlight)",
+            left: `${progressLeft}%`,
+            width: `${progressWidth}%`,
+            transition: "all 0.2s ease-out",
+          }}
         />
       </div>
       <div className="pagination-info">
         {total === 0 ? (
-          <>Showing <strong>0</strong>{itemLabel ? ` ${itemLabel}` : ""}</>
+          <>
+            Showing <strong>0</strong>
+            {itemLabel ? ` ${itemLabel}` : ""}
+          </>
         ) : all ? (
-          <>Showing all <strong>{total}</strong>{itemLabel ? ` ${itemLabel}` : ""}</>
+          <>
+            Showing all <strong>{total}</strong>
+            {itemLabel ? ` ${itemLabel}` : ""}
+          </>
         ) : (
-          <>Showing <strong>{from}–{to}</strong> of <strong>{total}</strong>{itemLabel ? ` ${itemLabel}` : ""}</>
+          <>
+            Showing{" "}
+            <strong>
+              {from}–{to}
+            </strong>{" "}
+            of <strong>{total}</strong>
+            {itemLabel ? ` ${itemLabel}` : ""}
+          </>
         )}
       </div>
 
@@ -165,8 +210,20 @@ export function Pagination({
             </Button>
           </Tooltip>
 
-          <div className="pagination-page-jumper" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '0 8px' }}>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Page</span>
+          <div
+            className="pagination-page-jumper"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              margin: "0 8px",
+            }}
+          >
+            <span
+              style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}
+            >
+              Page
+            </span>
             <TextInput
               type="number"
               size="sm"
@@ -181,9 +238,13 @@ export function Pagination({
               fullWidth={false}
               containerClassName="pagination-page-input"
               aria-label="Current page"
-              style={{ width: '3.5rem', textAlign: 'center' }}
+              style={{ width: "3.5rem", textAlign: "center" }}
             />
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>of {totalPages}</span>
+            <span
+              style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}
+            >
+              of {totalPages}
+            </span>
           </div>
 
           <Tooltip content="Next page">
@@ -224,9 +285,12 @@ export function Pagination({
             value={customMode ? "custom" : String(pageSize)}
             onChange={handleSelectChange}
             options={[
-              ...PAGE_SIZE_PRESETS.map((n) => ({ value: String(n), label: String(n) })),
+              ...PAGE_SIZE_PRESETS.map((n) => ({
+                value: String(n),
+                label: String(n),
+              })),
               { value: ALL_PAGE_SIZE, label: "All" },
-              { value: "custom", label: "Custom…" }
+              { value: "custom", label: "Custom…" },
             ]}
             size="xs"
             aria-label="Items per page"

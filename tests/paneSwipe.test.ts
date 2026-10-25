@@ -12,7 +12,7 @@ import {
   stepPane,
   stillPaneDrag,
   swipeIntent,
-  swipeVelocity
+  swipeVelocity,
 } from "../src/client/engine/paneSwipe";
 
 describe("when a drag is a panel swipe", () => {
@@ -73,12 +73,20 @@ describe("which axis a drag belongs to before it locks", () => {
   it("uses the same dominance the reduced-motion release rule uses", () => {
     // Both paths, same input, same verdict: this is the asymmetry that made the gesture mean two
     // different things depending on a media query.
-    for (const drag of [{ dx: -70, dy: -20 }, { dx: -100, dy: 60 }, { dx: -120, dy: -40 }]) {
-      expect(dragAxis(drag)).toBe(swipeIntent(drag) === null ? "vertical" : "horizontal");
+    for (const drag of [
+      { dx: -70, dy: -20 },
+      { dx: -100, dy: 60 },
+      { dx: -120, dy: -40 },
+    ]) {
+      expect(dragAxis(drag)).toBe(
+        swipeIntent(drag) === null ? "vertical" : "horizontal",
+      );
     }
     // The boundary is `SWIPE_DOMINANCE`, not a second number nobody wrote down.
     expect(dragAxis({ dx: -(SWIPE_DOMINANCE * 30), dy: -30 })).toBe("vertical");
-    expect(dragAxis({ dx: -(SWIPE_DOMINANCE * 30 + 1), dy: -30 })).toBe("horizontal");
+    expect(dragAxis({ dx: -(SWIPE_DOMINANCE * 30 + 1), dy: -30 })).toBe(
+      "horizontal",
+    );
   });
 
   it("takes the axis lock and the dominance as options", () => {
@@ -126,8 +134,12 @@ describe("when an element owns the horizontal gesture", () => {
 
 describe("when a released drag lands on the neighbour", () => {
   it("lands on it once it has travelled far enough", () => {
-    expect(commitSwipe({ offset: -142, velocity: -0.1, width: 355 })).toBe(true); // 40% of 355
-    expect(commitSwipe({ offset: -141, velocity: -0.1, width: 355 })).toBe(false);
+    expect(commitSwipe({ offset: -142, velocity: -0.1, width: 355 })).toBe(
+      true,
+    ); // 40% of 355
+    expect(commitSwipe({ offset: -141, velocity: -0.1, width: 355 })).toBe(
+      false,
+    );
   });
 
   it("lands on it when it was thrown, even if it went nowhere", () => {
@@ -140,7 +152,9 @@ describe("when a released drag lands on the neighbour", () => {
   });
 
   it("ignores a long lazy drag that stopped short of the mark", () => {
-    expect(commitSwipe({ offset: -60, velocity: -0.05, width: 355 })).toBe(false);
+    expect(commitSwipe({ offset: -60, velocity: -0.05, width: 355 })).toBe(
+      false,
+    );
   });
 
   it("never commits without a width to measure against", () => {
@@ -155,7 +169,7 @@ describe("how fast a gesture was travelling", () => {
       { x: 320, t: 0 },
       { x: 318, t: 200 },
       { x: 240, t: 210 },
-      { x: 180, t: 220 }
+      { x: 180, t: 220 },
     ];
     // (180 - 318) / (220 - 200) = -6.9 px/ms
     expect(swipeVelocity(samples)).toBeLessThan(-2);
@@ -164,7 +178,12 @@ describe("how fast a gesture was travelling", () => {
   it("has nothing to say about a gesture with no travel in time", () => {
     expect(swipeVelocity([])).toBe(0);
     expect(swipeVelocity([{ x: 10, t: 5 }])).toBe(0);
-    expect(swipeVelocity([{ x: 10, t: 5 }, { x: 40, t: 5 }])).toBe(0);
+    expect(
+      swipeVelocity([
+        { x: 10, t: 5 },
+        { x: 40, t: 5 },
+      ]),
+    ).toBe(0);
   });
 });
 

@@ -4,7 +4,7 @@ import {
   parsePageSizeInput,
   rangeLabel,
   totalPagesFor,
-  type PageSize
+  type PageSize,
 } from "../engine/pagination";
 import type { PageSizeSurface } from "../api";
 import { usePersistedPageSize } from "./usePagination";
@@ -40,7 +40,7 @@ export type ServerPaginationState = {
 export function useServerPagination({
   totalItems,
   persistAs,
-  resetDeps = []
+  resetDeps = [],
 }: UseServerPaginationOptions): ServerPaginationState {
   const stored = usePersistedPageSize(persistAs);
   const pageSize = stored.pageSize;
@@ -80,6 +80,6 @@ export function useServerPagination({
     label: rangeLabel(page, pageSize, totalItems),
     setPage,
     setPageSize,
-    commitCustomPageSize
+    commitCustomPageSize,
   };
 }

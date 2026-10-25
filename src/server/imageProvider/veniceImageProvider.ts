@@ -1,7 +1,11 @@
 import type { ProviderConnection } from "../../schemas";
 import type { ResolvedProviderConfig } from "../providerConfig";
 import { requestWithRetry } from "../provider/openaiClient";
-import type { ImageGenerationRequest, ImageGenerationResult, ImageProvider } from "./types";
+import type {
+  ImageGenerationRequest,
+  ImageGenerationResult,
+  ImageProvider,
+} from "./types";
 import { clampChars, modelFromRawBody, parseSize, sniffMime } from "./shared";
 
 /** POST /image/generate caps the prompt at the model's `promptCharacterLimit`
@@ -17,31 +21,51 @@ export class VeniceImageProvider implements ImageProvider {
   constructor(
     private readonly config: ResolvedProviderConfig,
     private readonly connection: ProviderConnection,
-    private readonly fetchImpl: typeof fetch = fetch
+    private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
-  async generateImage(req: ImageGenerationRequest): Promise<ImageGenerationResult> {
+  async generateImage(
+    req: ImageGenerationRequest,
+  ): Promise<ImageGenerationResult> {
     const start = Date.now();
     // The re-send path: the body IS the request — nothing is clamped and none
     // of the connection's current settings (size, seed, variants, style preset,
     // safe mode) are re-applied on top of it.
-    const body: Record<string, unknown> = req.rawBody ?? buildVeniceBody(req, this.connection, this.config.model);
+    const body: Record<string, unknown> =
+      req.rawBody ?? buildVeniceBody(req, this.connection, this.config.model);
     // The seed reported on the ref is what the BODY carries, not what the
     // connection asks for: the ordinary path's seed was already RESOLVED by the
     // caller (route: request body → connection → unset), and on the re-send path
     // the body is the authority. `0` is Venice's documented "pick one at
     // random" — the same thing as sending nothing, so it reports as absent
     // rather than as a number nobody chose.
-    const seedValue = req.rawBody ? req.rawBody.seed : req.seed ?? 0;
-    const seed = typeof seedValue === "number" && Number.isFinite(seedValue) ? seedValue : 0;
+    const seedValue = req.rawBody ? req.rawBody.seed : (req.seed ?? 0);
+    const seed =
+      typeof seedValue === "number" && Number.isFinite(seedValue)
+        ? seedValue
+        : 0;
 
-    const res = await requestWithRetry(this.config, this.fetchImpl, body, "/image/generate", undefined, req.signal);
+    const res = await requestWithRetry(
+      this.config,
+      this.fetchImpl,
+      body,
+      "/image/generate",
+      undefined,
+      req.signal,
+    );
     const text = await res.text();
-    if (!res.ok) throw new Error(`Image provider error ${res.status}: ${text.slice(0, 300)}`);
+    if (!res.ok)
+      throw new Error(
+        `Image provider error ${res.status}: ${text.slice(0, 300)}`,
+      );
 
-    const parsed = JSON.parse(text) as { images?: string[]; timing?: { total?: number } };
+    const parsed = JSON.parse(text) as {
+      images?: string[];
+      timing?: { total?: number };
+    };
     const payloads = Array.isArray(parsed.images) ? parsed.images : [];
-    if (!payloads.length) throw new Error("Image provider returned no image data");
+    if (!payloads.length)
+      throw new Error("Image provider returned no image data");
 
     return {
       images: payloads.map((b64) => {
@@ -53,9 +77,12 @@ export class VeniceImageProvider implements ImageProvider {
       providerId: this.config.providerId,
       // What was ACTUALLY sent, so the stored ref can be compared or re-rolled.
       seed: seed || undefined,
-      durationMs: typeof parsed.timing?.total === "number" ? parsed.timing.total : Date.now() - start,
+      durationMs:
+        typeof parsed.timing?.total === "number"
+          ? parsed.timing.total
+          : Date.now() - start,
       rawRequest: JSON.stringify(body),
-      rawOutput: text
+      rawOutput: text,
     };
   }
 }
@@ -68,7 +95,7 @@ export class VeniceImageProvider implements ImageProvider {
 function buildVeniceBody(
   req: ImageGenerationRequest,
   connection: ProviderConnection,
-  model: string
+  model: string,
 ): Record<string, unknown> {
   const aspectRatio = req.aspectRatio ?? connection.aspectRatio;
   // aspect_ratio and width/height are mutually exclusive upstream: sending
@@ -81,9 +108,13 @@ function buildVeniceBody(
     return_binary: false,
     variants: req.variants ?? connection.variants ?? 1,
     seed: req.seed ?? 0, // 0 = random (documented)
-    safe_mode: req.safeMode ?? connection.safeMode ?? false
+    safe_mode: req.safeMode ?? connection.safeMode ?? false,
   };
-  if (req.negativePrompt) body.negative_prompt = clampChars(req.negativePrompt, VENICE_IMAGE_PROMPT_CAP);
+  if (req.negativePrompt)
+    body.negative_prompt = clampChars(
+      req.negativePrompt,
+      VENICE_IMAGE_PROMPT_CAP,
+    );
   if (aspectRatio) body.aspect_ratio = aspectRatio;
   if (dims) {
     body.width = dims.width;

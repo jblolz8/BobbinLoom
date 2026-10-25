@@ -18,7 +18,7 @@ type MigrationFn = (raw: unknown) => unknown;
 const playthroughMigrations: Record<number, MigrationFn> = {
   1: (raw: any) => {
     const data = { ...raw };
-    
+
     // Helper to migrate worldState for a given state object (root or snapshot)
     const migrateWorldState = (stateObj: any) => {
       stateObj.worldState = stateObj.worldState || [];
@@ -26,18 +26,27 @@ const playthroughMigrations: Record<number, MigrationFn> = {
       if (Array.isArray(stateObj.flags)) {
         for (const flag of stateObj.flags) {
           if (typeof flag === "string") {
-            stateObj.worldState.push({ id: `ws_mig_f_${idCounter++}`, name: flag, description: "" });
+            stateObj.worldState.push({
+              id: `ws_mig_f_${idCounter++}`,
+              name: flag,
+              description: "",
+            });
           }
         }
       }
       if (Array.isArray(stateObj.quests)) {
         for (const quest of stateObj.quests) {
-          if (quest && typeof quest === "object" && typeof quest.name === "string") {
+          if (
+            quest &&
+            typeof quest === "object" &&
+            typeof quest.name === "string"
+          ) {
             const status = quest.status ? ` [${quest.status}]` : "";
             stateObj.worldState.push({
               id: quest.id || `ws_mig_q_${idCounter++}`,
               name: quest.name + status,
-              description: typeof quest.summary === "string" ? quest.summary : ""
+              description:
+                typeof quest.summary === "string" ? quest.summary : "",
             });
           }
         }
@@ -48,8 +57,12 @@ const playthroughMigrations: Record<number, MigrationFn> = {
 
     // Migrate root
     migrateWorldState(data);
-    data.activeCharacters = data.activeCharacters ?? (Array.isArray(data.characters) ? data.characters.map((c: any) => c.id) : []);
-    
+    data.activeCharacters =
+      data.activeCharacters ??
+      (Array.isArray(data.characters)
+        ? data.characters.map((c: any) => c.id)
+        : []);
+
     delete data.npcs;
     delete data.locationCatalog;
     delete data.locationId;
@@ -60,14 +73,18 @@ const playthroughMigrations: Record<number, MigrationFn> = {
         const snap = data.snapshots[key];
         if (snap && typeof snap === "object") {
           migrateWorldState(snap);
-          snap.activeCharacters = snap.activeCharacters ?? (Array.isArray(snap.characters) ? snap.characters.map((c: any) => c.id) : []);
+          snap.activeCharacters =
+            snap.activeCharacters ??
+            (Array.isArray(snap.characters)
+              ? snap.characters.map((c: any) => c.id)
+              : []);
         }
       }
     }
-    
+
     data.schemaVersion = 2;
     return data;
-  }
+  },
 };
 
 function extractVersion(raw: unknown): number | undefined {
@@ -84,7 +101,7 @@ function runChain(
   raw: unknown,
   fromVersion: number,
   chain: Record<number, MigrationFn>,
-  current: number
+  current: number,
 ): { data: unknown; migratedFrom?: number } {
   let data = raw;
   let version = fromVersion;
@@ -97,7 +114,9 @@ function runChain(
   return version > fromVersion ? { data, migratedFrom: fromVersion } : { data };
 }
 
-function formatZodIssues(issues: { path: PropertyKey[]; message: string }[]): string {
+function formatZodIssues(
+  issues: { path: PropertyKey[]; message: string }[],
+): string {
   return issues
     .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
     .join("; ");
@@ -116,11 +135,14 @@ export function migratePlaythrough(raw: unknown): MigrationResult<Playthrough> {
     raw,
     from,
     playthroughMigrations,
-    CURRENT_PLAYTHROUGH_VERSION
+    CURRENT_PLAYTHROUGH_VERSION,
   );
   const parsed = PlaythroughSchema.safeParse(data);
   if (!parsed.success) {
-    return { ok: false, reason: `invalid playthrough: ${formatZodIssues(parsed.error.issues)}` };
+    return {
+      ok: false,
+      reason: `invalid playthrough: ${formatZodIssues(parsed.error.issues)}`,
+    };
   }
   return migratedFrom !== undefined
     ? { ok: true, data: parsed.data, migratedFrom }

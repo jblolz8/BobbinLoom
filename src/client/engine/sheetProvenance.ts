@@ -38,13 +38,13 @@ const SECTION_LINE_PATTERNS: ReadonlyArray<{
   { verb: "section item added", headerIndex: 0 },
   { verb: "section item removed", headerIndex: 0 },
   { verb: "section item replaced", headerIndex: 0 },
-  { verb: "clothing updated", headerIndex: "clothing" }
+  { verb: "clothing updated", headerIndex: "clothing" },
 ];
 
 function readSectionLine(
   line: string,
   characterName: string,
-  turn: number
+  turn: number,
 ): { section: string; change: SectionChange } | null {
   for (const pattern of SECTION_LINE_PATTERNS) {
     const prefix = pattern.verb + ": ";
@@ -59,12 +59,20 @@ function readSectionLine(
 
     // Every other verb only ever writes this character's own sheet, so anything else is not ours.
     if (!rest.startsWith(characterName + " → [")) return null;
-    const headers = [...line.matchAll(/\[([^\]]+)\]/g)].map((match) => match[1]);
+    const headers = [...line.matchAll(/\[([^\]]+)\]/g)].map(
+      (match) => match[1],
+    );
     const header = headers[pattern.headerIndex];
     if (!header) return null;
 
     const closing = line.indexOf("]", line.indexOf("[" + header + "]"));
-    const note = closing === -1 ? "" : line.slice(closing + 1).replace(/^[\s⇒|]+/, "").trim();
+    const note =
+      closing === -1
+        ? ""
+        : line
+            .slice(closing + 1)
+            .replace(/^[\s⇒|]+/, "")
+            .trim();
     return { section: header, change: { turn, note } };
   }
   return null;
@@ -76,7 +84,7 @@ function readSectionLine(
  */
 export function sectionProvenance(
   messages: ReadonlyArray<ProvenanceMessage>,
-  characterName: string
+  characterName: string,
 ): Map<string, SectionChange[]> {
   const out = new Map<string, SectionChange[]>();
   if (!characterName) return out;
@@ -100,7 +108,9 @@ export function sectionProvenance(
 }
 
 /** The most recent change in a section, or null when there is none. */
-export function latestChange(changes: SectionChange[] | undefined): SectionChange | null {
+export function latestChange(
+  changes: SectionChange[] | undefined,
+): SectionChange | null {
   if (!changes || changes.length === 0) return null;
   return changes[changes.length - 1];
 }

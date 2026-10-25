@@ -3,6 +3,7 @@ import {
   applyAvatarShapeTheme,
   applyCoverAspect,
   applyTheme,
+  applyWorkspaceWidth,
   createPlaythrough,
   generatePlaythrough,
   getGenerationProgress,
@@ -69,6 +70,7 @@ export default function App() {
       .then((res) => {
         if (res.avatarShape) applyAvatarShapeTheme(res.avatarShape);
         if (res.coverAspect) applyCoverAspect(res.coverAspect);
+        if (typeof res.workspaceWidthPercent === "number") applyWorkspaceWidth(res.workspaceWidthPercent);
         applyTheme({
           themeMode: res.themeMode,
           themePreset: res.themePreset,

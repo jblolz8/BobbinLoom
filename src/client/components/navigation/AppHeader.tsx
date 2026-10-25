@@ -22,7 +22,14 @@ export type AppHeaderProps = {
   activeHomeTab: HomeTab;
   onSelectHomeTab: (tab: HomeTab) => void;
   activePlaythroughName?: string | null;
-  onOpenModal: (modal: "playthroughs" | "characters" | "lorebooks" | "personas" | "settings") => void;
+  onOpenModal: (
+    modal:
+      | "playthroughs"
+      | "characters"
+      | "lorebooks"
+      | "personas"
+      | "settings",
+  ) => void;
   onGoHome: () => void;
   onNewPlaythrough: () => void;
   onOpenSettings: () => void;
@@ -53,7 +60,7 @@ export function AppHeader({
   isMobile = false,
 }: AppHeaderProps) {
   const [showPlayNavTabs, setShowPlayNavTabs] = useState<boolean>(
-    NAV_PREFERENCE_DEFAULTS.showPlayNavTabs
+    NAV_PREFERENCE_DEFAULTS.showPlayNavTabs,
   );
 
   /** Set the moment the reader toggles it, so the read that lands later never overwrites what they
@@ -117,7 +124,10 @@ export function AppHeader({
         onClick={onGoHome}
       >
         {view === "play" && activePlaythroughName ? (
-          <Tooltip content={`Active Playthrough: ${activePlaythroughName}`} side="bottom">
+          <Tooltip
+            content={`Active Playthrough: ${activePlaythroughName}`}
+            side="bottom"
+          >
             <Badge
               variant="accent"
               size="sm"
@@ -193,7 +203,9 @@ export function AppHeader({
             active={showPlayNavTabs}
             leftIcon="MoreVertical"
             collapseBelow="always"
-            tooltip={showPlayNavTabs ? "Hide navigation bar" : "Show navigation bar"}
+            tooltip={
+              showPlayNavTabs ? "Hide navigation bar" : "Show navigation bar"
+            }
             tooltipSide="bottom"
             onClick={handleTogglePlayNavTabs}
             aria-label="Toggle navigation bar"

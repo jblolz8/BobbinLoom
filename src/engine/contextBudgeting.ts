@@ -1,4 +1,10 @@
-import type { EntryTimingState, LorebookEntry, MemoryEvent, MemoryLayers, Playthrough } from "../schemas";
+import type {
+  EntryTimingState,
+  LorebookEntry,
+  MemoryEvent,
+  MemoryLayers,
+  Playthrough,
+} from "../schemas";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -37,14 +43,21 @@ interface ScoredEvent {
 
 function scoreEventKeyword(event: MemoryEvent, state: Playthrough): number {
   const characterIds = new Set(state.characters.map((c) => c.id));
-  const characterNames = new Set(state.characters.map((c) => c.name.toLowerCase()));
+  const characterNames = new Set(
+    state.characters.map((c) => c.name.toLowerCase()),
+  );
   const activeIds = new Set(state.activeCharacters ?? []);
   const questIds = new Set((state.worldState ?? []).map((q) => q.id));
-  const flagSet = new Set((state.worldState ?? []).map((q) => q.name.toLowerCase()));
+  const flagSet = new Set(
+    (state.worldState ?? []).map((q) => q.name.toLowerCase()),
+  );
 
   let score = event.importance * 3;
 
-  if (event.characterInstanceId && characterIds.has(event.characterInstanceId)) {
+  if (
+    event.characterInstanceId &&
+    characterIds.has(event.characterInstanceId)
+  ) {
     score += 8;
     if (activeIds.has(event.characterInstanceId)) score += 3;
   }
@@ -61,7 +74,7 @@ function scoreEventKeyword(event: MemoryEvent, state: Playthrough): number {
 
 export function retrieveMemoriesVector(
   state: Playthrough,
-  queryEmbedding: number[]
+  queryEmbedding: number[],
 ): string {
   const eventMap = new Map<string, MemoryEvent>();
   for (const layer of [
@@ -82,7 +95,11 @@ export function retrieveMemoriesVector(
   for (const event of allEvents) {
     let score = scoreEventKeyword(event, state);
 
-    if (event.embedding && event.embedding.length > 0 && queryEmbedding.length > 0) {
+    if (
+      event.embedding &&
+      event.embedding.length > 0 &&
+      queryEmbedding.length > 0
+    ) {
       const similarity = cosineSimilarity(queryEmbedding, event.embedding);
       score += similarity * 10;
     }
@@ -112,7 +129,7 @@ export function retrieveMemoriesVector(
 export function retrieveMemories(
   _layers: MemoryLayers | undefined,
   state: Playthrough,
-  _budget?: number
+  _budget?: number,
 ): string {
   return retrieveMemoriesVector(state, []);
 }
@@ -127,15 +144,18 @@ export function retrieveMemories(
  */
 export function rotateMemoryEvents(
   playthrough: Playthrough,
-  threshold: number = MEMORY_ROTATION_THRESHOLD
+  threshold: number = MEMORY_ROTATION_THRESHOLD,
 ): Playthrough {
   if (playthrough.memoryEvents.length < threshold) return playthrough;
   const next = clone(playthrough);
   if (!next.memoryLayers) {
     next.memoryLayers = { recent: [], compressed: [] };
   }
-  next.memoryLayers.compressed = [...next.memoryLayers.compressed, ...next.memoryLayers.recent, ...next.memoryEvents]
-    .slice(-COMPRESSED_EVENT_CAP);
+  next.memoryLayers.compressed = [
+    ...next.memoryLayers.compressed,
+    ...next.memoryLayers.recent,
+    ...next.memoryEvents,
+  ].slice(-COMPRESSED_EVENT_CAP);
   next.memoryLayers.recent = [];
   next.memoryEvents = [];
   next.updatedAt = nowIso();
@@ -151,14 +171,24 @@ export interface ActivatedEntry {
 export interface LorebookScanOptions {
   messages: Array<{ role: string; content: string }>;
   entries: LorebookEntry[];
-  lorebookDefaults: { scanDepth: number; caseSensitive: boolean; matchWholeWords: boolean };
+  lorebookDefaults: {
+    scanDepth: number;
+    caseSensitive: boolean;
+    matchWholeWords: boolean;
+  };
   timingStates?: Map<number, EntryTimingState>;
   currentMessageIndex?: number;
 }
 
-function buildScanText(messages: Array<{ role: string; content: string }>, scanDepth: number): string {
-  if (scanDepth <= 0) return messages.map(m => m.content).join("\n");
-  return messages.slice(-scanDepth).map(m => m.content).join("\n");
+function buildScanText(
+  messages: Array<{ role: string; content: string }>,
+  scanDepth: number,
+): string {
+  if (scanDepth <= 0) return messages.map((m) => m.content).join("\n");
+  return messages
+    .slice(-scanDepth)
+    .map((m) => m.content)
+    .join("\n");
 }
 
 function checkTiming(entry: LorebookEntry, timing?: EntryTimingState): boolean {
@@ -176,7 +206,11 @@ function passesProbability(entry: LorebookEntry): boolean {
 function matchSingleKey(
   key: string,
   text: string,
-  options: { caseSensitive: boolean; matchWholeWords: boolean; useRegex: boolean }
+  options: {
+    caseSensitive: boolean;
+    matchWholeWords: boolean;
+    useRegex: boolean;
+  },
 ): boolean {
   const trimmed = key.trim();
   if (!trimmed) return false;
@@ -192,7 +226,10 @@ function matchSingleKey(
 
     if (options.matchWholeWords) {
       const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const boundaryRegex = new RegExp(`(?<!\\p{L}|\\p{N}|_)${escaped}(?!\\p{L}|\\p{N}|_)`, "u");
+      const boundaryRegex = new RegExp(
+        `(?<!\\p{L}|\\p{N}|_)${escaped}(?!\\p{L}|\\p{N}|_)`,
+        "u",
+      );
       return boundaryRegex.test(haystack);
     }
 
@@ -205,7 +242,11 @@ function matchSingleKey(
 function matchPrimaryKeys(
   keys: string[],
   text: string,
-  options: { caseSensitive: boolean; matchWholeWords: boolean; useRegex: boolean }
+  options: {
+    caseSensitive: boolean;
+    matchWholeWords: boolean;
+    useRegex: boolean;
+  },
 ): { matched: boolean; matchedKeys: string[] } {
   const matchedKeys: string[] = [];
   for (const key of keys) {
@@ -220,20 +261,29 @@ function matchSecondaryKeys(
   secondaryKeys: string[],
   text: string,
   logic: number,
-  options: { caseSensitive: boolean; matchWholeWords: boolean; useRegex: boolean }
+  options: {
+    caseSensitive: boolean;
+    matchWholeWords: boolean;
+    useRegex: boolean;
+  },
 ): boolean {
   if (secondaryKeys.length === 0) return true;
 
-  const results = secondaryKeys.map(k => matchSingleKey(k, text, options));
+  const results = secondaryKeys.map((k) => matchSingleKey(k, text, options));
   const hasAny = results.some(Boolean);
   const hasAll = results.every(Boolean);
 
   switch (logic) {
-    case 0: return hasAny;
-    case 1: return !hasAll;
-    case 2: return !hasAny;
-    case 3: return hasAll;
-    default: return hasAny;
+    case 0:
+      return hasAny;
+    case 1:
+      return !hasAll;
+    case 2:
+      return !hasAny;
+    case 3:
+      return hasAll;
+    default:
+      return hasAny;
   }
 }
 
@@ -242,7 +292,7 @@ export function scanLorebooks(options: LorebookScanOptions): ActivatedEntry[] {
   const activated: ActivatedEntry[] = [];
 
   const sorted = [...entries]
-    .filter(e => !e.disable)
+    .filter((e) => !e.disable)
     .sort((a, b) => a.order - b.order);
 
   for (const entry of sorted) {
@@ -279,11 +329,23 @@ export function scanLorebooks(options: LorebookScanOptions): ActivatedEntry[] {
       useRegex: entry.useRegex,
     };
 
-    const { matched, matchedKeys } = matchPrimaryKeys(entry.key, scanText, matchOpts);
+    const { matched, matchedKeys } = matchPrimaryKeys(
+      entry.key,
+      scanText,
+      matchOpts,
+    );
     if (!matched) continue;
 
     if (entry.selective && entry.keysecondary.length > 0) {
-      if (!matchSecondaryKeys(entry.keysecondary, scanText, entry.selectiveLogic, matchOpts)) continue;
+      if (
+        !matchSecondaryKeys(
+          entry.keysecondary,
+          scanText,
+          entry.selectiveLogic,
+          matchOpts,
+        )
+      )
+        continue;
     }
 
     if (!passesProbability(entry)) continue;
@@ -305,7 +367,7 @@ export function updateTimingStates(
   currentMessageIndex: number,
 ): Map<number, EntryTimingState> {
   const nextStates = new Map<number, EntryTimingState>();
-  const activatedUids = new Set(activatedEntries.map(a => a.entry.uid));
+  const activatedUids = new Set(activatedEntries.map((a) => a.entry.uid));
 
   for (const entry of entries) {
     if (entry.sticky <= 0 && entry.cooldown <= 0 && entry.delay <= 0) continue;
@@ -320,8 +382,11 @@ export function updateTimingStates(
           delayRemaining: entry.delay > 0 ? entry.delay : 0,
         };
 
-    const wasActivated = activatedUids.has(entry.uid) &&
-      !activatedEntries.find(a => a.entry.uid === entry.uid && a.activationSource === "sticky");
+    const wasActivated =
+      activatedUids.has(entry.uid) &&
+      !activatedEntries.find(
+        (a) => a.entry.uid === entry.uid && a.activationSource === "sticky",
+      );
 
     if (wasActivated) {
       state.lastActivatedAt = currentMessageIndex;
@@ -337,7 +402,11 @@ export function updateTimingStates(
       }
     }
 
-    if (state.stickyCount > 0 || state.cooldownRemaining > 0 || state.delayRemaining > 0) {
+    if (
+      state.stickyCount > 0 ||
+      state.cooldownRemaining > 0 ||
+      state.delayRemaining > 0
+    ) {
       nextStates.set(entry.uid, state);
     }
   }

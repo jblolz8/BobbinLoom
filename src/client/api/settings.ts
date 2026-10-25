@@ -1,9 +1,20 @@
-import type { AutoScrollBehavior, AvatarShape, ChapterOpeningMode, CharacterContextScope, CoverAspect, CustomThemeColors, TagTaxonomyConfig, ThemeMode, ViewPreferences } from "../../schemas";
+import type {
+  AutoScrollBehavior,
+  AvatarShape,
+  ChapterOpeningMode,
+  CharacterContextScope,
+  CoverAspect,
+  CustomThemeColors,
+  TagTaxonomyConfig,
+  ThemeMode,
+  ViewPreferences,
+} from "../../schemas";
 import {
   COVER_ASPECT_VALUES,
   avatarBadgeRadius,
+  clampWorkspaceWidthPercent,
   effectiveThemeMode,
-  themeTokens
+  themeTokens,
 } from "../../engine/theme";
 import { request } from "./client";
 
@@ -17,18 +28,23 @@ export type { ThemeMode, CustomThemeColors, ChapterOpeningMode };
  * is the one place the UI turns this into concrete values.
  */
 export function getViewPreferences(): Promise<ViewPreferences> {
-  return request<{ preferences: ViewPreferences }>("/api/settings/preferences").then(
-    (result) => result.preferences ?? {}
-  );
+  return request<{ preferences: ViewPreferences }>(
+    "/api/settings/preferences",
+  ).then((result) => result.preferences ?? {});
 }
 
 /** Merge a partial preferences patch server-side. Callers set their own state optimistically first,
  *  the way the appearance panel does. */
-export function updateViewPreferences(patch: ViewPreferences): Promise<ViewPreferences> {
-  return request<{ preferences: ViewPreferences }>("/api/settings/preferences", {
-    method: "PUT",
-    body: JSON.stringify(patch)
-  }).then((result) => result.preferences ?? {});
+export function updateViewPreferences(
+  patch: ViewPreferences,
+): Promise<ViewPreferences> {
+  return request<{ preferences: ViewPreferences }>(
+    "/api/settings/preferences",
+    {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    },
+  ).then((result) => result.preferences ?? {});
 }
 
 /** What a reader who has never chosen anything gets for the chat toggles. These are the values the
@@ -48,7 +64,7 @@ export const CHAT_PREFERENCE_DEFAULTS = {
   /** Skips the confirmation when re-sending an image's request body: OFF. */
   alwaysDiscardOldImage: false,
   /** Behavior when receiving a new AI message turn: start of message (default), bottom, or none. */
-  autoScrollBehavior: "start" as AutoScrollBehavior
+  autoScrollBehavior: "start" as AutoScrollBehavior,
 } as const;
 
 export type ResolvedChatPreferences = {
@@ -68,7 +84,9 @@ export type ResolvedChatPreferences = {
 /** The chat toggles with defaults filled. An absent leaf means "never chosen", so defaults are applied
  *  HERE and nowhere else — and a stored value must beat a default, which is why the spread
  *  order is the whole point of this function. */
-export function resolveChatPreferences(stored: ViewPreferences | undefined): ResolvedChatPreferences {
+export function resolveChatPreferences(
+  stored: ViewPreferences | undefined,
+): ResolvedChatPreferences {
   return { ...CHAT_PREFERENCE_DEFAULTS, ...(stored?.chat ?? {}) };
 }
 
@@ -85,7 +103,7 @@ export const LIBRARY_PREFERENCE_DEFAULTS = {
   /** The home shelf. Its own view mode, sort and direction — a different list, same group. */
   playthroughViewMode: "grid",
   playthroughSortBy: "updatedAt",
-  playthroughSortDir: "desc"
+  playthroughSortDir: "desc",
 } satisfies ResolvedLibraryPreferences;
 
 export type ResolvedLibraryPreferences = {
@@ -103,7 +121,7 @@ export type ResolvedLibraryPreferences = {
 /** The library group, defaults filled. Absent means "never chosen", so the defaults are applied HERE
  *  and nowhere else — a stored value always wins, including one that matches a default. */
 export function resolveLibraryPreferences(
-  stored: ViewPreferences | undefined
+  stored: ViewPreferences | undefined,
 ): ResolvedLibraryPreferences {
   return { ...LIBRARY_PREFERENCE_DEFAULTS, ...(stored?.library ?? {}) };
 }
@@ -111,12 +129,20 @@ export function resolveLibraryPreferences(
 /** Which list a pager is, keyed as `viewPreferences.pageSizes` keys it. Page size has no resolver here
  *  — unlike the other groups there is no meaningful "default" to fill, because a list that has never
  *  been sized keeps the pager's own `DEFAULT_PAGE_SIZE`. */
-export type PageSizeSurface = "library" | "lorebook" | "persona" | "setupCast" | "home";
+export type PageSizeSurface =
+  | "library"
+  | "lorebook"
+  | "persona"
+  | "setupCast"
+  | "home";
 
 /** The shape every resolver below shares: defaults first, so a stored value always wins — including one
  *  that happens to equal a default. `undefined` for a leaf means "never chosen", which is why the
  *  server's answer never fills defaults of its own. */
-function resolveGroup<T extends object>(defaults: T, stored: Partial<T> | undefined): T {
+function resolveGroup<T extends object>(
+  defaults: T,
+  stored: Partial<T> | undefined,
+): T {
   return { ...defaults, ...(stored ?? {}) };
 }
 
@@ -125,7 +151,7 @@ export const SETUP_PREFERENCE_DEFAULTS: ResolvedSetupPreferences = {
   castSortBy: "name",
   castSortDir: "asc",
   castViewMode: "portrait",
-  showTagFilters: false
+  showTagFilters: false,
 };
 
 export type ResolvedSetupPreferences = {
@@ -136,14 +162,16 @@ export type ResolvedSetupPreferences = {
   showTagFilters: boolean;
 };
 
-export function resolveSetupPreferences(stored?: ViewPreferences): ResolvedSetupPreferences {
+export function resolveSetupPreferences(
+  stored?: ViewPreferences,
+): ResolvedSetupPreferences {
   return resolveGroup(SETUP_PREFERENCE_DEFAULTS, stored?.setup);
 }
 
 export const CAST_PREFERENCE_DEFAULTS: ResolvedCastPreferences = {
   viewMode: "portrait",
   contextScope: "chapter",
-  recentCount: 8
+  recentCount: 8,
 };
 
 export type ResolvedCastPreferences = {
@@ -152,7 +180,9 @@ export type ResolvedCastPreferences = {
   recentCount: number;
 };
 
-export function resolveCastPreferences(stored?: ViewPreferences): ResolvedCastPreferences {
+export function resolveCastPreferences(
+  stored?: ViewPreferences,
+): ResolvedCastPreferences {
   return resolveGroup(CAST_PREFERENCE_DEFAULTS, stored?.cast);
 }
 
@@ -160,7 +190,7 @@ export const PROVIDER_PREFERENCE_DEFAULTS: ResolvedProviderPreferences = {
   sortByText: "lastActiveAt",
   sortDirText: "desc",
   sortByImage: "lastActiveAt",
-  sortDirImage: "desc"
+  sortDirImage: "desc",
 };
 
 export type ResolvedProviderPreferences = {
@@ -170,29 +200,43 @@ export type ResolvedProviderPreferences = {
   sortDirImage: "asc" | "desc";
 };
 
-export function resolveProviderPreferences(stored?: ViewPreferences): ResolvedProviderPreferences {
+export function resolveProviderPreferences(
+  stored?: ViewPreferences,
+): ResolvedProviderPreferences {
   return resolveGroup(PROVIDER_PREFERENCE_DEFAULTS, stored?.providers);
 }
 
-export const NAV_PREFERENCE_DEFAULTS: ResolvedNavPreferences = { showPlayNavTabs: true };
+export const NAV_PREFERENCE_DEFAULTS: ResolvedNavPreferences = {
+  showPlayNavTabs: true,
+};
 
 export type ResolvedNavPreferences = { showPlayNavTabs: boolean };
 
-export function resolveNavPreferences(stored?: ViewPreferences): ResolvedNavPreferences {
+export function resolveNavPreferences(
+  stored?: ViewPreferences,
+): ResolvedNavPreferences {
   return resolveGroup(NAV_PREFERENCE_DEFAULTS, stored?.nav);
 }
 
 export const UI_PREFERENCE_DEFAULTS: ResolvedUiPreferences = {
   settingsTab: "provider",
-  settingsProviderKind: "text"
+  settingsProviderKind: "text",
 };
 
 export type ResolvedUiPreferences = {
-  settingsTab: "provider" | "prompts" | "tags" | "chat" | "interface" | "appearance";
+  settingsTab:
+    | "provider"
+    | "prompts"
+    | "tags"
+    | "chat"
+    | "interface"
+    | "appearance";
   settingsProviderKind: "text" | "image" | "overrides";
 };
 
-export function resolveUiPreferences(stored?: ViewPreferences): ResolvedUiPreferences {
+export function resolveUiPreferences(
+  stored?: ViewPreferences,
+): ResolvedUiPreferences {
   return resolveGroup(UI_PREFERENCE_DEFAULTS, stored?.ui);
 }
 
@@ -200,6 +244,8 @@ export interface AppearanceSettings {
   avatarShape: AvatarShape;
   /** The shape of every cover frame on the playthrough shelf. */
   coverAspect: CoverAspect;
+  /** Horizontal width percentage (50–100%) for Home workspace pages. */
+  workspaceWidthPercent: number;
   themeMode: ThemeMode;
   themePreset: string;
   customThemeColors: CustomThemeColors;
@@ -209,18 +255,22 @@ export interface AppearanceSettings {
   paneSwipeEnabled: boolean;
 }
 
-
-
-
 export function getTagTaxonomy(): Promise<{ tagTaxonomy: TagTaxonomyConfig }> {
-  return request<{ tagTaxonomy: TagTaxonomyConfig }>("/api/settings/tag-taxonomy");
+  return request<{ tagTaxonomy: TagTaxonomyConfig }>(
+    "/api/settings/tag-taxonomy",
+  );
 }
 
-export function updateTagTaxonomy(config: TagTaxonomyConfig): Promise<{ tagTaxonomy: TagTaxonomyConfig }> {
-  return request<{ tagTaxonomy: TagTaxonomyConfig }>("/api/settings/tag-taxonomy", {
-    method: "PUT",
-    body: JSON.stringify(config),
-  });
+export function updateTagTaxonomy(
+  config: TagTaxonomyConfig,
+): Promise<{ tagTaxonomy: TagTaxonomyConfig }> {
+  return request<{ tagTaxonomy: TagTaxonomyConfig }>(
+    "/api/settings/tag-taxonomy",
+    {
+      method: "PUT",
+      body: JSON.stringify(config),
+    },
+  );
 }
 
 /** The brainstorm assistant's preferences: the original-card context, and its chosen connection. */
@@ -235,32 +285,43 @@ export function getBrainstormSettings(): Promise<BrainstormSettings> {
   return request<BrainstormSettings>("/api/settings/brainstorm");
 }
 
-export function setBrainstormSettings(patch: Partial<BrainstormSettings>): Promise<BrainstormSettings> {
+export function setBrainstormSettings(
+  patch: Partial<BrainstormSettings>,
+): Promise<BrainstormSettings> {
   return request<BrainstormSettings>("/api/settings/brainstorm", {
     method: "PUT",
-    body: JSON.stringify(patch)
+    body: JSON.stringify(patch),
   });
 }
 
 /** The remembered chapter-opening mode. */
-export function getChapterOpeningMode(): Promise<{ chapterOpeningMode: ChapterOpeningMode }> {
-  return request<{ chapterOpeningMode: ChapterOpeningMode }>("/api/settings/chapter-opening-mode");
+export function getChapterOpeningMode(): Promise<{
+  chapterOpeningMode: ChapterOpeningMode;
+}> {
+  return request<{ chapterOpeningMode: ChapterOpeningMode }>(
+    "/api/settings/chapter-opening-mode",
+  );
 }
 
 export function setChapterOpeningMode(
-  mode: ChapterOpeningMode
+  mode: ChapterOpeningMode,
 ): Promise<{ chapterOpeningMode: ChapterOpeningMode }> {
-  return request<{ chapterOpeningMode: ChapterOpeningMode }>("/api/settings/chapter-opening-mode", {
-    method: "PUT",
-    body: JSON.stringify({ openingMode: mode })
-  });
+  return request<{ chapterOpeningMode: ChapterOpeningMode }>(
+    "/api/settings/chapter-opening-mode",
+    {
+      method: "PUT",
+      body: JSON.stringify({ openingMode: mode }),
+    },
+  );
 }
 
 export function getAppearanceSettings(): Promise<AppearanceSettings> {
   return request<AppearanceSettings>("/api/settings/appearance");
 }
 
-export function updateAppearanceSettings(payload: Partial<AppearanceSettings>): Promise<AppearanceSettings> {
+export function updateAppearanceSettings(
+  payload: Partial<AppearanceSettings>,
+): Promise<AppearanceSettings> {
   return request<AppearanceSettings>("/api/settings/appearance", {
     method: "PUT",
     body: JSON.stringify(payload),
@@ -271,7 +332,10 @@ export function updateAppearanceSettings(payload: Partial<AppearanceSettings>): 
 export function applyAvatarShapeTheme(shape: AvatarShape) {
   if (typeof document === "undefined") return;
   document.documentElement.setAttribute("data-avatar-shape", shape);
-  document.documentElement.style.setProperty("--avatar-badge-radius", avatarBadgeRadius(shape));
+  document.documentElement.style.setProperty(
+    "--avatar-badge-radius",
+    avatarBadgeRadius(shape),
+  );
 }
 
 /** The avatar shape the page is CURRENTLY wearing, read off the root. The server paints it into the first
@@ -280,7 +344,9 @@ export function applyAvatarShapeTheme(shape: AvatarShape) {
 export function currentAvatarShape(): AvatarShape {
   if (typeof document === "undefined") return "rounded";
   const attribute = document.documentElement.getAttribute("data-avatar-shape");
-  return attribute === "square" || attribute === "circle" ? attribute : "rounded";
+  return attribute === "square" || attribute === "circle"
+    ? attribute
+    : "rounded";
 }
 
 /** The frame shape each setting means, in CSS `aspect-ratio` terms. */
@@ -297,7 +363,20 @@ export function currentAvatarShape(): AvatarShape {
 export function applyCoverAspect(aspect: CoverAspect) {
   if (typeof document === "undefined") return;
   document.documentElement.setAttribute("data-cover-aspect", aspect);
-  document.documentElement.style.setProperty("--cover-art-aspect", COVER_ASPECT_VALUES[aspect]);
+  document.documentElement.style.setProperty(
+    "--cover-art-aspect",
+    COVER_ASPECT_VALUES[aspect],
+  );
+}
+
+/** Applies the workspace page width percentage (50–100%) globally on the root element. */
+export function applyWorkspaceWidth(percent: number) {
+  if (typeof document === "undefined") return;
+  const clamped = clampWorkspaceWidthPercent(percent);
+  document.documentElement.style.setProperty(
+    "--workspace-max-width",
+    `${clamped}%`,
+  );
 }
 
 /** Applies CSS variables, data-theme attribute, and custom colors globally. The tokens come from the
@@ -327,7 +406,12 @@ export function applyTheme(settings: {
   const propsToRemove: string[] = [];
   for (let i = 0; i < style.length; i++) {
     const prop = style[i];
-    if (prop.startsWith("--") && prop !== "--avatar-badge-radius" && prop !== "--cover-art-aspect") {
+    if (
+      prop.startsWith("--") &&
+      prop !== "--avatar-badge-radius" &&
+      prop !== "--cover-art-aspect" &&
+      prop !== "--workspace-max-width"
+    ) {
       propsToRemove.push(prop);
     }
   }
@@ -340,19 +424,26 @@ export function applyTheme(settings: {
     root.style.setProperty(key, value);
   }
 
-  const activeAccent = tokens["--accent-base"] || (effectiveMode === "light" ? "#2563eb" : "#2b4b7b");
+  const activeAccent =
+    tokens["--accent-base"] ||
+    (effectiveMode === "light" ? "#2563eb" : "#2b4b7b");
   // Once live inline tokens are on `document.documentElement.style`, retire `#theme-first-paint`
   // (preserving the shape tokens on `root.style` if they were not already inline) so switching back
   // to a minimal preset like `default-dark` or `default-light` never falls through to stale first-paint rules.
   const firstPaintStyle = document.getElementById("theme-first-paint");
   if (firstPaintStyle) {
     if (!style.getPropertyValue("--avatar-badge-radius")) {
-      style.setProperty("--avatar-badge-radius", avatarBadgeRadius(currentAvatarShape()));
+      style.setProperty(
+        "--avatar-badge-radius",
+        avatarBadgeRadius(currentAvatarShape()),
+      );
     }
     const coverAttr = root.getAttribute("data-cover-aspect");
     if (
       !style.getPropertyValue("--cover-art-aspect") &&
-      (coverAttr === "portrait" || coverAttr === "square" || coverAttr === "landscape")
+      (coverAttr === "portrait" ||
+        coverAttr === "square" ||
+        coverAttr === "landscape")
     ) {
       style.setProperty("--cover-art-aspect", COVER_ASPECT_VALUES[coverAttr]);
     }
@@ -363,7 +454,10 @@ export function applyTheme(settings: {
 }
 
 /** Generates dynamic thread spool SVG data URI for browser tab favicon */
-export function generateThreadFaviconDataUri(accentColor: string, isLightMode: boolean = false): string {
+export function generateThreadFaviconDataUri(
+  accentColor: string,
+  isLightMode: boolean = false,
+): string {
   const spoolColor = isLightMode ? "%23475569" : "%2394a3b8";
   const holeColor = "%230f172a";
   const encodedAccent = encodeURIComponent(accentColor);
@@ -374,7 +468,10 @@ export function generateThreadFaviconDataUri(accentColor: string, isLightMode: b
 }
 
 /** Updates the document favicon link tag dynamically */
-export function updateFavicon(accentColor: string, isLightMode: boolean = false): void {
+export function updateFavicon(
+  accentColor: string,
+  isLightMode: boolean = false,
+): void {
   if (typeof document === "undefined") return;
   try {
     let link = document.querySelector<HTMLLinkElement>("link[rel~='icon']");

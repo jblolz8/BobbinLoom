@@ -12,10 +12,11 @@ const updateViewPreferences = vi.fn();
 
 vi.mock("../src/client/api/settings", () => ({
   getViewPreferences: () => getViewPreferences(),
-  updateViewPreferences: (patch: unknown) => updateViewPreferences(patch)
+  updateViewPreferences: (patch: unknown) => updateViewPreferences(patch),
 }));
 
-const { adoptLocalPreferences, resetAdoptionCache } = await import("../src/client/api/settingsAdoption");
+const { adoptLocalPreferences, resetAdoptionCache } =
+  await import("../src/client/api/settingsAdoption");
 
 describe("the shared preferences read", () => {
   beforeEach(() => {
@@ -24,7 +25,9 @@ describe("the shared preferences read", () => {
     updateViewPreferences.mockReset();
     // No `window` in this suite, so the read is just "ask the server" — which is exactly the part that
     // must be shared.
-    getViewPreferences.mockImplementation(async () => ({ chat: { showDebug: false } }));
+    getViewPreferences.mockImplementation(async () => ({
+      chat: { showDebug: false },
+    }));
   });
 
   afterEach(() => {
@@ -32,7 +35,10 @@ describe("the shared preferences read", () => {
   });
 
   it("fetches once for surfaces that ask in the same tick", async () => {
-    const [first, second] = await Promise.all([adoptLocalPreferences(), adoptLocalPreferences()]);
+    const [first, second] = await Promise.all([
+      adoptLocalPreferences(),
+      adoptLocalPreferences(),
+    ]);
 
     expect(getViewPreferences).toHaveBeenCalledTimes(1);
     expect(second).toBe(first);
@@ -51,7 +57,10 @@ describe("the shared preferences read", () => {
     getViewPreferences.mockRejectedValueOnce(new Error("offline"));
 
     await expect(adoptLocalPreferences()).rejects.toThrow("offline");
-    await expect(adoptLocalPreferences()).resolves.toEqual({ preferences: { chat: { showDebug: false } }, changed: false });
+    await expect(adoptLocalPreferences()).resolves.toEqual({
+      preferences: { chat: { showDebug: false } },
+      changed: false,
+    });
     expect(getViewPreferences).toHaveBeenCalledTimes(2);
   });
 });

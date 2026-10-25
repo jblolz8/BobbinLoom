@@ -18,7 +18,7 @@ export const Separator = React.forwardRef<HTMLDivElement, SeparatorProps>(
       className = "",
       ...props
     },
-    ref
+    ref,
   ) => {
     const classNames = [
       "base-separator",
@@ -41,7 +41,7 @@ export const Separator = React.forwardRef<HTMLDivElement, SeparatorProps>(
         {label ? <span className="base-separator__label">{label}</span> : null}
       </div>
     );
-  }
+  },
 );
 
 Separator.displayName = "Separator";

@@ -10,7 +10,11 @@ const USER_RE = /\{\{\s*user\s*\}\}/gi;
 
 /** Both macros. Use only where `{{char}}` has an unambiguous owner — a character's
  *  sheet, that character's own runtime block, or their absent one-liner. */
-export function expandMacros(text: string, charName: string, playerName: string): string {
+export function expandMacros(
+  text: string,
+  charName: string,
+  playerName: string,
+): string {
   return text.replace(CHAR_RE, charName).replace(USER_RE, playerName);
 }
 

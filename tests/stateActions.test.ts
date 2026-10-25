@@ -2,11 +2,30 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { closeChapterAction, fleshOutCharacterAction, fleshOutCharacterDraftAction, worldStateAction } from "../src/server/stateActions";
+import {
+  closeChapterAction,
+  fleshOutCharacterAction,
+  fleshOutCharacterDraftAction,
+  worldStateAction,
+} from "../src/server/stateActions";
 import { applyStatePatch, takeTurnSnapshot } from "../src/engine/engine";
-import { createPlaythroughRecord, getPlaythroughRecord, updatePlaythroughRecord } from "../src/server/store";
-import type { CharacterInstance, ParsedUserInput, Playthrough, ScenarioPreferences, ScenarioSeed } from "../src/schemas";
-import type { ProviderTurn, TurnProvider, CharacterBrainstormOutput } from "../src/server/provider";
+import {
+  createPlaythroughRecord,
+  getPlaythroughRecord,
+  updatePlaythroughRecord,
+} from "../src/server/store";
+import type {
+  CharacterInstance,
+  ParsedUserInput,
+  Playthrough,
+  ScenarioPreferences,
+  ScenarioSeed,
+} from "../src/schemas";
+import type {
+  ProviderTurn,
+  TurnProvider,
+  CharacterBrainstormOutput,
+} from "../src/server/provider";
 
 const tempDirs: string[] = [];
 
@@ -27,40 +46,70 @@ describe("worldStateAction", () => {
   it("edits a world state name and description", () => {
     const dir = tempDir();
     const playthrough = createPlaythroughRecord(dir, "WS Edit");
-    playthrough.worldState.push({ id: "ws_starter", name: "Old Name", description: "Old." });
+    playthrough.worldState.push({
+      id: "ws_starter",
+      name: "Old Name",
+      description: "Old.",
+    });
     updatePlaythroughRecord(dir, playthrough);
 
-    const result = worldStateAction(dir, playthrough.id, "ws_starter", "edit", "New Name", "New description.");
+    const result = worldStateAction(
+      dir,
+      playthrough.id,
+      "ws_starter",
+      "edit",
+      "New Name",
+      "New description.",
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
     const ws = result.state.worldState.find((q: any) => q.id === "ws_starter");
     expect(ws?.name).toBe("New Name");
     expect(ws?.description).toBe("New description.");
-    
+
     // Verify persistence
     const stored = getPlaythroughRecord(dir, playthrough.id);
-    expect(stored?.worldState.find((w: any) => w.id === "ws_starter")?.name).toBe("New Name");
+    expect(
+      stored?.worldState.find((w: any) => w.id === "ws_starter")?.name,
+    ).toBe("New Name");
   });
 
   it("deletes a world state", () => {
     const dir = tempDir();
     const playthrough = createPlaythroughRecord(dir, "WS Delete");
-    playthrough.worldState.push({ id: "ws_starter", name: "Old Name", description: "Old." });
+    playthrough.worldState.push({
+      id: "ws_starter",
+      name: "Old Name",
+      description: "Old.",
+    });
     updatePlaythroughRecord(dir, playthrough);
-    
-    const result = worldStateAction(dir, playthrough.id, "ws_starter", "delete");
+
+    const result = worldStateAction(
+      dir,
+      playthrough.id,
+      "ws_starter",
+      "delete",
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.state.worldState.find((q: any) => q.id === "ws_starter")).toBeUndefined();
+    expect(
+      result.state.worldState.find((q: any) => q.id === "ws_starter"),
+    ).toBeUndefined();
   });
 
   it("rejects unknown world states", () => {
     const dir = tempDir();
     const playthrough = createPlaythroughRecord(dir, "WS Missing");
 
-    const result = worldStateAction(dir, playthrough.id, "ws_nope", "edit", "Foo");
+    const result = worldStateAction(
+      dir,
+      playthrough.id,
+      "ws_nope",
+      "edit",
+      "Foo",
+    );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.status).toBe(404);
   });
@@ -70,20 +119,34 @@ class MockProviderShim implements TurnProvider {
   async generateTurn(
     _input: ParsedUserInput,
     _state: Playthrough,
-    _choicesEnabled: boolean
+    _choicesEnabled: boolean,
   ): Promise<ProviderTurn> {
     throw new Error("not used in promote tests");
   }
 
-  async generateScenarioSeed(_preferences: ScenarioPreferences, _lorebookIds?: string[]): Promise<ScenarioSeed> {
+  async generateScenarioSeed(
+    _preferences: ScenarioPreferences,
+    _lorebookIds?: string[],
+  ): Promise<ScenarioSeed> {
     throw new Error("not used in promote tests");
   }
 
-  async summarizeChapter(_transcript: string): Promise<{ name: string; shortDescription: string; fullSummary: string }> {
+  async summarizeChapter(
+    _transcript: string,
+  ): Promise<{ name: string; shortDescription: string; fullSummary: string }> {
     throw new Error("not used in promote tests");
   }
 
-  async compactStorySoFar(_input: { priorSummary: string | null; chapterTranscriptions: { name: string; fullSummary: string }[]; importantEvents: { type: string; summary: string; importance: number; turn: number }[]; }): Promise<{ summary: string }> {
+  async compactStorySoFar(_input: {
+    priorSummary: string | null;
+    chapterTranscriptions: { name: string; fullSummary: string }[];
+    importantEvents: {
+      type: string;
+      summary: string;
+      importance: number;
+      turn: number;
+    }[];
+  }): Promise<{ summary: string }> {
     throw new Error("not used in promote tests");
   }
 
@@ -91,15 +154,26 @@ class MockProviderShim implements TurnProvider {
     return [];
   }
 
-  async generateCharacterSheet(_npc: { name: string; description: string; disposition?: string }, _storyContext: string): Promise<string> {
+  async generateCharacterSheet(
+    _npc: { name: string; description: string; disposition?: string },
+    _storyContext: string,
+  ): Promise<string> {
     return "[Species]: Human\n\n[Personality]\n- Cheerful shopkeeper";
   }
 
-  async refineCharacterSheet(_c: string, _o: string, _f: string, _s: string): Promise<string> {
+  async refineCharacterSheet(
+    _c: string,
+    _o: string,
+    _f: string,
+    _s: string,
+  ): Promise<string> {
     throw new Error("not used in promote tests");
   }
 
-  async reformatCharacterSheet(_content: string, _format: unknown): Promise<string> {
+  async reformatCharacterSheet(
+    _content: string,
+    _format: unknown,
+  ): Promise<string> {
     throw new Error("not used in promote tests");
   }
 
@@ -116,12 +190,28 @@ describe("fleshOutCharacterDraftAction", () => {
   it("drafts a sheet without mutating the playthrough", async () => {
     const dir = tempDir();
     const pt = createPlaythroughRecord(dir, "Draft Test");
-    const withChar = applyStatePatch(pt, { characterAddSimple: [{ name: "Shopkeep", description: "A friendly shopkeeper.", storyRole: "Merchant" }] });
+    const withChar = applyStatePatch(pt, {
+      characterAddSimple: [
+        {
+          name: "Shopkeep",
+          description: "A friendly shopkeeper.",
+          storyRole: "Merchant",
+        },
+      ],
+    });
     updatePlaythroughRecord(dir, withChar.state);
-    const charId = withChar.state.characters.find((c) => c.name === "Shopkeep")!.id;
+    const charId = withChar.state.characters.find(
+      (c) => c.name === "Shopkeep",
+    )!.id;
 
     const provider = new MockProviderShim();
-    const out = await fleshOutCharacterDraftAction(dir, withChar.state.id, charId, provider, 4000);
+    const out = await fleshOutCharacterDraftAction(
+      dir,
+      withChar.state.id,
+      charId,
+      provider,
+      4000,
+    );
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     expect(out.content).toContain("[Species]");
@@ -136,12 +226,33 @@ describe("fleshOutCharacterDraftAction", () => {
   it("fleshOutCharacterAction with acceptedContent skips the provider", async () => {
     const dir = tempDir();
     const pt = createPlaythroughRecord(dir, "Confirm Test");
-    const withChar = applyStatePatch(pt, { characterAddSimple: [{ name: "Shopkeep", description: "A friendly shopkeeper.", storyRole: "Merchant" }] });
+    const withChar = applyStatePatch(pt, {
+      characterAddSimple: [
+        {
+          name: "Shopkeep",
+          description: "A friendly shopkeeper.",
+          storyRole: "Merchant",
+        },
+      ],
+    });
     updatePlaythroughRecord(dir, withChar.state);
-    const charId = withChar.state.characters.find((c) => c.name === "Shopkeep")!.id;
+    const charId = withChar.state.characters.find(
+      (c) => c.name === "Shopkeep",
+    )!.id;
 
-    const throwing = { generateCharacterSheet: async () => { throw new Error("should not be called"); } } as unknown as TurnProvider;
-    const out = await fleshOutCharacterAction(dir, withChar.state.id, charId, throwing, "[Species]: Human\n\n[Personality]\n- Cheerful", 4000);
+    const throwing = {
+      generateCharacterSheet: async () => {
+        throw new Error("should not be called");
+      },
+    } as unknown as TurnProvider;
+    const out = await fleshOutCharacterAction(
+      dir,
+      withChar.state.id,
+      charId,
+      throwing,
+      "[Species]: Human\n\n[Personality]\n- Cheerful",
+      4000,
+    );
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     expect(out.state.characters.some((c) => c.name === "Shopkeep")).toBe(true);
@@ -149,7 +260,9 @@ describe("fleshOutCharacterDraftAction", () => {
     expect(promoted?.memorySummary).toContain("Cheerful");
     expect(promoted?.templateId).toBeDefined();
     // The approved draft becomes the promoted template's content (sections ensured).
-    const template = out.state.characterTemplates.find((t) => t.id === promoted?.templateId);
+    const template = out.state.characterTemplates.find(
+      (t) => t.id === promoted?.templateId,
+    );
     expect(template?.content).toContain("[Species]: Human");
     expect(template?.content).toContain("[Personality]\n- Cheerful");
     expect(template?.content).toContain("[Dislikes]\n(not established)");
@@ -159,18 +272,44 @@ describe("closeChapterAction — NPC staleness pruning (Phase E)", () => {
   /** Minimal provider whose generateTurn produces the chapter opening. */
   function makeChapterProvider(): TurnProvider {
     return {
-      async generateTurn(_input: ParsedUserInput, _state: Playthrough, _choicesEnabled: boolean): Promise<ProviderTurn> {
+      async generateTurn(
+        _input: ParsedUserInput,
+        _state: Playthrough,
+        _choicesEnabled: boolean,
+      ): Promise<ProviderTurn> {
         return { turn: { narrative: "New chapter opening." } };
       },
-      async generateScenarioSeed(): Promise<ScenarioSeed> { throw new Error("not used"); },
-      async summarizeChapter(): Promise<{ name: string; shortDescription: string; fullSummary: string }> { throw new Error("not used"); },
-      async compactStorySoFar(): Promise<{ summary: string }> { return { summary: "compacted" }; },
-      async embedTexts(): Promise<number[][]> { return []; },
-      async generateCharacterSheet(): Promise<string> { throw new Error("not used"); },
-      async refineCharacterSheet(): Promise<string> { throw new Error("not used"); },
-      async reformatCharacterSheet(): Promise<string> { throw new Error("not used"); },
-      async suggestCharacterTags(): Promise<string[]> { return []; },
-      async brainstormCharacter() { throw new Error("not used"); }
+      async generateScenarioSeed(): Promise<ScenarioSeed> {
+        throw new Error("not used");
+      },
+      async summarizeChapter(): Promise<{
+        name: string;
+        shortDescription: string;
+        fullSummary: string;
+      }> {
+        throw new Error("not used");
+      },
+      async compactStorySoFar(): Promise<{ summary: string }> {
+        return { summary: "compacted" };
+      },
+      async embedTexts(): Promise<number[][]> {
+        return [];
+      },
+      async generateCharacterSheet(): Promise<string> {
+        throw new Error("not used");
+      },
+      async refineCharacterSheet(): Promise<string> {
+        throw new Error("not used");
+      },
+      async reformatCharacterSheet(): Promise<string> {
+        throw new Error("not used");
+      },
+      async suggestCharacterTags(): Promise<string[]> {
+        return [];
+      },
+      async brainstormCharacter() {
+        throw new Error("not used");
+      },
     };
   }
 
@@ -182,20 +321,33 @@ describe("closeChapterAction — NPC staleness pruning (Phase E)", () => {
         id: `msg_${i}`,
         role: i % 2 === 0 ? "user" : "assistant",
         content: `message ${i}`,
-        createdAt: `2026-01-0${i + 1}T00:00:00.000Z`
+        createdAt: `2026-01-0${i + 1}T00:00:00.000Z`,
       });
     }
   }
 
   /** Adds a simple character, persists the playthrough, returns the persisted state. */
-  function addSimpleChar(dir: string, pt: Playthrough, name: string, active = false): Playthrough {
+  function addSimpleChar(
+    dir: string,
+    pt: Playthrough,
+    name: string,
+    active = false,
+  ): Playthrough {
     const withChar = applyStatePatch(pt, {
-      characterAddSimple: [{ name, description: `${name} keeps to themselves.`, storyRole: "Townsfolk" }]
+      characterAddSimple: [
+        {
+          name,
+          description: `${name} keeps to themselves.`,
+          storyRole: "Townsfolk",
+        },
+      ],
     });
     if (!active) {
       const added = withChar.state.characters.find((c) => c.name === name);
       if (added) {
-        withChar.state.activeCharacters = (withChar.state.activeCharacters ?? []).filter((id) => id !== added.id);
+        withChar.state.activeCharacters = (
+          withChar.state.activeCharacters ?? []
+        ).filter((id) => id !== added.id);
       }
     }
     updatePlaythroughRecord(dir, withChar.state);
@@ -203,9 +355,17 @@ describe("closeChapterAction — NPC staleness pruning (Phase E)", () => {
   }
 
   async function closeChapter(dir: string, pt: Playthrough): Promise<void> {
-    const result = await closeChapterAction(dir, pt.id, {
-      name: "Session", shortDescription: "s", fullSummary: "session summary"
-    }, makeChapterProvider(), false);
+    const result = await closeChapterAction(
+      dir,
+      pt.id,
+      {
+        name: "Session",
+        shortDescription: "s",
+        fullSummary: "session summary",
+      },
+      makeChapterProvider(),
+      false,
+    );
     expect(result.ok).toBe(true);
   }
 
@@ -233,17 +393,19 @@ describe("closeChapterAction — NPC staleness pruning (Phase E)", () => {
     const dir = tempDir();
     const pt = createPlaythroughRecord(dir, "Event Test");
     seedMessages(pt);
-    pt.memoryEvents = [{
-      id: "evt_corvin",
-      playthroughId: pt.id,
-      branchId: pt.branchId,
-      turn: 1,
-      type: "story",
-      summary: "Corvin mends the clock tower.",
-      importance: 2,
-      tags: ["corvin"],
-      createdAt: "2026-01-02T00:00:00.000Z"
-    }];
+    pt.memoryEvents = [
+      {
+        id: "evt_corvin",
+        playthroughId: pt.id,
+        branchId: pt.branchId,
+        turn: 1,
+        type: "story",
+        summary: "Corvin mends the clock tower.",
+        importance: 2,
+        tags: ["corvin"],
+        createdAt: "2026-01-02T00:00:00.000Z",
+      },
+    ];
     const withChar = addSimpleChar(dir, pt, "Corvin", false);
     await closeChapter(dir, withChar);
 
@@ -274,8 +436,16 @@ describe("closeChapterAction — NPC staleness pruning (Phase E)", () => {
     const pipId = withChar.characters.find((c) => c.name === "Pip")!.id;
     withChar.turn = 3;
     withChar.snapshots = {
-      "2": { ...takeTurnSnapshot(withChar), turn: 2, activeCharacters: [pipId] },
-      msg_snap1: { ...takeTurnSnapshot(withChar), turn: 2, activeCharacters: [pipId] }
+      "2": {
+        ...takeTurnSnapshot(withChar),
+        turn: 2,
+        activeCharacters: [pipId],
+      },
+      msg_snap1: {
+        ...takeTurnSnapshot(withChar),
+        turn: 2,
+        activeCharacters: [pipId],
+      },
     };
     updatePlaythroughRecord(dir, withChar);
     await closeChapter(dir, withChar);
@@ -297,7 +467,9 @@ describe("closeChapterAction — NPC staleness pruning (Phase E)", () => {
     const fades = systemFadeMessages(loaded);
     expect(fades).toHaveLength(1);
     expect(fades[0].role).toBe("system");
-    expect(fades[0].content).toBe("Some background characters faded from the story: Zelda.");
+    expect(fades[0].content).toBe(
+      "Some background characters faded from the story: Zelda.",
+    );
     expect(fades[0].id.startsWith("msg_")).toBe(true);
     // Visible in the new chapter: not archived, not hidden.
     expect(fades[0].hidden).toBeUndefined();
@@ -337,7 +509,7 @@ describe("closeChapterAction — NPC staleness pruning (Phase E)", () => {
       flags: [],
       clothing: [],
       createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z"
+      updatedAt: "2026-01-01T00:00:00.000Z",
     };
     pt.characters.push(far);
     const detailedBefore = pt.characters.filter((c) => c.templateId).length;
@@ -345,12 +517,16 @@ describe("closeChapterAction — NPC staleness pruning (Phase E)", () => {
     await closeChapter(dir, withChar);
 
     const loaded = getPlaythroughRecord(dir, withChar.id)!;
-    expect(loaded.characters.filter((c) => c.templateId)).toHaveLength(detailedBefore);
+    expect(loaded.characters.filter((c) => c.templateId)).toHaveLength(
+      detailedBefore,
+    );
     expect(loaded.characters.some((c) => c.id === "char_far")).toBe(true);
     expect(loaded.characters.some((n) => n.name === "Zelda")).toBe(false);
     const fades = systemFadeMessages(loaded);
     expect(fades).toHaveLength(1);
-    expect(fades[0].content).toBe("Some background characters faded from the story: Zelda.");
+    expect(fades[0].content).toBe(
+      "Some background characters faded from the story: Zelda.",
+    );
   });
 });
 
@@ -363,7 +539,7 @@ describe("flesh-out story context macro expansion", () => {
     class CapturingProvider extends MockProviderShim {
       async generateCharacterSheet(
         _npc: { name: string; description: string; storyRole?: string },
-        storyContext: string
+        storyContext: string,
       ): Promise<string> {
         captured = storyContext;
         return "[Species]: Human\n\n[Personality]\n- Cheerful shopkeeper";
@@ -378,12 +554,26 @@ describe("flesh-out story context macro expansion", () => {
     updatePlaythroughRecord(dir, pt);
 
     const withChar = applyStatePatch(pt, {
-      characterAddSimple: [{ name: "Shopkeep", description: "A friendly shopkeeper.", storyRole: "Merchant" }]
+      characterAddSimple: [
+        {
+          name: "Shopkeep",
+          description: "A friendly shopkeeper.",
+          storyRole: "Merchant",
+        },
+      ],
     });
     updatePlaythroughRecord(dir, withChar.state);
-    const charId = withChar.state.characters.find((c) => c.name === "Shopkeep")!.id;
+    const charId = withChar.state.characters.find(
+      (c) => c.name === "Shopkeep",
+    )!.id;
 
-    const out = await fleshOutCharacterDraftAction(dir, withChar.state.id, charId, new CapturingProvider(), 4000);
+    const out = await fleshOutCharacterDraftAction(
+      dir,
+      withChar.state.id,
+      charId,
+      new CapturingProvider(),
+      4000,
+    );
     expect(out.ok).toBe(true);
     expect(captured).toContain("Anon wanders the district.");
     expect(captured).not.toContain("{{user}}");
@@ -400,15 +590,37 @@ describe("closeChapterAction — the opening message and the opening mode", () =
         captured.raw = input.raw;
         return { turn: { narrative: "The next chapter opens." } };
       },
-      async generateScenarioSeed(): Promise<ScenarioSeed> { throw new Error("not used"); },
-      async summarizeChapter(): Promise<{ name: string; shortDescription: string; fullSummary: string }> { throw new Error("not used"); },
-      async compactStorySoFar(): Promise<{ summary: string }> { return { summary: "compacted" }; },
-      async embedTexts(): Promise<number[][]> { return []; },
-      async generateCharacterSheet(): Promise<string> { throw new Error("not used"); },
-      async refineCharacterSheet(): Promise<string> { throw new Error("not used"); },
-      async reformatCharacterSheet(): Promise<string> { throw new Error("not used"); },
-      async suggestCharacterTags(): Promise<string[]> { return []; },
-      async brainstormCharacter() { throw new Error("not used"); }
+      async generateScenarioSeed(): Promise<ScenarioSeed> {
+        throw new Error("not used");
+      },
+      async summarizeChapter(): Promise<{
+        name: string;
+        shortDescription: string;
+        fullSummary: string;
+      }> {
+        throw new Error("not used");
+      },
+      async compactStorySoFar(): Promise<{ summary: string }> {
+        return { summary: "compacted" };
+      },
+      async embedTexts(): Promise<number[][]> {
+        return [];
+      },
+      async generateCharacterSheet(): Promise<string> {
+        throw new Error("not used");
+      },
+      async refineCharacterSheet(): Promise<string> {
+        throw new Error("not used");
+      },
+      async reformatCharacterSheet(): Promise<string> {
+        throw new Error("not used");
+      },
+      async suggestCharacterTags(): Promise<string[]> {
+        return [];
+      },
+      async brainstormCharacter() {
+        throw new Error("not used");
+      },
     };
   }
 
@@ -421,12 +633,16 @@ describe("closeChapterAction — the opening message and the opening mode", () =
         role: i % 2 === 0 ? "user" : "assistant",
         content: "message " + i,
         createdAt: "2026-01-01T00:00:0" + i + ".000Z",
-        turn: Math.floor(i / 2) + 1
+        turn: Math.floor(i / 2) + 1,
       });
     }
   }
 
-  const SUMMARY = { name: "Closed Chapter", shortDescription: "short", fullSummary: "full" };
+  const SUMMARY = {
+    name: "Closed Chapter",
+    shortDescription: "short",
+    fullSummary: "full",
+  };
   const NOTE = "Three days later, in the harbour town of Rime.";
 
   it("appends the player message as the first message of the NEW chapter", async () => {
@@ -436,10 +652,21 @@ describe("closeChapterAction — the opening message and the opening mode", () =
     updatePlaythroughRecord(dir, pt);
 
     const captured: { raw?: string } = {};
-    const result = await closeChapterAction(dir, pt.id, SUMMARY, makeProvider(captured), true, 32768, undefined, undefined, undefined, {
-      openingMode: "shortJump",
-      openingMessage: NOTE
-    });
+    const result = await closeChapterAction(
+      dir,
+      pt.id,
+      SUMMARY,
+      makeProvider(captured),
+      true,
+      32768,
+      undefined,
+      undefined,
+      undefined,
+      {
+        openingMode: "shortJump",
+        openingMessage: NOTE,
+      },
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -457,7 +684,9 @@ describe("closeChapterAction — the opening message and the opening mode", () =
     // The chapter that closed knows nothing about it.
     const chapter = result.state.chapters[result.state.chapters.length - 1];
     expect(chapter.messageIds).not.toContain(appended.id);
-    expect(result.state.messages.filter((m) => m.chapterId === chapter.id).length).toBe(8);
+    expect(
+      result.state.messages.filter((m) => m.chapterId === chapter.id).length,
+    ).toBe(8);
 
     // And the opening turn was asked for a short jump that honours the message.
     expect(captured.raw).toContain("MOMENTS LATER");
@@ -471,9 +700,20 @@ describe("closeChapterAction — the opening message and the opening mode", () =
     updatePlaythroughRecord(dir, pt);
 
     const captured: { raw?: string } = {};
-    const result = await closeChapterAction(dir, pt.id, SUMMARY, makeProvider(captured), true, 32768, undefined, undefined, undefined, {
-      openingMode: "continuation"
-    });
+    const result = await closeChapterAction(
+      dir,
+      pt.id,
+      SUMMARY,
+      makeProvider(captured),
+      true,
+      32768,
+      undefined,
+      undefined,
+      undefined,
+      {
+        openingMode: "continuation",
+      },
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -490,9 +730,20 @@ describe("closeChapterAction — the opening message and the opening mode", () =
     updatePlaythroughRecord(dir, pt);
 
     const captured: { raw?: string } = {};
-    const result = await closeChapterAction(dir, pt.id, SUMMARY, makeProvider(captured), true, 32768, undefined, undefined, undefined, {
-      openingMode: "custom"
-    });
+    const result = await closeChapterAction(
+      dir,
+      pt.id,
+      SUMMARY,
+      makeProvider(captured),
+      true,
+      32768,
+      undefined,
+      undefined,
+      undefined,
+      {
+        openingMode: "custom",
+      },
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;

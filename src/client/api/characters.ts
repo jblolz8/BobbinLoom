@@ -1,19 +1,35 @@
-import type { CharacterFormat, CharacterTemplate, ClothingItem, Playthrough } from "../../schemas";
+import type {
+  CharacterFormat,
+  CharacterTemplate,
+  ClothingItem,
+  Playthrough,
+} from "../../schemas";
 import { request } from "./client";
 import type { BrainstormSession } from "../../engine/brainstorm";
 
-export type CharacterTemplateUpdate = Partial<Pick<CharacterTemplate, "name" | "content" | "creatorNotes" | "tags">>;
+export type CharacterTemplateUpdate = Partial<
+  Pick<CharacterTemplate, "name" | "content" | "creatorNotes" | "tags">
+>;
 
-export type SaveToLibraryResult = { template: CharacterTemplate; created: boolean };
+export type SaveToLibraryResult = {
+  template: CharacterTemplate;
+  created: boolean;
+};
 
-export type ImportCharacterResult = { record: CharacterTemplate; created: boolean };
+export type ImportCharacterResult = {
+  record: CharacterTemplate;
+  created: boolean;
+};
 
 /** Import a CCv2 card (PNG with embedded `chara` JSON, or standalone JSON).
  *  `dataBase64` is the raw file content base64-encoded (no data: prefix). */
-export function importCharacter(fileName: string, dataBase64: string): Promise<ImportCharacterResult> {
+export function importCharacter(
+  fileName: string,
+  dataBase64: string,
+): Promise<ImportCharacterResult> {
   return request<ImportCharacterResult>("/api/characters/import", {
     method: "POST",
-    body: JSON.stringify({ fileName, dataBase64 })
+    body: JSON.stringify({ fileName, dataBase64 }),
   });
 }
 
@@ -43,39 +59,51 @@ export function getCharacter(id: string): Promise<CharacterTemplate> {
 
 /** A character's brainstorm session, or null when it has never been brainstormed with. The session lives
  *  beside the character on the server, so it survives a cleared browser and is visible from any device. */
-export function getBrainstormSession(characterId: string): Promise<BrainstormSession | null> {
-  return request<BrainstormSession | null>(`/api/characters/${characterId}/brainstorm`).catch(() =>
-    null
-  );
+export function getBrainstormSession(
+  characterId: string,
+): Promise<BrainstormSession | null> {
+  return request<BrainstormSession | null>(
+    `/api/characters/${characterId}/brainstorm`,
+  ).catch(() => null);
 }
 
 /** Stores the whole thread. Unusable entries are dropped server-side and the tail is trimmed there, so a
  *  caller may send whatever it holds. */
 export function saveBrainstormSession(
   characterId: string,
-  messages: unknown[]
+  messages: unknown[],
 ): Promise<BrainstormSession> {
-  return request<BrainstormSession>(`/api/characters/${characterId}/brainstorm`, {
-    method: "PUT",
-    body: JSON.stringify({ messages })
-  });
+  return request<BrainstormSession>(
+    `/api/characters/${characterId}/brainstorm`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ messages }),
+    },
+  );
 }
 
-export function clearBrainstormSession(characterId: string): Promise<{ ok: boolean }> {
-  return request<{ ok: boolean }>(`/api/characters/${characterId}/brainstorm`, { method: "DELETE" });
+export function clearBrainstormSession(
+  characterId: string,
+): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/api/characters/${characterId}/brainstorm`, {
+    method: "DELETE",
+  });
 }
 
 export function createCharacter(name: string): Promise<CharacterTemplate> {
   return request<CharacterTemplate>("/api/characters", {
     method: "POST",
-    body: JSON.stringify({ name })
+    body: JSON.stringify({ name }),
   });
 }
 
-export function updateCharacter(id: string, updates: CharacterTemplateUpdate): Promise<CharacterTemplate> {
+export function updateCharacter(
+  id: string,
+  updates: CharacterTemplateUpdate,
+): Promise<CharacterTemplate> {
   return request<CharacterTemplate>(`/api/characters/${id}`, {
     method: "PUT",
-    body: JSON.stringify(updates)
+    body: JSON.stringify(updates),
   });
 }
 
@@ -87,30 +115,43 @@ export function uploadCharacterAvatar(
   id: string,
   type: "portrait" | "profile",
   dataBase64: string,
-  fileName?: string
+  fileName?: string,
 ): Promise<{ record: CharacterTemplate }> {
-  return request<{ record: CharacterTemplate }>(`/api/characters/${id}/avatar`, {
-    method: "POST",
-    body: JSON.stringify({ type, dataBase64, fileName })
-  });
+  return request<{ record: CharacterTemplate }>(
+    `/api/characters/${id}/avatar`,
+    {
+      method: "POST",
+      body: JSON.stringify({ type, dataBase64, fileName }),
+    },
+  );
 }
 
-export function restoreOriginalCharacterAvatar(id: string): Promise<{ record: CharacterTemplate }> {
-  return request<{ record: CharacterTemplate }>(`/api/characters/${id}/avatar/restore`, {
-    method: "POST"
-  });
+export function restoreOriginalCharacterAvatar(
+  id: string,
+): Promise<{ record: CharacterTemplate }> {
+  return request<{ record: CharacterTemplate }>(
+    `/api/characters/${id}/avatar/restore`,
+    {
+      method: "POST",
+    },
+  );
 }
 
-export function deleteCharacterProfileAvatar(id: string): Promise<{ record: CharacterTemplate }> {
-  return request<{ record: CharacterTemplate }>(`/api/characters/${id}/avatar/profile`, {
-    method: "DELETE"
-  });
+export function deleteCharacterProfileAvatar(
+  id: string,
+): Promise<{ record: CharacterTemplate }> {
+  return request<{ record: CharacterTemplate }>(
+    `/api/characters/${id}/avatar/profile`,
+    {
+      method: "DELETE",
+    },
+  );
 }
 
 export function getCharacterAvatarUrl(
   id: string,
   type: "portrait" | "profile" | "original" = "portrait",
-  updatedAt?: number
+  updatedAt?: number,
 ): string {
   const query = new URLSearchParams();
   if (type !== "portrait") query.set("type", type);
@@ -122,23 +163,29 @@ export function getCharacterAvatarUrl(
 export function saveCharacterToLibrary(
   playthroughId: string,
   characterId: string,
-  mode: "update" | "newVersion" = "update"
+  mode: "update" | "newVersion" = "update",
 ): Promise<SaveToLibraryResult> {
-  return request<SaveToLibraryResult>(`/api/playthroughs/${playthroughId}/characters/${characterId}/save-to-library`, {
-    method: "POST",
-    body: JSON.stringify({ mode })
-  });
+  return request<SaveToLibraryResult>(
+    `/api/playthroughs/${playthroughId}/characters/${characterId}/save-to-library`,
+    {
+      method: "POST",
+      body: JSON.stringify({ mode }),
+    },
+  );
 }
 
 export function editCharacter(
   playthroughId: string,
   characterId: string,
-  payload: CharacterEditPayload
+  payload: CharacterEditPayload,
 ): Promise<Playthrough> {
-  return request<Playthrough>(`/api/playthroughs/${playthroughId}/characters/${characterId}`, {
-    method: "PUT",
-    body: JSON.stringify(payload)
-  });
+  return request<Playthrough>(
+    `/api/playthroughs/${playthroughId}/characters/${characterId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 // ── CCv2 → BL conversion ──
@@ -163,14 +210,16 @@ export type ConvertGenerateOptions = {
 
 export function convertCharacterGenerate(
   id: string,
-  options?: ConvertGenerateOptions
+  options?: ConvertGenerateOptions,
 ): Promise<ConvertGenerateResult> {
   return request<ConvertGenerateResult>(`/api/characters/${id}/convert`, {
     method: "POST",
     body: JSON.stringify({
       action: "generate",
       ...(options?.feedback ? { feedback: options.feedback } : {}),
-      ...(options?.currentContent ? { currentContent: options.currentContent } : {}),
+      ...(options?.currentContent
+        ? { currentContent: options.currentContent }
+        : {}),
       ...(options?.format ? { format: options.format } : {}),
     }),
     signal: options?.signal,
@@ -179,7 +228,7 @@ export function convertCharacterGenerate(
 
 export function convertCharacterApply(
   id: string,
-  content: string
+  content: string,
 ): Promise<ConvertApplyResult> {
   return request<ConvertApplyResult>(`/api/characters/${id}/convert`, {
     method: "POST",
@@ -199,14 +248,16 @@ export type ReformatGenerateOptions = {
 
 export function reformatCharacterGenerate(
   id: string,
-  options?: ReformatGenerateOptions
+  options?: ReformatGenerateOptions,
 ): Promise<ConvertGenerateResult> {
   return request<ConvertGenerateResult>(`/api/characters/${id}/reformat`, {
     method: "POST",
     body: JSON.stringify({
       action: "generate",
       ...(options?.format ? { format: options.format } : {}),
-      ...(options?.currentContent ? { currentContent: options.currentContent } : {}),
+      ...(options?.currentContent
+        ? { currentContent: options.currentContent }
+        : {}),
       ...(options?.feedback ? { feedback: options.feedback } : {}),
     }),
     signal: options?.signal,
@@ -215,7 +266,7 @@ export function reformatCharacterGenerate(
 
 export function reformatCharacterApply(
   id: string,
-  content: string
+  content: string,
 ): Promise<ConvertApplyResult> {
   return request<ConvertApplyResult>(`/api/characters/${id}/reformat`, {
     method: "POST",
@@ -236,7 +287,7 @@ export type SuggestTagsPayload = {
 
 export function suggestCharacterTags(
   payload: SuggestTagsPayload,
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal },
 ): Promise<{ tags: string[] }> {
   return request<{ tags: string[] }>("/api/characters/suggest-tags", {
     method: "POST",
@@ -293,7 +344,7 @@ export type CharacterBrainstormResult = {
 
 export function brainstormCharacter(
   payload: CharacterBrainstormPayload,
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal },
 ): Promise<CharacterBrainstormResult> {
   return request<CharacterBrainstormResult>("/api/characters/brainstorm", {
     method: "POST",

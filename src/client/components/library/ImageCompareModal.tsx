@@ -19,7 +19,9 @@ export function ImageCompareModal({
   loading = false,
 }: ImageCompareModalProps) {
   const [showConfirmRestore, setShowConfirmRestore] = useState(false);
-  const [mobileTab, setMobileTab] = useState<"side-by-side" | "original" | "current">("side-by-side");
+  const [mobileTab, setMobileTab] = useState<
+    "side-by-side" | "original" | "current"
+  >("side-by-side");
 
   function handleRestoreClick() {
     setShowConfirmRestore(true);
@@ -37,7 +39,10 @@ export function ImageCompareModal({
         if (e.target === e.currentTarget && !loading) onClose();
       }}
     >
-      <section className="modal image-compare-modal" aria-labelledby="compare-modal-title">
+      <section
+        className="modal image-compare-modal"
+        aria-labelledby="compare-modal-title"
+      >
         <header className="modal-header">
           <div className="compare-modal-title-wrap">
             <span className="compare-modal-icon-badge">
@@ -45,7 +50,9 @@ export function ImageCompareModal({
             </span>
             <div>
               <h3 id="compare-modal-title">Compare Artwork: {characterName}</h3>
-              <p className="modal-subtitle">Original CCv2 Artwork vs. Current Custom Portrait</p>
+              <p className="modal-subtitle">
+                Original CCv2 Artwork vs. Current Custom Portrait
+              </p>
             </div>
           </div>
           <button
@@ -90,10 +97,16 @@ export function ImageCompareModal({
           {(mobileTab === "side-by-side" || mobileTab === "original") && (
             <div className="image-compare-pane original-pane">
               <div className="compare-pane-header">
-                <span className="pane-badge ccv2-badge">Original CCv2 Artwork</span>
+                <span className="pane-badge ccv2-badge">
+                  Original CCv2 Artwork
+                </span>
               </div>
               <div className="compare-image-wrap">
-                <img src={originalSrc} alt="Original CCv2 artwork" className="compare-image" />
+                <img
+                  src={originalSrc}
+                  alt="Original CCv2 artwork"
+                  className="compare-image"
+                />
               </div>
             </div>
           )}
@@ -102,10 +115,16 @@ export function ImageCompareModal({
           {(mobileTab === "side-by-side" || mobileTab === "current") && (
             <div className="image-compare-pane current-pane">
               <div className="compare-pane-header">
-                <span className="pane-badge current-badge">Current Custom Portrait</span>
+                <span className="pane-badge current-badge">
+                  Current Custom Portrait
+                </span>
               </div>
               <div className="compare-image-wrap">
-                <img src={currentSrc} alt="Current portrait artwork" className="compare-image" />
+                <img
+                  src={currentSrc}
+                  alt="Current portrait artwork"
+                  className="compare-image"
+                />
               </div>
             </div>
           )}
@@ -115,7 +134,10 @@ export function ImageCompareModal({
           <div className="compare-restore-warning">
             <div className="restore-warning-text">
               <Icon name="AlertTriangle" size={15} />
-              <span>Are you sure? This will remove your custom portrait and revert back to the original CCv2 card art.</span>
+              <span>
+                Are you sure? This will remove your custom portrait and revert
+                back to the original CCv2 card art.
+              </span>
             </div>
             <div className="restore-warning-actions">
               <Button

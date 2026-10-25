@@ -31,11 +31,13 @@ export function TwoPaneDiff({
 }: TwoPaneDiffProps) {
   const rows = useMemo(
     () => computeTwoPaneDiff(leftContent, rightContent),
-    [leftContent, rightContent]
+    [leftContent, rightContent],
   );
 
   return (
-    <div className={`two-pane-diff-scroll diff-mode-${viewMode} ${className ?? ""}`}>
+    <div
+      className={`two-pane-diff-scroll diff-mode-${viewMode} ${className ?? ""}`}
+    >
       <div className={`two-pane-diff diff-mode-${viewMode}`}>
         <div className={`two-pane-diff-header diff-mode-${viewMode}`}>
           {(viewMode === "split" || viewMode === "left") && (

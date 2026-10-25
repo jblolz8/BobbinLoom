@@ -1,7 +1,10 @@
 import type { ImageGenerationSettings } from "../../schemas";
 import { applyInstructionMode } from "../../engine/imageDefaults";
 import { clampChars, composePrompt } from "../imageProvider/shared";
-import { buildTextSamplingParams, type ResolvedProviderConfig } from "../providerConfig";
+import {
+  buildTextSamplingParams,
+  type ResolvedProviderConfig,
+} from "../providerConfig";
 import { requestWithRetry } from "./openaiClient";
 import { extractJsonPayload } from "./patchParser";
 
@@ -88,7 +91,7 @@ const REFUSAL_PATTERNS = [
   "i must decline",
   "can't help with",
   "cannot help with",
-  "cannot assist"
+  "cannot assist",
 ];
 
 /** Typographic apostrophes ("I can’t") must match the same patterns as ASCII. */
@@ -98,7 +101,9 @@ function normalizeQuotes(text: string): string {
 
 /** The refusal shape the text opens with, or null when it opens like a prompt. */
 function matchedRefusal(text: string): string | null {
-  const window = normalizeQuotes(text.slice(0, REFUSAL_WINDOW_CHARS)).toLowerCase();
+  const window = normalizeQuotes(
+    text.slice(0, REFUSAL_WINDOW_CHARS),
+  ).toLowerCase();
   return REFUSAL_PATTERNS.find((pattern) => window.includes(pattern)) ?? null;
 }
 
@@ -151,7 +156,11 @@ function promptShapeWarning(raw: string): string | null {
   return null;
 }
 
-type ReasoningSignal = "reasoning_content" | "reasoning" | "a reasoning block" | null;
+type ReasoningSignal =
+  | "reasoning_content"
+  | "reasoning"
+  | "a reasoning block"
+  | null;
 
 /** A content block typed as reasoning/thinking (Anthropic-style proxying). */
 function isReasoningBlock(block: unknown): boolean {
@@ -167,9 +176,15 @@ function isReasoningBlock(block: unknown): boolean {
  */
 function reasoningSignal(message: MessageShape | undefined): ReasoningSignal {
   if (!message) return null;
-  if (typeof message.reasoning_content === "string" && message.reasoning_content.trim()) return "reasoning_content";
-  if (typeof message.reasoning === "string" && message.reasoning.trim()) return "reasoning";
-  if (Array.isArray(message.content) && message.content.some(isReasoningBlock)) return "a reasoning block";
+  if (
+    typeof message.reasoning_content === "string" &&
+    message.reasoning_content.trim()
+  )
+    return "reasoning_content";
+  if (typeof message.reasoning === "string" && message.reasoning.trim())
+    return "reasoning";
+  if (Array.isArray(message.content) && message.content.some(isReasoningBlock))
+    return "a reasoning block";
   return null;
 }
 
@@ -182,19 +197,22 @@ function reasoningSignal(message: MessageShape | undefined): ReasoningSignal {
 function emptyContentError(
   text: string,
   finishReason: string,
-  reasoning: ReasoningSignal
+  reasoning: ReasoningSignal,
 ): Error {
   const details = [`finish_reason: ${finishReason}`];
   if (reasoning) {
     details.push(
-      `the message carried ${reasoning} while content was empty — the model spent its output budget on reasoning instead of writing the prompt (raise the connection's maxTokens, or use a connection that answers directly)`
+      `the message carried ${reasoning} while content was empty — the model spent its output budget on reasoning instead of writing the prompt (raise the connection's maxTokens, or use a connection that answers directly)`,
     );
   } else {
     details.push("the message carried no reasoning field");
   }
-  const snippet = text.length > ERROR_SNIPPET_CHARS ? `${text.slice(0, ERROR_SNIPPET_CHARS)}…` : text;
+  const snippet =
+    text.length > ERROR_SNIPPET_CHARS
+      ? `${text.slice(0, ERROR_SNIPPET_CHARS)}…`
+      : text;
   return new Error(
-    `The text provider returned no image prompt (${details.join("; ")}). Raw response (truncated): ${snippet}`
+    `The text provider returned no image prompt (${details.join("; ")}). Raw response (truncated): ${snippet}`,
   );
 }
 
@@ -204,7 +222,10 @@ function emptyContentError(
  * dropped entirely (an empty "CURRENT STATE:" header invites the model to
  * invent one).
  */
-export function buildImagePromptContextBlock(input: ImagePromptInput, settings: ImageGenerationSettings): string {
+export function buildImagePromptContextBlock(
+  input: ImagePromptInput,
+  settings: ImageGenerationSettings,
+): string {
   const blocks: string[] = [];
   // The history block OPENS the message: all non-current material is grouped ahead
   // of the frame, and the parts that already work (SCENE TEXT first among them,
@@ -218,15 +239,22 @@ export function buildImagePromptContextBlock(input: ImagePromptInput, settings: 
       [
         PREVIOUS_ANSWER_HEADER,
         input.previousAnswer.prompt,
-        ...(input.previousAnswer.negative ? [`Negative: ${input.previousAnswer.negative}`] : [])
-      ].join("\n")
+        ...(input.previousAnswer.negative
+          ? [`Negative: ${input.previousAnswer.negative}`]
+          : []),
+      ].join("\n"),
     );
   }
   blocks.push(`SCENE TEXT:\n${input.messageContent}`);
-  if (input.previousUserContent) blocks.push(`PLAYER'S LAST ACTION:\n${input.previousUserContent}`);
-  if (settings.includeState && input.stateSummary) blocks.push(`CURRENT STATE:\n${input.stateSummary}`);
-  if (settings.includeCast && input.castSummary) blocks.push(`PRESENT CHARACTERS:\n${input.castSummary}`);
-  blocks.push('Return ONE line of comma-separated tags describing this moment. Return JSON only: {"prompt": "…", "negative": "…"}');
+  if (input.previousUserContent)
+    blocks.push(`PLAYER'S LAST ACTION:\n${input.previousUserContent}`);
+  if (settings.includeState && input.stateSummary)
+    blocks.push(`CURRENT STATE:\n${input.stateSummary}`);
+  if (settings.includeCast && input.castSummary)
+    blocks.push(`PRESENT CHARACTERS:\n${input.castSummary}`);
+  blocks.push(
+    'Return ONE line of comma-separated tags describing this moment. Return JSON only: {"prompt": "…", "negative": "…"}',
+  );
   return blocks.join("\n\n");
 }
 
@@ -237,12 +265,15 @@ export function buildImagePromptContextBlock(input: ImagePromptInput, settings: 
  *  The NEGATIVE side is comma-joined (the shipped list and the model's tags are
  *  both comma-separated strings, so a space join would splice two lists into
  *  one undifferentiated run); the positive side stays space-joined. */
-function compose(prefix: string, body: string, limit: number, comma = false): { text: string; truncated: boolean } {
+function compose(
+  prefix: string,
+  body: string,
+  limit: number,
+  comma = false,
+): { text: string; truncated: boolean } {
   const p = prefix.trim();
   const b = body.trim();
-  const joined = comma
-    ? (!p ? b : !b ? p : `${p}, ${b}`)
-    : composePrompt(p, b);
+  const joined = comma ? (!p ? b : !b ? p : `${p}, ${b}`) : composePrompt(p, b);
   if (limit <= 0) return { text: joined, truncated: false };
   const clamped = clampChars(joined, limit);
   return { text: clamped, truncated: clamped.length < joined.length };
@@ -264,7 +295,7 @@ export async function generateImagePrompt(
   settings: ImageGenerationSettings,
   input: ImagePromptInput,
   fetchImpl: typeof fetch = fetch,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<ImagePromptOutput> {
   const start = Date.now();
   const body = {
@@ -281,20 +312,38 @@ export async function generateImagePrompt(
       // unchanged, so an instruction carrying neither perspective variant (a
       // hand-written one) is never touched. The preset editor rewrites its field on
       // a mode change for the same reason — what is shown is what is sent.
-      { role: "system", content: applyInstructionMode(settings.instruction, settings.instructionMode) },
-      { role: "user", content: buildImagePromptContextBlock(input, settings) }
-    ]
+      {
+        role: "system",
+        content: applyInstructionMode(
+          settings.instruction,
+          settings.instructionMode,
+        ),
+      },
+      { role: "user", content: buildImagePromptContextBlock(input, settings) },
+    ],
   };
 
-  const res = await requestWithRetry(config, fetchImpl, body, "/chat/completions", undefined, signal);
+  const res = await requestWithRetry(
+    config,
+    fetchImpl,
+    body,
+    "/chat/completions",
+    undefined,
+    signal,
+  );
   const text = await res.text();
-  if (!res.ok) throw new Error(`Image prompt provider error ${res.status}: ${text.slice(0, 300)}`);
+  if (!res.ok)
+    throw new Error(
+      `Image prompt provider error ${res.status}: ${text.slice(0, 300)}`,
+    );
 
   let envelope: CompletionEnvelope;
   try {
     envelope = JSON.parse(text) as CompletionEnvelope;
   } catch {
-    throw new Error("The text provider returned a non-JSON response while writing the image prompt.");
+    throw new Error(
+      "The text provider returned a non-JSON response while writing the image prompt.",
+    );
   }
 
   const choice = envelope.choices?.[0];
@@ -304,16 +353,20 @@ export async function generateImagePrompt(
   // FAIL IMMEDIATELY on empty content: no retry, no deterministic fallback
   // prompt. The diagnostic IS the deliverable — see `emptyContentError`.
   if (!content.trim()) {
-    const finishReason = choice?.finish_reason
-      ?? (envelope.choices?.length ? "absent" : "absent — the response carried no choices");
+    const finishReason =
+      choice?.finish_reason ??
+      (envelope.choices?.length
+        ? "absent"
+        : "absent — the response carried no choices");
     throw emptyContentError(text, finishReason, reasoningSignal(message));
   }
 
   const warnings: string[] = [];
   const payload = extractJsonPayload(content);
-  const obj = payload && typeof payload === "object" && !Array.isArray(payload)
-    ? (payload as Record<string, unknown>)
-    : null;
+  const obj =
+    payload && typeof payload === "object" && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : null;
 
   let rawPrompt = "";
   let rawNegative = "";
@@ -321,11 +374,12 @@ export async function generateImagePrompt(
     if (typeof obj.prompt === "string") rawPrompt = obj.prompt;
     // The instruction asks for a `negative` field; accept a model that still
     // answers the legacy `negative_prompt` spelling so old contracts keep working.
-    const negativeVal = typeof obj.negative === "string" ? obj.negative : obj.negative_prompt;
+    const negativeVal =
+      typeof obj.negative === "string" ? obj.negative : obj.negative_prompt;
     if (typeof negativeVal === "string") rawNegative = negativeVal;
     if (typeof obj.prompt !== "string") {
       warnings.push(
-        `The text model returned JSON with no "prompt" field (keys: ${describeKeys(obj)}), so that raw JSON is now the image prompt. Edit it before generating, or try another text connection.`
+        `The text model returned JSON with no "prompt" field (keys: ${describeKeys(obj)}), so that raw JSON is now the image prompt. Edit it before generating, or try another text connection.`,
       );
     }
   }
@@ -338,7 +392,7 @@ export async function generateImagePrompt(
     const refusal = matchedRefusal(rawPrompt);
     if (refusal) {
       warnings.push(
-        `The text model looks like it refused — it opened with "${refusal}" instead of describing an image, and that text is now the prompt. Review it before generating, or try another text connection.`
+        `The text model looks like it refused — it opened with "${refusal}" instead of describing an image, and that text is now the prompt. Review it before generating, or try another text connection.`,
       );
     }
   }
@@ -353,7 +407,11 @@ export async function generateImagePrompt(
     if (shape) warnings.push(shape);
   }
 
-  const composedPrompt = compose(settings.positivePrefix, rawPrompt, settings.promptCharacterLimit);
+  const composedPrompt = compose(
+    settings.positivePrefix,
+    rawPrompt,
+    settings.promptCharacterLimit,
+  );
   // The negative has NO preset ceiling: it is a fixed list we ship, not a tag list
   // the preset sizes. A limit of 0 reads as unlimited here, and the route clamps
   // the composed negative to the dialect's hard cap — which is the only ceiling it
@@ -364,7 +422,12 @@ export async function generateImagePrompt(
   // `comma` flag): both are comma-separated strings, so a space join would splice
   // two lists into one undifferentiated run. The shipped list stays first — it is
   // the baseline; the model's tags extend it for this scene.
-  const composedNegative = compose(settings.negativePrefix, rawNegative, 0, true);
+  const composedNegative = compose(
+    settings.negativePrefix,
+    rawNegative,
+    0,
+    true,
+  );
 
   return {
     prompt: composedPrompt.text,
@@ -378,6 +441,6 @@ export async function generateImagePrompt(
     writerNegative: rawNegative.trim(),
     model: config.model,
     durationMs: Date.now() - start,
-    warnings
+    warnings,
   };
 }
