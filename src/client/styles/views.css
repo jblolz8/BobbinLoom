@@ -280,7 +280,7 @@
 
 .message-markdown strong,
 .message strong {
-  font-weight: 600;
+  font-weight: 700;
   color: var(--story-emphasis);
 }
 
@@ -294,9 +294,30 @@
   color: var(--story-italic);
 }
 
+.message-markdown strong em,
+.message strong em {
+  color: var(--story-emphasis);
+}
+
 .quote-text {
   color: var(--story-quote);
   font-weight: 500;
+}
+
+.quote-text em,
+.quote-text strong,
+.quote-text strong em {
+  color: inherit;
+}
+
+.quote-text strong {
+  font-weight: 700;
+}
+
+.message-markdown del,
+.message del {
+  color: var(--text-muted);
+  text-decoration: line-through;
 }
 
 .inline-code {
@@ -453,9 +474,41 @@
   opacity: 0.75;
 }
 
+.message-heading {
+  margin: 0.75rem 0 0.35rem 0;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--story-emphasis, var(--text-primary));
+}
+
+.message-heading:first-child {
+  margin-top: 0;
+}
+
+.message-heading--1 {
+  font-size: 1.12rem;
+  padding-bottom: 0.2rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.message-heading--2 {
+  font-size: 1.03rem;
+}
+
+.message-heading--3,
+.message-heading--4,
+.message-heading--5,
+.message-heading--6 {
+  font-size: 0.96rem;
+}
+
 .message-list {
   margin: 0.4rem 0 0.65rem 0;
   padding-left: 1.4rem;
+}
+
+.message-list li::marker {
+  color: var(--text-muted);
 }
 
 .message-list:last-child {

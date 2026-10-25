@@ -45,6 +45,10 @@
   min-width: 0;
 }
 
+.base-stack--full-height {
+  height: 100%;
+}
+
 .base-stack--sticky {
   position: sticky;
   top: 0;
@@ -53,4 +57,10 @@
   padding-top: 0.15rem;
   padding-bottom: 0.5rem;
   border-bottom: 1px solid var(--border-main);
+}
+
+@media (min-width: 1101px) {
+  .base-stack--mobile-only {
+    display: none;
+  }
 }

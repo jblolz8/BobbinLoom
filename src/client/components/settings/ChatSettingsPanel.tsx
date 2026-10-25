@@ -87,13 +87,14 @@ export function ChatSettingsPanel({
   setAutoScrollBehavior,
 }: ChatSettingsPanelProps) {
   return (
-    <Stack direction="column" align="stretch" gap="sm">
-      <Text as="p" size="xs" tone="secondary">
-        Customize which components and visual indicators appear in the Chat panel.
-      </Text>
-
+    <Stack direction="column" align="stretch" gap="md">
       <Stack direction="column" align="stretch" gap="2xs">
-        <Header variant="section" title="Chat Message" />
+        <Header
+          variant="section"
+          icon="MessageSquare"
+          title="Chat Message"
+          subtitle="Choose which badges, metadata, and interactive controls appear on chat turns."
+        />
         <SwitchRow
           icon="MessageSquare"
           title="Show Choices"
@@ -139,7 +140,12 @@ export function ChatSettingsPanel({
       </Stack>
 
       <Stack direction="column" align="stretch" gap="2xs">
-        <Header variant="section" title="Auto-Scroll on AI Reply" />
+        <Header
+          variant="section"
+          icon="ArrowDownToLine"
+          title="Auto-Scroll on AI Reply"
+          subtitle="Control where the chat viewport scrolls when a new AI response arrives."
+        />
         <FormGrid cols={3} gap="xs">
           {AUTOSCROLL_OPTIONS.map((opt) => {
             const isSelected = autoScrollBehavior === opt.id;
@@ -182,7 +188,12 @@ export function ChatSettingsPanel({
       </Stack>
 
       <Stack direction="column" align="stretch" gap="2xs">
-        <Header variant="section" title="Image Generation" />
+        <Header
+          variant="section"
+          icon="Image"
+          title="Image Generation"
+          subtitle="Configure how scene renders are prompted, triggered, and replaced in chat."
+        />
         <SwitchRow
           icon="Image"
           title="Review Image Prompt Before Generating"
@@ -207,7 +218,12 @@ export function ChatSettingsPanel({
       </Stack>
 
       <Stack direction="column" align="stretch" gap="2xs">
-        <Header variant="section" title="Debugging" />
+        <Header
+          variant="section"
+          icon="Wrench"
+          title="Debugging"
+          subtitle="Inspect raw prompt payloads, model responses, and state patches."
+        />
         <SwitchRow
           icon="Wrench"
           title="Show Debug Accordion"

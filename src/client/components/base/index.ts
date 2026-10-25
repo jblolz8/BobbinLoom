@@ -18,6 +18,7 @@ export * from "./TextArea";
 export * from "./Badge/Badge";
 export * from "./Tabs/Tabs";
 export * from "./Checkbox";
+export * from "./CheckboxRow";
 export * from "./Switch";
 export * from "./SwitchRow";
 export * from "./ThreadIcon";

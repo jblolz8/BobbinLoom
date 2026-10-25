@@ -1,9 +1,23 @@
-import type { PlaythroughCoverView } from "../../../schemas";
+import type { CoverAspect, PlaythroughCoverView } from "../../../schemas";
 import { buildImageUrl, getCharacterAvatarUrl } from "../../api";
 import { CharacterAvatar } from "./CharacterAvatar";
+import { Icon } from "./Icon";
 import { ThreadIcon } from "./ThreadIcon";
 
 export type CoverArtSize = "card" | "thumb" | "hero";
+
+export interface CoverAspectPreviewProps {
+  aspect: CoverAspect;
+}
+
+/** Miniature aspect-ratio frame preview for cover art selection controls. */
+export function CoverAspectPreview({ aspect }: CoverAspectPreviewProps) {
+  return (
+    <span className="cover-aspect-preview" data-aspect={aspect} aria-hidden="true">
+      <Icon name="Image" size={13} />
+    </span>
+  );
+}
 
 export type CoverArtProps = {
   /** The resolved cover from the list projection, or null for the placeholder. */

@@ -7,6 +7,7 @@ export type TextElement =
   | "label"
   | "strong"
   | "em"
+  | "code"
   | "h1"
   | "h2"
   | "h3"

@@ -35,13 +35,13 @@
   --text-disabled: #414a58;
 
   /* ── 4. Story & Roleplay Markdown ── */
-  --story-text: #eceff4;
-  --story-quote: #e2b86b;             /* Spoken dialogue ("...") */
-  --story-italic: #d8dee9;            /* Italic prose: actions and internal thoughts (*...*) */
-  --story-emphasis: #60a5fa;          /* Bold / action (**...**) */
-  --story-blockquote-border: #e2b86b;
-  --story-blockquote-bg: rgba(226, 184, 107, 0.06);
-  --story-blockquote-text: #cbd5e1;
+  --story-text: #e4eaf2;
+  --story-quote: #e5be73;             /* Spoken dialogue ("...") */
+  --story-italic: #b4c3d8;            /* Italic prose: actions and internal thoughts (*...*) */
+  --story-emphasis: #bcd8ff;          /* Bold / action (**...**) */
+  --story-blockquote-border: #e5be73;
+  --story-blockquote-bg: rgba(229, 190, 115, 0.06);
+  --story-blockquote-text: #b4c3d8;
 
   /* ── 5. Code & Technical Blocks ──
      Every code token DERIVES from this theme's own surfaces, so a theme that
@@ -195,9 +195,9 @@
 [data-theme="light"] {
   color-scheme: light;
 
-  --bg-app: #f4f6f9;
-  --bg-panel: #ffffff;
-  --bg-surface-elevated: #edf2f7;
+  --bg-app: #eef2f6;
+  --bg-panel: #f8fafc;
+  --bg-surface-elevated: #ffffff;
   --bg-surface-hover: #e2e8f0;
   --modal-backdrop: rgba(15, 23, 42, 0.45);
 
@@ -211,10 +211,10 @@
   --text-muted: #64748b;
   --text-disabled: #94a3b8;
 
-  --story-text: #0f172a;
+  --story-text: #1e293b;
   --story-quote: #b45309;             /* Inverted warm amber/gold for high contrast */
-  --story-italic: #475569;            /* Slate for readable italic prose */
-  --story-emphasis: #1d4ed8;
+  --story-italic: #4a5d78;            /* Muted steel-blue slate for italic prose */
+  --story-emphasis: #163f73;          /* Deep sapphire-navy ink for bold emphasis */
   --story-blockquote-border: #d97706;
   --story-blockquote-bg: rgba(245, 158, 11, 0.08);
   --story-blockquote-text: #334155;
@@ -222,7 +222,7 @@
   /* Code derives from the light surfaces (see the :root block). Light themes
      get a LIGHT code slab: a dark slab on a cream page is the drift this
      replaced. */
-  --code-block-bg: var(--bg-panel);
+  --code-block-bg: var(--bg-surface-elevated);
   /* ── 5c. Documentation search hits ──
      A highlighted term is a surface that lands on prose AND on code slabs, so
      it gets a pair of its own instead of borrowing either. Derived from the
@@ -232,10 +232,10 @@
   --doc-hit-bg: color-mix(in srgb, var(--accent-highlight) 32%, transparent);
   --doc-hit-text: var(--text-primary);
 
-  --code-block-header: var(--bg-surface-elevated);
+  --code-block-header: var(--bg-panel);
   --code-block-border: var(--border-main);
   --code-lang-label: var(--text-muted);
-  --code-inline-bg: var(--bg-surface-elevated);
+  --code-inline-bg: var(--bg-app);
   --code-inline-border: var(--border-main);
   --code-inline-text: var(--accent-base);
 
@@ -251,13 +251,13 @@
   --media-border: rgba(255, 255, 255, 0.22);
 
   --chat-bg: var(--bg-app);
-  --chat-user-bg: #e0e7ff;
-  --chat-user-border: #c7d2fe;
-  --chat-user-text: #1e1b4b;
+  --chat-user-bg: #e6effa;
+  --chat-user-border: #bdd4f2;
+  --chat-user-text: #1e293b;
 
   --chat-ai-bg: #ffffff;
   --chat-ai-border: #e2e8f0;
-  --chat-ai-text: #0f172a;
+  --chat-ai-text: #1e293b;
 
   --chat-system-bg: #f1f5f9;
   --chat-system-border: #cbd5e1;
@@ -338,7 +338,7 @@
   --shadow-card: 0 4px 14px rgba(0, 0, 0, 0.08);
   --segmented-bg: var(--bg-app);
   --segmented-border: var(--border-subtle);
-  --segmented-active-bg: var(--bg-panel);
+  --segmented-active-bg: var(--bg-surface-elevated);
   --segmented-active-border: var(--border-subtle);
   --segmented-active-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }

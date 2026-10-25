@@ -1108,6 +1108,97 @@ textarea.base-form-input--lg,
   flex-shrink: 0;
 }
 
+.base-toggle-row__checkbox {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.base-toggle-row__checkbox-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+}
+
+.base-toggle-row__checkbox-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background-color: var(--input-bg);
+  border: 1.5px solid var(--border-light);
+  color: transparent;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.base-toggle-row:hover .base-toggle-row__checkbox-box {
+  border-color: var(--border-focus);
+}
+
+.base-toggle-row__checkbox-input:checked + .base-toggle-row__checkbox-box {
+  background-color: var(--accent-base);
+  border-color: var(--accent-base);
+  color: var(--accent-text, #ffffff);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent-base) 30%, transparent);
+}
+
+.base-toggle-row__checkbox-input:focus-visible + .base-toggle-row__checkbox-box {
+  outline: 2px solid var(--accent-highlight, var(--accent-base));
+  outline-offset: 2px;
+}
+
+.base-toggle-row__checkbox-input:disabled + .base-toggle-row__checkbox-box {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── CoverAspectPreview (rendered by components/base/CoverArt.tsx) ── */
+.cover-aspect-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 42px;
+  flex-shrink: 0;
+  position: relative;
+  color: var(--accent-highlight, var(--accent-base));
+}
+
+.cover-aspect-preview svg {
+  position: relative;
+  z-index: 1;
+  opacity: 0.85;
+}
+
+.cover-aspect-preview::before {
+  content: "";
+  position: absolute;
+  border: 1.5px solid var(--accent-highlight, var(--accent-base));
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent-base) 16%, var(--bg-surface-elevated));
+}
+
+.cover-aspect-preview[data-aspect="landscape"]::before {
+  width: 52px;
+  height: 30px;
+}
+
+.cover-aspect-preview[data-aspect="square"]::before {
+  width: 38px;
+  height: 38px;
+}
+
+.cover-aspect-preview[data-aspect="portrait"]::before {
+  width: 28px;
+  height: 42px;
+}
+
 @media (max-width: 480px) {
   .base-toggle-row {
     padding: 0.4rem 0.55rem;

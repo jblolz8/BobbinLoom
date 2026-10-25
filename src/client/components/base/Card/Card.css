@@ -6,7 +6,6 @@
   border: 1px solid var(--border-main);
   box-sizing: border-box;
   transition: border-color 0.15s ease, background-color 0.15s ease;
-  container-type: inline-size;
 }
 
 button.base-card {

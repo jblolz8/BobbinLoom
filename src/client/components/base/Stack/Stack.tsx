@@ -14,7 +14,10 @@ export interface StackProps extends HTMLAttributes<HTMLElement> {
   wrap?: boolean;
   inline?: boolean;
   flex1?: boolean;
+  fullHeight?: boolean;
   sticky?: boolean;
+  /** Hides the stack on wide desktop viewports (>= 1101px) where multi-pane layouts are already visible. */
+  mobileOnly?: boolean;
   children?: ReactNode;
 }
 
@@ -28,7 +31,9 @@ export const Stack = forwardRef<HTMLElement, StackProps>(function Stack(
     wrap = false,
     inline = false,
     flex1 = false,
+    fullHeight = false,
     sticky = false,
+    mobileOnly = false,
     className = "",
     children,
     ...props
@@ -44,7 +49,9 @@ export const Stack = forwardRef<HTMLElement, StackProps>(function Stack(
     `base-stack--gap-${gap}`,
     wrap ? "base-stack--wrap" : "",
     flex1 ? "base-stack--flex-1" : "",
+    fullHeight ? "base-stack--full-height" : "",
     sticky ? "base-stack--sticky" : "",
+    mobileOnly ? "base-stack--mobile-only" : "",
     className,
   ]
     .filter(Boolean)

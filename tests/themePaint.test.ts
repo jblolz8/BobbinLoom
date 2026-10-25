@@ -14,6 +14,7 @@ import {
   COVER_ASPECT_VALUES,
   THEME_PRESETS,
   avatarBadgeRadius,
+  counterpartPresetId,
   effectiveThemeMode,
   presetCardTokens,
   themePresetFor,
@@ -269,8 +270,8 @@ describe("presetCardTokens and extended preset tokens", () => {
     const darkTokens = presetCardTokens(classicDark);
 
     // Studio Light card carries its own light surface and dark text even when rendered inside a dark page
-    expect(lightTokens["--bg-panel"]).toBe("#ffffff");
-    expect(lightTokens["--bg-surface-elevated"]).toBe("#edf2f7");
+    expect(lightTokens["--bg-panel"]).toBe("#f8fafc");
+    expect(lightTokens["--bg-surface-elevated"]).toBe("#ffffff");
     expect(lightTokens["--text-primary"]).toBe("#0f172a");
     expect(lightTokens["--accent-base"]).toBe("#2563eb");
 
@@ -294,13 +295,27 @@ describe("presetCardTokens and extended preset tokens", () => {
   });
 
   it("includes blockquote, system chat, and timeline tokens on custom palettes", () => {
-    for (const id of ["nord-frost", "warm-parchment", "midnight-purple", "emerald-archive", "amber-hearth", "matcha-cream", "polar-mist"]) {
+    for (const id of ["nord-frost", "warm-parchment", "midnight-purple", "emerald-archive", "amber-hearth", "matcha-cream", "polar-mist", "sakura-blossom"]) {
       const tokens = themeTokens({ themePreset: id }, "dark");
       expect(tokens["--story-blockquote-border"], `${id} blockquote border`).toBeTruthy();
       expect(tokens["--story-blockquote-bg"], `${id} blockquote bg`).toBeTruthy();
       expect(tokens["--story-blockquote-text"], `${id} blockquote text`).toBeTruthy();
       expect(tokens["--chat-system-bg"], `${id} chat system bg`).toBeTruthy();
       expect(tokens["--timeline-node-active-border"], `${id} timeline active border`).toBeTruthy();
+    }
+  });
+
+  it("pairs Dark and Light presets in alternating columns and flips counterparts via counterpartPresetId", () => {
+    expect(THEME_PRESETS).toHaveLength(10);
+    for (let i = 0; i < THEME_PRESETS.length; i += 2) {
+      const darkPreset = THEME_PRESETS[i];
+      const lightPreset = THEME_PRESETS[i + 1];
+      expect(darkPreset.mode).toBe("dark");
+      expect(lightPreset.mode).toBe("light");
+      expect(counterpartPresetId(darkPreset.id, "light")).toBe(lightPreset.id);
+      expect(counterpartPresetId(lightPreset.id, "dark")).toBe(darkPreset.id);
+      expect(counterpartPresetId(darkPreset.id, "dark")).toBe(darkPreset.id);
+      expect(counterpartPresetId(lightPreset.id, "light")).toBe(lightPreset.id);
     }
   });
 });

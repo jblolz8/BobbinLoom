@@ -7,6 +7,7 @@ import {
   Button,
   Card,
   Checkbox,
+  CheckboxRow,
   DragGhost,
   DragHandle,
   Header,
@@ -19,7 +20,9 @@ import {
   TextInput,
 } from "../src/client/components/base";
 import { SettingsModal } from "../src/client/components/modals/SettingsModal";
+import { AppearanceSettingsPanel } from "../src/client/components/settings/AppearanceSettingsPanel";
 import { ChatSettingsPanel } from "../src/client/components/settings/ChatSettingsPanel";
+import { InterfaceSettingsPanel } from "../src/client/components/settings/InterfaceSettingsPanel";
 import { formatEqual, imageEqual, PresetEditor, promptConfigDiffers } from "../src/client/components/settings/PresetEditor";
 import { ProviderConnectionCard } from "../src/client/components/settings/providers/ProviderConnectionList";
 import { ImageConnectionEditor } from "../src/client/components/settings/providers/ImageConnectionEditor";
@@ -162,6 +165,12 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
     );
 
     expect(html).toContain("base-header base-header--section");
+    expect(html).toContain("base-header__title-icon");
+    expect(html).toContain("base-header__subtitle");
+    expect(html).toContain("Choose which badges, metadata, and interactive controls appear on chat turns.");
+    expect(html).toContain("Control where the chat viewport scrolls when a new AI response arrives.");
+    expect(html).toContain("Configure how scene renders are prompted, triggered, and replaced in chat.");
+    expect(html).toContain("Inspect raw prompt payloads, model responses, and state patches.");
     expect(html).toContain("base-card base-card--elevated base-card--pad-xs base-card--active base-card--hoverable");
     expect(html).toContain("base-badge base-badge--accent base-badge--xs");
     expect(html).toContain("Top of Message");
@@ -810,6 +819,14 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
               checked: true,
               dirty: true,
               onChange: noop,
+            }),
+            createElement(CheckboxRow, {
+              icon: "UserPlus",
+              title: "Allow AI to invent additional characters",
+              description: "Let the story introduce new characters organically.",
+              checked: true,
+              dirty: true,
+              onChange: noop,
             })
           )
         )
@@ -821,7 +838,48 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
     expect(html).toContain("base-select-trigger--dirty");
     expect(html).toContain("base-slider--dirty");
     expect(html).toContain("base-toggle-row--dirty");
+    expect(html).toContain("base-toggle-row--checkbox");
+    expect(html).toContain("base-toggle-row__checkbox-box");
     expect(html).toContain("base-badge base-badge--warning base-badge--xs");
     expect(html).toContain("Modified");
+  });
+
+  it("renders InterfaceSettingsPanel using Header, Separator, FormGrid, Card, Badge, CoverAspectPreview, and SwitchRow primitives without legacy classes", () => {
+    const html = renderToStaticMarkup(createElement(InterfaceSettingsPanel));
+
+    expect(html).toContain("base-header base-header--section");
+    expect(html).toContain("Cast, NPCs &amp; Personas");
+    expect(html).toContain("Playthrough Library");
+    expect(html).toContain("Narrow Screens");
+    expect(html).toContain("base-separator base-separator--horizontal");
+    expect(html).toContain("base-form-grid base-form-grid--cols-3");
+    expect(html).toContain("base-card base-card--elevated base-card--pad-sm base-card--active base-card--hoverable");
+    expect(html).toContain("base-card base-card--panel base-card--pad-xs");
+    expect(html).toContain("base-stack--mobile-only");
+    expect(html).toContain("cover-aspect-preview");
+    expect(html).not.toContain("interface-preview-stage");
+    expect(html).not.toContain("pane-swipe-setting");
+    expect(html).not.toContain("shape-option-card");
+    expect(html).not.toContain("avatar-shape-selector-grid");
+    expect(html).not.toContain("shape-radio-indicator");
+  });
+
+  it("renders AppearanceSettingsPanel using Header, Tabs, FormGrid, Card, Badge, Separator, and Button primitives without legacy appearance classes", () => {
+    const html = renderToStaticMarkup(createElement(AppearanceSettingsPanel));
+
+    expect(html).toContain("base-header base-header--section");
+    expect(html).toContain("base-tabs base-tabs--segmented");
+    expect(html).toContain("base-form-grid base-form-grid--cols-2");
+    expect(html).toContain("Dark Themes");
+    expect(html).toContain("Light Counterparts");
+    expect(html).toContain("Sakura Blossom");
+    expect(html).toContain("Live Theme &amp; Typography Preview");
+    expect(html).toContain("Theme Color Palette (Active Tokens)");
+    expect(html).not.toContain("Custom Palette Tweaks");
+    expect(html).not.toContain("appearance-settings-panel");
+    expect(html).not.toContain("theme-mode-segmented-bar");
+    expect(html).not.toContain("preset-card");
+    expect(html).not.toContain("custom-color-grid");
+    expect(html).not.toContain("appearance-live-preview-box");
   });
 });

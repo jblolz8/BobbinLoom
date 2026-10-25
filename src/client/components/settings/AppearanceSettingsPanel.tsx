@@ -1,64 +1,33 @@
 import { useEffect, useState } from "react";
-import type { CustomThemeColors, ThemeMode } from "../../../schemas";
-import { presetCardTokens, themeTokens } from "../../../engine/theme";
+import type { ThemeMode } from "../../../schemas";
+import { counterpartPresetId, presetCardTokens } from "../../../engine/theme";
 import {
   applyTheme,
   getAppearanceSettings,
   THEME_PRESETS,
   updateAppearanceSettings,
-  type ThemePreset
+  type ThemePreset,
 } from "../../api";
-import { AvatarBadge, Icon } from "../base";
+import {
+  AvatarBadge,
+  Badge,
+  Button,
+  Card,
+  FormGrid,
+  Header,
+  Icon,
+  Separator,
+  Stack,
+  Tabs,
+  Text,
+  type IconName,
+  type TabItem,
+} from "../base";
 
-const CUSTOMIZABLE_COLOR_TOKENS: Array<{
-  variable: string;
-  label: string;
-  desc: string;
-  defaultDark: string;
-  defaultLight: string;
-}> = [
-  {
-    variable: "--accent-base",
-    label: "Primary Brand Accent",
-    desc: "Primary action buttons, active tabs, and focus rings",
-    defaultDark: "#2b4b7b",
-    defaultLight: "#2563eb",
-  },
-  {
-    variable: "--story-quote",
-    label: "Spoken Dialogue Quotes",
-    desc: 'Color of spoken dialogue inside quotation marks ("...")',
-    defaultDark: "#e2b86b",
-    defaultLight: "#b45309",
-  },
-  {
-    variable: "--story-emphasis",
-    label: "Bold & Dramatic Emphasis",
-    desc: "Color of bold narrative beats (**...**)",
-    defaultDark: "#60a5fa",
-    defaultLight: "#1d4ed8",
-  },
-  {
-    variable: "--story-italic",
-    label: "Italics & Actions",
-    desc: "Color of italic actions and internal thoughts (*...*)",
-    defaultDark: "#d8dee9",
-    defaultLight: "#475569",
-  },
-  {
-    variable: "--story-text",
-    label: "Main Story Prose",
-    desc: "Base narrative text color inside chat messages",
-    defaultDark: "#eceff4",
-    defaultLight: "#0f172a",
-  },
-  {
-    variable: "--ai-accent",
-    label: "AI Assistant Accent",
-    desc: "Brainstorm and AI generation controls",
-    defaultDark: "#a855f7",
-    defaultLight: "#7e22ce",
-  },
+const THEME_MODE_TABS: TabItem<ThemeMode>[] = [
+  { id: "dark", label: "Dark", icon: "Moon" },
+  { id: "light", label: "Light", icon: "Sun" },
+  { id: "system", label: "System", icon: "Monitor" },
 ];
 
 interface ThemeShowcaseItem {
@@ -67,14 +36,14 @@ interface ThemeShowcaseItem {
   desc: string;
   preview: "pill" | "swatch" | "text" | "input";
   badgeText?: string;
-  icon?: string;
+  icon?: IconName;
   style: React.CSSProperties;
 }
 
 interface ThemeShowcaseGroup {
   id: string;
   title: string;
-  icon: string;
+  icon: IconName;
   items: ThemeShowcaseItem[];
 }
 
@@ -242,6 +211,8 @@ const THEME_SHOWCASE_GROUPS: ThemeShowcaseGroup[] = [
         style: {
           color: "var(--doc-hit-text)",
           background: "var(--doc-hit-bg)",
+          padding: "0.1rem 0.35rem",
+          borderRadius: "4px",
         },
       },
       {
@@ -268,6 +239,11 @@ const THEME_SHOWCASE_GROUPS: ThemeShowcaseGroup[] = [
         badgeText: "inline code",
         style: {
           color: "var(--code-inline-text)",
+          background: "var(--code-inline-bg)",
+          border: "1px solid var(--code-inline-border)",
+          padding: "0.1rem 0.35rem",
+          borderRadius: "4px",
+          fontFamily: "var(--font-mono, monospace)",
         },
       },
       {
@@ -448,30 +424,28 @@ const THEME_SHOWCASE_GROUPS: ThemeShowcaseGroup[] = [
   },
 ];
 
+function resolveSystemMode(): "dark" | "light" {
+  return typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-color-scheme: light)").matches
+    ? "light"
+    : "dark";
+}
+
 export function AppearanceSettingsPanel() {
   // Initial values are the shipped defaults: the server paints these tokens into the first frame and
   // the GET below fills the controls, so the device cache is gone (it desynced across devices).
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
-
   const [themePreset, setThemePreset] = useState<string>("default-dark");
-
-  const [customColors, setCustomColors] = useState<CustomThemeColors>({});
-  const [showTokenReference, setShowTokenReference] = useState(false);
-
-  const [saving, setSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<string | null>(null);
 
   useEffect(() => {
     getAppearanceSettings()
       .then((res) => {
         if (res.themeMode) setThemeMode(res.themeMode);
         if (res.themePreset) setThemePreset(res.themePreset);
-        if (res.customThemeColors) setCustomColors(res.customThemeColors);
 
         applyTheme({
           themeMode: res.themeMode,
           themePreset: res.themePreset,
-          customThemeColors: res.customThemeColors,
         });
       })
       .catch(() => {
@@ -482,30 +456,22 @@ export function AppearanceSettingsPanel() {
   async function persistAppearance(updates: {
     themeMode?: ThemeMode;
     themePreset?: string;
-    customThemeColors?: CustomThemeColors;
   }) {
-    setSaving(true);
-    setSaveStatus(null);
     try {
       await updateAppearanceSettings(updates);
-      setSaveStatus("Saved");
-      setTimeout(() => setSaveStatus(null), 2500);
     } catch {
-      setSaveStatus("Saved locally (server sync failed)");
-      setTimeout(() => setSaveStatus(null), 3000);
-    } finally {
-      setSaving(false);
+      /* Next read reconciles; local UI state is already applied immediately. */
     }
   }
 
   function handleSelectMode(mode: ThemeMode) {
     setThemeMode(mode);
-    const newPreset = mode === "light" && themePreset === "default-dark" ? "default-light" : themePreset;
+    const targetScheme = mode === "system" ? resolveSystemMode() : mode;
+    const newPreset = counterpartPresetId(themePreset, targetScheme);
     if (newPreset !== themePreset) setThemePreset(newPreset);
     applyTheme({
       themeMode: mode,
       themePreset: newPreset,
-      customThemeColors: customColors,
     });
     void persistAppearance({ themeMode: mode, themePreset: newPreset });
   }
@@ -513,17 +479,13 @@ export function AppearanceSettingsPanel() {
   function handleSelectPreset(preset: ThemePreset) {
     setThemePreset(preset.id);
     setThemeMode(preset.mode);
-    // Clear conflicting custom colors on preset switch
-    setCustomColors({});
     applyTheme({
       themeMode: preset.mode,
       themePreset: preset.id,
-      customThemeColors: {},
     });
     void persistAppearance({
       themeMode: preset.mode,
       themePreset: preset.id,
-      customThemeColors: {},
     });
   }
 
@@ -532,313 +494,405 @@ export function AppearanceSettingsPanel() {
       ? "light"
       : themeMode === "dark"
         ? "dark"
-        : typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: light)").matches
-          ? "light"
-          : "dark";
+        : resolveSystemMode();
 
-  const resolvedTokens = themeTokens(
-    { themePreset, customThemeColors: customColors },
-    effectiveMode
+  const activePresetObj = THEME_PRESETS.find((p) => p.id === themePreset);
+  const totalShowcaseTokens = THEME_SHOWCASE_GROUPS.reduce(
+    (sum, g) => sum + g.items.length,
+    0
   );
 
-  function handleCustomColorChange(variable: string, value: string) {
-    const next = { ...customColors, [variable]: value };
-    setCustomColors(next);
-    applyTheme({
-      themeMode,
-      themePreset,
-      customThemeColors: next,
-    });
-    void persistAppearance({ customThemeColors: next });
-  }
-
-  function handleResetCustomColors() {
-    setCustomColors({});
-    applyTheme({
-      themeMode,
-      themePreset,
-      customThemeColors: {},
-    });
-    void persistAppearance({ customThemeColors: {} });
-  }
-
-  const hasCustomOverrides = Object.keys(customColors).some((k) => Boolean(customColors[k]));
-  const totalShowcaseTokens = THEME_SHOWCASE_GROUPS.reduce((sum, g) => sum + g.items.length, 0);
-
-
-
   return (
-    <div className="appearance-settings-panel">
+    <Stack direction="column" align="stretch" gap="md">
       {/* ── Theme Mode Section ── */}
-      <div className="appearance-section-header">
-        <div>
-          <h3 className="appearance-section-title flex items-center gap-2">
-            <Icon name="SunMedium" size={17} />
-            <span>Theme Mode</span>
-          </h3>
-          <p className="appearance-section-desc">
-            Toggle between Dark, Light, or follow your System OS display settings.
-          </p>
-        </div>
-        {saveStatus && <span className="appearance-save-status">{saveStatus}</span>}
-      </div>
+      <Stack direction="column" align="stretch" gap="xs">
+        <Header
+          variant="section"
+          icon="SunMedium"
+          title="Theme Mode"
+          subtitle="Toggle between Dark, Light, or follow your System OS display settings. Switching modes flips to the active preset's counterpart."
+        />
 
-      <div className="theme-mode-segmented-bar">
-        <button
-          type="button"
-          className={`theme-mode-btn ${themeMode === "dark" ? "active" : ""}`}
-          onClick={() => handleSelectMode("dark")}
-          disabled={saving}
-        >
-          <Icon name="Moon" size={15} />
-          <span>Dark</span>
-        </button>
-        <button
-          type="button"
-          className={`theme-mode-btn ${themeMode === "light" ? "active" : ""}`}
-          onClick={() => handleSelectMode("light")}
-          disabled={saving}
-        >
-          <Icon name="Sun" size={15} />
-          <span>Light</span>
-        </button>
-        <button
-          type="button"
-          className={`theme-mode-btn ${themeMode === "system" ? "active" : ""}`}
-          onClick={() => handleSelectMode("system")}
-          disabled={saving}
-        >
-          <Icon name="Monitor" size={15} />
-          <span>System</span>
-        </button>
-      </div>
+        <Tabs<ThemeMode>
+          tabs={THEME_MODE_TABS}
+          activeTab={themeMode}
+          onChange={handleSelectMode}
+          variant="segmented"
+          size="sm"
+          fullWidth
+          ariaLabel="Theme mode"
+        />
+      </Stack>
 
-      {/* ── Theme Presets Section ── */}
-      <div className="appearance-section-header" style={{ marginTop: "1.5rem" }}>
-        <div>
-          <h3 className="appearance-section-title flex items-center gap-2">
-            <Icon name="Palette" size={17} />
-            <span>Theme Presets</span>
-          </h3>
-          <p className="appearance-section-desc">
-            Hand-crafted palettes calibrated for high contrast story reading and roleplay.
-          </p>
-        </div>
-      </div>
+      <Separator spacing="none" />
 
-      <div className="theme-presets-grid">
-        {THEME_PRESETS.map((preset) => {
-          const isSelected = themePreset === preset.id;
-          const cardTokens = presetCardTokens(preset) as React.CSSProperties;
-          return (
-            <button
-              key={preset.id}
-              type="button"
-              className={`preset-card ${isSelected ? "is-selected" : ""}`}
-              style={cardTokens}
-              onClick={() => handleSelectPreset(preset)}
-              disabled={saving}
+      {/* ── Theme Presets Section (2-Column Dark <-> Light Counterparts) ── */}
+      <Stack direction="column" align="stretch" gap="xs">
+        <Header
+          variant="section"
+          icon="Palette"
+          title="Theme Presets"
+          subtitle="Hand-crafted Dark (left) and Light (right) counterpart palettes calibrated for high-contrast story reading and roleplay."
+        />
+
+        <FormGrid cols={2} gap="xs">
+          <Stack direction="row" align="center" gap="2xs">
+            <Text as="span" tone="accent">
+              <Icon name="Moon" size={13} />
+            </Text>
+            <Text as="strong" size="xs" weight="semibold" tone="secondary">
+              Dark Themes
+            </Text>
+          </Stack>
+          <Stack direction="row" align="center" gap="2xs">
+            <Text as="span" tone="accent">
+              <Icon name="Sun" size={13} />
+            </Text>
+            <Text as="strong" size="xs" weight="semibold" tone="secondary">
+              Light Counterparts
+            </Text>
+          </Stack>
+        </FormGrid>
+
+        <FormGrid cols={2} gap="xs">
+          {THEME_PRESETS.map((preset) => {
+            const isSelected = themePreset === preset.id;
+            const cardTokens = presetCardTokens(preset) as React.CSSProperties;
+            return (
+              <Card
+                key={preset.id}
+                as="button"
+                type="button"
+                variant="panel"
+                padding="sm"
+                active={isSelected}
+                hoverable
+                style={cardTokens}
+                aria-pressed={isSelected}
+                onClick={() => handleSelectPreset(preset)}
+              >
+                <Stack direction="column" align="stretch" justify="between" gap="xs" fullHeight>
+                  <Stack direction="column" align="stretch" gap="xs">
+                    <Stack direction="row" align="center" justify="between" gap="xs">
+                      <Text as="strong" size="sm" weight="semibold" tone="primary">
+                        {preset.name}
+                      </Text>
+                      <Stack direction="row" align="center" gap="2xs">
+                        <Badge
+                          variant={isSelected ? "accent" : "neutral"}
+                          size="xs"
+                          leftIcon={preset.mode === "dark" ? "Moon" : "Sun"}
+                        >
+                          {preset.mode}
+                        </Badge>
+                        {isSelected && (
+                          <Badge variant="accent" size="xs">
+                            Active
+                          </Badge>
+                        )}
+                      </Stack>
+                    </Stack>
+
+                    <Text as="p" variant="caption" tone="secondary">
+                      {preset.description}
+                    </Text>
+                  </Stack>
+
+                  <Card
+                    variant="elevated"
+                    padding="xs"
+                    aria-hidden="true"
+                    style={{
+                      background: "var(--chat-ai-bg)",
+                      borderColor: "var(--chat-ai-border)",
+                    }}
+                  >
+                    <Text as="p" size="xs" style={{ color: "var(--story-text)" }}>
+                      <Text
+                        as="span"
+                        weight="semibold"
+                        style={{ color: "var(--story-quote)" }}
+                      >
+                        &ldquo;Hello,&rdquo;
+                      </Text>{" "}
+                      <Text
+                        as="em"
+                        style={{ color: "var(--story-italic)", fontStyle: "italic" }}
+                      >
+                        she whispers
+                      </Text>{" "}
+                      <Text
+                        as="strong"
+                        weight="bold"
+                        style={{ color: "var(--story-emphasis)" }}
+                      >
+                        softly.
+                      </Text>
+                    </Text>
+                  </Card>
+                </Stack>
+              </Card>
+            );
+          })}
+        </FormGrid>
+      </Stack>
+
+      <Separator spacing="none" />
+
+      {/* ── Live Interactive Story & UI Preview (Overview) ── */}
+      <Stack direction="column" align="stretch" gap="xs">
+        <Header
+          variant="section"
+          icon="Eye"
+          title="Live Theme & Typography Preview"
+          badge={
+            <Badge variant="neutral" size="xs">
+              {activePresetObj?.name ?? themePreset} · {effectiveMode}
+            </Badge>
+          }
+          subtitle="Preview how spoken dialogue, italic actions, bold emphasis, blockquotes, and controls render in the active theme."
+        />
+
+        <Card variant="panel" padding="sm">
+          <Stack direction="column" align="stretch" gap="xs">
+            {/* AI Response Preview */}
+            <Card
+              variant="elevated"
+              padding="sm"
+              style={{
+                background: "var(--chat-ai-bg)",
+                borderColor: "var(--chat-ai-border)",
+                color: "var(--chat-ai-text)",
+              }}
             >
-              <div className="preset-card-top">
-                <strong className="preset-name">{preset.name}</strong>
-                <span className="preset-badge">{preset.mode}</span>
-              </div>
-              <p className="preset-desc">{preset.description}</p>
-              <div className="preset-card-sample" aria-hidden="true">
-                <span className="preset-sample-quote">"Hello,"</span>{" "}
-                <em className="preset-sample-italic">she whispers</em>{" "}
-                <strong className="preset-sample-emphasis">softly.</strong>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+              <Stack direction="column" align="stretch" gap="xs">
+                <Stack direction="row" align="center" gap="xs">
+                  <AvatarBadge name="Mira" size="sm" />
+                  <Text as="strong" size="sm" weight="semibold" tone="primary">
+                    Mira Vane
+                  </Text>
+                  <Badge variant="accent" size="xs">
+                    AI
+                  </Badge>
+                </Stack>
 
-      {/* ── Custom Color Tweaks Section ── */}
-      <div className="appearance-section-header" style={{ marginTop: "1.75rem" }}>
-        <div>
-          <h3 className="appearance-section-title flex items-center gap-2">
-            <Icon name="Sliders" size={17} />
-            <span>Custom Palette Tweaks</span>
-          </h3>
-          <p className="appearance-section-desc">
-            Fine-tune individual story typography and accent colors on top of the active preset. Switching presets resets custom overrides.
-          </p>
-        </div>
-        {hasCustomOverrides && (
-          <button
-            type="button"
-            className="theme-reset-btn"
-            onClick={handleResetCustomColors}
-            disabled={saving}
-          >
-            <Icon name="RotateCcw" size={13} />
-            <span>Reset Overrides</span>
-          </button>
-        )}
-      </div>
+                <Stack direction="column" align="stretch" gap="2xs">
+                  <Text as="p" size="sm" style={{ color: "var(--story-text)" }}>
+                    <Text
+                      as="span"
+                      weight="semibold"
+                      style={{ color: "var(--story-quote)" }}
+                    >
+                      &ldquo;Welcome back to the BobbinLoom archives,&rdquo;
+                    </Text>{" "}
+                    <Text
+                      as="em"
+                      style={{ color: "var(--story-italic)", fontStyle: "italic" }}
+                    >
+                      she whispers softly, tracing the worn leather edge of the parchment.
+                    </Text>
+                  </Text>
+                  <Text as="p" size="sm" style={{ color: "var(--story-text)" }}>
+                    <Text
+                      as="strong"
+                      weight="bold"
+                      style={{ color: "var(--story-emphasis)" }}
+                    >
+                      The ancient loom hums
+                    </Text>{" "}
+                    with subtle resonance as you step forward.
+                  </Text>
+                  <Card
+                    as="blockquote"
+                    variant="panel"
+                    padding="xs"
+                    style={{
+                      margin: 0,
+                      borderLeft:
+                        "3px solid var(--story-blockquote-border, var(--accent-base))",
+                      background: "var(--story-blockquote-bg, var(--bg-panel))",
+                      color: "var(--story-blockquote-text, var(--text-secondary))",
+                      fontStyle: "italic",
+                    }}
+                  >
+                    <Text as="span" size="xs">
+                      &ldquo;Every thread remembers the hand that spun it.&rdquo;
+                    </Text>
+                  </Card>
+                </Stack>
+              </Stack>
+            </Card>
 
-      <div className="custom-color-grid">
-        {CUSTOMIZABLE_COLOR_TOKENS.map((token) => {
-          const fallback = effectiveMode === "light" ? token.defaultLight : token.defaultDark;
-          const rawVal = customColors[token.variable] || resolvedTokens[token.variable] || fallback;
-          const pickerVal = /^#[0-9a-fA-F]{6}$/.test(rawVal.trim()) ? rawVal.trim() : fallback;
-          const isOverridden = Boolean(customColors[token.variable]);
-          return (
-            <div key={token.variable} className="color-item-card">
-              <div className="color-item-info">
-                <span className="color-label">
-                  {token.label}
-                  {isOverridden ? " *" : ""}
-                </span>
-                <span className="color-desc">{token.desc}</span>
-              </div>
-              <div className="color-picker-wrap">
-                <span className="color-hex-label">{pickerVal}</span>
-                <input
-                  type="color"
-                  className="color-input"
-                  value={pickerVal}
-                  onChange={(e) => handleCustomColorChange(token.variable, e.target.value)}
-                  disabled={saving}
-                  aria-label={token.label}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            {/* User Response Preview */}
+            <Card
+              variant="elevated"
+              padding="sm"
+              style={{
+                background: "var(--chat-user-bg)",
+                borderColor: "var(--chat-user-border)",
+                color: "var(--chat-user-text)",
+              }}
+            >
+              <Stack direction="column" align="stretch" gap="2xs">
+                <Stack direction="row" align="center" gap="xs">
+                  <AvatarBadge icon="User" name="You" size="sm" />
+                  <Text as="strong" size="sm" weight="semibold" tone="primary">
+                    You
+                  </Text>
+                </Stack>
+                <Text as="p" size="sm" style={{ color: "var(--story-text)" }}>
+                  <Text
+                    as="span"
+                    weight="semibold"
+                    style={{ color: "var(--story-quote)" }}
+                  >
+                    &ldquo;Show me the records of the latest chapter.&rdquo;
+                  </Text>
+                </Text>
+              </Stack>
+            </Card>
+
+            <Separator spacing="none" />
+
+            {/* Accent Button Preview */}
+            <Stack direction="row" align="center" gap="xs" wrap>
+              <Button type="button" variant="primary" size="sm" leftIcon="Send">
+                Primary Action
+              </Button>
+              <Button type="button" variant="secondary" size="sm">
+                Neutral Button
+              </Button>
+            </Stack>
+          </Stack>
+        </Card>
+      </Stack>
+
+      <Separator spacing="none" />
 
       {/* ── Theme Color Palette Showcase Section ── */}
-      <div className="appearance-section-header" style={{ marginTop: "1.75rem" }}>
-        <div>
-          <h3 className="appearance-section-title flex items-center gap-2">
-            <Icon name="Layers" size={17} />
-            <span>Theme Color Palette (Active Tokens)</span>
-          </h3>
-          <p className="appearance-section-desc">
-            Live reference of all {totalShowcaseTokens} active theme tokens across status badges, brand accents, and roleplay surfaces.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="theme-reset-btn"
-          onClick={() => setShowTokenReference((v) => !v)}
-          aria-expanded={showTokenReference}
-        >
-          <Icon name={showTokenReference ? "ChevronUp" : "ChevronDown"} size={13} />
-          <span>{showTokenReference ? "Hide Token Reference" : `Show All Tokens (${totalShowcaseTokens})`}</span>
-        </button>
-      </div>
+      <Stack direction="column" align="stretch" gap="sm">
+        <Header
+          variant="section"
+          icon="Layers"
+          title="Theme Color Palette (Active Tokens)"
+          badge={
+            <Badge variant="neutral" size="xs">
+              {totalShowcaseTokens} tokens
+            </Badge>
+          }
+          subtitle={`Live reference of all ${totalShowcaseTokens} active theme tokens across status badges, brand accents, and roleplay surfaces.`}
+        />
 
-      {showTokenReference && (
-      <div className="theme-showcase-container">
-        {THEME_SHOWCASE_GROUPS.map((group) => (
-          <div key={group.id} className="theme-showcase-group">
-            <div className="theme-showcase-group-header">
-              <Icon name={group.icon} size={14} />
-              <span>{group.title}</span>
-            </div>
+        <Stack direction="column" align="stretch" gap="md">
+          {THEME_SHOWCASE_GROUPS.map((group) => (
+            <Stack key={group.id} direction="column" align="stretch" gap="xs">
+              <Header
+                variant="section"
+                icon={group.icon}
+                title={group.title}
+              />
 
-            <div className="theme-showcase-grid">
-              {group.items.map((item) => (
-                <div key={item.variable} className="theme-showcase-card">
-                  <div className="theme-showcase-info">
-                    <span className="theme-showcase-name">{item.name}</span>
-                    <span className="theme-showcase-var">{item.variable}</span>
-                    <span className="theme-showcase-desc">{item.desc}</span>
-                  </div>
+              <FormGrid cols={2} gap="xs">
+                {group.items.map((item) => (
+                  <Card key={item.variable} variant="elevated" padding="sm">
+                    <Stack
+                      direction="column"
+                      align="stretch"
+                      justify="between"
+                      gap="xs"
+                      fullHeight
+                    >
+                      <Stack direction="column" align="stretch" gap="2xs">
+                        <Stack
+                          direction="row"
+                          align="center"
+                          justify="between"
+                          gap="xs"
+                          wrap
+                        >
+                          <Text as="strong" size="xs" weight="semibold" tone="primary">
+                            {item.name}
+                          </Text>
+                          <Text as="code" mono size="xs" tone="muted">
+                            {item.variable}
+                          </Text>
+                        </Stack>
+                        <Text as="p" variant="caption" tone="secondary">
+                          {item.desc}
+                        </Text>
+                      </Stack>
 
-                  <div className="theme-showcase-preview-wrap">
-                    {item.preview === "pill" && (
-                      <span className="theme-showcase-preview-pill" style={item.style}>
-                        {item.icon && <Icon name={item.icon} size={13} />}
-                        <span>{item.badgeText}</span>
-                      </span>
-                    )}
-                    {item.preview === "swatch" && (
-                      <div className="theme-showcase-swatch" style={item.style} title={item.variable} />
-                    )}
-                    {item.preview === "text" && (
-                      <span className="theme-showcase-text-sample" style={item.style}>
-                        {item.badgeText}
-                      </span>
-                    )}
-                    {item.preview === "input" && (
-                      <input
-                        type="text"
-                        readOnly
-                        value={item.badgeText ?? "Sample"}
-                        className="theme-showcase-input-sample"
-                        style={item.style}
-                      />
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-      )}
-
-      {/* ── Live Interactive Story & UI Preview ── */}
-      <div className="appearance-live-preview-box" style={{ marginTop: "1.75rem" }}>
-        <div className="preview-box-header">
-          <Icon name="Eye" size={14} />
-          <span>Live Theme &amp; Typography Preview</span>
-          <span className="preview-active-shape-tag">Mode: {themeMode}</span>
-        </div>
-
-        {/* Story Message Mockups */}
-        <div className="preview-chat-container">
-          {/* AI Response Preview */}
-          <div className="preview-message-bubble preview-ai-bubble">
-            <div className="preview-msg-header">
-              <AvatarBadge name="Mira" size="sm" />
-              <strong>Mira Vane</strong>
-              <span className="preview-badge-role">AI</span>
-            </div>
-            <div className="preview-msg-body">
-              <p>
-                <span className="quote-text">"Welcome back to the BobbinLoom archives,"</span>{" "}
-                <em>she whispers softly, tracing the worn leather edge of the parchment.</em>
-              </p>
-              <p>
-                <strong>The ancient loom hums</strong> with subtle resonance as you step forward.
-              </p>
-              <blockquote className="message-blockquote">
-                "Every thread remembers the hand that spun it."
-              </blockquote>
-            </div>
-          </div>
-
-          {/* User Response Preview */}
-          <div className="preview-message-bubble preview-user-bubble">
-            <div className="preview-msg-header">
-              <AvatarBadge icon="User" name="You" size="sm" />
-              <strong>You</strong>
-            </div>
-            <div className="preview-msg-body">
-              <p>
-                <span className="quote-text">"Show me the records of the latest chapter."</span>
-              </p>
-            </div>
-          </div>
-
-          {/* Accent Button Preview */}
-          <div className="preview-interactive-row">
-            <button type="button" className="primary-btn flex items-center gap-1.5" style={{ fontSize: "0.82rem", padding: "0.35rem 0.75rem" }}>
-              <Icon name="Send" size={13} />
-              <span>Primary Action</span>
-            </button>
-            <button type="button" style={{ fontSize: "0.82rem", padding: "0.35rem 0.75rem" }}>
-              Neutral Button
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+                      {item.preview === "pill" && (
+                        <Stack direction="row" align="center" justify="start">
+                          <Badge
+                            variant="outline"
+                            size="sm"
+                            leftIcon={item.icon}
+                            style={item.style}
+                          >
+                            {item.badgeText}
+                          </Badge>
+                        </Stack>
+                      )}
+                      {item.preview === "swatch" && (
+                        <span
+                          title={item.variable}
+                          style={{
+                            display: "block",
+                            width: "100%",
+                            height: "28px",
+                            flexShrink: 0,
+                            borderRadius: "6px",
+                            border: "1.5px solid var(--border-light)",
+                            boxShadow: "0 1px 4px rgba(0, 0, 0, 0.2)",
+                            boxSizing: "border-box",
+                            ...item.style,
+                          }}
+                        />
+                      )}
+                      {item.preview === "text" && (
+                        <Card
+                          variant="panel"
+                          padding="xs"
+                          style={{
+                            background: "var(--chat-ai-bg)",
+                            borderColor: "var(--border-subtle)",
+                          }}
+                        >
+                          <Text as="span" size="sm" style={item.style}>
+                            {item.badgeText}
+                          </Text>
+                        </Card>
+                      )}
+                      {item.preview === "input" && (
+                        <input
+                          type="text"
+                          readOnly
+                          value={item.badgeText ?? "Sample"}
+                          aria-label={item.name}
+                          style={{
+                            fontSize: "0.78rem",
+                            padding: "0.3rem 0.6rem",
+                            borderRadius: "6px",
+                            width: "100%",
+                            boxSizing: "border-box",
+                            cursor: "default",
+                            outline: "none",
+                            fontFamily: "inherit",
+                            ...item.style,
+                          }}
+                        />
+                      )}
+                    </Stack>
+                  </Card>
+                ))}
+              </FormGrid>
+            </Stack>
+          ))}
+        </Stack>
+      </Stack>
+    </Stack>
   );
 }
 
+export default AppearanceSettingsPanel;
