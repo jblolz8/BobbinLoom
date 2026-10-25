@@ -68,6 +68,19 @@ describe("renderDocMarkdown", () => {
     expect(html).toContain('data-doc-link="timelines.md#branching"');
   });
 
+  it("parses inline links, bold, emphasis, and code inside tight list items", () => {
+    const listMarkdown = [
+      "**Playing**",
+      "- [Playthroughs](playthroughs.md) — creating, scenario generation",
+      "- **Opening mode** — *Quick start* uses the generated scenario and `StatePatch`."
+    ].join("\n");
+    const html = renderDocMarkdown(listMarkdown);
+    expect(html).toContain('<a href="#" data-doc-link="playthroughs.md">Playthroughs</a>');
+    expect(html).toContain("<strong>Opening mode</strong>");
+    expect(html).toContain("<em>Quick start</em>");
+    expect(html).toContain('<code class="inline-code">StatePatch</code>');
+  });
+
   it("opens external links in a new tab", () => {
     const html = renderDocMarkdown("[Forge Couple](https://github.com/Haoming02/sd-forge-couple)");
     expect(html).toContain('target="_blank"');

@@ -89,10 +89,16 @@ function renderer(pattern: RegExp | null): Renderer {
   /**
    * Prose. Overriding `text` means escaping it ourselves — marked does not do it
    * for an override — and it is what makes a matched word highlight inside
-   * emphasis, links, headings, table cells and blockquotes.
+   * emphasis, links, headings, table cells and blockquotes. Tight list items
+   * hand `renderer.text` a block-level `text` token carrying child inline
+   * `tokens` (links, strong, em, codespan), which must be delegated to
+   * `parseInline` just like Marked's default renderer does.
    */
-  renderer.text = function ({ text }) {
-    return mark(escapeHtml(text), pattern);
+  renderer.text = function (token) {
+    if ("tokens" in token && token.tokens) {
+      return this.parser.parseInline(token.tokens);
+    }
+    return mark(escapeHtml(token.text), pattern);
   };
 
   /**

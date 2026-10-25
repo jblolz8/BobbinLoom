@@ -66,9 +66,9 @@
 /* ── Rendered page ── */
 
 .doc-markdown {
-  color: var(--text-secondary);
+  color: var(--story-text, var(--text-primary));
   font-size: 0.9rem;
-  line-height: 1.6;
+  line-height: 1.65;
   padding-bottom: 3rem;
 }
 
@@ -104,9 +104,17 @@
   color: var(--text-secondary);
 }
 
-.doc-markdown p,
-.doc-markdown li {
+.doc-markdown p {
   margin: 0.55rem 0;
+}
+
+.doc-markdown li {
+  margin: 0.65rem 0;
+  line-height: 1.7;
+}
+
+.doc-markdown li::marker {
+  color: var(--accent-highlight, var(--text-muted));
 }
 
 .doc-markdown ul,
@@ -119,13 +127,39 @@
   margin: 0.25rem 0;
 }
 
+.doc-markdown strong {
+  color: var(--story-emphasis, var(--text-primary));
+  font-weight: 700;
+}
+
+.doc-markdown em {
+  color: var(--story-italic, var(--text-secondary));
+  font-style: italic;
+}
+
+.doc-markdown strong em,
+.doc-markdown em strong {
+  color: var(--story-emphasis, var(--text-primary));
+}
+
+.doc-markdown del {
+  color: var(--text-muted);
+}
+
 .doc-markdown a {
   color: var(--accent-highlight, var(--accent-base));
-  text-decoration: none;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(
+    in srgb,
+    var(--accent-highlight, var(--accent-base)) 45%,
+    transparent
+  );
 }
 
 .doc-markdown a:hover {
-  text-decoration: underline;
+  text-decoration-color: currentColor;
 }
 
 .doc-markdown .doc-link-inert {
@@ -159,10 +193,10 @@
 .doc-markdown blockquote {
   margin: 0.75rem 0;
   padding: 0.5rem 0.9rem;
-  border-left: 3px solid var(--accent-highlight, var(--accent-base));
-  background: var(--bg-surface);
+  border-left: 3px solid var(--story-blockquote-border, var(--accent-highlight, var(--accent-base)));
+  background: var(--story-blockquote-bg, var(--bg-surface));
   border-radius: 0 6px 6px 0;
-  color: var(--text-muted);
+  color: var(--story-blockquote-text, var(--text-muted));
 }
 
 .doc-markdown blockquote p {
