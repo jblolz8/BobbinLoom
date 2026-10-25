@@ -1,12 +1,19 @@
 import { useMemo } from "react";
 import {
   resolveTagStyle,
+  type TagStyle,
   type TagTaxonomyConfig,
 } from "../../../engine/tagTaxonomy";
+import { resolvePlaythroughTagStyle } from "../../../engine/playthroughTagTaxonomy";
 
 export type TagChipProps = {
   tag: string;
   userConfig?: TagTaxonomyConfig | null;
+  taxonomy?: "character" | "playthrough";
+  resolveStyle?: (
+    tag: string,
+    userConfig?: TagTaxonomyConfig | null,
+  ) => TagStyle;
   active?: boolean;
   count?: number;
   onClick?: (e: React.MouseEvent) => void;
@@ -21,6 +28,8 @@ export type TagChipProps = {
 export function TagChip({
   tag,
   userConfig,
+  taxonomy = "character",
+  resolveStyle,
   active,
   count,
   onClick,
@@ -31,10 +40,13 @@ export function TagChip({
   title,
   showCategoryTooltip = true,
 }: TagChipProps) {
-  const style = useMemo(
-    () => resolveTagStyle(tag, userConfig),
-    [tag, userConfig],
-  );
+  const style = useMemo(() => {
+    if (resolveStyle) return resolveStyle(tag, userConfig);
+    if (taxonomy === "playthrough") {
+      return resolvePlaythroughTagStyle(tag, userConfig);
+    }
+    return resolveTagStyle(tag, userConfig);
+  }, [tag, userConfig, taxonomy, resolveStyle]);
 
   const defaultTitle = useMemo(() => {
     if (title) return title;

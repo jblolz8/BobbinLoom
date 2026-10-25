@@ -24,6 +24,7 @@ import {
   setChapterTextProvider as setChapterRegistryTextProvider,
   setGenerationTextProvider as setGenerationRegistryTextProvider,
   setCharacterTextProvider as setCharacterRegistryTextProvider,
+  setTagTextProvider as setTagRegistryTextProvider,
   setProviderTestPrompt,
   testProviderConnection,
   testProviderResponse,
@@ -101,6 +102,18 @@ export class ProviderManager {
 
   setCharacterTextProvider(id: string | null): PublicProviderRegistry {
     return setCharacterRegistryTextProvider(this.dataDir, id);
+  }
+
+  tagTextProviderId(): string | null {
+    return getRegistry(this.dataDir).tagTextProviderId ?? null;
+  }
+
+  setTagTextProvider(id: string | null): PublicProviderRegistry {
+    return setTagRegistryTextProvider(this.dataDir, id);
+  }
+
+  getTagProvider(): TurnProvider {
+    return this.getProvider(this.tagTextProviderId() ?? undefined);
   }
 
   getProvider(id?: string): TurnProvider {

@@ -40,6 +40,7 @@ export type ProviderRegistry = {
    *  above, and it is remembered separately because a chapter is its own user action. */
   chapterTextProviderId?: string | null;
   characterTextProviderId?: string | null;
+  tagTextProviderId?: string | null;
   /** Global prompt used by "Test response" across all text connections; null/absent uses DEFAULT_PROVIDER_TEST_PROMPT. */
   testPrompt?: string | null;
   connections: ProviderConnection[];
@@ -140,6 +141,10 @@ function migrateToV2(raw: Record<string, unknown>): Record<string, unknown> {
     raw.characterTextProviderId === null
       ? { characterTextProviderId: raw.characterTextProviderId }
       : {}),
+    ...(typeof raw.tagTextProviderId === "string" ||
+    raw.tagTextProviderId === null
+      ? { tagTextProviderId: raw.tagTextProviderId }
+      : {}),
     connections: connections.map((c) =>
       c && typeof c === "object" && !Array.isArray(c)
         ? { kind: "text", ...(c as Record<string, unknown>) }
@@ -203,6 +208,7 @@ function readRegistry(dir: string): ReadResult {
           generationTextProviderId: parsed.generationTextProviderId ?? null,
           chapterTextProviderId: parsed.chapterTextProviderId ?? null,
           characterTextProviderId: parsed.characterTextProviderId ?? null,
+          tagTextProviderId: parsed.tagTextProviderId ?? null,
           testPrompt: parsed.testPrompt ?? null,
           connections: decryptConnections(parsed.connections, vaultKey),
         },
@@ -217,6 +223,7 @@ function readRegistry(dir: string): ReadResult {
         generationTextProviderId: file.data.generationTextProviderId ?? null,
         chapterTextProviderId: file.data.chapterTextProviderId ?? null,
         characterTextProviderId: file.data.characterTextProviderId ?? null,
+        tagTextProviderId: file.data.tagTextProviderId ?? null,
         testPrompt: file.data.testPrompt ?? null,
         connections: decryptConnections(file.data.connections, vaultKey),
       },
@@ -265,6 +272,11 @@ function readRegistry(dir: string): ReadResult {
       rawObj.characterTextProviderId === null
         ? rawObj.characterTextProviderId
         : null,
+    tagTextProviderId:
+      typeof rawObj.tagTextProviderId === "string" ||
+      rawObj.tagTextProviderId === null
+        ? rawObj.tagTextProviderId
+        : null,
     testPrompt:
       typeof rawObj.testPrompt === "string" || rawObj.testPrompt === null
         ? rawObj.testPrompt
@@ -290,6 +302,7 @@ function readRegistry(dir: string): ReadResult {
       generationTextProviderId: salvaged.generationTextProviderId ?? null,
       chapterTextProviderId: salvaged.chapterTextProviderId ?? null,
       characterTextProviderId: salvaged.characterTextProviderId ?? null,
+      tagTextProviderId: salvaged.tagTextProviderId ?? null,
       testPrompt: salvaged.testPrompt ?? null,
       connections: decryptConnections(salvaged.connections, vaultKey),
     },
@@ -307,6 +320,7 @@ function writeRegistry(dir: string, reg: ProviderRegistry): void {
     generationTextProviderId: reg.generationTextProviderId ?? null,
     chapterTextProviderId: reg.chapterTextProviderId ?? null,
     characterTextProviderId: reg.characterTextProviderId ?? null,
+    tagTextProviderId: reg.tagTextProviderId ?? null,
     testPrompt: reg.testPrompt ?? null,
     connections: reg.connections.map((c) =>
       c.apiKey ? { ...c, apiKey: encryptApiKey(c.apiKey, vaultKey) } : c,
@@ -325,6 +339,7 @@ export function seedRegistry(dir: string): ProviderRegistry {
     generationTextProviderId: null,
     chapterTextProviderId: null,
     characterTextProviderId: null,
+    tagTextProviderId: null,
     testPrompt: null,
     connections: [],
   };
@@ -357,6 +372,7 @@ export function listConnections(dir: string): PublicProviderRegistry {
     generationTextProviderId: reg.generationTextProviderId ?? null,
     chapterTextProviderId: reg.chapterTextProviderId ?? null,
     characterTextProviderId: reg.characterTextProviderId ?? null,
+    tagTextProviderId: reg.tagTextProviderId ?? null,
     testPrompt: reg.testPrompt ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings,
@@ -570,6 +586,7 @@ export function deleteConnection(
     generationTextProviderId: reg.generationTextProviderId ?? null,
     chapterTextProviderId: reg.chapterTextProviderId ?? null,
     characterTextProviderId: reg.characterTextProviderId ?? null,
+    tagTextProviderId: reg.tagTextProviderId ?? null,
     testPrompt: reg.testPrompt ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings: [],
@@ -599,6 +616,7 @@ export function setActiveConnection(
     generationTextProviderId: reg.generationTextProviderId ?? null,
     chapterTextProviderId: reg.chapterTextProviderId ?? null,
     characterTextProviderId: reg.characterTextProviderId ?? null,
+    tagTextProviderId: reg.tagTextProviderId ?? null,
     testPrompt: reg.testPrompt ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings: [],
@@ -625,6 +643,7 @@ export function setGenerationTextProvider(
     generationTextProviderId: reg.generationTextProviderId ?? null,
     chapterTextProviderId: reg.chapterTextProviderId ?? null,
     characterTextProviderId: reg.characterTextProviderId ?? null,
+    tagTextProviderId: reg.tagTextProviderId ?? null,
     testPrompt: reg.testPrompt ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings: [],
@@ -648,6 +667,7 @@ export function setChapterTextProvider(
     generationTextProviderId: reg.generationTextProviderId ?? null,
     chapterTextProviderId: reg.chapterTextProviderId ?? null,
     characterTextProviderId: reg.characterTextProviderId ?? null,
+    tagTextProviderId: reg.tagTextProviderId ?? null,
     testPrompt: reg.testPrompt ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings: [],
@@ -671,6 +691,29 @@ export function setCharacterTextProvider(
     generationTextProviderId: reg.generationTextProviderId ?? null,
     chapterTextProviderId: reg.chapterTextProviderId ?? null,
     characterTextProviderId: reg.characterTextProviderId ?? null,
+    tagTextProviderId: reg.tagTextProviderId ?? null,
+    testPrompt: reg.testPrompt ?? null,
+    connections: reg.connections.map(toPublicConnection),
+    warnings: [],
+  };
+}
+
+/** Remember which text connection suggests tags for playthroughs and characters.
+ *  `null` means "follow whichever connection is active". */
+export function setTagTextProvider(
+  dir: string,
+  id: string | null,
+): PublicProviderRegistry {
+  const reg = getRegistry(dir);
+  reg.tagTextProviderId = id;
+  writeRegistry(dir, reg);
+  return {
+    activeTextProviderId: reg.activeTextProviderId,
+    activeImageProviderId: reg.activeImageProviderId,
+    generationTextProviderId: reg.generationTextProviderId ?? null,
+    chapterTextProviderId: reg.chapterTextProviderId ?? null,
+    characterTextProviderId: reg.characterTextProviderId ?? null,
+    tagTextProviderId: reg.tagTextProviderId ?? null,
     testPrompt: reg.testPrompt ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings: [],
@@ -692,6 +735,7 @@ export function setProviderTestPrompt(
     generationTextProviderId: reg.generationTextProviderId ?? null,
     chapterTextProviderId: reg.chapterTextProviderId ?? null,
     characterTextProviderId: reg.characterTextProviderId ?? null,
+    tagTextProviderId: reg.tagTextProviderId ?? null,
     testPrompt: reg.testPrompt ?? null,
     connections: reg.connections.map(toPublicConnection),
     warnings: [],

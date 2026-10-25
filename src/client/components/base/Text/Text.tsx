@@ -49,6 +49,7 @@ export type TextWeight = "normal" | "medium" | "semibold" | "bold";
 export type TextLeading = "none" | "tight" | "snug" | "normal" | "relaxed";
 
 export type TextAlign = "left" | "center" | "right";
+export type TextLineClamp = 1 | 2 | 3;
 
 export interface TextProps extends HTMLAttributes<HTMLElement> {
   as?: TextElement;
@@ -59,6 +60,9 @@ export interface TextProps extends HTMLAttributes<HTMLElement> {
   weight?: TextWeight;
   leading?: TextLeading;
   align?: TextAlign;
+  lineClamp?: TextLineClamp;
+  /** When used with `lineClamp`, reserves the full vertical height of `lineClamp` lines even if content is shorter. */
+  reserveLines?: boolean;
   truncate?: boolean;
   nowrap?: boolean;
   mono?: boolean;
@@ -84,6 +88,8 @@ export const Text = forwardRef<HTMLElement, TextProps>(function Text(
     weight,
     leading,
     align,
+    lineClamp,
+    reserveLines = false,
     truncate = false,
     nowrap = false,
     mono = false,
@@ -107,6 +113,8 @@ export const Text = forwardRef<HTMLElement, TextProps>(function Text(
     weight ? `base-text--weight-${weight}` : "",
     leading ? `base-text--leading-${leading}` : "",
     align ? `base-text--align-${align}` : "",
+    lineClamp ? `base-text--clamp-${lineClamp}` : "",
+    lineClamp && reserveLines ? "base-text--reserve-lines" : "",
     truncate ? "base-text--truncate" : "",
     nowrap ? "base-text--nowrap" : "",
     mono ? "base-text--mono" : "",

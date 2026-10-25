@@ -162,6 +162,13 @@ export interface TurnProvider {
     signal?: AbortSignal,
   ): Promise<string[]>;
 
+  /** Suggest a list of relevant tags for a playthrough based on its story context,
+   *  current tags, built-in taxonomy, and library tags. */
+  suggestPlaythroughTags?(
+    playthrough: SuggestPlaythroughTagsInput,
+    signal?: AbortSignal,
+  ): Promise<string[]>;
+
   /** Interactive brainstorming and refinement session for character cards. */
   brainstormCharacter(
     input: CharacterBrainstormInput,
@@ -191,6 +198,14 @@ export interface TurnProvider {
 export interface ProposedSectionChange {
   header: string;
   body: string;
+}
+
+export interface SuggestPlaythroughTagsInput {
+  name: string;
+  storyContext: string;
+  currentTags?: string[];
+  guidance?: string;
+  libraryTags?: string[];
 }
 
 export interface CharacterBrainstormInput {
@@ -323,6 +338,15 @@ export class MockProvider implements TurnProvider {
       guidance?: string;
     },
     _libraryTags: string[],
+    _signal?: AbortSignal,
+  ): Promise<string[]> {
+    throw new Error(
+      "Tag suggestion is not available with the Mock provider. Switch to a real provider in Settings.",
+    );
+  }
+
+  async suggestPlaythroughTags(
+    _playthrough: SuggestPlaythroughTagsInput,
     _signal?: AbortSignal,
   ): Promise<string[]> {
     throw new Error(

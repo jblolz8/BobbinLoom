@@ -23,7 +23,9 @@ import type {
   MeasuredUsage,
   ProposedSectionChange,
   ProviderTurn,
+  SuggestPlaythroughTagsInput,
 } from "./provider";
+import { SUGGESTED_PLAYTHROUGH_TAGS_BY_CATEGORY } from "../engine/playthroughTagTaxonomy";
 import {
   buildTextSamplingParams,
   type ResolvedProviderConfig,
@@ -778,6 +780,90 @@ export class OpenAICompatibleProvider {
       { role: "user", content: userPrompt },
     ];
 
+    return this.requestTagsFromMessages(messages, signal);
+  }
+
+  async suggestPlaythroughTags(
+    playthrough: SuggestPlaythroughTagsInput,
+    signal?: AbortSignal,
+  ): Promise<string[]> {
+    const builtInTheme = SUGGESTED_PLAYTHROUGH_TAGS_BY_CATEGORY.theme;
+    const builtInSetting = SUGGESTED_PLAYTHROUGH_TAGS_BY_CATEGORY.setting;
+    const builtInTrope = SUGGESTED_PLAYTHROUGH_TAGS_BY_CATEGORY.trope;
+    const builtInSet = new Set([
+      ...builtInTheme,
+      ...builtInSetting,
+      ...builtInTrope,
+    ]);
+    const customShelfTags = (playthrough.libraryTags ?? []).filter(
+      (t) => !builtInSet.has(t.toLowerCase().trim()),
+    );
+
+    const systemPrompt =
+      "You are an expert story archivist and VNDB-style tagger for interactive RPG playthroughs in BobbinLoom. You must output a valid JSON object containing a 'tags' array.";
+
+    const userPrompt = [
+      "Given the playthrough's story context, current tags, and the built-in + shelf tag taxonomy, generate an accurate, curated list of tags representing this playthrough.",
+      "",
+      "Return ONLY a JSON object with this exact shape:",
+      "{",
+      '  "tags": ["theme:dark_fantasy", "setting:dungeon", "trope:enemies_to_lovers", "trope:slow_burn", "theme:cursed_relic", "setting:underground_citadel"]',
+      "}",
+      "",
+      "TAGGING RULES & INSTRUCTIONS:",
+      "1. COMPREHENSIVE COVERAGE ACROSS 3 CORE CATEGORIES: Suggest between 6 and 16 strong, accurate tags covering:",
+      "   - Theme & Genre (e.g. theme:dark_fantasy, theme:horror, theme:lovecraftian_horror, theme:cyberpunk, theme:mystery, theme:romance)",
+      "   - Setting & Backdrop (e.g. setting:workplace, setting:academy, setting:medieval, setting:modern_day, setting:space_station, setting:dungeon)",
+      "   - Tropes, Dynamics & Kinks (e.g. trope:slow_burn, trope:enemies_to_lovers, trope:femdom, trope:forced_proximity, trope:mind_control)",
+      "2. UTILIZE PRE-CREATED BUILT-IN TAXONOMY FIRST: Whenever a concept matches a tag in the BUILT-IN TAXONOMY lists below, use that exact canonical tag (with its `theme:`, `setting:`, or `trope:` prefix).",
+      "3. INVENT NEW TAGS WHEN RELEVANT: If the story features specific themes, settings, tropes, or dynamics not in the preset lists, actively create new concise tags for them prefixed with `theme:`, `setting:`, or `trope:` (e.g. `theme:heist`, `setting:arctic_research_base`, `trope:secret_identity`).",
+      "4. EVALUATE & PRUNE CURRENT TAGS: Carefully evaluate `CURRENT PLAYTHROUGH TAGS` against the story context. Retain existing tags that genuinely fit the story, and OMIT any current tags that are inaccurate or irrelevant to the playthrough (omitted current tags will be proposed for removal).",
+      "5. FORMAT: Lowercase, concise (1-4 words max). Do not include markdown or explanations outside the JSON object.",
+      ...(playthrough.guidance
+        ? ["", `USER GUIDANCE / FOCUS: ${playthrough.guidance}`]
+        : []),
+      "",
+      `PLAYTHROUGH TITLE: ${playthrough.name || "Untitled Playthrough"}`,
+      playthrough.currentTags && playthrough.currentTags.length > 0
+        ? `CURRENT PLAYTHROUGH TAGS (keep relevant ones, omit irrelevant ones): ${playthrough.currentTags.join(", ")}`
+        : "CURRENT PLAYTHROUGH TAGS: (none assigned yet)",
+      "",
+      "--- BUILT-IN TAXONOMY: THEME & GENRE ---",
+      builtInTheme.join(", "),
+      "",
+      "--- BUILT-IN TAXONOMY: SETTING & BACKDROP ---",
+      builtInSetting.join(", "),
+      "",
+      "--- BUILT-IN TAXONOMY: TROPES, DYNAMICS & KINKS ---",
+      builtInTrope.join(", "),
+      ...(customShelfTags.length > 0
+        ? [
+            "",
+            "--- ADDITIONAL CUSTOM TAGS USED ON SHELF ---",
+            customShelfTags.join(", "),
+          ]
+        : []),
+      "",
+      "--- PLAYTHROUGH STORY CONTEXT ---",
+      playthrough.storyContext || "(no story context available)",
+      "",
+      "Return ONLY the JSON object. No markdown, no explanation.",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const messages: ChatMessage[] = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ];
+
+    return this.requestTagsFromMessages(messages, signal);
+  }
+
+  private async requestTagsFromMessages(
+    messages: ChatMessage[],
+    signal?: AbortSignal,
+  ): Promise<string[]> {
     const maxTokens = Math.max(4000, this.config.maxTokens || 4000);
 
     // Attempt 1: Standard with response_format: { type: "json_object" }

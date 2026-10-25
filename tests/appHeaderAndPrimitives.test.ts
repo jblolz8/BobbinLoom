@@ -15,10 +15,12 @@ import {
   Slider,
   Stack,
   SwitchRow,
+  TagSidebar,
   Text,
   TextArea,
   TextInput,
 } from "../src/client/components/base";
+import { PlaythroughShelfContent } from "../src/client/components/library/PlaythroughLibrary";
 import { SettingsModal } from "../src/client/components/modals/SettingsModal";
 import { AppearanceSettingsPanel } from "../src/client/components/settings/AppearanceSettingsPanel";
 import { ChatSettingsPanel } from "../src/client/components/settings/ChatSettingsPanel";
@@ -947,6 +949,9 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
     expect(html).toContain("base-card base-card--panel base-card--pad-xs");
     expect(html).toContain("base-stack--mobile-only");
     expect(html).toContain("cover-aspect-preview");
+    expect(html).toContain("Match Portrait &amp; Square Width in Landscape");
+    expect(html).toContain("Show Full Playthrough Title");
+    expect(html).toContain("Show Full List of Tags");
     expect(html).not.toContain("interface-preview-stage");
     expect(html).not.toContain("pane-swipe-setting");
     expect(html).not.toContain("shape-option-card");
@@ -971,5 +976,138 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
     expect(html).not.toContain("preset-card");
     expect(html).not.toContain("custom-color-grid");
     expect(html).not.toContain("appearance-live-preview-box");
+  });
+
+  it("renders TagSidebar and PlaythroughShelfContent with bottom-only Pagination on 1 page and top+bottom on multiple pages", () => {
+    const sidebarHtml = renderToStaticMarkup(
+      createElement(TagSidebar, {
+        taxonomy: "playthrough",
+        tagCounts: [
+          { tag: "lovecraftian_horror", count: 3 },
+          { tag: "workplace", count: 2 },
+          { tag: "femdom", count: 1 },
+        ],
+        activeTags: ["workplace"],
+        onToggleTag: noop,
+        onClearTags: noop,
+      }),
+    );
+
+    expect(sidebarHtml).toContain("base-tag-sidebar");
+    expect(sidebarHtml).toContain("Theme &amp; Genre");
+    expect(sidebarHtml).toContain("Setting &amp; Backdrop");
+    expect(sidebarHtml).toContain("Tropes, Dynamics &amp; Kinks");
+    expect(sidebarHtml).toContain("lovecraftian_horror");
+
+    const sampleItem = {
+      id: "play_1",
+      name: "Shadows Over Innsmouth Corp",
+      turn: 12,
+      castCount: 3,
+      chapterCount: 2,
+      imageCount: 0,
+      visibleMessageCount: 8,
+      lastMessagePreview: "The fluorescent lights hummed overhead.",
+      isTimelineBranch: false,
+      cover: null,
+      tags: [
+        "lovecraftian_horror",
+        "workplace",
+        "femdom",
+        "dark_fantasy",
+        "mystery",
+        "noir",
+      ],
+      updatedAt: "2026-03-01T00:00:00.000Z",
+    };
+
+    const singlePageHtml = renderToStaticMarkup(
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(PlaythroughShelfContent, {
+          initialLoading: false,
+          isFetching: false,
+          total: 1,
+          playthroughs: [sampleItem],
+          search: "",
+          selectedTags: [],
+          viewMode: "grid",
+          page: 1,
+          pageSize: 12,
+          onPageChange: noop,
+          onPageSizeChange: noop,
+          onClearSearch: noop,
+          onToggleTag: noop,
+          onSelect: noop,
+          onRenameRequest: noop,
+          onEditTagsRequest: noop,
+          onDuplicated: noop,
+          onDeleted: async () => {},
+          onError: noop,
+        }),
+      ),
+    );
+
+    // 1 page: only 1 Pagination bar (bottom)
+    expect(
+      (singlePageHtml.match(/base-pagination__summary/g) ?? []).length,
+    ).toBe(1);
+    expect(singlePageHtml).toContain("base-separator");
+    expect(singlePageHtml).toContain("base-form-grid--cols-cards");
+    expect(singlePageHtml).toContain("base-card__title-btn");
+    expect(singlePageHtml).toContain("base-card__interactive");
+    expect(singlePageHtml).toContain("base-actions-menu");
+    expect(singlePageHtml).toContain(
+      "base-text--clamp-2 base-text--reserve-lines",
+    );
+    expect(singlePageHtml).toContain("base-tag-row");
+    expect(singlePageHtml).toContain("base-tag-row__overflow-trigger");
+    expect(singlePageHtml).toContain("+2");
+    expect(singlePageHtml).toContain("2 chapters");
+    expect(singlePageHtml).toContain("0 images");
+    expect(singlePageHtml).toContain("cat-theme");
+    expect(singlePageHtml).toContain("cat-setting");
+    expect(singlePageHtml).toContain("cat-trope");
+    expect(singlePageHtml).not.toContain("playthrough-card");
+    expect(singlePageHtml).not.toContain("playthrough-grid");
+
+    const multiPageHtml = renderToStaticMarkup(
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(PlaythroughShelfContent, {
+          initialLoading: false,
+          isFetching: false,
+          total: 25,
+          playthroughs: [sampleItem],
+          search: "",
+          selectedTags: [],
+          viewMode: "grid",
+          showFullTitle: true,
+          showAllTags: true,
+          page: 1,
+          pageSize: 12,
+          onPageChange: noop,
+          onPageSizeChange: noop,
+          onClearSearch: noop,
+          onToggleTag: noop,
+          onSelect: noop,
+          onRenameRequest: noop,
+          onEditTagsRequest: noop,
+          onDuplicated: noop,
+          onDeleted: async () => {},
+          onError: noop,
+        }),
+      ),
+    );
+
+    // >1 page: both top and bottom Pagination bars (2 total)
+    expect(
+      (multiPageHtml.match(/base-pagination__summary/g) ?? []).length,
+    ).toBe(2);
+    // When showAllTags is true, TagRow wraps all tags without (+N) overflow trigger
+    expect(multiPageHtml).toContain("base-tag-row--wrap");
+    expect(multiPageHtml).not.toContain("base-tag-row__overflow-trigger");
   });
 });

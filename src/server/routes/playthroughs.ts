@@ -24,6 +24,7 @@ import {
   resolveCast,
   resolvePresetForGeneration,
   setPlaythroughCoverRecord,
+  setPlaythroughTagsRecord,
   updatePlaythroughRecord,
 } from "../store";
 import {
@@ -66,6 +67,19 @@ const CreatePlaythroughBody = z.object({
 });
 
 const RenameBody = z.object({ name: z.string().min(1) });
+
+const TagsBody = z.object({ tags: z.array(z.string()) });
+
+const SuggestPlaythroughTagsBody = z.object({
+  providerId: z.string().optional(),
+  currentTags: z.array(z.string()).optional(),
+  libraryTags: z.array(z.string()).optional(),
+  guidance: z.string().optional(),
+  includeWorldState: z.boolean().default(true),
+  includeCastAndPersona: z.boolean().default(true),
+  includeChaptersAndTimeline: z.boolean().default(true),
+  includeCurrentChapterMessages: z.boolean().default(true),
+});
 
 const DraftBody = z.object({ content: z.string() });
 
@@ -153,6 +167,7 @@ export const playthroughRoutes: FastifyPluginAsync<
         page: z.string().optional(),
         pageSize: z.string().optional(),
         search: z.string().optional(),
+        tags: z.string().optional(),
         sortBy: z.enum(["updatedAt", "name", "turn"]).optional(),
         sortDir: z.enum(["asc", "desc"]).optional(),
       })
@@ -167,6 +182,12 @@ export const playthroughRoutes: FastifyPluginAsync<
         : query.pageSize
           ? parseInt(query.pageSize, 10)
           : undefined;
+    const tags = query.tags
+      ? query.tags
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean)
+      : undefined;
 
     // Summaries, not whole documents: the list only renders cards, and a document carries
     // messages, snapshots and catalogs the cards never read (measured at ~750 KB for five
@@ -179,6 +200,7 @@ export const playthroughRoutes: FastifyPluginAsync<
       page,
       pageSize,
       search: query.search,
+      tags,
       sortBy: query.sortBy,
       sortDir: query.sortDir,
       resolveCover: (p) =>
@@ -238,6 +260,181 @@ export const playthroughRoutes: FastifyPluginAsync<
     if (!updated)
       return reply.code(404).send({ error: "Playthrough not found" });
     return updated;
+  });
+
+  app.put("/api/playthroughs/:id/tags", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const body = TagsBody.parse(request.body ?? {});
+    const updated = setPlaythroughTagsRecord(dataDir, params.id, body.tags);
+    if (!updated)
+      return reply.code(404).send({ error: "Playthrough not found" });
+    return updated;
+  });
+
+  app.post("/api/playthroughs/:id/suggest-tags", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const body = SuggestPlaythroughTagsBody.parse(request.body ?? {});
+    const playthrough = getPlaythroughRecord(dataDir, params.id);
+    if (!playthrough) {
+      return reply.code(404).send({ error: "Playthrough not found" });
+    }
+
+    const sections: string[] = [];
+
+    if (body.includeWorldState) {
+      if (playthrough.scenarioDescription?.trim()) {
+        sections.push(
+          `[Scenario / Premise]\n${playthrough.scenarioDescription.trim()}`,
+        );
+      }
+      if (playthrough.worldState.length > 0) {
+        const wsLines = playthrough.worldState.map(
+          (w) => `- ${w.name}: ${w.description}`,
+        );
+        sections.push(`[World State]\n${wsLines.join("\n")}`);
+      }
+    }
+
+    if (body.includeCastAndPersona) {
+      const p = playthrough.playerCharacter;
+      if (p) {
+        const playerParts = [
+          `Name: ${p.name}`,
+          p.description ? `Description: ${p.description}` : "",
+          p.appearance ? `Appearance: ${p.appearance}` : "",
+          p.conditions.length > 0
+            ? `Conditions: ${p.conditions.join(", ")}`
+            : "",
+          p.flags.length > 0 ? `Flags: ${p.flags.join(", ")}` : "",
+        ].filter(Boolean);
+        sections.push(`[Player Persona]\n${playerParts.join("\n")}`);
+      }
+
+      if (playthrough.characters.length > 0) {
+        const templateMap = new Map(
+          playthrough.characterTemplates.map((t) => [t.id, t]),
+        );
+        const charBlocks = playthrough.characters.map((c) => {
+          const tpl = c.templateId ? templateMap.get(c.templateId) : undefined;
+          const details = [
+            `- ${c.name} (Role: ${c.storyRole || "Character"}${
+              playthrough.activeCharacters.includes(c.id) ? ", Present" : ""
+            })`,
+            c.towardPlayer ? `  Toward Player: ${c.towardPlayer}` : "",
+            c.mood ? `  Mood: ${c.mood}` : "",
+            tpl?.tags && tpl.tags.length > 0
+              ? `  Character Card Tags: ${tpl.tags.join(", ")}`
+              : "",
+            c.description
+              ? `  Description: ${c.description}`
+              : tpl?.summary
+                ? `  Summary: ${tpl.summary}`
+                : "",
+            c.memorySummary ? `  Story Memory: ${c.memorySummary}` : "",
+          ].filter(Boolean);
+          return details.join("\n");
+        });
+        sections.push(`[Cast & Characters]\n${charBlocks.join("\n")}`);
+      }
+    }
+
+    if (body.includeChaptersAndTimeline) {
+      if (playthrough.storyMetaSummaries.length > 0) {
+        const metaLines = playthrough.storyMetaSummaries.map(
+          (m) =>
+            `Turns ${m.turnRange.start}-${m.turnRange.end}: ${m.summary}`,
+        );
+        sections.push(`[Story Meta-Summaries]\n${metaLines.join("\n\n")}`);
+      }
+
+      if (playthrough.chapters.length > 0) {
+        const chapterLines = playthrough.chapters.map(
+          (ch, idx) =>
+            `Chapter ${idx + 1}: ${ch.name} (Turns ${ch.turnRange.start}-${ch.turnRange.end})\n${
+              ch.fullSummary || ch.shortDescription
+            }`,
+        );
+        sections.push(`[Archived Chapters]\n${chapterLines.join("\n\n")}`);
+      }
+
+      if (playthrough.memoryEvents.length > 0) {
+        const events = playthrough.memoryEvents
+          .slice(-40)
+          .map((ev) => `- [Turn ${ev.turn} | ${ev.type}] ${ev.summary}`);
+        sections.push(`[Event Timeline]\n${events.join("\n")}`);
+      }
+    }
+
+    if (body.includeCurrentChapterMessages) {
+      const visibleMessages = playthrough.messages.filter(
+        (m) => !m.hidden && !m.chapterId && m.content.trim().length > 0,
+      );
+      if (visibleMessages.length > 0) {
+        const formatted = visibleMessages.map(
+          (m) =>
+            `${m.role === "user" ? "Player" : "Narrator"}: ${m.content.trim()}`,
+        );
+        const fullTranscript = formatted.join("\n\n");
+        const MAX_CHAT_CHARS = 24000;
+        let transcriptText = fullTranscript;
+        if (fullTranscript.length > MAX_CHAT_CHARS && formatted.length > 4) {
+          const head = formatted.slice(0, 2).join("\n\n");
+          const budgetForTail = Math.max(4000, MAX_CHAT_CHARS - head.length);
+          const tailMessages: string[] = [];
+          let used = 0;
+          for (let i = formatted.length - 1; i >= 2; i--) {
+            const msg = formatted[i];
+            if (used + msg.length > budgetForTail && tailMessages.length > 0) {
+              break;
+            }
+            tailMessages.unshift(msg);
+            used += msg.length + 2;
+          }
+          transcriptText = `${head}\n\n... [earlier chapter messages omitted] ...\n\n${tailMessages.join("\n\n")}`;
+        }
+        sections.push(
+          `[Current Chapter Chat History]\n${transcriptText}`,
+        );
+      }
+    }
+
+    const storyContext =
+      sections.length > 0
+        ? sections.join("\n\n")
+        : `Playthrough Name: ${playthrough.name} (Turn ${playthrough.turn})`;
+
+    const controller = abortOnClientDisconnect(reply);
+    const provider = body.providerId
+      ? manager.getProvider(body.providerId)
+      : manager.getTagProvider();
+
+    if (!provider.suggestPlaythroughTags) {
+      return reply
+        .code(501)
+        .send({ error: "Provider does not support playthrough tag suggestion" });
+    }
+
+    try {
+      const tags = await provider.suggestPlaythroughTags(
+        {
+          name: playthrough.name,
+          storyContext,
+          currentTags: body.currentTags ?? playthrough.tags ?? [],
+          libraryTags: body.libraryTags ?? [],
+          guidance: body.guidance,
+        },
+        controller.signal,
+      );
+      return { tags };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (message.includes("abort")) {
+        return reply.code(499).send({ error: "Request aborted" });
+      }
+      return reply
+        .code(502)
+        .send({ error: `Tag suggestion failed: ${message}` });
+    }
   });
 
   // The manual cover: a pointer at an image that already lives in the content-addressed

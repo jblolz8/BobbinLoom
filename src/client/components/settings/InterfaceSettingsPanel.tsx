@@ -8,11 +8,16 @@ import {
 } from "../../../schemas";
 import { clampWorkspaceWidthPercent } from "../../../engine/theme";
 import {
+  LIBRARY_PREFERENCE_DEFAULTS,
   applyAvatarShapeTheme,
   applyCoverAspect,
+  applyLandscapeCardWidth,
   applyWorkspaceWidth,
   getAppearanceSettings,
+  getViewPreferences,
+  resolveLibraryPreferences,
   updateAppearanceSettings,
+  updateViewPreferences,
 } from "../../api";
 import {
   AvatarBadge,
@@ -101,6 +106,16 @@ export function InterfaceSettingsPanel() {
    *  `AppearanceSettings.paneSwipeEnabled`. */
   const [paneSwipeEnabled, setPaneSwipeEnabled] = useState(true);
 
+  const [compactLandscape, setCompactLandscape] = useState<boolean>(
+    LIBRARY_PREFERENCE_DEFAULTS.playthroughCompactLandscape,
+  );
+  const [showFullTitle, setShowFullTitle] = useState<boolean>(
+    LIBRARY_PREFERENCE_DEFAULTS.playthroughShowFullTitle,
+  );
+  const [showAllTags, setShowAllTags] = useState<boolean>(
+    LIBRARY_PREFERENCE_DEFAULTS.playthroughShowAllTags,
+  );
+
   useEffect(() => {
     getAppearanceSettings()
       .then((res) => {
@@ -124,6 +139,19 @@ export function InterfaceSettingsPanel() {
       .catch(() => {
         /* fallback to state defaults */
       });
+
+    getViewPreferences()
+      .then((prefs) => {
+        const resolved = resolveLibraryPreferences(prefs);
+        setCompactLandscape(resolved.playthroughCompactLandscape);
+        setShowFullTitle(resolved.playthroughShowFullTitle);
+        setShowAllTags(resolved.playthroughShowAllTags);
+        applyLandscapeCardWidth(resolved.playthroughCompactLandscape);
+      })
+      .catch(() => {
+        /* fallback to state defaults */
+      });
+
     return () => {
       if (widthPersistTimerRef.current !== null) {
         window.clearTimeout(widthPersistTimerRef.current);
@@ -174,6 +202,28 @@ export function InterfaceSettingsPanel() {
   function handleTogglePaneSwipe(enabled: boolean) {
     setPaneSwipeEnabled(enabled);
     void persistInterfaceSettings({ paneSwipeEnabled: enabled });
+  }
+
+  function handleToggleCompactLandscape(enabled: boolean) {
+    setCompactLandscape(enabled);
+    applyLandscapeCardWidth(enabled);
+    void updateViewPreferences({
+      library: { playthroughCompactLandscape: enabled },
+    }).catch(() => {});
+  }
+
+  function handleToggleShowFullTitle(enabled: boolean) {
+    setShowFullTitle(enabled);
+    void updateViewPreferences({
+      library: { playthroughShowFullTitle: enabled },
+    }).catch(() => {});
+  }
+
+  function handleToggleShowAllTags(enabled: boolean) {
+    setShowAllTags(enabled);
+    void updateViewPreferences({
+      library: { playthroughShowAllTags: enabled },
+    }).catch(() => {});
   }
 
   return (
@@ -368,6 +418,30 @@ export function InterfaceSettingsPanel() {
             );
           })}
         </FormGrid>
+
+        <Stack direction="column" align="stretch" gap="2xs">
+          <SwitchRow
+            icon="Minimize2"
+            title="Match Portrait & Square Width in Landscape"
+            description="Shrink Landscape (16:9) cards in Grid view to the same column width constraint as Portrait and Square instead of expanding card width to preserve Portrait cover height."
+            checked={compactLandscape}
+            onChange={(e) => handleToggleCompactLandscape(e.target.checked)}
+          />
+          <SwitchRow
+            icon="Type"
+            title="Show Full Playthrough Title"
+            description="Display the entire playthrough title on cards and rows without truncating at 2 lines (may vary card heights across pages)."
+            checked={showFullTitle}
+            onChange={(e) => handleToggleShowFullTitle(e.target.checked)}
+          />
+          <SwitchRow
+            icon="Tag"
+            title="Show Full List of Tags"
+            description="Wrap all playthrough tags across multiple lines instead of collapsing overflow tags into a single-line (+N) badge (may cause bottom pagination to shift height between pages)."
+            checked={showAllTags}
+            onChange={(e) => handleToggleShowAllTags(e.target.checked)}
+          />
+        </Stack>
       </Stack>
 
       {/* ── Mobile Panels Section ──

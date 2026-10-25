@@ -229,6 +229,18 @@ export const providerRoutes: FastifyPluginAsync<ProviderRoutesOptions> = async (
     },
   );
 
+  app.put(
+    "/api/settings/providers/tag-provider",
+    async (request, reply) => {
+      const parsedBody = GenerationProviderBody.safeParse(request.body ?? {});
+      if (!parsedBody.success)
+        return reply
+          .code(400)
+          .send({ error: "providerId must be a string or null" });
+      return manager.setTagTextProvider(parsedBody.data.providerId);
+    },
+  );
+
   app.post("/api/settings/providers/test", async (request) => {
     const body = TestConnectionBody.parse(request.body ?? {});
     return manager.testConnection(body);

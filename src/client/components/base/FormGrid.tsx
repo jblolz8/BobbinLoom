@@ -1,7 +1,7 @@
 import { type HTMLAttributes, type ReactNode } from "react";
 
-export type FormGridCols = 1 | 2 | "2-asymmetric" | 3 | 4;
-export type FormGridGap = "xs" | "sm" | "md";
+export type FormGridCols = 1 | 2 | "2-asymmetric" | 3 | 4 | "cards";
+export type FormGridGap = "xs" | "sm" | "md" | "lg";
 
 export interface FormGridProps extends HTMLAttributes<HTMLDivElement> {
   cols?: FormGridCols;

@@ -38,6 +38,13 @@ export function getViewPreferences(): Promise<ViewPreferences> {
 export function updateViewPreferences(
   patch: ViewPreferences,
 ): Promise<ViewPreferences> {
+  if (typeof window !== "undefined" && patch.library) {
+    window.dispatchEvent(
+      new CustomEvent("bobbinloom:library-prefs-updated", {
+        detail: patch.library,
+      }),
+    );
+  }
   return request<{ preferences: ViewPreferences }>(
     "/api/settings/preferences",
     {
@@ -104,6 +111,9 @@ export const LIBRARY_PREFERENCE_DEFAULTS = {
   playthroughViewMode: "grid",
   playthroughSortBy: "updatedAt",
   playthroughSortDir: "desc",
+  playthroughCompactLandscape: false,
+  playthroughShowFullTitle: false,
+  playthroughShowAllTags: false,
 } satisfies ResolvedLibraryPreferences;
 
 export type ResolvedLibraryPreferences = {
@@ -116,6 +126,9 @@ export type ResolvedLibraryPreferences = {
   playthroughViewMode: "grid" | "list";
   playthroughSortBy: "updatedAt" | "name" | "turn";
   playthroughSortDir: "asc" | "desc";
+  playthroughCompactLandscape: boolean;
+  playthroughShowFullTitle: boolean;
+  playthroughShowAllTags: boolean;
 };
 
 /** The library group, defaults filled. Absent means "never chosen", so the defaults are applied HERE
@@ -367,6 +380,23 @@ export function applyCoverAspect(aspect: CoverAspect) {
     "--cover-art-aspect",
     COVER_ASPECT_VALUES[aspect],
   );
+}
+
+/**
+ * Applies whether Landscape cover cards in Grid view shrink to the same column width constraint
+ * as Portrait and Square (`data-landscape-card-width="compact"`), or keep Portrait's cover height
+ * by expanding their column width (default).
+ */
+export function applyLandscapeCardWidth(compact: boolean) {
+  if (typeof document === "undefined") return;
+  if (compact) {
+    document.documentElement.setAttribute(
+      "data-landscape-card-width",
+      "compact",
+    );
+  } else {
+    document.documentElement.removeAttribute("data-landscape-card-width");
+  }
 }
 
 /** Applies the workspace page width percentage (50–100%) globally on the root element. */

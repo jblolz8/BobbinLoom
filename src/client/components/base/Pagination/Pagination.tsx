@@ -8,12 +8,13 @@ import {
   rangeParts,
   totalPagesFor,
   type PageSize,
-} from "../../engine/pagination";
-import { Button } from "./Button/Button";
-import { Icon } from "./Icon";
-import { SimpleSelect } from "./Select";
-import { TextInput } from "./TextInput";
-import { Tooltip } from "./Tooltip/Tooltip";
+} from "../../../engine/pagination";
+import { Button } from "../Button/Button";
+import { Icon } from "../Icon";
+import { SimpleSelect } from "../Select";
+import { TextInput } from "../TextInput";
+import { Tooltip } from "../Tooltip/Tooltip";
+import "./Pagination.css";
 
 export type PaginationProps = {
   page: number;
@@ -33,11 +34,8 @@ export type PaginationProps = {
 };
 
 /**
- * Shared library/collection pager — the design-system replacement for the copy that lived in
- * CharacterLibrary and its fork in SetupView. Pair with `usePagination()` for state.
- *
- * The root renders `.base-pagination`; the inner `pagination-*` class names are kept because the
- * moved stylesheet block (components.css) still targets them.
+ * Shared library/collection pager — compact, token-driven pagination bar.
+ * Pair with `usePagination()` or `useServerPagination()` for state.
  */
 export function Pagination({
   page,
@@ -52,21 +50,15 @@ export function Pagination({
   showPageSize = true,
 }: PaginationProps) {
   const totalPages = totalPagesFor(total, pageSize);
-  // `customMode` is explicit state: deriving it from `pageSize` meant selecting "Custom…" while a
-  // preset was active did nothing (the input never appeared). It has to FOLLOW the size as well, so a
-  // custom size still shows the input — including one that arrives after the first paint, which is how
-  // the size comes back now that it is read from the server rather than from the device.
   const [customMode, setCustomMode] = useState<boolean>(
     () => !isPresetPageSize(pageSize),
   );
   const [draft, setDraft] = useState<string>(() =>
     isPresetPageSize(pageSize) ? "" : String(pageSize),
   );
-
   const [pageDraft, setPageDraft] = useState<string>(String(page));
 
   useEffect(() => {
-    // A preset is handled by the select's own options; only the custom case needs the input.
     if (isPresetPageSize(pageSize)) return;
     setCustomMode(true);
     setDraft(String(pageSize));
@@ -88,7 +80,6 @@ export function Pagination({
   function handleSelectChange(val: string) {
     if (val === "custom") {
       setCustomMode(true);
-      // Prefill with the currently applied size so the user edits from a sane starting point.
       setDraft((d) => (parsePageSizeInput(d) !== null ? d : String(pageSize)));
       return;
     }
@@ -124,108 +115,91 @@ export function Pagination({
     }
   }
 
+  const classes = [
+    "base-pagination",
+    totalPages > 1 ? "base-pagination--with-progress" : "",
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <div
-      className={`base-pagination ${className}`.trim()}
-      style={{ position: "relative" }}
+      className={classes}
+      style={
+        totalPages > 1
+          ? ({
+              "--pagination-progress-left": `${progressLeft}%`,
+              "--pagination-progress-width": `${progressWidth}%`,
+            } as React.CSSProperties)
+          : undefined
+      }
     >
-      <div
-        className="pagination-progress-track"
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: "4px",
-          background: "var(--border-main)",
-          borderTopLeftRadius: "9px",
-          borderTopRightRadius: "9px",
-          overflow: "hidden",
-        }}
-      >
-        <div
-          className="pagination-progress-fill"
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            background: "var(--accent-highlight)",
-            left: `${progressLeft}%`,
-            width: `${progressWidth}%`,
-            transition: "all 0.2s ease-out",
-          }}
-        />
-      </div>
-      <div className="pagination-info">
+      {totalPages > 1 && (
+        <div className="base-pagination__progress" aria-hidden="true">
+          <div className="base-pagination__progress-fill" />
+        </div>
+      )}
+
+      <div className="base-pagination__summary">
         {total === 0 ? (
-          <>
+          <span>
             Showing <strong>0</strong>
             {itemLabel ? ` ${itemLabel}` : ""}
-          </>
+          </span>
         ) : all ? (
-          <>
+          <span>
             Showing all <strong>{total}</strong>
             {itemLabel ? ` ${itemLabel}` : ""}
-          </>
+          </span>
         ) : (
-          <>
+          <span>
             Showing{" "}
             <strong>
               {from}–{to}
             </strong>{" "}
             of <strong>{total}</strong>
             {itemLabel ? ` ${itemLabel}` : ""}
-          </>
+          </span>
         )}
       </div>
 
       {totalPages > 1 ? (
-        <nav className="pagination-controls" aria-label={ariaLabel}>
+        <nav className="base-pagination__controls" aria-label={ariaLabel}>
           <Tooltip content="First page">
             <Button
               type="button"
-              variant="secondary"
+              variant="ghost"
               size="xs"
               iconOnly
-              className="pagination-nav-btn"
+              className="base-pagination__nav-btn"
               disabled={page === 1}
               onClick={() => onPageChange(1)}
               aria-label="First page"
             >
-              <Icon name="ChevronsLeft" size={14} />
+              <Icon name="ChevronsLeft" size={13} />
             </Button>
           </Tooltip>
           <Tooltip content="Previous page">
             <Button
               type="button"
-              variant="secondary"
+              variant="ghost"
               size="xs"
               iconOnly
-              className="pagination-nav-btn"
+              className="base-pagination__nav-btn"
               disabled={page === 1}
               onClick={() => onPageChange(page - 1)}
               aria-label="Previous page"
             >
-              <Icon name="ChevronLeft" size={14} />
+              <Icon name="ChevronLeft" size={13} />
             </Button>
           </Tooltip>
 
-          <div
-            className="pagination-page-jumper"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              margin: "0 8px",
-            }}
-          >
-            <span
-              style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}
-            >
-              Page
-            </span>
+          <div className="base-pagination__jumper">
+            <span className="base-pagination__jumper-text">Page</span>
             <TextInput
               type="number"
+              inputMode="numeric"
               size="sm"
               min={1}
               max={totalPages}
@@ -236,13 +210,10 @@ export function Pagination({
                 if (e.key === "Enter") commitPageDraft();
               }}
               fullWidth={false}
-              containerClassName="pagination-page-input"
+              containerClassName="base-pagination__page-input"
               aria-label="Current page"
-              style={{ width: "3.5rem", textAlign: "center" }}
             />
-            <span
-              style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}
-            >
+            <span className="base-pagination__jumper-text">
               of {totalPages}
             </span>
           </div>
@@ -250,37 +221,37 @@ export function Pagination({
           <Tooltip content="Next page">
             <Button
               type="button"
-              variant="secondary"
+              variant="ghost"
               size="xs"
               iconOnly
-              className="pagination-nav-btn"
+              className="base-pagination__nav-btn"
               disabled={page === totalPages}
               onClick={() => onPageChange(page + 1)}
               aria-label="Next page"
             >
-              <Icon name="ChevronRight" size={14} />
+              <Icon name="ChevronRight" size={13} />
             </Button>
           </Tooltip>
           <Tooltip content="Last page">
             <Button
               type="button"
-              variant="secondary"
+              variant="ghost"
               size="xs"
               iconOnly
-              className="pagination-nav-btn"
+              className="base-pagination__nav-btn"
               disabled={page === totalPages}
               onClick={() => onPageChange(totalPages)}
               aria-label="Last page"
             >
-              <Icon name="ChevronsRight" size={14} />
+              <Icon name="ChevronsRight" size={13} />
             </Button>
           </Tooltip>
         </nav>
       ) : null}
 
       {showPageSize ? (
-        <div className="pagination-size-selector">
-          <span className="pagination-size-selector-label">Per page:</span>
+        <div className="base-pagination__size">
+          <span className="base-pagination__size-label">Per page:</span>
           <SimpleSelect<string>
             value={customMode ? "custom" : String(pageSize)}
             onChange={handleSelectChange}
@@ -299,6 +270,7 @@ export function Pagination({
             <TextInput
               size="sm"
               type="number"
+              inputMode="numeric"
               min={1}
               max={MAX_PAGE_SIZE}
               fullWidth={false}
@@ -309,7 +281,7 @@ export function Pagination({
                 if (e.key === "Enter") commitDraft();
               }}
               placeholder="Count"
-              containerClassName="pagination-custom-input"
+              containerClassName="base-pagination__custom-input"
               aria-label="Custom items per page"
             />
           ) : null}

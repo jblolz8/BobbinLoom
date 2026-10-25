@@ -1,0 +1,217 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   BASE PAGINATION — Compact, full-width token-driven pagination bar
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.base-pagination {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  gap: 0.4rem 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.22rem 0.55rem;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.base-pagination--with-progress {
+  padding-top: calc(0.22rem + 2px);
+}
+
+.base-pagination__progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--border-subtle);
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.base-pagination__progress-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--pagination-progress-left, 0%);
+  width: var(--pagination-progress-width, 0%);
+  background: var(--accent-highlight, var(--accent-base));
+  opacity: 0.8;
+  transition:
+    left 0.2s ease-out,
+    width 0.2s ease-out;
+}
+
+.base-pagination__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1.25;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.base-pagination__summary strong {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.base-pagination__controls {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: var(--bg-app);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.base-pagination__nav-btn {
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px !important;
+  min-height: 24px !important;
+  padding: 0 !important;
+  border-radius: 4px !important;
+}
+
+.base-pagination__jumper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.35rem;
+}
+
+.base-pagination__jumper-text {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.base-pagination .base-pagination__page-input {
+  width: 2.4rem;
+  margin: 0;
+}
+
+.base-pagination .base-pagination__page-input .base-form-input {
+  height: 22px;
+  min-height: 22px;
+  padding: 0 0.2rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  border-radius: 4px;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.base-pagination
+  .base-pagination__page-input
+  .base-form-input::-webkit-outer-spin-button,
+.base-pagination
+  .base-pagination__page-input
+  .base-form-input::-webkit-inner-spin-button,
+.base-pagination
+  .base-pagination__custom-input
+  .base-form-input::-webkit-outer-spin-button,
+.base-pagination
+  .base-pagination__custom-input
+  .base-form-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.base-pagination__size {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
+.base-pagination__controls + .base-pagination__size {
+  margin-left: 0;
+}
+
+.base-pagination .base-pagination__size .base-select-trigger {
+  height: 24px;
+  min-height: 24px;
+  padding: 0 0.45rem;
+  font-size: 0.74rem;
+  border-radius: 5px;
+}
+
+.base-pagination__size-label {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.base-pagination .base-pagination__custom-input {
+  width: 3.4rem;
+  margin: 0;
+}
+
+.base-pagination .base-pagination__custom-input .base-form-input {
+  height: 24px;
+  min-height: 24px;
+  padding: 0 0.3rem;
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  border-radius: 5px;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+/* ── Narrow / Mobile Layout (<= 640px) ──────────────────────────────────────
+   Row 1: Summary + Per-page selector centered (including when wrapping)
+   Row 2 (when totalPages > 1): Page navigation centered across full width */
+@media (max-width: 640px) {
+  .base-pagination {
+    justify-content: center;
+    text-align: center;
+    padding: 0.3rem 0.5rem;
+    gap: 0.35rem 0.65rem;
+  }
+
+  .base-pagination--with-progress {
+    padding-top: calc(0.3rem + 2px);
+  }
+
+  .base-pagination__summary {
+    order: 1;
+    justify-content: center;
+    font-size: 0.74rem;
+  }
+
+  .base-pagination__size {
+    order: 2;
+    margin-left: 0;
+    justify-content: center;
+  }
+
+  .base-pagination__controls {
+    order: 3;
+    width: 100%;
+    justify-content: space-between;
+    box-sizing: border-box;
+    padding: 2px 4px;
+  }
+
+  .base-pagination__nav-btn {
+    width: 26px !important;
+    height: 26px !important;
+    min-width: 26px !important;
+    min-height: 26px !important;
+  }
+}

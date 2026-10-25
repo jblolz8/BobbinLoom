@@ -9,6 +9,7 @@ export type StackDirection = "row" | "column";
 export type StackAlign = "start" | "center" | "end" | "stretch" | "baseline";
 export type StackJustify = "start" | "center" | "end" | "between";
 export type StackGap = "none" | "2xs" | "xs" | "sm" | "md" | "lg";
+export type StackCollapseBreakpoint = "sm" | "md";
 
 export interface StackProps extends HTMLAttributes<HTMLElement> {
   as?: ElementType;
@@ -19,8 +20,13 @@ export interface StackProps extends HTMLAttributes<HTMLElement> {
   wrap?: boolean;
   inline?: boolean;
   flex1?: boolean;
+  fullWidth?: boolean;
   fullHeight?: boolean;
   sticky?: boolean;
+  dimmed?: boolean;
+  scrollable?: boolean;
+  /** Collapses a row Stack into a vertical column below the specified viewport breakpoint (`sm` = 680px, `md` = 820px). */
+  stackBelow?: StackCollapseBreakpoint;
   /** Hides the stack on wide desktop viewports (>= 1101px) where multi-pane layouts are already visible. */
   mobileOnly?: boolean;
   children?: ReactNode;
@@ -36,8 +42,12 @@ export const Stack = forwardRef<HTMLElement, StackProps>(function Stack(
     wrap = false,
     inline = false,
     flex1 = false,
+    fullWidth = false,
     fullHeight = false,
     sticky = false,
+    dimmed = false,
+    scrollable = false,
+    stackBelow,
     mobileOnly = false,
     className = "",
     children,
@@ -54,8 +64,12 @@ export const Stack = forwardRef<HTMLElement, StackProps>(function Stack(
     `base-stack--gap-${gap}`,
     wrap ? "base-stack--wrap" : "",
     flex1 ? "base-stack--flex-1" : "",
+    fullWidth ? "base-stack--full-width" : "",
     fullHeight ? "base-stack--full-height" : "",
     sticky ? "base-stack--sticky" : "",
+    dimmed ? "base-stack--dimmed" : "",
+    scrollable ? "base-stack--scrollable" : "",
+    stackBelow ? `base-stack--stack-below-${stackBelow}` : "",
     mobileOnly ? "base-stack--mobile-only" : "",
     className,
   ]

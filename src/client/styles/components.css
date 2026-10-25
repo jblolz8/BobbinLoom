@@ -13,6 +13,7 @@
 @import "../components/base/Modal/Modal.css";
 @import "../components/base/Tooltip/Tooltip.css";
 @import "../components/base/Slider/Slider.css";
+@import "../components/base/TagRow/TagRow.css";
 
 /* --------------------------------------------------------------------------
    Dropdown Menu (.base-dropdown-*)
@@ -106,6 +107,25 @@
   letter-spacing: 0.05em;
   color: var(--text-muted);
   user-select: none;
+}
+
+.base-dropdown-item__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.base-actions-menu {
+  position: relative;
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.base-actions-menu__entry {
+  display: contents;
 }
 
 /* --------------------------------------------------------------------------
@@ -210,6 +230,27 @@
   width: 100%;
   position: relative;
   box-sizing: border-box;
+}
+
+.field-input-row--inline {
+  display: inline-flex;
+  width: auto;
+  max-width: 100%;
+  flex: 0 1 auto;
+}
+
+.field-input-row--inline > .base-select-trigger {
+  width: auto;
+}
+
+@media (max-width: 680px) {
+  .field-input-row--inline {
+    flex: 1 1 auto;
+  }
+
+  .field-input-row--inline > .base-select-trigger {
+    flex: 1 1 auto;
+  }
 }
 
 .base-form-input-wrapper {
@@ -592,6 +633,30 @@ textarea.base-form-input--lg,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+}
+
+.base-select-trigger__content {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.base-select-trigger__leading-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.base-select-trigger__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .base-select-trigger__icon {
@@ -883,6 +948,10 @@ textarea.base-form-input--lg,
   gap: 0.7rem;
 }
 
+.base-form-grid--gap-lg {
+  gap: 1rem;
+}
+
 .base-form-grid--cols-1 {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -903,9 +972,17 @@ textarea.base-form-input--lg,
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.base-form-grid--cols-cards {
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(min(100%, var(--cover-card-min-col, 260px)), 1fr)
+  );
+}
+
 @media (max-width: 640px) {
   .base-form-grid--cols-2,
-  .base-form-grid--cols-2-asymmetric {
+  .base-form-grid--cols-2-asymmetric,
+  .base-form-grid--cols-cards {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -1249,123 +1326,6 @@ textarea.base-form-input--lg,
    Moved out of views.css so the control travels with its component (Wave 2 dropped the
    old .library-pagination alias — every call site renders .base-pagination now).
    ========================================================================= */
-
-/* ── Pagination Bar ── */
-.base-pagination {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  padding: 10px 14px;
-  background: var(--bg-surface-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  margin-top: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.pagination-info {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-}
-
-.pagination-info strong {
-  color: var(--text-primary);
-  font-weight: 600;
-}
-
-.pagination-controls {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.pagination-nav-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.12s;
-  padding: 0;
-}
-
-.pagination-nav-btn:hover:not(:disabled) {
-  background: var(--bg-surface-hover);
-  color: var(--text-primary);
-  border-color: var(--border-main);
-}
-
-.pagination-nav-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.pagination-page-btn {
-  min-width: 28px;
-  height: 28px;
-  padding: 0 6px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  color: var(--text-secondary);
-  font-size: 0.8rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.12s;
-}
-
-.pagination-page-btn:hover:not(.active) {
-  background: var(--bg-surface-hover);
-  color: var(--text-primary);
-}
-
-.pagination-page-btn.active {
-  background: var(--accent-base);
-  color: var(--accent-text);
-  border-color: var(--accent-base);
-  font-weight: 600;
-}
-
-.pagination-ellipsis {
-  color: var(--text-muted);
-  padding: 0 4px;
-  font-size: 0.85rem;
-}
-
-.pagination-size-selector {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-}
-
-.pagination-size-selector select {
-  background: var(--input-bg);
-  border: 1px solid var(--input-border);
-  border-radius: 6px;
-  color: var(--input-text);
-  padding: 3px 6px;
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-
-.pagination-size-selector-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.pagination-custom-input {
-  width: 68px !important;
-  text-align: center;
-}
 
 /* ── Side nav (the shared sectioned list: docs pages, gallery chapters) ───────
    ONE presentation per viewport and no middle tier: a column beside the content

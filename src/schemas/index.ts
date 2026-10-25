@@ -299,6 +299,7 @@ export const ProviderRegistryFileSchema = z.object({
    *  preference exists parses untouched. */
   chapterTextProviderId: z.string().nullable().optional(),
   characterTextProviderId: z.string().nullable().optional(),
+  tagTextProviderId: z.string().nullable().optional(),
   testPrompt: z.string().nullable().optional(),
   connections: z.array(ProviderConnectionSchema),
 });
@@ -559,6 +560,9 @@ export const ViewPreferencesSchema = z.object({
       playthroughViewMode: z.enum(["grid", "list"]).optional(),
       playthroughSortBy: z.enum(["updatedAt", "name", "turn"]).optional(),
       playthroughSortDir: z.enum(["asc", "desc"]).optional(),
+      playthroughCompactLandscape: z.boolean().optional(),
+      playthroughShowFullTitle: z.boolean().optional(),
+      playthroughShowAllTags: z.boolean().optional(),
     })
     .optional(),
   /** How many rows each list shows, one leaf per pager. Deliberately NOT inside `library`: three of the
@@ -887,6 +891,9 @@ export const PlaythroughSchema = z.object({
    *  `.default()`: an additive optional field needs no `dataMigrations` entry and
    *  every record written before covers existed parses untouched. */
   cover: PlaythroughCoverSchema.optional(),
+  /** Optional VNDB-inspired playthrough tags (themes, settings, tropes, general).
+   *  Additive optional field so existing playthrough files parse untouched. */
+  tags: z.array(z.string()).optional(),
   // Measured/estimated prompt-token ratio from the last turn, fed back into the
   // next turn's budget. Deliberately NOT snapshotted (see TurnSnapshotSchema):
   // it measures the tokenizer, not world state, so a retry must not rewind it.
@@ -943,6 +950,10 @@ export const PlaythroughSummarySchema = z.object({
   name: z.string(),
   turn: z.number(),
   castCount: z.number(),
+  /** Number of chapters in the playthrough, where the running chapter is counted as 1. */
+  chapterCount: z.number().default(1),
+  /** Count of media images attached across visible messages in the playthrough. */
+  imageCount: z.number().default(0),
   /** Count of non-hidden messages; the card shows "No messages yet" at 0. */
   visibleMessageCount: z.number(),
   /** Last non-hidden message, truncated to 120 chars. Empty when there is none. */
@@ -951,6 +962,7 @@ export const PlaythroughSummarySchema = z.object({
   /** The resolved cover, or null to render the placeholder. Never null-of-error:
    *  a cover whose file is gone falls through to the next source instead. */
   cover: PlaythroughCoverViewSchema.nullable(),
+  tags: z.array(z.string()).default([]),
   updatedAt: z.string(),
 });
 export type PlaythroughSummary = z.infer<typeof PlaythroughSummarySchema>;
@@ -960,6 +972,10 @@ export const PlaythroughListResponseSchema = z.object({
   failures: z.array(LoadFailureSchema),
   /** Size of the filtered list. The pager's total: the client must not infer it from the array. */
   total: z.number(),
+  /** Global tag counts across all non-branch playthroughs for the library TagSidebar. */
+  tagCounts: z
+    .array(z.object({ tag: z.string(), count: z.number() }))
+    .optional(),
 });
 export type PlaythroughListResponse = z.infer<
   typeof PlaythroughListResponseSchema

@@ -1,11 +1,14 @@
 import { useState, useRef, type KeyboardEvent } from "react";
 import { TagChip } from "./TagChip";
+import type { TagTaxonomyConfig } from "../../../engine/tagTaxonomy";
 
 export type TagInputProps = {
   value: string[];
   onChange: (value: string[]) => void;
   placeholder?: string;
   disabled?: boolean;
+  taxonomy?: "character" | "playthrough";
+  userConfig?: TagTaxonomyConfig | null;
 };
 
 export function TagInput({
@@ -13,6 +16,8 @@ export function TagInput({
   onChange,
   placeholder,
   disabled,
+  taxonomy = "character",
+  userConfig,
 }: TagInputProps) {
   const [text, setText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -63,6 +68,8 @@ export function TagInput({
           key={`${tag}-${i}`}
           tag={tag}
           size="sm"
+          taxonomy={taxonomy}
+          userConfig={userConfig}
           disabled={disabled}
           onRemove={!disabled ? () => removeTag(i) : undefined}
         />

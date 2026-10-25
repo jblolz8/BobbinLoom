@@ -2,12 +2,34 @@
    Base Card (.base-card)
    ========================================================================== */
 .base-card {
+  position: relative;
   border-radius: 10px;
   border: 1px solid var(--border-main);
   box-sizing: border-box;
   transition:
     border-color 0.15s ease,
-    background-color 0.15s ease;
+    background-color 0.15s ease,
+    transform 0.12s ease,
+    box-shadow 0.15s ease;
+}
+
+.base-card--full-width {
+  width: 100%;
+}
+
+.base-card--layout-column {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.55rem;
+}
+
+.base-card--layout-row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0.85rem;
+  min-height: var(--cover-row-height, 148px);
 }
 
 button.base-card {
@@ -65,6 +87,78 @@ button.base-card {
 
 .base-card--pad-lg {
   padding: 0.95rem 1.1rem;
+}
+
+/* Cover slots */
+.base-card__cover--top {
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.base-card__cover--row {
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: flex;
+  align-items: stretch;
+  min-height: 0;
+  width: calc(
+    var(--cover-row-thumb, 148px) * var(--cover-art-w, 16) /
+      var(--cover-art-h, 9)
+  );
+}
+
+/* Stretched-link primary title button inside a Card */
+.base-card__title-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+}
+
+.base-card__title-btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.base-card:has(.base-card__title-btn:focus-visible) {
+  outline: 2px solid var(--accent-base);
+  outline-offset: 2px;
+}
+
+/* Elevated interactive sub-layer (menus, badges, buttons above stretched-link overlay) */
+.base-card__interactive {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  max-width: 100%;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+@media (max-width: 640px) {
+  .base-card--layout-row {
+    align-items: stretch;
+    gap: 0.65rem;
+  }
+
+  .base-card__cover--row {
+    max-width: calc(50% - 0.325rem);
+    flex: 0 1
+      calc(
+        var(--cover-row-thumb, 148px) * var(--cover-art-w, 16) /
+          var(--cover-art-h, 9)
+      );
+  }
 }
 
 /* Unsaved / modified warning state */

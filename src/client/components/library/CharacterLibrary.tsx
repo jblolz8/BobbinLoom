@@ -61,6 +61,7 @@ import {
   type SortDirection,
 } from "../../../engine/characterCards";
 import {
+  ActionsMenu,
   Button,
   Icon,
   SearchBar,
@@ -70,10 +71,6 @@ import {
   TextInput,
   SimpleSelect,
   Pagination,
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
 } from "../base";
 export { CharacterAvatar } from "../base";
 import { usePagination } from "../../hooks/usePagination";
@@ -455,76 +452,6 @@ function formatLibraryDate(isoOrStr?: string): string {
   } catch {
     return "";
   }
-}
-
-/** Card dropdown "more options" menu */
-function MoreOptionsMenu({
-  template,
-  onEdit,
-  onConvert,
-  onDelete,
-  converting,
-}: {
-  template: CharacterTemplate;
-  onEdit: () => void;
-  onConvert?: () => void;
-  onDelete: () => void;
-  converting?: boolean;
-}) {
-  return (
-    <div
-      className="card-more-menu-container"
-      onClick={(e) => e.stopPropagation()}
-      onMouseDown={(e) => e.stopPropagation()}
-      onKeyDown={(e) => e.stopPropagation()}
-    >
-      <DropdownMenu>
-        <Tooltip content="Actions">
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              iconOnly
-              aria-label="Actions"
-              className="more-options-btn"
-            >
-              <Icon name="MoreVertical" size={16} />
-            </Button>
-          </DropdownMenuTrigger>
-        </Tooltip>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem
-            icon={<Icon name="Pencil" size={14} />}
-            onClick={onEdit}
-          >
-            Edit
-          </DropdownMenuItem>
-          {onConvert ? (
-            <DropdownMenuItem
-              icon={
-                <Icon
-                  name="Sparkles"
-                  size={14}
-                  className={converting ? "sparkle-pulse" : ""}
-                />
-              }
-              onClick={onConvert}
-              disabled={converting}
-            >
-              {converting ? "Converting…" : "Convert to BL"}
-            </DropdownMenuItem>
-          ) : null}
-          <DropdownMenuItem
-            danger
-            icon={<Icon name="Trash2" size={14} />}
-            onClick={onDelete}
-          >
-            Delete
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  );
 }
 
 export function CharacterLibrary({
@@ -3110,21 +3037,38 @@ export function CharacterLibrary({
                                     </span>
                                   ) : null}
                                 </div>
-                                <MoreOptionsMenu
-                                  template={latest}
-                                  onEdit={() => requestOpenEdit(latest)}
-                                  onConvert={
+                                <ActionsMenu
+                                  label="Actions"
+                                  items={[
+                                    {
+                                      label: "Edit",
+                                      icon: "Pencil",
+                                      onClick: () => requestOpenEdit(latest),
+                                    },
                                     entryKind(latest) === "ccv2"
-                                      ? () => handleConvert(latest)
-                                      : undefined
-                                  }
-                                  onDelete={() =>
-                                    requestDelete(
-                                      latest.id,
-                                      displayTitle(latest),
-                                    )
-                                  }
-                                  converting={isConverting}
+                                      ? {
+                                          label: isConverting
+                                            ? "Converting…"
+                                            : "Convert to BL",
+                                          icon: "Sparkles",
+                                          iconClassName: isConverting
+                                            ? "sparkle-pulse"
+                                            : undefined,
+                                          disabled: isConverting,
+                                          onClick: () => handleConvert(latest),
+                                        }
+                                      : null,
+                                    {
+                                      label: "Delete",
+                                      icon: "Trash2",
+                                      danger: true,
+                                      onClick: () =>
+                                        requestDelete(
+                                          latest.id,
+                                          displayTitle(latest),
+                                        ),
+                                    },
+                                  ]}
                                 />
                               </div>
                             </div>
@@ -3209,21 +3153,38 @@ export function CharacterLibrary({
                                   ) : null}
                                 </div>
 
-                                <MoreOptionsMenu
-                                  template={latest}
-                                  onEdit={() => requestOpenEdit(latest)}
-                                  onConvert={
+                                <ActionsMenu
+                                  label="Actions"
+                                  items={[
+                                    {
+                                      label: "Edit",
+                                      icon: "Pencil",
+                                      onClick: () => requestOpenEdit(latest),
+                                    },
                                     entryKind(latest) === "ccv2"
-                                      ? () => handleConvert(latest)
-                                      : undefined
-                                  }
-                                  onDelete={() =>
-                                    requestDelete(
-                                      latest.id,
-                                      displayTitle(latest),
-                                    )
-                                  }
-                                  converting={isConverting}
+                                      ? {
+                                          label: isConverting
+                                            ? "Converting…"
+                                            : "Convert to BL",
+                                          icon: "Sparkles",
+                                          iconClassName: isConverting
+                                            ? "sparkle-pulse"
+                                            : undefined,
+                                          disabled: isConverting,
+                                          onClick: () => handleConvert(latest),
+                                        }
+                                      : null,
+                                    {
+                                      label: "Delete",
+                                      icon: "Trash2",
+                                      danger: true,
+                                      onClick: () =>
+                                        requestDelete(
+                                          latest.id,
+                                          displayTitle(latest),
+                                        ),
+                                    },
+                                  ]}
                                 />
                               </div>
 
@@ -3341,21 +3302,38 @@ export function CharacterLibrary({
                                     </span>
                                   ) : null}
                                 </div>
-                                <MoreOptionsMenu
-                                  template={latest}
-                                  onEdit={() => requestOpenEdit(latest)}
-                                  onConvert={
+                                <ActionsMenu
+                                  label="Actions"
+                                  items={[
+                                    {
+                                      label: "Edit",
+                                      icon: "Pencil",
+                                      onClick: () => requestOpenEdit(latest),
+                                    },
                                     entryKind(latest) === "ccv2"
-                                      ? () => handleConvert(latest)
-                                      : undefined
-                                  }
-                                  onDelete={() =>
-                                    requestDelete(
-                                      latest.id,
-                                      displayTitle(latest),
-                                    )
-                                  }
-                                  converting={isConverting}
+                                      ? {
+                                          label: isConverting
+                                            ? "Converting…"
+                                            : "Convert to BL",
+                                          icon: "Sparkles",
+                                          iconClassName: isConverting
+                                            ? "sparkle-pulse"
+                                            : undefined,
+                                          disabled: isConverting,
+                                          onClick: () => handleConvert(latest),
+                                        }
+                                      : null,
+                                    {
+                                      label: "Delete",
+                                      icon: "Trash2",
+                                      danger: true,
+                                      onClick: () =>
+                                        requestDelete(
+                                          latest.id,
+                                          displayTitle(latest),
+                                        ),
+                                    },
+                                  ]}
                                 />
                               </div>
                             </div>

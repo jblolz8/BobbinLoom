@@ -10,6 +10,7 @@ export interface SearchBarProps extends Omit<
   onClear?: () => void;
   placeholder?: string;
   size?: "sm" | "md" | "lg";
+  flex1?: boolean;
   containerClassName?: string;
   rightAction?: ReactNode;
   iconName?: "Search" | "Filter" | "Tag";
@@ -23,6 +24,7 @@ export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
       onClear,
       placeholder = "Search…",
       size = "md",
+      flex1 = false,
       className = "",
       containerClassName = "",
       rightAction,
@@ -56,7 +58,7 @@ export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
 
     return (
       <div
-        className={`base-search-bar search-bar-${size} ${containerClassName}`.trim()}
+        className={`base-search-bar search-bar-${size} ${flex1 ? "base-search-bar--flex-1" : ""} ${containerClassName}`.trim()}
       >
         <span className="base-search-icon" aria-hidden="true">
           <Icon name={iconName} size={iconSizes[size]} />

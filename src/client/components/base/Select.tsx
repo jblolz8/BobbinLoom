@@ -216,11 +216,15 @@ export function SimpleSelect<T extends string = string>({
       >
         <SelectValue placeholder={placeholder}>
           {selectedOption ? (
-            <span className="flex items-center gap-1.5 min-w-0">
+            <span className="base-select-trigger__content">
               {selectedOption.icon && (
-                <span className="shrink-0">{selectedOption.icon}</span>
+                <span className="base-select-trigger__leading-icon">
+                  {selectedOption.icon}
+                </span>
               )}
-              <span className="truncate">{selectedOption.label}</span>
+              <span className="base-select-trigger__label">
+                {selectedOption.label}
+              </span>
             </span>
           ) : (
             placeholder
@@ -246,9 +250,12 @@ export function SimpleSelect<T extends string = string>({
     </Select>
   );
 
+  const isFieldWrapped = Boolean(label || helperText || error);
+  const isRowFullWidth = fullWidth || isFieldWrapped;
+
   const controlNode = rightElement ? (
     <div
-      className={`field-input-row field-input-row--${size} has-action has-right-action`}
+      className={`field-input-row field-input-row--${size} ${isRowFullWidth ? "field-input-row--full" : "field-input-row--inline"} has-action has-right-action`}
     >
       {selectNode}
       <div className="field-input-action field-input-action--right">
@@ -259,7 +266,7 @@ export function SimpleSelect<T extends string = string>({
     selectNode
   );
 
-  if (!label && !helperText && !error) {
+  if (!isFieldWrapped) {
     return controlNode;
   }
 

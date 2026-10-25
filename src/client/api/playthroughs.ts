@@ -83,6 +83,7 @@ export type ListPlaythroughsOptions = {
   page?: number;
   pageSize?: number | "all";
   search?: string;
+  tags?: string[];
   sortBy?: "updatedAt" | "name" | "turn";
   sortDir?: "asc" | "desc";
 };
@@ -94,6 +95,9 @@ export function listPlaythroughs(
   if (options?.page) query.set("page", String(options.page));
   if (options?.pageSize) query.set("pageSize", String(options.pageSize));
   if (options?.search) query.set("search", options.search);
+  if (options?.tags && options.tags.length > 0) {
+    query.set("tags", options.tags.join(","));
+  }
   if (options?.sortBy) query.set("sortBy", options.sortBy);
   if (options?.sortDir) query.set("sortDir", options.sortDir);
   const q = query.toString();
@@ -361,6 +365,39 @@ export function renamePlaythrough(
   return request<Playthrough>(`/api/playthroughs/${id}`, {
     method: "PUT",
     body: JSON.stringify({ name }),
+  });
+}
+
+export function updatePlaythroughTags(
+  id: string,
+  tags: string[],
+): Promise<Playthrough> {
+  return request<Playthrough>(`/api/playthroughs/${id}/tags`, {
+    method: "PUT",
+    body: JSON.stringify({ tags }),
+  });
+}
+
+export type SuggestPlaythroughTagsOptions = {
+  providerId?: string;
+  currentTags?: string[];
+  libraryTags?: string[];
+  guidance?: string;
+  includeWorldState?: boolean;
+  includeCastAndPersona?: boolean;
+  includeChaptersAndTimeline?: boolean;
+  includeCurrentChapterMessages?: boolean;
+};
+
+export function suggestPlaythroughTags(
+  id: string,
+  options: SuggestPlaythroughTagsOptions = {},
+  signal?: AbortSignal,
+): Promise<{ tags: string[] }> {
+  return request<{ tags: string[] }>(`/api/playthroughs/${id}/suggest-tags`, {
+    method: "POST",
+    body: JSON.stringify(options),
+    signal,
   });
 }
 

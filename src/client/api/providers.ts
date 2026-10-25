@@ -113,6 +113,7 @@ export type ProviderRegistry = {
   generationTextProviderId?: string | null;
   chapterTextProviderId?: string | null;
   characterTextProviderId?: string | null;
+  tagTextProviderId?: string | null;
   testPrompt?: string | null;
   connections: ProviderConnection[];
   warnings: string[];
@@ -286,6 +287,15 @@ export function setCharacterTextProvider(
       body: JSON.stringify({ providerId }),
     },
   );
+}
+
+export function setTagTextProvider(
+  providerId: string | null,
+): Promise<ProviderRegistry> {
+  return request<ProviderRegistry>("/api/settings/providers/tag-provider", {
+    method: "PUT",
+    body: JSON.stringify({ providerId }),
+  });
 }
 
 export function testProviderConnection(p: {

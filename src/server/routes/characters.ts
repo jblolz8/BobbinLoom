@@ -378,7 +378,7 @@ export const characterRoutes: FastifyPluginAsync<
   app.post("/api/characters/suggest-tags", async (request, reply) => {
     const body = SuggestTagsBody.parse(request.body ?? {});
     const controller = abortOnClientDisconnect(reply);
-    const provider = providerManager.getProvider();
+    const provider = providerManager.getTagProvider();
     try {
       const tags = await provider.suggestCharacterTags(
         {

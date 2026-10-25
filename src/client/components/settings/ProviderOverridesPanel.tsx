@@ -17,6 +17,7 @@ import {
   setChapterTextProvider,
   setCharacterTextProvider,
   setGenerationTextProvider,
+  setTagTextProvider,
   updateProviderConnection,
   type ProviderConnection,
   type ProviderRegistry,
@@ -193,6 +194,7 @@ export function ProviderOverridesPanel({
   const genProviderId = registry?.generationTextProviderId ?? "";
   const chapterProviderId = registry?.chapterTextProviderId ?? "";
   const charProviderId = registry?.characterTextProviderId ?? "";
+  const tagProviderId = registry?.tagTextProviderId ?? "";
 
   return (
     <Stack direction="column" align="stretch" gap="sm">
@@ -276,6 +278,26 @@ export function ProviderOverridesPanel({
                   badges={renderOverrideStatusBadge(charProviderId)}
                   onChange={(val) => {
                     void setCharacterTextProvider(val || null)
+                      .then(setRegistry)
+                      .catch((err) =>
+                        setStatus({
+                          kind: "err",
+                          text:
+                            err instanceof Error ? err.message : String(err),
+                        }),
+                      );
+                  }}
+                />
+
+                <OverrideFieldRow
+                  icon="Tag"
+                  label="AI Tagging (Playthroughs & Characters)"
+                  value={tagProviderId}
+                  options={textOptions}
+                  ariaLabel="AI Tagging Provider"
+                  badges={renderOverrideStatusBadge(tagProviderId)}
+                  onChange={(val) => {
+                    void setTagTextProvider(val || null)
                       .then(setRegistry)
                       .catch((err) =>
                         setStatus({

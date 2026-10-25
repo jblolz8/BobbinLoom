@@ -20,6 +20,10 @@ import {
   updatePlaythroughRecord,
 } from "../src/server/store";
 import { imageRef, pngBytes } from "./helpers/imageFixtures";
+import {
+  groupPlaythroughTagsByCategory,
+  resolvePlaythroughTagStyle,
+} from "../src/engine/playthroughTagTaxonomy";
 import type { ChatMessage, Playthrough } from "../src/schemas";
 
 let tempDirs: string[] = [];
@@ -65,11 +69,14 @@ function message(id: string, content: string, hidden = false): ChatMessage {
  *  smuggled in from the document — or a document field renamed into the summary — fails here. */
 const SUMMARY_KEYS = [
   "castCount",
+  "chapterCount",
   "cover",
   "id",
+  "imageCount",
   "isTimelineBranch",
   "lastMessagePreview",
   "name",
+  "tags",
   "turn",
   "updatedAt",
   "visibleMessageCount",
@@ -135,6 +142,69 @@ describe("GET /api/playthroughs ships summaries, not documents", () => {
     expect(chatty?.lastMessagePreview).toBe(long.slice(0, 120));
     expect(quiet?.visibleMessageCount).toBe(0);
     expect(quiet?.lastMessagePreview).toBe("");
+  });
+
+  it("projects chapterCount (running chapter = 1 + closed chapters) and imageCount across visible messages", async () => {
+    const { app, dataDir, imagesDir } = harness();
+    const img1 = saveImageBytes(pngBytes("img1"), "image/png", imagesDir).file;
+    const img2 = saveImageBytes(pngBytes("img2"), "image/png", imagesDir).file;
+
+    const fresh = createPlaythroughRecord(dataDir, "Fresh Run");
+    const chronicled = createPlaythroughRecord(dataDir, "Chronicled Run");
+    chronicled.chapters = [
+      {
+        id: "ch_1",
+        name: "Chapter 1",
+        shortDescription: "Start",
+        fullSummary: "The beginning",
+        turnRange: { start: 1, end: 5 },
+        messageIds: ["m1"],
+        memoryEventIds: [],
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+      {
+        id: "ch_2",
+        name: "Chapter 2",
+        shortDescription: "Middle",
+        fullSummary: "The middle",
+        turnRange: { start: 6, end: 10 },
+        messageIds: ["m3"],
+        memoryEventIds: [],
+        createdAt: "2026-01-02T00:00:00.000Z",
+      },
+    ];
+    chronicled.messages.push(
+      {
+        ...message("m1", "scene 1"),
+        images: [imageRef(img1), imageRef(img2)],
+      },
+      {
+        ...message("m2", "hidden scene", true),
+        images: [imageRef(img1)],
+      },
+      {
+        ...message("m3", "scene 2"),
+        images: [imageRef(img1)],
+      },
+    );
+    updatePlaythroughRecord(dataDir, chronicled);
+
+    const body = (await list(app)).json() as {
+      playthroughs: {
+        id: string;
+        chapterCount: number;
+        imageCount: number;
+      }[];
+    };
+    const freshSummary = body.playthroughs.find((p) => p.id === fresh.id);
+    const chronicledSummary = body.playthroughs.find(
+      (p) => p.id === chronicled.id,
+    );
+
+    expect(freshSummary?.chapterCount).toBe(1);
+    expect(freshSummary?.imageCount).toBe(0);
+    expect(chronicledSummary?.chapterCount).toBe(3);
+    expect(chronicledSummary?.imageCount).toBe(3);
   });
 
   it("orders newest-first and keeps total equal to the listed count", async () => {
@@ -234,5 +304,92 @@ describe("GET /api/playthroughs ships summaries, not documents", () => {
     expect(body.total).toBe(1);
     expect(body.failures).toHaveLength(1);
     expect(body.failures[0].id).toBe("play_broken");
+  });
+
+  it("updates playthrough tags without bumping updatedAt, projects tagCounts, and filters by tags", async () => {
+    const { app, dataDir } = harness();
+    const first = createPlaythroughRecord(dataDir, "Eldritch Office");
+    first.updatedAt = "2026-01-10T00:00:00.000Z";
+    updatePlaythroughRecord(dataDir, first);
+
+    const second = createPlaythroughRecord(dataDir, "Gothic Castle");
+    second.updatedAt = "2026-02-10T00:00:00.000Z";
+    updatePlaythroughRecord(dataDir, second);
+
+    const putFirst = await app.inject({
+      method: "PUT",
+      url: `/api/playthroughs/${first.id}/tags`,
+      payload: { tags: ["Femdom", "Workplace", "Lovecraftian Horror"] },
+    });
+    expect(putFirst.statusCode).toBe(200);
+    const updatedFirst = putFirst.json() as Playthrough;
+    // Canonical order: theme -> setting -> trope (with canonical category prefixes)
+    expect(updatedFirst.tags).toEqual([
+      "theme:lovecraftian_horror",
+      "setting:workplace",
+      "trope:femdom",
+    ]);
+    // Tag edits do not bump updatedAt
+    expect(updatedFirst.updatedAt).toBe("2026-01-10T00:00:00.000Z");
+
+    await app.inject({
+      method: "PUT",
+      url: `/api/playthroughs/${second.id}/tags`,
+      payload: { tags: ["Dark Fantasy", "Castle", "Lovecraftian Horror"] },
+    });
+
+    const allBody = (await list(app)).json() as {
+      playthroughs: { id: string; tags: string[] }[];
+      total: number;
+      tagCounts: { tag: string; count: number }[];
+    };
+    expect(allBody.total).toBe(2);
+    expect(allBody.tagCounts).toContainEqual({
+      tag: "theme:lovecraftian_horror",
+      count: 2,
+    });
+    expect(allBody.tagCounts).toContainEqual({
+      tag: "setting:workplace",
+      count: 1,
+    });
+
+    // Filter by tag via query string
+    const filtered = (await list(app, "?tags=workplace,femdom")).json() as {
+      playthroughs: { id: string }[];
+      total: number;
+      tagCounts: { tag: string; count: number }[];
+    };
+    expect(filtered.total).toBe(1);
+    expect(filtered.playthroughs.map((p) => p.id)).toEqual([first.id]);
+    // Global tagCounts stay populated even when filtered
+    expect(filtered.tagCounts).toContainEqual({
+      tag: "theme:dark_fantasy",
+      count: 1,
+    });
+  });
+
+  it("categorizes playthrough tags into theme, setting, trope, and general", () => {
+    expect(resolvePlaythroughTagStyle("Lovecraftian Horror").categoryId).toBe(
+      "theme",
+    );
+    expect(resolvePlaythroughTagStyle("Dark Fantasy").categoryId).toBe("theme");
+    expect(resolvePlaythroughTagStyle("Workplace").categoryId).toBe("setting");
+    expect(resolvePlaythroughTagStyle("Femdom").categoryId).toBe("trope");
+    expect(resolvePlaythroughTagStyle("Custom Story Note").categoryId).toBe(
+      "general",
+    );
+
+    const groups = groupPlaythroughTagsByCategory([
+      { tag: "custom_note", count: 1 },
+      { tag: "femdom", count: 3 },
+      { tag: "workplace", count: 2 },
+      { tag: "lovecraftian_horror", count: 4 },
+    ]);
+    expect(groups.map((g) => g.id)).toEqual([
+      "theme",
+      "setting",
+      "trope",
+      "general",
+    ]);
   });
 });

@@ -21,6 +21,11 @@ import {
 import { migratePlaythrough } from "./dataMigrations";
 import { slugify, uniqueSlug } from "./slugs";
 import { normalizeCreator, normalizeTags } from "../engine/characterCards";
+import { cleanTag } from "../engine/tagTaxonomy";
+import {
+  canonicalizePlaythroughTag,
+  sortPlaythroughTags,
+} from "../engine/playthroughTagTaxonomy";
 import type { ParsedCard } from "./characterCards/parseCard";
 import {
   createBlankPlaythrough,
@@ -1150,6 +1155,20 @@ export function setPlaythroughCoverRecord(
   return playthrough;
 }
 
+/** Update a playthrough's tags without bumping `updatedAt` (tag organization is metadata,
+ *  not story activity, so editing tags does not reorder the shelf). */
+export function setPlaythroughTagsRecord(
+  dir: string,
+  id: string,
+  tags: string[],
+): Playthrough | null {
+  const playthrough = getPlaythroughRecord(dir, id);
+  if (!playthrough) return null;
+  playthrough.tags = sortPlaythroughTags(tags);
+  updatePlaythroughRecord(dir, playthrough);
+  return playthrough;
+}
+
 /**
  * Deep-clone an existing playthrough into a new file with a fresh id.
  * Everything is copied — messages, snapshots, chapters, world state — so the
@@ -1413,15 +1432,22 @@ export function toPlaythroughSummary(
   options: PlaythroughSummaryOptions = {},
 ): PlaythroughSummary {
   const visible = p.messages.filter((m) => !m.hidden);
+  const imageCount = visible.reduce(
+    (sum, m) => sum + (m.images?.length ?? 0),
+    0,
+  );
   return {
     id: p.id,
     name: p.name,
     turn: p.turn,
     castCount: p.characters.length,
+    chapterCount: (p.chapters?.length ?? 0) + 1,
+    imageCount,
     visibleMessageCount: visible.length,
     lastMessagePreview: visible.slice(-1)[0]?.content.slice(0, 120) ?? "",
     isTimelineBranch: p.isTimelineBranch === true,
     cover: options.resolveCover?.(p) ?? null,
+    tags: sortPlaythroughTags(p.tags ?? []),
     updatedAt: p.updatedAt,
   };
 }
@@ -1433,6 +1459,7 @@ export type PlaythroughListOptions = {
   page?: number;
   pageSize?: number | "all";
   search?: string;
+  tags?: string[];
   sortBy?: "updatedAt" | "name" | "turn";
   sortDir?: "asc" | "desc";
 };
@@ -1447,11 +1474,44 @@ export function listPlaythroughSummaries(
     options?.includeTimelineBranches === true,
   ).map((p) => toPlaythroughSummary(p, options));
 
+  // Compute global tag counts across all eligible summaries before filtering/slicing
+  const tagMap = new Map<string, number>();
+  for (const s of summaries) {
+    for (const raw of s.tags) {
+      const norm = cleanTag(raw);
+      if (norm) {
+        tagMap.set(norm, (tagMap.get(norm) ?? 0) + 1);
+      }
+    }
+  }
+  const tagCounts = [...tagMap.entries()]
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+
+  if (options?.tags && options.tags.length > 0) {
+    const requiredTags = options.tags
+      .map((t) => canonicalizePlaythroughTag(t))
+      .filter(Boolean);
+    if (requiredTags.length > 0) {
+      summaries = summaries.filter((p) => {
+        const pTags = new Set(p.tags.map((t) => canonicalizePlaythroughTag(t)));
+        return requiredTags.every((req) => pTags.has(req));
+      });
+    }
+  }
+
   if (options?.search) {
     const needle = options.search.trim().toLowerCase();
     if (needle) {
-      summaries = summaries.filter((p) =>
-        p.name.toLowerCase().includes(needle),
+      const normNeedle = cleanTag(needle);
+      summaries = summaries.filter(
+        (p) =>
+          p.name.toLowerCase().includes(needle) ||
+          p.tags.some(
+            (t) =>
+              t.toLowerCase().includes(needle) ||
+              (normNeedle && cleanTag(t).includes(normNeedle)),
+          ),
       );
     }
   }
@@ -1477,7 +1537,7 @@ export function listPlaythroughSummaries(
     summaries = summaries.slice(start, start + pageSize);
   }
 
-  return { playthroughs: summaries, failures, total };
+  return { playthroughs: summaries, failures, total, tagCounts };
 }
 
 /** FULL documents — for readers that genuinely walk the state: the image-orphan sweep (which needs

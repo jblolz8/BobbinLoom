@@ -164,6 +164,41 @@
   min-width: 0;
 }
 
+.base-text--clamp-1,
+.base-text--clamp-2,
+.base-text--clamp-3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.35;
+}
+
+.base-text--clamp-1 {
+  -webkit-line-clamp: 1;
+}
+
+.base-text--clamp-2 {
+  -webkit-line-clamp: 2;
+}
+
+.base-text--clamp-3 {
+  -webkit-line-clamp: 3;
+}
+
+.base-text--clamp-1.base-text--reserve-lines {
+  min-height: 1.35em;
+}
+
+.base-text--clamp-2.base-text--reserve-lines {
+  min-height: calc(2 * 1.35em);
+}
+
+.base-text--clamp-3.base-text--reserve-lines {
+  min-height: calc(3 * 1.35em);
+}
+
 .base-text--nowrap {
   white-space: nowrap;
 }
