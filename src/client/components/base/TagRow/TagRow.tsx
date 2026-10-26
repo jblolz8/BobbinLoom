@@ -160,7 +160,12 @@ export function TagRow({
 
   const tooltipContent =
     hiddenTags.length > 0 ? (
-      <div className="base-tag-row__tooltip-chips">
+      <div
+        className="base-tag-row__tooltip-chips"
+        onPointerDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={(e) => e.stopPropagation()}
+      >
         {hiddenTags.map((tag) =>
           variant === "badge" ? (
             <Badge key={tag} variant="neutral" size="xs">
@@ -175,6 +180,14 @@ export function TagRow({
               userConfig={userConfig}
               active={activeSet.has(cleanTag(tag))}
               showCategoryTooltip={false}
+              onClick={
+                onToggleTag
+                  ? (e) => {
+                      e.stopPropagation();
+                      onToggleTag(tag);
+                    }
+                  : undefined
+              }
             />
           ),
         )}
@@ -212,7 +225,13 @@ export function TagRow({
       )}
 
       {hiddenTags.length > 0 ? (
-        <Tooltip content={tooltipContent} side="top" align="center" delayDuration={120}>
+        <Tooltip
+          content={tooltipContent}
+          side="top"
+          align="center"
+          delayDuration={120}
+          interactive
+        >
           <span
             tabIndex={0}
             className="base-tag-row__overflow-trigger"

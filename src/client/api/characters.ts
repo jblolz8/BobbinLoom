@@ -8,7 +8,7 @@ import { request } from "./client";
 import type { BrainstormSession } from "../../engine/brainstorm";
 
 export type CharacterTemplateUpdate = Partial<
-  Pick<CharacterTemplate, "name" | "content" | "creatorNotes" | "tags">
+  Pick<CharacterTemplate, "name" | "title" | "parentId" | "content" | "creatorNotes" | "tags">
 >;
 
 export type SaveToLibraryResult = {
@@ -90,10 +90,10 @@ export function clearBrainstormSession(
   });
 }
 
-export function createCharacter(name: string): Promise<CharacterTemplate> {
+export function createCharacter(name: string, title?: string): Promise<CharacterTemplate> {
   return request<CharacterTemplate>("/api/characters", {
     method: "POST",
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, ...(title?.trim() ? { title: title.trim() } : {}) }),
   });
 }
 
@@ -104,6 +104,18 @@ export function updateCharacter(
   return request<CharacterTemplate>(`/api/characters/${id}`, {
     method: "PUT",
     body: JSON.stringify(updates),
+  });
+}
+
+export function duplicateCharacter(id: string): Promise<CharacterTemplate> {
+  return request<CharacterTemplate>(`/api/characters/${id}/duplicate`, {
+    method: "POST",
+  });
+}
+
+export function detachCharacterCcv2(id: string): Promise<{ record: CharacterTemplate }> {
+  return request<{ record: CharacterTemplate }>(`/api/characters/${id}/detach-ccv2`, {
+    method: "POST",
   });
 }
 
@@ -277,6 +289,7 @@ export function reformatCharacterApply(
 // ── AI Tag Suggestion ──
 
 export type SuggestTagsPayload = {
+  providerId?: string;
   name: string;
   content: string;
   creatorNotes?: string;

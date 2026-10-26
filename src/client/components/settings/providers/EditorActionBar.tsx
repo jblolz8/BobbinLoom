@@ -1,5 +1,5 @@
 import { type MouseEvent, type ReactNode } from "react";
-import { Button, Stack, StatusMessage } from "../../base";
+import { Button, Separator, Stack, StatusMessage } from "../../base";
 
 export type EditorFooterStatus = {
   kind: "ok" | "err" | "warn";
@@ -43,7 +43,8 @@ export function EditorActionBar({
   const anyBusy = busy || testingConnection || testingResponse;
 
   return (
-    <div className="conn-actions-bar">
+    <Stack direction="column" align="stretch" gap="xs">
+      <Separator spacing="xs" />
       {drawerContent}
       {status && (
         <StatusMessage
@@ -57,20 +58,8 @@ export function EditorActionBar({
         </StatusMessage>
       )}
 
-      <Stack
-        direction="row"
-        align="center"
-        justify="between"
-        gap="sm"
-        className="conn-actions-row"
-      >
-        <Stack
-          direction="row"
-          align="center"
-          gap="xs"
-          wrap
-          className="conn-actions-left"
-        >
+      <Stack direction="row" align="center" justify="between" gap="sm" wrap>
+        <Stack direction="row" align="center" gap="xs" wrap>
           <Button
             type="submit"
             variant="primary"
@@ -93,13 +82,7 @@ export function EditorActionBar({
             Test connection
           </Button>
           {onTestResponse && (
-            <Stack
-              direction="row"
-              align="center"
-              gap="2xs"
-              inline
-              className="conn-test-response-group"
-            >
+            <Stack direction="row" align="center" gap="2xs" inline>
               <Button
                 type="button"
                 variant="secondary"
@@ -149,6 +132,6 @@ export function EditorActionBar({
           </Button>
         )}
       </Stack>
-    </div>
+    </Stack>
   );
 }

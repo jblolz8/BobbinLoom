@@ -18,24 +18,16 @@ import {
   deletePlaythrough,
   duplicatePlaythrough,
   listPlaythroughs,
-  listProviderConnections,
   renamePlaythrough,
   resolveLibraryPreferences,
-  setTagTextProvider,
   suggestPlaythroughTags,
   updatePlaythroughTags,
   updateViewPreferences,
   type PlaythroughSummary,
-  type ProviderRegistry,
   type ResolvedLibraryPreferences,
 } from "../../api";
 import { cleanTag } from "../../../engine/tagTaxonomy";
-import {
-  PLAYTHROUGH_BUILT_IN_CATEGORIES,
-  SUGGESTED_PLAYTHROUGH_TAGS_BY_CATEGORY,
-  canonicalizePlaythroughTag,
-  sortPlaythroughTags,
-} from "../../../engine/playthroughTagTaxonomy";
+import { sortPlaythroughTags } from "../../../engine/playthroughTagTaxonomy";
 import { totalPagesFor, type PageSize } from "../../engine/pagination";
 import { useServerPagination } from "../../hooks/useServerPagination";
 import {
@@ -43,7 +35,6 @@ import {
   Badge,
   Button,
   Card,
-  CheckboxRow,
   CoverArt,
   FormGrid,
   Header,
@@ -52,20 +43,18 @@ import {
   Pagination,
   SearchBar,
   Separator,
-  SimpleSelect,
+  SortSelect,
   Spinner,
   Stack,
   StatusMessage,
   Tabs,
   TagChip,
-  TagInput,
   TagRow,
   TagSidebar,
   Text,
-  TextInput,
   Tooltip,
 } from "../base";
-import { ConfirmModal, RenameModal } from "../common";
+import { ConfirmModal, EditTagsModal, RenameModal } from "../common";
 
 export type PlaythroughLibraryVariant = "page" | "dialog";
 export type PlaythroughViewMode = "grid" | "list";
@@ -370,8 +359,13 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
   }
 
   function setSortBy(option: PlaythroughSortOption) {
+    const nextDir: "asc" | "desc" = option === "name" ? "asc" : "desc";
     setSortByState(option);
-    writeShelfPreference({ playthroughSortBy: option });
+    setSortDirState(nextDir);
+    writeShelfPreference({
+      playthroughSortBy: option,
+      playthroughSortDir: nextDir,
+    });
   }
 
   function toggleSortDirection() {
@@ -512,13 +506,68 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
   ) : null;
 
   const tagsDialog = tagsTarget ? (
-    <PlaythroughTagsModal
-      playthroughId={tagsTarget.id}
-      playthroughName={tagsTarget.name}
+    <EditTagsModal
+      entityName={tagsTarget.name}
+      taxonomy="playthrough"
       initialTags={tagsTarget.tags}
       libraryTags={effectiveTagCounts.map((t) => t.tag)}
       busy={tagsSaving}
       error={tagsError}
+      contextOptions={[
+        {
+          id: "worldState",
+          icon: "Globe",
+          title: "World State & Premise",
+          description: "Scenario setup and active world state entries.",
+          defaultChecked: true,
+        },
+        {
+          id: "castAndPersona",
+          icon: "Users",
+          title: "Player Persona & Cast",
+          description: "Player details, main cast sheets, and NPCs.",
+          defaultChecked: true,
+        },
+        {
+          id: "chaptersAndTimeline",
+          icon: "BookOpen",
+          title: "Chapters & Event Timeline",
+          description: "Archived chapter summaries and memory events.",
+          defaultChecked: true,
+        },
+        {
+          id: "currentChapterMessages",
+          icon: "MessageSquare",
+          title: "Current Chapter Chat History",
+          description: "Visible messages from the active chapter.",
+          defaultChecked: true,
+        },
+      ]}
+      onSuggestAiTags={async ({
+        providerId,
+        currentTags,
+        guidance,
+        selectedContext,
+        signal,
+      }) => {
+        const res = await suggestPlaythroughTags(
+          tagsTarget.id,
+          {
+            providerId,
+            currentTags,
+            libraryTags: effectiveTagCounts.map((t) => t.tag),
+            guidance,
+            includeWorldState: selectedContext.worldState ?? true,
+            includeCastAndPersona: selectedContext.castAndPersona ?? true,
+            includeChaptersAndTimeline:
+              selectedContext.chaptersAndTimeline ?? true,
+            includeCurrentChapterMessages:
+              selectedContext.currentChapterMessages ?? true,
+          },
+          signal,
+        );
+        return res.tags;
+      }}
       onSave={(nextTags) => {
         void submitTags(nextTags);
       }}
@@ -530,15 +579,6 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
       }}
     />
   ) : null;
-
-  const sortTooltipText =
-    sortBy === "name"
-      ? sortDir === "asc"
-        ? "Sort A to Z (click for Z to A)"
-        : "Sort Z to A (click for A to Z)"
-      : sortDir === "desc"
-        ? "Newest first (click for Oldest first)"
-        : "Oldest first (click for Newest first)";
 
   const body = (
     <Stack direction="column" align="stretch" gap="md" fullWidth>
@@ -580,36 +620,15 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
                 aria-label="Search playthroughs"
               />
 
-              <SimpleSelect<PlaythroughSortOption>
+              <SortSelect<PlaythroughSortOption>
                 value={sortBy}
                 onChange={setSortBy}
-                options={PLAYTHROUGH_SORT_OPTIONS.map((option) => ({
-                  value: option.value,
-                  label: option.label,
-                  icon: <Icon name="ArrowUpDown" size={12} />,
-                }))}
+                direction={sortDir}
+                onToggleDirection={toggleSortDirection}
+                options={PLAYTHROUGH_SORT_OPTIONS}
                 size="sm"
+                groupAriaLabel="Sort playthroughs"
                 aria-label="Sort playthroughs by"
-                rightElement={
-                  <Tooltip content={sortTooltipText}>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      iconOnly
-                      onClick={toggleSortDirection}
-                      aria-label="Toggle sort order"
-                    >
-                      <Icon
-                        name={
-                          sortDir === "asc"
-                            ? "ArrowUpNarrowWide"
-                            : "ArrowDownWideNarrow"
-                        }
-                        size={14}
-                      />
-                    </Button>
-                  </Tooltip>
-                }
               />
 
               <Tabs<PlaythroughViewMode>
@@ -710,7 +729,7 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
     <Stack direction="column" align="stretch" gap="md" fullWidth>
       <Header
         variant="page"
-        title="Playthroughs"
+        title="Playthrough Library"
         subtitle="Resume an existing story, filter by theme or setting tags, or start a new adventure."
         actions={
           onNewPlaythrough ? (
@@ -1400,758 +1419,6 @@ function PlaythroughRow(props: ItemProps) {
         </Text>
       </Stack>
     </Card>
-  );
-}
-
-type PlaythroughTagsModalProps = {
-  playthroughId: string;
-  playthroughName: string;
-  initialTags: string[];
-  libraryTags: string[];
-  busy: boolean;
-  error: string | null;
-  onSave: (tags: string[]) => void;
-  onClose: () => void;
-};
-
-type StagedAiTagResult = {
-  added: string[];
-  kept: string[];
-  removed: string[];
-};
-
-function PlaythroughTagsModal({
-  playthroughId,
-  playthroughName,
-  initialTags,
-  libraryTags,
-  busy,
-  error,
-  onSave,
-  onClose,
-}: PlaythroughTagsModalProps) {
-  const [draftTags, setDraftTags] = useState<string[]>(() =>
-    sortPlaythroughTags(initialTags),
-  );
-  const [activeCategory, setActiveCategory] = useState<
-    "theme" | "setting" | "trope"
-  >("theme");
-  const [filterQuery, setFilterQuery] = useState("");
-
-  // AI Tagging state
-  const [aiPanelOpen, setAiPanelOpen] = useState(false);
-  const [providerRegistry, setProviderRegistry] =
-    useState<ProviderRegistry | null>(null);
-  const [includeWorldState, setIncludeWorldState] = useState(true);
-  const [includeCastAndPersona, setIncludeCastAndPersona] = useState(true);
-  const [includeChaptersAndTimeline, setIncludeChaptersAndTimeline] =
-    useState(true);
-  const [includeCurrentChapterMessages, setIncludeCurrentChapterMessages] =
-    useState(true);
-  const [aiGuidance, setAiGuidance] = useState("");
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-  const [stagedAi, setStagedAi] = useState<StagedAiTagResult | null>(null);
-  const [stagedSelectedSet, setStagedSelectedSet] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    if (!aiPanelOpen || providerRegistry) return;
-    listProviderConnections()
-      .then(setProviderRegistry)
-      .catch(() => {
-        // Non-fatal; falls back to server-side provider resolution
-      });
-  }, [aiPanelOpen, providerRegistry]);
-
-  const textConnections = useMemo(
-    () =>
-      (providerRegistry?.connections ?? []).filter((c) => c.kind === "text"),
-    [providerRegistry],
-  );
-
-  const activeTextProvider = useMemo(
-    () =>
-      textConnections.find(
-        (c) => c.id === providerRegistry?.activeTextProviderId,
-      ),
-    [textConnections, providerRegistry?.activeTextProviderId],
-  );
-
-  const tagProviderOptions = useMemo(
-    () => [
-      {
-        value: "",
-        label: activeTextProvider
-          ? `Follow active (${activeTextProvider.label})`
-          : "Follow active text provider",
-      },
-      ...textConnections.map((c) => ({ value: c.id, label: c.label })),
-    ],
-    [textConnections, activeTextProvider],
-  );
-
-  const selectedTagProviderId = providerRegistry?.tagTextProviderId ?? "";
-
-  function handleTagProviderOverrideChange(nextId: string) {
-    const normalized = nextId || null;
-    setProviderRegistry((prev) =>
-      prev ? { ...prev, tagTextProviderId: normalized } : prev,
-    );
-    void setTagTextProvider(normalized)
-      .then(setProviderRegistry)
-      .catch((err) => {
-        setAiError(err instanceof Error ? err.message : String(err));
-      });
-  }
-
-  useEffect(() => {
-    return () => {
-      abortControllerRef.current?.abort();
-    };
-  }, []);
-
-  const activeSet = useMemo(
-    () => new Set(draftTags.map((t) => canonicalizePlaythroughTag(t))),
-    [draftTags],
-  );
-
-  function toggleSuggestedTag(tag: string) {
-    const norm = canonicalizePlaythroughTag(tag);
-    if (!norm) return;
-    setDraftTags((prev) => {
-      const exists = prev.some((t) => canonicalizePlaythroughTag(t) === norm);
-      const next = exists
-        ? prev.filter((t) => canonicalizePlaythroughTag(t) !== norm)
-        : [...prev, norm];
-      return sortPlaythroughTags(next);
-    });
-  }
-
-  async function handleGenerateAiTags() {
-    abortControllerRef.current?.abort();
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    setAiLoading(true);
-    setAiError(null);
-
-    try {
-      const res = await suggestPlaythroughTags(
-        playthroughId,
-        {
-          providerId: selectedTagProviderId || undefined,
-          currentTags: draftTags,
-          libraryTags,
-          guidance: aiGuidance.trim() || undefined,
-          includeWorldState,
-          includeCastAndPersona,
-          includeChaptersAndTimeline,
-          includeCurrentChapterMessages,
-        },
-        controller.signal,
-      );
-
-      const normalizedSuggestions = Array.from(
-        new Set(res.tags.map((t) => canonicalizePlaythroughTag(t)).filter(Boolean)),
-      );
-      const suggestedSet = new Set(normalizedSuggestions);
-      const currentNormalized = draftTags
-        .map((t) => canonicalizePlaythroughTag(t))
-        .filter(Boolean);
-      const currentSet = new Set(currentNormalized);
-
-      const added = sortPlaythroughTags(
-        normalizedSuggestions.filter((t) => !currentSet.has(t)),
-      );
-      const kept = sortPlaythroughTags(
-        currentNormalized.filter((t) => suggestedSet.has(t)),
-      );
-      const removed = sortPlaythroughTags(
-        currentNormalized.filter((t) => !suggestedSet.has(t)),
-      );
-
-      setStagedAi({ added, kept, removed });
-      // Default selection: all new additions + confirmed existing tags checked; suggested removals unchecked
-      setStagedSelectedSet(new Set([...added, ...kept]));
-    } catch (e) {
-      if (controller.signal.aborted) return;
-      const msg = e instanceof Error ? e.message : String(e);
-      if (!msg.toLowerCase().includes("abort")) {
-        setAiError(msg);
-      }
-    } finally {
-      if (abortControllerRef.current === controller) {
-        setAiLoading(false);
-        abortControllerRef.current = null;
-      }
-    }
-  }
-
-  function handleCancelAiRequest() {
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
-    setAiLoading(false);
-  }
-
-  function toggleStagedTag(tag: string) {
-    const norm = canonicalizePlaythroughTag(tag);
-    if (!norm) return;
-    setStagedSelectedSet((prev) => {
-      const next = new Set(prev);
-      if (next.has(norm)) {
-        next.delete(norm);
-      } else {
-        next.add(norm);
-      }
-      return next;
-    });
-  }
-
-  function handleRevertStagedAi() {
-    setStagedAi(null);
-    setStagedSelectedSet(new Set());
-    setAiError(null);
-  }
-
-  function handleApplyStagedToDraft() {
-    if (!stagedAi) return;
-    const nextTags = sortPlaythroughTags(Array.from(stagedSelectedSet));
-    setDraftTags(nextTags);
-    setStagedAi(null);
-    setStagedSelectedSet(new Set());
-  }
-
-  function handleSaveAndApplyStaged() {
-    if (!stagedAi) return;
-    const nextTags = sortPlaythroughTags(Array.from(stagedSelectedSet));
-    setDraftTags(nextTags);
-    onSave(nextTags);
-  }
-
-  const categorySuggestions = useMemo(() => {
-    const rawList = SUGGESTED_PLAYTHROUGH_TAGS_BY_CATEGORY[activeCategory];
-    const q = filterQuery.trim().toLowerCase();
-    const normQ = cleanTag(q);
-    if (!q) return rawList;
-    return rawList.filter(
-      (t) => t.includes(q) || (normQ && cleanTag(t).includes(normQ)),
-    );
-  }, [activeCategory, filterQuery]);
-
-  const categoryMeta = useMemo(
-    () => PLAYTHROUGH_BUILT_IN_CATEGORIES.find((c) => c.id === activeCategory),
-    [activeCategory],
-  );
-
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      size="lg"
-      fullScreenMobile
-      ariaLabel={`Edit tags for ${playthroughName}`}
-    >
-      <Header
-        variant="section"
-        icon="Tag"
-        title={`Edit Tags — ${playthroughName}`}
-        subtitle="Assign themes, settings, tropes, or use AI to analyze the story and suggest tags."
-        actions={
-          <Button
-            variant={aiPanelOpen ? "primary" : "secondary"}
-            size="sm"
-            leftIcon="Sparkles"
-            disabled={busy}
-            onClick={() => setAiPanelOpen((v) => !v)}
-          >
-            {aiPanelOpen ? "Hide AI Tagger" : "Edit Tags with AI"}
-          </Button>
-        }
-      />
-      <Modal.Body>
-        <Modal.Content>
-          <Stack direction="column" align="stretch" gap="md" fullWidth>
-            {error ? (
-              <StatusMessage variant="banner" tone="err">
-                {error}
-              </StatusMessage>
-            ) : null}
-
-            <Stack direction="column" align="stretch" gap="xs" fullWidth>
-              <Stack
-                direction="row"
-                align="center"
-                justify="between"
-                gap="xs"
-                fullWidth
-              >
-                <Text size="xs" weight="semibold" tone="secondary">
-                  Assigned Tags ({draftTags.length})
-                </Text>
-                {draftTags.length > 0 ? (
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    disabled={busy || aiLoading}
-                    onClick={() => setDraftTags([])}
-                  >
-                    Clear All
-                  </Button>
-                ) : null}
-              </Stack>
-              <TagInput
-                value={draftTags}
-                onChange={(next) => setDraftTags(sortPlaythroughTags(next))}
-                taxonomy="playthrough"
-                disabled={busy || aiLoading}
-                placeholder="Type a tag (e.g. horror, workplace, femdom, theme:noir) and press Enter…"
-              />
-              <Text size="xs" tone="muted">
-                Tip: Built-in keywords automatically color-code into Theme,
-                Setting, or Trope. You can also prefix custom tags with{" "}
-                <code>theme:</code>, <code>setting:</code>, or{" "}
-                <code>trope:</code>.
-              </Text>
-            </Stack>
-
-            {aiPanelOpen ? (
-              <Card variant="elevated" padding="md" fullWidth>
-                <Stack direction="column" align="stretch" gap="sm" fullWidth>
-                  <Stack
-                    direction="row"
-                    align="center"
-                    justify="between"
-                    gap="xs"
-                    wrap
-                    fullWidth
-                  >
-                    <Stack direction="row" align="center" gap="xs">
-                      <Icon
-                        name="Sparkles"
-                        size={15}
-                        className="ds-icon-accent"
-                      />
-                      <Text size="sm" weight="semibold">
-                        Edit Tags with AI
-                      </Text>
-                    </Stack>
-                    <Badge variant="outline" size="xs">
-                      Uses Built-in + Shelf Taxonomy
-                    </Badge>
-                  </Stack>
-
-                  <Text size="xs" tone="secondary">
-                    Choose which story context the AI should review to suggest
-                    relevant Theme, Setting, and Trope tags (and flag any
-                    irrelevant existing tags for removal).
-                  </Text>
-
-                  <SimpleSelect
-                    label="AI Tagging Provider"
-                    labelIcon="Sliders"
-                    size="sm"
-                    variant="filled"
-                    fullWidth
-                    value={selectedTagProviderId}
-                    options={tagProviderOptions}
-                    disabled={
-                      aiLoading || busy || textConnections.length === 0
-                    }
-                    onChange={handleTagProviderOverrideChange}
-                    aria-label="AI Tagging Provider Override"
-                  />
-
-                  <FormGrid cols={2} gap="xs">
-                    <CheckboxRow
-                      icon="Globe"
-                      title="World State & Premise"
-                      description="Scenario setup and active world state entries."
-                      checked={includeWorldState}
-                      disabled={aiLoading || busy}
-                      onChange={(e) => setIncludeWorldState(e.target.checked)}
-                    />
-                    <CheckboxRow
-                      icon="Users"
-                      title="Player Persona & Cast"
-                      description="Player details, main cast sheets, and NPCs."
-                      checked={includeCastAndPersona}
-                      disabled={aiLoading || busy}
-                      onChange={(e) =>
-                        setIncludeCastAndPersona(e.target.checked)
-                      }
-                    />
-                    <CheckboxRow
-                      icon="BookOpen"
-                      title="Chapters & Event Timeline"
-                      description="Archived chapter summaries and memory events."
-                      checked={includeChaptersAndTimeline}
-                      disabled={aiLoading || busy}
-                      onChange={(e) =>
-                        setIncludeChaptersAndTimeline(e.target.checked)
-                      }
-                    />
-                    <CheckboxRow
-                      icon="MessageSquare"
-                      title="Current Chapter Chat History"
-                      description="Visible messages from the active chapter."
-                      checked={includeCurrentChapterMessages}
-                      disabled={aiLoading || busy}
-                      onChange={(e) =>
-                        setIncludeCurrentChapterMessages(e.target.checked)
-                      }
-                    />
-                  </FormGrid>
-
-                  <TextInput
-                    label="Custom Focus / Guidance (Optional)"
-                    labelIcon="Compass"
-                    size="sm"
-                    value={aiGuidance}
-                    onChange={(e) => setAiGuidance(e.target.value)}
-                    disabled={aiLoading || busy}
-                    placeholder="e.g. Focus on dark fantasy themes, or invent new setting tags for the floating city…"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !aiLoading && !busy) {
-                        e.preventDefault();
-                        void handleGenerateAiTags();
-                      }
-                    }}
-                    rightElement={
-                      <Stack direction="row" align="center" gap="xs">
-                        {aiLoading ? (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            leftIcon="X"
-                            onClick={handleCancelAiRequest}
-                          >
-                            Stop
-                          </Button>
-                        ) : null}
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          leftIcon="Sparkles"
-                          isLoading={aiLoading}
-                          disabled={busy}
-                          onClick={() => void handleGenerateAiTags()}
-                        >
-                          {stagedAi ? "Regenerate" : "Suggest Tags"}
-                        </Button>
-                      </Stack>
-                    }
-                  />
-
-                  {aiError ? (
-                    <StatusMessage
-                      variant="banner"
-                      tone="err"
-                      onDismiss={() => setAiError(null)}
-                    >
-                      {aiError}
-                    </StatusMessage>
-                  ) : null}
-
-                  {stagedAi ? (
-                    <Card variant="panel" padding="sm" fullWidth>
-                      <Stack
-                        direction="column"
-                        align="stretch"
-                        gap="sm"
-                        fullWidth
-                      >
-                        <Stack
-                          direction="row"
-                          align="center"
-                          justify="between"
-                          gap="xs"
-                          wrap
-                          fullWidth
-                        >
-                          <Stack direction="row" align="center" gap="xs" wrap>
-                            <Badge variant="accent" size="xs" leftIcon="Check">
-                              Staging Area ({stagedSelectedSet.size} selected)
-                            </Badge>
-                            <Text size="xs" tone="secondary">
-                              Click any tag chip below to toggle whether it will
-                              be kept or applied.
-                            </Text>
-                          </Stack>
-
-                          <Stack direction="row" align="center" gap="xs" wrap>
-                            <Button
-                              variant="ghost"
-                              size="xs"
-                              disabled={busy}
-                              onClick={() =>
-                                setStagedSelectedSet(
-                                  new Set([
-                                    ...stagedAi.added,
-                                    ...stagedAi.kept,
-                                    ...stagedAi.removed,
-                                  ]),
-                                )
-                              }
-                            >
-                              Select All
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="xs"
-                              disabled={busy}
-                              onClick={() => setStagedSelectedSet(new Set())}
-                            >
-                              Deselect All
-                            </Button>
-                          </Stack>
-                        </Stack>
-
-                        {stagedAi.added.length > 0 ? (
-                          <Stack
-                            direction="column"
-                            align="stretch"
-                            gap="2xs"
-                            fullWidth
-                          >
-                            <Text size="xs" weight="semibold" tone="primary">
-                              + New AI Suggestions ({stagedAi.added.length})
-                            </Text>
-                            <Stack
-                              direction="row"
-                              align="center"
-                              gap="xs"
-                              wrap
-                              fullWidth
-                            >
-                              {stagedAi.added.map((tag) => (
-                                <TagChip
-                                  key={`add-${tag}`}
-                                  tag={tag}
-                                  size="sm"
-                                  taxonomy="playthrough"
-                                  active={stagedSelectedSet.has(
-                                    canonicalizePlaythroughTag(tag),
-                                  )}
-                                  disabled={busy}
-                                  onClick={() => toggleStagedTag(tag)}
-                                />
-                              ))}
-                            </Stack>
-                          </Stack>
-                        ) : null}
-
-                        {stagedAi.kept.length > 0 ? (
-                          <Stack
-                            direction="column"
-                            align="stretch"
-                            gap="2xs"
-                            fullWidth
-                          >
-                            <Text size="xs" weight="semibold" tone="secondary">
-                              ✓ Confirmed Existing Tags ({stagedAi.kept.length})
-                            </Text>
-                            <Stack
-                              direction="row"
-                              align="center"
-                              gap="xs"
-                              wrap
-                              fullWidth
-                            >
-                              {stagedAi.kept.map((tag) => (
-                                <TagChip
-                                  key={`keep-${tag}`}
-                                  tag={tag}
-                                  size="sm"
-                                  taxonomy="playthrough"
-                                  active={stagedSelectedSet.has(
-                                    canonicalizePlaythroughTag(tag),
-                                  )}
-                                  disabled={busy}
-                                  onClick={() => toggleStagedTag(tag)}
-                                />
-                              ))}
-                            </Stack>
-                          </Stack>
-                        ) : null}
-
-                        {stagedAi.removed.length > 0 ? (
-                          <Stack
-                            direction="column"
-                            align="stretch"
-                            gap="2xs"
-                            fullWidth
-                          >
-                            <Text size="xs" weight="semibold" tone="warning">
-                              − Suggested Removals (Unchecked = Remove, Click to
-                              Keep) ({stagedAi.removed.length})
-                            </Text>
-                            <Stack
-                              direction="row"
-                              align="center"
-                              gap="xs"
-                              wrap
-                              fullWidth
-                            >
-                              {stagedAi.removed.map((tag) => (
-                                <TagChip
-                                  key={`rem-${tag}`}
-                                  tag={tag}
-                                  size="sm"
-                                  taxonomy="playthrough"
-                                  active={stagedSelectedSet.has(
-                                    canonicalizePlaythroughTag(tag),
-                                  )}
-                                  disabled={busy}
-                                  onClick={() => toggleStagedTag(tag)}
-                                />
-                              ))}
-                            </Stack>
-                          </Stack>
-                        ) : null}
-
-                        <Separator spacing="none" />
-
-                        <Stack
-                          direction="row"
-                          align="center"
-                          justify="between"
-                          gap="xs"
-                          wrap
-                          fullWidth
-                        >
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            leftIcon="RotateCcw"
-                            disabled={busy}
-                            onClick={handleRevertStagedAi}
-                          >
-                            Cancel / Revert
-                          </Button>
-                          <Stack direction="row" align="center" gap="xs" wrap>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              leftIcon="Check"
-                              disabled={busy}
-                              onClick={handleApplyStagedToDraft}
-                            >
-                              Apply to Draft
-                            </Button>
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              leftIcon="Sparkles"
-                              isLoading={busy}
-                              onClick={handleSaveAndApplyStaged}
-                            >
-                              Save & Apply ({stagedSelectedSet.size})
-                            </Button>
-                          </Stack>
-                        </Stack>
-                      </Stack>
-                    </Card>
-                  ) : null}
-                </Stack>
-              </Card>
-            ) : null}
-
-            <Separator spacing="none" />
-
-            <Stack direction="column" align="stretch" gap="sm" fullWidth>
-              <Stack
-                direction="row"
-                align="center"
-                justify="between"
-                gap="sm"
-                fullWidth
-                stackBelow="sm"
-              >
-                <Tabs<"theme" | "setting" | "trope">
-                  variant="segmented"
-                  size="sm"
-                  fullWidth
-                  activeTab={activeCategory}
-                  onChange={setActiveCategory}
-                  tabs={[
-                    { id: "theme", label: "Theme & Genre" },
-                    { id: "setting", label: "Setting & Backdrop" },
-                    { id: "trope", label: "Tropes & Dynamics" },
-                  ]}
-                />
-                <SearchBar
-                  size="sm"
-                  flex1
-                  value={filterQuery}
-                  onChange={setFilterQuery}
-                  placeholder="Filter suggestions…"
-                  aria-label="Filter suggested tags"
-                />
-              </Stack>
-
-              {categoryMeta?.description ? (
-                <Text size="xs" tone="muted">
-                  {categoryMeta.description}
-                </Text>
-              ) : null}
-
-              <Card variant="elevated" padding="sm" fullWidth>
-                <Stack
-                  direction="row"
-                  align="center"
-                  gap="xs"
-                  wrap
-                  scrollable
-                  fullWidth
-                >
-                  {categorySuggestions.length === 0 ? (
-                    <Text size="xs" tone="muted">
-                      No presets match &ldquo;{filterQuery}&rdquo;. Press Enter
-                      in the field above to add it as a custom tag.
-                    </Text>
-                  ) : (
-                    categorySuggestions.map((tag) => (
-                      <TagChip
-                        key={tag}
-                        tag={tag}
-                        size="sm"
-                        taxonomy="playthrough"
-                        active={activeSet.has(canonicalizePlaythroughTag(tag))}
-                        disabled={busy}
-                        onClick={() => toggleSuggestedTag(tag)}
-                      />
-                    ))
-                  )}
-                </Stack>
-              </Card>
-            </Stack>
-          </Stack>
-        </Modal.Content>
-      </Modal.Body>
-      <Modal.Footer>
-        <Stack direction="row" align="center" justify="end" gap="sm">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onClose}
-            disabled={busy}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            isLoading={busy}
-            onClick={() => onSave(draftTags)}
-          >
-            Save Tags
-          </Button>
-        </Stack>
-      </Modal.Footer>
-    </Modal>
   );
 }
 

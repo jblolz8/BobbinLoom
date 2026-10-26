@@ -28,6 +28,9 @@ data/personas/*
 
 # Agent workspace
 .hermes/
+.agents/
+product.yaml
+backlog.json
 
 # Generated images — content-addressed, adult content, never commit.
 data/images/

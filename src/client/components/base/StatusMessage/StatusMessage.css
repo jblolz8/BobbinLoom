@@ -64,6 +64,13 @@
   background: var(--status-danger-bg);
 }
 
+.base-status--sticky {
+  position: sticky;
+  top: 10px;
+  z-index: 60;
+  backdrop-filter: blur(8px);
+}
+
 .base-status__main {
   display: flex;
   align-items: center;

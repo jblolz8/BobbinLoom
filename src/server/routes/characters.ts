@@ -4,6 +4,8 @@ import { createReadStream } from "node:fs";
 import {
   createCharacterTemplateRecord,
   deleteCharacterTemplateRecord,
+  detachCharacterCcv2Source,
+  duplicateCharacterTemplateRecord,
   getCharacterAvatarPath,
   getCharacterTemplate,
   getPlaythroughRecord,
@@ -16,6 +18,7 @@ import {
   updateCharacterTemplateRecord,
   updatePlaythroughRecord,
 } from "../store";
+import { displayTitle, normalizeCreator } from "../../engine/characterCards";
 import { parseCard } from "../characterCards/parseCard";
 import {
   deleteBrainstormSession,
@@ -43,6 +46,8 @@ import type { CharacterFormat } from "../../schemas";
 
 const UpdateCharacterBody = z.object({
   name: z.string().min(1).optional(),
+  title: z.string().optional(),
+  parentId: z.string().nullable().optional(),
   content: z.string().optional(),
   creatorNotes: z.string().optional(),
   tags: z.array(z.string()).optional(),
@@ -110,16 +115,42 @@ export const characterRoutes: FastifyPluginAsync<
 
   app.post("/api/characters", async (request, reply) => {
     const body = z
-      .object({ name: z.string().min(1) })
+      .object({ name: z.string().min(1), title: z.string().optional() })
       .parse(request.body ?? {});
-    const template = createCharacterTemplateRecord(body.name);
+    const template = createCharacterTemplateRecord(
+      body.name,
+      undefined,
+      body.title,
+    );
     return reply.code(201).send(template);
+  });
+
+  app.post("/api/characters/:id/duplicate", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const duplicated = duplicateCharacterTemplateRecord(params.id);
+    if (!duplicated)
+      return reply.code(404).send({ error: "Character not found" });
+    return reply.code(201).send(duplicated);
+  });
+
+  app.post("/api/characters/:id/detach-ccv2", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const detached = detachCharacterCcv2Source(params.id);
+    if (!detached)
+      return reply.code(404).send({
+        error: "Character not found or is still an unconverted CCv2 card",
+      });
+    return { record: detached };
   });
 
   app.put("/api/characters/:id", async (request, reply) => {
     const params = z.object({ id: z.string() }).parse(request.params);
     const body = UpdateCharacterBody.parse(request.body ?? {});
-    const updated = updateCharacterTemplateRecord(params.id, body);
+    const { parentId, ...rest } = body;
+    const updated = updateCharacterTemplateRecord(params.id, {
+      ...rest,
+      ...(parentId !== undefined ? { parentId: parentId ?? "" } : {}),
+    });
     if (!updated) return reply.code(404).send({ error: "Character not found" });
     return updated;
   });
@@ -152,13 +183,15 @@ export const characterRoutes: FastifyPluginAsync<
       try {
         const card = parseCard(body.fileName, bytes);
 
-        // Check if a BL-converted record with matching name+creator already exists.
+        // Check if a BL-converted record with matching title/name+creator already exists.
         // Importing a CCv2 card that was already converted would be a no-op.
         const existingConverted = listCharacterTemplates().find(
           (t) =>
-            t.name === card.name &&
+            displayTitle(t) === card.name &&
             t.format !== "ccv2" &&
-            t.ccv2Content !== undefined,
+            t.ccv2Content !== undefined &&
+            (t.ccv2Content === card.description ||
+              (t.creator ?? "") === normalizeCreator(card.creator)),
         );
         if (existingConverted) {
           return reply.code(200).send({
@@ -374,6 +407,7 @@ export const characterRoutes: FastifyPluginAsync<
   });
 
   const SuggestTagsBody = z.object({
+    providerId: z.string().optional(),
     name: z.string().default(""),
     content: z.string().default(""),
     creatorNotes: z.string().optional(),
@@ -385,7 +419,9 @@ export const characterRoutes: FastifyPluginAsync<
   app.post("/api/characters/suggest-tags", async (request, reply) => {
     const body = SuggestTagsBody.parse(request.body ?? {});
     const controller = abortOnClientDisconnect(reply);
-    const provider = providerManager.getTagProvider();
+    const provider = body.providerId
+      ? providerManager.getProvider(body.providerId)
+      : providerManager.getTagProvider();
     try {
       const tags = await provider.suggestCharacterTags(
         {

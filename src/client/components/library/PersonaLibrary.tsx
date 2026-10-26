@@ -36,12 +36,11 @@ import {
   CheckboxRow,
   FormGrid,
   Header,
-  Icon,
   Modal,
   Pagination,
   SearchBar,
   Separator,
-  SimpleSelect,
+  SortSelect,
   Stack,
   StatusMessage,
   Tabs,
@@ -49,9 +48,8 @@ import {
   Text,
   TextArea,
   TextInput,
-  Tooltip,
   type ActionsMenuItem,
-  type SimpleSelectOption,
+  type SortSelectOption,
 } from "../base";
 import { usePagination } from "../../hooks/usePagination";
 import {
@@ -74,8 +72,15 @@ export type PersonaLibraryProps = {
   onPersonasChanged?: (personas: Persona[]) => void;
 };
 
-const PERSONA_SORT_OPTIONS: SimpleSelectOption<PersonaSortBy>[] = [
-  { value: "default", label: "Default First" },
+const PERSONA_SORT_OPTIONS: SortSelectOption<PersonaSortBy>[] = [
+  {
+    value: "default",
+    label: "Default First",
+    ascLabel: "First",
+    descLabel: "Last",
+    ascTooltip: "Default persona first",
+    descTooltip: "Default persona last",
+  },
   { value: "name", label: "Name" },
 ];
 
@@ -527,15 +532,6 @@ export function PersonaLibrary({
     ];
   }
 
-  const sortTooltipText =
-    sortBy === "name"
-      ? sortDir === "asc"
-        ? "Sort A to Z (click for Z to A)"
-        : "Sort Z to A (click for A to Z)"
-      : sortDir === "asc"
-        ? "Default persona first"
-        : "Default persona last";
-
   const contentBody = (
     <Stack direction="column" align="stretch" gap="md" fullWidth>
       {personaStatus ? (
@@ -570,38 +566,15 @@ export function PersonaLibrary({
                 aria-label="Search personas"
               />
 
-              <SimpleSelect<PersonaSortBy>
+              <SortSelect<PersonaSortBy>
                 value={sortBy}
                 onChange={setSortBy}
-                options={PERSONA_SORT_OPTIONS.map((option) => ({
-                  value: option.value,
-                  label: option.label,
-                  icon: <Icon name="ArrowUpDown" size={12} />,
-                }))}
+                direction={sortDir}
+                onDirectionChange={setSortDir}
+                options={PERSONA_SORT_OPTIONS}
                 size="sm"
+                groupAriaLabel="Sort personas"
                 aria-label="Sort personas by"
-                rightElement={
-                  <Tooltip content={sortTooltipText}>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      iconOnly
-                      onClick={() =>
-                        setSortDir((d) => (d === "asc" ? "desc" : "asc"))
-                      }
-                      aria-label="Toggle sort order"
-                    >
-                      <Icon
-                        name={
-                          sortDir === "asc"
-                            ? "ArrowUpNarrowWide"
-                            : "ArrowDownWideNarrow"
-                        }
-                        size={14}
-                      />
-                    </Button>
-                  </Tooltip>
-                }
               />
 
               <Tabs<PersonaViewMode>
@@ -1208,12 +1181,12 @@ export function PersonaLibrary({
         onClose={() => onClose?.()}
         size="wide"
         fullScreenMobile
-        ariaLabel="Persona Manager"
+        ariaLabel="Persona Library"
       >
         <Header
           variant="section"
           icon="User"
-          title="Persona Manager"
+          title="Persona Library"
           subtitle="Manage player character personas, physical traits, and starting clothing."
           actions={
             <Stack direction="row" align="center" gap="sm">
@@ -1258,7 +1231,7 @@ export function PersonaLibrary({
     <Stack direction="column" align="stretch" gap="md" fullWidth>
       <Header
         variant="page"
-        title="Persona Manager"
+        title="Persona Library"
         subtitle="Manage player character personas, physical traits, and starting clothing."
         actions={
           !personaEditorOpen ? (

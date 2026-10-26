@@ -23,6 +23,8 @@ export interface StatusMessageProps extends HTMLAttributes<HTMLDivElement> {
   detail?: string;
   /** When true and `children` is a multi-line or >96-char string, automatically truncates the summary and moves the full text into `detail`. */
   autoCollapseDetail?: boolean;
+  /** Pins a banner to the top of the scrolling viewport (`position: sticky`). */
+  sticky?: boolean;
   onDismiss?: () => void;
   children?: ReactNode;
 }
@@ -64,6 +66,7 @@ export const StatusMessage = forwardRef<HTMLDivElement, StatusMessageProps>(
       loading = false,
       detail,
       autoCollapseDetail = false,
+      sticky = false,
       onDismiss,
       className = "",
       children,
@@ -113,6 +116,7 @@ export const StatusMessage = forwardRef<HTMLDivElement, StatusMessageProps>(
       `base-status--${variant}`,
       `base-status--${tone}`,
       isCompact || Boolean(onDismiss) ? "base-status--compact" : "",
+      sticky ? "base-status--sticky" : "",
       className,
     ]
       .filter(Boolean)

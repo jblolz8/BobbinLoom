@@ -1,115 +1,4 @@
-/* ── Character Library: Booru Layout, Views & Inline Editor ── */
-.character-booru-layout {
-  display: flex;
-  gap: 1.25rem;
-  align-items: flex-start;
-  width: 100%;
-}
-
-/* Main Gallery Area */
-.character-main-gallery {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  width: 100%;
-}
-
-.library-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.library-toolbar-actions {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.library-search-wrapper {
-  position: relative;
-  flex: 1;
-  max-width: 380px;
-  min-width: 200px;
-}
-
-/* Library Sort Controls */
-.library-sort-control-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  background: var(--bg-surface-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 2px 4px;
-}
-
-.library-sort-dir-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: transparent;
-  border: none;
-  border-left: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
-  padding: 5px 8px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  border-radius: 0 6px 6px 0;
-  cursor: pointer;
-  transition: all 0.12s ease;
-  font-family: inherit;
-}
-
-.library-sort-dir-btn:hover {
-  color: var(--accent-highlight, var(--accent-base));
-  background: var(--bg-surface-hover);
-}
-
-.library-sort-dir-btn:active {
-  transform: scale(0.96);
-}
-
-.sort-dir-label {
-  display: inline-block;
-  font-size: 0.72rem;
-  letter-spacing: 0.02em;
-}
-
-/* Active Search Summary Filter Chips */
-.active-filters-bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  padding: 6px 12px;
-  background: var(--bg-surface-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  font-size: 0.8rem;
-}
-
-.active-filters-label {
-  color: var(--text-muted);
-  font-size: 0.74rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-/* Sticky Status Banners in Library */
-.library-sticky-banner {
-  position: sticky;
-  top: 10px;
-  z-index: 60;
-  margin-bottom: 1rem;
-  backdrop-filter: blur(8px);
-}
-
+/* ── Character Library: Views (temporarily retained for SetupView) & Inline Editor ── */
 .sparkle-pulse {
   animation: char-lib-spin-pulse 1.8s infinite linear;
 }
@@ -127,29 +16,6 @@
     transform: rotate(360deg) scale(1);
     filter: drop-shadow(0 0 2px var(--accent-translucent));
   }
-}
-
-/* Card Converting Highlight */
-.card-portrait.is-converting,
-.card-list-row.is-converting,
-.card-grid-item.is-converting {
-  border-color: var(--ai-accent) !important;
-  box-shadow: 0 0 16px var(--ai-accent-translucent) !important;
-  animation: card-converting-pulse 1.5s infinite alternate ease-in-out;
-}
-
-@keyframes card-converting-pulse {
-  0% {
-    box-shadow: 0 0 8px var(--ai-accent-translucent);
-  }
-  100% {
-    box-shadow: 0 0 20px var(--ai-accent-translucent);
-  }
-}
-
-.empty-library-container {
-  padding: 3rem 1rem;
-  text-align: center;
 }
 
 /* ── 1. Card Portrait View ── */
@@ -721,27 +587,7 @@
   }
 }
 
-@media (max-width: 860px) {
-  .character-booru-layout {
-    flex-direction: column;
-    gap: 0.85rem;
-  }
-}
-
 @media (max-width: 600px) {
-  .library-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .library-toolbar-actions {
-    justify-content: space-between;
-  }
-  .library-search-wrapper {
-    max-width: 100%;
-  }
-  .library-sort-control-group {
-    justify-content: center;
-  }
   .tag-diff-container {
     grid-template-columns: 1fr;
   }

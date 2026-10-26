@@ -205,6 +205,11 @@
   white-space: nowrap;
 }
 
+.base-text--pre-wrap {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .base-text--mono {
   font-family: var(--font-mono);
 }

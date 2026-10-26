@@ -258,3 +258,108 @@
   flex-shrink: 0;
   margin-left: 6px;
 }
+
+/* ==========================================================================
+   Joined Sort Select + Direction Control (.base-sort-select)
+   ========================================================================== */
+
+.base-sort-select {
+  display: inline-flex;
+  align-items: stretch;
+  background-color: var(--input-bg, var(--bg-surface-elevated));
+  border: 1px solid var(--input-border, var(--border-subtle));
+  border-radius: var(--radius-sm, 6px);
+  box-sizing: border-box;
+  flex-shrink: 0;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.base-sort-select--xs {
+  min-height: 26px;
+  border-radius: 5px;
+}
+
+.base-sort-select--sm {
+  min-height: 28px;
+  border-radius: 5px;
+}
+
+.base-sort-select--md {
+  min-height: 32px;
+}
+
+.base-sort-select--lg {
+  min-height: 38px;
+}
+
+.base-sort-select--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.base-sort-select:hover:not(.base-sort-select--disabled) {
+  border-color: var(--border-focus, var(--input-focus-border));
+}
+
+.base-sort-select:focus-within {
+  border-color: var(--input-focus-border);
+  box-shadow: 0 0 0 2px var(--input-focus-ring);
+}
+
+.base-sort-select__trigger.base-select-trigger {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 100%;
+  border: none;
+  border-radius: calc(var(--radius-sm, 6px) - 1px) 0 0
+    calc(var(--radius-sm, 6px) - 1px);
+  color: var(--input-text);
+  box-shadow: none;
+}
+
+.base-sort-select__trigger.base-select-trigger:focus,
+.base-sort-select__trigger.base-select-trigger:focus-visible,
+.base-sort-select__trigger.base-select-trigger[data-state="open"] {
+  box-shadow: none;
+  border-color: transparent;
+}
+
+.base-sort-select__dir-btn.base-btn {
+  height: auto;
+  min-height: 100%;
+  border: none;
+  border-left: 1px solid var(--border-subtle);
+  border-radius: 0 calc(var(--radius-sm, 6px) - 1px)
+    calc(var(--radius-sm, 6px) - 1px) 0;
+  color: var(--text-secondary);
+  box-shadow: none;
+  padding: 0 0.55rem;
+  gap: 4px;
+}
+
+.base-sort-select--xs .base-sort-select__dir-btn.base-btn {
+  padding: 0 0.45rem;
+}
+
+.base-sort-select__dir-btn.base-btn:hover:not(:disabled) {
+  color: var(--accent-highlight, var(--accent-base));
+  background-color: var(--bg-surface-hover);
+  border-left-color: var(--border-subtle);
+}
+
+.base-sort-select__dir-btn.base-btn:focus-visible {
+  box-shadow: none;
+  background-color: var(--accent-translucent);
+  color: var(--accent-highlight, var(--accent-base));
+}
+
+.base-sort-select__dir-label {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+

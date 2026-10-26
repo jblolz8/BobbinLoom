@@ -21,6 +21,11 @@
   will-change: transform, opacity;
 }
 
+.base-tooltip-content--interactive {
+  pointer-events: auto;
+  user-select: auto;
+}
+
 .base-tooltip-content[data-state="delayed-open"] {
   animation-name: base-tooltip-fade-in;
 }

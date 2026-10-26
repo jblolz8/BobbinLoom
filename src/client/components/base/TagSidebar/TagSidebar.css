@@ -15,8 +15,8 @@
   position: sticky;
   top: 0;
   height: auto;
-  max-height: var(--tag-sidebar-max-height, calc(100vh - 10.5rem));
-  max-height: var(--tag-sidebar-max-height, calc(100dvh - 10.5rem));
+  max-height: var(--tag-sidebar-max-height, calc(100vh - 13.5rem));
+  max-height: var(--tag-sidebar-max-height, calc(100dvh - 13.5rem));
   box-sizing: border-box;
 }
 

@@ -34,6 +34,7 @@ import {
   Pagination,
   SearchBar,
   SimpleSelect,
+  SortSelect,
   StatusMessage,
   SwitchRow,
   TagChip,
@@ -882,72 +883,20 @@ export function SetupView(props: SetupViewProps) {
                       </Button>
 
                       {/* Sort Controls */}
-                      <div
-                        className="library-sort-control-group setup-cast-sort-group"
-                        role="group"
-                        aria-label="Sort cast"
-                      >
-                        <SimpleSelect<CharacterSortOption>
-                          value={sortBy}
-                          onChange={(val) => setSortBy(val)}
-                          options={[
-                            {
-                              value: "name",
-                              label: "Name",
-                              icon: <Icon name="ArrowUpDown" size={12} />,
-                            },
-                            {
-                              value: "createdAt",
-                              label: "Created Date",
-                              icon: <Icon name="ArrowUpDown" size={12} />,
-                            },
-                            {
-                              value: "updatedAt",
-                              label: "Updated Date",
-                              icon: <Icon name="ArrowUpDown" size={12} />,
-                            },
-                          ]}
-                          size="xs"
-                          variant="ghost"
-                          aria-label="Sort cast by"
-                        />
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          className="library-sort-dir-btn"
-                          leftIcon={
-                            <Icon
-                              name={
-                                sortDirection === "asc"
-                                  ? "ArrowUpNarrowWide"
-                                  : "ArrowDownWideNarrow"
-                              }
-                              size={13}
-                            />
-                          }
-                          onClick={toggleSortDirection}
-                          title={
-                            sortBy === "name"
-                              ? sortDirection === "asc"
-                                ? "Sort A to Z (click for Z to A)"
-                                : "Sort Z to A (click for A to Z)"
-                              : sortDirection === "desc"
-                                ? "Newest first (click for Oldest first)"
-                                : "Oldest first (click for Newest first)"
-                          }
-                          aria-label="Toggle sort order"
-                        >
-                          <span className="sort-dir-label">
-                            {sortBy === "name"
-                              ? sortDirection === "asc"
-                                ? "A-Z"
-                                : "Z-A"
-                              : sortDirection === "desc"
-                                ? "Newest"
-                                : "Oldest"}
-                          </span>
-                        </Button>
-                      </div>
+                      <SortSelect<CharacterSortOption>
+                        value={sortBy}
+                        onChange={setSortBy}
+                        direction={sortDirection}
+                        onToggleDirection={toggleSortDirection}
+                        options={[
+                          { value: "name", label: "Name" },
+                          { value: "createdAt", label: "Created Date" },
+                          { value: "updatedAt", label: "Updated Date" },
+                        ]}
+                        size="xs"
+                        groupAriaLabel="Sort cast"
+                        aria-label="Sort cast by"
+                      />
 
                       {/* View Mode Buttons */}
                       <div className="view-mode-selector">

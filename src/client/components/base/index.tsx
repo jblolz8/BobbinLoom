@@ -16,6 +16,7 @@ export * from "./Icon/Icon";
 export * from "./IconButton/IconButton";
 export * from "./Modal/Modal";
 export * from "./ModelIcon/ModelIcon";
+export * from "./PageShell/PageShell";
 export * from "./Pagination/Pagination";
 export * from "./SearchBar/SearchBar";
 export * from "./Select/Select";

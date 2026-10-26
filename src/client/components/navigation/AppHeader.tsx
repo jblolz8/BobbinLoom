@@ -16,7 +16,6 @@ import {
   Tooltip,
   type TabItem,
 } from "../base";
-import "./AppHeader.css";
 
 export type AppHeaderProps = {
   view: "home" | "play" | "setup";
@@ -118,7 +117,7 @@ export function AppHeader({
   const isCompact = isMobile && view === "play";
 
   return (
-    <Header variant="app" compact={isCompact} className="app-header">
+    <Header variant="app" compact={isCompact}>
       <Header.Brand
         icon={<ThreadIcon size={22} />}
         title="BobbinLoom"

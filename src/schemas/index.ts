@@ -73,6 +73,8 @@ export type EntryTimingState = z.infer<typeof EntryTimingStateSchema>;
 export const CharacterTemplateSchema = z.object({
   id: z.string(),
   lineageId: z.string().optional(),
+  /** Optional parent card ID linking character variants into a Parent -> Child/Sibling family tree. */
+  parentId: z.string().optional(),
   name: z.string(),
   version: z.number(),
   content: z.string(),

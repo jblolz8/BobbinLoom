@@ -34,7 +34,7 @@
 
 .base-card--layout-row:has(.card-list-avatar) {
   min-height: 0;
-  align-items: center;
+  align-items: flex-start;
 }
 
 button.base-card {
@@ -165,7 +165,7 @@ button.base-card {
 /* Stretched-link primary title button inside a Card */
 .base-card__title-btn,
 .base-card__title-btn:hover {
-  flex: 1 1 0%;
+  flex: 0 1 auto;
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
@@ -224,6 +224,22 @@ button.base-card {
 .base-card--dirty {
   border-color: var(--status-warning-border, var(--status-warning));
   border-left: 3.5px solid var(--status-warning);
+}
+
+/* AI conversion / processing pulse state */
+.base-card--ai-pulse {
+  border-color: var(--ai-accent) !important;
+  box-shadow: 0 0 16px var(--ai-accent-translucent) !important;
+  animation: base-card-ai-pulse 1.5s infinite alternate ease-in-out;
+}
+
+@keyframes base-card-ai-pulse {
+  0% {
+    box-shadow: 0 0 8px var(--ai-accent-translucent);
+  }
+  100% {
+    box-shadow: 0 0 20px var(--ai-accent-translucent);
+  }
 }
 
 /* Reorderable drag-and-drop states */

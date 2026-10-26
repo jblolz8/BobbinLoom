@@ -89,7 +89,7 @@ export function convertCardApply(
     format: undefined, // drops the "ccv2" literal → becomes BL-native
     ccv2Content: input.template.content, // cache original for comparison
     ccv2CreatorNotes: input.template.creatorNotes, // cache original creator notes for comparison
-    ccv2Tags: input.template.tags, // cache original tags for comparison / restoration
+    ccv2Tags: input.template.ccv2Tags ?? input.template.tags, // cache original tags for comparison / restoration
     summary: "", // reset summary — BL-native re-derives it
     // Preserve: name, tags, scenario, creator, cardRef, spec, specVersion, etc.
   };

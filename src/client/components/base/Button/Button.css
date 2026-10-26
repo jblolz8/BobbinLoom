@@ -196,6 +196,15 @@
   border-color: var(--border-focus);
 }
 
+.base-btn--active.base-btn--primary:disabled,
+.base-btn--active.base-btn--primary[aria-disabled="true"] {
+  background-color: var(--accent-translucent);
+  color: var(--accent-highlight, var(--accent-base));
+  border-color: var(--accent-base);
+  opacity: 1;
+  cursor: default;
+}
+
 /* Responsive Label Collapsing */
 .base-btn--collapse-always {
   aspect-ratio: 1;

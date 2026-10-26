@@ -6,6 +6,8 @@ import type { ViewPreferences } from "../../../schemas";
 import {
   createCharacter,
   deleteCharacter,
+  detachCharacterCcv2,
+  duplicateCharacter,
   importCharacter,
   listCharacters,
   updateCharacter,
@@ -50,7 +52,9 @@ import {
   resolveCharacterFormat,
 } from "../../../engine/characterFormat";
 import {
+  buildCharacterFamilyTree,
   displayTitle,
+  hasDistinctTitle,
   entryKind,
   filterLibraryEntries,
   cardBadgeLabel,
@@ -67,23 +71,36 @@ import {
   Card,
   CharacterAvatar,
   Dialog,
+  FormGrid,
+  Header,
   Icon,
+  Modal,
   Pagination,
   SearchBar,
+  Separator,
   SimpleSelect,
+  SortSelect,
   Stack,
   StatusMessage,
   Tabs,
   TagChip,
+  TagRow,
   TagSidebar,
   Text,
   TextArea,
   TextInput,
   Tooltip,
+  type ActionsMenuItem,
 } from "../base";
 export { CharacterAvatar } from "../base";
 import { usePagination } from "../../hooks/usePagination";
-import { CharacterPortraitDrawer, ConfirmModal } from "../common";
+import {
+  CardFamilyModal,
+  CharacterPortraitDrawer,
+  ConfirmModal,
+  EditTagsModal,
+  type EditTagsAiContextOption,
+} from "../common";
 import { DiffModal } from "./DiffModal";
 import { TwoPaneDiff } from "./TwoPaneDiff";
 import { TagSuggestionModal } from "./TagSuggestionModal";
@@ -112,7 +129,9 @@ import {
 import "./CharacterLibrary.css";
 
 export type CharacterLibraryProps = {
+  variant?: "page" | "dialog";
   isModal?: boolean;
+  onClose?: () => void;
   initialEditingId?: string;
 };
 
@@ -120,18 +139,24 @@ export type ViewMode = "portrait" | "list" | "grid";
 
 type CharacterForm = {
   name: string;
+  title: string;
   creatorNotes: string;
   tags: string[];
   content: string;
 };
 
 function blankForm(): CharacterForm {
-  return { name: "", creatorNotes: "", tags: [], content: "" };
+  return { name: "", title: "", creatorNotes: "", tags: [], content: "" };
 }
 
 function templateToForm(t: CharacterTemplate): CharacterForm {
+  const distinctTitle =
+    t.title && t.title.trim().toLowerCase() !== t.name.trim().toLowerCase()
+      ? t.title.trim()
+      : "";
   return {
     name: t.name,
+    title: distinctTitle,
     creatorNotes: t.creatorNotes ?? "",
     tags: t.tags ?? [],
     content: t.content,
@@ -139,8 +164,14 @@ function templateToForm(t: CharacterTemplate): CharacterForm {
 }
 
 function formToUpdate(form: CharacterForm): CharacterTemplateUpdate {
+  const trimmedTitle = form.title.trim();
+  const trimmedName = form.name.trim();
   return {
     name: form.name,
+    title:
+      trimmedTitle && trimmedTitle.toLowerCase() !== trimmedName.toLowerCase()
+        ? trimmedTitle
+        : "",
     creatorNotes: form.creatorNotes,
     tags: form.tags,
     content: form.content,
@@ -468,9 +499,13 @@ function formatLibraryDate(isoOrStr?: string): string {
 }
 
 export function CharacterLibrary({
+  variant,
   isModal,
+  onClose,
   initialEditingId,
 }: CharacterLibraryProps) {
+  const resolvedVariant: "page" | "dialog" =
+    variant ?? (isModal ? "dialog" : "page");
   const [templates, setTemplates] = useState<CharacterTemplate[]>([]);
   const [form, setForm] = useState<CharacterForm>(blankForm());
   const [initialForm, setInitialForm] = useState<CharacterForm>(blankForm());
@@ -614,6 +649,97 @@ export function CharacterLibrary({
   const [taxonomyConfig, setTaxonomyConfig] =
     useState<TagTaxonomyConfig | null>(null);
   const [taxonomyModalOpen, setTaxonomyModalOpen] = useState(false);
+  const [familyTargetId, setFamilyTargetId] = useState<string | null>(null);
+  const [familyBusy, setFamilyBusy] = useState(false);
+  const [familyError, setFamilyError] = useState<string | null>(null);
+  const [tagsTargetId, setTagsTargetId] = useState<string | null>(null);
+  const [tagsSaving, setTagsSaving] = useState(false);
+  const [tagsError, setTagsError] = useState<string | null>(null);
+  const tagsTarget = useMemo(
+    () =>
+      tagsTargetId
+        ? (templates.find((t) => t.id === tagsTargetId) ?? null)
+        : null,
+    [tagsTargetId, templates],
+  );
+
+  function handleEditTagsRequest(template: CharacterTemplate) {
+    setTagsError(null);
+    setTagsTargetId(template.id);
+  }
+
+  function handleOpenCardFamily(template: CharacterTemplate) {
+    setFamilyError(null);
+    setFamilyTargetId(template.id);
+  }
+
+  async function handleSetCharacterParent(
+    cardId: string,
+    parentId: string | undefined,
+    options?: { detachCcv2?: boolean },
+  ) {
+    setFamilyBusy(true);
+    setFamilyError(null);
+    try {
+      await updateCharacter(cardId, { parentId: parentId ?? "" });
+      if (options?.detachCcv2) {
+        await detachCharacterCcv2(cardId);
+      }
+      setTemplates(await listCharacters());
+    } catch (e) {
+      setFamilyError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setFamilyBusy(false);
+    }
+  }
+
+  async function handleDetachCharacterCcv2(cardId: string) {
+    setFamilyBusy(true);
+    setFamilyError(null);
+    try {
+      await detachCharacterCcv2(cardId);
+      const refreshed = await listCharacters();
+      setTemplates(refreshed);
+      if (editingId === cardId) {
+        const updated = refreshed.find((t) => t.id === cardId);
+        if (updated) {
+          const nextForm = templateToForm(updated);
+          setForm(nextForm);
+          setInitialForm(nextForm);
+        }
+      }
+    } catch (e) {
+      setFamilyError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setFamilyBusy(false);
+    }
+  }
+
+  async function submitCharacterTags(nextTags: string[]) {
+    if (!tagsTarget) return;
+    setTagsSaving(true);
+    setTagsError(null);
+    try {
+      const normalized = sortTags(nextTags, taxonomyConfig);
+      const updated = await updateCharacter(tagsTarget.id, {
+        tags: normalized,
+      });
+      setTemplates((prev) =>
+        prev.map((t) => (t.id === updated.id ? updated : t)),
+      );
+      if (editingId === updated.id) {
+        setForm((f) => ({ ...f, tags: updated.tags ?? normalized }));
+        setInitialForm((f) =>
+          f ? { ...f, tags: updated.tags ?? normalized } : f,
+        );
+      }
+      setTagsTargetId(null);
+    } catch (e) {
+      setTagsError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setTagsSaving(false);
+    }
+  }
   const [sidebarViewMode, setSidebarViewModeState] = useState<
     "grouped" | "flat"
   >(LIBRARY_PREFERENCE_DEFAULTS.sidebarViewMode);
@@ -763,6 +889,7 @@ export function CharacterLibrary({
   const isFormDirty = useMemo(() => {
     if (!editorOpen) return false;
     if (form.name !== initialForm.name) return true;
+    if (form.title !== initialForm.title) return true;
     if (form.creatorNotes !== initialForm.creatorNotes) return true;
     if (form.content !== initialForm.content) return true;
     if (form.tags.length !== initialForm.tags.length) return true;
@@ -1239,15 +1366,19 @@ export function CharacterLibrary({
     try {
       const canonicalTags = sortTags(form.tags, taxonomyConfig);
       const update = formToUpdate({ ...form, tags: canonicalTags });
+      const effectiveLabel = update.title || form.name.trim();
       if (editingId) {
         await updateCharacter(
           editingId,
-          editingIsCcv2 ? { name: update.name } : update,
+          editingIsCcv2
+            ? { name: update.name, title: update.title }
+            : update,
         );
-        setStatus(`"${form.name}" saved successfully.`);
+        setStatus(`"${effectiveLabel}" saved successfully.`);
       } else {
-        const created = await createCharacter(form.name);
+        const created = await createCharacter(form.name, update.title);
         await updateCharacter(created.id, {
+          title: update.title,
           content: form.content,
           creatorNotes: form.creatorNotes,
           tags: canonicalTags,
@@ -1255,15 +1386,40 @@ export function CharacterLibrary({
         setEditingId(created.id);
         // Now that the character has an id, the conversation it already has can be kept.
         persistBrainstormSession(aiMessages, created.id);
-        setStatus(`"${form.name}" created and saved successfully.`);
+        setStatus(`"${effectiveLabel}" created and saved successfully.`);
       }
-      setForm((prev) => ({ ...prev, tags: canonicalTags }));
-      setInitialForm({ ...form, tags: canonicalTags });
+      const nextForm = {
+        ...form,
+        title: update.title ?? "",
+        tags: canonicalTags,
+      };
+      setForm(nextForm);
+      setInitialForm(nextForm);
       setTemplates(await listCharacters());
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDuplicateAsVariant(template: CharacterTemplate) {
+    setLibraryError(null);
+    setDeleteSuccess(null);
+    setImportSuccess(null);
+    setConvertedSuccess(null);
+    try {
+      const duplicated = await duplicateCharacter(template.id);
+      const refreshed = await listCharacters();
+      setTemplates(refreshed);
+      const target =
+        refreshed.find((t) => t.id === duplicated.id) ?? duplicated;
+      openEdit(target);
+      setStatus(
+        `Created variant "${displayTitle(target)}" (in-story name: "${target.name}").`,
+      );
+    } catch (e) {
+      setLibraryError(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -1672,12 +1828,151 @@ export function CharacterLibrary({
     />
   );
 
-  return (
-    <div
-      className={`character-library-container ${isModal ? "is-modal" : "is-workspace"}`}
+  function buildCharacterMenuItems(
+    latest: CharacterTemplate,
+    isConverting: boolean,
+  ): Array<ActionsMenuItem | null> {
+    return [
+      {
+        label: "Edit",
+        icon: "Pencil",
+        onClick: () => requestOpenEdit(latest),
+      },
+      {
+        label: "Edit Tags",
+        icon: "Tag",
+        onClick: () => handleEditTagsRequest(latest),
+      },
+      {
+        label: "Card Family",
+        icon: "GitBranch",
+        onClick: () => handleOpenCardFamily(latest),
+      },
+      {
+        label: "Duplicate as Variant",
+        icon: "Copy",
+        onClick: () => void handleDuplicateAsVariant(latest),
+      },
+      entryKind(latest) === "ccv2"
+        ? {
+            label: isConverting ? "Converting…" : "Convert to BL",
+            icon: "Sparkles",
+            iconClassName: isConverting ? "sparkle-pulse" : undefined,
+            disabled: isConverting,
+            onClick: () => void handleConvert(latest),
+          }
+        : null,
+      {
+        label: "Delete",
+        icon: "Trash2",
+        danger: true,
+        onClick: () => requestDelete(latest.id, displayTitle(latest)),
+      },
+    ];
+  }
+
+  function renderCharacterBadges(
+    group: (typeof paginatedGroups)[number],
+    latest: CharacterTemplate,
+    badge: ReturnType<typeof cardBadgeLabel>,
+  ) {
+    const family = buildCharacterFamilyTree(latest.id, templates);
+    const hasFamily = Boolean(family && family.members.length > 1);
+    return (
+      <>
+        {hasDistinctTitle(latest) ? (
+          <Badge
+            variant="outline"
+            size="xs"
+            leftIcon="User"
+            title={`In-story character name used by the AI: ${latest.name}`}
+          >
+            {latest.name}
+          </Badge>
+        ) : null}
+        {hasFamily && family ? (
+          <Card.Interactive>
+            <Badge
+              variant="outline"
+              size="xs"
+              leftIcon="GitBranch"
+              role="button"
+              tabIndex={0}
+              title={
+                family.parent
+                  ? `Child variant of ${displayTitle(family.parent)} (${family.members.length} cards in family) — click to manage Card Family`
+                  : `Root parent of ${family.members.length - 1} variant${family.members.length - 1 === 1 ? "" : "s"} — click to manage Card Family`
+              }
+              onClick={() => handleOpenCardFamily(latest)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleOpenCardFamily(latest);
+                }
+              }}
+            >
+              {family.parent
+                ? `Parent: ${displayTitle(family.parent)}`
+                : `Family (${family.members.length})`}
+            </Badge>
+          </Card.Interactive>
+        ) : null}
+        {badge === "ccv2" ? (
+          <Badge variant="warning" size="xs">
+            CCv2
+          </Badge>
+        ) : null}
+        {badge === "ccv2bl" ? (
+          <Badge variant="info" size="xs">
+            CCv2 / BL
+          </Badge>
+        ) : null}
+        {badge === null ? (
+          <Badge variant="accent" size="xs">
+            BL
+          </Badge>
+        ) : null}
+        <Badge variant="neutral" size="xs">
+          v{latest.cardVersion ?? String(latest.version)}
+        </Badge>
+        {group.versions.length > 1 ? (
+          <Badge variant="neutral" size="xs">
+            {group.versions.length} versions
+          </Badge>
+        ) : null}
+      </>
+    );
+  }
+
+  function renderCharacterDate(group: (typeof paginatedGroups)[number]) {
+    const isCreated = sortBy === "createdAt";
+    const rawIso = isCreated
+      ? getGroupCreatedAt(group)
+      : getGroupUpdatedAt(group) || getGroupCreatedAt(group);
+    const shortDate = formatLibraryDate(rawIso);
+    if (!rawIso || !shortDate) return null;
+    const fullTimestamp = `${isCreated ? "Created" : "Updated"}: ${new Date(rawIso).toLocaleString()}`;
+    return (
+      <Card.Interactive>
+        <Tooltip content={fullTimestamp}>
+          <Text as="span" size="xs" tone="muted" truncate>
+            {shortDate}
+          </Text>
+        </Tooltip>
+      </Card.Interactive>
+    );
+  }
+
+  const contentBody = (
+    <Stack
+      direction="column"
+      align="stretch"
+      gap="md"
+      fullWidth
+      className={resolvedVariant === "dialog" ? "is-modal" : ""}
     >
-      {isModal ? (
-        <div style={{ marginBottom: "0.75rem" }}>
+      {resolvedVariant === "dialog" ? (
+        <Stack direction="row" align="center">
           <Badge
             variant="outline"
             size="sm"
@@ -1685,182 +1980,171 @@ export function CharacterLibrary({
           >
             🌐 Global Character Templates
           </Badge>
-        </div>
+        </Stack>
       ) : null}
 
-      <div className="character-manager-body">
-        {convertLoading && convertingCharacter ? (
-          <StatusMessage
-            variant="banner"
-            tone="neutral"
-            icon="Sparkles"
-            className="library-sticky-banner"
+      {convertLoading && convertingCharacter ? (
+        <StatusMessage variant="banner" tone="neutral" icon="Sparkles" sticky>
+          <Stack
+            direction="row"
+            justify="between"
+            align="center"
+            gap="sm"
+            wrap
           >
-            <Stack
-              direction="row"
-              justify="between"
-              align="center"
-              gap="sm"
-              wrap
+            <span>
+              Converting{" "}
+              <strong>&quot;{displayTitle(convertingCharacter)}&quot;</strong>{" "}
+              to BobbinLoom format with AI…
+            </span>
+            <Button
+              type="button"
+              variant="danger"
+              size="xs"
+              leftIcon="X"
+              onClick={handleCancelConvert}
+              title="Cancel ongoing conversion"
             >
-              <span>
-                Converting{" "}
-                <strong>&quot;{displayTitle(convertingCharacter)}&quot;</strong>{" "}
-                to BobbinLoom format with AI…
-              </span>
-              <Button
-                type="button"
-                variant="danger"
-                size="xs"
-                leftIcon={<Icon name="X" size={14} />}
-                onClick={handleCancelConvert}
-                title="Cancel ongoing conversion"
-              >
-                Cancel
-              </Button>
-            </Stack>
-          </StatusMessage>
-        ) : null}
+              Cancel
+            </Button>
+          </Stack>
+        </StatusMessage>
+      ) : null}
 
-        {importing ? (
-          <StatusMessage
-            variant="banner"
-            tone="neutral"
-            icon="Upload"
-            className="library-sticky-banner"
-          >
-            Importing character card…
-          </StatusMessage>
-        ) : null}
+      {importing ? (
+        <StatusMessage variant="banner" tone="neutral" icon="Upload" sticky>
+          Importing character card…
+        </StatusMessage>
+      ) : null}
 
-        {convertedSuccess ? (
-          <StatusMessage
-            variant="banner"
-            tone="ok"
-            icon="CheckCircle2"
-            className="library-sticky-banner"
-            onDismiss={() => setConvertedSuccess(null)}
-          >
-            <Stack direction="row" align="center" gap="sm" wrap>
-              <span>
-                {convertedSuccess.kind === "reformat" ? (
-                  <>
-                    Successfully updated{" "}
-                    <strong>&quot;{convertedSuccess.recordName}&quot;</strong>{" "}
-                    into the newer format!
-                  </>
-                ) : (
-                  <>
-                    Successfully converted and saved{" "}
-                    <strong>&quot;{convertedSuccess.recordName}&quot;</strong>{" "}
-                    to BobbinLoom format!
-                  </>
-                )}
-              </span>
-              <Button
-                type="button"
-                variant="secondary"
-                size="xs"
-                rightIcon={<Icon name="ArrowRight" size={13} />}
-                onClick={() => {
-                  openEdit(convertedSuccess.template);
-                  setConvertedSuccess(null);
-                }}
-              >
-                Open in Editor
-              </Button>
-            </Stack>
-          </StatusMessage>
-        ) : null}
+      {convertedSuccess ? (
+        <StatusMessage
+          variant="banner"
+          tone="ok"
+          icon="CheckCircle2"
+          sticky
+          onDismiss={() => setConvertedSuccess(null)}
+        >
+          <Stack direction="row" align="center" gap="sm" wrap>
+            <span>
+              {convertedSuccess.kind === "reformat" ? (
+                <>
+                  Successfully updated{" "}
+                  <strong>&quot;{convertedSuccess.recordName}&quot;</strong>{" "}
+                  into the newer format!
+                </>
+              ) : (
+                <>
+                  Successfully converted and saved{" "}
+                  <strong>&quot;{convertedSuccess.recordName}&quot;</strong>{" "}
+                  to BobbinLoom format!
+                </>
+              )}
+            </span>
+            <Button
+              type="button"
+              variant="secondary"
+              size="xs"
+              rightIcon="ArrowRight"
+              onClick={() => {
+                openEdit(convertedSuccess.template);
+                setConvertedSuccess(null);
+              }}
+            >
+              Open in Editor
+            </Button>
+          </Stack>
+        </StatusMessage>
+      ) : null}
 
-        {importSuccess ? (
-          <StatusMessage
-            variant="banner"
-            tone="ok"
-            icon="CheckCircle2"
-            className="library-sticky-banner"
-            onDismiss={() => setImportSuccess(null)}
-          >
-            <Stack direction="row" align="center" gap="sm" wrap>
-              <span>
-                Successfully imported{" "}
-                <strong>&quot;{importSuccess.recordName}&quot;</strong> into the
-                library!
-              </span>
-              <Button
-                type="button"
-                variant="secondary"
-                size="xs"
-                rightIcon={<Icon name="ArrowRight" size={13} />}
-                onClick={() => {
-                  openEdit(importSuccess.template);
-                  setImportSuccess(null);
-                }}
-              >
-                Open in Editor
-              </Button>
-            </Stack>
-          </StatusMessage>
-        ) : null}
+      {importSuccess ? (
+        <StatusMessage
+          variant="banner"
+          tone="ok"
+          icon="CheckCircle2"
+          sticky
+          onDismiss={() => setImportSuccess(null)}
+        >
+          <Stack direction="row" align="center" gap="sm" wrap>
+            <span>
+              Successfully imported{" "}
+              <strong>&quot;{importSuccess.recordName}&quot;</strong> into the
+              library!
+            </span>
+            <Button
+              type="button"
+              variant="secondary"
+              size="xs"
+              rightIcon="ArrowRight"
+              onClick={() => {
+                openEdit(importSuccess.template);
+                setImportSuccess(null);
+              }}
+            >
+              Open in Editor
+            </Button>
+          </Stack>
+        </StatusMessage>
+      ) : null}
 
-        {deleteSuccess ? (
-          <StatusMessage
-            variant="banner"
-            tone="err"
-            icon="Trash2"
-            className="library-sticky-banner"
-            onDismiss={() => setDeleteSuccess(null)}
-          >
-            Character card{" "}
-            <strong>&quot;{deleteSuccess.recordName}&quot;</strong> was deleted
-            from the library.
-          </StatusMessage>
-        ) : null}
+      {deleteSuccess ? (
+        <StatusMessage
+          variant="banner"
+          tone="err"
+          icon="Trash2"
+          sticky
+          onDismiss={() => setDeleteSuccess(null)}
+        >
+          Character card{" "}
+          <strong>&quot;{deleteSuccess.recordName}&quot;</strong> was deleted
+          from the library.
+        </StatusMessage>
+      ) : null}
 
-        {libraryError ? (
-          <StatusMessage
-            variant="banner"
-            tone="err"
-            icon="AlertTriangle"
-            className="library-sticky-banner"
-            onDismiss={() => setLibraryError(null)}
-          >
-            {libraryError}
-          </StatusMessage>
-        ) : null}
+      {libraryError ? (
+        <StatusMessage
+          variant="banner"
+          tone="err"
+          icon="AlertTriangle"
+          sticky
+          onDismiss={() => setLibraryError(null)}
+        >
+          {libraryError}
+        </StatusMessage>
+      ) : null}
 
-        {conversionFailed ? (
-          <StatusMessage
-            variant="banner"
-            tone="err"
-            icon="AlertCircle"
-            className="library-sticky-banner"
-            onDismiss={() => setConversionFailed(null)}
-          >
-            <Stack direction="row" align="center" gap="sm" wrap>
-              <span>
-                Failed to convert{" "}
-                <strong>
-                  &quot;{displayTitle(conversionFailed.template)}&quot;
-                </strong>{" "}
-                to BobbinLoom format: {conversionFailed.error}
-              </span>
-              <Button
-                type="button"
-                variant="secondary"
-                size="xs"
-                onClick={() => {
-                  const tpl = conversionFailed.template;
-                  setConversionFailed(null);
-                  void handleConvert(tpl);
-                }}
-                leftIcon={<Icon name="RefreshCw" size={12} />}
-              >
-                Retry
-              </Button>
-            </Stack>
-          </StatusMessage>
-        ) : null}
+      {conversionFailed ? (
+        <StatusMessage
+          variant="banner"
+          tone="err"
+          icon="AlertCircle"
+          sticky
+          onDismiss={() => setConversionFailed(null)}
+        >
+          <Stack direction="row" align="center" gap="sm" wrap>
+            <span>
+              Failed to convert{" "}
+              <strong>
+                &quot;{displayTitle(conversionFailed.template)}&quot;
+              </strong>{" "}
+              to BobbinLoom format: {conversionFailed.error}
+            </span>
+            <Button
+              type="button"
+              variant="secondary"
+              size="xs"
+              onClick={() => {
+                const tpl = conversionFailed.template;
+                setConversionFailed(null);
+                void handleConvert(tpl);
+              }}
+              leftIcon="RefreshCw"
+            >
+              Retry
+            </Button>
+          </Stack>
+        </StatusMessage>
+      ) : null}
 
         {editorOpen ? (
           <div
@@ -1868,7 +2152,7 @@ export function CharacterLibrary({
           >
             <div className="editor-top-bar">
               <div className="editor-title-wrap">
-                <Button
+                  <Button
                   type="button"
                   variant="secondary"
                   size="sm"
@@ -1878,7 +2162,11 @@ export function CharacterLibrary({
                 >
                   Back
                 </Button>
-                <h3>{editingId ? `Edit: ${form.name}` : "New Character"}</h3>
+                <h3>
+                  {editingId
+                    ? `Edit: ${form.title.trim() || form.name}`
+                    : "New Character"}
+                </h3>
                 {status ? (
                   <Badge
                     variant={
@@ -2098,13 +2386,45 @@ export function CharacterLibrary({
                   );
                 })()}
 
-                <TextInput
-                  label="Name"
-                  value={form.name}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, name: e.target.value }))
-                  }
-                />
+                <FormGrid cols={2} gap="sm">
+                  <TextInput
+                    label="Character Name (In-Story / AI)"
+                    value={form.name}
+                    placeholder="e.g. Miku"
+                    helperText="The name used inside stories and seen by the AI."
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, name: e.target.value }))
+                    }
+                  />
+                  <TextInput
+                    label="Card Title / Variant (Optional)"
+                    value={form.title}
+                    placeholder={
+                      form.name.trim()
+                        ? `e.g. ${form.name.trim()} — Anthro Fox`
+                        : "e.g. Miku — Anthro Fox"
+                    }
+                    helperText="Displayed in the library only (hidden from the AI). Defaults to Character Name if blank."
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, title: e.target.value }))
+                    }
+                    rightElement={
+                      !form.title.trim() && form.name.trim() ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="xs"
+                          onClick={() =>
+                            setForm((f) => ({ ...f, title: f.name.trim() }))
+                          }
+                          title="Copy current Character Name into Card Title so you can shorten the in-story Character Name"
+                        >
+                          Copy Name
+                        </Button>
+                      ) : undefined
+                    }
+                  />
+                </FormGrid>
 
                 {(() => {
                   const tpl = editingId
@@ -2436,7 +2756,13 @@ export function CharacterLibrary({
             </div>
           </div>
         ) : (
-          <div className="character-booru-layout">
+          <Stack
+            direction="row"
+            align="start"
+            gap="lg"
+            fullWidth
+            stackBelow="md"
+          >
             {/* ── Left-side Booru Tag Sidebar (shared primitive) ── */}
             <TagSidebar
               taxonomy="character"
@@ -2445,7 +2771,6 @@ export function CharacterLibrary({
               activeTags={activeFilterTags}
               onToggleTag={toggleTag}
               onClearTags={search.trim() ? () => setSearch("") : undefined}
-              onOpenSettings={() => setTaxonomyModalOpen(true)}
               mode={sidebarViewMode}
               onModeChange={setSidebarViewMode}
               collapsedCategories={collapsedCategories}
@@ -2453,633 +2778,573 @@ export function CharacterLibrary({
             />
 
             {/* ── Main Gallery Area ── */}
-            <main className="character-main-gallery">
-              {/* Top Toolbar */}
-              <div className="library-toolbar">
-                <div className="library-toolbar-actions">
-                  <Button
-                    variant="primary"
-                    onClick={openCreate}
-                    leftIcon={<Icon name="Plus" size={15} />}
-                  >
-                    New Character
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={importing}
-                    isLoading={importing}
-                    leftIcon={<Icon name="Upload" size={15} />}
-                  >
-                    Import Card
-                  </Button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".png,.json"
-                    style={{ display: "none" }}
-                    onChange={handleImportFile}
-                  />
-                </div>
-
-                <SearchBar
-                  value={search}
-                  onChange={(val) => {
-                    setSearch(val);
-                  }}
-                  placeholder="Search name, tags, creator:…"
-                  size="md"
-                  containerClassName="library-search-wrapper"
-                />
-
-                {/* Sort Controls */}
-                <div
-                  className="library-sort-control-group"
-                  role="group"
-                  aria-label="Sort library"
+            <Stack
+              direction="column"
+              align="stretch"
+              gap="sm"
+              flex1
+              fullWidth
+            >
+              {/* Top Toolbar (mirrors PlaythroughLibrary & PersonaLibrary) */}
+              <Card variant="elevated" padding="xs" fullWidth>
+                <Stack
+                  direction="row"
+                  align="center"
+                  justify="between"
+                  gap="xs"
+                  wrap
+                  fullWidth
                 >
-                  <SimpleSelect<CharacterSortOption>
+                  <SearchBar
+                    value={search}
+                    onChange={setSearch}
+                    onClear={() => setSearch("")}
+                    placeholder="Search characters by name, tags, creator:…"
+                    size="sm"
+                    flex1
+                    aria-label="Search characters"
+                  />
+
+                  <SortSelect<CharacterSortOption>
                     value={sortBy}
-                    onChange={(val) => setSortBy(val)}
+                    onChange={setSortBy}
+                    direction={sortDirection}
+                    onToggleDirection={toggleSortDirection}
                     options={[
-                      {
-                        value: "name",
-                        label: "Name",
-                        icon: <Icon name="ArrowUpDown" size={12} />,
-                      },
-                      {
-                        value: "createdAt",
-                        label: "Created Date",
-                        icon: <Icon name="ArrowUpDown" size={12} />,
-                      },
-                      {
-                        value: "updatedAt",
-                        label: "Updated Date",
-                        icon: <Icon name="ArrowUpDown" size={12} />,
-                      },
+                      { value: "name", label: "Name" },
+                      { value: "createdAt", label: "Created Date" },
+                      { value: "updatedAt", label: "Updated Date" },
                     ]}
-                    size="xs"
-                    variant="ghost"
+                    size="sm"
+                    groupAriaLabel="Sort library"
                     aria-label="Sort characters by"
                   />
-                  <button
-                    type="button"
-                    className="library-sort-dir-btn"
-                    onClick={toggleSortDirection}
-                    title={
-                      sortBy === "name"
-                        ? sortDirection === "asc"
-                          ? "Sort A to Z (click for Z to A)"
-                          : "Sort Z to A (click for A to Z)"
-                        : sortDirection === "desc"
-                          ? "Newest first (click for Oldest first)"
-                          : "Oldest first (click for Newest first)"
-                    }
-                    aria-label="Toggle sort order"
-                  >
-                    <Icon
-                      name={
-                        sortDirection === "asc"
-                          ? "ArrowUpNarrowWide"
-                          : "ArrowDownWideNarrow"
-                      }
-                      size={14}
-                    />
-                    <span className="sort-dir-label">
-                      {sortBy === "name"
-                        ? sortDirection === "asc"
-                          ? "A-Z"
-                          : "Z-A"
-                        : sortDirection === "desc"
-                          ? "Newest"
-                          : "Oldest"}
-                    </span>
-                  </button>
-                </div>
 
-                {/* View Mode Switcher */}
-                <Tabs<ViewMode>
-                  variant="segmented"
-                  size="sm"
-                  activeTab={viewMode}
-                  onChange={setViewMode}
-                  ariaLabel="View mode"
-                  tabs={[
-                    {
-                      id: "portrait",
-                      label: "Portrait",
-                      icon: "IdCard",
-                    },
-                    {
-                      id: "list",
-                      label: "List",
-                      icon: "List",
-                    },
-                    {
-                      id: "grid",
-                      label: "Grid",
-                      icon: "LayoutGrid",
-                    },
-                  ]}
-                />
-              </div>
+                  <Tabs<ViewMode>
+                    variant="segmented"
+                    size="sm"
+                    activeTab={viewMode}
+                    onChange={setViewMode}
+                    ariaLabel="View mode"
+                    tabs={[
+                      {
+                        id: "portrait",
+                        label: "Portrait",
+                        icon: "IdCard",
+                      },
+                      {
+                        id: "list",
+                        label: "List",
+                        icon: "List",
+                      },
+                      {
+                        id: "grid",
+                        label: "Grid",
+                        icon: "LayoutGrid",
+                      },
+                    ]}
+                  />
+                </Stack>
+              </Card>
 
               {/* Active Search Summary Filter Chips */}
               {activeFilterTags.length > 0 ? (
-                <div className="active-filters-bar">
-                  <span className="active-filters-label">Active filters:</span>
-                  {activeFilterTags.map((tag) => (
-                    <TagChip
-                      key={tag}
-                      tag={tag}
-                      userConfig={taxonomyConfig}
-                      active={true}
-                      size="sm"
-                      onRemove={() => removeFilterTag(tag)}
-                    />
-                  ))}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => {
-                      setSearch("");
-                    }}
-                  >
-                    Clear all
-                  </Button>
-                </div>
+                <Card variant="panel" padding="xs" fullWidth>
+                  <Stack direction="row" align="center" gap="xs" wrap>
+                    <Text variant="overline" size="2xs" tone="muted">
+                      Active filters:
+                    </Text>
+                    {activeFilterTags.map((tag) => (
+                      <TagChip
+                        key={tag}
+                        tag={tag}
+                        userConfig={taxonomyConfig}
+                        active
+                        size="sm"
+                        onRemove={() => removeFilterTag(tag)}
+                      />
+                    ))}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => setSearch("")}
+                    >
+                      Clear all
+                    </Button>
+                  </Stack>
+                </Card>
               ) : null}
 
               {/* Results Gallery according to ViewMode */}
               {groups.length === 0 ? (
-                <div className="empty-library-container">
-                  <Text tone="muted" align="center">
-                    {search
-                      ? "No characters found matching your search."
-                      : "No characters in the library yet."}
-                  </Text>
-                  {search ? (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      style={{ marginTop: "8px" }}
-                      onClick={() => {
-                        setSearch("");
-                      }}
-                    >
-                      Reset filters
-                    </Button>
-                  ) : null}
-                </div>
+                <Card variant="panel" padding="lg">
+                  <Stack direction="column" align="center" gap="sm">
+                    <Text size="md" weight="semibold">
+                      {templates.length === 0
+                        ? "No characters yet"
+                        : "No characters match your search"}
+                    </Text>
+                    <Text size="sm" tone="secondary" align="center">
+                      {templates.length === 0
+                        ? "Create a new character sheet or import a CCv2 / BobbinLoom card to get started."
+                        : "Try adjusting your search query or clearing active tag filters."}
+                    </Text>
+                    {search ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setSearch("")}
+                      >
+                        Reset filters
+                      </Button>
+                    ) : null}
+                  </Stack>
+                </Card>
               ) : (
-                <>
-                  {paginationElement}
+                <Stack direction="column" align="stretch" gap="sm" fullWidth>
+                  {pager.totalPages > 1 ? paginationElement : null}
+
                   {/* 1. Card Portrait View */}
                   {viewMode === "portrait" && (
-                    <div className="character-portrait-grid">
+                    <FormGrid cols="portrait" gap="md">
                       {paginatedGroups.map((group) => {
                         const latest = group.versions[0];
                         const badge = cardBadgeLabel(latest);
                         const isConverting =
                           convertingId === latest.id && convertLoading;
+                        const sortedTags = sortTags(
+                          latest.tags ?? [],
+                          taxonomyConfig,
+                        );
                         return (
-                          <div
+                          <Card
                             key={group.key}
-                            className={`card-portrait ${isConverting ? "is-converting" : ""}`}
-                            onClick={() => requestOpenEdit(latest)}
-                            role="button"
-                            tabIndex={0}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") requestOpenEdit(latest);
-                            }}
+                            as="article"
+                            variant="panel"
+                            padding="none"
+                            layout="column"
+                            hoverable
+                            aiPulse={isConverting}
                           >
-                            <div className="card-portrait-image-wrap">
+                            <Card.Cover position="top" aspect="portrait">
                               <CharacterAvatar
                                 template={latest}
                                 variant="portrait"
                               />
-                            </div>
+                            </Card.Cover>
 
-                            <div className="card-portrait-body">
-                              <div className="card-portrait-title-row">
-                                <strong
-                                  className="card-portrait-title"
+                            <Card.Body padding="sm" gap="xs">
+                              {/* Row 1: Name + Action Menu */}
+                              <Stack
+                                direction="row"
+                                align="start"
+                                justify="between"
+                                gap="xs"
+                                fullWidth
+                              >
+                                <Card.TitleButton
                                   title={displayTitle(latest)}
+                                  onClick={() => requestOpenEdit(latest)}
                                 >
-                                  {displayTitle(latest)}
-                                </strong>
-                                {group.versions.length > 1 ? (
-                                  <span className="version-count">
-                                    ({group.versions.length} v)
-                                  </span>
-                                ) : null}
-                              </div>
+                                  <Text
+                                    as="span"
+                                    size="md"
+                                    weight="semibold"
+                                    preWrap
+                                  >
+                                    {displayTitle(latest)}
+                                  </Text>
+                                </Card.TitleButton>
+                                <Card.Interactive>
+                                  <ActionsMenu
+                                    label={`Actions for ${displayTitle(latest)}`}
+                                    items={buildCharacterMenuItems(
+                                      latest,
+                                      isConverting,
+                                    )}
+                                  />
+                                </Card.Interactive>
+                              </Stack>
 
+                              {/* Row 2: Format, Version, Date */}
+                              <Stack
+                                direction="row"
+                                align="center"
+                                justify="between"
+                                gap="2xs"
+                                wrap
+                                fullWidth
+                              >
+                                <Stack
+                                  direction="row"
+                                  align="center"
+                                  gap="2xs"
+                                  wrap
+                                >
+                                  {renderCharacterBadges(group, latest, badge)}
+                                </Stack>
+                                {renderCharacterDate(group)}
+                              </Stack>
+
+                              {/* Row 3: Author */}
                               {latest.creator?.trim() ? (
-                                <span className="card-creator-tag">
-                                  by {latest.creator.trim()}
-                                </span>
-                              ) : null}
-
-                              {latest.creatorNotes?.trim() ? (
-                                <p className="card-creator-notes-snippet">
-                                  {latest.creatorNotes.trim()}
-                                </p>
-                              ) : null}
-
-                              {(latest.tags ?? []).length > 0 ? (
-                                <div
-                                  className="tag-chips"
-                                  onClick={(e) => e.stopPropagation()}
+                                <Text
+                                  as="span"
+                                  size="xs"
+                                  tone="muted"
+                                  italic
                                 >
-                                  {sortTags(
-                                    latest.tags ?? [],
-                                    taxonomyConfig,
-                                  ).map((tag) => {
-                                    const active = isTagActive(tag);
-                                    return (
-                                      <TagChip
-                                        key={tag}
-                                        tag={tag}
-                                        userConfig={taxonomyConfig}
-                                        active={active}
-                                        size="xs"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          toggleTag(tag);
-                                        }}
-                                      />
-                                    );
-                                  })}
-                                </div>
+                                  by {latest.creator.trim()}
+                                </Text>
                               ) : null}
 
-                              {/* Portrait Footer: Badges on left, Options on right */}
-                              <div className="card-portrait-footer">
-                                <div className="card-portrait-badges">
-                                  {badge === "ccv2" ? (
-                                    <Badge variant="warning" size="xs">
-                                      CCv2
-                                    </Badge>
-                                  ) : null}
-                                  {badge === "ccv2bl" ? (
-                                    <Badge variant="info" size="xs">
-                                      CCv2 / BL
-                                    </Badge>
-                                  ) : null}
-                                  <Badge variant="accent" size="xs">
-                                    v
-                                    {latest.cardVersion ??
-                                      String(latest.version)}
-                                  </Badge>
-                                  {sortBy === "createdAt" &&
-                                  getGroupCreatedAt(group) ? (
-                                    <Badge
-                                      variant="outline"
-                                      size="xs"
-                                      leftIcon={<Icon name="Calendar" size={10} />}
-                                      title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}
-                                    >
-                                      {formatLibraryDate(
-                                        getGroupCreatedAt(group),
-                                      )}
-                                    </Badge>
-                                  ) : null}
-                                  {sortBy === "updatedAt" &&
-                                  getGroupUpdatedAt(group) ? (
-                                    <Badge
-                                      variant="outline"
-                                      size="xs"
-                                      leftIcon={<Icon name="Clock" size={10} />}
-                                      title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}
-                                    >
-                                      {formatLibraryDate(
-                                        getGroupUpdatedAt(group),
-                                      )}
-                                    </Badge>
-                                  ) : null}
-                                </div>
-                                <ActionsMenu
-                                  label="Actions"
-                                  items={[
-                                    {
-                                      label: "Edit",
-                                      icon: "Pencil",
-                                      onClick: () => requestOpenEdit(latest),
-                                    },
-                                    entryKind(latest) === "ccv2"
-                                      ? {
-                                          label: isConverting
-                                            ? "Converting…"
-                                            : "Convert to BL",
-                                          icon: "Sparkles",
-                                          iconClassName: isConverting
-                                            ? "sparkle-pulse"
-                                            : undefined,
-                                          disabled: isConverting,
-                                          onClick: () => handleConvert(latest),
-                                        }
-                                      : null,
-                                    {
-                                      label: "Delete",
-                                      icon: "Trash2",
-                                      danger: true,
-                                      onClick: () =>
-                                        requestDelete(
-                                          latest.id,
-                                          displayTitle(latest),
-                                        ),
-                                    },
-                                  ]}
+                              {/* Row 4: Comment */}
+                              {latest.creatorNotes?.trim() ? (
+                                <Card variant="elevated" padding="xs" fullWidth>
+                                  <Text
+                                    as="p"
+                                    size="xs"
+                                    tone="secondary"
+                                    preWrap
+                                  >
+                                    {latest.creatorNotes.trim()}
+                                  </Text>
+                                </Card>
+                              ) : null}
+
+                                {/* Rows 5 & 6: Separator + Tags (anchored at bottom) */}
+                              <Stack
+                                direction="column"
+                                align="stretch"
+                                gap="xs"
+                                fullWidth
+                                pushBottom
+                              >
+                                <Separator spacing="none" />
+                                <TagRow
+                                  taxonomy="character"
+                                  userConfig={taxonomyConfig}
+                                  tags={sortedTags}
+                                  activeTags={activeFilterTags}
+                                  onToggleTag={toggleTag}
+                                  onEditTags={() =>
+                                    handleEditTagsRequest(latest)
+                                  }
+                                  wrapAll
                                 />
-                              </div>
-                            </div>
-                          </div>
+                              </Stack>
+                            </Card.Body>
+                          </Card>
                         );
                       })}
-                    </div>
+                    </FormGrid>
                   )}
 
                   {/* 2. List View */}
                   {viewMode === "list" && (
-                    <div className="character-list-view">
+                    <Stack
+                      direction="column"
+                      align="stretch"
+                      gap="sm"
+                      fullWidth
+                    >
                       {paginatedGroups.map((group) => {
                         const latest = group.versions[0];
                         const badge = cardBadgeLabel(latest);
                         const isConverting =
                           convertingId === latest.id && convertLoading;
+                        const sortedTags = sortTags(
+                          latest.tags ?? [],
+                          taxonomyConfig,
+                        );
                         return (
-                          <div
+                          <Card
                             key={group.key}
-                            className={`card-list-row ${isConverting ? "is-converting" : ""}`}
-                            onClick={() => requestOpenEdit(latest)}
-                            role="button"
-                            tabIndex={0}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") requestOpenEdit(latest);
-                            }}
+                            as="article"
+                            variant="panel"
+                            padding="sm"
+                            layout="row"
+                            hoverable
+                            aiPulse={isConverting}
                           >
-                            <CharacterAvatar template={latest} variant="list" />
-                            <div className="card-list-content">
-                              <div className="card-list-header-row">
-                                <div className="card-list-title-wrap">
-                                  <strong className="card-list-title">
-                                    {displayTitle(latest)}
-                                  </strong>
-                                  {badge === "ccv2" ? (
-                                    <Badge variant="warning" size="xs">
-                                      CCv2
-                                    </Badge>
-                                  ) : null}
-                                  {badge === "ccv2bl" ? (
-                                    <Badge variant="info" size="xs">
-                                      CCv2 / BL
-                                    </Badge>
-                                  ) : null}
-                                  <Badge variant="accent" size="xs">
-                                    v
-                                    {latest.cardVersion ??
-                                      String(latest.version)}
-                                  </Badge>
-                                  {group.versions.length > 1 ? (
-                                    <span className="version-count">
-                                      ({group.versions.length} versions)
-                                    </span>
-                                  ) : null}
+                            <CharacterAvatar
+                              template={latest}
+                              variant="list"
+                            />
+                            <Stack
+                              direction="column"
+                              align="stretch"
+                              gap="xs"
+                              flex1
+                              fullWidth
+                            >
+                              <Stack
+                                direction="row"
+                                align="start"
+                                justify="between"
+                                gap="sm"
+                                fullWidth
+                              >
+                                <Stack
+                                  direction="row"
+                                  align="center"
+                                  gap="xs"
+                                  wrap
+                                  flex1
+                                >
+                                  <Card.TitleButton
+                                    title={displayTitle(latest)}
+                                    onClick={() => requestOpenEdit(latest)}
+                                  >
+                                    <Text
+                                      as="span"
+                                      size="md"
+                                      weight="semibold"
+                                      preWrap
+                                    >
+                                      {displayTitle(latest)}
+                                    </Text>
+                                  </Card.TitleButton>
+                                  {renderCharacterBadges(group, latest, badge)}
+                                  {renderCharacterDate(group)}
                                   {latest.creator?.trim() ? (
-                                    <span className="card-creator-tag">
+                                    <Text
+                                      as="span"
+                                      size="xs"
+                                      tone="muted"
+                                      italic
+                                    >
                                       by {latest.creator.trim()}
-                                    </span>
+                                    </Text>
                                   ) : null}
-                                  {sortBy === "createdAt" &&
-                                  getGroupCreatedAt(group) ? (
-                                    <Badge
-                                      variant="outline"
-                                      size="xs"
-                                      leftIcon={<Icon name="Calendar" size={11} />}
-                                      title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}
-                                    >
-                                      {formatLibraryDate(
-                                        getGroupCreatedAt(group),
-                                      )}
-                                    </Badge>
-                                  ) : null}
-                                  {sortBy === "updatedAt" &&
-                                  getGroupUpdatedAt(group) ? (
-                                    <Badge
-                                      variant="outline"
-                                      size="xs"
-                                      leftIcon={<Icon name="Clock" size={11} />}
-                                      title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}
-                                    >
-                                      {formatLibraryDate(
-                                        getGroupUpdatedAt(group),
-                                      )}
-                                    </Badge>
-                                  ) : null}
-                                </div>
+                                </Stack>
 
-                                <ActionsMenu
-                                  label="Actions"
-                                  items={[
-                                    {
-                                      label: "Edit",
-                                      icon: "Pencil",
-                                      onClick: () => requestOpenEdit(latest),
-                                    },
-                                    entryKind(latest) === "ccv2"
-                                      ? {
-                                          label: isConverting
-                                            ? "Converting…"
-                                            : "Convert to BL",
-                                          icon: "Sparkles",
-                                          iconClassName: isConverting
-                                            ? "sparkle-pulse"
-                                            : undefined,
-                                          disabled: isConverting,
-                                          onClick: () => handleConvert(latest),
-                                        }
-                                      : null,
-                                    {
-                                      label: "Delete",
-                                      icon: "Trash2",
-                                      danger: true,
-                                      onClick: () =>
+                                <Card.Interactive>
+                                  <Stack inline gap="xs" hideBelow="md">
+                                    {entryKind(latest) === "ccv2" ? (
+                                      <Button
+                                        variant="ai"
+                                        size="xs"
+                                        leftIcon="Sparkles"
+                                        isLoading={isConverting}
+                                        disabled={isConverting}
+                                        onClick={() => void handleConvert(latest)}
+                                      >
+                                        {isConverting
+                                          ? "Converting…"
+                                          : "Convert to BL"}
+                                      </Button>
+                                    ) : null}
+                                    <Button
+                                      variant="secondary"
+                                      size="xs"
+                                      leftIcon="Tag"
+                                      onClick={() =>
+                                        handleEditTagsRequest(latest)
+                                      }
+                                    >
+                                      Edit Tags
+                                    </Button>
+                                    <Button
+                                      variant="secondary"
+                                      size="xs"
+                                      leftIcon="GitBranch"
+                                      onClick={() =>
+                                        handleOpenCardFamily(latest)
+                                      }
+                                      title="Manage Parent, Child, and Sibling card relationships"
+                                    >
+                                      Family
+                                    </Button>
+                                    <Button
+                                      variant="secondary"
+                                      size="xs"
+                                      leftIcon="Copy"
+                                      onClick={() =>
+                                        void handleDuplicateAsVariant(latest)
+                                      }
+                                      title="Duplicate this card as a new variant while keeping the same in-story Character Name"
+                                    >
+                                      Duplicate
+                                    </Button>
+                                    <Button
+                                      variant="secondary"
+                                      size="xs"
+                                      leftIcon="Pencil"
+                                      onClick={() => requestOpenEdit(latest)}
+                                    >
+                                      Edit
+                                    </Button>
+                                    <Button
+                                      variant="danger"
+                                      size="xs"
+                                      leftIcon="Trash2"
+                                      onClick={() =>
                                         requestDelete(
                                           latest.id,
                                           displayTitle(latest),
-                                        ),
-                                    },
-                                  ]}
-                                />
-                              </div>
+                                        )
+                                      }
+                                    >
+                                      Delete
+                                    </Button>
+                                  </Stack>
+                                  <Stack inline showBelow="md">
+                                    <ActionsMenu
+                                      label={`Actions for ${displayTitle(latest)}`}
+                                      items={buildCharacterMenuItems(
+                                        latest,
+                                        isConverting,
+                                      )}
+                                    />
+                                  </Stack>
+                                </Card.Interactive>
+                              </Stack>
 
                               {latest.creatorNotes?.trim() ? (
-                                <p className="card-creator-notes-snippet">
-                                  {latest.creatorNotes.trim()}
-                                </p>
+                                <Card variant="elevated" padding="xs" fullWidth>
+                                  <Text
+                                    as="p"
+                                    size="xs"
+                                    tone="secondary"
+                                    preWrap
+                                  >
+                                    {latest.creatorNotes.trim()}
+                                  </Text>
+                                </Card>
                               ) : null}
 
-                              {(latest.tags ?? []).length > 0 ? (
-                                <div
-                                  className="tag-chips"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  {sortTags(
-                                    latest.tags ?? [],
-                                    taxonomyConfig,
-                                  ).map((tag) => {
-                                    const active = isTagActive(tag);
-                                    return (
-                                      <TagChip
-                                        key={tag}
-                                        tag={tag}
-                                        userConfig={taxonomyConfig}
-                                        active={active}
-                                        size="xs"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          toggleTag(tag);
-                                        }}
-                                      />
-                                    );
-                                  })}
-                                </div>
-                              ) : null}
-                            </div>
-                          </div>
+                              <Separator spacing="none" />
+
+                              <TagRow
+                                taxonomy="character"
+                                userConfig={taxonomyConfig}
+                                tags={sortedTags}
+                                activeTags={activeFilterTags}
+                                onToggleTag={toggleTag}
+                                onEditTags={() => handleEditTagsRequest(latest)}
+                                wrapAll
+                              />
+                            </Stack>
+                          </Card>
                         );
                       })}
-                    </div>
+                    </Stack>
                   )}
 
-                  {/* 3. Grid View */}
+                  {/* 3. Grid View (Compact 1:1 square cards with 1-row interactive TagRow) */}
                   {viewMode === "grid" && (
-                    <div className="character-grid-view">
+                    <FormGrid cols="compact" gap="sm">
                       {paginatedGroups.map((group) => {
                         const latest = group.versions[0];
                         const badge = cardBadgeLabel(latest);
                         const isConverting =
                           convertingId === latest.id && convertLoading;
+                        const sortedTags = sortTags(
+                          latest.tags ?? [],
+                          taxonomyConfig,
+                        );
                         return (
-                          <div
+                          <Card
                             key={group.key}
-                            className={`card-grid-item ${isConverting ? "is-converting" : ""}`}
-                            onClick={() => requestOpenEdit(latest)}
-                            role="button"
-                            tabIndex={0}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") requestOpenEdit(latest);
-                            }}
+                            as="article"
+                            variant="panel"
+                            padding="none"
+                            layout="column"
+                            hoverable
+                            aiPulse={isConverting}
                           >
-                            <div className="card-grid-thumb-wrap">
+                            <Card.Cover position="top" aspect="square">
                               <CharacterAvatar
                                 template={latest}
                                 variant="grid"
                               />
-                            </div>
-                            <div className="card-grid-body">
-                              <strong
-                                className="card-grid-title"
-                                title={displayTitle(latest)}
+                            </Card.Cover>
+                            <Card.Body padding="sm" gap="xs">
+                              <Stack
+                                direction="row"
+                                align="start"
+                                justify="between"
+                                gap="2xs"
+                                fullWidth
                               >
-                                {displayTitle(latest)}
-                              </strong>
-                              <div className="card-grid-footer">
-                                <div className="card-grid-badges">
-                                  {badge === "ccv2" ? (
-                                    <Badge variant="warning" size="xs">
-                                      CCv2
-                                    </Badge>
-                                  ) : null}
-                                  {badge === "ccv2bl" ? (
-                                    <Badge variant="info" size="xs">
-                                      CCv2 / BL
-                                    </Badge>
-                                  ) : null}
-                                  <Badge variant="accent" size="xs">
-                                    v
-                                    {latest.cardVersion ??
-                                      String(latest.version)}
-                                  </Badge>
-                                  {group.versions.length > 1 ? (
-                                    <span className="version-count">
-                                      ({group.versions.length} v)
-                                    </span>
-                                  ) : null}
-                                  {sortBy === "createdAt" &&
-                                  getGroupCreatedAt(group) ? (
-                                    <span
-                                      className="card-grid-timestamp"
-                                      title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}
-                                    >
-                                      {formatLibraryDate(
-                                        getGroupCreatedAt(group),
-                                      )}
-                                    </span>
-                                  ) : null}
-                                  {sortBy === "updatedAt" &&
-                                  getGroupUpdatedAt(group) ? (
-                                    <span
-                                      className="card-grid-timestamp"
-                                      title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}
-                                    >
-                                      {formatLibraryDate(
-                                        getGroupUpdatedAt(group),
-                                      )}
-                                    </span>
-                                  ) : null}
-                                </div>
-                                <ActionsMenu
-                                  label="Actions"
-                                  items={[
-                                    {
-                                      label: "Edit",
-                                      icon: "Pencil",
-                                      onClick: () => requestOpenEdit(latest),
-                                    },
-                                    entryKind(latest) === "ccv2"
-                                      ? {
-                                          label: isConverting
-                                            ? "Converting…"
-                                            : "Convert to BL",
-                                          icon: "Sparkles",
-                                          iconClassName: isConverting
-                                            ? "sparkle-pulse"
-                                            : undefined,
-                                          disabled: isConverting,
-                                          onClick: () => handleConvert(latest),
-                                        }
-                                      : null,
-                                    {
-                                      label: "Delete",
-                                      icon: "Trash2",
-                                      danger: true,
-                                      onClick: () =>
-                                        requestDelete(
-                                          latest.id,
-                                          displayTitle(latest),
-                                        ),
-                                    },
-                                  ]}
+                                <Card.TitleButton
+                                  title={displayTitle(latest)}
+                                  onClick={() => requestOpenEdit(latest)}
+                                >
+                                  <Text
+                                    as="span"
+                                    size="sm"
+                                    weight="semibold"
+                                    preWrap
+                                  >
+                                    {displayTitle(latest)}
+                                  </Text>
+                                </Card.TitleButton>
+                                <Card.Interactive>
+                                  <ActionsMenu
+                                    label={`Actions for ${displayTitle(latest)}`}
+                                    items={buildCharacterMenuItems(
+                                      latest,
+                                      isConverting,
+                                    )}
+                                  />
+                                </Card.Interactive>
+                              </Stack>
+
+                              <Stack
+                                direction="row"
+                                align="center"
+                                justify="between"
+                                gap="2xs"
+                                wrap
+                                fullWidth
+                              >
+                                <Stack
+                                  direction="row"
+                                  align="center"
+                                  gap="2xs"
+                                  wrap
+                                >
+                                  {renderCharacterBadges(group, latest, badge)}
+                                </Stack>
+                                {renderCharacterDate(group)}
+                              </Stack>
+
+                              <Stack
+                                direction="column"
+                                align="stretch"
+                                gap="xs"
+                                fullWidth
+                                pushBottom
+                              >
+                                <Separator spacing="none" />
+                                <TagRow
+                                  taxonomy="character"
+                                  userConfig={taxonomyConfig}
+                                  tags={sortedTags}
+                                  activeTags={activeFilterTags}
+                                  onToggleTag={toggleTag}
+                                  onEditTags={() =>
+                                    handleEditTagsRequest(latest)
+                                  }
                                 />
-                              </div>
-                            </div>
-                          </div>
+                              </Stack>
+                            </Card.Body>
+                          </Card>
                         );
                       })}
-                    </div>
+                    </FormGrid>
                   )}
 
                   {paginationElement}
-                </>
+                </Stack>
               )}
-            </main>
-          </div>
+            </Stack>
+          </Stack>
         )}
-      </div>
 
       {/* Diff comparison modal */}
       {diffData ? (
@@ -3198,6 +3463,206 @@ export function CharacterLibrary({
         onConfigUpdated={(newCfg) => setTaxonomyConfig(newCfg)}
       />
 
+      {/* Card Family Hierarchy & CCv2 Detachment Modal */}
+      {familyTargetId ? (
+        <CardFamilyModal
+          focusId={familyTargetId}
+          allTemplates={templates}
+          busy={familyBusy}
+          error={familyError}
+          onSelectFocus={(nextId) => {
+            setFamilyError(null);
+            setFamilyTargetId(nextId);
+          }}
+          onOpenEditor={(tpl) => requestOpenEdit(tpl)}
+          onSetParent={handleSetCharacterParent}
+          onDetachCcv2={handleDetachCharacterCcv2}
+          onCreateVariant={async (parentId) => {
+            const parentTpl = templates.find((t) => t.id === parentId);
+            if (!parentTpl) return;
+            setFamilyBusy(true);
+            setFamilyError(null);
+            try {
+              const duplicated = await duplicateCharacter(parentTpl.id);
+              const refreshed = await listCharacters();
+              setTemplates(refreshed);
+              setFamilyTargetId(duplicated.id);
+            } catch (e) {
+              setFamilyError(e instanceof Error ? e.message : String(e));
+            } finally {
+              setFamilyBusy(false);
+            }
+          }}
+          onClose={() => {
+            if (!familyBusy) {
+              setFamilyTargetId(null);
+              setFamilyError(null);
+            }
+          }}
+        />
+      ) : null}
+
+      {/* Reusable Edit Tags Modal for Character Cards */}
+      {tagsTarget
+        ? (() => {
+            const originalCcv2Tags =
+              tagsTarget.ccv2Tags ??
+              (tagsTarget.format === "ccv2" ? tagsTarget.tags : undefined) ??
+              [];
+            const hasOriginalSheetOrScenario = Boolean(
+              (tagsTarget.ccv2Content?.trim() &&
+                tagsTarget.ccv2Content.trim() !== tagsTarget.content?.trim()) ||
+                tagsTarget.scenario?.trim(),
+            );
+            const contextOptions: EditTagsAiContextOption[] = [
+              {
+                id: "content",
+                icon: "FileText",
+                title: "Character Sheet / Description",
+                description:
+                  "Main character profile, appearance, personality, and traits.",
+                defaultChecked: true,
+              },
+              {
+                id: "creatorNotes",
+                icon: "MessageSquare",
+                title: "Creator's Notes / Comment",
+                description:
+                  "Author commentary, backstory notes, and usage context.",
+                defaultChecked: Boolean(tagsTarget.creatorNotes?.trim()),
+              },
+              ...(hasOriginalSheetOrScenario
+                ? [
+                    {
+                      id: "originalCard",
+                      icon: "BookOpen" as const,
+                      title: "Original CCv2 Sheet & Scenario",
+                      description:
+                        "Include the raw imported CCv2 description and scenario text.",
+                      defaultChecked: true,
+                    },
+                  ]
+                : []),
+              ...(originalCcv2Tags.length > 0
+                ? [
+                    {
+                      id: "originalTags",
+                      icon: "Tag" as const,
+                      title: "Original CCv2 Tags",
+                      description:
+                        "Include the card's original imported CCv2 tags on the Edit Tags with AI prompt.",
+                      defaultChecked: true,
+                    },
+                  ]
+                : []),
+            ];
+
+            return (
+              <EditTagsModal
+                key={tagsTarget.id}
+                entityName={displayTitle(tagsTarget)}
+                taxonomy="character"
+                userConfig={taxonomyConfig}
+                initialTags={tagsTarget.tags ?? []}
+                originalTags={
+                  originalCcv2Tags.length > 0 ? originalCcv2Tags : undefined
+                }
+                restoreOriginalLabel="Restore CCv2 Tags"
+                libraryTags={allTagCounts.map((t) => t.tag)}
+                busy={tagsSaving}
+                error={tagsError}
+                contextOptions={contextOptions}
+                onSuggestAiTags={async ({
+                  providerId,
+                  currentTags,
+                  guidance,
+                  selectedContext,
+                  signal,
+                }) => {
+                  const contentParts: string[] = [];
+                  if (selectedContext.content ?? true) {
+                    if (tagsTarget.content?.trim()) {
+                      contentParts.push(tagsTarget.content.trim());
+                    }
+                  }
+                  if (selectedContext.originalCard) {
+                    if (
+                      tagsTarget.ccv2Content?.trim() &&
+                      tagsTarget.ccv2Content.trim() !==
+                        tagsTarget.content?.trim()
+                    ) {
+                      contentParts.push(
+                        `[Original CCv2 Description]\n${tagsTarget.ccv2Content.trim()}`,
+                      );
+                    }
+                    if (tagsTarget.scenario?.trim()) {
+                      contentParts.push(
+                        `[Scenario]\n${tagsTarget.scenario.trim()}`,
+                      );
+                    }
+                  }
+                  const effectiveContent =
+                    contentParts.length > 0
+                      ? contentParts.join("\n\n")
+                      : (tagsTarget.content ?? "");
+
+                  const effectiveCreatorNotes = selectedContext.creatorNotes
+                    ? [
+                        tagsTarget.creatorNotes?.trim(),
+                        tagsTarget.ccv2CreatorNotes?.trim() &&
+                        tagsTarget.ccv2CreatorNotes.trim() !==
+                          tagsTarget.creatorNotes?.trim()
+                          ? `[Original CCv2 Creator Notes]\n${tagsTarget.ccv2CreatorNotes.trim()}`
+                          : undefined,
+                      ]
+                        .filter(Boolean)
+                        .join("\n\n") || undefined
+                    : undefined;
+
+                  const guidanceParts: string[] = [];
+                  if (guidance?.trim()) {
+                    guidanceParts.push(guidance.trim());
+                  }
+                  if (
+                    selectedContext.originalTags &&
+                    originalCcv2Tags.length > 0
+                  ) {
+                    guidanceParts.push(
+                      `Original imported CCv2 tags on this card: ${originalCcv2Tags.join(", ")}. Evaluate which of these original tags (or standardized BobbinLoom equivalents) remain accurate and worth keeping.`,
+                    );
+                  }
+
+                  const res = await suggestCharacterTags(
+                    {
+                      providerId,
+                      name: displayTitle(tagsTarget),
+                      content: effectiveContent,
+                      creatorNotes: effectiveCreatorNotes,
+                      currentTags,
+                      guidance:
+                        guidanceParts.length > 0
+                          ? guidanceParts.join("\n\n")
+                          : undefined,
+                      libraryTags: allTagCounts.map((t) => t.tag),
+                    },
+                    { signal },
+                  );
+                  return res.tags;
+                }}
+                onSave={(nextTags) => {
+                  void submitCharacterTags(nextTags);
+                }}
+                onClose={() => {
+                  if (!tagsSaving) {
+                    setTagsTargetId(null);
+                    setTagsError(null);
+                  }
+                }}
+              />
+            );
+          })()
+        : null}
+
       {/* Discard Changes Warning Modal */}
       {discardConfirm && (
         <ConfirmModal
@@ -3277,6 +3742,104 @@ export function CharacterLibrary({
           onCancel={() => setDeleteTarget(null)}
         />
       ) : null}
-    </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".png,.json"
+        hidden
+        onChange={handleImportFile}
+      />
+    </Stack>
+  );
+
+  if (resolvedVariant === "dialog") {
+    return (
+      <Modal
+        open
+        onClose={() => onClose?.()}
+        size="wide"
+        fullScreenMobile
+        ariaLabel="Character Library"
+      >
+        <Header
+          variant="section"
+          icon="Users"
+          title="Character Library"
+          subtitle="Manage character templates for scenario generation and story casts."
+          actions={
+            <Stack direction="row" align="center" gap="sm">
+              {!editorOpen ? (
+                <>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    leftIcon="Upload"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={saving || importing}
+                    isLoading={importing}
+                  >
+                    {importing ? "Importing…" : "Import Card"}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    leftIcon="Plus"
+                    onClick={openCreate}
+                    disabled={saving || importing}
+                  >
+                    New Character
+                  </Button>
+                </>
+              ) : null}
+              {onClose ? (
+                <Button variant="secondary" size="sm" onClick={onClose}>
+                  Close
+                </Button>
+              ) : null}
+            </Stack>
+          }
+        />
+        <Modal.Body>
+          <Modal.Content>{contentBody}</Modal.Content>
+        </Modal.Body>
+      </Modal>
+    );
+  }
+
+  return (
+    <Stack direction="column" align="stretch" gap="md" fullWidth>
+      <Header
+        variant="page"
+        title="Character Library"
+        subtitle="Manage character templates for scenario generation and story casts."
+        actions={
+          !editorOpen ? (
+            <Stack direction="row" align="center" gap="sm">
+              <Button
+                variant="secondary"
+                size="md"
+                leftIcon="Upload"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={saving || importing}
+                isLoading={importing}
+              >
+                {importing ? "Importing…" : "Import Card"}
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
+                leftIcon="Plus"
+                onClick={openCreate}
+                disabled={saving || importing}
+              >
+                New Character
+              </Button>
+            </Stack>
+          ) : undefined
+        }
+      />
+      {contentBody}
+    </Stack>
   );
 }

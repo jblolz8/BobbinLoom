@@ -456,13 +456,7 @@ export function ImageConnectionEditor({
     : capabilityLines(form.model ? modelSpecs[form.model] : undefined);
 
   return (
-    <Card
-      as="form"
-      variant="elevated"
-      padding="md"
-      className="conn-editor"
-      onSubmit={onSubmit}
-    >
+    <Card as="form" variant="elevated" padding="md" onSubmit={onSubmit}>
       <Stack direction="column" align="stretch" gap="sm">
         <Header
           variant="panel"

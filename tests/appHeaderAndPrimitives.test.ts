@@ -12,8 +12,10 @@ import {
   DragGhost,
   DragHandle,
   Header,
+  PageShell,
   SimpleSelect,
   Slider,
+  SortSelect,
   Stack,
   SwitchRow,
   TagSidebar,
@@ -22,6 +24,7 @@ import {
   TextInput,
 } from "../src/client/components/base";
 import { PlaythroughShelfContent } from "../src/client/components/library/PlaythroughLibrary";
+import { CardFamilyModal, EditTagsModal } from "../src/client/components/common";
 import { SettingsModal } from "../src/client/components/modals/SettingsModal";
 import { AppearanceSettingsPanel } from "../src/client/components/settings/AppearanceSettingsPanel";
 import { ChatSettingsPanel } from "../src/client/components/settings/ChatSettingsPanel";
@@ -68,7 +71,8 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
       ),
     );
 
-    expect(html).toContain("base-header base-header--app app-header");
+    expect(html).toContain('<header class="base-header base-header--app">');
+    expect(html).not.toContain("app-header");
     expect(html).toContain("base-header__brand");
     expect(html).toContain(
       '<h1 class="base-header__logo"><button type="button" class="base-header__logo-btn">',
@@ -506,7 +510,7 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
 
     expect(html).toContain("base-status base-status--inline base-status--ok");
     expect(html).toContain("1 model loaded.");
-    expect(html).toContain("conn-test-drawer");
+    expect(html).toContain("base-card base-card--panel base-card--pad-xs");
     expect(html).toContain("Test Response Prompt");
     expect(html).toContain("Say hello in one sentence.");
     expect(html).toContain("Hello! Systems are online and ready.");
@@ -1231,5 +1235,177 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
     expect(rendered).toBe(
       "The themes, settings, and tropes of the story for Alex are theme: dark romance and setting: modern day.",
     );
+  });
+
+  it("renders SortSelect as a joined split control with direction icon, label, and tooltip without legacy sort classes", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(
+          Stack,
+          { direction: "row", gap: "sm" },
+          createElement(SortSelect, {
+            value: "name",
+            onChange: noop,
+            direction: "asc",
+            onToggleDirection: noop,
+            options: [
+              { value: "name", label: "Name" },
+              { value: "updatedAt", label: "Updated Date" },
+            ],
+            size: "sm",
+            groupAriaLabel: "Sort library",
+            "aria-label": "Sort characters by",
+          }),
+          createElement(SortSelect, {
+            value: "updatedAt",
+            onChange: noop,
+            direction: "desc",
+            onToggleDirection: noop,
+            options: [
+              { value: "name", label: "Name" },
+              { value: "updatedAt", label: "Updated Date" },
+            ],
+            size: "sm",
+          }),
+        ),
+      ),
+    );
+
+    expect(html).toContain("base-sort-select base-sort-select--sm");
+    expect(html).toContain("base-sort-select__trigger");
+    expect(html).toContain("base-sort-select__dir-btn");
+    expect(html).toContain("base-sort-select__dir-label");
+    expect(html).toContain("A-Z");
+    expect(html).toContain("Newest");
+    expect(html).toContain('aria-label="Sort library"');
+    expect(html).toContain('aria-label="Sort characters by"');
+    expect(html).not.toContain("library-sort-control-group");
+    expect(html).not.toContain("library-sort-dir-btn");
+  });
+
+  it("renders PageShell and PageShell.Section (standard and flush) without legacy home-workspace classes", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        PageShell,
+        null,
+        createElement(PageShell.Section, null, "Workspace Content"),
+        createElement(PageShell.Section, { flush: true }, "Flush Docs Content"),
+      ),
+    );
+
+    expect(html).toContain('class="base-page-shell"');
+    expect(html).not.toContain("app-shell");
+    expect(html).toContain("base-page-shell__section");
+    expect(html).toContain("base-page-shell__section--flush");
+    expect(html).not.toContain("home-workspace-shell");
+    expect(html).not.toContain("home-workspace-page");
+  });
+
+  it("renders reusable EditTagsModal for character taxonomy with Restore CCv2 Tags button and category tabs", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(EditTagsModal, {
+          entityName: "Aurelia Vance",
+          taxonomy: "character",
+          initialTags: ["species:elf", "class:mage"],
+          originalTags: ["elf", "mage", "fantasy"],
+          restoreOriginalLabel: "Restore CCv2 Tags",
+          libraryTags: ["species:elf", "class:mage", "theme:fantasy"],
+          busy: false,
+          error: null,
+          contextOptions: [
+            {
+              id: "content",
+              icon: "FileText",
+              title: "Character Sheet / Description",
+              description: "Main character profile.",
+              defaultChecked: true,
+            },
+            {
+              id: "originalTags",
+              icon: "Tag",
+              title: "Original CCv2 Tags",
+              description:
+                "Include the card's original imported CCv2 tags on the Edit Tags with AI prompt.",
+              defaultChecked: true,
+            },
+          ],
+          onSuggestAiTags: async () => [],
+          onSave: noop,
+          onClose: noop,
+        }),
+      ),
+    );
+
+    expect(html).toContain("Edit Tags — Aurelia Vance");
+    expect(html).toContain("Edit Tags with AI");
+    expect(html).toContain("Restore CCv2 Tags");
+    expect(html).toContain("Clear All");
+    expect(html).toContain("All Tags");
+    expect(html).toContain("Species &amp; Theme");
+    expect(html).toContain("Rating &amp; Origin");
+    expect(html).toContain("General Traits");
+    expect(html).toContain("Save Tags");
+  });
+
+  it("renders CardFamilyModal with tree hierarchy, same-name suggestions, and Make Pure BL action", () => {
+    const averiRoot = {
+      id: "char_averi_1",
+      name: "Averi",
+      version: 1,
+      content: "[Species]: Human",
+      summary: "",
+      startingClothing: [],
+      ccv2Content: "Original Averi CCv2",
+    };
+    const averiBully = {
+      id: "char_averi_2",
+      parentId: "char_averi_1",
+      name: "Averi",
+      title: "Averi - Bully",
+      version: 1,
+      content: "[Species]: Human\n[Personality]\nBully",
+      summary: "",
+      startingClothing: [],
+      ccv2Content: "Duplicate CCv2 source",
+    };
+    const averiUnlinked = {
+      id: "char_averi_3",
+      name: "Averi",
+      title: "Averi - Fox",
+      version: 1,
+      content: "[Species]: Kitsune",
+      summary: "",
+      startingClothing: [],
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(CardFamilyModal, {
+          focusId: "char_averi_1",
+          allTemplates: [averiRoot, averiBully, averiUnlinked],
+          onSelectFocus: noop,
+          onSetParent: noop,
+          onDetachCcv2: noop,
+          onCreateVariant: noop,
+          onClose: noop,
+        }),
+      ),
+    );
+
+    expect(html).toContain("Card Family — Averi");
+    expect(html).toContain("Family Hierarchy (2 cards)");
+    expect(html).toContain("Root Parent");
+    expect(html).toContain("Child Variant");
+    expect(html).toContain("Averi - Bully");
+    expect(html).toContain("Make Pure BL (Cut CCv2 Ties)");
+    expect(html).toContain("Matching Character Name: Averi");
+    expect(html).toContain("Averi - Fox");
   });
 });

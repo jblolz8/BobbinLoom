@@ -1,4 +1,5 @@
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -20,7 +21,12 @@ import {
 } from "./persistence";
 import { migratePlaythrough } from "./dataMigrations";
 import { slugify, uniqueSlug } from "./slugs";
-import { normalizeCreator, normalizeTags } from "../engine/characterCards";
+import {
+  buildCharacterFamilyTree,
+  displayTitle,
+  normalizeCreator,
+  normalizeTags,
+} from "../engine/characterCards";
 import { cleanTag } from "../engine/tagTaxonomy";
 import {
   canonicalizePlaythroughTag,
@@ -592,7 +598,7 @@ export function characterFolderForId(
   if (!record) return null;
   return (
     findFolderContainingId(dir, id) ??
-    characterFolderPath(dir, slugify(record.name))
+    characterFolderPath(dir, slugify(displayTitle(record)))
   );
 }
 
@@ -988,11 +994,14 @@ export function removeCharacterProfileAvatar(
 export function createCharacterTemplateRecord(
   name: string,
   dir: string = CHARACTERS_DIR,
+  title?: string,
 ): CharacterTemplate {
   const now = new Date().toISOString();
+  const normalizedTitle = title?.trim() ? title.trim() : undefined;
   const template: CharacterTemplate = {
     id: `char_${Date.now()}`,
     name,
+    ...(normalizedTitle ? { title: normalizedTitle } : {}),
     version: 1,
     summary: "",
     startingClothing: [],
@@ -1005,7 +1014,7 @@ export function createCharacterTemplateRecord(
     createdAt: now,
     updatedAt: now,
   };
-  const slug = uniqueSlug(slugify(name), characterSlugs(dir));
+  const slug = uniqueSlug(slugify(displayTitle(template)), characterSlugs(dir));
   ensureStoreDir(characterFolderPath(dir, slug));
   atomicWriteJson(characterFilePath(dir, slug), template); // latest = <slug>.json
   return template;
@@ -1019,16 +1028,207 @@ export function updateCharacterTemplateRecord(
   const templates = listCharacterTemplates(dir);
   const index = templates.findIndex((t) => t.id === id);
   if (index === -1) return null;
+  const current = templates[index];
   const now = new Date().toISOString();
-  const updated: CharacterTemplate = {
-    ...templates[index],
+  const preserveCcv2Tags =
+    current.format === "ccv2" &&
+    updates.tags !== undefined &&
+    current.ccv2Tags === undefined
+      ? { ccv2Tags: current.tags }
+      : {};
+
+  let resolvedParentPatch: Partial<CharacterTemplate> = {};
+  if ("parentId" in updates) {
+    const rawParent = updates.parentId?.trim() || undefined;
+    if (!rawParent || rawParent === id) {
+      resolvedParentPatch = { parentId: undefined };
+    } else {
+      const fam = buildCharacterFamilyTree(id, templates);
+      if (fam?.descendantIds.has(rawParent)) {
+        // Prevent cycles: ignore attempt to set a descendant as parent
+        resolvedParentPatch = { parentId: current.parentId };
+      } else {
+        resolvedParentPatch = { parentId: rawParent };
+      }
+    }
+  }
+
+  const normalizedUpdates: Partial<CharacterTemplate> = {
     ...updates,
+    ...("title" in updates
+      ? { title: updates.title?.trim() ? updates.title.trim() : undefined }
+      : {}),
+    ...resolvedParentPatch,
+  };
+  const updated: CharacterTemplate = {
+    ...current,
+    ...preserveCcv2Tags,
+    ...normalizedUpdates,
     id,
-    createdAt: templates[index].createdAt ?? now,
+    createdAt: current.createdAt ?? now,
     updatedAt: updates.updatedAt ?? now,
   };
   saveCharacterTemplateRecord(updated, dir);
   return updated;
+}
+
+/**
+ * Cuts ties to the embedded original CCv2 source on a converted BL character card,
+ * turning it into a pure BobbinLoom (`BL`) card while preserving its portrait art.
+ */
+export function detachCharacterCcv2Source(
+  id: string,
+  dir: string = CHARACTERS_DIR,
+): CharacterTemplate | null {
+  const templates = listCharacterTemplates(dir);
+  const current = templates.find((t) => t.id === id);
+  if (!current || current.format === "ccv2") return null;
+
+  const folder =
+    findFolderContainingId(dir, id) ??
+    characterFolderPath(dir, slugify(displayTitle(current)));
+
+  if (existsSync(folder)) {
+    // If the card's portrait was still served from cardRef.file, promote it to portrait.png first
+    if (current.cardRef?.kind === "png" && current.cardRef.file) {
+      const srcPng = join(folder, current.cardRef.file);
+      const hasDedicatedPortrait =
+        Boolean(
+          current.customPortrait &&
+            existsSync(join(folder, current.customPortrait)),
+        ) ||
+        ["png", "jpg", "jpeg", "webp"].some((ext) =>
+          existsSync(join(folder, `portrait.${ext}`)),
+        );
+      if (!hasDedicatedPortrait && existsSync(srcPng)) {
+        try {
+          copyFileSync(srcPng, join(folder, "portrait.png"));
+        } catch {
+          /* ignore */
+        }
+      }
+      if (
+        existsSync(srcPng) &&
+        basename(srcPng) !== "portrait.png" &&
+        basename(srcPng) !== current.customPortrait
+      ) {
+        try {
+          unlinkSync(srcPng);
+        } catch {
+          /* ignore */
+        }
+      }
+    } else if (current.cardRef?.kind === "json" && current.cardRef.file) {
+      const srcJson = join(folder, current.cardRef.file);
+      if (existsSync(srcJson)) {
+        try {
+          unlinkSync(srcJson);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  }
+
+  removeCharacterImportRecord(id, dir);
+
+  const now = new Date().toISOString();
+  const detached: CharacterTemplate = {
+    ...current,
+    format: undefined,
+    cardRef: undefined,
+    ccv2Content: undefined,
+    ccv2CreatorNotes: undefined,
+    ccv2Tags: undefined,
+    avatarUpdatedAt: Date.now(),
+    updatedAt: now,
+  };
+  saveCharacterTemplateRecord(detached, dir);
+  return detached;
+}
+
+export function duplicateCharacterTemplateRecord(
+  id: string,
+  dir: string = CHARACTERS_DIR,
+): CharacterTemplate | null {
+  const templates = listCharacterTemplates(dir);
+  const source = templates.find((t) => t.id === id);
+  if (!source) return null;
+
+  const sourceFolder = findFolderContainingId(dir, id);
+  const now = new Date().toISOString();
+  const variantTitle = `${displayTitle(source)} (Variant)`;
+  const slug = uniqueSlug(slugify(variantTitle), characterSlugs(dir));
+  const targetFolder = characterFolderPath(dir, slug);
+  ensureStoreDir(targetFolder);
+
+  const isSourcePureOrConvertedBl = source.format !== "ccv2";
+  let copiedPortrait = false;
+
+  // Copy portrait, profile, and (only for unconverted CCv2) original card sidecar files
+  if (sourceFolder && existsSync(sourceFolder)) {
+    for (const ext of ["png", "jpg", "jpeg", "webp"]) {
+      for (const prefix of ["portrait", "profile"]) {
+        const srcImg = join(sourceFolder, `${prefix}.${ext}`);
+        if (existsSync(srcImg)) {
+          try {
+            copyFileSync(srcImg, join(targetFolder, `${prefix}.${ext}`));
+            if (prefix === "portrait") copiedPortrait = true;
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    }
+    if (source.cardRef?.file) {
+      const srcCardFile = join(sourceFolder, source.cardRef.file);
+      if (existsSync(srcCardFile)) {
+        if (isSourcePureOrConvertedBl) {
+          // Promote CCv2 PNG art to native portrait.png on the BL child variant
+          if (!copiedPortrait && source.cardRef.kind === "png") {
+            try {
+              copyFileSync(srcCardFile, join(targetFolder, "portrait.png"));
+            } catch {
+              /* ignore */
+            }
+          }
+        } else {
+          try {
+            copyFileSync(srcCardFile, join(targetFolder, source.cardRef.file));
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    }
+  }
+
+  const duplicated: CharacterTemplate = {
+    ...structuredClone(source),
+    id: `char_${Date.now()}_${randomUUID().slice(0, 6)}`,
+    lineageId: undefined,
+    parentId: source.id,
+    version: 1,
+    name: source.name,
+    title: variantTitle,
+    ...(isSourcePureOrConvertedBl
+      ? {
+          cardRef: undefined,
+          ccv2Content: undefined,
+          ccv2CreatorNotes: undefined,
+          ccv2Tags: undefined,
+        }
+      : {}),
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const targetFile =
+    duplicated.format === "ccv2"
+      ? join(targetFolder, `${slug}.bl.json`)
+      : characterFilePath(dir, slug);
+  atomicWriteJson(targetFile, duplicated);
+  return duplicated;
 }
 
 /** After a CCv2 card is converted to BL, the converted record is written to
@@ -1059,9 +1259,23 @@ export function deleteCharacterTemplateRecord(
   id: string,
   dir: string = CHARACTERS_DIR,
 ): boolean {
-  if (!listCharacterTemplates(dir).some((t) => t.id === id)) return false;
+  const all = listCharacterTemplates(dir);
+  const target = all.find((t) => t.id === id);
+  if (!target) return false;
   const folder = findFolderContainingId(dir, id);
   if (!folder) return false;
+
+  // Promote any direct children to target.parentId (or root) before deleting
+  for (const child of all) {
+    if (child.parentId === id && child.id !== id) {
+      updateCharacterTemplateRecord(
+        child.id,
+        { parentId: target.parentId ?? "" },
+        dir,
+      );
+    }
+  }
+
   const backup = quarantineFolder(folder);
   console.log(
     `[store] character ${id} deleted — folder quarantined${backup ? ` to ${backup}` : ""}`,
@@ -1077,28 +1291,44 @@ export function saveCharacterTemplateRecord(
   dir: string = CHARACTERS_DIR,
 ): CharacterTemplate {
   const templates = listCharacterTemplates(dir);
-  const existing = templates.find((t) => t.id === template.id);
+  const existing =
+    templates.find((t) => t.id === template.id) ??
+    (template.lineageId
+      ? templates.find((t) => (t.lineageId ?? t.id) === template.lineageId)
+      : undefined);
   const slugs = characterSlugs(dir);
-  const nameSlug = slugify(template.name);
+  const desiredSlug = slugify(displayTitle(template));
   let slug: string;
   if (existing) {
-    slug = slugify(existing.name);
-    if (nameSlug !== slug) {
-      slug = uniqueSlug(nameSlug, slugs);
-      moveCharacterFolder(dir, slugify(existing.name), slug);
+    const existingFolder = findFolderContainingId(dir, existing.id);
+    const currentSlug = existingFolder
+      ? basename(existingFolder)
+      : slugify(displayTitle(existing));
+    const oldDesiredSlug = slugify(displayTitle(existing));
+    if (desiredSlug !== oldDesiredSlug && desiredSlug !== currentSlug) {
+      slug = uniqueSlug(desiredSlug, slugs);
+      moveCharacterFolder(dir, currentSlug, slug);
+    } else {
+      slug = currentSlug;
     }
   } else {
-    slug = uniqueSlug(nameSlug, slugs);
+    slug = uniqueSlug(desiredSlug, slugs);
   }
   ensureStoreDir(characterFolderPath(dir, slug));
   const now = new Date().toISOString();
   const recordToSave: CharacterTemplate = {
     ...template,
+    ...("title" in template
+      ? { title: template.title?.trim() ? template.title.trim() : undefined }
+      : {}),
     createdAt: template.createdAt ?? existing?.createdAt ?? now,
     updatedAt: template.updatedAt ?? now,
   };
   const maxV = folderMaxVersion(dir, slug);
-  if (recordToSave.version >= maxV) {
+  const blImportPath = join(characterFolderPath(dir, slug), `${slug}.bl.json`);
+  if (recordToSave.format === "ccv2" && existsSync(blImportPath)) {
+    atomicWriteJson(blImportPath, recordToSave);
+  } else if (recordToSave.version >= maxV) {
     // Latest lands at <slug>.json — demote the previous holder first.
     const latestPath = characterFilePath(dir, slug);
     if (existsSync(latestPath)) {
@@ -1136,12 +1366,15 @@ export function importCharacterCard(
   const existing = listCharacterTemplates(dir).find(
     (t) =>
       t.format === "ccv2" &&
-      t.name === card.name &&
+      displayTitle(t) === card.name &&
       (t.creator ?? "") === normalizeCreator(card.creator),
   );
   let slug: string;
   if (existing) {
-    slug = slugify(existing.name);
+    const existingFolder = findFolderContainingId(dir, existing.id);
+    slug = existingFolder
+      ? basename(existingFolder)
+      : slugify(displayTitle(existing));
   } else {
     slug = uniqueSlug(slugify(card.name), characterSlugs(dir));
     ensureStoreDir(characterFolderPath(dir, slug));
@@ -1731,17 +1964,15 @@ export function listPlaythroughSummaries(
     }
   }
 
-  if (options?.sortBy) {
-    summaries.sort((a, b) => {
-      if (options.sortBy === "name") return a.name.localeCompare(b.name);
-      if (options.sortBy === "turn") return a.turn - b.turn;
-      return a.updatedAt.localeCompare(b.updatedAt);
-    });
-  }
+  const sortBy = options?.sortBy ?? "updatedAt";
+  const sortDir = options?.sortDir ?? (sortBy === "name" ? "asc" : "desc");
+  const dirMultiplier = sortDir === "asc" ? 1 : -1;
 
-  if (options?.sortDir === "asc") {
-    summaries.reverse();
-  }
+  summaries.sort((a, b) => {
+    if (sortBy === "name") return a.name.localeCompare(b.name) * dirMultiplier;
+    if (sortBy === "turn") return (a.turn - b.turn) * dirMultiplier;
+    return a.updatedAt.localeCompare(b.updatedAt) * dirMultiplier;
+  });
 
   const total = summaries.length;
 

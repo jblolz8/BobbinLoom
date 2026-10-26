@@ -223,6 +223,43 @@ describe("GET /api/playthroughs ships summaries, not documents", () => {
 
     expect(body.playthroughs.map((p) => p.id)).toEqual([newer.id, older.id]);
     expect(body.total).toBe(body.playthroughs.length);
+
+    const descBody = (
+      await list(app, "?sortBy=updatedAt&sortDir=desc")
+    ).json() as {
+      playthroughs: { id: string }[];
+    };
+    expect(descBody.playthroughs.map((p) => p.id)).toEqual([
+      newer.id,
+      older.id,
+    ]);
+
+    const ascBody = (
+      await list(app, "?sortBy=updatedAt&sortDir=asc")
+    ).json() as {
+      playthroughs: { id: string }[];
+    };
+    expect(ascBody.playthroughs.map((p) => p.id)).toEqual([older.id, newer.id]);
+
+    const nameAscBody = (
+      await list(app, "?sortBy=name&sortDir=asc")
+    ).json() as {
+      playthroughs: { id: string }[];
+    };
+    expect(nameAscBody.playthroughs.map((p) => p.id)).toEqual([
+      newer.id,
+      older.id,
+    ]);
+
+    const nameDescBody = (
+      await list(app, "?sortBy=name&sortDir=desc")
+    ).json() as {
+      playthroughs: { id: string }[];
+    };
+    expect(nameDescBody.playthroughs.map((p) => p.id)).toEqual([
+      older.id,
+      newer.id,
+    ]);
   });
 
   it("hides timeline branches by default and includes them on request", async () => {

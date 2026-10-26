@@ -23,6 +23,8 @@ export interface StackProps extends HTMLAttributes<HTMLElement> {
   flex1?: boolean;
   fullWidth?: boolean;
   fullHeight?: boolean;
+  /** Pushes the stack to the bottom of a flex column (`margin-top: auto`). */
+  pushBottom?: boolean;
   sticky?: boolean;
   dimmed?: boolean;
   scrollable?: boolean;
@@ -49,6 +51,7 @@ export const Stack = forwardRef<HTMLElement, StackProps>(function Stack(
     flex1 = false,
     fullWidth = false,
     fullHeight = false,
+    pushBottom = false,
     sticky = false,
     dimmed = false,
     scrollable = false,
@@ -73,6 +76,7 @@ export const Stack = forwardRef<HTMLElement, StackProps>(function Stack(
     flex1 ? "base-stack--flex-1" : "",
     fullWidth ? "base-stack--full-width" : "",
     fullHeight ? "base-stack--full-height" : "",
+    pushBottom ? "base-stack--push-bottom" : "",
     sticky ? "base-stack--sticky" : "",
     dimmed ? "base-stack--dimmed" : "",
     scrollable ? "base-stack--scrollable" : "",

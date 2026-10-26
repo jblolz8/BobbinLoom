@@ -3,9 +3,8 @@ import {
   Badge,
   Button,
   Card,
-  Icon,
   Separator,
-  SimpleSelect,
+  SortSelect,
   Stack,
   Text,
 } from "../../base";
@@ -85,16 +84,11 @@ export function ProviderConnectionCard({
 
         {/* 2. Action Buttons + Activity/Date Timestamp */}
         <Stack direction="row" align="center" justify="between" gap="xs" wrap>
-          <Stack
-            direction="row"
-            align="center"
-            gap="2xs"
-            wrap
-            className="conn-actions"
-          >
+          <Stack direction="row" align="center" gap="2xs" wrap>
             <Button
               variant="primary"
               size="xs"
+              active={isActive}
               onClick={onActivate}
               disabled={isActive}
               collapseBelow="xs"
@@ -288,38 +282,16 @@ export function ProviderConnectionList({
           </Stack>
 
           {connections.length > 0 && (
-            <Stack direction="row" align="center" gap="2xs">
-              <Text
-                as="label"
-                htmlFor="conn-sort-select"
-                size="xs"
-                tone="secondary"
-              >
-                <Stack direction="row" align="center" gap="2xs" inline>
-                  <Icon name="ArrowUpDown" size={13} />
-                  <span>Sort:</span>
-                </Stack>
-              </Text>
-              <SimpleSelect<ProviderSortBy>
-                id="conn-sort-select"
-                size="xs"
-                value={sortBy}
-                onChange={onSortByChange}
-                options={SORT_OPTIONS}
-                aria-label="Sort providers by"
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                size="xs"
-                onClick={onToggleSortDir}
-                tooltip={`Sort order: ${sortDir === "asc" ? "Ascending" : "Descending"} (click to toggle)`}
-                aria-label={`Sort order: ${sortDir === "asc" ? "Ascending" : "Descending"}`}
-                leftIcon={sortDir === "asc" ? "ArrowUp" : "ArrowDown"}
-              >
-                {sortDir === "asc" ? "Asc" : "Desc"}
-              </Button>
-            </Stack>
+            <SortSelect<ProviderSortBy>
+              id="conn-sort-select"
+              size="xs"
+              value={sortBy}
+              onChange={onSortByChange}
+              direction={sortDir}
+              onToggleDirection={onToggleSortDir}
+              options={SORT_OPTIONS}
+              aria-label="Sort providers by"
+            />
           )}
         </Stack>
       </Card>

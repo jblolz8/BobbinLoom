@@ -1,6 +1,8 @@
 import {
   isValidElement,
+  useCallback,
   useEffect,
+  useRef,
   useState,
   type ReactElement,
   type ReactNode,
@@ -61,6 +63,8 @@ export interface TooltipProps {
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   delayDuration?: number;
+  /** When true, enables pointer events inside the tooltip so users can hover into, scroll, and click interactive elements inside it. */
+  interactive?: boolean;
 }
 
 interface CollapsibleChildProps {
@@ -84,6 +88,7 @@ export function Tooltip({
   defaultOpen,
   onOpenChange,
   delayDuration,
+  interactive = false,
 }: TooltipProps) {
   const childProps: CollapsibleChildProps | undefined = isValidElement(children)
     ? ((children as ReactElement<CollapsibleChildProps>).props ?? undefined)
@@ -97,6 +102,96 @@ export function Tooltip({
   const [isBelowBreakpoint, setIsBelowBreakpoint] = useState<boolean>(() =>
     matchesCollapseBreakpoint(effectiveCollapseBelow),
   );
+
+  const [uncontrolledOpen, setUncontrolledOpen] = useState<boolean>(
+    defaultOpen ?? false,
+  );
+  const isControlled = open !== undefined;
+  const interactiveOpen = isControlled ? open : uncontrolledOpen;
+  const interactiveOpenRef = useRef<boolean>(interactiveOpen);
+  interactiveOpenRef.current = interactiveOpen;
+
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearTimers = useCallback(() => {
+    if (openTimerRef.current !== null) {
+      clearTimeout(openTimerRef.current);
+      openTimerRef.current = null;
+    }
+    if (closeTimerRef.current !== null) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => clearTimers();
+  }, [clearTimers]);
+
+  const setInteractiveOpen = useCallback(
+    (next: boolean | ((prev: boolean) => boolean)) => {
+      const prev = interactiveOpenRef.current;
+      const resolved = typeof next === "function" ? next(prev) : next;
+      if (resolved === prev) return;
+      interactiveOpenRef.current = resolved;
+      if (!isControlled) {
+        setUncontrolledOpen(resolved);
+      }
+      onOpenChange?.(resolved);
+    },
+    [isControlled, onOpenChange],
+  );
+
+  const scheduleInteractiveOpen = useCallback(() => {
+    if (closeTimerRef.current !== null) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    if (interactiveOpenRef.current || openTimerRef.current !== null) return;
+    const delay = delayDuration ?? 120;
+    openTimerRef.current = setTimeout(() => {
+      openTimerRef.current = null;
+      setInteractiveOpen(true);
+    }, delay);
+  }, [delayDuration, setInteractiveOpen]);
+
+  const scheduleInteractiveClose = useCallback(() => {
+    if (openTimerRef.current !== null) {
+      clearTimeout(openTimerRef.current);
+      openTimerRef.current = null;
+    }
+    if (closeTimerRef.current !== null) {
+      clearTimeout(closeTimerRef.current);
+    }
+    closeTimerRef.current = setTimeout(() => {
+      closeTimerRef.current = null;
+      setInteractiveOpen(false);
+    }, 150);
+  }, [setInteractiveOpen]);
+
+  // When an interactive tooltip is open, close it if an ancestor scroll container of the trigger scrolls
+  // (while ignoring scroll events inside the tooltip portal content itself).
+  useEffect(() => {
+    if (!interactive || !interactiveOpen || typeof window === "undefined") {
+      return;
+    }
+    const handleScroll = (event: Event) => {
+      const triggerEl = triggerRef.current;
+      if (
+        triggerEl &&
+        event.target instanceof Node &&
+        event.target.contains(triggerEl)
+      ) {
+        clearTimers();
+        setInteractiveOpen(false);
+      }
+    };
+    window.addEventListener("scroll", handleScroll, { capture: true });
+    return () =>
+      window.removeEventListener("scroll", handleScroll, { capture: true });
+  }, [interactive, interactiveOpen, clearTimers, setInteractiveOpen]);
 
   useEffect(() => {
     if (!effectiveCollapseBelow || effectiveCollapseBelow === "always") {
@@ -131,12 +226,57 @@ export function Tooltip({
 
   return (
     <RadixTooltip.Root
-      open={open}
-      defaultOpen={defaultOpen}
-      onOpenChange={onOpenChange}
+      open={interactive ? interactiveOpen : open}
+      defaultOpen={interactive ? undefined : defaultOpen}
+      onOpenChange={interactive ? undefined : onOpenChange}
       delayDuration={delayDuration}
+      disableHoverableContent={!interactive}
     >
-      <RadixTooltip.Trigger asChild={shouldUseAsChild}>
+      <RadixTooltip.Trigger
+        ref={interactive ? triggerRef : undefined}
+        asChild={shouldUseAsChild}
+        onPointerEnter={
+          interactive
+            ? (e) => {
+                if (e.pointerType === "touch") return;
+                scheduleInteractiveOpen();
+              }
+            : undefined
+        }
+        onPointerLeave={
+          interactive
+            ? (e) => {
+                if (e.pointerType === "touch") return;
+                scheduleInteractiveClose();
+              }
+            : undefined
+        }
+        onClick={
+          interactive
+            ? (e) => {
+                e.stopPropagation();
+                clearTimers();
+                setInteractiveOpen((prev) => !prev);
+              }
+            : undefined
+        }
+        onKeyDown={
+          interactive
+            ? (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  clearTimers();
+                  setInteractiveOpen((prev) => !prev);
+                } else if (e.key === "Escape" && interactiveOpenRef.current) {
+                  e.stopPropagation();
+                  clearTimers();
+                  setInteractiveOpen(false);
+                }
+              }
+            : undefined
+        }
+      >
         {shouldUseAsChild ? children : <span>{children}</span>}
       </RadixTooltip.Trigger>
       <RadixTooltip.Portal>
@@ -148,7 +288,50 @@ export function Tooltip({
           data-collapse-below={
             shouldGateByCollapse ? effectiveCollapseBelow : undefined
           }
-          className={`base-tooltip-content ${className}`.trim()}
+          className={`base-tooltip-content ${interactive ? "base-tooltip-content--interactive" : ""} ${className}`.trim()}
+          onPointerEnter={
+            interactive
+              ? (e) => {
+                  if (e.pointerType === "touch") return;
+                  if (closeTimerRef.current !== null) {
+                    clearTimeout(closeTimerRef.current);
+                    closeTimerRef.current = null;
+                  }
+                }
+              : undefined
+          }
+          onPointerLeave={
+            interactive
+              ? (e) => {
+                  if (e.pointerType === "touch") return;
+                  scheduleInteractiveClose();
+                }
+              : undefined
+          }
+          onEscapeKeyDown={
+            interactive
+              ? () => {
+                  clearTimers();
+                  setInteractiveOpen(false);
+                }
+              : undefined
+          }
+          onPointerDownOutside={
+            interactive
+              ? (event) => {
+                  const target = event.detail?.originalEvent?.target ?? event.target;
+                  if (
+                    triggerRef.current &&
+                    target instanceof Node &&
+                    triggerRef.current.contains(target)
+                  ) {
+                    return;
+                  }
+                  clearTimers();
+                  setInteractiveOpen(false);
+                }
+              : undefined
+          }
         >
           {content}
           <RadixTooltip.Arrow

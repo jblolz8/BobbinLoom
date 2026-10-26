@@ -30,8 +30,27 @@ export function cardBadgeLabel(t: CharacterTemplate): CardBadgeKind {
   return null;
 }
 
+/** True when a converted BL card still retains embedded CCv2 source metadata/sidecars (`CCv2 / BL`). */
+export function hasCcv2Source(t: CharacterTemplate): boolean {
+  if (t.format === "ccv2") return false;
+  return (
+    t.ccv2Content !== undefined ||
+    t.ccv2CreatorNotes !== undefined ||
+    t.ccv2Tags !== undefined ||
+    t.cardRef !== undefined
+  );
+}
+
 export function displayTitle(t: CharacterTemplate): string {
   return (t.title ?? "").trim() || t.name;
+}
+
+/** True when `t.title` is non-empty and differs (case-insensitively) from `t.name`. */
+export function hasDistinctTitle(t: CharacterTemplate): boolean {
+  const title = (t.title ?? "").trim();
+  return Boolean(
+    title && title.toLowerCase() !== t.name.trim().toLowerCase(),
+  );
 }
 
 export interface LibraryQuery {
@@ -288,4 +307,135 @@ export function groupByLineage(
     versions: versions.sort((a, b) => b.version - a.version),
   }));
   return sortVersionGroups(groups, sortBy, sortDirection);
+}
+
+export interface CharacterFamilyNode {
+  template: CharacterTemplate;
+  children: CharacterFamilyNode[];
+  depth: number;
+}
+
+export interface CharacterFamilyInfo {
+  focus: CharacterTemplate;
+  root: CharacterTemplate;
+  tree: CharacterFamilyNode;
+  parent: CharacterTemplate | null;
+  children: CharacterTemplate[];
+  siblings: CharacterTemplate[];
+  /** All cards in the connected family tree (root + all descendants), in depth-first order. */
+  members: CharacterTemplate[];
+  /** IDs of all descendants of `focus` (used to prevent cycles when choosing a parent for `focus`). */
+  descendantIds: Set<string>;
+}
+
+/**
+ * Resolves the connected Parent -> Child / Sibling family tree for a given character card.
+ * Collapses version lineages to their latest version first so each card appears once.
+ */
+export function buildCharacterFamilyTree(
+  focusId: string,
+  allTemplates: CharacterTemplate[],
+): CharacterFamilyInfo | null {
+  const latestCards = groupByLineage(allTemplates, "name", "asc")
+    .map((g) => g.versions[0])
+    .filter((t): t is CharacterTemplate => t !== undefined);
+
+  const byId = new Map<string, CharacterTemplate>();
+  // Also map any older version IDs or lineageIds to the latest version card
+  for (const g of groupByLineage(allTemplates, "name", "asc")) {
+    const latest = g.versions[0];
+    if (!latest) continue;
+    byId.set(latest.id, latest);
+    if (latest.lineageId) byId.set(latest.lineageId, latest);
+    for (const v of g.versions) {
+      byId.set(v.id, latest);
+    }
+  }
+
+  const focus = byId.get(focusId);
+  if (!focus) return null;
+
+  const resolveParent = (card: CharacterTemplate): CharacterTemplate | null => {
+    if (!card.parentId) return null;
+    const p = byId.get(card.parentId);
+    if (!p || p.id === card.id) return null;
+    return p;
+  };
+
+  // Walk up to the root card with cycle protection
+  let root = focus;
+  const ancestorSeen = new Set<string>([root.id]);
+  while (true) {
+    const p = resolveParent(root);
+    if (!p || ancestorSeen.has(p.id)) break;
+    ancestorSeen.add(p.id);
+    root = p;
+  }
+
+  // Build adjacency list of parent.id -> direct children
+  const childrenMap = new Map<string, CharacterTemplate[]>();
+  for (const card of latestCards) {
+    const p = resolveParent(card);
+    if (!p) continue;
+    const list = childrenMap.get(p.id) ?? [];
+    list.push(card);
+    childrenMap.set(p.id, list);
+  }
+  for (const list of childrenMap.values()) {
+    list.sort((a, b) => displayTitle(a).localeCompare(displayTitle(b)));
+  }
+
+  // Depth-first tree construction with cycle protection
+  const members: CharacterTemplate[] = [];
+  const treeVisited = new Set<string>();
+  const buildNode = (
+    card: CharacterTemplate,
+    depth: number,
+  ): CharacterFamilyNode => {
+    treeVisited.add(card.id);
+    members.push(card);
+    const rawChildren = childrenMap.get(card.id) ?? [];
+    const childNodes: CharacterFamilyNode[] = [];
+    for (const ch of rawChildren) {
+      if (!treeVisited.has(ch.id)) {
+        childNodes.push(buildNode(ch, depth + 1));
+      }
+    }
+    return {
+      template: card,
+      children: childNodes,
+      depth,
+    };
+  };
+
+  const tree = buildNode(root, 0);
+
+  // Collect descendants of `focus` specifically (for cycle prevention)
+  const descendantIds = new Set<string>();
+  const collectDescendants = (cardId: string) => {
+    for (const ch of childrenMap.get(cardId) ?? []) {
+      if (!descendantIds.has(ch.id) && ch.id !== focus.id) {
+        descendantIds.add(ch.id);
+        collectDescendants(ch.id);
+      }
+    }
+  };
+  collectDescendants(focus.id);
+
+  const parent = resolveParent(focus);
+  const children = childrenMap.get(focus.id) ?? [];
+  const siblings = parent
+    ? (childrenMap.get(parent.id) ?? []).filter((c) => c.id !== focus.id)
+    : [];
+
+  return {
+    focus,
+    root,
+    tree,
+    parent,
+    children,
+    siblings,
+    members,
+    descendantIds,
+  };
 }

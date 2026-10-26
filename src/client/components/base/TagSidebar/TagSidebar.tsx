@@ -82,6 +82,31 @@ function findScrollContainer(el: HTMLElement | null): HTMLElement | null {
   return null;
 }
 
+/**
+ * Sums bottom padding, borders, and margins for all ancestor wrappers from `row`
+ * up to `scrollContainer` (inclusive) so intermediate containers like `PageShell.Section`
+ * (`padding-bottom: 1.5rem`) are accounted for when capping `TagSidebar` height.
+ */
+function computeBottomInsetToScrollContainer(
+  row: HTMLElement | null,
+  scrollContainer: HTMLElement | null,
+): number {
+  if (!scrollContainer) return 16;
+  let totalBottom = 0;
+  let node: HTMLElement | null = row ?? scrollContainer;
+  while (node) {
+    const style = window.getComputedStyle(node);
+    const padBottom = parseFloat(style.paddingBottom) || 0;
+    const borderBottom = parseFloat(style.borderBottomWidth) || 0;
+    const marginBottom =
+      node !== scrollContainer ? parseFloat(style.marginBottom) || 0 : 0;
+    totalBottom += padBottom + borderBottom + marginBottom;
+    if (node === scrollContainer) break;
+    node = node.parentElement;
+  }
+  return totalBottom;
+}
+
 export type TagSidebarProps = {
   /** Array of tags and their occurrence counts across the library */
   tagCounts: ReadonlyArray<{ tag: string; count: number }>;
@@ -168,13 +193,18 @@ export function TagSidebar({
       ? containerRect.height
       : window.innerHeight;
 
+    const row = sidebar.parentElement;
+    const sidebarRect = sidebar.getBoundingClientRect();
+    const rowTop = row ? row.getBoundingClientRect().top : sidebarRect.top;
+
     let containerContentBottom: number;
     if (scrollContainer && containerRect) {
-      const style = window.getComputedStyle(scrollContainer);
-      const paddingBottom = parseFloat(style.paddingBottom) || 0;
-      const borderBottom = parseFloat(style.borderBottomWidth) || 0;
-      containerContentBottom =
-        containerRect.bottom - paddingBottom - borderBottom;
+      const bottomInset = computeBottomInsetToScrollContainer(
+        row,
+        scrollContainer,
+      );
+      // Subtract 1px extra for subpixel / fractional DPI rounding
+      containerContentBottom = Math.floor(containerRect.bottom - bottomInset - 1);
     } else {
       containerContentBottom = window.innerHeight - 16;
     }
@@ -182,10 +212,6 @@ export function TagSidebar({
     const scrollTop = scrollContainer
       ? scrollContainer.scrollTop
       : window.scrollY;
-
-    const row = sidebar.parentElement;
-    const sidebarRect = sidebar.getBoundingClientRect();
-    const rowTop = row ? row.getBoundingClientRect().top : sidebarRect.top;
 
     let siblingHeight = 0;
     if (row) {
@@ -215,7 +241,13 @@ export function TagSidebar({
 
   useIsomorphicLayoutEffect(() => {
     recalculateMaxHeight();
-  }, [recalculateMaxHeight, tagCounts.length, activeTags.length]);
+  }, [
+    recalculateMaxHeight,
+    tagCounts.length,
+    activeTags.length,
+    mode,
+    collapsedCategories,
+  ]);
 
   useEffect(() => {
     const sidebar = sidebarRef.current;
@@ -237,9 +269,17 @@ export function TagSidebar({
     let observer: ResizeObserver | null = null;
     if (typeof ResizeObserver !== "undefined") {
       observer = new ResizeObserver(handleScrollOrResize);
-      if (scrollContainer) observer.observe(scrollContainer);
+      if (scrollContainer) {
+        observer.observe(scrollContainer);
+        if (scrollContainer.firstElementChild) {
+          observer.observe(scrollContainer.firstElementChild);
+        }
+      }
       if (row) {
         observer.observe(row);
+        if (row.parentElement) {
+          observer.observe(row.parentElement);
+        }
         for (const child of Array.from(row.children)) {
           if (child !== sidebar) {
             observer.observe(child);

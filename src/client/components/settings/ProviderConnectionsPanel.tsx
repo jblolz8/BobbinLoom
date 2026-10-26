@@ -49,7 +49,6 @@ import {
   cleanStateAfterSave,
   isConnectionDirty,
 } from "../../utils/connectionDraft";
-import "./ProviderConnectionsPanel.css";
 
 type EditorState =
   | { mode: "closed" }

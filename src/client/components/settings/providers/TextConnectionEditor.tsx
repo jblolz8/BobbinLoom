@@ -182,13 +182,7 @@ export function TextConnectionEditor({
   const isPromptModified = testPrompt.trim() !== DEFAULT_PROVIDER_TEST_PROMPT;
 
   return (
-    <Card
-      as="form"
-      variant="elevated"
-      padding="md"
-      className="conn-editor"
-      onSubmit={onSubmit}
-    >
+    <Card as="form" variant="elevated" padding="md" onSubmit={onSubmit}>
       <Stack direction="column" align="stretch" gap="sm">
         <Header
           variant="panel"
@@ -355,7 +349,6 @@ export function TextConnectionEditor({
                     type="button"
                     variant="outline"
                     size="xs"
-                    className="conn-limit-chip"
                     onClick={() =>
                       setForm((f) => ({
                         ...f,
@@ -397,7 +390,6 @@ export function TextConnectionEditor({
                     type="button"
                     variant="outline"
                     size="xs"
-                    className="conn-limit-chip"
                     onClick={() =>
                       setForm((f) => ({ ...f, maxTokens: reportedMaxOutput }))
                     }
@@ -501,7 +493,7 @@ export function TextConnectionEditor({
           testDrawerOpen={isDrawerVisible}
           drawerContent={
             isDrawerVisible ? (
-              <Card variant="panel" padding="xs" className="conn-test-drawer">
+              <Card variant="panel" padding="xs">
                 <Stack direction="column" align="stretch" gap="xs">
                   <Stack
                     direction="row"
@@ -559,48 +551,33 @@ export function TextConnectionEditor({
                     </Stack>
                   </Stack>
 
-                  <Stack
-                    direction="row"
-                    align="center"
-                    gap="xs"
-                    className="conn-test-drawer__prompt-row"
-                  >
-                    <TextInput
-                      size="sm"
-                      fullWidth
-                      value={testPrompt}
-                      onChange={(e) => onTestPromptChange?.(e.target.value)}
-                      onBlur={() => onSaveTestPrompt?.(testPrompt)}
-                      placeholder={DEFAULT_PROVIDER_TEST_PROMPT}
-                      aria-label="Global test prompt"
-                    />
-                    {onTestResponse && (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        leftIcon="Send"
-                        isLoading={testingResponse}
-                        disabled={busy || testingConnection || testingResponse}
-                        onClick={onTestResponse}
-                      >
-                        Send
-                      </Button>
-                    )}
-                  </Stack>
+                  <TextInput
+                    size="sm"
+                    fullWidth
+                    value={testPrompt}
+                    onChange={(e) => onTestPromptChange?.(e.target.value)}
+                    onBlur={() => onSaveTestPrompt?.(testPrompt)}
+                    placeholder={DEFAULT_PROVIDER_TEST_PROMPT}
+                    aria-label="Global test prompt"
+                    rightElement={
+                      onTestResponse ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          leftIcon="Send"
+                          isLoading={testingResponse}
+                          disabled={busy || testingConnection || testingResponse}
+                          onClick={onTestResponse}
+                        >
+                          Send
+                        </Button>
+                      ) : undefined
+                    }
+                  />
 
                   {(testingResponse || testResponseResult) && (
-                    <Card
-                      variant="elevated"
-                      padding="xs"
-                      className={`conn-test-reply ${
-                        testingResponse
-                          ? "loading"
-                          : testResponseResult?.ok
-                            ? "ok"
-                            : "err"
-                      }`}
-                    >
+                    <Card variant="elevated" padding="xs">
                       {testingResponse ? (
                         <StatusMessage variant="inline" loading>
                           Waiting for model completion…
@@ -667,12 +644,18 @@ export function TextConnectionEditor({
                                   </Badge>
                                 )}
                             </Stack>
-                            <div className="conn-test-reply__body">
+                            <Text
+                              as="div"
+                              size="xs"
+                              leading="snug"
+                              preWrap
+                              tone={testResponseResult.ok ? "primary" : "danger"}
+                            >
                               {testResponseResult.ok
                                 ? testResponseResult.reply || "(Empty response)"
                                 : testResponseResult.message ||
                                   "Request failed."}
-                            </div>
+                            </Text>
                           </Stack>
                         )
                       )}

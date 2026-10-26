@@ -66,6 +66,7 @@ export interface TextProps extends HTMLAttributes<HTMLElement> {
   reserveLines?: boolean;
   truncate?: boolean;
   nowrap?: boolean;
+  preWrap?: boolean;
   mono?: boolean;
   italic?: boolean;
   uppercase?: boolean;
@@ -93,6 +94,7 @@ export const Text = forwardRef<HTMLElement, TextProps>(function Text(
     reserveLines = false,
     truncate = false,
     nowrap = false,
+    preWrap = false,
     mono = false,
     italic = false,
     uppercase = false,
@@ -118,6 +120,7 @@ export const Text = forwardRef<HTMLElement, TextProps>(function Text(
     lineClamp && reserveLines ? "base-text--reserve-lines" : "",
     truncate ? "base-text--truncate" : "",
     nowrap ? "base-text--nowrap" : "",
+    preWrap ? "base-text--pre-wrap" : "",
     mono ? "base-text--mono" : "",
     italic ? "base-text--italic" : "",
     uppercase ? "base-text--uppercase" : "",

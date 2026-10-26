@@ -2,8 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { CharacterTemplate } from "../src/schemas";
 import { DEFAULT_CHARACTER_FORMAT } from "../src/engine/characterFormat";
 import {
+  buildCharacterFamilyTree,
   collectCardSettings,
   displayTitle,
+  hasCcv2Source,
+  hasDistinctTitle,
   entryKind,
   filterLibraryEntries,
   groupByLineage,
@@ -75,12 +78,25 @@ describe("entryKind", () => {
   });
 });
 
-describe("displayTitle", () => {
+describe("displayTitle and hasDistinctTitle", () => {
   it("uses trimmed title when present, else name", () => {
     expect(displayTitle(makeEntry({ title: "  Mira the Brave  " }))).toBe(
       "Mira the Brave",
     );
     expect(displayTitle(makeEntry())).toBe("Mira");
+  });
+
+  it("detects when title is non-empty and distinct from name", () => {
+    expect(
+      hasDistinctTitle(makeEntry({ name: "Miku", title: "Miku — Anthro Fox" })),
+    ).toBe(true);
+    expect(hasDistinctTitle(makeEntry({ name: "Miku", title: "miku" }))).toBe(
+      false,
+    );
+    expect(hasDistinctTitle(makeEntry({ name: "Miku", title: "   " }))).toBe(
+      false,
+    );
+    expect(hasDistinctTitle(makeEntry({ name: "Miku" }))).toBe(false);
   });
 });
 
@@ -681,5 +697,130 @@ describe("groupByLineage and sortVersionGroups", () => {
     expect(getCharacterCreatedAt(charWithIdOnly)).toBe(
       "2024-01-01T00:00:00.000Z",
     );
+  });
+
+  it("keeps multiple character variants with the same in-story name in separate folders without colliding", async () => {
+    const { mkdtempSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const {
+      createCharacterTemplateRecord,
+      duplicateCharacterTemplateRecord,
+      listCharacterTemplates,
+      updateCharacterTemplateRecord,
+    } = await import("../src/server/store");
+
+    const tempDir = mkdtempSync(join(tmpdir(), "bl-char-variants-"));
+    try {
+      const mikuFox = createCharacterTemplateRecord(
+        "Miku",
+        tempDir,
+        "Miku — Anthro Fox",
+      );
+      const mikuCruel = createCharacterTemplateRecord(
+        "Miku",
+        tempDir,
+        "Miku — Cruel",
+      );
+
+      // Update the second Miku variant and verify the first Miku variant is untouched
+      updateCharacterTemplateRecord(
+        mikuCruel.id,
+        { content: "[Species]: Human\n[Personality]\nCruel and cold" },
+        tempDir,
+      );
+
+      // Duplicate the first variant and verify it preserves name="Miku" with a variant title
+      const duplicated = duplicateCharacterTemplateRecord(mikuFox.id, tempDir);
+      expect(duplicated).not.toBeNull();
+      expect(duplicated?.name).toBe("Miku");
+      expect(duplicated?.title).toBe("Miku — Anthro Fox (Variant)");
+
+      const all = listCharacterTemplates(tempDir);
+      expect(all).toHaveLength(3);
+      expect(all.every((c) => c.name === "Miku")).toBe(true);
+      expect(all.map((c) => displayTitle(c)).sort()).toEqual([
+        "Miku — Anthro Fox",
+        "Miku — Anthro Fox (Variant)",
+        "Miku — Cruel",
+      ]);
+      // Duplicated variant automatically links parentId to the source card
+      expect(duplicated?.parentId).toBe(mikuFox.id);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("builds a Parent -> Child / Sibling family tree and detaches CCv2 source while preserving portrait art", async () => {
+    const { existsSync, mkdtempSync, rmSync, writeFileSync } = await import(
+      "node:fs"
+    );
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const {
+      createCharacterTemplateRecord,
+      detachCharacterCcv2Source,
+      getCharacterAvatarPath,
+      listCharacterTemplates,
+      saveCharacterTemplateRecord,
+      updateCharacterTemplateRecord,
+    } = await import("../src/server/store");
+
+    const tempDir = mkdtempSync(join(tmpdir(), "bl-char-family-"));
+    try {
+      const rootAveri = createCharacterTemplateRecord("Averi", tempDir);
+      const bullyAveri = createCharacterTemplateRecord(
+        "Averi",
+        tempDir,
+        "Averi - Bully",
+      );
+
+      // Simulate converted CCv2 / BL metadata on bullyAveri with a sidecar PNG
+      const bullyFolder = join(tempDir, "averi-bully");
+      writeFileSync(join(bullyFolder, "averi-bully.png"), "fake-png-bytes");
+      saveCharacterTemplateRecord(
+        {
+          ...bullyAveri,
+          parentId: rootAveri.id,
+          ccv2Content: "Original CCv2 description",
+          ccv2CreatorNotes: "Original notes",
+          ccv2Tags: ["bully"],
+          cardRef: { file: "averi-bully.png", kind: "png" },
+        },
+        tempDir,
+      );
+
+      const beforeDetach = listCharacterTemplates(tempDir);
+      const fam = buildCharacterFamilyTree(bullyAveri.id, beforeDetach);
+      expect(fam).not.toBeNull();
+      expect(fam?.root.id).toBe(rootAveri.id);
+      expect(fam?.parent?.id).toBe(rootAveri.id);
+      expect(fam?.members.map((m) => m.id)).toEqual([
+        rootAveri.id,
+        bullyAveri.id,
+      ]);
+      expect(hasCcv2Source(fam!.focus)).toBe(true);
+
+      // Prevent cycle: attempting to set rootAveri.parentId = bullyAveri.id is ignored
+      const cycleAttempt = updateCharacterTemplateRecord(
+        rootAveri.id,
+        { parentId: bullyAveri.id },
+        tempDir,
+      );
+      expect(cycleAttempt?.parentId).toBeUndefined();
+
+      // Detach CCv2 source on bullyAveri -> becomes pure BL and promotes averi-bully.png to portrait.png
+      const detached = detachCharacterCcv2Source(bullyAveri.id, tempDir);
+      expect(detached).not.toBeNull();
+      expect(hasCcv2Source(detached!)).toBe(false);
+      expect(detached?.ccv2Content).toBeUndefined();
+      expect(detached?.cardRef).toBeUndefined();
+      expect(existsSync(join(bullyFolder, "portrait.png"))).toBe(true);
+      expect(getCharacterAvatarPath(bullyAveri.id, "portrait", tempDir)).toBe(
+        join(bullyFolder, "portrait.png"),
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });

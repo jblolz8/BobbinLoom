@@ -31,7 +31,7 @@
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
-  cursor: help;
+  cursor: pointer;
   border-radius: 999px;
   outline: none;
 }
@@ -91,6 +91,11 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  padding: 2px 0;
+  padding: 2px;
   max-width: 260px;
+  max-height: 180px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }

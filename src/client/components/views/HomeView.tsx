@@ -1,13 +1,12 @@
 import { useState } from "react";
 import type { Playthrough } from "../../../schemas";
 import { getPlaythrough, type Persona } from "../../api";
-import { Header, StatusMessage } from "../base";
+import { Header, PageShell, StatusMessage } from "../base";
 import { PlaythroughLibrary } from "../library/PlaythroughLibrary";
 import { CharacterLibrary } from "../library/CharacterLibrary";
 import { LorebookLibrary } from "../library/LorebookLibrary";
 import { PersonaLibrary } from "../library/PersonaLibrary";
 import { DocsView } from "./DocsView";
-import "./HomeView.css";
 
 export type HomeTab =
   | "playthroughs"
@@ -45,44 +44,39 @@ export function HomeView({
   }
 
   return (
-    <main className="app-shell home-workspace-shell">
+    <PageShell>
       {error ? (
-        <StatusMessage variant="banner" tone="err" className="error-box">
+        <StatusMessage variant="banner" tone="err">
           {error}
         </StatusMessage>
       ) : null}
 
       {activeTab === "characters" ? (
-        <section className="home-workspace-page">
-          <Header
-            variant="page"
-            title="Character Library"
-            subtitle="Manage character templates for scenario generation and story casts."
-          />
-          <CharacterLibrary />
-        </section>
+        <PageShell.Section>
+          <CharacterLibrary variant="page" />
+        </PageShell.Section>
       ) : activeTab === "lorebooks" ? (
-        <section className="home-workspace-page">
+        <PageShell.Section>
           <Header
             variant="page"
             title="Lorebook Library"
             subtitle="Manage World Info lorebooks for prompt context injection."
           />
           <LorebookLibrary />
-        </section>
+        </PageShell.Section>
       ) : activeTab === "docs" ? (
-        <section className="home-workspace-page docs-workspace-page">
+        <PageShell.Section flush>
           <DocsView />
-        </section>
+        </PageShell.Section>
       ) : activeTab === "personas" ? (
-        <section className="home-workspace-page">
+        <PageShell.Section>
           <PersonaLibrary
             variant="page"
             onPersonasChanged={onPersonasChanged}
           />
-        </section>
+        </PageShell.Section>
       ) : (
-        <section className="home-page">
+        <PageShell.Section>
           <PlaythroughLibrary
             variant="page"
             onOpen={(id) => {
@@ -91,8 +85,8 @@ export function HomeView({
             onNewPlaythrough={onNewPlaythrough}
             onError={setError}
           />
-        </section>
+        </PageShell.Section>
       )}
-    </main>
+    </PageShell>
   );
 }
