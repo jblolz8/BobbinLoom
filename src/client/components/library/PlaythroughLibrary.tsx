@@ -65,8 +65,7 @@ import {
   TextInput,
   Tooltip,
 } from "../base";
-import { ConfirmModal } from "../common/ConfirmModal";
-import { RenameModal } from "../common/RenameModal";
+import { ConfirmModal, RenameModal } from "../common";
 
 export type PlaythroughLibraryVariant = "page" | "dialog";
 export type PlaythroughViewMode = "grid" | "list";

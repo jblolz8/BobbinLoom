@@ -1,4 +1,4 @@
-import { Button, Icon } from "../base";
+import { Button, Header, Icon, Modal } from "../base";
 import { LorebookLibrary } from "../library/LorebookLibrary";
 
 export type LorebookManagerProps = {
@@ -15,16 +15,13 @@ export function LorebookManager({
   if (!open) return null;
 
   return (
-    <div className="modal-backdrop">
-      <section className="modal lorebook-manager-modal">
-        <header className="modal-header">
-          <div>
-            <h2>Lorebook Manager</h2>
-            <p>
-              Manage World Info lorebooks. Import .json files exported from
-              SillyTavern, or create new ones here.
-            </p>
-          </div>
+    <Modal open={open} onClose={onClose} size="wide" className="lorebook-manager-modal">
+      <Header
+        variant="modal"
+        title="Lorebook Manager"
+        subtitle="Manage World Info lorebooks. Import .json files exported from SillyTavern, or create new ones here."
+        bordered
+        actions={
           <Button
             variant="secondary"
             size="sm"
@@ -33,14 +30,17 @@ export function LorebookManager({
           >
             Close
           </Button>
-        </header>
-
-        <LorebookLibrary
-          isModal={true}
-          onClose={onClose}
-          onLorebooksChanged={onLorebooksChanged}
-        />
-      </section>
-    </div>
+        }
+      />
+      <Modal.Body>
+        <Modal.Content>
+          <LorebookLibrary
+            isModal={true}
+            onClose={onClose}
+            onLorebooksChanged={onLorebooksChanged}
+          />
+        </Modal.Content>
+      </Modal.Body>
+    </Modal>
   );
 }

@@ -6,7 +6,8 @@ import {
   type ReactNode,
 } from "react";
 import * as RadixTooltip from "@radix-ui/react-tooltip";
-import { Icon, type IconName } from "../Icon";
+import { Icon, type IconName } from "../Icon/Icon";
+import "./Tooltip.css";
 
 export type TooltipCollapseBreakpoint = "xs" | "sm" | "md" | "always";
 

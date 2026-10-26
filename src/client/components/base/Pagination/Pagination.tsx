@@ -10,9 +10,9 @@ import {
   type PageSize,
 } from "../../../engine/pagination";
 import { Button } from "../Button/Button";
-import { Icon } from "../Icon";
-import { SimpleSelect } from "../Select";
-import { TextInput } from "../TextInput";
+import { Icon } from "../Icon/Icon";
+import { SimpleSelect } from "../Select/Select";
+import { TextInput } from "../TextInput/TextInput";
 import { Tooltip } from "../Tooltip/Tooltip";
 import "./Pagination.css";
 

@@ -14,9 +14,13 @@ import {
   SimpleSelect,
   Checkbox,
   Badge,
+  Card,
+  Stack,
+  Separator,
+  Text,
 } from "../base";
 import { usePagination } from "../../hooks/usePagination";
-import { ConfirmModal } from "../common/ConfirmModal";
+import { ConfirmModal } from "../common";
 import {
   createLorebook,
   deleteLorebook,
@@ -25,6 +29,7 @@ import {
   listLorebooks,
   saveLorebook,
 } from "../../api";
+import "./LorebookLibrary.css";
 
 export type LorebookLibraryProps = {
   isModal?: boolean;
@@ -147,7 +152,6 @@ function entryStateBadges(entry: LorebookEntry): ReactNode {
 
 export function LorebookLibrary({
   isModal,
-  onClose,
   onLorebooksChanged,
 }: LorebookLibraryProps) {
   const [summaries, setSummaries] = useState<LorebookSummary[]>([]);
@@ -342,16 +346,14 @@ export function LorebookLibrary({
           await handleCreate(name);
         }}
       >
-        <div className="modal-form-fields">
-          <TextInput
-            label="Lorebook name"
-            value={createName}
-            onChange={(e) => setCreateName(e.target.value)}
-            placeholder="e.g. Kanto Region Lore"
-            disabled={saving}
-            autoFocus
-          />
-        </div>
+        <TextInput
+          label="Lorebook name"
+          value={createName}
+          onChange={(e) => setCreateName(e.target.value)}
+          placeholder="e.g. Kanto Region Lore"
+          disabled={saving}
+          autoFocus
+        />
       </ConfirmModal>
     );
   }
@@ -642,10 +644,10 @@ export function LorebookLibrary({
         </Button>
       </div>
       {filteredEntries.length === 0 ? (
-        <p className="lorebook-empty">
-          No entries. Click "+ Add Entry" to create one, or import from a
+        <Text size="sm" tone="muted" align="center" style={{ padding: "24px 0" }}>
+          No entries. Click &quot;+ Add Entry&quot; to create one, or import from a
           SillyTavern World Info file.
-        </p>
+        </Text>
       ) : (
         <ul className="lorebook-entry-rows">
           {filteredEntries.map((entry) => (
@@ -689,32 +691,40 @@ export function LorebookLibrary({
           className={`lorebook-library-container ${isModal ? "is-modal" : "is-workspace"}`}
         >
           {isModal ? (
-            <div
-              className="global-scope-badge"
-              title="Edits modify global lorebook templates"
-            >
-              🌐 Global Lorebooks
+            <div>
+              <Badge
+                variant="outline"
+                size="sm"
+                title="Edits modify global lorebook templates"
+              >
+                🌐 Global Lorebooks
+              </Badge>
             </div>
           ) : null}
 
-          <div className="lorebook-editor-subhead">
-            <div className="lorebook-subhead-title">
+          <Stack
+            direction="row"
+            justify="between"
+            align="center"
+            wrap
+            gap="sm"
+          >
+            <Stack direction="row" align="center" gap="md" wrap>
               <Button
                 variant="secondary"
                 size="sm"
-                className="lorebook-back-btn"
                 onClick={handleBackToLibrary}
                 leftIcon={<Icon name="ArrowLeft" size={15} />}
                 title="Return to Lorebook Library"
               >
                 Back to Lorebook Library
               </Button>
-              <h3>
+              <Text as="h3" size="md" weight="bold">
                 Lorebook: {lorebook.name} (
                 {Object.keys(lorebook.entries).length} entries)
-              </h3>
-            </div>
-            <div className="modal-header-actions">
+              </Text>
+            </Stack>
+            <Stack direction="row" align="center" gap="xs">
               <Button
                 variant="primary"
                 size="sm"
@@ -727,11 +737,13 @@ export function LorebookLibrary({
               <Button variant="secondary" size="sm" onClick={handleExport}>
                 Export
               </Button>
-            </div>
-          </div>
+            </Stack>
+          </Stack>
+
+          <Separator spacing="none" />
 
           {status ? (
-            <div style={{ marginBottom: "8px" }}>
+            <div>
               {status.isError ? (
                 <Badge
                   variant="danger"
@@ -806,10 +818,10 @@ export function LorebookLibrary({
             {entryListPanel}
 
             <div className="lorebook-entry-editor-placeholder">
-              <p>
-                Select an entry from the list to edit it, or click "+ Add
-                Entry".
-              </p>
+              <Text size="sm" tone="muted" align="center">
+                Select an entry from the list to edit it, or click &quot;+ Add
+                Entry&quot;.
+              </Text>
             </div>
           </div>
         </div>
@@ -825,23 +837,28 @@ export function LorebookLibrary({
         <div
           className={`lorebook-library-container ${isModal ? "is-modal" : "is-workspace"}`}
         >
-          <div className="lorebook-editor-subhead">
-            <div className="lorebook-subhead-title">
+          <Stack
+            direction="row"
+            justify="between"
+            align="center"
+            wrap
+            gap="sm"
+          >
+            <Stack direction="row" align="center" gap="md" wrap>
               <Button
                 variant="secondary"
                 size="sm"
-                className="lorebook-back-btn"
                 onClick={handleCloseEntryEditor}
                 leftIcon={<Icon name="ArrowLeft" size={15} />}
                 title="Return to the Lorebook entry list"
               >
                 Back to Lorebook Entry List
               </Button>
-              <h3>
+              <Text as="h3" size="md" weight="bold">
                 {lorebook.name} — Editing Entry #{entryForm.uid}
-              </h3>
-            </div>
-            <div className="modal-header-actions">
+              </Text>
+            </Stack>
+            <Stack direction="row" align="center" gap="xs">
               <Button
                 variant="primary"
                 size="sm"
@@ -854,11 +871,13 @@ export function LorebookLibrary({
               <Button variant="secondary" size="sm" onClick={handleExport}>
                 Export
               </Button>
-            </div>
-          </div>
+            </Stack>
+          </Stack>
+
+          <Separator spacing="none" />
 
           {status ? (
-            <div style={{ marginBottom: "8px" }}>
+            <div>
               {status.isError ? (
                 <Badge
                   variant="danger"
@@ -960,30 +979,26 @@ export function LorebookLibrary({
                   />
 
                   {entryForm.selective ? (
-                    <div className="lorebook-sidebar-field">
-                      <span className="field-label-text">Selective Logic</span>
-                      <SimpleSelect
-                        value={String(entryForm.selectiveLogic)}
-                        onChange={(v) =>
-                          entryFormField("selectiveLogic", Number(v))
-                        }
-                        size="sm"
-                        fullWidth
-                        aria-label="Selective Logic"
-                        options={[
-                          { value: "0", label: "AND ANY — any key matches" },
-                          {
-                            value: "1",
-                            label: "NOT ALL — not every key matches",
-                          },
-                          { value: "2", label: "NOT ANY — no key matches" },
-                          { value: "3", label: "AND ALL — every key matches" },
-                        ]}
-                      />
-                      <span className="field-helper-text">
-                        Controls how secondary keys combine with primary keys.
-                      </span>
-                    </div>
+                    <SimpleSelect
+                      label="Selective Logic"
+                      value={String(entryForm.selectiveLogic)}
+                      onChange={(v) =>
+                        entryFormField("selectiveLogic", Number(v))
+                      }
+                      size="sm"
+                      fullWidth
+                      aria-label="Selective Logic"
+                      helperText="Controls how secondary keys combine with primary keys."
+                      options={[
+                        { value: "0", label: "AND ANY — any key matches" },
+                        {
+                          value: "1",
+                          label: "NOT ALL — not every key matches",
+                        },
+                        { value: "2", label: "NOT ANY — no key matches" },
+                        { value: "3", label: "AND ALL — every key matches" },
+                      ]}
+                    />
                   ) : null}
                 </SidebarSection>
 
@@ -1026,34 +1041,29 @@ export function LorebookLibrary({
                     size="sm"
                     helperText="Lower = injected earlier. Default 100."
                   />
-                  <div className="lorebook-sidebar-field">
-                    <span className="field-label-text">Position</span>
-                    <SimpleSelect
-                      value={String(entryForm.position)}
-                      onChange={(v) => entryFormField("position", Number(v))}
-                      size="sm"
-                      fullWidth
-                      aria-label="Position"
-                      options={[
-                        {
-                          value: "0",
-                          label: "Before — system prompt preamble",
-                        },
-                        {
-                          value: "1",
-                          label: "After — after character definitions",
-                        },
-                        {
-                          value: "2",
-                          label: "Depth — at the current message index",
-                        },
-                      ]}
-                    />
-                    <span className="field-helper-text">
-                      Where in the assembled prompt this entry's content is
-                      inserted.
-                    </span>
-                  </div>
+                  <SimpleSelect
+                    label="Position"
+                    value={String(entryForm.position)}
+                    onChange={(v) => entryFormField("position", Number(v))}
+                    size="sm"
+                    fullWidth
+                    aria-label="Position"
+                    helperText="Where in the assembled prompt this entry's content is inserted."
+                    options={[
+                      {
+                        value: "0",
+                        label: "Before — system prompt preamble",
+                      },
+                      {
+                        value: "1",
+                        label: "After — after character definitions",
+                      },
+                      {
+                        value: "2",
+                        label: "Depth — at the current message index",
+                      },
+                    ]}
+                  />
                   <TextInput
                     label="Depth"
                     type="number"
@@ -1146,7 +1156,7 @@ export function LorebookLibrary({
                   ) : null}
                 </SidebarSection>
 
-                <div className="entry-editor-actions">
+                <Stack direction="row" justify="end" style={{ marginTop: "8px" }}>
                   <Button
                     variant="danger"
                     size="sm"
@@ -1156,7 +1166,7 @@ export function LorebookLibrary({
                   >
                     Delete Entry
                   </Button>
-                </div>
+                </Stack>
               </div>
             </div>
           </div>
@@ -1173,16 +1183,19 @@ export function LorebookLibrary({
         className={`lorebook-library-container ${isModal ? "is-modal" : "is-workspace"}`}
       >
         {isModal ? (
-          <div
-            className="global-scope-badge"
-            title="Edits modify global lorebook templates"
-          >
-            🌐 Global Lorebooks
+          <div>
+            <Badge
+              variant="outline"
+              size="sm"
+              title="Edits modify global lorebook templates"
+            >
+              🌐 Global Lorebooks
+            </Badge>
           </div>
         ) : null}
 
         {status ? (
-          <div style={{ marginBottom: "8px" }}>
+          <div>
             {status.isError ? (
               <Badge
                 variant="danger"
@@ -1201,7 +1214,7 @@ export function LorebookLibrary({
           </div>
         ) : null}
 
-        <div className="lorebook-toolbar">
+        <Stack direction="row" gap="sm" wrap>
           <Button
             variant="primary"
             size="sm"
@@ -1229,52 +1242,73 @@ export function LorebookLibrary({
             style={{ display: "none" }}
             onChange={() => void handleImport()}
           />
-        </div>
+        </Stack>
 
         {summaries.length === 0 ? (
-          <p className="lorebook-empty">
+          <Text size="sm" tone="muted" align="center" style={{ padding: "24px 0" }}>
             No lorebooks yet. Create one or import a SillyTavern World Info
             .json file.
-          </p>
+          </Text>
         ) : (
           <>
             {paginationElement}
-            <ul className="lorebook-list">
+            <Stack gap="sm">
               {lorebookPager.pageItems.map((s) => (
-                <li key={s.id} className="lorebook-list-row">
-                  <div
-                    className="lorebook-list-info"
-                    onClick={() => void selectLorebook(s.id)}
+                <Card
+                  key={s.id}
+                  variant="elevated"
+                  padding="sm"
+                  hoverable
+                  onClick={() => void selectLorebook(s.id)}
+                >
+                  <Stack
+                    direction="row"
+                    justify="between"
+                    align="center"
+                    gap="md"
+                    wrap
                   >
-                    <strong>{s.name}</strong>
-                    <span>{s.entryCount} entries</span>
-                    <span>Scan depth: {s.scanDepth}</span>
-                  </div>
-                  <div className="lorebook-list-actions">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => void selectLorebook(s.id)}
+                    <Stack direction="row" align="center" gap="md" wrap>
+                      <Text weight="semibold" size="sm">
+                        {s.name}
+                      </Text>
+                      <Badge variant="outline" size="xs">
+                        {s.entryCount} entries
+                      </Badge>
+                      <Text size="xs" tone="muted">
+                        Scan depth: {s.scanDepth}
+                      </Text>
+                    </Stack>
+                    <Stack
+                      direction="row"
+                      gap="xs"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      Edit
-                    </Button>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() =>
-                        setDeleteConfirm({
-                          kind: "lorebook",
-                          id: s.id,
-                          name: s.name,
-                        })
-                      }
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </li>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => void selectLorebook(s.id)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() =>
+                          setDeleteConfirm({
+                            kind: "lorebook",
+                            id: s.id,
+                            name: s.name,
+                          })
+                        }
+                      >
+                        Delete
+                      </Button>
+                    </Stack>
+                  </Stack>
+                </Card>
               ))}
-            </ul>
+            </Stack>
           </>
         )}
 

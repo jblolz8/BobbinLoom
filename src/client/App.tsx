@@ -93,7 +93,7 @@ export default function App() {
     setGenError(null);
     modalHook.openSetup();
     if (initial?.personaId) setSelectedPersonaId(initial.personaId);
-    void loadPersonasForPicker();
+    void loadPersonasForPicker(initial?.personaId);
     void loadCastLibrary(initial?.castIds);
     void loadLorebookLibrary();
     void loadCardSettings();
@@ -107,12 +107,16 @@ export default function App() {
     }
   }
 
-  async function loadPersonasForPicker() {
+  async function loadPersonasForPicker(preSelectPersonaId?: string) {
     try {
       const all = await listPersonas();
       setPersonas(all);
+      if (preSelectPersonaId && all.some((p) => p.id === preSelectPersonaId)) {
+        setSelectedPersonaId(preSelectPersonaId);
+        return;
+      }
       const def = all.find((p) => p.isDefault) ?? all[0];
-      if (def && !selectedPersonaId) setSelectedPersonaId(def.id);
+      if (def) setSelectedPersonaId(def.id);
     } catch { /* silent */ }
   }
 
@@ -247,10 +251,15 @@ export default function App() {
   }
 
   function handlePersonasChanged(refreshed: Persona[]) {
+    const prevDef = personas.find((p) => p.isDefault);
+    const nextDef = refreshed.find((p) => p.isDefault) ?? refreshed[0];
     setPersonas(refreshed);
-    if (selectedPersonaId && !refreshed.some((p) => p.id === selectedPersonaId)) {
-      const def = refreshed.find((p) => p.isDefault) ?? refreshed[0];
-      setSelectedPersonaId(def?.id ?? "");
+    if (
+      !selectedPersonaId ||
+      !refreshed.some((p) => p.id === selectedPersonaId) ||
+      (nextDef && prevDef?.id !== nextDef.id)
+    ) {
+      setSelectedPersonaId(nextDef?.id ?? "");
     }
   }
 

@@ -10,6 +10,7 @@ import {
   popDialog,
   pushDialog,
 } from "../../../engine/dialogStack";
+import "./Modal.css";
 
 export type ModalSize = "sm" | "md" | "lg" | "wide";
 

@@ -6,8 +6,9 @@ import {
   chunkWarning,
   estimatePromptChunks,
 } from "../../../utils/imagePromptEstimate";
-import { Button, Icon, TextArea } from "../../base";
+import { Button, Icon, Text, TextArea } from "../../base";
 import { formatDuration } from "../../../engine/displayFormat";
+import "./ChatPanel.css";
 
 /**
  * The review step between the text model writing an image prompt and the image
@@ -271,9 +272,9 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
               Cancel
             </Button>
             {rerunning && promptElapsedMs !== null ? (
-              <span className="image-prompt-elapsed">
+              <Text as="span" size="xs" tone="muted" mono>
                 {formatDuration(promptElapsedMs)}
-              </span>
+              </Text>
             ) : null}
           </div>
         </div>

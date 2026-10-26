@@ -33,13 +33,15 @@ import {
   Badge,
   Button,
   Icon,
+  ModelIcon,
+  resolveModelInfo,
   SearchBar,
   SimpleSelect,
   TextArea,
+  type SimpleSelectOption,
 } from "../../../base";
-import type { SimpleSelectOption } from "../../../base/Select";
-import { ModelIcon, resolveModelInfo } from "../../../base/ModelIcon";
-import { ConfirmModal } from "../../../common/ConfirmModal";
+import { ConfirmModal } from "../../../common";
+import "./CharsTab.css";
 
 type SaveFeedback = { ok: boolean; text: string };
 

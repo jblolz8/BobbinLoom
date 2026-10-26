@@ -1,0 +1,214 @@
+/* ── Gallery Modal ── */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--modal-backdrop);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 1000;
+}
+
+.modal {
+  width: min(680px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  border: 1px solid var(--border-main);
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  border-radius: 14px;
+  padding: 1rem;
+  box-shadow: var(--shadow-card);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.modal-header h2,
+.modal-header p {
+  margin: 0;
+}
+
+/* Gallery Media: two panes — the chapter nav and the grid. The modal is a flex column that
+   owns no scrolling of its own (`overflow: hidden`), so the grid scrolls and the header stays
+   put; `min-height: 0` at every level is what lets the panes shrink inside a sheet. */
+.modal.gallery-modal {
+  width: min(980px, 100%);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal.gallery-modal .modal-header {
+  flex-shrink: 0;
+}
+
+.gallery-modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.gallery-modal-error {
+  color: var(--status-danger);
+  font-size: 0.8rem;
+  margin: 0.35rem 0 0;
+}
+
+.gallery-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.gallery-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+}
+
+.gallery-toolbar-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.gallery-toolbar-count {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* The flex ROW the nav's drawer positions itself against — `position: relative` here is
+   load-bearing, and `min-width: 0` is what stops the grid's min-content from flooring the row
+   (a grid inside a flex item takes the item's automatic minimum size, and the sheet's
+   `overflow: hidden` would then clip it with no scrollbar). */
+.gallery-panes {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  gap: 0.9rem;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.gallery-panes .gallery-grid {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+}
+
+.gallery-item {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 0.5rem;
+}
+
+.gallery-item.current {
+  border-color: var(--accent-highlight, var(--accent-base));
+}
+
+.gallery-item-thumb {
+  padding: 0;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-app);
+  cursor: zoom-in;
+}
+
+.gallery-item-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.gallery-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.gallery-item-when {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.gallery-item-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 680px) {
+  /* The house phone sheet, matching `.modal.setup-wizard-modal`: full screen, `dvh` AFTER `vh`
+     (vh matches the large viewport, so with a mobile URL bar showing the sheet's footer sits
+     below the fold), and `min-height: 0` because the base `.modal` max-height/height rules
+     would otherwise beat it. */
+  .modal.gallery-modal {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    min-height: 0;
+    border-radius: 0;
+    border: none;
+  }
+
+  /* The shared backdrop keeps 1rem of padding; a full-height sheet inside it would overflow and
+     clip its own footer, so the gallery's backdrop goes flush — its own rule, deliberately not
+     folded into the 680px block that owns the sheet. */
+  .gallery-backdrop {
+    padding: 0;
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
+  /* The header's two blocks stop competing for one row. The actions row is shrink-proof (it holds
+     two buttons), so beside a wrapping subtitle it took the room instead: measured at 375px with a
+     custom cover, the title column was 112px wide and 23.6% of the sheet tall. Stacked, the title
+     gets the full width back and the header fits in one line. */
+  .modal.gallery-modal .modal-header {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .gallery-modal-title {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+}

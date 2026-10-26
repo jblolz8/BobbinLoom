@@ -35,7 +35,7 @@ import {
   repairMemoryEventTurns,
   restoreSnapshotState,
 } from "../engine/engine";
-import { loadAppSettings } from "./appSettingsStore";
+import { loadAppSettings, saveAppSettings } from "./appSettingsStore";
 import { DEMO_TEMPLATE } from "../engine/demoData";
 import type {
   CharacterFormat,
@@ -114,7 +114,7 @@ function playthroughPath(dir: string, id: string): string {
   return join(dir, `${id}.json`);
 }
 
-const PERSONAS_DIR = join(process.cwd(), "data", "personas");
+export const PERSONAS_DIR = join(process.cwd(), "data", "personas");
 
 // --- Preset helpers ---
 
@@ -142,14 +142,24 @@ export function loadDefaultPreset(): {
   };
 }
 
-/** All presets from data/prompt-presets.json ([] when missing or unreadable). */
+/** All presets from data/prompt-presets.json merged with data/user-prompt-presets.json ([] when missing or unreadable). */
 function readAllPresets(): PromptPreset[] {
-  try {
-    const presetsPath = join(process.cwd(), "data", "prompt-presets.json");
-    return JSON.parse(readFileSync(presetsPath, "utf8")) as PromptPreset[];
-  } catch {
-    return [];
-  }
+  const readList = (path: string): PromptPreset[] => {
+    if (!existsSync(path)) return [];
+    try {
+      const parsed = JSON.parse(readFileSync(path, "utf8"));
+      return Array.isArray(parsed) ? (parsed as PromptPreset[]) : [];
+    } catch {
+      return [];
+    }
+  };
+  const shippedFile = readList(join(process.cwd(), "data", "prompt-presets.json"));
+  const userPath = join(process.cwd(), "data", "user-prompt-presets.json");
+  if (!existsSync(userPath)) return shippedFile;
+  return [
+    ...shippedFile.filter((p) => p.readonly),
+    ...readList(userPath).map((p) => ({ ...p, readonly: false })),
+  ];
 }
 
 /** Resolves the preset for a scenario-generation request: an explicit presetId wins;
@@ -214,14 +224,30 @@ function movePersonaFolder(
   if (existsSync(oldFile)) renameSync(oldFile, join(to, `${newSlug}.json`));
 }
 
-/** Write a persona into its home folder (found by id, else its name slug). */
-function savePersona(persona: PlayerPersona, dir: string = PERSONAS_DIR): void {
-  const home =
-    findFolderContainingId(dir, persona.id) ??
-    personaFolderPath(dir, slugify(persona.name));
+function settingsDirForPersonasDir(dir: string): string {
+  return dir === PERSONAS_DIR ? join(process.cwd(), "data") : dir;
+}
+
+/** Write a persona into its home folder (found by id, else its name slug).
+ *  On disk, only the shipped `persona_default` carries `isDefault: true` so
+ *  changing the active default persona (stored in gitignored user-settings.json)
+ *  never dirties committed persona seed files. */
+function savePersona(
+  persona: PlayerPersona,
+  dir: string = PERSONAS_DIR,
+  targetSlug?: string,
+): void {
+  const home = targetSlug
+    ? personaFolderPath(dir, targetSlug)
+    : (findFolderContainingId(dir, persona.id) ??
+      personaFolderPath(dir, slugify(persona.name)));
   ensureStoreDir(home);
   const slug = basename(home);
-  atomicWriteJson(join(home, `${slug}.json`), persona);
+  const onDisk: PlayerPersona = {
+    ...persona,
+    isDefault: persona.id === "persona_default",
+  };
+  atomicWriteJson(join(home, `${slug}.json`), onDisk);
 }
 
 /** Scan data/personas/<slug>/ — one PlayerPersona per folder, per-file validated. */
@@ -251,7 +277,27 @@ function loadPersonas(dir: string = PERSONAS_DIR): PlayerPersona[] {
     }
     personas.push(parsed.data);
   }
-  return personas;
+
+  if (personas.length === 0) return personas;
+
+  const settings = loadAppSettings(settingsDirForPersonasDir(dir));
+  const configuredId = settings.defaultPersonaId;
+  const matchedConfigured = configuredId
+    ? personas.find((p) => p.id === configuredId)
+    : undefined;
+  const legacyCustomDefault = personas.find(
+    (p) => p.id !== "persona_default" && p.isDefault,
+  );
+  const resolvedDefaultId =
+    matchedConfigured?.id ??
+    legacyCustomDefault?.id ??
+    personas.find((p) => p.isDefault)?.id ??
+    personas[0].id;
+
+  return personas.map((p) => ({
+    ...p,
+    isDefault: p.id === resolvedDefaultId,
+  }));
 }
 
 export function loadDefaultPersona(): PlayerPersona {
@@ -260,7 +306,7 @@ export function loadDefaultPersona(): PlayerPersona {
     // Fallback — should never happen if data/personas ships correctly
     return {
       id: "persona_default",
-      name: "Player",
+      name: "John Bobbin",
       description: "A newcomer, ready for anything.",
       bodyType: "average",
       appearance: "Travel-worn clothes, alert posture.",
@@ -292,20 +338,26 @@ export function createPersonaRecord(
     ? personas.find((p) => p.id === cloneFromId)
     : undefined;
 
+  const existingIds = new Set(personas.map((p) => p.id));
+  let candidateTimestamp = Date.now();
+  while (existingIds.has(`persona_${candidateTimestamp}`)) {
+    candidateTimestamp += 1;
+  }
+
   const persona: PlayerPersona = {
-    id: `persona_${Date.now()}`,
+    id: `persona_${candidateTimestamp}`,
     name,
     description: source?.description ?? "",
-    bodyType: source?.bodyType ?? "average",
+    bodyType: source?.bodyType ?? "",
     appearance: source?.appearance ?? "",
     initialClothing: source ? structuredClone(source.initialClothing) : [],
-    isDefault: false,
+    isDefault: personas.length === 0,
   };
 
   const slug = uniqueSlug(slugify(name), personaSlugs(dir));
   ensureStoreDir(personaFolderPath(dir, slug));
-  atomicWriteJson(personaFilePath(dir, slug), persona);
-  return persona;
+  savePersona(persona, dir, slug);
+  return loadPersonas(dir).find((p) => p.id === persona.id) ?? persona;
 }
 
 export function updatePersonaRecord(
@@ -317,15 +369,21 @@ export function updatePersonaRecord(
   const index = personas.findIndex((p) => p.id === id);
   if (index === -1) return null;
 
-  const updated = { ...personas[index], ...updates };
-  const oldSlug = slugify(personas[index].name);
+  const current = personas[index];
+  const updated = { ...current, ...updates, id: current.id };
+  const folder = findFolderContainingId(dir, id);
+  const oldSlug = folder ? basename(folder) : slugify(current.name);
   const newSlug = slugify(updated.name);
-  if (oldSlug !== newSlug) {
+  if (
+    updated.name !== current.name &&
+    oldSlug !== newSlug &&
+    id !== "persona_default"
+  ) {
     const target = uniqueSlug(newSlug, personaSlugs(dir));
     movePersonaFolder(dir, oldSlug, target);
   }
   savePersona(updated, dir);
-  return updated;
+  return loadPersonas(dir).find((p) => p.id === id) ?? updated;
 }
 
 export function deletePersonaRecord(
@@ -340,7 +398,9 @@ export function deletePersonaRecord(
 
   if (personas[index].isDefault) {
     const remaining = personas.filter((_, i) => i !== index);
-    savePersona({ ...remaining[0], isDefault: true }, dir);
+    saveAppSettings(settingsDirForPersonasDir(dir), {
+      defaultPersonaId: remaining[0].id,
+    });
   }
 
   const folder = findFolderContainingId(dir, id);
@@ -360,13 +420,155 @@ export function setDefaultPersonaRecord(
   const target = personas.find((p) => p.id === id);
   if (!target) return null;
 
-  for (const p of personas) {
-    if (p.isDefault && p.id !== id)
-      savePersona({ ...p, isDefault: false }, dir);
+  saveAppSettings(settingsDirForPersonasDir(dir), {
+    defaultPersonaId: id,
+  });
+  return { ...target, isDefault: true };
+}
+
+function personaPortraitFileFor(
+  record: PlayerPersona,
+  folder: string,
+): string | null {
+  if (record.customPortrait) {
+    const file = join(folder, record.customPortrait);
+    if (existsSync(file)) return file;
   }
-  const updated = { ...target, isDefault: true };
-  savePersona(updated, dir);
-  return updated;
+  for (const ext of ["png", "jpg", "jpeg", "webp"]) {
+    const candidate = join(folder, `portrait.${ext}`);
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+export function getPersonaAvatarPath(
+  id: string,
+  typeOrDir?: "portrait" | "profile" | string,
+  maybeDir?: string,
+): string | null {
+  const isType = typeOrDir === "portrait" || typeOrDir === "profile";
+  const type: "portrait" | "profile" = isType
+    ? (typeOrDir as "portrait" | "profile")
+    : "portrait";
+  const dir = isType
+    ? (maybeDir ?? PERSONAS_DIR)
+    : (typeOrDir ?? PERSONAS_DIR);
+
+  const record = loadPersonas(dir).find((p) => p.id === id);
+  if (!record) return null;
+  const folder =
+    findFolderContainingId(dir, id) ??
+    personaFolderPath(dir, slugify(record.name));
+
+  if (type === "profile") {
+    if (record.profileImage) {
+      const file = join(folder, record.profileImage);
+      if (existsSync(file)) return file;
+    }
+    for (const ext of ["png", "jpg", "jpeg", "webp"]) {
+      const candidate = join(folder, `profile.${ext}`);
+      if (existsSync(candidate)) return candidate;
+    }
+    // Fall back to portrait if no dedicated profile exists
+  }
+
+  return personaPortraitFileFor(record, folder);
+}
+
+export function savePersonaAvatar(
+  id: string,
+  type: "portrait" | "profile",
+  buffer: Buffer,
+  ext: string = "png",
+  dir: string = PERSONAS_DIR,
+): PlayerPersona | null {
+  const record = loadPersonas(dir).find((p) => p.id === id);
+  if (!record) return null;
+  const folder =
+    findFolderContainingId(dir, id) ??
+    personaFolderPath(dir, slugify(record.name));
+  ensureStoreDir(folder);
+
+  const cleanExt = ext.replace(/^\./, "").toLowerCase() || "png";
+  const filename = `${type}.${cleanExt}`;
+  for (const prevExt of ["png", "jpg", "jpeg", "webp"]) {
+    if (prevExt === cleanExt) continue;
+    const stale = join(folder, `${type}.${prevExt}`);
+    if (existsSync(stale)) {
+      try {
+        unlinkSync(stale);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  const filePath = join(folder, filename);
+  atomicWriteFile(filePath, buffer);
+
+  const now = Date.now();
+  const updates: Partial<PlayerPersona> = {
+    avatarUpdatedAt: now,
+    ...(type === "portrait"
+      ? { customPortrait: filename }
+      : { profileImage: filename }),
+  };
+  return updatePersonaRecord(id, updates, dir);
+}
+
+export function removePersonaPortraitAvatar(
+  id: string,
+  dir: string = PERSONAS_DIR,
+): PlayerPersona | null {
+  const record = loadPersonas(dir).find((p) => p.id === id);
+  if (!record) return null;
+  const folder =
+    findFolderContainingId(dir, id) ??
+    personaFolderPath(dir, slugify(record.name));
+
+  for (const ext of ["png", "jpg", "jpeg", "webp"]) {
+    const candidate = join(folder, `portrait.${ext}`);
+    if (existsSync(candidate)) {
+      try {
+        unlinkSync(candidate);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  const updates: Partial<PlayerPersona> = {
+    customPortrait: undefined,
+    avatarUpdatedAt: Date.now(),
+  };
+  return updatePersonaRecord(id, updates, dir);
+}
+
+export function removePersonaProfileAvatar(
+  id: string,
+  dir: string = PERSONAS_DIR,
+): PlayerPersona | null {
+  const record = loadPersonas(dir).find((p) => p.id === id);
+  if (!record) return null;
+  const folder =
+    findFolderContainingId(dir, id) ??
+    personaFolderPath(dir, slugify(record.name));
+
+  for (const ext of ["png", "jpg", "jpeg", "webp"]) {
+    const candidate = join(folder, `profile.${ext}`);
+    if (existsSync(candidate)) {
+      try {
+        unlinkSync(candidate);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  const updates: Partial<PlayerPersona> = {
+    profileImage: undefined,
+    avatarUpdatedAt: Date.now(),
+  };
+  return updatePersonaRecord(id, updates, dir);
 }
 
 // --- Character template CRUD (folder-per-entity: data/characters/<slug>/<slug>.json, older versions <slug>.v<N>.json) ---
@@ -699,6 +901,19 @@ export function saveCharacterAvatar(
 
   const cleanExt = ext.replace(/^\./, "").toLowerCase() || "png";
   const filename = `${type}.${cleanExt}`;
+  const originalFile =
+    record.cardRef?.kind === "png" ? record.cardRef.file : null;
+  for (const prevExt of ["png", "jpg", "jpeg", "webp"]) {
+    if (prevExt === cleanExt) continue;
+    const stale = join(folder, `${type}.${prevExt}`);
+    if (existsSync(stale) && basename(stale) !== originalFile) {
+      try {
+        unlinkSync(stale);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
   const filePath = join(folder, filename);
   atomicWriteFile(filePath, buffer);
 

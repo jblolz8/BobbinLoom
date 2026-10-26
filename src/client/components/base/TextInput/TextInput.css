@@ -1,0 +1,301 @@
+/* --------------------------------------------------------------------------
+   Base Form Controls (.base-form-field, .base-form-input)
+   -------------------------------------------------------------------------- */
+.base-form-field,
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+  width: auto;
+  box-sizing: border-box;
+}
+
+.base-form-field--full {
+  width: 100%;
+}
+
+.base-form-field--disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.field-label-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.76rem;
+  line-height: 1.2;
+  font-weight: 500;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.field-input-row {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  width: 100%;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.field-input-row--inline {
+  display: inline-flex;
+  width: auto;
+  max-width: 100%;
+  flex: 0 1 auto;
+}
+
+.field-input-row--inline > .base-select-trigger {
+  width: auto;
+}
+
+@media (max-width: 680px) {
+  .field-input-row--inline {
+    flex: 1 1 auto;
+  }
+
+  .field-input-row--inline > .base-select-trigger {
+    flex: 1 1 auto;
+  }
+}
+
+.base-form-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  width: 100%;
+}
+
+.base-form-input-wrapper .base-form-input,
+.base-form-input-wrapper .form-input,
+.field-input-row .base-form-input,
+.field-input-row .form-input,
+.field-input-row input,
+.field-input-row > .base-select-trigger {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.base-form-input__icon--left {
+  position: absolute;
+  left: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease;
+  z-index: 1;
+}
+
+.base-form-input-wrapper:focus-within .base-form-input__icon--left {
+  color: var(--input-focus-border, var(--accent-base));
+}
+
+.base-form-input-wrapper.has-left-icon .base-form-input,
+.base-form-input-wrapper.has-left-icon .form-input {
+  padding-left: 2rem;
+}
+
+.field-input-row--sm .base-form-input-wrapper.has-left-icon .base-form-input,
+.field-input-row--sm .base-form-input-wrapper.has-left-icon .form-input {
+  padding-left: 1.85rem;
+}
+
+.field-input-row--lg .base-form-input-wrapper.has-left-icon .base-form-input,
+.field-input-row--lg .base-form-input-wrapper.has-left-icon .form-input {
+  padding-left: 2.3rem;
+}
+
+.field-input-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Base Form Input */
+.base-form-input,
+.form-input {
+  border-radius: var(--radius-sm, 6px);
+  font: inherit;
+  width: 100%;
+  box-sizing: border-box;
+  color: var(--input-text);
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.base-form-input::placeholder,
+.form-input::placeholder {
+  color: var(--input-placeholder, var(--text-muted));
+  opacity: 0.85;
+}
+
+.base-form-input:hover:not(:focus):not(:disabled),
+.form-input:hover:not(:focus):not(:disabled) {
+  border-color: var(--border-focus, var(--input-focus-border));
+}
+
+.base-form-input:focus,
+.base-form-input:focus-visible,
+.form-input:focus,
+.form-input:focus-visible {
+  border-color: var(--input-focus-border);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--input-focus-ring);
+}
+
+.base-form-input:disabled,
+.form-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Input Sizes */
+.base-form-input--sm,
+.field-input-row--sm .base-form-input,
+.field-input-row--sm .form-input {
+  height: 28px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.78rem;
+  border-radius: 5px;
+}
+
+.base-form-input--md,
+.field-input-row--md .base-form-input,
+.field-input-row--md .form-input {
+  height: 32px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.82rem;
+  border-radius: 6px;
+}
+
+.base-form-input--lg,
+.field-input-row--lg .base-form-input,
+.field-input-row--lg .form-input {
+  height: 38px;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.92rem;
+  border-radius: 7px;
+}
+
+/* Input Variants */
+.base-form-input--filled {
+  background-color: var(--input-filled-bg, var(--bg-surface-elevated));
+  border-color: transparent;
+}
+
+.base-form-input--filled:hover:not(:focus):not(:disabled) {
+  border-color: var(--input-border);
+}
+
+.base-form-input--filled:focus {
+  background-color: var(--input-bg);
+  border-color: var(--input-focus-border);
+}
+
+.base-form-input--ghost {
+  background-color: transparent;
+  border-color: transparent;
+}
+
+.base-form-input--ghost:hover:not(:focus):not(:disabled) {
+  background-color: var(--bg-surface-hover);
+}
+
+.base-form-input--ghost:focus {
+  background-color: var(--input-bg);
+  border-color: var(--input-focus-border);
+}
+
+/* Unsaved / modified warning state */
+.base-form-input--dirty,
+.form-input.base-form-input--dirty {
+  border-color: var(--status-warning-border, var(--status-warning));
+  border-left: 3px solid var(--status-warning);
+}
+
+/* Error State */
+.base-form-input--error,
+.form-input.has-error,
+.base-form-input[aria-invalid="true"] {
+  border-color: var(--status-danger) !important;
+  box-shadow: 0 0 0 2px var(--status-danger-border) !important;
+}
+
+.field-error-text {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.25;
+  color: var(--status-danger);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.field-helper-text {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.25;
+  color: var(--text-muted);
+}
+
+/* Base Form Select (.base-form-select, .form-select) */
+.base-form-select,
+.form-select {
+  border-radius: var(--radius-sm, 6px);
+  font: inherit;
+  width: 100%;
+  box-sizing: border-box;
+  color: var(--input-text);
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  height: 32px;
+  font-size: 0.82rem;
+  padding: 0.3rem 2rem 0.3rem 0.65rem;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238a93a5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
+  background-size: 13px 13px;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.base-form-select:hover:not(:focus):not(:disabled),
+.form-select:hover:not(:focus):not(:disabled) {
+  border-color: var(--border-focus, var(--input-focus-border));
+}
+
+.base-form-select:focus,
+.base-form-select:focus-visible,
+.form-select:focus,
+.form-select:focus-visible {
+  border-color: var(--input-focus-border);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--input-focus-ring);
+}
+
+.base-form-select option,
+.form-select option {
+  background-color: var(--bg-surface-elevated, var(--bg-panel));
+  color: var(--text-primary);
+  padding: 0.4rem;
+}

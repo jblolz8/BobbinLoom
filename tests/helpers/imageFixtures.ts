@@ -63,11 +63,26 @@ export function writePlaythroughWithImages(
   const pt = createBlankPlaythroughRecord(
     dir,
     name,
-    undefined,
+    "persona_default",
     [],
     undefined,
     undefined,
   );
+  pt.playerCharacter = {
+    name: "Anon",
+    description:
+      "A male human. Wears glasses since he is short-sighted. Prefers a long sleeve shirt, slacks and a necktie.",
+    bodyType: "average",
+    appearance: "Fair skin. Black hair. Black eye color.",
+    clothing: [
+      { slot: "Torso", name: "White Long Sleeve Shirt" },
+      { slot: "Neck", name: "Necktie" },
+      { slot: "Legs", name: "Black Slacks" },
+      { slot: "Feet", name: "Black Shoes" },
+    ],
+    conditions: [],
+    flags: [],
+  };
   pt.messages = filesPerMessage.map((files, i) => ({
     id: `msg_${name.replace(/\W+/g, "_")}_${i}`,
     role: i % 2 === 0 ? ("assistant" as const) : ("user" as const),

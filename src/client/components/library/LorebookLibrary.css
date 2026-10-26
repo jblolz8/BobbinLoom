@@ -1,0 +1,320 @@
+/* ── Lorebook Library & Model B Master-Detail Editor ── */
+.lorebook-library-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+  width: 100%;
+}
+
+.lorebook-library-container.is-modal {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.lorebook-settings-bar {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 6px 0 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-wrap: wrap;
+}
+
+.lorebook-settings-bar .base-form-field {
+  margin: 0;
+}
+
+.lorebook-settings-name {
+  flex: 1 1 220px;
+  min-width: 160px;
+  max-width: 420px;
+}
+
+.lorebook-settings-scan {
+  flex: 0 0 auto;
+  width: 110px;
+}
+
+.lorebook-settings-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.lorebook-settings-name .base-form-field,
+.lorebook-settings-scan .base-form-field {
+  width: 100%;
+}
+
+/* The master–detail split: the in-flow editor/placeholder drives height; the
+   entry list is absolutely positioned to always match that height. */
+.lorebook-master-detail {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  padding-left: 316px;
+  overflow: hidden;
+}
+
+.lorebook-entry-list {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding-right: 16px;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.lorebook-entry-list-header {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.lorebook-entry-list-header .base-search-bar {
+  flex: 1;
+  min-width: 0;
+}
+
+.lorebook-entry-rows {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.lorebook-entry-row {
+  padding: 8px 10px;
+  border: 1px solid var(--border-main);
+  border-radius: 6px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  background: var(--bg-surface-elevated);
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.lorebook-entry-row:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--border-light);
+}
+
+.lorebook-entry-row.selected {
+  border-color: var(--accent-base);
+  background: var(--accent-translucent);
+}
+
+.lorebook-entry-row:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-base);
+}
+
+.lorebook-entry-row.disabled {
+  opacity: 0.5;
+}
+
+.lorebook-entry-row .entry-row-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.lorebook-entry-row .entry-uid {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.lorebook-entry-row .entry-state-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.lorebook-entry-row .entry-label {
+  display: block;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lorebook-entry-row .entry-preview {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin-top: 2px;
+}
+
+.lorebook-entry-editor-placeholder {
+  flex: 1;
+  min-width: 0;
+  min-height: 420px;
+  max-height: clamp(380px, calc(100vh - 340px), 860px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 24px;
+}
+
+.lorebook-entry-editor {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+  overflow: hidden;
+  min-width: 0;
+  max-height: clamp(380px, calc(100vh - 340px), 860px);
+  min-height: 0;
+}
+
+.lorebook-entry-editor-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+
+.lorebook-entry-editor-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lorebook-entry-editor-sidebar .lorebook-sidebar-section {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--bg-surface-elevated);
+}
+
+.lorebook-entry-editor-sidebar .lorebook-sidebar-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 2px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: inherit;
+}
+
+.lorebook-entry-editor-sidebar .lorebook-sidebar-section-head svg {
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.lorebook-entry-editor-sidebar .lorebook-sidebar-section-head:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface-hover);
+}
+
+.lorebook-entry-editor-sidebar .lorebook-sidebar-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.lorebook-entry-editor-sidebar .base-form-input[type="number"],
+.lorebook-entry-editor-sidebar .base-form-textarea {
+  max-width: 100%;
+}
+
+.lorebook-entry-editor-sidebar .base-form-field {
+  margin-top: 0;
+}
+
+.lorebook-entry-editor-sidebar .base-form-field + .base-form-field {
+  margin-top: 0.4rem;
+}
+
+@media (max-width: 860px) {
+  .lorebook-master-detail {
+    position: static;
+    padding-left: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    overflow: visible;
+  }
+  .lorebook-entry-list {
+    position: static;
+    width: 100%;
+    padding-right: 0;
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: 12px;
+  }
+  .lorebook-entry-rows {
+    flex: 0 1 auto;
+    max-height: 40vh;
+  }
+  .lorebook-entry-editor {
+    flex-direction: column;
+    gap: 16px;
+    overflow: visible;
+    max-height: none;
+    min-height: 0;
+  }
+  .lorebook-entry-editor-main {
+    overflow: visible;
+    max-height: none;
+    flex: none;
+  }
+  .lorebook-entry-editor-sidebar {
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+    flex-shrink: 0;
+  }
+  .lorebook-entry-editor-placeholder {
+    flex: none;
+    min-height: 160px;
+    max-height: none;
+  }
+}

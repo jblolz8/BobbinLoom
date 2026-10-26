@@ -1,0 +1,15 @@
+/* ── Close Chapter Modal ── */
+.modal.close-chapter-modal {
+  width: min(520px, 100%);
+}
+
+.close-chapter-modal .modal-header p {
+  color: var(--text-muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.close-chapter-modal .settings-actions {
+  margin-top: 0.25rem;
+  justify-content: flex-end;
+}

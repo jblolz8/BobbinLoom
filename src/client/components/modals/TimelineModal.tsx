@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { RenameModal } from "../common/RenameModal";
+import { useEffect, useState, useCallback } from "react";
+import { RenameModal } from "../common";
 import {
   ReactFlow,
   Controls,
@@ -20,7 +20,8 @@ import {
   renamePlaythrough,
   promotePlaythroughBranch,
 } from "../../api";
-import { Icon, IconButton } from "../base";
+import { Badge, Button, Icon, IconButton, StatusMessage } from "../base";
+import "./TimelineModal.css";
 
 export type TimelineModalProps = {
   open: boolean;
@@ -91,7 +92,9 @@ function TimelineCustomNode({ data }: { data: TimelineNodeData }) {
         {isActive ? (
           <span className="timeline-current-label">Current Timeline</span>
         ) : (
-          <button
+          <Button
+            variant="secondary"
+            size="xs"
             className="timeline-switch-btn"
             onClick={(e) => {
               e.stopPropagation();
@@ -99,7 +102,7 @@ function TimelineCustomNode({ data }: { data: TimelineNodeData }) {
             }}
           >
             Switch
-          </button>
+          </Button>
         )}
       </div>
 
@@ -409,10 +412,14 @@ export function TimelineModal({
         </header>
 
         {error ? (
-          <div className="timeline-error-banner">
-            <span>{error}</span>
-            <button onClick={() => setError(null)}>Dismiss</button>
-          </div>
+          <StatusMessage
+            variant="banner"
+            tone="err"
+            className="timeline-error-banner"
+            onDismiss={() => setError(null)}
+          >
+            {error}
+          </StatusMessage>
         ) : null}
 
         <div className="timeline-canvas-container">
@@ -463,16 +470,18 @@ export function TimelineModal({
                   <h3 title={selectedPlaythrough.name}>
                     {selectedPlaythrough.name}
                   </h3>
-                  <button
+                  <IconButton
+                    icon="Edit3"
+                    size="xs"
+                    variant="ghost"
                     className="rename-icon-btn"
+                    label="Rename timeline"
+                    title="Rename timeline"
                     onClick={() => {
                       setRenameError(null);
                       setRenameTarget(selectedPlaythrough);
                     }}
-                    title="Rename timeline"
-                  >
-                    <Icon name="Edit3" size={13} />
-                  </button>
+                  />
                   {renameTarget ? (
                     <RenameModal
                       title="Rename Timeline"
@@ -487,9 +496,13 @@ export function TimelineModal({
                     />
                   ) : null}
                   {selectedIsActive ? (
-                    <span className="inspector-active-pill">
+                    <Badge
+                      variant="accent"
+                      size="xs"
+                      className="inspector-active-pill"
+                    >
                       CURRENT TIMELINE
-                    </span>
+                    </Badge>
                   ) : null}
                 </div>
 
@@ -538,57 +551,72 @@ export function TimelineModal({
 
               <div className="inspector-actions">
                 {selectedPlaythrough.isTimelineBranch ? (
-                  <button
+                  <Button
+                    variant="ai"
+                    size="sm"
                     className="timeline-action-btn promote"
+                    leftIcon={<Icon name="ExternalLink" size={14} />}
                     onClick={() => void handlePromote(selectedPlaythrough.id)}
                     title="Make this branch appear as a standalone playthrough in the Save/Load menu"
                   >
-                    <Icon name="ExternalLink" size={14} />
-                    <span>Promote to Playthrough</span>
-                  </button>
+                    Promote to Playthrough
+                  </Button>
                 ) : null}
 
                 {selectedIsActive ? (
-                  <button className="timeline-action-btn current" disabled>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="timeline-action-btn current"
+                    disabled
+                  >
                     Currently Active
-                  </button>
+                  </Button>
                 ) : (
-                  <button
+                  <Button
+                    variant="primary"
+                    size="sm"
                     className="timeline-action-btn switch primary"
+                    leftIcon={<Icon name="Play" size={14} />}
                     onClick={() => void handleSwitch(selectedPlaythrough.id)}
                   >
-                    <Icon name="Play" size={14} />
-                    <span>Load This Timeline</span>
-                  </button>
+                    Load This Timeline
+                  </Button>
                 )}
 
                 {!selectedIsActive ? (
                   deleteConfirmId === selectedPlaythrough.id ? (
                     <div className="delete-confirm-group">
                       <span className="confirm-text">Delete?</span>
-                      <button
+                      <Button
+                        variant="danger"
+                        size="xs"
                         className="danger-btn confirm"
                         onClick={() =>
                           void handleDelete(selectedPlaythrough.id)
                         }
                       >
                         Yes
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="xs"
                         className="cancel-btn"
                         onClick={() => setDeleteConfirmId(null)}
                       >
                         No
-                      </button>
+                      </Button>
                     </div>
                   ) : (
-                    <button
+                    <IconButton
+                      icon="Trash2"
+                      size="sm"
+                      variant="danger"
                       className="timeline-action-btn delete"
-                      onClick={() => setDeleteConfirmId(selectedPlaythrough.id)}
+                      label="Delete this branch"
                       title="Delete this branch"
-                    >
-                      <Icon name="Trash2" size={14} />
-                    </button>
+                      onClick={() => setDeleteConfirmId(selectedPlaythrough.id)}
+                    />
                   )
                 ) : null}
               </div>

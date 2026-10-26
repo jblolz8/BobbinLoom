@@ -62,19 +62,28 @@ import {
 } from "../../../engine/characterCards";
 import {
   ActionsMenu,
+  Badge,
   Button,
-  Icon,
-  SearchBar,
-  TagChip,
+  Card,
   CharacterAvatar,
-  Tooltip,
-  TextInput,
-  SimpleSelect,
+  Dialog,
+  Icon,
   Pagination,
+  SearchBar,
+  SimpleSelect,
+  Stack,
+  StatusMessage,
+  Tabs,
+  TagChip,
+  TagSidebar,
+  Text,
+  TextArea,
+  TextInput,
+  Tooltip,
 } from "../base";
 export { CharacterAvatar } from "../base";
 import { usePagination } from "../../hooks/usePagination";
-import { ConfirmModal } from "../common/ConfirmModal";
+import { CharacterPortraitDrawer, ConfirmModal } from "../common";
 import { DiffModal } from "./DiffModal";
 import { TwoPaneDiff } from "./TwoPaneDiff";
 import { TagSuggestionModal } from "./TagSuggestionModal";
@@ -91,17 +100,16 @@ import {
   isBrainstormMessage,
   trimBrainstormMessages,
 } from "../../../engine/brainstorm";
-import { CharacterVisualsDrawer } from "./CharacterVisualsDrawer";
 import {
   getBrainstormSettings,
   getTagTaxonomy,
   setBrainstormSettings,
 } from "../../api";
 import {
-  groupTagsByCategory,
   sortTags,
   type TagTaxonomyConfig,
 } from "../../../engine/tagTaxonomy";
+import "./CharacterLibrary.css";
 
 export type CharacterLibraryProps = {
   isModal?: boolean;
@@ -199,20 +207,23 @@ function TagChipEditor({
       <div className="editor-field-header-row">
         <span className="editor-field-label">Tags</span>
         {onSuggestAI ? (
-          <button
+          <Button
             type="button"
-            className="suggest-tags-ai-btn"
+            variant="ai"
+            size="xs"
             onClick={() => onSuggestAI()}
             disabled={disabled || suggestingAI}
+            leftIcon={
+              <Icon
+                name="Sparkles"
+                size={13}
+                className={suggestingAI ? "sparkle-pulse" : ""}
+              />
+            }
             title="Use AI to analyze character content and suggest tags based on library taxonomy"
           >
-            <Icon
-              name="Sparkles"
-              size={13}
-              className={suggestingAI ? "sparkle-pulse" : ""}
-            />
             {suggestingAI ? "Analyzing Tags…" : "Edit Tags by AI"}
-          </button>
+          </Button>
         ) : null}
       </div>
 
@@ -383,14 +394,16 @@ function TagDiffViewer({
       <div className="editor-field-header-row">
         <span className="editor-field-label">Tags Comparison</span>
         {originalTags.length > 0 ? (
-          <button
+          <Button
             type="button"
-            className="restore-tags-btn"
+            variant="secondary"
+            size="xs"
+            leftIcon={<Icon name="RotateCcw" size={13} />}
             onClick={onRestore}
             title="Restore original CCv2 tags"
           >
-            <Icon name="RotateCcw" size={13} /> Restore Original Tags
-          </button>
+            Restore Original Tags
+          </Button>
         ) : null}
       </div>
 
@@ -478,7 +491,6 @@ export function CharacterLibrary({
     writeLibraryPreference({ search: val });
   };
 
-  const [tagFilterSearch, setTagFilterSearch] = useState("");
   const [importing, setImporting] = useState(false);
   const [viewMode, setViewModeState] = useState<ViewMode>(
     LIBRARY_PREFERENCE_DEFAULTS.viewMode,
@@ -653,7 +665,6 @@ export function CharacterLibrary({
       cancelled = true;
     };
   }, []);
-  const [mobileSidebarExpanded, setMobileSidebarExpanded] = useState(false);
 
   // ── AI Brainstorming State ──
   const [aiBrainstormOpen, setAiBrainstormOpen] = useState(false);
@@ -1579,17 +1590,6 @@ export function CharacterLibrary({
       .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
   }, [templates]);
 
-  // Tag filter sidebar search
-  const filteredTagCounts = useMemo(() => {
-    if (!tagFilterSearch.trim()) return allTagCounts;
-    const q = tagFilterSearch.trim().toLowerCase();
-    return allTagCounts.filter((item) => item.tag.includes(q));
-  }, [allTagCounts, tagFilterSearch]);
-
-  const groupedTagCategories = useMemo(() => {
-    return groupTagsByCategory(filteredTagCounts, taxonomyConfig);
-  }, [filteredTagCounts, taxonomyConfig]);
-
   function toggleCategoryCollapse(categoryId: string) {
     const next = new Set(collapsedCategories);
     if (next.has(categoryId)) next.delete(categoryId);
@@ -1652,9 +1652,7 @@ export function CharacterLibrary({
     [filteredTemplates, sortBy, sortDirection],
   );
 
-  // Pagination — shared maths + state (engine/pagination.ts + hooks/usePagination.ts). The page
-  // returns to 1 when the search text, sort field, or sort direction changes (this replaces the old
-  // per-handler page resets) and it clamps when filtering shrinks the list.
+  // Pagination — shared maths + state (engine/pagination.ts + hooks/usePagination.ts).
   const pager = usePagination({
     items: groups,
     persistAs: "library",
@@ -1674,99 +1672,77 @@ export function CharacterLibrary({
     />
   );
 
-  const galleryRef = useRef<HTMLElement>(null);
-  const [galleryHeight, setGalleryHeight] = useState<number | null>(null);
-
-  useEffect(() => {
-    const el = galleryRef.current;
-    if (!el) return;
-
-    const updateHeight = () => {
-      const h = el.offsetHeight;
-      if (h > 0) {
-        setGalleryHeight(h);
-      }
-    };
-
-    updateHeight();
-
-    if (typeof ResizeObserver !== "undefined") {
-      const ro = new ResizeObserver(() => {
-        updateHeight();
-      });
-      ro.observe(el);
-      return () => ro.disconnect();
-    }
-  }, [paginatedGroups.length, viewMode, search, activeFilterTags]);
-
-  const sidebarStyle = useMemo<React.CSSProperties>(() => {
-    if (!galleryHeight) return {};
-    // When gallery is short (e.g. 2 cards = ~300px), limit sidebar max-height so it doesn't exceed gallery.
-    // Maintain a comfortable minimum floor (260px) so the search input and several tags remain visible.
-    const effectiveMax = Math.max(galleryHeight, 260);
-    const ceiling = isModal ? "calc(90vh - 130px)" : "calc(100vh - 24px)";
-    return {
-      maxHeight: `min(${effectiveMax}px, ${ceiling})`,
-    };
-  }, [galleryHeight, isModal]);
-
   return (
     <div
       className={`character-library-container ${isModal ? "is-modal" : "is-workspace"}`}
     >
       {isModal ? (
-        <div
-          className="global-scope-badge"
-          title="Edits modify global templates used for new playthroughs"
-        >
-          🌐 Global Character Templates
+        <div style={{ marginBottom: "0.75rem" }}>
+          <Badge
+            variant="outline"
+            size="sm"
+            title="Edits modify global templates used for new playthroughs"
+          >
+            🌐 Global Character Templates
+          </Badge>
         </div>
       ) : null}
 
       <div className="character-manager-body">
         {convertLoading && convertingCharacter ? (
-          <div className="conversion-active-banner">
-            <div className="conversion-banner-content">
-              <span className="conversion-banner-spinner">
-                <Icon name="Sparkles" size={17} className="sparkle-pulse" />
-              </span>
-              <span className="conversion-banner-text">
+          <StatusMessage
+            variant="banner"
+            tone="neutral"
+            icon="Sparkles"
+            className="library-sticky-banner"
+          >
+            <Stack
+              direction="row"
+              justify="between"
+              align="center"
+              gap="sm"
+              wrap
+            >
+              <span>
                 Converting{" "}
                 <strong>&quot;{displayTitle(convertingCharacter)}&quot;</strong>{" "}
                 to BobbinLoom format with AI…
               </span>
-            </div>
-            <button
-              type="button"
-              className="conversion-cancel-btn"
-              onClick={handleCancelConvert}
-              title="Cancel ongoing conversion"
-            >
-              <Icon name="X" size={14} /> Cancel
-            </button>
-          </div>
+              <Button
+                type="button"
+                variant="danger"
+                size="xs"
+                leftIcon={<Icon name="X" size={14} />}
+                onClick={handleCancelConvert}
+                title="Cancel ongoing conversion"
+              >
+                Cancel
+              </Button>
+            </Stack>
+          </StatusMessage>
         ) : null}
 
         {importing ? (
-          <div className="conversion-active-banner import-active-banner">
-            <div className="conversion-banner-content">
-              <span className="conversion-banner-spinner">
-                <Icon name="Upload" size={17} className="sparkle-pulse" />
-              </span>
-              <span className="conversion-banner-text">
-                Importing character card…
-              </span>
-            </div>
-          </div>
+          <StatusMessage
+            variant="banner"
+            tone="neutral"
+            icon="Upload"
+            className="library-sticky-banner"
+          >
+            Importing character card…
+          </StatusMessage>
         ) : null}
 
         {convertedSuccess ? (
-          <div className="conversion-success-banner">
-            <div className="conversion-success-content">
-              <span className="conversion-success-icon">
-                <Icon name="CheckCircle2" size={18} />
-              </span>
-              <span className="conversion-success-text">
+          <StatusMessage
+            variant="banner"
+            tone="ok"
+            icon="CheckCircle2"
+            className="library-sticky-banner"
+            onDismiss={() => setConvertedSuccess(null)}
+          >
+            <Stack direction="row" align="center" gap="sm" wrap>
+              <span>
                 {convertedSuccess.kind === "reformat" ? (
                   <>
                     Successfully updated{" "}
@@ -1781,112 +1757,88 @@ export function CharacterLibrary({
                   </>
                 )}
               </span>
-              <button
+              <Button
                 type="button"
-                className="conversion-view-edit-link"
+                variant="secondary"
+                size="xs"
+                rightIcon={<Icon name="ArrowRight" size={13} />}
                 onClick={() => {
                   openEdit(convertedSuccess.template);
                   setConvertedSuccess(null);
                 }}
               >
-                Open in Editor <Icon name="ArrowRight" size={13} />
-              </button>
-            </div>
-            <button
-              type="button"
-              className="conversion-success-dismiss"
-              onClick={() => setConvertedSuccess(null)}
-              title="Dismiss notification"
-            >
-              <Icon name="X" size={14} />
-            </button>
-          </div>
+                Open in Editor
+              </Button>
+            </Stack>
+          </StatusMessage>
         ) : null}
 
         {importSuccess ? (
-          <div className="conversion-success-banner import-success-banner">
-            <div className="conversion-success-content">
-              <span className="conversion-success-icon">
-                <Icon name="CheckCircle2" size={18} />
-              </span>
-              <span className="conversion-success-text">
+          <StatusMessage
+            variant="banner"
+            tone="ok"
+            icon="CheckCircle2"
+            className="library-sticky-banner"
+            onDismiss={() => setImportSuccess(null)}
+          >
+            <Stack direction="row" align="center" gap="sm" wrap>
+              <span>
                 Successfully imported{" "}
                 <strong>&quot;{importSuccess.recordName}&quot;</strong> into the
                 library!
               </span>
-              <button
+              <Button
                 type="button"
-                className="conversion-view-edit-link"
+                variant="secondary"
+                size="xs"
+                rightIcon={<Icon name="ArrowRight" size={13} />}
                 onClick={() => {
                   openEdit(importSuccess.template);
                   setImportSuccess(null);
                 }}
               >
-                Open in Editor <Icon name="ArrowRight" size={13} />
-              </button>
-            </div>
-            <button
-              type="button"
-              className="conversion-success-dismiss"
-              onClick={() => setImportSuccess(null)}
-              title="Dismiss notification"
-            >
-              <Icon name="X" size={14} />
-            </button>
-          </div>
+                Open in Editor
+              </Button>
+            </Stack>
+          </StatusMessage>
         ) : null}
 
         {deleteSuccess ? (
-          <div className="conversion-success-banner delete-success-banner">
-            <div className="conversion-success-content">
-              <span className="conversion-success-icon delete-icon">
-                <Icon name="Trash2" size={18} />
-              </span>
-              <span className="conversion-success-text">
-                Character card{" "}
-                <strong>&quot;{deleteSuccess.recordName}&quot;</strong> was
-                deleted from the library.
-              </span>
-            </div>
-            <button
-              type="button"
-              className="conversion-success-dismiss"
-              onClick={() => setDeleteSuccess(null)}
-              title="Dismiss notification"
-            >
-              <Icon name="X" size={14} />
-            </button>
-          </div>
+          <StatusMessage
+            variant="banner"
+            tone="err"
+            icon="Trash2"
+            className="library-sticky-banner"
+            onDismiss={() => setDeleteSuccess(null)}
+          >
+            Character card{" "}
+            <strong>&quot;{deleteSuccess.recordName}&quot;</strong> was deleted
+            from the library.
+          </StatusMessage>
         ) : null}
 
         {libraryError ? (
-          <div className="conversion-success-banner library-error-banner">
-            <div className="conversion-success-content">
-              <span className="conversion-success-icon error-icon">
-                <Icon name="AlertTriangle" size={18} />
-              </span>
-              <span className="conversion-success-text error-text">
-                {libraryError}
-              </span>
-            </div>
-            <button
-              type="button"
-              className="conversion-success-dismiss"
-              onClick={() => setLibraryError(null)}
-              title="Dismiss notification"
-            >
-              <Icon name="X" size={14} />
-            </button>
-          </div>
+          <StatusMessage
+            variant="banner"
+            tone="err"
+            icon="AlertTriangle"
+            className="library-sticky-banner"
+            onDismiss={() => setLibraryError(null)}
+          >
+            {libraryError}
+          </StatusMessage>
         ) : null}
 
         {conversionFailed ? (
-          <div className="conversion-success-banner library-error-banner conversion-failed-banner">
-            <div className="conversion-success-content">
-              <span className="conversion-success-icon error-icon">
-                <Icon name="AlertCircle" size={18} />
-              </span>
-              <span className="conversion-success-text error-text">
+          <StatusMessage
+            variant="banner"
+            tone="err"
+            icon="AlertCircle"
+            className="library-sticky-banner"
+            onDismiss={() => setConversionFailed(null)}
+          >
+            <Stack direction="row" align="center" gap="sm" wrap>
+              <span>
                 Failed to convert{" "}
                 <strong>
                   &quot;{displayTitle(conversionFailed.template)}&quot;
@@ -1897,7 +1849,6 @@ export function CharacterLibrary({
                 type="button"
                 variant="secondary"
                 size="xs"
-                className="conversion-retry-banner-btn"
                 onClick={() => {
                   const tpl = conversionFailed.template;
                   setConversionFailed(null);
@@ -1907,16 +1858,8 @@ export function CharacterLibrary({
               >
                 Retry
               </Button>
-            </div>
-            <button
-              type="button"
-              className="conversion-success-dismiss"
-              onClick={() => setConversionFailed(null)}
-              title="Dismiss notification"
-            >
-              <Icon name="X" size={14} />
-            </button>
-          </div>
+            </Stack>
+          </StatusMessage>
         ) : null}
 
         {editorOpen ? (
@@ -1929,7 +1872,6 @@ export function CharacterLibrary({
                   type="button"
                   variant="secondary"
                   size="sm"
-                  className="editor-back-btn"
                   onClick={handleCancelClick}
                   leftIcon={<Icon name="ArrowLeft" size={15} />}
                   title="Return to Character Library"
@@ -1938,20 +1880,28 @@ export function CharacterLibrary({
                 </Button>
                 <h3>{editingId ? `Edit: ${form.name}` : "New Character"}</h3>
                 {status ? (
-                  <span
-                    className={`editor-status-toast ${status.toLowerCase().includes("error") || status.toLowerCase().includes("fail") ? "is-error" : ""}`}
+                  <Badge
+                    variant={
+                      status.toLowerCase().includes("error") ||
+                      status.toLowerCase().includes("fail")
+                        ? "danger"
+                        : "success"
+                    }
+                    pill
+                    leftIcon={
+                      <Icon
+                        name={
+                          status.toLowerCase().includes("error") ||
+                          status.toLowerCase().includes("fail")
+                            ? "AlertCircle"
+                            : "Check"
+                        }
+                        size={13}
+                      />
+                    }
                   >
-                    <Icon
-                      name={
-                        status.toLowerCase().includes("error") ||
-                        status.toLowerCase().includes("fail")
-                          ? "AlertCircle"
-                          : "Check"
-                      }
-                      size={13}
-                    />
                     {status}
-                  </span>
+                  </Badge>
                 ) : null}
               </div>
 
@@ -1973,28 +1923,31 @@ export function CharacterLibrary({
                 </div>
 
                 {!editingIsCcv2 ? (
-                  <button
+                  <Button
                     type="button"
-                    className={`ai-brainstorm-toggle-btn ${aiBrainstormOpen ? "active" : ""}`}
+                    variant="ai"
+                    size="sm"
                     onClick={() => setAiBrainstormOpen(!aiBrainstormOpen)}
+                    leftIcon={
+                      <Icon
+                        name="Sparkles"
+                        size={14}
+                        className={aiLoading ? "sparkle-pulse" : ""}
+                      />
+                    }
                     title={
                       aiBrainstormOpen
                         ? "Hide AI Assistant"
                         : "Open AI Brainstorm Assistant"
                     }
                   >
-                    <Icon
-                      name="Sparkles"
-                      size={14}
-                      className={aiLoading ? "sparkle-pulse" : ""}
-                    />
                     <span>AI Assistant</span>
                     {aiMessages.length > 0 && (
                       <span className="ai-msg-count-badge">
                         {aiMessages.length}
                       </span>
                     )}
-                  </button>
+                  </Button>
                 ) : null}
 
                 {!editingIsCcv2 &&
@@ -2002,8 +1955,8 @@ export function CharacterLibrary({
                 !isFormatAligned(form.content, targetFormat) ? (
                   <Button
                     type="button"
+                    variant="ai"
                     size="xs"
-                    className="reformat-btn"
                     onClick={() => void handleReformat()}
                     disabled={convertLoading}
                     title="Restructure this sheet to match the selected format, with a preview before applying"
@@ -2026,7 +1979,6 @@ export function CharacterLibrary({
                     type="button"
                     size="xs"
                     variant="primary"
-                    className="convert-btn"
                     onClick={() => {
                       const tpl = templates.find((t) => t.id === editingId);
                       if (tpl) handleConvert(tpl);
@@ -2041,51 +1993,110 @@ export function CharacterLibrary({
 
             <div className="editor-split-container">
               <div className="editor-main-pane">
-                <CharacterVisualsDrawer
-                  template={
-                    editingId ? templates.find((t) => t.id === editingId) : null
-                  }
-                  characterName={form.name}
-                  onUploadPortrait={async (dataBase64, fileName) => {
-                    if (!editingId) return;
-                    const res = await uploadCharacterAvatar(
-                      editingId,
-                      "portrait",
-                      dataBase64,
-                      fileName,
-                    );
-                    setTemplates((prev) =>
-                      prev.map((t) => (t.id === editingId ? res.record : t)),
-                    );
-                  }}
-                  onUploadProfile={async (dataBase64, fileName) => {
-                    if (!editingId) return;
-                    const res = await uploadCharacterAvatar(
-                      editingId,
-                      "profile",
-                      dataBase64,
-                      fileName,
-                    );
-                    setTemplates((prev) =>
-                      prev.map((t) => (t.id === editingId ? res.record : t)),
-                    );
-                  }}
-                  onRestoreOriginalPortrait={async () => {
-                    if (!editingId) return;
-                    const res = await restoreOriginalCharacterAvatar(editingId);
-                    setTemplates((prev) =>
-                      prev.map((t) => (t.id === editingId ? res.record : t)),
-                    );
-                  }}
-                  onDeleteProfile={async () => {
-                    if (!editingId) return;
-                    const res = await deleteCharacterProfileAvatar(editingId);
-                    setTemplates((prev) =>
-                      prev.map((t) => (t.id === editingId ? res.record : t)),
-                    );
-                  }}
-                  disabled={saving}
-                />
+                {(() => {
+                  const editingTemplate = editingId
+                    ? templates.find((t) => t.id === editingId)
+                    : null;
+                  const hasOriginalCcv2 =
+                    editingTemplate?.cardRef?.kind === "png";
+                  const updatedAt = editingTemplate?.avatarUpdatedAt;
+                  return (
+                    <CharacterPortraitDrawer
+                      entityId={editingTemplate?.id}
+                      entityName={form.name}
+                      entityLabel="character card"
+                      portraitUrl={
+                        editingTemplate
+                          ? getCharacterAvatarUrl(
+                              editingTemplate.id,
+                              "portrait",
+                              updatedAt,
+                            )
+                          : null
+                      }
+                      profileUrl={
+                        editingTemplate
+                          ? getCharacterAvatarUrl(
+                              editingTemplate.id,
+                              "profile",
+                              updatedAt,
+                            )
+                          : null
+                      }
+                      originalUrl={
+                        editingTemplate && hasOriginalCcv2
+                          ? getCharacterAvatarUrl(
+                              editingTemplate.id,
+                              "original",
+                              updatedAt,
+                            )
+                          : null
+                      }
+                      hasOriginalCcv2={hasOriginalCcv2}
+                      hasCustomPortrait={!!editingTemplate?.customPortrait}
+                      hasProfileImage={!!editingTemplate?.profileImage}
+                      onUploadPortrait={async (dataBase64, fileName) => {
+                        if (!editingId) return;
+                        const res = await uploadCharacterAvatar(
+                          editingId,
+                          "portrait",
+                          dataBase64,
+                          fileName,
+                        );
+                        setTemplates((prev) =>
+                          prev.map((t) =>
+                            t.id === editingId ? res.record : t,
+                          ),
+                        );
+                      }}
+                      onUploadProfile={async (dataBase64, fileName) => {
+                        if (!editingId) return;
+                        const res = await uploadCharacterAvatar(
+                          editingId,
+                          "profile",
+                          dataBase64,
+                          fileName,
+                        );
+                        setTemplates((prev) =>
+                          prev.map((t) =>
+                            t.id === editingId ? res.record : t,
+                          ),
+                        );
+                      }}
+                      onRestoreOriginalPortrait={async () => {
+                        if (!editingId) return;
+                        const res =
+                          await restoreOriginalCharacterAvatar(editingId);
+                        setTemplates((prev) =>
+                          prev.map((t) =>
+                            t.id === editingId ? res.record : t,
+                          ),
+                        );
+                      }}
+                      onDeletePortrait={async () => {
+                        if (!editingId) return;
+                        const res =
+                          await restoreOriginalCharacterAvatar(editingId);
+                        setTemplates((prev) =>
+                          prev.map((t) =>
+                            t.id === editingId ? res.record : t,
+                          ),
+                        );
+                      }}
+                      onDeleteProfile={async () => {
+                        if (!editingId) return;
+                        const res =
+                          await deleteCharacterProfileAvatar(editingId);
+                        setTemplates((prev) =>
+                          prev.map((t) =>
+                            t.id === editingId ? res.record : t,
+                          ),
+                        );
+                      }}
+                      disabled={saving}
+                    />
+                  );
+                })()}
 
                 <TextInput
                   label="Name"
@@ -2112,29 +2123,28 @@ export function CharacterLibrary({
                     // Unconverted CCv2 (read-only) or native BL (editable) — single view.
                     return (
                       <>
-                        <label className="editor-field">
-                          <span className="editor-field-label">
-                            Creator's Notes
-                            {editingIsCcv2 ? (
-                              <span className="ccv2-readonly-badge">
-                                Read-only CCv2 sheet
-                              </span>
-                            ) : null}
-                          </span>
-                          <textarea
-                            rows={3}
-                            value={form.creatorNotes}
-                            onChange={(e) =>
-                              setForm((f) => ({
-                                ...f,
-                                creatorNotes: e.target.value,
-                              }))
-                            }
-                            placeholder="Optional notes from the creator (e.g. usage guidelines, character background, tags)..."
-                            className="creator-notes-textarea"
-                            disabled={editingIsCcv2}
-                          />
-                        </label>
+                        <TextArea
+                          label={
+                            <Stack direction="row" align="center" gap="xs">
+                              <span>Creator&apos;s Notes</span>
+                              {editingIsCcv2 ? (
+                                <Badge variant="outline" size="xs" pill>
+                                  Read-only CCv2 sheet
+                                </Badge>
+                              ) : null}
+                            </Stack>
+                          }
+                          rows={3}
+                          value={form.creatorNotes}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              creatorNotes: e.target.value,
+                            }))
+                          }
+                          placeholder="Optional notes from the creator (e.g. usage guidelines, character background, tags)..."
+                          disabled={editingIsCcv2}
+                        />
 
                         <TagChipEditor
                           tags={form.tags}
@@ -2150,29 +2160,28 @@ export function CharacterLibrary({
                           taxonomyConfig={taxonomyConfig}
                         />
 
-                        <label className="editor-field">
-                          <span className="editor-field-label">
-                            Content (full character sheet)
-                            {editingIsCcv2 ? (
-                              <span className="ccv2-readonly-badge">
-                                Read-only CCv2 sheet
-                              </span>
-                            ) : null}
-                          </span>
-                          <textarea
-                            rows={20}
-                            value={form.content}
-                            onChange={(e) =>
-                              setForm((f) => ({
-                                ...f,
-                                content: e.target.value,
-                              }))
-                            }
-                            placeholder={CHARACTER_SHEET_EXAMPLE}
-                            className="content-textarea"
-                            disabled={editingIsCcv2}
-                          />
-                        </label>
+                        <TextArea
+                          label={
+                            <Stack direction="row" align="center" gap="xs">
+                              <span>Content (full character sheet)</span>
+                              {editingIsCcv2 ? (
+                                <Badge variant="outline" size="xs" pill>
+                                  Read-only CCv2 sheet
+                                </Badge>
+                              ) : null}
+                            </Stack>
+                          }
+                          rows={20}
+                          value={form.content}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              content: e.target.value,
+                            }))
+                          }
+                          placeholder={CHARACTER_SHEET_EXAMPLE}
+                          disabled={editingIsCcv2}
+                        />
                       </>
                     );
                   }
@@ -2180,48 +2189,30 @@ export function CharacterLibrary({
                   // Converted → tabs: BL Format (editable) / Original (read-only) / Both (live).
                   return (
                     <div className="editor-tabs-wrap">
-                      <div className="editor-tabs" role="tablist">
-                        <button
-                          className={viewTab === "bl" ? "active" : ""}
-                          onClick={() => setViewTab("bl")}
-                          role="tab"
-                        >
-                          BL Format
-                        </button>
-                        <button
-                          className={viewTab === "original" ? "active" : ""}
-                          onClick={() => setViewTab("original")}
-                          role="tab"
-                        >
-                          Original
-                        </button>
-                        <button
-                          className={viewTab === "both" ? "active" : ""}
-                          onClick={() => setViewTab("both")}
-                          role="tab"
-                        >
-                          Both
-                        </button>
-                      </div>
+                      <Tabs<"bl" | "original" | "both">
+                        variant="underline"
+                        activeTab={viewTab}
+                        onChange={(val) => setViewTab(val)}
+                        tabs={[
+                          { id: "bl", label: "BL Format" },
+                          { id: "original", label: "Original" },
+                          { id: "both", label: "Both" },
+                        ]}
+                      />
                       {viewTab === "bl" ? (
                         <>
-                          <label className="editor-field">
-                            <span className="editor-field-label">
-                              Creator's Notes (BL format — editable)
-                            </span>
-                            <textarea
-                              rows={3}
-                              value={form.creatorNotes}
-                              onChange={(e) =>
-                                setForm((f) => ({
-                                  ...f,
-                                  creatorNotes: e.target.value,
-                                }))
-                              }
-                              placeholder="Optional notes from the creator (e.g. usage guidelines, character background, tags)..."
-                              className="creator-notes-textarea"
-                            />
-                          </label>
+                          <TextArea
+                            label="Creator's Notes (BL format — editable)"
+                            rows={3}
+                            value={form.creatorNotes}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                creatorNotes: e.target.value,
+                              }))
+                            }
+                            placeholder="Optional notes from the creator (e.g. usage guidelines, character background, tags)..."
+                          />
 
                           <TagChipEditor
                             tags={form.tags}
@@ -2236,40 +2227,34 @@ export function CharacterLibrary({
                             taxonomyConfig={taxonomyConfig}
                           />
 
-                          <label className="editor-field">
-                            <span className="editor-field-label">
-                              Content (BL format — editable)
-                            </span>
-                            <textarea
-                              rows={20}
-                              value={form.content}
-                              onChange={(e) =>
-                                setForm((f) => ({
-                                  ...f,
-                                  content: e.target.value,
-                                }))
-                              }
-                              className="content-textarea"
-                            />
-                          </label>
+                          <TextArea
+                            label="Content (BL format — editable)"
+                            rows={20}
+                            value={form.content}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                content: e.target.value,
+                              }))
+                            }
+                          />
                         </>
                       ) : viewTab === "original" ? (
                         <>
-                          <label className="editor-field read-only">
-                            <span className="editor-field-label">
-                              Original Creator's Notes
-                              <span className="ccv2-readonly-badge">
-                                Read-only
-                              </span>
-                            </span>
-                            <textarea
-                              rows={3}
-                              value={originalCreatorNotes}
-                              readOnly
-                              placeholder="(no original creator notes)"
-                              className="creator-notes-textarea read-only"
-                            />
-                          </label>
+                          <TextArea
+                            label={
+                              <Stack direction="row" align="center" gap="xs">
+                                <span>Original Creator&apos;s Notes</span>
+                                <Badge variant="outline" size="xs" pill>
+                                  Read-only
+                                </Badge>
+                              </Stack>
+                            }
+                            rows={3}
+                            value={originalCreatorNotes}
+                            readOnly
+                            placeholder="(no original creator notes)"
+                          />
 
                           <div className="editor-field read-only">
                             <div className="editor-field-header-row">
@@ -2281,7 +2266,6 @@ export function CharacterLibrary({
                                   type="button"
                                   size="xs"
                                   variant="secondary"
-                                  className="restore-tags-btn"
                                   onClick={() =>
                                     setForm((f) => ({
                                       ...f,
@@ -2313,26 +2297,25 @@ export function CharacterLibrary({
                             </div>
                           </div>
 
-                          <label className="editor-field read-only">
-                            <span className="editor-field-label">
-                              Original CCv2 Content
-                              <span className="ccv2-readonly-badge">
-                                Read-only
-                              </span>
-                            </span>
-                            <textarea
-                              rows={20}
-                              value={tpl!.ccv2Content ?? ""}
-                              readOnly
-                              className="content-textarea read-only"
-                            />
-                          </label>
+                          <TextArea
+                            label={
+                              <Stack direction="row" align="center" gap="xs">
+                                <span>Original CCv2 Content</span>
+                                <Badge variant="outline" size="xs" pill>
+                                  Read-only
+                                </Badge>
+                              </Stack>
+                            }
+                            rows={20}
+                            value={tpl!.ccv2Content ?? ""}
+                            readOnly
+                          />
                         </>
                       ) : (
                         <>
                           <div className="editor-field">
                             <span className="editor-field-label">
-                              Creator's Notes
+                              Creator&apos;s Notes
                             </span>
                             <TwoPaneDiff
                               leftLabel="Original Creator's Notes"
@@ -2371,13 +2354,12 @@ export function CharacterLibrary({
                   );
                 })()}
 
-                <div className="modal-actions editor-footer-actions">
+                <div className="editor-footer-actions">
                   {editingId ? (
                     <Tooltip content="Delete this character card from the library">
                       <Button
                         type="button"
                         variant="danger"
-                        className="editor-delete-btn"
                         onClick={() => {
                           const targetTpl = templates.find(
                             (t) => t.id === editingId,
@@ -2415,7 +2397,6 @@ export function CharacterLibrary({
                       <Button
                         type="button"
                         variant="primary"
-                        className="editor-save-btn"
                         onClick={handleSave}
                         disabled={saving || !form.name.trim() || !isFormDirty}
                         isLoading={saving}
@@ -2456,276 +2437,23 @@ export function CharacterLibrary({
           </div>
         ) : (
           <div className="character-booru-layout">
-            {/* ── Left-side Booru Tag Sidebar ── */}
-            <aside
-              className={`character-tag-sidebar ${mobileSidebarExpanded ? "mobile-expanded" : "mobile-collapsed"}`}
-              style={sidebarStyle}
-            >
-              <div
-                className="sidebar-header"
-                onClick={() => setMobileSidebarExpanded(!mobileSidebarExpanded)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setMobileSidebarExpanded(!mobileSidebarExpanded);
-                  }
-                }}
-              >
-                <h4>
-                  <Icon name="Tag" size={15} /> Tags
-                  <span className="sidebar-total-count">
-                    ({allTagCounts.length})
-                  </span>
-                  {activeFilterTags.length > 0 && (
-                    <span
-                      className="sidebar-active-filter-badge"
-                      title={`${activeFilterTags.length} active tag filter(s)`}
-                    >
-                      {activeFilterTags.length} active
-                    </span>
-                  )}
-                </h4>
-                <div
-                  className="sidebar-header-actions"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    type="button"
-                    className={`sidebar-mode-btn ${sidebarViewMode === "grouped" ? "active" : ""}`}
-                    onClick={() =>
-                      setSidebarViewMode(
-                        sidebarViewMode === "grouped" ? "flat" : "grouped",
-                      )
-                    }
-                    title={
-                      sidebarViewMode === "grouped"
-                        ? "Switch to flat tag list"
-                        : "Switch to category grouped tags"
-                    }
-                  >
-                    <Icon
-                      name={sidebarViewMode === "grouped" ? "Layers" : "List"}
-                      size={13}
-                    />
-                  </button>
-                  <button
-                    type="button"
-                    className="sidebar-settings-btn"
-                    onClick={() => setTaxonomyModalOpen(true)}
-                    title="Configure Tag Taxonomy & Colors"
-                  >
-                    <Icon name="Sliders" size={13} />
-                  </button>
-                  {search.trim() ? (
-                    <button
-                      type="button"
-                      className="sidebar-clear-btn"
-                      onClick={() => {
-                        setSearch("");
-                      }}
-                      title="Clear search and tag filters"
-                    >
-                      Clear
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="sidebar-mobile-toggle-btn"
-                    onClick={() =>
-                      setMobileSidebarExpanded(!mobileSidebarExpanded)
-                    }
-                    aria-label={
-                      mobileSidebarExpanded
-                        ? "Collapse tag filters"
-                        : "Expand tag filters"
-                    }
-                    title={
-                      mobileSidebarExpanded
-                        ? "Collapse tag filters"
-                        : "Expand tag filters"
-                    }
-                  >
-                    <span className="sidebar-toggle-text">
-                      {mobileSidebarExpanded ? "Hide" : "Filter"}
-                    </span>
-                    <Icon
-                      name={mobileSidebarExpanded ? "ChevronUp" : "ChevronDown"}
-                      size={13}
-                    />
-                  </button>
-                </div>
-              </div>
-
-              <div className="sidebar-collapsible-body">
-                {allTagCounts.length > 6 ? (
-                  <div className="sidebar-tag-search-wrap">
-                    <input
-                      type="text"
-                      placeholder="Filter tags…"
-                      value={tagFilterSearch}
-                      onChange={(e) => setTagFilterSearch(e.target.value)}
-                      className="sidebar-tag-search-input"
-                    />
-                    {tagFilterSearch ? (
-                      <button
-                        type="button"
-                        className="sidebar-tag-clear"
-                        onClick={() => setTagFilterSearch("")}
-                      >
-                        ✕
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                {/* Active filter tags quick bar on mobile / narrow space */}
-                {activeFilterTags.length > 0 && (
-                  <div className="sidebar-active-tags-row">
-                    <span className="sidebar-active-tags-label">Active:</span>
-                    <div className="sidebar-active-tags-list">
-                      {activeFilterTags.map((tag) => (
-                        <button
-                          key={tag}
-                          type="button"
-                          className="sidebar-active-tag-chip"
-                          onClick={() => removeFilterTag(tag)}
-                          title={`Remove filter "${tag}"`}
-                        >
-                          <span>{tag}</span>
-                          <Icon name="X" size={10} />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="sidebar-tag-list">
-                  {filteredTagCounts.length === 0 ? (
-                    <p className="sidebar-empty-tags">
-                      {tagFilterSearch ? "No matching tags." : "No tags yet."}
-                    </p>
-                  ) : sidebarViewMode === "grouped" ? (
-                    groupedTagCategories.map((group) => {
-                      const isCollapsed = collapsedCategories.has(group.id);
-                      return (
-                        <div key={group.id} className="sidebar-category-group">
-                          <button
-                            type="button"
-                            className="sidebar-category-header"
-                            onClick={() => toggleCategoryCollapse(group.id)}
-                          >
-                            <div className="sidebar-cat-title-wrap">
-                              <span
-                                className="sidebar-cat-dot"
-                                style={{ backgroundColor: group.color }}
-                              />
-                              <span className="sidebar-cat-label">
-                                {group.label}
-                              </span>
-                            </div>
-                            <div className="sidebar-cat-right">
-                              <span className="sidebar-cat-count">
-                                {group.tags.length}
-                              </span>
-                              <Icon
-                                name={
-                                  isCollapsed ? "ChevronRight" : "ChevronDown"
-                                }
-                                size={12}
-                                className="sidebar-cat-chevron"
-                              />
-                            </div>
-                          </button>
-                          {!isCollapsed && (
-                            <div className="sidebar-category-items">
-                              {group.tags.map(({ tag, count, style }) => {
-                                const active = isTagActive(tag);
-                                return (
-                                  <button
-                                    key={tag}
-                                    type="button"
-                                    className={`sidebar-tag-item ${active ? "active" : ""}`}
-                                    onClick={() => toggleTag(tag)}
-                                    title={
-                                      active
-                                        ? `Remove tag "${tag}"`
-                                        : `Filter by tag "${tag}"`
-                                    }
-                                    style={{
-                                      borderLeftColor: active
-                                        ? style.colors.text
-                                        : "transparent",
-                                    }}
-                                  >
-                                    <span className="sidebar-tag-name">
-                                      {style.namespace ? (
-                                        <span
-                                          className="sidebar-tag-prefix"
-                                          style={{
-                                            color: style.colors.text,
-                                            opacity: 0.8,
-                                          }}
-                                        >
-                                          {style.namespace}:
-                                        </span>
-                                      ) : null}
-                                      <span
-                                        style={{
-                                          color: active
-                                            ? style.colors.text
-                                            : undefined,
-                                        }}
-                                      >
-                                        {style.value}
-                                      </span>
-                                    </span>
-                                    <span
-                                      className="sidebar-tag-count"
-                                      style={{
-                                        borderColor: active
-                                          ? style.colors.text
-                                          : undefined,
-                                      }}
-                                    >
-                                      {count}
-                                    </span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })
-                  ) : (
-                    filteredTagCounts.map(({ tag, count }) => {
-                      const active = isTagActive(tag);
-                      return (
-                        <button
-                          key={tag}
-                          type="button"
-                          className={`sidebar-tag-item ${active ? "active" : ""}`}
-                          onClick={() => toggleTag(tag)}
-                          title={
-                            active
-                              ? `Remove tag "${tag}"`
-                              : `Filter by tag "${tag}"`
-                          }
-                        >
-                          <span className="sidebar-tag-name">{tag}</span>
-                          <span className="sidebar-tag-count">{count}</span>
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </aside>
+            {/* ── Left-side Booru Tag Sidebar (shared primitive) ── */}
+            <TagSidebar
+              taxonomy="character"
+              userConfig={taxonomyConfig}
+              tagCounts={allTagCounts}
+              activeTags={activeFilterTags}
+              onToggleTag={toggleTag}
+              onClearTags={search.trim() ? () => setSearch("") : undefined}
+              onOpenSettings={() => setTaxonomyModalOpen(true)}
+              mode={sidebarViewMode}
+              onModeChange={setSidebarViewMode}
+              collapsedCategories={collapsedCategories}
+              onToggleCategory={toggleCategoryCollapse}
+            />
 
             {/* ── Main Gallery Area ── */}
-            <main className="character-main-gallery" ref={galleryRef}>
+            <main className="character-main-gallery">
               {/* Top Toolbar */}
               <div className="library-toolbar">
                 <div className="library-toolbar-actions">
@@ -2738,7 +2466,6 @@ export function CharacterLibrary({
                   </Button>
                   <Button
                     variant="secondary"
-                    className="import-btn"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={importing}
                     isLoading={importing}
@@ -2831,39 +2558,30 @@ export function CharacterLibrary({
                 </div>
 
                 {/* View Mode Switcher */}
-                <div
-                  className="view-mode-switcher"
-                  role="group"
-                  aria-label="View mode"
-                >
-                  <button
-                    type="button"
-                    className={`view-mode-btn ${viewMode === "portrait" ? "active" : ""}`}
-                    onClick={() => setViewMode("portrait")}
-                    title="Card Portrait View"
-                  >
-                    <Icon name="IdCard" size={16} />
-                    <span className="view-mode-label">Portrait</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`view-mode-btn ${viewMode === "list" ? "active" : ""}`}
-                    onClick={() => setViewMode("list")}
-                    title="List View"
-                  >
-                    <Icon name="List" size={16} />
-                    <span className="view-mode-label">List</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`view-mode-btn ${viewMode === "grid" ? "active" : ""}`}
-                    onClick={() => setViewMode("grid")}
-                    title="Grid View"
-                  >
-                    <Icon name="LayoutGrid" size={16} />
-                    <span className="view-mode-label">Grid</span>
-                  </button>
-                </div>
+                <Tabs<ViewMode>
+                  variant="segmented"
+                  size="sm"
+                  activeTab={viewMode}
+                  onChange={setViewMode}
+                  ariaLabel="View mode"
+                  tabs={[
+                    {
+                      id: "portrait",
+                      label: "Portrait",
+                      icon: "IdCard",
+                    },
+                    {
+                      id: "list",
+                      label: "List",
+                      icon: "List",
+                    },
+                    {
+                      id: "grid",
+                      label: "Grid",
+                      icon: "LayoutGrid",
+                    },
+                  ]}
+                />
               </div>
 
               {/* Active Search Summary Filter Chips */}
@@ -2880,37 +2598,39 @@ export function CharacterLibrary({
                       onRemove={() => removeFilterTag(tag)}
                     />
                   ))}
-                  <button
+                  <Button
                     type="button"
-                    className="clear-all-filters-btn"
+                    variant="ghost"
+                    size="xs"
                     onClick={() => {
                       setSearch("");
                     }}
                   >
                     Clear all
-                  </button>
+                  </Button>
                 </div>
               ) : null}
 
               {/* Results Gallery according to ViewMode */}
               {groups.length === 0 ? (
                 <div className="empty-library-container">
-                  <p className="empty-value">
+                  <Text tone="muted" align="center">
                     {search
                       ? "No characters found matching your search."
                       : "No characters in the library yet."}
-                  </p>
+                  </Text>
                   {search ? (
-                    <button
+                    <Button
                       type="button"
-                      className="secondary-btn"
+                      variant="secondary"
+                      size="sm"
                       style={{ marginTop: "8px" }}
                       onClick={() => {
                         setSearch("");
                       }}
                     >
                       Reset filters
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               ) : (
@@ -3000,41 +2720,45 @@ export function CharacterLibrary({
                               <div className="card-portrait-footer">
                                 <div className="card-portrait-badges">
                                   {badge === "ccv2" ? (
-                                    <span className="ccv2-badge">CCv2</span>
+                                    <Badge variant="warning" size="xs">
+                                      CCv2
+                                    </Badge>
                                   ) : null}
                                   {badge === "ccv2bl" ? (
-                                    <span className="ccv2bl-badge">
+                                    <Badge variant="info" size="xs">
                                       CCv2 / BL
-                                    </span>
+                                    </Badge>
                                   ) : null}
-                                  <span className="version-badge">
+                                  <Badge variant="accent" size="xs">
                                     v
                                     {latest.cardVersion ??
                                       String(latest.version)}
-                                  </span>
+                                  </Badge>
                                   {sortBy === "createdAt" &&
                                   getGroupCreatedAt(group) ? (
-                                    <span
-                                      className="card-timestamp-badge"
+                                    <Badge
+                                      variant="outline"
+                                      size="xs"
+                                      leftIcon={<Icon name="Calendar" size={10} />}
                                       title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}
                                     >
-                                      <Icon name="Calendar" size={10} />{" "}
                                       {formatLibraryDate(
                                         getGroupCreatedAt(group),
                                       )}
-                                    </span>
+                                    </Badge>
                                   ) : null}
                                   {sortBy === "updatedAt" &&
                                   getGroupUpdatedAt(group) ? (
-                                    <span
-                                      className="card-timestamp-badge"
+                                    <Badge
+                                      variant="outline"
+                                      size="xs"
+                                      leftIcon={<Icon name="Clock" size={10} />}
                                       title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}
                                     >
-                                      <Icon name="Clock" size={10} />{" "}
                                       {formatLibraryDate(
                                         getGroupUpdatedAt(group),
                                       )}
-                                    </span>
+                                    </Badge>
                                   ) : null}
                                 </div>
                                 <ActionsMenu
@@ -3105,18 +2829,20 @@ export function CharacterLibrary({
                                     {displayTitle(latest)}
                                   </strong>
                                   {badge === "ccv2" ? (
-                                    <span className="ccv2-badge">CCv2</span>
+                                    <Badge variant="warning" size="xs">
+                                      CCv2
+                                    </Badge>
                                   ) : null}
                                   {badge === "ccv2bl" ? (
-                                    <span className="ccv2bl-badge">
+                                    <Badge variant="info" size="xs">
                                       CCv2 / BL
-                                    </span>
+                                    </Badge>
                                   ) : null}
-                                  <span className="version-badge">
+                                  <Badge variant="accent" size="xs">
                                     v
                                     {latest.cardVersion ??
                                       String(latest.version)}
-                                  </span>
+                                  </Badge>
                                   {group.versions.length > 1 ? (
                                     <span className="version-count">
                                       ({group.versions.length} versions)
@@ -3129,27 +2855,29 @@ export function CharacterLibrary({
                                   ) : null}
                                   {sortBy === "createdAt" &&
                                   getGroupCreatedAt(group) ? (
-                                    <span
-                                      className="card-timestamp-tag"
+                                    <Badge
+                                      variant="outline"
+                                      size="xs"
+                                      leftIcon={<Icon name="Calendar" size={11} />}
                                       title={`Created: ${new Date(getGroupCreatedAt(group)).toLocaleString()}`}
                                     >
-                                      <Icon name="Calendar" size={11} />{" "}
                                       {formatLibraryDate(
                                         getGroupCreatedAt(group),
                                       )}
-                                    </span>
+                                    </Badge>
                                   ) : null}
                                   {sortBy === "updatedAt" &&
                                   getGroupUpdatedAt(group) ? (
-                                    <span
-                                      className="card-timestamp-tag"
+                                    <Badge
+                                      variant="outline"
+                                      size="xs"
+                                      leftIcon={<Icon name="Clock" size={11} />}
                                       title={`Updated: ${new Date(getGroupUpdatedAt(group)).toLocaleString()}`}
                                     >
-                                      <Icon name="Clock" size={11} />{" "}
                                       {formatLibraryDate(
                                         getGroupUpdatedAt(group),
                                       )}
-                                    </span>
+                                    </Badge>
                                   ) : null}
                                 </div>
 
@@ -3262,18 +2990,20 @@ export function CharacterLibrary({
                               <div className="card-grid-footer">
                                 <div className="card-grid-badges">
                                   {badge === "ccv2" ? (
-                                    <span className="ccv2-badge">CCv2</span>
+                                    <Badge variant="warning" size="xs">
+                                      CCv2
+                                    </Badge>
                                   ) : null}
                                   {badge === "ccv2bl" ? (
-                                    <span className="ccv2bl-badge">
+                                    <Badge variant="info" size="xs">
                                       CCv2 / BL
-                                    </span>
+                                    </Badge>
                                   ) : null}
-                                  <span className="version-badge">
+                                  <Badge variant="accent" size="xs">
                                     v
                                     {latest.cardVersion ??
                                       String(latest.version)}
-                                  </span>
+                                  </Badge>
                                   {group.versions.length > 1 ? (
                                     <span className="version-count">
                                       ({group.versions.length} v)
@@ -3395,59 +3125,44 @@ export function CharacterLibrary({
 
       {/* Import notice modal */}
       {importNotice ? (
-        <div
-          className="modal-backdrop"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setImportNotice(null);
-          }}
-        >
-          <section className="modal import-notice-modal">
-            <header className="modal-header">
-              <h2>Already Imported</h2>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setImportNotice(null)}
-              >
-                Close
-              </Button>
-            </header>
-            <p>{importNotice.message}</p>
-            <div
-              className="version-group"
-              style={{
-                margin: "12px 0",
-                padding: "12px",
-                border: "1px solid var(--border-color, #333)",
-                borderRadius: "6px",
-              }}
-            >
-              <div className="version-group-header">
-                <CharacterAvatar
-                  template={importNotice.existingRecord}
-                  variant="portrait"
-                />
-                <div className="version-group-title">
-                  <strong>{displayTitle(importNotice.existingRecord)}</strong>
-                </div>
-              </div>
-            </div>
-            <div className="modal-actions">
-              <Button variant="secondary" onClick={() => setImportNotice(null)}>
-                Dismiss
-              </Button>
+        <Dialog
+          title="Already Imported"
+          onClose={() => setImportNotice(null)}
+          footer={
+            <>
               <Button
                 variant="primary"
                 onClick={() => {
+                  const existing = importNotice.existingRecord;
                   setImportNotice(null);
-                  openEdit(importNotice.existingRecord);
+                  openEdit(existing);
                 }}
               >
                 View / Edit
               </Button>
-            </div>
-          </section>
-        </div>
+              <Button variant="secondary" onClick={() => setImportNotice(null)}>
+                Dismiss
+              </Button>
+            </>
+          }
+        >
+          <Stack gap="md">
+            <Text size="sm" tone="secondary">
+              {importNotice.message}
+            </Text>
+            <Card variant="elevated" padding="sm">
+              <Stack direction="row" align="center" gap="md">
+                <CharacterAvatar
+                  template={importNotice.existingRecord}
+                  variant="list"
+                />
+                <Text weight="bold">
+                  {displayTitle(importNotice.existingRecord)}
+                </Text>
+              </Stack>
+            </Card>
+          </Stack>
+        </Dialog>
       ) : null}
 
       {/* AI Tag Suggestion Modal (Option B) */}
@@ -3485,76 +3200,40 @@ export function CharacterLibrary({
 
       {/* Discard Changes Warning Modal */}
       {discardConfirm && (
-        <div
-          className="modal-backdrop"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setDiscardConfirm(null);
-          }}
-        >
-          <section
-            className="modal discard-warning-modal"
-            aria-labelledby="discard-modal-title"
-          >
-            <header className="modal-header discard-warning-header">
-              <div className="discard-warning-title-wrap">
-                <span className="discard-warning-icon-badge">
-                  <Icon name="AlertTriangle" size={20} />
-                </span>
-                <h3 id="discard-modal-title">Discard unsaved changes?</h3>
-              </div>
-              <button
-                type="button"
-                className="diff-close-btn"
-                onClick={() => setDiscardConfirm(null)}
-                title="Close dialog"
-                aria-label="Close dialog"
-              >
-                <Icon name="X" size={16} />
-              </button>
-            </header>
-            <div className="discard-warning-body">
-              {!editingId && aiMessages.length > 0 ? (
-                <p>
-                  <strong>&quot;{form.name || "New Character"}&quot;</strong>{" "}
-                  has not been saved yet, so its AI brainstorming session (
-                  {aiMessages.length} message
-                  {aiMessages.length === 1 ? "" : "s"}) cannot be kept
-                  {isFormDirty
-                    ? ", and your edits to the sheet go with it"
-                    : ""}
-                  .
-                </p>
-              ) : (
-                <p>
-                  You have unsaved changes to{" "}
-                  <strong>&quot;{form.name || "New Character"}&quot;</strong>
-                  {aiMessages.length > 0
-                    ? `, and an AI brainstorming session (${aiMessages.length} message${aiMessages.length === 1 ? "" : "s"}) which is kept`
-                    : ""}
-                  . Your unsaved edits will be discarded.
-                </p>
-              )}
-            </div>
-            <footer className="discard-warning-footer">
-              <Button
-                variant="secondary"
-                onClick={() => setDiscardConfirm(null)}
-              >
-                Keep Editing
-              </Button>
-              <Button
-                variant="danger"
-                className="discard-confirm-btn"
-                onClick={handleConfirmDiscard}
-                leftIcon={<Icon name="Trash2" size={14} />}
-              >
-                Discard Changes
-              </Button>
-            </footer>
-          </section>
-        </div>
+        <ConfirmModal
+          title="Discard unsaved changes?"
+          confirmLabel="Discard Changes"
+          cancelLabel="Keep Editing"
+          danger
+          onConfirm={handleConfirmDiscard}
+          onCancel={() => setDiscardConfirm(null)}
+          message={
+            !editingId && aiMessages.length > 0 ? (
+              <span>
+                <strong>&quot;{form.name || "New Character"}&quot;</strong> has
+                not been saved yet, so its AI brainstorming session (
+                {aiMessages.length} message
+                {aiMessages.length === 1 ? "" : "s"}) cannot be kept
+                {isFormDirty
+                  ? ", and your edits to the sheet go with it"
+                  : ""}
+                .
+              </span>
+            ) : (
+              <span>
+                You have unsaved changes to{" "}
+                <strong>&quot;{form.name || "New Character"}&quot;</strong>
+                {aiMessages.length > 0
+                  ? `, and an AI brainstorming session (${aiMessages.length} message${aiMessages.length === 1 ? "" : "s"}) which is kept`
+                  : ""}
+                . Your unsaved edits will be discarded.
+              </span>
+            )
+          }
+        />
       )}
-      {/* Confirm Delete Character Modal */}
+
+      {/* Brainstorm Settings Modal */}
       {brainstormSettingsOpen ? (
         <BrainstormSettingsModal
           hasOriginalCcv2={

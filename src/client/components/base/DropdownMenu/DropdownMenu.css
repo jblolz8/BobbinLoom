@@ -1,0 +1,112 @@
+/* --------------------------------------------------------------------------
+   Dropdown Menu (.base-dropdown-*)
+   -------------------------------------------------------------------------- */
+.base-dropdown-content {
+  min-width: 160px;
+  background-color: var(--bg-surface-elevated);
+  border: 1px solid var(--border-main);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: var(--shadow-card);
+  z-index: 99999;
+  animation-duration: 120ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+  font-family: inherit;
+}
+
+.base-dropdown-content[data-state="open"] {
+  animation-name: base-dropdown-scale-in;
+}
+
+@keyframes base-dropdown-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.base-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 0.84rem;
+  font-weight: 500;
+  border-radius: 5px;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+  text-align: left;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+  box-sizing: border-box;
+}
+
+.base-dropdown-item[data-highlighted] {
+  background-color: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+
+.base-dropdown-item:disabled,
+.base-dropdown-item[data-disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.base-dropdown-item.danger,
+.base-dropdown-item[data-variant="danger"] {
+  color: var(--status-danger);
+}
+
+.base-dropdown-item.danger[data-highlighted],
+.base-dropdown-item[data-variant="danger"][data-highlighted] {
+  background-color: var(--btn-danger-bg);
+  color: var(--btn-danger-text);
+}
+
+.base-dropdown-separator {
+  height: 1px;
+  background-color: var(--border-subtle);
+  margin: 4px -4px;
+}
+
+.base-dropdown-label {
+  padding: 6px 10px 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.base-dropdown-item__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.base-actions-menu {
+  position: relative;
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.base-actions-menu__entry {
+  display: contents;
+}

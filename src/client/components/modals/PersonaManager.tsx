@@ -15,18 +15,10 @@ export function PersonaManager({
   if (!open) return null;
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <section
-        className="modal persona-manager"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <header className="modal-header">
-          <h2>Persona Manager</h2>
-          <button onClick={onClose}>Close</button>
-        </header>
-
-        <PersonaLibrary isModal={true} onPersonasChanged={onPersonasChanged} />
-      </section>
-    </div>
+    <PersonaLibrary
+      variant="dialog"
+      onClose={onClose}
+      onPersonasChanged={onPersonasChanged}
+    />
   );
 }

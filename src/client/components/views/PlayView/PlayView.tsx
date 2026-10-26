@@ -46,9 +46,9 @@ import { PersonaManager } from "../../modals/PersonaManager";
 import { CharacterManager } from "../../modals/CharacterManager";
 import { LorebookManager } from "../../modals/LorebookManager";
 import { TimelineModal } from "../../modals/TimelineModal";
-import { ConfirmModal } from "../../common/ConfirmModal";
-import { RevertConfirmModal } from "../../common/RevertConfirmModal";
-import { Icon, TextInput, Checkbox } from "../../base";
+import { ConfirmModal, RevertConfirmModal } from "../../common";
+import { Icon, TextInput, Checkbox, StatusMessage } from "../../base";
+import "./PlayView.css";
 
 export type PlayViewProps = {
   playthrough: Playthrough;
@@ -546,7 +546,11 @@ export function PlayView(props: PlayViewProps) {
 
   return (
     <main className="app-shell play-view-shell">
-      {error ? <pre className="error-box">{error}</pre> : null}
+      {error ? (
+        <StatusMessage variant="banner" tone="err" className="error-box">
+          {error}
+        </StatusMessage>
+      ) : null}
 
       {/* The play view mounts the SAME shelf the home screen renders, as a dialog: one card
           contract, two surfaces. Picking a card loads it and closes — the shelf's own list is a

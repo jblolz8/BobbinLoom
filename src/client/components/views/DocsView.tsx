@@ -33,9 +33,10 @@ import {
   type DocSearchResult,
 } from "../../api";
 import { MIN_QUERY_LENGTH } from "../../../engine/docsSearch";
-import { Icon, IconButton, SearchBar, SideNav } from "../base";
+import { Icon, IconButton, SearchBar, SideNav, StatusMessage } from "../base";
 import { renderDocMarkdown } from "../../utils/docsMarkdown";
 import { useSideNavMode } from "../../hooks/useSideNavMode";
+import "./DocsView.css";
 
 export type DocsViewProps = {
   variant?: "page" | "overlay";
@@ -197,8 +198,6 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
 
   const openDoc = useCallback(
     (slug: string, anchor?: string) => {
-      // On a narrow screen the drawer is a temporary overlay: choosing a page
-      // dismisses it, the way a menu does.
       // On a narrow screen the drawer is a temporary overlay: choosing a page dismisses it.
       if (nav.narrow) nav.closeDrawer();
       if (slug === activeSlug) {
@@ -213,7 +212,7 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
       pendingAnchor.current = anchor ?? null;
       setActiveSlug(slug);
     },
-    [activeSlug],
+    [activeSlug, nav],
   );
 
   /** Cross-page links in the docs are markdown links; intercept them here so a
@@ -412,7 +411,11 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
             />
           ) : null}
         </div>
-        {error ? <pre className="error-box">{error}</pre> : null}
+        {error ? (
+          <StatusMessage variant="banner" tone="err" className="error-box">
+            {error}
+          </StatusMessage>
+        ) : null}
         {!error && loading && !page ? (
           <p className="docs-loading">Loading…</p>
         ) : null}

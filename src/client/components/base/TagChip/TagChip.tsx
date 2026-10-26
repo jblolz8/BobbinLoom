@@ -1,0 +1,122 @@
+import { useMemo } from "react";
+import {
+  resolveTagStyle,
+  type TagStyle,
+  type TagTaxonomyConfig,
+} from "../../../../engine/tagTaxonomy";
+import { resolvePlaythroughTagStyle } from "../../../../engine/playthroughTagTaxonomy";
+import "./TagChip.css";
+
+export type TagChipProps = {
+  tag: string;
+  userConfig?: TagTaxonomyConfig | null;
+  taxonomy?: "character" | "playthrough";
+  resolveStyle?: (
+    tag: string,
+    userConfig?: TagTaxonomyConfig | null,
+  ) => TagStyle;
+  active?: boolean;
+  count?: number;
+  onClick?: (e: React.MouseEvent) => void;
+  onRemove?: () => void;
+  disabled?: boolean;
+  size?: "xs" | "sm" | "md" | "lg";
+  className?: string;
+  title?: string;
+  showCategoryTooltip?: boolean;
+};
+
+export function TagChip({
+  tag,
+  userConfig,
+  taxonomy = "character",
+  resolveStyle,
+  active,
+  count,
+  onClick,
+  onRemove,
+  disabled,
+  size = "md",
+  className = "",
+  title,
+  showCategoryTooltip = true,
+}: TagChipProps) {
+  const style = useMemo(() => {
+    if (resolveStyle) return resolveStyle(tag, userConfig);
+    if (taxonomy === "playthrough") {
+      return resolvePlaythroughTagStyle(tag, userConfig);
+    }
+    return resolveTagStyle(tag, userConfig);
+  }, [tag, userConfig, taxonomy, resolveStyle]);
+
+  const defaultTitle = useMemo(() => {
+    if (title) return title;
+    if (!showCategoryTooltip) return tag;
+    return `[${style.categoryLabel}] ${tag}${count !== undefined ? ` (${count})` : ""}`;
+  }, [title, showCategoryTooltip, style.categoryLabel, tag, count]);
+
+  const isInteractive = Boolean(onClick) && !disabled;
+
+  const darkColors = style.colorsDark || style.colors;
+  const lightColors = style.colorsLight;
+
+  const elementProps = {
+    className: `color-tag-chip size-${size} cat-${style.categoryId} ${active ? "active" : ""} ${isInteractive ? "interactive" : ""} ${className}`,
+    style: {
+      "--tag-text": darkColors.text,
+      "--tag-bg": active ? darkColors.glow || darkColors.bg : darkColors.bg,
+      "--tag-border": active ? darkColors.text : darkColors.border,
+      "--tag-glow": active
+        ? `0 0 8px ${darkColors.glow || darkColors.border}`
+        : "none",
+      "--tag-text-light": lightColors.text,
+      "--tag-bg-light": active
+        ? lightColors.glow || lightColors.bg
+        : lightColors.bg,
+      "--tag-border-light": active ? lightColors.text : lightColors.border,
+      "--tag-glow-light": active
+        ? `0 0 8px ${lightColors.glow || lightColors.border}`
+        : "none",
+    } as React.CSSProperties,
+    title: defaultTitle,
+    onClick: isInteractive ? onClick : undefined,
+  };
+
+  const content = (
+    <>
+      {style.namespace ? (
+        <span className="tag-namespace-prefix">{style.namespace}:</span>
+      ) : null}
+      <span className="tag-value-text">
+        {style.value || style.displayLabel}
+      </span>
+      {count !== undefined ? (
+        <span className="tag-count-indicator">{count}</span>
+      ) : null}
+      {onRemove && !disabled ? (
+        <button
+          type="button"
+          className="tag-remove-action"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          title={`Remove tag "${tag}"`}
+          aria-label={`Remove tag "${tag}"`}
+        >
+          ✕
+        </button>
+      ) : null}
+    </>
+  );
+
+  if (isInteractive) {
+    return (
+      <button type="button" {...elementProps}>
+        {content}
+      </button>
+    );
+  }
+
+  return <span {...elementProps}>{content}</span>;
+}

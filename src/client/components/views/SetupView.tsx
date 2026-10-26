@@ -14,6 +14,7 @@ import type { Persona, ResolvedSetupPreferences } from "../../api";
 import {
   SETUP_PREFERENCE_DEFAULTS,
   adoptLocalPreferences,
+  getPersonaAvatarUrl,
   getTagTaxonomy,
   resolveSetupPreferences,
   updateViewPreferences,
@@ -29,9 +30,11 @@ import {
   Button,
   CharacterAvatar,
   Icon,
+  IconButton,
   Pagination,
   SearchBar,
   SimpleSelect,
+  StatusMessage,
   SwitchRow,
   TagChip,
   TextArea,
@@ -42,7 +45,6 @@ import type { ViewMode } from "../library/CharacterLibrary";
 import {
   cardBadgeLabel,
   displayTitle,
-  entryKind,
   filterLibraryEntries,
   groupByLineage,
   getGroupCreatedAt,
@@ -55,6 +57,8 @@ import {
   sortTags,
   type TagTaxonomyConfig,
 } from "../../../engine/tagTaxonomy";
+import "../library/CharacterLibrary.css";
+import "./SetupView.css";
 
 export type SetupFormState = {
   name: string;
@@ -524,16 +528,17 @@ export function SetupView(props: SetupViewProps) {
               setting.
             </p>
           </div>
-          <button
-            type="button"
-            className="flex items-center gap-1 modal-close-btn"
+          <Button
+            variant="secondary"
+            size="xs"
+            className="modal-close-btn"
+            leftIcon={<Icon name="X" size={16} />}
             onClick={onClose}
             disabled={generating}
             title="Close setup"
           >
-            <Icon name="X" size={16} />{" "}
             <span className="close-btn-label">Close</span>
-          </button>
+          </Button>
         </header>
 
         {/* ── Active Generating Screen ── */}
@@ -722,6 +727,11 @@ export function SetupView(props: SetupViewProps) {
                           >
                             <div className="persona-card-header">
                               <AvatarBadge
+                                src={getPersonaAvatarUrl(
+                                  p.id,
+                                  "profile",
+                                  p.avatarUpdatedAt,
+                                )}
                                 icon="User"
                                 name={p.name}
                                 size="sm"
@@ -782,14 +792,15 @@ export function SetupView(props: SetupViewProps) {
                         <h4>Selected Cast ({selectedCastCount})</h4>
                       </div>
                       {selectedCastCount > 0 ? (
-                        <button
-                          type="button"
+                        <Button
+                          variant="ghost"
+                          size="xs"
                           className="tag-mini-btn"
                           onClick={handleClearCast}
                           title="Deselect all characters"
                         >
                           Clear Selection
-                        </button>
+                        </Button>
                       ) : null}
                     </div>
 
@@ -809,14 +820,15 @@ export function SetupView(props: SetupViewProps) {
                             >
                               {displayTitle(t)}
                             </span>
-                            <button
-                              type="button"
+                            <IconButton
+                              icon="X"
+                              size="xs"
+                              variant="ghost"
                               className="selected-cast-remove"
                               onClick={() => onToggleCastId(t.id)}
+                              label={`Remove ${displayTitle(t)}`}
                               title={`Remove ${displayTitle(t)}`}
-                            >
-                              <Icon name="X" size={12} />
-                            </button>
+                            />
                           </div>
                         ))}
                       </div>
@@ -844,30 +856,30 @@ export function SetupView(props: SetupViewProps) {
                     </div>
 
                     <div className="setup-cast-actions">
-                      <button
-                        type="button"
+                      <Button
+                        variant={showTagFilters ? "secondary" : "ghost"}
+                        size="xs"
                         className={`tag-mini-btn tag-filter-toggle-btn ${showTagFilters ? "active" : ""}`}
+                        leftIcon={<Icon name="Tag" size={13} />}
                         onClick={() => setShowTagFilters(!showTagFilters)}
                         title="Toggle tag taxonomy filter cloud"
                       >
-                        <Icon name="Tag" size={13} />
-                        <span>
-                          Filter Tags{" "}
-                          {allTagCounts.length > 0
-                            ? `(${allTagCounts.length})`
-                            : ""}
-                        </span>
-                      </button>
+                        Filter Tags{" "}
+                        {allTagCounts.length > 0
+                          ? `(${allTagCounts.length})`
+                          : ""}
+                      </Button>
 
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
+                        size="xs"
                         className="tag-mini-btn"
                         onClick={handleSelectAllFilteredCast}
                         disabled={filteredCast.length === 0}
                         title="Select all filtered characters"
                       >
                         Select All
-                      </button>
+                      </Button>
 
                       {/* Sort Controls */}
                       <div
@@ -899,9 +911,20 @@ export function SetupView(props: SetupViewProps) {
                           variant="ghost"
                           aria-label="Sort cast by"
                         />
-                        <button
-                          type="button"
+                        <Button
+                          variant="ghost"
+                          size="xs"
                           className="library-sort-dir-btn"
+                          leftIcon={
+                            <Icon
+                              name={
+                                sortDirection === "asc"
+                                  ? "ArrowUpNarrowWide"
+                                  : "ArrowDownWideNarrow"
+                              }
+                              size={13}
+                            />
+                          }
                           onClick={toggleSortDirection}
                           title={
                             sortBy === "name"
@@ -914,14 +937,6 @@ export function SetupView(props: SetupViewProps) {
                           }
                           aria-label="Toggle sort order"
                         >
-                          <Icon
-                            name={
-                              sortDirection === "asc"
-                                ? "ArrowUpNarrowWide"
-                                : "ArrowDownWideNarrow"
-                            }
-                            size={13}
-                          />
                           <span className="sort-dir-label">
                             {sortBy === "name"
                               ? sortDirection === "asc"
@@ -931,35 +946,40 @@ export function SetupView(props: SetupViewProps) {
                                 ? "Newest"
                                 : "Oldest"}
                           </span>
-                        </button>
+                        </Button>
                       </div>
 
                       {/* View Mode Buttons */}
                       <div className="view-mode-selector">
-                        <button
-                          type="button"
+                        <IconButton
+                          icon="Columns"
+                          size="sm"
+                          variant={
+                            viewMode === "portrait" ? "secondary" : "ghost"
+                          }
                           className={`view-mode-btn ${viewMode === "portrait" ? "active" : ""}`}
                           onClick={() => setViewMode("portrait")}
+                          label="Portrait View"
                           title="Portrait View"
-                        >
-                          <Icon name="Columns" size={15} />
-                        </button>
-                        <button
-                          type="button"
+                        />
+                        <IconButton
+                          icon="List"
+                          size="sm"
+                          variant={viewMode === "list" ? "secondary" : "ghost"}
                           className={`view-mode-btn ${viewMode === "list" ? "active" : ""}`}
                           onClick={() => setViewMode("list")}
+                          label="List View"
                           title="List View"
-                        >
-                          <Icon name="List" size={15} />
-                        </button>
-                        <button
-                          type="button"
+                        />
+                        <IconButton
+                          icon="LayoutGrid"
+                          size="sm"
+                          variant={viewMode === "grid" ? "secondary" : "ghost"}
                           className={`view-mode-btn ${viewMode === "grid" ? "active" : ""}`}
                           onClick={() => setViewMode("grid")}
+                          label="Grid View"
                           title="Grid View"
-                        >
-                          <Icon name="LayoutGrid" size={15} />
-                        </button>
+                        />
                       </div>
                     </div>
                   </div>
@@ -980,15 +1000,16 @@ export function SetupView(props: SetupViewProps) {
                           onRemove={() => removeFilterTag(tag)}
                         />
                       ))}
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
+                        size="xs"
                         className="clear-all-filters-btn"
                         onClick={() => {
                           setCastSearch("");
                         }}
                       >
                         Clear all
-                      </button>
+                      </Button>
                     </div>
                   )}
 
@@ -1767,16 +1788,24 @@ export function SetupView(props: SetupViewProps) {
                       aria-label="Text provider for Character Flesh Out"
                     />
                     {providerChoiceError && (
-                      <p className="error-box setup-error">
+                      <StatusMessage
+                        variant="banner"
+                        tone="err"
+                        className="error-box setup-error"
+                      >
                         {providerChoiceError}
-                      </p>
+                      </StatusMessage>
                     )}
                   </div>
 
                   {/* Error Box if previous attempt failed */}
                   {genError ? (
-                    <div className="error-box setup-error">
-                      <p>{genError}</p>
+                    <StatusMessage
+                      variant="banner"
+                      tone="err"
+                      className="error-box setup-error"
+                    >
+                      <div>{genError}</div>
                       <div className="flex items-center gap-2 mt-2">
                         <Button
                           variant="secondary"
@@ -1795,7 +1824,7 @@ export function SetupView(props: SetupViewProps) {
                           Use Start Blank Instead
                         </Button>
                       </div>
-                    </div>
+                    </StatusMessage>
                   ) : null}
                 </div>
               )}

@@ -32,6 +32,7 @@ import {
 } from "../characterCards/convertCard";
 import { resolveCharacterFormat } from "../../engine/characterFormat";
 import { PNG_SIG } from "../characterCards/pngText";
+import { transcodeToWebp } from "../imageTranscode";
 import { saveToLibraryAction } from "../stateActions";
 import {
   abortOnClientDisconnect,
@@ -212,8 +213,14 @@ export const characterRoutes: FastifyPluginAsync<
       const params = z.object({ id: z.string() }).parse(request.params);
       const body = UploadAvatarBody.parse(request.body ?? {});
       const bytes = Buffer.from(body.dataBase64, "base64");
-      const ext = body.fileName?.split(".").pop() || "png";
-      const updated = saveCharacterAvatar(params.id, body.type, bytes, ext);
+      const rawExt = body.fileName?.split(".").pop() || "png";
+      const transcoded = await transcodeToWebp(bytes, rawExt);
+      const updated = saveCharacterAvatar(
+        params.id,
+        body.type,
+        transcoded.bytes,
+        transcoded.ext,
+      );
       if (!updated)
         return reply.code(404).send({ error: "Character not found" });
       return { record: updated };

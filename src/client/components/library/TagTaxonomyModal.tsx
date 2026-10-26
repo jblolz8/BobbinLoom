@@ -5,7 +5,23 @@ import {
   deriveLightColor,
   discoverLibraryNamespaces,
 } from "../../../engine/tagTaxonomy";
-import { Icon, TagChip } from "../base";
+import {
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  FormGrid,
+  Header,
+  Modal,
+  Separator,
+  Stack,
+  StatusMessage,
+  Tabs,
+  TagChip,
+  Text,
+  TextInput,
+  type TabItem,
+} from "../base";
 import { getTagTaxonomy, updateTagTaxonomy } from "../../api";
 
 const PRESET_COLOR_SWATCHES = [
@@ -42,6 +58,14 @@ const PRESET_LIGHT_COLOR_SWATCHES = [
   "#475569", // Slate
 ];
 
+type PreviewThemeMode = "both" | "dark" | "light";
+
+const PREVIEW_THEME_TABS: TabItem<PreviewThemeMode>[] = [
+  { id: "both", label: "Side-by-Side" },
+  { id: "dark", label: "Dark Theme" },
+  { id: "light", label: "Light Theme" },
+];
+
 export type TagTaxonomyPanelProps = {
   allLibraryTags?: string[];
   currentConfig?: TagTaxonomyConfig | null;
@@ -60,9 +84,7 @@ export function TagTaxonomyPanel({
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [previewInput, setPreviewInput] = useState("species:cat-girl");
-  const [previewTheme, setPreviewTheme] = useState<"both" | "dark" | "light">(
-    "both",
-  );
+  const [previewTheme, setPreviewTheme] = useState<PreviewThemeMode>("both");
 
   // Form state for creating/editing a custom category
   const [newCatLabel, setNewCatLabel] = useState("");
@@ -243,479 +265,675 @@ export function TagTaxonomyPanel({
   }
 
   return (
-    <div className="taxonomy-panel-container">
-      {/* Live Preview Bar */}
-      <div className="taxonomy-preview-card">
-        <div className="preview-top-row">
-          <span className="preview-label">Live Tag Preview:</span>
-          <div
-            className="preview-theme-toggle"
-            role="group"
-            aria-label="Preview theme mode"
+    <Stack direction="column" align="stretch" gap="md">
+      {/* Live Preview Card */}
+      <Card variant="elevated" padding="sm">
+        <Stack direction="column" align="stretch" gap="xs">
+          <Stack
+            direction="row"
+            align="center"
+            justify="between"
+            gap="sm"
+            wrap
           >
-            <button
-              type="button"
-              className={`preview-toggle-btn ${previewTheme === "both" ? "active" : ""}`}
-              onClick={() => setPreviewTheme("both")}
-            >
-              Side-by-Side
-            </button>
-            <button
-              type="button"
-              className={`preview-toggle-btn ${previewTheme === "dark" ? "active" : ""}`}
-              onClick={() => setPreviewTheme("dark")}
-            >
-              Dark Theme
-            </button>
-            <button
-              type="button"
-              className={`preview-toggle-btn ${previewTheme === "light" ? "active" : ""}`}
-              onClick={() => setPreviewTheme("light")}
-            >
-              Light Theme
-            </button>
-          </div>
-        </div>
+            <Text as="strong" size="xs" weight="semibold" tone="secondary">
+              Live Tag Preview:
+            </Text>
+            <Tabs<PreviewThemeMode>
+              tabs={PREVIEW_THEME_TABS}
+              activeTab={previewTheme}
+              onChange={setPreviewTheme}
+              variant="segmented"
+              size="sm"
+              ariaLabel="Preview theme mode"
+            />
+          </Stack>
 
-        <div
-          className={`preview-themes-wrap ${previewTheme === "both" ? "is-split" : ""}`}
-        >
-          {(previewTheme === "both" || previewTheme === "dark") && (
-            <div className="preview-theme-pane dark-pane" data-theme="dark">
-              <span className="theme-pane-tag">Dark Mode</span>
-              <div className="preview-chips-row">
-                <TagChip
-                  tag={previewInput || "species:cat-girl"}
-                  userConfig={config}
-                  size="md"
-                />
-                <TagChip tag="nsfw" userConfig={config} size="md" />
-                <TagChip tag="rating:sfw" userConfig={config} size="md" />
-                <TagChip
-                  tag="copyright:cyberpunk"
-                  userConfig={config}
-                  size="md"
-                />
-                <TagChip tag="adventurer" userConfig={config} size="md" />
-              </div>
-            </div>
-          )}
+          <FormGrid cols={previewTheme === "both" ? 2 : 1} gap="xs">
+            {(previewTheme === "both" || previewTheme === "dark") && (
+              <Card
+                variant="panel"
+                padding="xs"
+                data-theme="dark"
+                style={{
+                  background: "#0b0f19",
+                  borderColor: "#1e293b",
+                }}
+              >
+                <Stack direction="column" align="stretch" gap="xs">
+                  <Text
+                    as="span"
+                    variant="overline"
+                    style={{ color: "#94a3b8" }}
+                  >
+                    Dark Mode
+                  </Text>
+                  <Stack direction="row" align="center" gap="xs" wrap>
+                    <TagChip
+                      tag={previewInput || "species:cat-girl"}
+                      userConfig={config}
+                      size="md"
+                    />
+                    <TagChip tag="nsfw" userConfig={config} size="md" />
+                    <TagChip tag="rating:sfw" userConfig={config} size="md" />
+                    <TagChip
+                      tag="copyright:cyberpunk"
+                      userConfig={config}
+                      size="md"
+                    />
+                    <TagChip tag="adventurer" userConfig={config} size="md" />
+                  </Stack>
+                </Stack>
+              </Card>
+            )}
 
-          {(previewTheme === "both" || previewTheme === "light") && (
-            <div
-              className="preview-theme-pane light-pane"
-              data-theme="light"
-              data-theme-preview="light"
-            >
-              <span className="theme-pane-tag">Light Mode</span>
-              <div className="preview-chips-row">
-                <TagChip
-                  tag={previewInput || "species:cat-girl"}
-                  userConfig={config}
-                  size="md"
-                />
-                <TagChip tag="nsfw" userConfig={config} size="md" />
-                <TagChip tag="rating:sfw" userConfig={config} size="md" />
-                <TagChip
-                  tag="copyright:cyberpunk"
-                  userConfig={config}
-                  size="md"
-                />
-                <TagChip tag="adventurer" userConfig={config} size="md" />
-              </div>
-            </div>
-          )}
-        </div>
+            {(previewTheme === "both" || previewTheme === "light") && (
+              <Card
+                variant="panel"
+                padding="xs"
+                data-theme="light"
+                data-theme-preview="light"
+                style={{
+                  background: "#f8fafc",
+                  borderColor: "#cbd5e1",
+                }}
+              >
+                <Stack direction="column" align="stretch" gap="xs">
+                  <Text
+                    as="span"
+                    variant="overline"
+                    style={{ color: "#475569" }}
+                  >
+                    Light Mode
+                  </Text>
+                  <Stack direction="row" align="center" gap="xs" wrap>
+                    <TagChip
+                      tag={previewInput || "species:cat-girl"}
+                      userConfig={config}
+                      size="md"
+                    />
+                    <TagChip tag="nsfw" userConfig={config} size="md" />
+                    <TagChip tag="rating:sfw" userConfig={config} size="md" />
+                    <TagChip
+                      tag="copyright:cyberpunk"
+                      userConfig={config}
+                      size="md"
+                    />
+                    <TagChip tag="adventurer" userConfig={config} size="md" />
+                  </Stack>
+                </Stack>
+              </Card>
+            )}
+          </FormGrid>
 
-        <div className="preview-input-row">
-          <input
-            type="text"
-            className="preview-test-input"
+          <TextInput
+            size="sm"
+            fullWidth
             placeholder="Type any tag to test (e.g. species:dragon, faction:solar)..."
             value={previewInput}
             onChange={(e) => setPreviewInput(e.target.value)}
+            aria-label="Test tag input"
           />
-        </div>
-      </div>
+        </Stack>
+      </Card>
 
       {/* Unmapped Namespaces Banner */}
       {unmappedNamespaces.length > 0 ? (
-        <div className="unmapped-namespaces-banner">
-          <div className="unmapped-banner-header">
-            <Icon name="Sparkles" size={15} />
-            <span>
+        <StatusMessage variant="banner" tone="neutral" icon="Sparkles">
+          <Stack direction="column" align="start" gap="xs">
+            <Text as="strong" size="xs" weight="semibold">
               Discovered prefixes in your library without a custom category:
-            </span>
-          </div>
-          <div className="unmapped-chips">
-            {unmappedNamespaces.map((d) => (
-              <button
-                key={d.prefix}
-                type="button"
-                className="unmapped-prefix-chip"
-                onClick={() => handleQuickAddNamespace(d.prefix)}
-                title={`Create a category for "${d.prefix}:" (${d.count} characters use this)`}
-              >
-                + <strong>{d.prefix}:</strong> ({d.count})
-              </button>
-            ))}
-          </div>
-        </div>
+            </Text>
+            <Stack direction="row" align="center" gap="xs" wrap>
+              {unmappedNamespaces.map((d) => (
+                <Button
+                  key={d.prefix}
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  onClick={() => handleQuickAddNamespace(d.prefix)}
+                  title={`Create a category for "${d.prefix}:" (${d.count} characters use this)`}
+                >
+                  + {d.prefix}: ({d.count})
+                </Button>
+              ))}
+            </Stack>
+          </Stack>
+        </StatusMessage>
       ) : null}
 
       {/* Built-in Categories Reference */}
-      <div className="taxonomy-section">
-        <h4 className="taxonomy-section-title">
-          <Icon name="Layers" size={14} /> Built-in Categories
-        </h4>
-        <div className="category-cards-grid">
-          {BUILT_IN_CATEGORIES.map((cat) => (
-            <div key={cat.id} className="category-card built-in">
-              <div className="category-card-header">
-                <div className="category-title-wrap">
-                  <div
-                    className="category-color-dots"
-                    title={`Dark: ${cat.color} | Light: ${cat.colorLight || cat.color}`}
-                  >
-                    <span
-                      className="category-color-dot dark"
-                      style={{ backgroundColor: cat.color }}
-                    />
-                    <span
-                      className="category-color-dot light"
-                      style={{ backgroundColor: cat.colorLight || cat.color }}
-                    />
-                  </div>
-                  <strong className="category-name">{cat.label}</strong>
-                </div>
-              </div>
-              <p className="category-desc">{cat.description}</p>
-              <div className="category-prefixes-wrap">
-                {cat.prefixes.map((p) => (
-                  <span
-                    key={p}
-                    className="prefix-badge"
-                    style={{ borderColor: `${cat.color}66`, color: cat.color }}
-                  >
-                    {p.endsWith(":") ? p : `${p}:`}
-                  </span>
-                ))}
-                {cat.id === "rating_nsfw" && (
-                  <span
-                    className="prefix-badge"
-                    style={{ borderColor: `${cat.color}66`, color: cat.color }}
-                  >
-                    nsfw, explicit, lewd, 18+ (values)
-                  </span>
-                )}
-                {cat.id === "rating_sfw" && (
-                  <span
-                    className="prefix-badge"
-                    style={{ borderColor: `${cat.color}66`, color: cat.color }}
-                  >
-                    sfw, safe, general (values)
-                  </span>
-                )}
-                {cat.prefixes.length === 0 ? (
-                  <span className="prefix-badge neutral">Standalone tags</span>
-                ) : null}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* User Custom Categories */}
-      <div className="taxonomy-section">
-        <h4 className="taxonomy-section-title">
-          <Icon name="Sliders" size={14} /> Custom Categories &amp; Namespaces
-        </h4>
-
-        {config.customCategories.length > 0 ? (
-          <div className="category-cards-grid" style={{ marginBottom: "1rem" }}>
-            {config.customCategories.map((cat) => {
-              const derivedLight = deriveLightColor(cat.color);
-              const lightColor = cat.colorLight || derivedLight;
-              return (
-                <div key={cat.id} className="category-card custom">
-                  <div className="category-card-header">
-                    <div className="category-title-wrap">
-                      <div
-                        className="category-color-dots"
-                        title={`Dark: ${cat.color} | Light: ${lightColor}`}
-                      >
-                        <span
-                          className="category-color-dot dark"
-                          style={{ backgroundColor: cat.color }}
-                        />
-                        <span
-                          className="category-color-dot light"
-                          style={{ backgroundColor: lightColor }}
-                        />
-                      </div>
-                      <strong className="category-name">{cat.label}</strong>
-                    </div>
-                    <div className="category-actions">
-                      <button
-                        type="button"
-                        className="cat-action-btn"
-                        onClick={() => handleEditCategory(cat)}
-                        title="Edit category"
-                      >
-                        <Icon name="Pencil" size={12} />
-                      </button>
-                      <button
-                        type="button"
-                        className="cat-action-btn danger"
-                        onClick={() => handleDeleteCategory(cat.id)}
-                        title="Delete category"
-                      >
-                        <Icon name="Trash2" size={12} />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="category-prefixes-wrap">
-                    {cat.prefixes.map((p) => (
+      <Card variant="elevated" padding="sm">
+        <Stack direction="column" align="stretch" gap="sm">
+          <Header
+            variant="section"
+            icon="Layers"
+            title="Built-in Categories"
+          />
+          <FormGrid cols={3} gap="xs">
+            {BUILT_IN_CATEGORIES.map((cat) => (
+              <Card
+                key={cat.id}
+                variant="panel"
+                padding="xs"
+                style={{ borderLeft: "3px solid var(--text-muted)" }}
+              >
+                <Stack direction="column" align="stretch" gap="2xs">
+                  <Stack direction="row" align="center" gap="xs">
+                    <Stack
+                      direction="row"
+                      align="center"
+                      gap="2xs"
+                      title={`Dark: ${cat.color} | Light: ${cat.colorLight || cat.color}`}
+                    >
                       <span
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          backgroundColor: cat.color,
+                          border: "1px solid rgba(0, 0, 0, 0.25)",
+                          flexShrink: 0,
+                        }}
+                      />
+                      <span
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          backgroundColor: cat.colorLight || cat.color,
+                          border: "1px solid rgba(255, 255, 255, 0.35)",
+                          flexShrink: 0,
+                        }}
+                      />
+                    </Stack>
+                    <Text
+                      as="strong"
+                      size="xs"
+                      weight="semibold"
+                      tone="primary"
+                    >
+                      {cat.label}
+                    </Text>
+                  </Stack>
+
+                  <Text as="p" variant="caption" tone="secondary">
+                    {cat.description}
+                  </Text>
+
+                  <Stack direction="row" align="center" gap="2xs" wrap>
+                    {cat.prefixes.map((p) => (
+                      <Badge
                         key={p}
-                        className="prefix-badge"
+                        variant="outline"
+                        size="xs"
                         style={{
                           borderColor: `${cat.color}66`,
                           color: cat.color,
+                          fontFamily: "var(--font-mono, monospace)",
                         }}
                       >
-                        {p}:
-                      </span>
+                        {p.endsWith(":") ? p : `${p}:`}
+                      </Badge>
                     ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="empty-category-hint">
-            No custom categories added yet. You can create custom prefixes (like{" "}
-            <code>clan:</code>, <code>world:</code>, <code>faction:</code>)
-            below.
-          </p>
-        )}
+                    {cat.id === "rating_nsfw" && (
+                      <Badge
+                        variant="outline"
+                        size="xs"
+                        style={{
+                          borderColor: `${cat.color}66`,
+                          color: cat.color,
+                          fontFamily: "var(--font-mono, monospace)",
+                        }}
+                      >
+                        nsfw, explicit, lewd, 18+ (values)
+                      </Badge>
+                    )}
+                    {cat.id === "rating_sfw" && (
+                      <Badge
+                        variant="outline"
+                        size="xs"
+                        style={{
+                          borderColor: `${cat.color}66`,
+                          color: cat.color,
+                          fontFamily: "var(--font-mono, monospace)",
+                        }}
+                      >
+                        sfw, safe, general (values)
+                      </Badge>
+                    )}
+                    {cat.prefixes.length === 0 ? (
+                      <Badge variant="neutral" size="xs">
+                        Standalone tags
+                      </Badge>
+                    ) : null}
+                  </Stack>
+                </Stack>
+              </Card>
+            ))}
+          </FormGrid>
+        </Stack>
+      </Card>
 
-        {/* Add / Edit Category Form */}
-        <div className="add-category-box">
-          <h5>
-            {editingCatId ? "Edit Custom Category" : "Add New Custom Category"}
-          </h5>
-          <div className="add-cat-row">
-            <div className="form-group flex-1">
-              <label>Category Label</label>
-              <input
-                type="text"
-                placeholder="e.g. Faction, World, Clan…"
-                value={newCatLabel}
-                onChange={(e) => setNewCatLabel(e.target.value)}
-              />
-            </div>
-            <div className="form-group flex-1">
-              <label>Prefixes (comma separated)</label>
-              <input
-                type="text"
-                placeholder="e.g. faction, clan, house"
-                value={newCatPrefixes}
-                onChange={(e) => setNewCatPrefixes(e.target.value)}
-              />
-            </div>
-          </div>
+      {/* User Custom Categories */}
+      <Card variant="elevated" padding="sm">
+        <Stack direction="column" align="stretch" gap="sm">
+          <Header
+            variant="section"
+            icon="Sliders"
+            title="Custom Categories & Namespaces"
+          />
 
-          <div className="add-cat-row colors-row">
-            <div className="form-group flex-1">
-              <label>Dark Theme Color</label>
-              <div className="color-picker-wrap">
-                <input
-                  type="color"
-                  value={newCatColor}
-                  onChange={(e) => {
-                    setNewCatColor(e.target.value);
-                    if (useAutoLightColor) {
-                      setNewCatColorLight(deriveLightColor(e.target.value));
-                    }
-                  }}
-                  className="color-input"
-                  title="Dark theme base color"
+          {config.customCategories.length > 0 ? (
+            <FormGrid cols={3} gap="xs">
+              {config.customCategories.map((cat) => {
+                const derivedLight = deriveLightColor(cat.color);
+                const lightColor = cat.colorLight || derivedLight;
+                return (
+                  <Card
+                    key={cat.id}
+                    variant="panel"
+                    padding="xs"
+                    style={{
+                      borderLeft:
+                        "3px solid var(--accent-highlight, var(--accent-base))",
+                    }}
+                  >
+                    <Stack direction="column" align="stretch" gap="xs">
+                      <Stack
+                        direction="row"
+                        align="center"
+                        justify="between"
+                        gap="xs"
+                      >
+                        <Stack direction="row" align="center" gap="xs">
+                          <Stack
+                            direction="row"
+                            align="center"
+                            gap="2xs"
+                            title={`Dark: ${cat.color} | Light: ${lightColor}`}
+                          >
+                            <span
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: "50%",
+                                backgroundColor: cat.color,
+                                border: "1px solid rgba(0, 0, 0, 0.25)",
+                                flexShrink: 0,
+                              }}
+                            />
+                            <span
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: "50%",
+                                backgroundColor: lightColor,
+                                border: "1px solid rgba(255, 255, 255, 0.35)",
+                                flexShrink: 0,
+                              }}
+                            />
+                          </Stack>
+                          <Text
+                            as="strong"
+                            size="xs"
+                            weight="semibold"
+                            tone="primary"
+                          >
+                            {cat.label}
+                          </Text>
+                        </Stack>
+                        <Stack direction="row" align="center" gap="2xs">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            iconOnly
+                            leftIcon="Pencil"
+                            onClick={() => handleEditCategory(cat)}
+                            title="Edit category"
+                            aria-label={`Edit ${cat.label}`}
+                          />
+                          <Button
+                            type="button"
+                            variant="danger"
+                            size="xs"
+                            iconOnly
+                            leftIcon="Trash2"
+                            onClick={() => handleDeleteCategory(cat.id)}
+                            title="Delete category"
+                            aria-label={`Delete ${cat.label}`}
+                          />
+                        </Stack>
+                      </Stack>
+
+                      <Stack direction="row" align="center" gap="2xs" wrap>
+                        {cat.prefixes.map((p) => (
+                          <Badge
+                            key={p}
+                            variant="outline"
+                            size="xs"
+                            style={{
+                              borderColor: `${cat.color}66`,
+                              color: cat.color,
+                              fontFamily: "var(--font-mono, monospace)",
+                            }}
+                          >
+                            {p}:
+                          </Badge>
+                        ))}
+                      </Stack>
+                    </Stack>
+                  </Card>
+                );
+              })}
+            </FormGrid>
+          ) : (
+            <Text as="p" size="xs" tone="muted">
+              No custom categories added yet. You can create custom prefixes
+              (like <Text as="code" mono>clan:</Text>,{" "}
+              <Text as="code" mono>world:</Text>,{" "}
+              <Text as="code" mono>faction:</Text>) below.
+            </Text>
+          )}
+
+          {/* Add / Edit Category Form */}
+          <Card variant="panel" padding="sm">
+            <Stack direction="column" align="stretch" gap="sm">
+              <Text as="strong" size="xs" weight="semibold" tone="primary">
+                {editingCatId
+                  ? "Edit Custom Category"
+                  : "Add New Custom Category"}
+              </Text>
+
+              <FormGrid cols={2} gap="sm">
+                <TextInput
+                  label="Category Label"
+                  size="sm"
+                  fullWidth
+                  placeholder="e.g. Faction, World, Clan…"
+                  value={newCatLabel}
+                  onChange={(e) => setNewCatLabel(e.target.value)}
                 />
-                <div className="preset-swatches">
-                  {PRESET_COLOR_SWATCHES.slice(0, 7).map((swatch) => (
-                    <button
-                      key={swatch}
-                      type="button"
-                      className={`swatch-btn ${newCatColor === swatch ? "selected" : ""}`}
-                      style={{ backgroundColor: swatch }}
-                      onClick={() => {
-                        setNewCatColor(swatch);
+                <TextInput
+                  label="Prefixes (comma separated)"
+                  size="sm"
+                  fullWidth
+                  placeholder="e.g. faction, clan, house"
+                  value={newCatPrefixes}
+                  onChange={(e) => setNewCatPrefixes(e.target.value)}
+                />
+              </FormGrid>
+
+              <FormGrid cols={2} gap="sm">
+                <Stack direction="column" align="stretch" gap="2xs">
+                  <Text as="span" size="xs" weight="medium" tone="secondary">
+                    Dark Theme Color
+                  </Text>
+                  <Stack direction="row" align="center" gap="xs" wrap>
+                    <input
+                      type="color"
+                      value={newCatColor}
+                      onChange={(e) => {
+                        setNewCatColor(e.target.value);
                         if (useAutoLightColor) {
-                          setNewCatColorLight(deriveLightColor(swatch));
+                          setNewCatColorLight(deriveLightColor(e.target.value));
                         }
                       }}
-                      title={swatch}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="form-group flex-1">
-              <div className="light-color-label-row">
-                <label>Light Theme Color</label>
-                <label className="auto-derive-checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={useAutoLightColor}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setUseAutoLightColor(checked);
-                      if (checked) {
-                        setNewCatColorLight(deriveLightColor(newCatColor));
-                      }
-                    }}
-                  />
-                  <span>Auto-contrast</span>
-                </label>
-              </div>
-              <div className="color-picker-wrap">
-                <input
-                  type="color"
-                  value={effectiveLightColor}
-                  onChange={(e) => {
-                    setUseAutoLightColor(false);
-                    setNewCatColorLight(e.target.value);
-                  }}
-                  className="color-input"
-                  title={
-                    useAutoLightColor
-                      ? "Auto-derived from dark color"
-                      : "Custom light theme color"
-                  }
-                />
-                <div className="preset-swatches">
-                  {PRESET_LIGHT_COLOR_SWATCHES.slice(0, 7).map((swatch) => (
-                    <button
-                      key={swatch}
-                      type="button"
-                      className={`swatch-btn ${effectiveLightColor === swatch ? "selected" : ""}`}
-                      style={{ backgroundColor: swatch }}
-                      onClick={() => {
-                        setUseAutoLightColor(false);
-                        setNewCatColorLight(swatch);
+                      title="Dark theme base color"
+                      style={{
+                        width: 28,
+                        height: 28,
+                        padding: 0,
+                        border: "1px solid var(--border-light)",
+                        borderRadius: 6,
+                        cursor: "pointer",
+                        background: "transparent",
                       }}
-                      title={swatch}
                     />
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
+                    <Stack direction="row" align="center" gap="2xs" wrap>
+                      {PRESET_COLOR_SWATCHES.slice(0, 7).map((swatch) => (
+                        <button
+                          key={swatch}
+                          type="button"
+                          className="base-btn"
+                          style={{
+                            width: 18,
+                            height: 18,
+                            minHeight: 18,
+                            padding: 0,
+                            borderRadius: "50%",
+                            backgroundColor: swatch,
+                            border: "1px solid var(--border-light)",
+                            boxShadow:
+                              newCatColor === swatch
+                                ? "0 0 0 2px var(--text-primary)"
+                                : undefined,
+                          }}
+                          onClick={() => {
+                            setNewCatColor(swatch);
+                            if (useAutoLightColor) {
+                              setNewCatColorLight(deriveLightColor(swatch));
+                            }
+                          }}
+                          title={swatch}
+                          aria-label={`Select dark color ${swatch}`}
+                        />
+                      ))}
+                    </Stack>
+                  </Stack>
+                </Stack>
 
-          <div className="add-cat-actions">
-            {editingCatId ? (
-              <button
-                type="button"
-                className="secondary-btn"
-                onClick={() => {
-                  setEditingCatId(null);
-                  setNewCatLabel("");
-                  setNewCatPrefixes("");
-                  setNewCatColor("#2dd4bf");
-                  setNewCatColorLight("");
-                  setUseAutoLightColor(true);
-                }}
-              >
-                Cancel Edit
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="primary-btn"
-              onClick={handleAddOrUpdateCategory}
-              disabled={!newCatLabel.trim()}
-            >
-              <Icon name="Plus" size={13} />{" "}
-              {editingCatId ? "Update Category" : "Add Category"}
-            </button>
-          </div>
-        </div>
-      </div>
+                <Stack direction="column" align="stretch" gap="2xs">
+                  <Stack
+                    direction="row"
+                    align="center"
+                    justify="between"
+                    gap="xs"
+                    wrap
+                  >
+                    <Text as="span" size="xs" weight="medium" tone="secondary">
+                      Light Theme Color
+                    </Text>
+                    <Checkbox
+                      label="Auto-contrast"
+                      checked={useAutoLightColor}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setUseAutoLightColor(checked);
+                        if (checked) {
+                          setNewCatColorLight(deriveLightColor(newCatColor));
+                        }
+                      }}
+                    />
+                  </Stack>
+                  <Stack direction="row" align="center" gap="xs" wrap>
+                    <input
+                      type="color"
+                      value={effectiveLightColor}
+                      onChange={(e) => {
+                        setUseAutoLightColor(false);
+                        setNewCatColorLight(e.target.value);
+                      }}
+                      title={
+                        useAutoLightColor
+                          ? "Auto-derived from dark color"
+                          : "Custom light theme color"
+                      }
+                      style={{
+                        width: 28,
+                        height: 28,
+                        padding: 0,
+                        border: "1px solid var(--border-light)",
+                        borderRadius: 6,
+                        cursor: "pointer",
+                        background: "transparent",
+                      }}
+                    />
+                    <Stack direction="row" align="center" gap="2xs" wrap>
+                      {PRESET_LIGHT_COLOR_SWATCHES.slice(0, 7).map((swatch) => (
+                        <button
+                          key={swatch}
+                          type="button"
+                          className="base-btn"
+                          style={{
+                            width: 18,
+                            height: 18,
+                            minHeight: 18,
+                            padding: 0,
+                            borderRadius: "50%",
+                            backgroundColor: swatch,
+                            border: "1px solid var(--border-light)",
+                            boxShadow:
+                              effectiveLightColor === swatch
+                                ? "0 0 0 2px var(--text-primary)"
+                                : undefined,
+                          }}
+                          onClick={() => {
+                            setUseAutoLightColor(false);
+                            setNewCatColorLight(swatch);
+                          }}
+                          title={swatch}
+                          aria-label={`Select light color ${swatch}`}
+                        />
+                      ))}
+                    </Stack>
+                  </Stack>
+                </Stack>
+              </FormGrid>
+
+              <Stack direction="row" align="center" justify="end" gap="xs" wrap>
+                {editingCatId ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setEditingCatId(null);
+                      setNewCatLabel("");
+                      setNewCatPrefixes("");
+                      setNewCatColor("#2dd4bf");
+                      setNewCatColorLight("");
+                      setUseAutoLightColor(true);
+                    }}
+                  >
+                    Cancel Edit
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  leftIcon="Plus"
+                  onClick={handleAddOrUpdateCategory}
+                  disabled={!newCatLabel.trim()}
+                >
+                  {editingCatId ? "Update Category" : "Add Category"}
+                </Button>
+              </Stack>
+            </Stack>
+          </Card>
+        </Stack>
+      </Card>
 
       {/* Specific Tag Overrides */}
-      <div className="taxonomy-section">
-        <h4 className="taxonomy-section-title">
-          <Icon name="Bookmark" size={14} /> Specific Tag Overrides
-        </h4>
-        <p className="section-subtitle">
-          Map individual standalone tags directly to a specific category ID or
-          Hex color.
-        </p>
-
-        {Object.keys(config.tagOverrides).length > 0 ? (
-          <div className="tag-overrides-list">
-            {Object.entries(config.tagOverrides).map(([tag, target]) => (
-              <div key={tag} className="tag-override-chip">
-                <span className="override-tag-name">{tag}</span>
-                <span className="override-arrow">→</span>
-                <span className="override-target-val">{target}</span>
-                <button
-                  type="button"
-                  className="override-remove-btn"
-                  onClick={() => handleRemoveTagOverride(tag)}
-                  title="Remove override"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="add-override-row">
-          <input
-            type="text"
-            placeholder="Tag name (e.g. gore, protagonist)…"
-            value={overrideTag}
-            onChange={(e) => setOverrideTag(e.target.value)}
-            className="override-input"
+      <Card variant="elevated" padding="sm">
+        <Stack direction="column" align="stretch" gap="sm">
+          <Header
+            variant="section"
+            icon="Bookmark"
+            title="Specific Tag Overrides"
+            subtitle="Map individual standalone tags directly to a specific category ID or Hex color."
           />
-          <input
-            type="text"
-            placeholder="Category (e.g. rating_nsfw) or Hex (#ff0077)…"
-            value={overrideTarget}
-            onChange={(e) => setOverrideTarget(e.target.value)}
-            className="override-input"
-          />
-          <button
-            type="button"
-            className="secondary-btn"
-            onClick={handleAddTagOverride}
-            disabled={!overrideTag.trim() || !overrideTarget.trim()}
+
+          {Object.keys(config.tagOverrides).length > 0 ? (
+            <Stack direction="row" align="center" gap="xs" wrap>
+              {Object.entries(config.tagOverrides).map(([tag, target]) => (
+                <Card key={tag} variant="panel" padding="xs">
+                  <Stack direction="row" align="center" gap="2xs">
+                    <Text as="strong" size="xs" weight="semibold" tone="accent">
+                      {tag}
+                    </Text>
+                    <Text as="span" size="xs" tone="muted">
+                      →
+                    </Text>
+                    <Text as="span" size="xs" tone="primary">
+                      {target}
+                    </Text>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      iconOnly
+                      leftIcon="X"
+                      onClick={() => handleRemoveTagOverride(tag)}
+                      title="Remove override"
+                      aria-label={`Remove override for ${tag}`}
+                    />
+                  </Stack>
+                </Card>
+              ))}
+            </Stack>
+          ) : null}
+
+          <Stack
+            direction="row"
+            align="center"
+            gap="xs"
+            stackBelow="sm"
+            fullWidth
           >
-            Add Override
-          </button>
-        </div>
-      </div>
+            <TextInput
+              size="sm"
+              fullWidth
+              placeholder="Tag name (e.g. gore, protagonist)…"
+              value={overrideTag}
+              onChange={(e) => setOverrideTag(e.target.value)}
+              aria-label="Override tag name"
+            />
+            <TextInput
+              size="sm"
+              fullWidth
+              placeholder="Category (e.g. rating_nsfw) or Hex (#ff0077)…"
+              value={overrideTarget}
+              onChange={(e) => setOverrideTarget(e.target.value)}
+              aria-label="Override target category or hex"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={handleAddTagOverride}
+              disabled={!overrideTag.trim() || !overrideTarget.trim()}
+            >
+              Add Override
+            </Button>
+          </Stack>
+        </Stack>
+      </Card>
 
-      <div className="taxonomy-save-bar">
+      <Separator spacing="none" />
+
+      <Stack direction="row" align="center" justify="between" gap="sm" wrap>
         {status ? (
-          <span className="modal-status-text">{status}</span>
+          <StatusMessage variant="inline" tone="ok">
+            {status}
+          </StatusMessage>
         ) : (
           <span />
         )}
-        <button
+        <Button
           type="button"
-          className="primary"
+          variant="primary"
+          size="sm"
           onClick={handleSave}
           disabled={saving}
+          isLoading={saving}
         >
           {saving ? "Saving…" : "Save Taxonomy Settings"}
-        </button>
-      </div>
-    </div>
+        </Button>
+      </Stack>
+    </Stack>
   );
 }
 
@@ -734,38 +952,30 @@ export function TagTaxonomyModal({
   currentConfig,
   onConfigUpdated,
 }: TagTaxonomyModalProps) {
-  if (!open) return null;
-
   return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <section className="modal tag-taxonomy-modal">
-        <header className="modal-header">
-          <div className="taxonomy-header-title">
-            <Icon name="Tag" size={20} />
-            <div>
-              <h2>Tag Taxonomy &amp; Color Settings</h2>
-              <p className="taxonomy-subtitle">
-                Customize category namespaces (e.g. <code>species:</code>,{" "}
-                <code>copyright:</code>), colors, and tag rules.
-              </p>
-            </div>
-          </div>
-          <button
+    <Modal open={open} onClose={onClose} size="lg" fullScreenMobile>
+      <Header
+        variant="modal"
+        icon="Tag"
+        title="Tag Taxonomy & Color Settings"
+        subtitle="Customize category namespaces (e.g. species:, copyright:), colors, and tag rules."
+        bordered
+        actions={
+          <Button
             type="button"
-            className="diff-close-btn"
+            variant="ghost"
+            size="sm"
+            iconOnly
+            leftIcon="X"
             onClick={onClose}
             title="Close"
-          >
-            <Icon name="X" size={16} />
-          </button>
-        </header>
+            aria-label="Close"
+          />
+        }
+      />
 
-        <div className="taxonomy-modal-body">
+      <Modal.Body>
+        <Modal.Content>
           <TagTaxonomyPanel
             allLibraryTags={allLibraryTags}
             currentConfig={currentConfig}
@@ -776,8 +986,8 @@ export function TagTaxonomyModal({
               }, 400);
             }}
           />
-        </div>
-      </section>
-    </div>
+        </Modal.Content>
+      </Modal.Body>
+    </Modal>
   );
 }

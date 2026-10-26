@@ -2,8 +2,9 @@ import type { CSSProperties } from "react";
 import { useState } from "react";
 import type { Playthrough, WorldStateEntry } from "../../../../schemas";
 import type { WorldStateAction } from "../../../api";
-import { ConfirmModal } from "../../common/ConfirmModal";
+import { ConfirmModal } from "../../common";
 import { Badge, Button, Icon, TextArea, TextInput } from "../../base";
+import "./ScenePanel.css";
 
 export type ScenePanelProps = {
   playthrough: Playthrough;

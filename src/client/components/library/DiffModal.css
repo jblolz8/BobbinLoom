@@ -1,0 +1,27 @@
+/* ── DiffModal Viewer Wrapper & Loading Overlay ── */
+.diff-viewer-wrapper {
+  position: relative;
+  border-radius: 6px;
+  flex: 1;
+  min-height: 0;
+}
+
+.diff-viewer-wrapper.is-loading .two-pane-diff-scroll {
+  opacity: 0.4;
+  filter: blur(1px);
+  pointer-events: none;
+  transition:
+    opacity 0.2s,
+    filter 0.2s;
+}
+
+.diff-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 14, 22, 0.45);
+  z-index: 10;
+  backdrop-filter: blur(2px);
+}

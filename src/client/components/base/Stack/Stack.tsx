@@ -4,6 +4,7 @@ import {
   type HTMLAttributes,
   type ReactNode,
 } from "react";
+import "./Stack.css";
 
 export type StackDirection = "row" | "column";
 export type StackAlign = "start" | "center" | "end" | "stretch" | "baseline";
@@ -27,6 +28,10 @@ export interface StackProps extends HTMLAttributes<HTMLElement> {
   scrollable?: boolean;
   /** Collapses a row Stack into a vertical column below the specified viewport breakpoint (`sm` = 680px, `md` = 820px). */
   stackBelow?: StackCollapseBreakpoint;
+  /** Hides the stack below the specified viewport breakpoint (`sm` = 680px, `md` = 820px). */
+  hideBelow?: StackCollapseBreakpoint;
+  /** Shows the stack only below the specified viewport breakpoint (`sm` = 680px, `md` = 820px). */
+  showBelow?: StackCollapseBreakpoint;
   /** Hides the stack on wide desktop viewports (>= 1101px) where multi-pane layouts are already visible. */
   mobileOnly?: boolean;
   children?: ReactNode;
@@ -48,6 +53,8 @@ export const Stack = forwardRef<HTMLElement, StackProps>(function Stack(
     dimmed = false,
     scrollable = false,
     stackBelow,
+    hideBelow,
+    showBelow,
     mobileOnly = false,
     className = "",
     children,
@@ -70,6 +77,8 @@ export const Stack = forwardRef<HTMLElement, StackProps>(function Stack(
     dimmed ? "base-stack--dimmed" : "",
     scrollable ? "base-stack--scrollable" : "",
     stackBelow ? `base-stack--stack-below-${stackBelow}` : "",
+    hideBelow ? `base-stack--hide-below-${hideBelow}` : "",
+    showBelow ? `base-stack--show-below-${showBelow}` : "",
     mobileOnly ? "base-stack--mobile-only" : "",
     className,
   ]

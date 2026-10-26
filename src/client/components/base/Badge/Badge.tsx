@@ -1,5 +1,6 @@
 import React from "react";
-import { Icon, type IconName } from "../Icon";
+import { Icon, type IconName } from "../Icon/Icon";
+import "./Badge.css";
 
 export type BadgeVariant =
   | "neutral"

@@ -8,6 +8,7 @@ import {
   Card,
   Checkbox,
   CheckboxRow,
+  computeTagSidebarMaxHeight,
   DragGhost,
   DragHandle,
   Header,
@@ -28,9 +29,14 @@ import { InterfaceSettingsPanel } from "../src/client/components/settings/Interf
 import {
   formatEqual,
   imageEqual,
-  PresetEditor,
+  PromptEditorPanel,
   promptConfigDiffers,
-} from "../src/client/components/settings/PresetEditor";
+} from "../src/client/components/settings/PromptEditorPanel";
+import {
+  expandPlaythroughTagsMacro,
+  formatPlaythroughTagsMacro,
+} from "../src/engine/macros";
+import { renderModules } from "../src/server/provider/promptBuilder";
 import { ProviderConnectionCard } from "../src/client/components/settings/providers/ProviderConnectionList";
 import { ImageConnectionEditor } from "../src/client/components/settings/providers/ImageConnectionEditor";
 import { TextConnectionEditor } from "../src/client/components/settings/providers/TextConnectionEditor";
@@ -732,7 +738,7 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
     expect(a1111Html).not.toContain("Hide Watermark");
   });
 
-  it("renders PresetEditor and drag-and-drop Card / DragHandle / Checkbox / TextArea primitives without legacy settings.css classes", () => {
+  it("renders PromptEditorPanel and drag-and-drop Card / DragHandle / Checkbox / TextArea primitives without legacy settings.css classes", () => {
     const html = renderToStaticMarkup(
       createElement(
         RadixTooltip.Provider,
@@ -740,7 +746,7 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
         createElement(
           Stack,
           { direction: "column", gap: "sm" },
-          createElement(PresetEditor),
+          createElement(PromptEditorPanel),
           createElement(
             Card,
             {
@@ -1109,5 +1115,121 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
     // When showAllTags is true, TagRow wraps all tags without (+N) overflow trigger
     expect(multiPageHtml).toContain("base-tag-row--wrap");
     expect(multiPageHtml).not.toContain("base-tag-row__overflow-trigger");
+  });
+
+  it("computes TagSidebar max-height to fit available unscrolled viewport space on short lists and expand on scrolled long lists", () => {
+    // Non-layout environment (containerHeight = 0) returns null
+    expect(
+      computeTagSidebarMaxHeight({
+        containerHeight: 0,
+        containerContentBottom: 0,
+        scrollTop: 0,
+        rowTop: 0,
+        sidebarTop: 0,
+        siblingHeight: 0,
+      }),
+    ).toBeNull();
+
+    // Short list (e.g. 2 items in list view, siblingHeight = 260px) inside a 900px viewport
+    // where containerContentBottom = 884px and unscrolled rowTop = 180px:
+    // unscrolledAvailable = 884 - 180 - 1 = 703px.
+    // Even if TagSidebar has many tags, it caps at 703px so the page does not overflow.
+    expect(
+      computeTagSidebarMaxHeight({
+        containerHeight: 844,
+        containerContentBottom: 884,
+        scrollTop: 0,
+        rowTop: 180,
+        sidebarTop: 180,
+        siblingHeight: 260,
+      }),
+    ).toBe(703);
+
+    // Filtering from a scrolled long list down to a short list (siblingHeight = 260px,
+    // scrollTop = 80px, rowTop = 100px => unscrolledRowTop = 180px):
+    // shrinks back to unscrolledAvailable (703px) so the scrollbar can disappear cleanly.
+    expect(
+      computeTagSidebarMaxHeight({
+        containerHeight: 844,
+        containerContentBottom: 884,
+        scrollTop: 80,
+        rowTop: 100,
+        sidebarTop: 100,
+        siblingHeight: 260,
+      }),
+    ).toBe(703);
+
+    // Long list (siblingHeight = 1600px) when scrolled down by 100px so the sticky
+    // sidebar rests at sidebarTop = 76px (top: 1rem inside container starting at 60px):
+    // currentVisibleAvailable = 884 - 76 - 1 = 807px (> unscrolledAvailable 703px).
+    expect(
+      computeTagSidebarMaxHeight({
+        containerHeight: 844,
+        containerContentBottom: 884,
+        scrollTop: 100,
+        rowTop: 80,
+        sidebarTop: 76,
+        siblingHeight: 1600,
+      }),
+    ).toBe(807);
+  });
+
+  it("expands {{playthroughTags}} into natural prefixed tags sorted by category or fallback when empty", () => {
+    expect(formatPlaythroughTagsMacro([])).toBe(
+      "determined by the scenario and story so far",
+    );
+    expect(formatPlaythroughTagsMacro(["dark_romance"])).toBe(
+      "theme: dark romance",
+    );
+    expect(formatPlaythroughTagsMacro(["modern_day", "dark_romance"])).toBe(
+      "theme: dark romance and setting: modern day",
+    );
+    expect(
+      formatPlaythroughTagsMacro([
+        "trope:power_play",
+        "setting:modern_day",
+        "theme:dark_romance",
+        "trope:femdom",
+      ]),
+    ).toBe(
+      "theme: dark romance, setting: modern day, trope: femdom, and trope: power play",
+    );
+
+    const template =
+      "The themes, settings, and tropes of the story are {{playthroughTags}}.";
+    expect(
+      expandPlaythroughTagsMacro(template, [
+        "theme:dark_romance",
+        "setting:modern_day",
+        "trope:femdom",
+        "trope:power_play",
+      ]),
+    ).toBe(
+      "The themes, settings, and tropes of the story are theme: dark romance, setting: modern day, trope: femdom, and trope: power play.",
+    );
+    expect(expandPlaythroughTagsMacro(template, [])).toBe(
+      "The themes, settings, and tropes of the story are determined by the scenario and story so far.",
+    );
+
+    const rendered = renderModules(
+      [
+        {
+          id: "story-theme",
+          name: "Story Theme",
+          description: "",
+          order: 1,
+          enabled: true,
+          content:
+            "The themes, settings, and tropes of the story for {{user}} are {{playthroughTags}}.",
+        },
+      ],
+      {
+        playthroughTags: ["theme:dark_romance", "setting:modern_day"],
+        playerName: "Alex",
+      },
+    );
+    expect(rendered).toBe(
+      "The themes, settings, and tropes of the story for Alex are theme: dark romance and setting: modern day.",
+    );
   });
 });

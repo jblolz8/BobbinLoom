@@ -3,14 +3,16 @@ import type { CharacterInstance } from "../../../schemas";
 import type { CharacterEditPayload } from "../../api/characters";
 import {
   Button,
+  Dialog,
   Icon,
+  StatusMessage,
   SwitchRow,
   TagInput,
   TextArea,
   TextInput,
 } from "../base";
-import { Dialog } from "../base/Dialog";
-import { ConfirmModal } from "../common/ConfirmModal";
+import { ConfirmModal } from "../common";
+import "./SimpleCharacterEditor.css";
 
 export type SimpleCharacterEditorProps = {
   character: CharacterInstance;
@@ -154,7 +156,11 @@ export function SimpleCharacterEditor({
         }
       >
         <div className="simple-char-editor-body">
-          {error ? <p className="status-error">{error}</p> : null}
+          {error ? (
+            <StatusMessage variant="banner" tone="err">
+              {error}
+            </StatusMessage>
+          ) : null}
 
           {onFleshOut ? (
             <div className="simple-char-flesh-out-callout">
@@ -171,12 +177,13 @@ export function SimpleCharacterEditor({
               <Button
                 size="sm"
                 variant="secondary"
+                leftIcon={<Icon name="Sparkles" size={14} />}
                 onClick={() => {
                   onClose();
                   onFleshOut();
                 }}
               >
-                <Icon name="Sparkles" size={14} /> Flesh Out
+                Flesh Out
               </Button>
             </div>
           ) : null}

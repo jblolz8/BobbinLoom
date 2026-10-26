@@ -1,0 +1,73 @@
+/* ── Switch (base primitive) ── */
+.base-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: auto;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.base-switch__input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+}
+
+.base-switch__slider {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 20px;
+  background-color: var(--border-light);
+  transition:
+    background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.2s ease;
+}
+
+.base-switch__slider::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  height: 14px;
+  width: 14px;
+  border-radius: 50%;
+  background-color: var(--text-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.base-switch__input:checked + .base-switch__slider {
+  background-color: var(--accent-base);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent-base) 35%, transparent);
+}
+
+.base-switch__input:checked + .base-switch__slider::before {
+  transform: translateX(16px);
+}
+
+.base-switch__input:focus-visible + .base-switch__slider {
+  outline: 2px solid var(--accent-highlight, var(--accent-base));
+  outline-offset: 2px;
+}
+
+.base-switch__input:disabled + .base-switch__slider {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.base-switch--disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.base-switch__label {
+  font-size: 0.86rem;
+  color: var(--text-primary);
+}

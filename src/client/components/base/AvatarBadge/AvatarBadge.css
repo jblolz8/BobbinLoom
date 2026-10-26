@@ -1,0 +1,61 @@
+/* ── Unified AvatarBadge Component ── */
+.avatar-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  background: var(--bg-surface-elevated);
+  border: 1.5px solid var(--border-subtle);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  flex-shrink: 0;
+  user-select: none;
+  transition:
+    border-radius 0.2s ease,
+    border-color 0.15s ease,
+    transform 0.12s ease;
+}
+
+.avatar-badge.avatar-shape-global {
+  border-radius: var(--avatar-badge-radius, 8px);
+}
+.avatar-badge.avatar-shape-square {
+  border-radius: 2px;
+}
+.avatar-badge.avatar-shape-rounded {
+  border-radius: 8px;
+}
+.avatar-badge.avatar-shape-circle {
+  border-radius: 50%;
+}
+
+.avatar-badge.is-clickable {
+  cursor: pointer;
+}
+.avatar-badge.is-clickable:hover {
+  border-color: var(--accent-highlight, var(--border-focus));
+  transform: scale(1.04);
+}
+
+.avatar-badge-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.avatar-badge-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-translucent);
+  color: var(--accent-highlight, var(--accent-base));
+  font-weight: 700;
+}
+
+.avatar-badge-fallback.is-icon {
+  color: var(--accent-highlight, var(--accent-base));
+  background: var(--accent-translucent);
+}

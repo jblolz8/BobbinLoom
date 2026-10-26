@@ -10,8 +10,9 @@ dist.staging/
 data/*.json
 !data/prompt-presets.json
 !data/settings.json
-# Runtime overrides are gitignored (defaults live in committed data/settings.json).
+# Runtime overrides and user-created prompt presets are gitignored (defaults live in committed data/settings.json and data/prompt-presets.json).
 data/user-settings.json
+data/user-prompt-presets.json
 data/*.bak
 data/playthroughs/
 data/lorebooks/

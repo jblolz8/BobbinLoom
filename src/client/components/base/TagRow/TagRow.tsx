@@ -8,14 +8,18 @@ import {
 } from "react";
 import { cleanTag, type TagTaxonomyConfig } from "../../../../engine/tagTaxonomy";
 import { Badge } from "../Badge/Badge";
-import { Icon } from "../Icon";
-import { TagChip } from "../TagChip";
+import { Icon } from "../Icon/Icon";
+import { TagChip } from "../TagChip/TagChip";
 import { Tooltip } from "../Tooltip/Tooltip";
 import "./TagRow.css";
 
 export interface TagRowProps {
   tags: string[];
   activeTags?: string[];
+  /** Visual item style: `"taxonomy"` renders colored `TagChip` items; `"badge"` renders neutral `Badge` items (e.g. clothing slots). */
+  variant?: "taxonomy" | "badge";
+  /** Optional fallback badge text when `tags` is empty and `onEditTags` is not provided. */
+  emptyLabel?: string;
   taxonomy?: "character" | "playthrough";
   userConfig?: TagTaxonomyConfig | null;
   onToggleTag?: (tag: string) => void;
@@ -41,6 +45,8 @@ const useIsomorphicLayoutEffect =
 export function TagRow({
   tags,
   activeTags = [],
+  variant = "taxonomy",
+  emptyLabel,
   taxonomy = "playthrough",
   userConfig,
   onToggleTag,
@@ -155,17 +161,23 @@ export function TagRow({
   const tooltipContent =
     hiddenTags.length > 0 ? (
       <div className="base-tag-row__tooltip-chips">
-        {hiddenTags.map((tag) => (
-          <TagChip
-            key={tag}
-            tag={tag}
-            size="xs"
-            taxonomy={taxonomy}
-            userConfig={userConfig}
-            active={activeSet.has(cleanTag(tag))}
-            showCategoryTooltip={false}
-          />
-        ))}
+        {hiddenTags.map((tag) =>
+          variant === "badge" ? (
+            <Badge key={tag} variant="neutral" size="xs">
+              {tag}
+            </Badge>
+          ) : (
+            <TagChip
+              key={tag}
+              tag={tag}
+              size="xs"
+              taxonomy={taxonomy}
+              userConfig={userConfig}
+              active={activeSet.has(cleanTag(tag))}
+              showCategoryTooltip={false}
+            />
+          ),
+        )}
       </div>
     ) : null;
 
@@ -175,24 +187,36 @@ export function TagRow({
       className={`base-tag-row ${wrapAll ? "base-tag-row--wrap" : ""} ${className}`.trim()}
       onClick={(e) => e.stopPropagation()}
     >
-      {visibleTags.map((tag) => (
-        <TagChip
-          key={tag}
-          tag={tag}
-          size="xs"
-          taxonomy={taxonomy}
-          userConfig={userConfig}
-          active={activeSet.has(cleanTag(tag))}
-          onClick={onToggleTag ? () => onToggleTag(tag) : undefined}
-        />
-      ))}
+      {tags.length === 0 && emptyLabel && !onEditTags ? (
+        <Badge variant="neutral" size="xs">
+          {emptyLabel}
+        </Badge>
+      ) : null}
+
+      {visibleTags.map((tag) =>
+        variant === "badge" ? (
+          <Badge key={tag} variant="neutral" size="xs">
+            {tag}
+          </Badge>
+        ) : (
+          <TagChip
+            key={tag}
+            tag={tag}
+            size="xs"
+            taxonomy={taxonomy}
+            userConfig={userConfig}
+            active={activeSet.has(cleanTag(tag))}
+            onClick={onToggleTag ? () => onToggleTag(tag) : undefined}
+          />
+        ),
+      )}
 
       {hiddenTags.length > 0 ? (
         <Tooltip content={tooltipContent} side="top" align="center" delayDuration={120}>
           <span
             tabIndex={0}
             className="base-tag-row__overflow-trigger"
-            aria-label={`${hiddenTags.length} more tags: ${hiddenTags.join(", ")}`}
+            aria-label={`${hiddenTags.length} more items: ${hiddenTags.join(", ")}`}
           >
             <Badge variant="neutral" size="xs">
               +{hiddenTags.length}
@@ -222,13 +246,19 @@ export function TagRow({
         >
           {tags.map((tag) => (
             <span key={tag} data-tag-measure="">
-              <TagChip
-                tag={tag}
-                size="xs"
-                taxonomy={taxonomy}
-                userConfig={userConfig}
-                showCategoryTooltip={false}
-              />
+              {variant === "badge" ? (
+                <Badge variant="neutral" size="xs">
+                  {tag}
+                </Badge>
+              ) : (
+                <TagChip
+                  tag={tag}
+                  size="xs"
+                  taxonomy={taxonomy}
+                  userConfig={userConfig}
+                  showCategoryTooltip={false}
+                />
+              )}
             </span>
           ))}
         </div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveModelInfo } from "../src/client/components/base/ModelIcon";
+import { resolveModelInfo } from "../src/client/components/base";
 
 describe("resolveModelInfo", () => {
   it("resolves DeepSeek models with exact model name", () => {

@@ -2,8 +2,9 @@ import { useState } from "react";
 import type { InventoryRef, Item, Playthrough } from "../../../../../schemas";
 import { ITEMS } from "../../../../../engine/demoData";
 import { AvatarBadge, Badge, Button, Icon, TextInput } from "../../../base";
-import { ConfirmModal } from "../../../common/ConfirmModal";
-import { editPlayer } from "../../../../api";
+import { ConfirmModal } from "../../../common";
+import { editPlayer, getPersonaAvatarUrl } from "../../../../api";
+import "./PlayerTab.css";
 
 function getItemDef(
   ref: InventoryRef,
@@ -165,7 +166,15 @@ export function PlayerTab({
     <div className="player-tab-container">
       <article className="card player-overview-card">
         <div className="player-card-header">
-          <AvatarBadge name={pc.name} icon="User" size="md" />
+          <AvatarBadge
+            src={getPersonaAvatarUrl(
+              playthrough.personaId ?? "persona_default",
+              "profile",
+            )}
+            name={pc.name}
+            icon="User"
+            size="md"
+          />
           <div>
             <h3 className="player-name">{pc.name}</h3>
             {pc.description ? (

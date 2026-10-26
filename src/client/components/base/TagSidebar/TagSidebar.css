@@ -15,16 +15,16 @@
   position: sticky;
   top: 0;
   height: auto;
-  max-height: calc(100vh - 5.5rem);
-  max-height: calc(100dvh - 5.5rem);
+  max-height: var(--tag-sidebar-max-height, calc(100vh - 10.5rem));
+  max-height: var(--tag-sidebar-max-height, calc(100dvh - 10.5rem));
   box-sizing: border-box;
 }
 
 .is-modal .base-tag-sidebar,
 .base-modal .base-tag-sidebar {
   top: 0;
-  max-height: calc(88vh - 9.5rem);
-  max-height: calc(88dvh - 9.5rem);
+  max-height: var(--tag-sidebar-max-height, calc(80vh - 8.5rem));
+  max-height: var(--tag-sidebar-max-height, calc(80dvh - 8.5rem));
 }
 
 .base-tag-sidebar__header {

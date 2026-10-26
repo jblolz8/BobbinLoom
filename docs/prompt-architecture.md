@@ -215,7 +215,8 @@ The **Debug** panel in the chat view:
 
 ## Macro expansion is a render-time step
 
-`{{char}}` and `{{user}}` are resolved while the prompt is assembled and never in stored data.
-The surfaces covered are a character's sheet and memory line, the player's own fields, lorebook
-segments, and the image cast block; text with no single character owner resolves `{{user}}` only.
+`{{char}}`, `{{user}}`, and `{{playthroughTags}}` are resolved while the prompt is assembled and
+never in stored data. Turn prompt modules resolve `{{playthroughTags}}` and `{{user}}`; character
+sheets and memory lines resolve `{{char}}` and `{{user}}`; shared surfaces with no single character
+owner (the player's fields, lorebook segments, and the image cast block) resolve `{{user}}` only.
 The per-surface table is in [`character-format.md`](character-format.md#macros).

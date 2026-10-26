@@ -41,7 +41,7 @@ describe("createInitialPlaythrough", () => {
     const playthrough = createInitialPlaythrough("Player Test");
 
     expect(playthrough.playerCharacter).toBeDefined();
-    expect(playthrough.playerCharacter.name).toBe("Player");
+    expect(playthrough.playerCharacter.name).toBe("John Bobbin");
     expect(playthrough.playerCharacter.clothing).toEqual([]);
     expect(playthrough.playerCharacter.conditions).toEqual([]);
   });

@@ -5,6 +5,7 @@ import type {
   CharacterContextScope,
   CoverAspect,
   CustomThemeColors,
+  ExportFormat,
   TagTaxonomyConfig,
   ThemeMode,
   ViewPreferences,
@@ -18,7 +19,7 @@ import {
 } from "../../engine/theme";
 import { request } from "./client";
 
-export type { ThemeMode, CustomThemeColors, ChapterOpeningMode };
+export type { ThemeMode, CustomThemeColors, ChapterOpeningMode, ExportFormat };
 
 /**
  * The reader's display preferences as stored — only what was chosen.
@@ -42,6 +43,13 @@ export function updateViewPreferences(
     window.dispatchEvent(
       new CustomEvent("bobbinloom:library-prefs-updated", {
         detail: patch.library,
+      }),
+    );
+  }
+  if (typeof window !== "undefined" && patch.storage) {
+    window.dispatchEvent(
+      new CustomEvent("bobbinloom:storage-prefs-updated", {
+        detail: patch.storage,
       }),
     );
   }
@@ -231,6 +239,20 @@ export function resolveNavPreferences(
   return resolveGroup(NAV_PREFERENCE_DEFAULTS, stored?.nav);
 }
 
+export const STORAGE_PREFERENCE_DEFAULTS: ResolvedStoragePreferences = {
+  exportFormat: "webp",
+};
+
+export type ResolvedStoragePreferences = {
+  exportFormat: ExportFormat;
+};
+
+export function resolveStoragePreferences(
+  stored?: ViewPreferences,
+): ResolvedStoragePreferences {
+  return resolveGroup(STORAGE_PREFERENCE_DEFAULTS, stored?.storage);
+}
+
 export const UI_PREFERENCE_DEFAULTS: ResolvedUiPreferences = {
   settingsTab: "provider",
   settingsProviderKind: "text",
@@ -243,7 +265,8 @@ export type ResolvedUiPreferences = {
     | "tags"
     | "chat"
     | "interface"
-    | "appearance";
+    | "appearance"
+    | "storage";
   settingsProviderKind: "text" | "image" | "overrides";
 };
 

@@ -8,17 +8,18 @@ import {
   Badge,
   Button,
   CodeBlock,
+  Dialog,
   Icon,
   SimpleSelect,
+  StatusMessage,
   SwitchRow,
   Tabs,
   TagInput,
   TextArea,
   TextInput,
 } from "../base";
-import { Dialog } from "../base/Dialog";
 import { TwoPaneDiff } from "../library/TwoPaneDiff";
-import { ConfirmModal } from "../common/ConfirmModal";
+import { ConfirmModal } from "../common";
 import {
   applySectionChanges,
   parseClothingFromContent,
@@ -27,6 +28,7 @@ import {
 } from "../../../engine/characterSections";
 import { CharacterSheetSections } from "../views/PlayView/InfoPanel/CharacterSheetSections";
 import { sectionProvenance } from "../../engine/sheetProvenance";
+import "./CharacterEditor.css";
 
 export type CharacterEditorProps = {
   character: CharacterInstance;
@@ -585,9 +587,13 @@ export function CharacterEditor({
       >
         <div className="character-editor-body">
           {status ? (
-            <p className={status.isError ? "status-error" : "status-ok"}>
+            <StatusMessage
+              variant="banner"
+              tone={status.isError ? "err" : "ok"}
+              className={status.isError ? "status-error" : "status-ok"}
+            >
               {status.text}
-            </p>
+            </StatusMessage>
           ) : null}
 
           {mode === "view" ? (

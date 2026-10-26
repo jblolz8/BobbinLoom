@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
-import { Icon, type IconName } from "../Icon";
+import { Icon, type IconName } from "../Icon/Icon";
+import "./Tabs.css";
 
 export type TabItem<T extends string = string> = {
   id: T;

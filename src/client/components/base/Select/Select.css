@@ -1,0 +1,260 @@
+/* ==========================================================================
+   Base Select (.base-select-*) Powered by Radix UI
+   ========================================================================== */
+
+.base-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  border-radius: var(--radius-sm, 6px);
+  font: inherit;
+  box-sizing: border-box;
+  color: var(--input-text);
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+  text-align: left;
+  line-height: 1.3;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.base-select-trigger--full {
+  width: 100%;
+}
+
+.base-select-trigger--dirty {
+  border-color: var(--status-warning-border, var(--status-warning));
+  border-left: 3px solid var(--status-warning);
+}
+
+.base-select-trigger--filled {
+  background-color: var(--input-filled-bg, var(--input-bg));
+}
+
+.base-select-trigger--ghost {
+  background-color: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+
+.base-select-trigger--ghost:hover:not(:disabled):not([data-state="open"]) {
+  background-color: var(--bg-surface-hover);
+  border-color: transparent;
+  color: var(--text-primary);
+}
+
+.base-select-trigger--ghost:focus,
+.base-select-trigger--ghost:focus-visible,
+.base-select-trigger--ghost[data-state="open"] {
+  background-color: var(--accent-translucent);
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--accent-highlight, var(--accent-base));
+}
+
+/* Trigger Sizes */
+.base-select-trigger--xs {
+  min-height: 26px;
+  padding: 0.18rem 0.5rem;
+  font-size: 0.76rem;
+  gap: 5px;
+  border-radius: 5px;
+}
+
+.base-select-trigger--sm {
+  min-height: 28px;
+  padding: 0.22rem 0.55rem;
+  font-size: 0.78rem;
+  gap: 6px;
+  border-radius: 5px;
+}
+
+.base-select-trigger--md {
+  min-height: 32px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.82rem;
+}
+
+.base-select-trigger--lg {
+  min-height: 38px;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.9rem;
+}
+
+.base-select-trigger:hover:not(:disabled):not([data-state="open"]) {
+  border-color: var(--border-focus, var(--input-focus-border));
+}
+
+.base-select-trigger:focus,
+.base-select-trigger:focus-visible,
+.base-select-trigger[data-state="open"] {
+  border-color: var(--input-focus-border);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--input-focus-ring);
+  background-color: var(--input-bg);
+}
+
+.base-select-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.base-select-trigger__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+}
+
+.base-select-trigger__content {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.base-select-trigger__leading-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.base-select-trigger__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.base-select-trigger__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.base-select-trigger[data-state="open"] .base-select-trigger__icon {
+  transform: rotate(180deg);
+}
+
+/* Popover Content */
+.base-select-content {
+  min-width: var(--radix-select-trigger-width, 160px);
+  max-width: min(500px, 90vw);
+  max-height: var(--radix-select-content-available-height, 320px);
+  background-color: var(--bg-surface-elevated);
+  border: 1px solid var(--border-main);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: var(--shadow-card);
+  z-index: 99999;
+  outline: none;
+  font-family: inherit;
+  overflow: hidden;
+  animation-duration: 120ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.base-select-content[data-state="open"] {
+  animation-name: base-dropdown-scale-in;
+}
+
+.base-select-viewport {
+  padding: 2px;
+  overflow-y: auto;
+}
+
+.base-select-scroll-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  background-color: var(--bg-surface-elevated);
+  color: var(--text-muted);
+  cursor: default;
+}
+
+/* Select Items */
+.base-select-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 0.84rem;
+  font-weight: 500;
+  line-height: 1.35;
+  border-radius: 5px;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+  box-sizing: border-box;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.base-select-item[data-highlighted] {
+  background-color: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+
+.base-select-item[data-state="checked"] {
+  font-weight: 600;
+}
+
+.base-select-item:disabled,
+.base-select-item[data-disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.base-select-item__content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.base-select-item__icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.base-select-item__desc {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  font-weight: 400;
+  margin-left: auto;
+}
+
+.base-select-item__indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-highlight, var(--accent-base));
+  flex-shrink: 0;
+  margin-left: 6px;
+}

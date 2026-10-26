@@ -7,8 +7,9 @@ import {
   type ReactNode,
 } from "react";
 import { Badge } from "../Badge/Badge";
-import { Icon } from "../Icon";
+import { Icon } from "../Icon/Icon";
 import { TooltipIcon } from "../Tooltip/Tooltip";
+import "./Slider.css";
 
 export interface SliderProps {
   label: string;

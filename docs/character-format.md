@@ -89,7 +89,7 @@ type CharacterFormatSection = {
 - **Generation is format-driven.** `generateCharacterSheet`/`refineCharacterSheet`/`reformatCharacterSheet` build their example blob and section rules from the resolved format (`buildFormatExample`/`buildFormatRules`) instead of a static example.
 - **Stubbing follows the format.** `ensureAllSections(content, format)` guarantees every format section exists in format order, stubbing absent ones as `(not established)` using the section's `inline` flag, preserving extra sections at the end. Used after NPC promotion and library conversion so drafts always match the target format.
 - **Fallback.** A preset or the global config without a `characterFormat` resolves to the shipped 10-section `DEFAULT_CHARACTER_FORMAT` (so old data keeps working; no migration needed). The format is read from the **global prompt config**, not snapshotted per playthrough.
-- **Editing the format** happens in Settings → Prompt Configuration → Character Sheet tab (add/remove/rename/reorder sections, toggle `inline`, set instruction + example). Reorder by dragging the ⋮⋮ grip — the pointer-based drag works on both mouse and touch. The Examples field types freely and normalizes (trim + collapse blank lines, one example per line) on blur, and the **Sample sheet body** field beside it is committed verbatim — it holds real newlines, which is how a four-bullet section is *shown* to the model rather than only described to it. A read-only preset's format is still fully editable as the working config; use "Save as New…" to keep it under a name.
+- **Editing the format** happens in Settings → Prompts → Character Sheet tab (add/remove/rename/reorder sections, toggle `inline`, set instruction + example). Reorder by dragging the ⋮⋮ grip — the pointer-based drag works on both mouse and touch. The Examples field types freely and normalizes (trim + collapse blank lines, one example per line) on blur, and the **Sample sheet body** field beside it is committed verbatim — it holds real newlines, which is how a four-bullet section is *shown* to the model rather than only described to it. A read-only preset's format is still fully editable as the working config; use "Save as New…" to keep it under a name.
 - **Migrating existing sheets.** The library's **"Update into Newer Format with AI"** button (visible in a card's edit view when its sheet doesn't match the selected format) restructures a stored BL sheet into the target format with a preview/accept diff — it never overwrites blindly. "Convert to BL" for CCv2 cards also targets the selected format (defaults to the active preset).
 
 ## 2. Character Instance — the runtime state
@@ -154,17 +154,19 @@ Injection order per character: template sheet (present only) → runtime state �
 
 ## Macros
 
-A sheet may contain two macros. They are expanded **at prompt-build time only** — stored
-sheets, imported cards and library records keep the macros verbatim.
+Macros are expanded **at prompt-build time only** — stored presets, sheets, imported cards and
+library records keep the macros verbatim.
 
 | Macro | Resolves to | Where it resolves |
 |---|---|---|
 | `{{char}}` | the name of the character whose sheet this is | a character's sheet, that character's memory line, their absent one-liner |
-| `{{user}}` | the playthrough's player name | everything in the row above, plus lorebook entries, the player's own fields, and the image cast block |
+| `{{user}}` | the playthrough's player name | everything in the row above, plus turn prompt modules, lorebook entries, the player's own fields, and the image cast block |
+| `{{playthroughTags}}` | the playthrough's assigned tags sorted by category (e.g. `theme: dark romance, setting: modern day, and trope: femdom`), or `"determined by the scenario and story so far"` when untagged | turn prompt modules |
 
-`{{char}}` is deliberately left **literal** wherever no single character owns the text — a
-lorebook entry, the player's block, an image frame, the NPC-promotion context. Guessing an
-owner there would substitute a wrong name, so those surfaces resolve `{{user}}` only.
+`{{char}}` is deliberately left **literal** wherever no single character owns the text — turn
+prompt modules, a lorebook entry, the player's block, an image frame, or the NPC-promotion
+context. Guessing an owner there would substitute a wrong name, so those surfaces never resolve
+`{{char}}`.
 
 Expansion is case-insensitive and tolerates spaces inside the braces (`{{ user }}`). The sheet
 format's own rules tell the model to keep both macros exactly as written rather than resolving

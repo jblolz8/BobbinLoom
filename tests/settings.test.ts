@@ -849,8 +849,14 @@ describe("image generation: preset routes and the global prompt config", () => {
   let startedIn: string;
 
   const presetsFile = () => join(dir, "data", "prompt-presets.json");
+  const userPresetsFile = () => join(dir, "data", "user-prompt-presets.json");
   const readPresets = () =>
-    JSON.parse(readFileSync(presetsFile(), "utf8")) as Array<{
+    JSON.parse(
+      readFileSync(
+        existsSync(userPresetsFile()) ? userPresetsFile() : presetsFile(),
+        "utf8",
+      ),
+    ) as Array<{
       id: string;
       imageGeneration?: unknown;
     }>;
@@ -939,7 +945,8 @@ describe("image generation: preset routes and the global prompt config", () => {
     );
     expect(body.imageGeneration.includeState).toBe(true);
     expect(body.imageGeneration.includeCast).toBe(true);
-    // Persisted, not merely echoed.
+    // Persisted to user-prompt-presets.json, leaving prompt-presets.json untouched.
+    expect(existsSync(userPresetsFile())).toBe(true);
     expect(
       readPresets().find((p) => p.id === "user-no-image")!.imageGeneration,
     ).toEqual(body.imageGeneration);

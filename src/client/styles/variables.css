@@ -4,12 +4,12 @@
     Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-display: var(--font-sans);
   font-family: var(--font-sans);
-  /* The mono stack for code surfaces, so a NEW one reads a token instead of
-     re-spelling a family list. (Older rules still carry their own stack inline;
-     folding them in would change their fallback order, so that is its own pass.) */
   --font-mono:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
     "Courier New", monospace;
+
+  --avatar-badge-radius: 8px;
+  --workspace-max-width: 80%;
 
   /* ── 0. Shape & Radius Tokens ── */
   --radius-xs: 4px;
@@ -46,18 +46,8 @@
   --story-blockquote-bg: rgba(229, 190, 115, 0.06);
   --story-blockquote-text: #b4c3d8;
 
-  /* ── 5. Code & Technical Blocks ──
-     Every code token DERIVES from this theme's own surfaces, so a theme that
-     says nothing about code still gets code that belongs to it. A palette that
-     wants a specific slab (or a dark block on a light page) overrides these in
-     its own preset. */
+  /* ── 5. Code & Technical Blocks ── */
   --code-block-bg: color-mix(in srgb, var(--bg-app) 82%, #000);
-  /* ── 5c. Documentation search hits ──
-     A highlighted term is a surface that lands on prose AND on code slabs, so
-     it gets a pair of its own instead of borrowing either. Derived from the
-     theme's own accent (light presets resolve --accent-highlight to
-     --accent-base), so every preset and every user palette is on-theme
-     without per-theme work. Tunable in Appearance → Search Highlights. */
   --doc-hit-bg: color-mix(in srgb, var(--accent-highlight) 32%, transparent);
   --doc-hit-text: var(--text-primary);
 
@@ -72,12 +62,7 @@
   --code-inline-border: var(--border-main);
   --code-inline-text: var(--accent-highlight);
 
-  /* ── 5b. Controls over media ──
-     A control floating over a generated image cannot be themed by surface
-     tokens: nothing knows what is behind it. Its icon is therefore chosen
-     against its OWN scrim, and the scrim stays dark in both modes — a light
-     pill on a bright image is the same failure mirrored. Declared per block so
-     a theme can tune it in either mode. */
+  /* ── 5b. Controls over media ── */
   --media-scrim: rgba(12, 14, 18, 0.72);
   --media-scrim-hover: rgba(12, 14, 18, 0.88);
   --media-icon: #f4f6f9;
@@ -198,6 +183,43 @@
   --text: var(--text-primary);
 }
 
+/* ── Cover frame shape (Settings → Interface & Appearance → Cover Art) ── */
+:root[data-cover-aspect="portrait"] {
+  --cover-art-aspect: 2 / 3;
+  --cover-art-w: 2;
+  --cover-art-h: 3;
+  --cover-card-min-col: 260px;
+}
+
+:root[data-cover-aspect="square"] {
+  --cover-art-aspect: 1 / 1;
+  --cover-art-w: 1;
+  --cover-art-h: 1;
+  --cover-card-min-col: 260px;
+}
+
+:root[data-cover-aspect="landscape"] {
+  --cover-art-aspect: 16 / 9;
+  --cover-art-w: 16;
+  --cover-art-h: 9;
+  --cover-card-min-col: 693px;
+}
+
+:root[data-landscape-card-width="compact"],
+:root[data-cover-aspect="landscape"][data-landscape-card-width="compact"] {
+  --cover-card-min-col: 260px;
+}
+
+:root[data-avatar-shape="square"] {
+  --avatar-badge-radius: 2px;
+}
+:root[data-avatar-shape="rounded"] {
+  --avatar-badge-radius: 8px;
+}
+:root[data-avatar-shape="circle"] {
+  --avatar-badge-radius: 50%;
+}
+
 /* ── Light Mode Palette ── */
 [data-theme="light"] {
   color-scheme: light;
@@ -219,23 +241,14 @@
   --text-disabled: #94a3b8;
 
   --story-text: #1e293b;
-  --story-quote: #b45309; /* Inverted warm amber/gold for high contrast */
-  --story-italic: #4a5d78; /* Muted steel-blue slate for italic prose */
-  --story-emphasis: #163f73; /* Deep sapphire-navy ink for bold emphasis */
+  --story-quote: #b45309;
+  --story-italic: #4a5d78;
+  --story-emphasis: #163f73;
   --story-blockquote-border: #d97706;
   --story-blockquote-bg: rgba(245, 158, 11, 0.08);
   --story-blockquote-text: #334155;
 
-  /* Code derives from the light surfaces (see the :root block). Light themes
-     get a LIGHT code slab: a dark slab on a cream page is the drift this
-     replaced. */
   --code-block-bg: var(--bg-surface-elevated);
-  /* ── 5c. Documentation search hits ──
-     A highlighted term is a surface that lands on prose AND on code slabs, so
-     it gets a pair of its own instead of borrowing either. Derived from the
-     theme's own accent (light presets resolve --accent-highlight to
-     --accent-base), so every preset and every user palette is on-theme
-     without per-theme work. Tunable in Appearance → Search Highlights. */
   --doc-hit-bg: color-mix(in srgb, var(--accent-highlight) 32%, transparent);
   --doc-hit-text: var(--text-primary);
 
@@ -246,12 +259,6 @@
   --code-inline-border: var(--border-main);
   --code-inline-text: var(--accent-base);
 
-  /* ── 5b. Controls over media ──
-     A control floating over a generated image cannot be themed by surface
-     tokens: nothing knows what is behind it. Its icon is therefore chosen
-     against its OWN scrim, and the scrim stays dark in both modes — a light
-     pill on a bright image is the same failure mirrored. Declared per block so
-     a theme can tune it in either mode. */
   --media-scrim: rgba(12, 14, 18, 0.72);
   --media-scrim-hover: rgba(12, 14, 18, 0.88);
   --media-icon: #f4f6f9;
@@ -277,7 +284,6 @@
   --accent-translucent: rgba(37, 99, 235, 0.12);
   --accent-highlight: var(--accent-base);
 
-  /* ── 7b. AI Assistant & Brainstorm Accents ── */
   --ai-accent: #7e22ce;
   --ai-accent-hover: #6b21a8;
   --ai-accent-active: #581c87;
@@ -350,8 +356,48 @@
   --segmented-active-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
+/* ── Global Reset, Scrollbars, & App Root Shell ── */
 * {
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  transition: background-color 0.15s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: var(--scrollbar-thumb-active, var(--scrollbar-thumb-hover));
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.ds-icon-accent {
+  color: var(--accent-highlight, var(--accent-base));
+}
+
+.ds-icon-muted {
+  color: var(--text-secondary);
 }
 
 body {
@@ -375,98 +421,23 @@ select {
   font: inherit;
 }
 
-button {
-  border: 1px solid var(--border-light);
-  background: var(--bg-surface-elevated);
+.app-root {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+  background: var(--bg-app);
   color: var(--text-primary);
-  border-radius: 8px;
-  padding: 0.55rem 0.8rem;
-  cursor: pointer;
-  transition:
-    background-color 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
 }
 
-/* The pre-`.base-btn` raw-button theme. Its specificity (one element, one
-   pseudo-class and eleven :not() arguments) outranks any single-class variant,
-   so every base button must be excluded here or its own hover is silently
-   overridden — which is what painted the overlay controls a theme surface
-   colour under a white glyph. Each `.base-btn--*` declares its own hover. */
-button:hover:not(:disabled):not(.base-btn):not(.base-tab):not(.base-card):not(
-    .base-header__logo-btn
-  ):not(.primary-btn):not(.danger):not(.ai-brainstorm-toggle-btn):not(
-    .suggest-tags-ai-btn
-  ):not(.auto-detect-action):not(.crop-auto-detect-btn):not(
-    .tag-regenerate-btn
-  ):not(.danger-action):not(.warning-action):not(.import-btn):not(.active):not(
-    .preset-card
-  ) {
-  background: var(--bg-surface-hover);
-  border-color: var(--border-focus);
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-button.danger {
-  border-color: var(--btn-danger-border);
-  background: var(--btn-danger-bg);
-  color: var(--btn-danger-text);
-}
-
-button.danger:hover:not(:disabled) {
-  background: var(--btn-danger-hover);
-}
-
-button.primary-btn {
-  background: var(--accent-base);
-  border-color: var(--accent-hover);
-  color: var(--accent-text);
-  font-weight: 600;
-}
-
-button.primary-btn:hover:not(:disabled) {
-  background: var(--accent-hover);
-}
-
-input,
-select,
-textarea {
-  border: 1px solid var(--input-border);
-  background: var(--input-bg);
-  color: var(--input-text);
-  border-radius: 8px;
-}
-
-input::placeholder,
-textarea::placeholder {
-  color: var(--input-placeholder);
-}
-
-input:focus,
-select:focus,
-textarea:focus {
-  outline: none;
-  border-color: var(--input-focus-border);
-  box-shadow: 0 0 0 2px var(--input-focus-ring);
-}
-
-textarea {
-  width: 100%;
-  resize: vertical;
-  padding: 0.75rem;
-  border-radius: 10px;
-}
-
-.status-ok {
-  color: var(--status-success);
-}
-
-.status-error {
-  color: var(--status-danger);
-  white-space: pre-wrap;
-  word-break: break-word;
+.app-shell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0.5rem;
+  min-height: 0;
+  background: var(--bg-app);
 }

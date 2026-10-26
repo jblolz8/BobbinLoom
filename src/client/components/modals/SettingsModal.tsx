@@ -6,14 +6,15 @@ import {
   resolveUiPreferences,
   updateViewPreferences,
 } from "../../api";
-import { PresetEditor } from "../settings/PresetEditor";
+import { PromptEditorPanel } from "../settings/PromptEditorPanel";
 import { ProviderConnectionsPanel } from "../settings/ProviderConnectionsPanel";
 import { ProviderOverridesPanel } from "../settings/ProviderOverridesPanel";
 import { TagTaxonomyPanel } from "../library/TagTaxonomyModal";
 import { AppearanceSettingsPanel } from "../settings/AppearanceSettingsPanel";
 import { InterfaceSettingsPanel } from "../settings/InterfaceSettingsPanel";
+import { FilesStorageSettingsPanel } from "../settings/FilesStorageSettingsPanel";
 import { ChatSettingsPanel } from "../settings/ChatSettingsPanel";
-import { ConfirmModal } from "../common/ConfirmModal";
+import { ConfirmModal } from "../common";
 import { Button, Header, Modal, Stack, Tabs, type TabItem } from "../base";
 
 type SettingsTab =
@@ -22,7 +23,8 @@ type SettingsTab =
   | "tags"
   | "chat"
   | "interface"
-  | "appearance";
+  | "appearance"
+  | "storage";
 
 const SETTINGS_TABS: TabItem<SettingsTab>[] = [
   { id: "provider", label: "Providers", icon: "Cpu" },
@@ -31,6 +33,7 @@ const SETTINGS_TABS: TabItem<SettingsTab>[] = [
   { id: "chat", label: "Chat", icon: "MessageSquare" },
   { id: "interface", label: "Interface", icon: "Layout" },
   { id: "appearance", label: "Appearance", icon: "Palette" },
+  { id: "storage", label: "Files & Storage", icon: "HardDrive" },
 ];
 
 type ProviderSubTab = ProviderKind | "overrides";
@@ -306,7 +309,7 @@ export function SettingsModal(props: SettingsModalProps) {
           </Tabs.Panel>
 
           <Tabs.Panel active={settingsTab === "prompts"}>
-            {visitedTabs.has("prompts") && <PresetEditor />}
+            {visitedTabs.has("prompts") && <PromptEditorPanel />}
           </Tabs.Panel>
 
           <Tabs.Panel active={settingsTab === "tags"}>
@@ -348,6 +351,10 @@ export function SettingsModal(props: SettingsModalProps) {
 
           <Tabs.Panel active={settingsTab === "appearance"}>
             {visitedTabs.has("appearance") && <AppearanceSettingsPanel />}
+          </Tabs.Panel>
+
+          <Tabs.Panel active={settingsTab === "storage"}>
+            {visitedTabs.has("storage") && <FilesStorageSettingsPanel />}
           </Tabs.Panel>
         </Modal.Content>
       </Modal.Body>

@@ -1,0 +1,92 @@
+/* --------------------------------------------------------------------------
+   Form Section Title (.form-section-title, .base-form-section-title)
+   & Base Form Section (.base-form-section, .base-section-header)
+   -------------------------------------------------------------------------- */
+.form-section-title,
+.base-form-section-title {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  user-select: none;
+}
+
+.form-section-title svg,
+.base-form-section-title svg {
+  color: var(--accent-highlight, var(--accent-base));
+  flex-shrink: 0;
+}
+
+.base-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.base-section-header__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.base-section-header__action {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.base-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.base-form-section__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.base-form-section--collapsible {
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  background: var(--bg-panel);
+  padding: 0.35rem 0.55rem;
+}
+
+.base-form-section__summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.base-form-section__summary::-webkit-details-marker {
+  display: none;
+}
+
+.base-form-section__chevron {
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.base-form-section--collapsible[open] .base-form-section__chevron {
+  transform: rotate(180deg);
+}
+
+.base-form-section__body--collapsible {
+  margin-top: 0.45rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--border-subtle);
+}

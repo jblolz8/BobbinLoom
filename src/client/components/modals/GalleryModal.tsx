@@ -4,7 +4,8 @@ import { buildImageUrl } from "../../api";
 import { groupCoverMedia, type CoverMediaItem } from "../../engine/coverMedia";
 import { useSideNavMode } from "../../hooks/useSideNavMode";
 import { Badge, Button, Icon, IconButton, SideNav } from "../base";
-import { ImageViewer } from "../common/ImageViewer";
+import { ImageViewer } from "../common";
+import "./GalleryModal.css";
 
 export type GalleryModalProps = {
   playthroughName: string;
@@ -40,7 +41,7 @@ export type GalleryModalProps = {
  * sheet.
  */
 export function GalleryModal({
-  playthroughName,
+  playthroughName: _playthroughName,
   media,
   chapters,
   currentFile,
@@ -132,13 +133,16 @@ export function GalleryModal({
                   Clear custom cover
                 </Button>
               ) : null}
-              <button
-                className="flex items-center gap-1 modal-close-btn"
+              <Button
+                variant="secondary"
+                size="xs"
+                className="modal-close-btn"
+                leftIcon={<Icon name="X" size={14} />}
                 onClick={onClose}
                 aria-label="Close gallery"
               >
-                <Icon name="X" size={14} /> Close
-              </button>
+                Close
+              </Button>
             </div>
           </header>
 

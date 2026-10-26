@@ -1,0 +1,325 @@
+/* ── PlayerTab ── */
+
+/* ── Player Tab, Conditions & Inventory Styling ── */
+.player-tab-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.player-overview-card {
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.player-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+
+.player-name {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.player-desc {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.player-meta-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-top: 0.4rem;
+  border-top: 1px dashed var(--border-subtle);
+}
+
+.player-meta-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+}
+
+.meta-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  min-width: 90px;
+  flex-shrink: 0;
+}
+
+.meta-val {
+  color: var(--text-primary);
+}
+
+.player-clothing-section {
+  padding-top: 0.4rem;
+  border-top: 1px dashed var(--border-subtle);
+}
+
+.subcard-title {
+  margin: 0 0 0.4rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.clothing-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.clothing-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: var(--bg-app);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 0.2rem 0.45rem;
+  font-size: 0.78rem;
+}
+
+.clothing-slot {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.clothing-name {
+  color: var(--text-primary);
+}
+
+.clothing-state {
+  color: var(--text-secondary);
+  font-style: italic;
+  font-size: 0.74rem;
+}
+
+.section-subtitle {
+  margin: 0.5rem 0 0.4rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.section-subtitle .icon,
+.section-subtitle svg {
+  color: var(--accent-highlight, var(--accent-base));
+}
+
+.badge-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.12rem 0.45rem;
+  border-radius: 10px;
+  background: var(--bg-surface-elevated);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.conditions-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.condition-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  background: var(--status-warning-bg, var(--accent-translucent));
+  border: 1px solid var(--status-warning-border, var(--border-subtle));
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  color: var(--status-warning, var(--accent-highlight));
+  font-size: 0.82rem;
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.condition-chip:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--border-light);
+}
+
+.condition-icon {
+  color: var(--status-warning, var(--accent-highlight));
+}
+
+.chip-remove-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  margin-left: 0.35rem;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+  opacity: 0.6;
+}
+
+.chip-remove-btn:hover {
+  background: var(--danger-subtle, rgba(239, 68, 68, 0.15));
+  color: var(--danger, #ef4444);
+  opacity: 1;
+}
+
+.group:hover .chip-remove-btn {
+  opacity: 1;
+}
+
+.info-empty-state {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: var(--bg-surface-elevated);
+  border: 1px dashed var(--border-subtle);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+.inventory-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.inventory-card {
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+@media (hover: hover) {
+  .inventory-card:hover {
+    background: var(--bg-surface-hover);
+    border-color: var(--border-focus);
+  }
+}
+
+.inventory-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.inventory-card-title {
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+
+.inventory-type-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--bg-app);
+  color: var(--accent-highlight, var(--accent-base));
+  border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.item-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.item-qty-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 6px;
+  background: var(--accent-translucent);
+  color: var(--accent-highlight, var(--accent-base));
+  border: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.inventory-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.item-type-tag {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.item-desc {
+  margin: 0.1rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+
+.flags-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.char-status-section .flag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--bg-app);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-weight: 500;
+}
+
+.char-status-section .flag-icon {
+  color: var(--accent-highlight, var(--accent-base));
+}
+

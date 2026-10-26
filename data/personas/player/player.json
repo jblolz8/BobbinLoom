@@ -1,9 +1,9 @@
 {
   "id": "persona_default",
-  "name": "Player",
+  "name": "John Bobbin",
   "description": "A newcomer to the region with no grand title and no agenda beyond seeing what the world holds. Curious, adaptable, and quick to lend a hand — or to ask the question nobody else will. How they act from here is up to the story.",
-  "bodyType": "average",
-  "appearance": "Practical traveler's clothes worn with an easy, unhurried posture. Alert eyes that notice details. A well-worn pack suggests miles already walked.",
+  "bodyType": "- Height: 5'10\"\n- Build: Average, travel-hardened",
+  "appearance": "- Eyes: Alert and observant\n- Features: Easy, unhurried posture with a well-worn pack that suggests miles already walked",
   "initialClothing": [
     {
       "slot": "Top",
@@ -18,5 +18,8 @@
       "name": "Sturdy walking boots"
     }
   ],
-  "isDefault": true
+  "isDefault": true,
+  "customPortrait": "portrait.webp",
+  "profileImage": "profile.webp",
+  "avatarUpdatedAt": 1792988455408
 }

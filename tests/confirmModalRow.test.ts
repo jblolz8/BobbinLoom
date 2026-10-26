@@ -8,7 +8,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Button } from "../src/client/components/base";
-import { ConfirmActions } from "../src/client/components/common/ConfirmModal";
+import { ConfirmActions } from "../src/client/components/common";
 
 /** The visible labels, in DOM order — the whole point of the test. */
 function labels(html: string): string[] {

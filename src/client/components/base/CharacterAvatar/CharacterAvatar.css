@@ -1,0 +1,112 @@
+/* ── Unified CharacterAvatar Component ── */
+.card-portrait-avatar {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: center top !important;
+  border: none !important;
+  border-radius: 0 !important;
+  display: block;
+}
+
+.card-list-avatar {
+  width: 72px !important;
+  height: 108px !important;
+  min-width: 72px !important;
+  min-height: 108px !important;
+  aspect-ratio: 2 / 3 !important;
+  border-radius: 8px !important;
+  object-fit: cover !important;
+  object-position: center top !important;
+  flex-shrink: 0;
+  border: 1px solid var(--border-subtle) !important;
+  background: #0a0d14;
+  display: block;
+}
+
+.card-grid-thumb {
+  width: 100% !important;
+  height: 100% !important;
+  aspect-ratio: 1 / 1;
+  object-fit: cover !important;
+  border: none !important;
+  border-radius: 0 !important;
+  display: block;
+}
+
+.library-avatar {
+  display: block;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #1a1e2b;
+}
+
+.library-avatar:not(.card-portrait-avatar):not(.card-list-avatar):not(
+    .card-grid-thumb
+  ):not(.selected-cast-avatar) {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid #3a4150;
+}
+
+.avatar-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(96, 165, 250, 0.15);
+  color: #60a5fa;
+  font-weight: 600;
+}
+
+.avatar-placeholder:not(.card-portrait-avatar):not(.card-list-avatar):not(
+    .card-grid-thumb
+  ):not(.selected-cast-avatar) {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  font-size: 1.15rem;
+}
+
+.library-avatar.selected-cast-avatar,
+.avatar-placeholder.selected-cast-avatar {
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px !important;
+  min-height: 24px !important;
+  border-radius: 9999px !important;
+  object-fit: cover !important;
+  border: none !important;
+  font-size: 0.72rem !important;
+  line-height: 1 !important;
+  flex-shrink: 0;
+}
+
+.avatar-placeholder.card-portrait-avatar {
+  width: 100% !important;
+  height: 100% !important;
+  font-size: 3.5rem;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+.avatar-placeholder.card-list-avatar {
+  width: 72px !important;
+  height: 108px !important;
+  min-width: 72px !important;
+  min-height: 108px !important;
+  aspect-ratio: 2 / 3 !important;
+  font-size: 1.8rem;
+  border-radius: 8px !important;
+  border: 1px solid rgba(96, 165, 250, 0.3) !important;
+}
+
+.avatar-placeholder.card-grid-thumb {
+  width: 100% !important;
+  height: 100% !important;
+  aspect-ratio: 1 / 1;
+  font-size: 2.5rem;
+  border: none !important;
+  border-radius: 0 !important;
+}

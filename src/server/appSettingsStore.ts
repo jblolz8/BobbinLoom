@@ -139,6 +139,7 @@ export function saveAppSettings(
   dataDir: string,
   input: {
     activePresetId?: string;
+    defaultPersonaId?: string;
     promptConfig?: PromptConfig;
     tagTaxonomy?: TagTaxonomyConfig;
     avatarShape?: AvatarShape;

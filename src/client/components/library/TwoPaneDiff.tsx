@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { computeTwoPaneDiff, type DiffPaneRow } from "../../engine/diff";
+import "./TwoPaneDiff.css";
 
 export type TwoPaneDiffProps = {
   leftLabel: string;

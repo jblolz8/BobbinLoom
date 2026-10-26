@@ -1,0 +1,232 @@
+/* ── ScenePanel & Quests ── */
+
+/* ── Scene Panel, Flags & Quests Styling ── */
+.scene-panel-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  margin-top: 0.25rem;
+}
+
+.scene-overview-card {
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.scene-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+
+.scene-avatar-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent-translucent, rgba(43, 75, 123, 0.2));
+  border: 1px solid var(--accent-highlight, #5a8fd4);
+  color: var(--accent-highlight, #5a8fd4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.scene-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.scene-subtitle-text {
+  margin: 0.15rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.scene-meta-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--border-subtle);
+}
+
+.scene-meta-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.scene-meta-item .meta-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text-muted);
+}
+
+.scene-meta-item .meta-val {
+  color: var(--text-primary);
+}
+
+.scene-meta-stat-group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.scene-meta-subtext {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.turn-badge {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.12rem 0.5rem;
+  border-radius: 6px;
+  background: var(--accent-translucent, rgba(43, 75, 123, 0.2));
+  color: var(--accent-highlight, var(--accent-base));
+  border: 1px solid var(--border-subtle);
+}
+
+.flags-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+}
+
+.flag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--bg-app);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 0.25rem 0.55rem;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.35;
+  transition: all 0.15s ease;
+}
+
+.flag-chip:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--border-light);
+}
+
+.flag-chip-text {
+  word-break: break-word;
+}
+
+.quests-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.quest-card {
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 0.65rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.quest-card.tracking {
+  border-color: var(--accent-highlight, var(--accent-base));
+  background: var(--bg-surface-hover, var(--bg-surface-elevated));
+}
+
+.quest-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.quest-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  user-select: none;
+  min-width: 0;
+}
+
+.quest-checkbox-label input[type="checkbox"] {
+  accent-color: var(--accent-base);
+  cursor: pointer;
+}
+
+.quest-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quest-summary {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.quest-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-top: 0.35rem;
+  margin-top: 0.15rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.quest-action-btn {
+  background: var(--bg-app);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+@media (hover: hover) {
+  .quest-action-btn:hover {
+    background: var(--bg-surface-hover);
+    color: var(--text-primary);
+  }
+
+  .quest-action-btn.danger:hover {
+    background: var(--status-danger-bg, rgba(239, 68, 68, 0.2));
+    color: var(--status-danger, #f87171);
+    border-color: var(--status-danger-border, rgba(239, 68, 68, 0.4));
+  }
+}
+

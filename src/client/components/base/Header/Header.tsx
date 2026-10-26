@@ -4,8 +4,9 @@ import {
   type HTMLAttributes,
   type ReactNode,
 } from "react";
-import { Icon, type IconName } from "../Icon";
+import { Icon, type IconName } from "../Icon/Icon";
 import { Text, type TextElement } from "../Text/Text";
+import "./Header.css";
 
 export type HeaderVariant = "app" | "page" | "modal" | "panel" | "section";
 
@@ -19,6 +20,7 @@ export interface HeaderProps extends Omit<
   subtitle?: ReactNode;
   icon?: ReactNode | IconName;
   badge?: ReactNode;
+  leading?: ReactNode;
   actions?: ReactNode;
   titleId?: string;
   /** Compact responsive layout (e.g., mobile play view on the app header). */
@@ -211,6 +213,7 @@ const HeaderRoot = forwardRef<HTMLElement, HeaderProps>(function Header(
     subtitle,
     icon,
     badge,
+    leading,
     actions,
     titleId,
     compact = false,
@@ -245,6 +248,7 @@ const HeaderRoot = forwardRef<HTMLElement, HeaderProps>(function Header(
       {hasStructuredTitle ? (
         <>
           <div className="base-header__row">
+            {leading && <div className="base-header__leading">{leading}</div>}
             <div className="base-header__main">
               <Text
                 as={headingElement}

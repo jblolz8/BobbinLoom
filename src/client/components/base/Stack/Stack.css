@@ -101,6 +101,16 @@
     flex-direction: column;
     align-items: stretch;
   }
+
+  .base-stack--hide-below-md {
+    display: none;
+  }
+}
+
+@media (min-width: 821px) {
+  .base-stack--show-below-md {
+    display: none;
+  }
 }
 
 @media (max-width: 680px) {
@@ -109,10 +119,20 @@
     align-items: stretch;
   }
 
+  .base-stack--hide-below-sm {
+    display: none;
+  }
+
   .base-stack--scrollable {
     max-height: none;
     overflow-y: visible;
     padding-right: 0;
+  }
+}
+
+@media (min-width: 681px) {
+  .base-stack--show-below-sm {
+    display: none;
   }
 }
 

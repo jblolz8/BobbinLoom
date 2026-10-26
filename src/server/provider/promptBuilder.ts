@@ -13,7 +13,11 @@ import {
   scanLorebooks,
   type ActivatedEntry,
 } from "../../engine/engine";
-import { expandMacros, expandUserMacro } from "../../engine/macros";
+import {
+  expandMacros,
+  expandPlaythroughTagsMacro,
+  expandUserMacro,
+} from "../../engine/macros";
 import type { EntryTimingState, LorebookEntry } from "../../schemas";
 import type {
   CharacterFormat,
@@ -239,13 +243,28 @@ type SystemPromptSegments = {
   lorebook: number;
 };
 
+export type ModuleMacroContext = {
+  playthroughTags?: readonly string[] | null;
+  playerName?: string;
+};
+
 export function renderModules(
   modules: PromptPresetModule[] | undefined,
+  context?: ModuleMacroContext,
 ): string {
   return (modules ?? [])
     .filter((m) => m.enabled)
     .sort((a, b) => a.order - b.order)
-    .map((m) => m.content)
+    .map((m) => {
+      let text = expandPlaythroughTagsMacro(
+        m.content,
+        context?.playthroughTags,
+      );
+      if (context?.playerName) {
+        text = expandUserMacro(text, context.playerName);
+      }
+      return text;
+    })
     .join("\n\n");
 }
 
@@ -253,8 +272,11 @@ export function renderModules(
 export function buildStableSystemBlock(
   modules: PromptPresetModule[],
   lorebookBefore: string,
+  context?: ModuleMacroContext,
 ): string {
-  return [renderModules(modules), lorebookBefore].filter(Boolean).join("\n\n");
+  return [renderModules(modules, context), lorebookBefore]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 export function buildSystemPrompt(
@@ -263,12 +285,9 @@ export function buildSystemPrompt(
   lorebookBefore: string,
   lorebookAfter: string,
   format?: CharacterFormat,
+  context?: ModuleMacroContext,
 ): { text: string; segments: SystemPromptSegments } {
-  const enabledModules = modules
-    .filter((m) => m.enabled)
-    .sort((a, b) => a.order - b.order);
-
-  const moduleContents = enabledModules.map((m) => m.content).join("\n\n");
+  const moduleContents = renderModules(modules, context);
   const lorebookSection = [lorebookBefore, lorebookAfter]
     .filter(Boolean)
     .join("\n\n");
@@ -606,7 +625,14 @@ export function assembleTurnPrompt(
     depth: lorebookDepth,
   } = collectLorebookSegments(state);
 
-  const stableBlock = buildStableSystemBlock(modules, lorebookBefore);
+  const macroContext: ModuleMacroContext = {
+    playthroughTags: state.tags,
+    playerName: state.playerCharacter.name,
+  };
+  const renderedModules = renderModules(modules, macroContext);
+  const stableBlock = [renderedModules, lorebookBefore]
+    .filter(Boolean)
+    .join("\n\n");
   const outputContract = buildOutputContract(choicesEnabled, format);
 
   const memories = retrieveMemoriesVector(state, queryEmbedding);
@@ -675,7 +701,7 @@ export function assembleTurnPrompt(
 
   const est = estimateTokens;
   const breakdown: PromptUsageBreakdown = {
-    modules: est(renderModules(modules).length),
+    modules: est(renderedModules.length),
     outputFormat: est(outputContract.length),
     lorebook: est(
       [lorebookBefore, lorebookAfter].filter(Boolean).join("\n\n").length,

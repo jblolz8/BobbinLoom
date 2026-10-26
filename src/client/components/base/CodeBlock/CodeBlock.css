@@ -1,0 +1,113 @@
+/* ── CodeBlock Component ── */
+.code-block {
+  margin: 0.6rem 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--code-block-bg);
+  border: 1px solid var(--code-block-border);
+}
+
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.3rem 0.65rem;
+  background: var(--code-block-header);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.75rem;
+}
+
+.code-lang-label {
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--code-lang-label);
+}
+
+.code-block-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.code-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: transparent;
+  border: 1px solid var(--border-main);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.code-copy-btn:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+  border-color: var(--border-light);
+}
+
+.code-block-pre {
+  margin: 0;
+  padding: 0.65rem 0.8rem;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--code-inline-text);
+  background: transparent;
+}
+
+.code-block code {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: transparent;
+  padding: 0;
+  border: none;
+}
+
+.code-block-pre.wrap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Tones: colour and scale only — never structure. */
+.code-block.tone-panel .code-block-pre {
+  font-size: 0.8rem;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.code-block.tone-error .code-lang-label {
+  color: var(--status-danger);
+}
+
+.code-block.tone-error .code-block-pre {
+  font-size: 0.8rem;
+  color: var(--error-box-code-text);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.code-block.tone-muted .code-block-pre {
+  font-size: 0.68rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.message-markdown > .code-block:first-child {
+  margin-top: 0;
+}
+
+.message-markdown > .code-block:last-child {
+  margin-bottom: 0;
+}

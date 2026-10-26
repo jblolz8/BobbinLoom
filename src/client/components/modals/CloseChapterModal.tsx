@@ -13,8 +13,16 @@ import {
   chapterOpeningModeNeedsMessage,
 } from "../../../engine/chapterLifecycle";
 import type { ChapterOpeningMode } from "../../../schemas";
-import { Button, Icon, SimpleSelect, TextArea } from "../base";
-import { Dialog } from "../base/Dialog";
+import {
+  Button,
+  Dialog,
+  Icon,
+  SimpleSelect,
+  Stack,
+  StatusMessage,
+  TextArea,
+} from "../base";
+import "./CloseChapterModal.css";
 
 export type CloseChapterModalProps = {
   /** How many visible messages the running chapter holds — the operation's own gate already ran,
@@ -134,13 +142,16 @@ export function CloseChapterModal({
       isBusy={isLoading}
       initialFocusRef={cancelRef}
       headerAction={
-        <button
-          className="flex items-center gap-1 modal-close-btn"
+        <Button
+          type="button"
+          variant="secondary"
+          size="xs"
+          leftIcon={<Icon name="X" size={14} />}
           onClick={onCancel}
           aria-label="Close"
         >
-          <Icon name="X" size={14} /> Close
-        </button>
+          Close
+        </Button>
       }
       description={
         <>
@@ -184,10 +195,12 @@ export function CloseChapterModal({
         </>
       }
     >
-      <div className="form-field">
-        <span className="field-label-text">Text Provider</span>
+      <Stack direction="column" gap="md">
         <SimpleSelect
           id="close-chapter-provider"
+          label="Text Provider"
+          helperText="Writes the summary and the chapter opening. Remembered for the next chapter."
+          error={providerError ?? undefined}
           size="sm"
           variant="filled"
           fullWidth
@@ -197,19 +210,12 @@ export function CloseChapterModal({
           placeholder="Active connection"
           aria-label="Text provider"
         />
-        <span className="field-hint">
-          Writes the summary and the chapter opening. Remembered for the next
-          chapter.
-        </span>
-        {providerError ? (
-          <span className="field-hint error">{providerError}</span>
-        ) : null}
-      </div>
 
-      <div className="form-field">
-        <span className="field-label-text">How the next chapter opens</span>
         <SimpleSelect<ChapterOpeningMode>
           id="close-chapter-mode"
+          label="How the next chapter opens"
+          helperText={chapterOpeningModeInfo(mode).blurb}
+          error={modeError ?? undefined}
           size="sm"
           variant="filled"
           fullWidth
@@ -221,35 +227,29 @@ export function CloseChapterModal({
           }))}
           aria-label="How the next chapter opens"
         />
-        <span className="field-hint">{chapterOpeningModeInfo(mode).blurb}</span>
-        {modeError ? (
-          <span className="field-hint error">{modeError}</span>
-        ) : null}
-      </div>
 
-      {/* The player's own message for the new chapter. It is a normal user message there — the
-          chapter's first — so it stays editable and re-readable like any other. */}
-      <div className="form-field">
-        <label className="field-label-text" htmlFor="close-chapter-message">
-          Opening message
-          {chapterOpeningModeNeedsMessage(mode) ? "" : " (optional)"}
-        </label>
+        {/* The player's own message for the new chapter. It is a normal user message there — the
+            chapter's first — so it stays editable and re-readable like any other. */}
         <TextArea
           id="close-chapter-message"
+          label={`Opening message${chapterOpeningModeNeedsMessage(mode) ? "" : " (optional)"}`}
+          helperText={
+            chapterOpeningModeNeedsMessage(mode)
+              ? "This mode follows your message exactly, so it needs one."
+              : "The new chapter starts with it, and a Retry on the opening keeps it."
+          }
           value={openingMessage}
           onChange={(event) => setOpeningMessage(event.target.value)}
           placeholder="Becomes the first message of the new chapter — a transition, a time skip, a first line. Leave it empty to let the connection open the scene alone."
           rows={3}
-          aria-describedby="close-chapter-message-hint"
         />
-        <span className="field-hint" id="close-chapter-message-hint">
-          {chapterOpeningModeNeedsMessage(mode)
-            ? "This mode follows your message exactly, so it needs one."
-            : "The new chapter starts with it, and a Retry on the opening keeps it."}
-        </span>
-      </div>
 
-      {errorMessage ? <p className="error-box">{errorMessage}</p> : null}
+        {errorMessage ? (
+          <StatusMessage variant="banner" tone="err">
+            {errorMessage}
+          </StatusMessage>
+        ) : null}
+      </Stack>
     </Dialog>
   );
 }

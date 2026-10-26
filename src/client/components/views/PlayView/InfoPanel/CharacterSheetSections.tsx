@@ -11,6 +11,7 @@ import {
   type SectionChange,
 } from "../../../../engine/sheetProvenance";
 import { Tooltip } from "../../../base";
+import "./CharsTab.css";
 
 type CharacterSheetSectionsProps = {
   content: string;

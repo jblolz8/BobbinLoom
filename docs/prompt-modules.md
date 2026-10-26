@@ -51,8 +51,8 @@ Two readonly presets ship with the app:
 
 | Preset | Turn modules | Character format |
 |---|---|---|
-| **Default** | Seven modules, content modules off | Ten sections |
-| **Default (NSFW)** | The same seven, content modules on | The same ten plus `[Sexual Capabilities]` |
+| **Default** | Core narrative and style modules; explicit content modules off | Ten sections |
+| **Default (NSFW)** | The same core modules plus *Gritty Style*, *Mature Content*, and *Explicit Content* | The same ten plus `[Sexual Capabilities]` |
 
 Read-only means they can't be *overwritten* — every field is editable as your working
 configuration, and **Save as New…** keeps your version under its own name. The preset you use
@@ -66,10 +66,22 @@ asked to write. Their image blocks differ too; see [Image generation](image-gene
 | Core GM | Establishes the narrator/GM role, that the model never speaks for you, and that it works from the state it is given |
 | Response Format | Quotes for speech, backticks for thoughts, bold for emphasis |
 | User Input Format | How to read what you send |
+| Story Theme | Anchors the atmosphere, setting, and character dynamics to the playthrough's assigned tags via `{{playthroughTags}}` |
 | Campaign Logic | Consequences, pacing, NPC agency |
 | Conflict Narration | Resolve conflict through prose |
 | Relationship Dynamics | Relationships move through actions, and a character's own details (wardrobe, likes, dislikes, appetites) change with the story and are recorded |
 | Grounded Style | Vivid but controlled prose |
+
+## Template macros (`{{...}}`)
+
+Macros are expanded at prompt-build time only — stored presets, sheets, and lorebooks keep the
+placeholders verbatim:
+
+| Macro | Purpose / Resolves to | Supported in |
+|---|---|---|
+| `{{playthroughTags}}` | The playthrough's assigned tags sorted by category (e.g. `theme: dark romance, setting: modern day, and trope: femdom`), or `"determined by the scenario and story so far"` when no tags are assigned | Turn prompt modules |
+| `{{user}}` | The player character's name | Turn prompt modules, character sheets & memory lines, player fields, lorebook entries, image cast block |
+| `{{char}}` | The owning character's name (left literal on shared/ownerless surfaces like turn modules and lorebooks) | Character sheets, character memory lines, absent character one-liners |
 
 ## The character sheet format
 
@@ -82,9 +94,9 @@ See [Character format](character-format.md) for what the sections themselves mea
 
 ## Configuring
 
-1. Open **Settings → Prompt Configuration**
+1. Open **Settings → Prompts**
 2. Pick a preset from the dropdown, or create one with **Save as New…**
-3. On **Turn**: toggle modules, reorder them with the arrows, edit a module's name and content,
+3. On **Turn**: toggle modules, reorder them by dragging the grip, edit a module's name and content,
    or add a new one
 4. On **Character Sheet**: edit the section list — name, `inline`, the model instruction and an
    optional example body — and reorder sections by dragging the grip
@@ -99,9 +111,10 @@ have unsaved edits.
 ## Where it is stored
 
 ```
-data/prompt-presets.json    the named presets — tracked in the repo
-data/user-settings.json     the global configuration: active preset id, prompt config,
-                            and the rest of your runtime overrides
+data/prompt-presets.json       shipped read-only presets — tracked in the repo
+data/user-prompt-presets.json  your saved custom presets — gitignored runtime data
+data/user-settings.json        the global configuration: active preset id, prompt config,
+                               and the rest of your runtime overrides
 ```
 
 ## Design principles
@@ -112,6 +125,6 @@ data/user-settings.json     the global configuration: active preset id, prompt c
   playthrough — one configuration for every story, and an edit reaches all of them on the next
   turn.
 - **Shipped presets are immutable.** You copy them to customize.
-- **Modules are passive text.** No variables beyond the two macros, no conditionals, no logic.
+- **Modules are passive text.** No variables beyond the runtime macros (`{{playthroughTags}}` and `{{user}}`), no conditionals, no logic.
 - **Format drives structure, modules drive tone.** The sheet contract comes from
   `characterFormat`; the output contract is always appended after the enabled modules.

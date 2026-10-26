@@ -1,0 +1,25 @@
+/* Base Form TextArea */
+textarea.base-form-input,
+.base-form-textarea {
+  height: auto;
+  min-height: 4rem;
+  resize: vertical;
+  line-height: 1.45;
+  padding: 0.45rem 0.65rem;
+}
+
+textarea.base-form-input--sm,
+.base-form-textarea--sm {
+  height: auto;
+  min-height: 3.1rem;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.78rem;
+}
+
+textarea.base-form-input--lg,
+.base-form-textarea--lg {
+  height: auto;
+  min-height: 5.2rem;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.92rem;
+}

@@ -1,10 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import { Icon, ModelBadge, TextArea } from "../base";
-import { MarkdownView } from "../common/MarkdownView";
+import {
+  Badge,
+  Button,
+  Card,
+  Header,
+  Icon,
+  ModelBadge,
+  Separator,
+  Stack,
+  StatusMessage,
+  Text,
+  TextArea,
+} from "../base";
+import { MarkdownView } from "../common";
 import type {
   ProposedSectionChange,
   CharacterBrainstormResult,
 } from "../../api";
+import "./CharacterBrainstormPanel.css";
 
 export type BrainstormChatMessage = {
   id: string;
@@ -45,7 +58,6 @@ export type CharacterBrainstormPanelProps = {
 
 export function CharacterBrainstormPanel({
   characterName,
-  hasOriginalCcv2,
   includeOriginalCcv2,
   onOpenSettings,
   messages,
@@ -131,73 +143,76 @@ export function CharacterBrainstormPanel({
   return (
     <div className="character-brainstorm-panel">
       {/* ── Header ── */}
-      <header className="brainstorm-panel-header">
-        <div className="brainstorm-header-left">
-          <span className="brainstorm-icon-badge">
-            <Icon name="Sparkles" size={16} />
-          </span>
-          <div className="brainstorm-header-titles">
-            <h4>AI Brainstorm Assistant</h4>
-            <span className="brainstorm-subtitle">
-              Co-editing &ldquo;{characterName || "Character"}&rdquo;
-            </span>
-          </div>
-        </div>
-
-        <div className="brainstorm-header-actions">
-          <button
-            type="button"
-            className={`brainstorm-settings-btn ${includeOriginalCcv2 ? "active" : ""}`}
-            onClick={onOpenSettings}
-            title="AI Brainstorm Assistant settings"
-            aria-label="AI Brainstorm Assistant settings"
-          >
-            <Icon name="Settings" size={14} />
-            {includeOriginalCcv2 ? (
-              <span className="brainstorm-settings-dot" aria-hidden="true" />
-            ) : null}
-          </button>
-
-          {messages.length > 0 ? (
-            <button
-              type="button"
-              className="brainstorm-clear-btn"
-              onClick={onClearChat}
-              disabled={loading}
-              title="Clear brainstorming chat session"
-              aria-label="Clear chat session"
+      <Header
+        variant="panel"
+        className="brainstorm-panel-header"
+        icon={<Icon name="Sparkles" size={16} />}
+        title="AI Brainstorm Assistant"
+        subtitle={`Co-editing \u201c${characterName || "Character"}\u201d`}
+        actions={
+          <Stack direction="row" align="center" gap="xs">
+            <Button
+              variant="ghost"
+              size="xs"
+              iconOnly
+              className="brainstorm-settings-btn"
+              onClick={onOpenSettings}
+              title="AI Brainstorm Assistant settings"
+              aria-label="AI Brainstorm Assistant settings"
             >
-              <Icon name="RotateCcw" size={14} />
-            </button>
-          ) : null}
+              <Icon name="Settings" size={14} />
+              {includeOriginalCcv2 ? (
+                <span className="brainstorm-settings-dot" aria-hidden="true" />
+              ) : null}
+            </Button>
 
-          <button
-            type="button"
-            className="brainstorm-close-btn"
-            onClick={onClose}
-            title="Close AI Assistant panel"
-            aria-label="Close AI Assistant panel"
-          >
-            <Icon name="X" size={16} />
-          </button>
-        </div>
-      </header>
+            {messages.length > 0 ? (
+              <Button
+                variant="ghost"
+                size="xs"
+                iconOnly
+                onClick={onClearChat}
+                disabled={loading}
+                title="Clear brainstorming chat session"
+                aria-label="Clear chat session"
+              >
+                <Icon name="RotateCcw" size={14} />
+              </Button>
+            ) : null}
+
+            <Button
+              variant="ghost"
+              size="xs"
+              iconOnly
+              onClick={onClose}
+              title="Close AI Assistant panel"
+              aria-label="Close AI Assistant panel"
+            >
+              <Icon name="X" size={16} />
+            </Button>
+          </Stack>
+        }
+      />
 
       {/* ── Chat Message List ── */}
       <div className="brainstorm-messages-container">
         {messages.length === 0 ? (
           <div className="brainstorm-empty-state">
-            <div className="brainstorm-welcome-card">
-              <span className="brainstorm-welcome-icon">
-                <Icon name="Sparkles" size={28} />
-              </span>
-              <h3>Brainstorm &amp; Refine</h3>
-              <p>
-                Ask for creative ideas, personality tweaks, backstory expansion,
-                or surgical section edits. Proposed changes can be applied
-                directly to your character sheet with one click.
-              </p>
-            </div>
+            <Card variant="elevated" padding="md">
+              <Stack align="center" gap="xs">
+                <span className="brainstorm-welcome-icon">
+                  <Icon name="Sparkles" size={28} />
+                </span>
+                <Text as="h3" size="md" weight="bold" align="center">
+                  Brainstorm &amp; Refine
+                </Text>
+                <Text size="xs" tone="secondary" align="center">
+                  Ask for creative ideas, personality tweaks, backstory
+                  expansion, or surgical section edits. Proposed changes can be
+                  applied directly to your character sheet with one click.
+                </Text>
+              </Stack>
+            </Card>
           </div>
         ) : (
           <div
@@ -219,32 +234,33 @@ export function CharacterBrainstormPanel({
                 </div>
                 <div className="brainstorm-bubble">
                   {editingId === msg.id ? (
-                    <div className="brainstorm-edit-box">
+                    <Stack gap="xs">
                       <TextArea
                         value={editDraft}
                         onChange={(e) => setEditDraft(e.target.value)}
                         rows={3}
-                        className="brainstorm-edit-textarea"
+                        size="sm"
                         aria-label="Edit this message"
                       />
-                      <div className="brainstorm-edit-actions">
-                        <button
-                          type="button"
-                          className="brainstorm-edit-save"
+                      <Stack direction="row" justify="end" gap="xs">
+                        <Button
+                          variant="primary"
+                          size="xs"
+                          leftIcon={<Icon name="Check" size={12} />}
                           onClick={() => commitEdit(msg.id)}
                           disabled={!editDraft.trim()}
                         >
-                          <Icon name="Check" size={12} /> Save
-                        </button>
-                        <button
-                          type="button"
-                          className="brainstorm-edit-cancel"
+                          Save
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="xs"
                           onClick={() => setEditingId(null)}
                         >
                           Cancel
-                        </button>
-                      </div>
-                    </div>
+                        </Button>
+                      </Stack>
+                    </Stack>
                   ) : (
                     <MarkdownView
                       content={msg.content}
@@ -254,238 +270,306 @@ export function CharacterBrainstormPanel({
 
                   {/* Proposed Changes Card */}
                   {msg.proposedChanges && (
-                    <div className="brainstorm-proposal-card">
-                      <div className="proposal-card-header">
-                        <span className="proposal-badge">
-                          <Icon name="Sliders" size={12} /> Proposed Sheet
-                          Updates
-                        </span>
-                      </div>
-
-                      {/* Sections */}
-                      {msg.proposedChanges.sections &&
-                        msg.proposedChanges.sections.length > 0 && (
-                          <div className="proposal-sections-list">
-                            {msg.proposedChanges.sections.map((sec, sIdx) => {
-                              const isApplied =
-                                !!msg.appliedChanges?.[
-                                  `section:${sec.header.toLowerCase()}`
-                                ] || !!msg.appliedChanges?.all;
-                              return (
-                                <div
-                                  key={`${sec.header}-${sIdx}`}
-                                  className="proposal-section-item"
-                                >
-                                  <div className="proposal-section-header">
-                                    <span className="proposal-section-tag">
-                                      [{sec.header}]
-                                    </span>
-                                    {msg.newSections?.includes(sec.header) ? (
-                                      <span
-                                        className="proposal-new-tag"
-                                        title="This section is not part of the format — applying it adds it to the end of the sheet"
-                                      >
-                                        New section
-                                      </span>
-                                    ) : null}
-                                    <button
-                                      type="button"
-                                      className={`proposal-apply-btn ${isApplied ? "applied" : ""}`}
-                                      onClick={() =>
-                                        onApplySection(sec, msg.id)
-                                      }
-                                      disabled={isApplied}
-                                      title={
-                                        isApplied
-                                          ? "Section applied to draft"
-                                          : `Apply [${sec.header}] to sheet`
-                                      }
-                                    >
-                                      <Icon
-                                        name={isApplied ? "Check" : "Plus"}
-                                        size={11}
-                                      />
-                                      {isApplied
-                                        ? "Applied"
-                                        : `Apply [${sec.header}]`}
-                                    </button>
-                                  </div>
-                                  <pre className="proposal-section-preview">
-                                    {sec.body}
-                                  </pre>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-
-                      {/* Rename: the proposal the card used to drop on the floor */}
-                      {msg.proposedChanges.name && (
-                        <div className="proposal-field-block">
-                          <span className="proposal-field-label">
-                            Character name:
-                          </span>
-                          <div className="proposal-name-row">
-                            <span className="proposal-name-value">
-                              {msg.proposedChanges.name}
-                            </span>
-                            <span className="proposal-name-current">
-                              currently &ldquo;{characterName || "unnamed"}
-                              &rdquo;
-                            </span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Tags */}
-                      {msg.proposedChanges.tags &&
-                        msg.proposedChanges.tags.length > 0 && (
-                          <div className="proposal-tags-block">
-                            <span className="proposal-field-label">Tags:</span>
-                            <div className="proposal-tags-list">
-                              {msg.proposedChanges.tags.map((tag) => (
-                                <span key={tag} className="proposal-tag-chip">
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                      {/* Creator Notes */}
-                      {msg.proposedChanges.creatorNotes && (
-                        <div className="proposal-notes-block">
-                          <span className="proposal-field-label">
-                            Creator Notes:
-                          </span>
-                          <p className="proposal-notes-preview">
-                            {msg.proposedChanges.creatorNotes}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* A whole-sheet rewrite is the one proposal that can destroy work, so it says so
-                          and keeps its content behind a fold until asked for. */}
-                      {msg.proposedChanges.fullContent && (
-                        <div className="proposal-full-content">
-                          <div className="proposal-full-header">
-                            <Icon name="TriangleAlert" size={13} />
-                            <span>
-                              Rewrites the <strong>entire sheet</strong> — the
-                              current content is replaced
-                            </span>
-                          </div>
-                          <details className="proposal-full-details">
-                            <summary>Preview the rewritten sheet</summary>
-                            <pre className="proposal-section-preview">
-                              {msg.proposedChanges.fullContent}
-                            </pre>
-                          </details>
-                        </div>
-                      )}
-
-                      {/* What it could not place */}
-                      {msg.unmappedHeaders && msg.unmappedHeaders.length > 0 ? (
-                        <div className="proposal-unmapped">
-                          <Icon name="AlertCircle" size={12} />
-                          <span>
-                            Not on this sheet, so left out:{" "}
-                            {msg.unmappedHeaders
-                              .map((header) => `[${header}]`)
-                              .join(", ")}
-                          </span>
-                        </div>
-                      ) : null}
-
-                      {/* Apply All Action */}
-                      {((msg.proposedChanges.sections &&
-                        msg.proposedChanges.sections.length > 1) ||
-                        (msg.proposedChanges.sections &&
-                          msg.proposedChanges.sections.length > 0 &&
-                          (msg.proposedChanges.tags ||
-                            msg.proposedChanges.creatorNotes))) && (
-                        <div className="proposal-card-footer">
-                          <button
-                            type="button"
-                            className={`proposal-apply-all-btn ${msg.appliedChanges?.all ? "applied" : ""}`}
-                            onClick={() =>
-                              onApplyAll(msg.proposedChanges, msg.id)
-                            }
-                            disabled={!!msg.appliedChanges?.all}
+                    <Card
+                      variant="elevated"
+                      padding="sm"
+                      className="brainstorm-proposal-card"
+                    >
+                      <Stack gap="sm">
+                        <Stack direction="row" justify="between" align="center">
+                          <Badge
+                            variant="info"
+                            size="xs"
+                            leftIcon={<Icon name="Sliders" size={11} />}
                           >
-                            <Icon
-                              name={
-                                msg.appliedChanges?.all ? "CheckCheck" : "Check"
-                              }
-                              size={13}
-                            />
-                            {msg.appliedChanges?.all
-                              ? "All Changes Applied"
-                              : "Apply All Proposed Changes"}
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                            Proposed Sheet Updates
+                          </Badge>
+                        </Stack>
+
+                        {/* Sections */}
+                        {msg.proposedChanges.sections &&
+                          msg.proposedChanges.sections.length > 0 && (
+                            <Stack gap="xs">
+                              {msg.proposedChanges.sections.map((sec, sIdx) => {
+                                const isApplied =
+                                  !!msg.appliedChanges?.[
+                                    `section:${sec.header.toLowerCase()}`
+                                  ] || !!msg.appliedChanges?.all;
+                                return (
+                                  <Card
+                                    key={`${sec.header}-${sIdx}`}
+                                    variant="panel"
+                                    padding="xs"
+                                  >
+                                    <Stack gap="xs">
+                                      <Stack
+                                        direction="row"
+                                        justify="between"
+                                        align="center"
+                                        gap="xs"
+                                        wrap
+                                      >
+                                        <Stack
+                                          direction="row"
+                                          align="center"
+                                          gap="xs"
+                                        >
+                                          <Text
+                                            size="xs"
+                                            weight="bold"
+                                            tone="accent"
+                                          >
+                                            [{sec.header}]
+                                          </Text>
+                                          {msg.newSections?.includes(
+                                            sec.header,
+                                          ) ? (
+                                            <Badge
+                                              variant="accent"
+                                              size="xs"
+                                              pill
+                                              title="This section is not part of the format — applying it adds it to the end of the sheet"
+                                            >
+                                              New section
+                                            </Badge>
+                                          ) : null}
+                                        </Stack>
+                                        <Button
+                                          variant={
+                                            isApplied ? "primary" : "secondary"
+                                          }
+                                          size="xs"
+                                          leftIcon={
+                                            <Icon
+                                              name={
+                                                isApplied ? "Check" : "Plus"
+                                              }
+                                              size={11}
+                                            />
+                                          }
+                                          onClick={() =>
+                                            onApplySection(sec, msg.id)
+                                          }
+                                          disabled={isApplied}
+                                          title={
+                                            isApplied
+                                              ? "Section applied to draft"
+                                              : `Apply [${sec.header}] to sheet`
+                                          }
+                                        >
+                                          {isApplied
+                                            ? "Applied"
+                                            : `Apply [${sec.header}]`}
+                                        </Button>
+                                      </Stack>
+                                      <pre className="proposal-section-preview">
+                                        {sec.body}
+                                      </pre>
+                                    </Stack>
+                                  </Card>
+                                );
+                              })}
+                            </Stack>
+                          )}
+
+                        {/* Rename */}
+                        {msg.proposedChanges.name && (
+                          <Stack gap="none">
+                            <Text size="xs" weight="semibold" tone="muted">
+                              Character name:
+                            </Text>
+                            <Stack
+                              direction="row"
+                              align="baseline"
+                              gap="xs"
+                              wrap
+                            >
+                              <Text size="xs" weight="semibold">
+                                {msg.proposedChanges.name}
+                              </Text>
+                              <Text size="xs" tone="muted">
+                                currently &ldquo;{characterName || "unnamed"}
+                                &rdquo;
+                              </Text>
+                            </Stack>
+                          </Stack>
+                        )}
+
+                        {/* Tags */}
+                        {msg.proposedChanges.tags &&
+                          msg.proposedChanges.tags.length > 0 && (
+                            <Card variant="panel" padding="xs">
+                              <Stack gap="xs">
+                                <Text
+                                  size="xs"
+                                  weight="semibold"
+                                  tone="muted"
+                                >
+                                  Tags:
+                                </Text>
+                                <Stack direction="row" gap="xs" wrap>
+                                  {msg.proposedChanges.tags.map((tag) => (
+                                    <Badge key={tag} variant="info" size="xs">
+                                      {tag}
+                                    </Badge>
+                                  ))}
+                                </Stack>
+                              </Stack>
+                            </Card>
+                          )}
+
+                        {/* Creator Notes */}
+                        {msg.proposedChanges.creatorNotes && (
+                          <Card variant="panel" padding="xs">
+                            <Stack gap="xs">
+                              <Text size="xs" weight="semibold" tone="muted">
+                                Creator Notes:
+                              </Text>
+                              <Text size="xs" tone="secondary" italic>
+                                {msg.proposedChanges.creatorNotes}
+                              </Text>
+                            </Stack>
+                          </Card>
+                        )}
+
+                        {/* Full Content Rewrite */}
+                        {msg.proposedChanges.fullContent && (
+                          <StatusMessage
+                            variant="banner"
+                            tone="warn"
+                            icon="TriangleAlert"
+                          >
+                            <Stack gap="xs">
+                              <Text size="xs">
+                                Rewrites the <strong>entire sheet</strong> — the
+                                current content is replaced
+                              </Text>
+                              <details className="proposal-full-details">
+                                <summary>Preview the rewritten sheet</summary>
+                                <pre className="proposal-section-preview">
+                                  {msg.proposedChanges.fullContent}
+                                </pre>
+                              </details>
+                            </Stack>
+                          </StatusMessage>
+                        )}
+
+                        {/* Unmapped headers */}
+                        {msg.unmappedHeaders &&
+                        msg.unmappedHeaders.length > 0 ? (
+                          <Stack direction="row" align="center" gap="xs">
+                            <Icon name="AlertCircle" size={12} />
+                            <Text size="xs" tone="muted">
+                              Not on this sheet, so left out:{" "}
+                              {msg.unmappedHeaders
+                                .map((header) => `[${header}]`)
+                                .join(", ")}
+                            </Text>
+                          </Stack>
+                        ) : null}
+
+                        {/* Apply All Action */}
+                        {((msg.proposedChanges.sections &&
+                          msg.proposedChanges.sections.length > 1) ||
+                          (msg.proposedChanges.sections &&
+                            msg.proposedChanges.sections.length > 0 &&
+                            (msg.proposedChanges.tags ||
+                              msg.proposedChanges.creatorNotes))) && (
+                          <>
+                            <Separator spacing="none" />
+                            <Stack direction="row" justify="end">
+                              <Button
+                                variant="primary"
+                                size="xs"
+                                leftIcon={
+                                  <Icon
+                                    name={
+                                      msg.appliedChanges?.all
+                                        ? "CheckCheck"
+                                        : "Check"
+                                    }
+                                    size={13}
+                                  />
+                                }
+                                onClick={() =>
+                                  onApplyAll(msg.proposedChanges, msg.id)
+                                }
+                                disabled={!!msg.appliedChanges?.all}
+                              >
+                                {msg.appliedChanges?.all
+                                  ? "All Changes Applied"
+                                  : "Apply All Proposed Changes"}
+                              </Button>
+                            </Stack>
+                          </>
+                        )}
+                      </Stack>
+                    </Card>
                   )}
 
                   {/* Message actions */}
                   {editingId === msg.id ? null : (
                     <div className="brainstorm-msg-actions">
-                      <button
-                        type="button"
-                        className="brainstorm-msg-action"
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        leftIcon={
+                          <Icon
+                            name={
+                              copyState?.id === msg.id && copyState.ok
+                                ? "Check"
+                                : "Copy"
+                            }
+                            size={11}
+                          />
+                        }
                         onClick={() => {
                           void handleCopy(msg);
                         }}
                         title="Copy this message"
                       >
-                        <Icon
-                          name={
-                            copyState?.id === msg.id && copyState.ok
-                              ? "Check"
-                              : "Copy"
-                          }
-                          size={11}
-                        />
                         {copyState?.id === msg.id
                           ? copyState.ok
                             ? "Copied"
                             : "Copy failed"
                           : "Copy"}
-                      </button>
+                      </Button>
 
                       {msg.role === "user" ? (
-                        <button
-                          type="button"
-                          className="brainstorm-msg-action"
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          leftIcon={<Icon name="Pencil" size={11} />}
                           onClick={() => startEdit(msg)}
                           disabled={loading}
                           title="Edit this message — anything after it is dropped"
                         >
-                          <Icon name="Pencil" size={11} /> Edit
-                        </button>
+                          Edit
+                        </Button>
                       ) : (
                         <>
                           {msg.id === lastAssistantId ? (
-                            <button
-                              type="button"
-                              className="brainstorm-msg-action"
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              leftIcon={<Icon name="RefreshCw" size={11} />}
                               onClick={() => onRegenerate(msg.id)}
                               disabled={loading}
                               title="Ask again and replace this reply"
                             >
-                              <Icon name="RefreshCw" size={11} /> Regenerate
-                            </button>
+                              Regenerate
+                            </Button>
                           ) : null}
-                          <button
-                            type="button"
-                            className="brainstorm-msg-action"
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            leftIcon={<Icon name="Undo2" size={11} />}
                             onClick={() => onRevertAndRetry(msg.id)}
                             disabled={loading}
                             title="Go back to the question this answered and ask it again"
                           >
-                            <Icon name="Undo2" size={11} /> Revert &amp; Retry
-                          </button>
+                            Revert &amp; Retry
+                          </Button>
                         </>
                       )}
                     </div>
@@ -512,14 +596,15 @@ export function CharacterBrainstormPanel({
                     <span />
                   </div>
                   <span className="thinking-label">Brainstorming ideas…</span>
-                  <button
-                    type="button"
-                    className="brainstorm-cancel-thinking-btn"
+                  <Button
+                    variant="secondary"
+                    size="xs"
                     onClick={onCancel}
                     title="Cancel generation"
+                    style={{ marginLeft: "auto" }}
                   >
                     Cancel
-                  </button>
+                  </Button>
                 </div>
               </div>
             ) : null}
@@ -530,17 +615,17 @@ export function CharacterBrainstormPanel({
       </div>
 
       {error ? (
-        <div className="brainstorm-error-banner">
-          <Icon name="AlertCircle" size={14} />
-          <span>{error}</span>
-        </div>
+        <StatusMessage variant="banner" tone="err" icon="AlertCircle">
+          {error}
+        </StatusMessage>
       ) : null}
 
       {/* ── Input Footer ── */}
       <footer className="brainstorm-input-footer">
-        <textarea
+        <TextArea
           ref={inputRef}
           rows={2}
+          size="sm"
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -548,9 +633,10 @@ export function CharacterBrainstormPanel({
           disabled={loading}
           className="brainstorm-textarea"
         />
-        <button
-          type="button"
-          className="brainstorm-send-btn"
+        <Button
+          variant="ai"
+          size="md"
+          iconOnly
           onClick={handleSend}
           disabled={loading || !inputText.trim()}
           title="Send message (Enter)"
@@ -561,7 +647,7 @@ export function CharacterBrainstormPanel({
           ) : (
             <Icon name="Send" size={16} />
           )}
-        </button>
+        </Button>
       </footer>
     </div>
   );

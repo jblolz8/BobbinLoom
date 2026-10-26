@@ -1,0 +1,195 @@
+/* ── CoverAspectPreview & CoverArt (rendered by CoverArt.tsx) ── */
+.cover-aspect-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 42px;
+  flex-shrink: 0;
+  position: relative;
+  color: var(--accent-highlight, var(--accent-base));
+}
+
+.cover-aspect-preview svg {
+  position: relative;
+  z-index: 1;
+  opacity: 0.85;
+}
+
+.cover-aspect-preview::before {
+  content: "";
+  position: absolute;
+  border: 1.5px solid var(--accent-highlight, var(--accent-base));
+  border-radius: 4px;
+  background: color-mix(
+    in srgb,
+    var(--accent-base) 16%,
+    var(--bg-surface-elevated)
+  );
+}
+
+.cover-aspect-preview[data-aspect="landscape"]::before {
+  width: 52px;
+  height: 30px;
+}
+
+.cover-aspect-preview[data-aspect="square"]::before {
+  width: 38px;
+  height: 38px;
+}
+
+.cover-aspect-preview[data-aspect="portrait"]::before {
+  width: 28px;
+  height: 42px;
+}
+
+.cover-art {
+  position: relative;
+  width: 100%;
+  aspect-ratio: var(--cover-art-aspect, 16 / 9);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-app);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  isolation: isolate;
+}
+
+.cover-art-thumb {
+  height: 100%;
+  min-height: var(--cover-row-thumb, 148px);
+  width: 100%;
+  max-height: none;
+  flex-shrink: 0;
+  border-radius: 7px;
+}
+
+.cover-art-hero {
+  border-radius: 10px;
+}
+
+.cover-art-main {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+
+.cover-art-empty {
+  background: var(--bg-surface-elevated);
+  color: var(--text-muted);
+}
+
+.cover-art-empty svg {
+  opacity: 0.55;
+}
+
+/* ── Cast collage ── */
+.cover-art-collage {
+  display: grid;
+  gap: 1px;
+  background: var(--border-subtle);
+  grid-auto-rows: 1fr;
+  grid-auto-columns: 1fr;
+  align-items: stretch;
+  justify-items: stretch;
+}
+
+.cover-art-collage-1 {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+}
+.cover-art-collage-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+.cover-art-collage-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+.cover-art-collage-4 {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+}
+
+:root[data-cover-aspect="landscape"] .cover-art-collage-4 {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: 1fr;
+}
+
+:root[data-cover-aspect="portrait"] .cover-art-collage-2 {
+  grid-template-columns: 1fr;
+  grid-template-rows: repeat(2, 1fr);
+}
+
+:root[data-cover-aspect="portrait"] .cover-art-collage-3 {
+  grid-template-columns: 1fr;
+  grid-template-rows: repeat(3, 1fr);
+}
+
+:root[data-cover-aspect="portrait"] .cover-art-collage-4 {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+}
+
+.cover-art-tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+
+.cover-art-tile-blur {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  filter: blur(8px) saturate(1.1);
+  transform: scale(1.12);
+  opacity: 0.5;
+  z-index: 0;
+}
+
+.cover-art-tile .cover-art-tile-img {
+  position: relative;
+  z-index: 1;
+  object-fit: contain !important;
+  object-position: center !important;
+  background: transparent !important;
+}
+
+.cover-art-tile-img {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  aspect-ratio: auto !important;
+  border: none !important;
+  border-radius: 0 !important;
+  object-fit: cover !important;
+  object-position: center top !important;
+  display: block;
+}
+
+.cover-art-more {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 2;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--media-scrim);
+  border: 1px solid var(--media-border);
+  color: var(--media-icon);
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.5;
+}

@@ -4,6 +4,7 @@ import {
   type HTMLAttributes,
   type ReactNode,
 } from "react";
+import "./Text.css";
 
 export type TextElement =
   | "span"

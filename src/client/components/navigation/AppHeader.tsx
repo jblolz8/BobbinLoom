@@ -16,6 +16,7 @@ import {
   Tooltip,
   type TabItem,
 } from "../base";
+import "./AppHeader.css";
 
 export type AppHeaderProps = {
   view: "home" | "play" | "setup";

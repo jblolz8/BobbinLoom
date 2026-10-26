@@ -1,0 +1,1465 @@
+/* ── ChatPanel, Messages, Prompt Card, & Image Modals ── */
+
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow: hidden;
+}
+
+.messages-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+}
+
+.scroll-to-bottom-floating-btn {
+  position: absolute;
+  bottom: 0.85rem;
+  right: 1.1rem;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-main);
+  color: var(--text-secondary);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 15;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: scrollBtnFadeIn 0.18s ease-out;
+}
+
+.scroll-to-bottom-floating-btn:hover {
+  background: var(--accent-translucent);
+  border-color: var(--accent-highlight, var(--accent-base));
+  color: var(--accent-highlight, var(--accent-base));
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.scroll-to-bottom-floating-btn:active {
+  transform: translateY(0) scale(0.95);
+}
+
+@keyframes scrollBtnFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message {
+  border-radius: 4px;
+  padding: 0.5rem 0.65rem;
+  background: var(--chat-ai-bg);
+  border: 1px solid var(--chat-ai-border);
+  color: var(--chat-ai-text);
+}
+
+.message.user {
+  background: var(--chat-user-bg);
+  border: 1px solid var(--chat-user-border);
+  color: var(--chat-user-text);
+}
+
+.message-markdown {
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--story-text, var(--chat-ai-text, var(--text-primary)));
+}
+
+.message.user .message-markdown {
+  color: var(--chat-user-text, var(--story-text, var(--text-primary)));
+}
+
+.message-markdown .message-paragraph,
+.message-paragraph {
+  margin: 0 0 1.55em 0;
+}
+
+.message-markdown .message-paragraph:last-child,
+.message-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+.message-markdown strong,
+.message strong {
+  font-weight: 700;
+  color: var(--story-emphasis);
+}
+
+.message-header-info strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.message em {
+  font-style: italic;
+  color: var(--story-italic);
+}
+
+.message-markdown strong em,
+.message strong em {
+  color: var(--story-emphasis);
+}
+
+.quote-text {
+  color: var(--story-quote);
+  font-weight: 500;
+}
+
+.quote-text em,
+.quote-text strong,
+.quote-text strong em {
+  color: inherit;
+}
+
+.quote-text strong {
+  font-weight: 700;
+}
+
+.message-markdown del,
+.message del {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.inline-code {
+  background: var(--code-inline-bg);
+  border: 1px solid var(--code-inline-border);
+  padding: 0.12rem 0.35rem;
+  border-radius: 4px;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 0.85em;
+  color: var(--code-inline-text);
+}
+
+.code-block {
+  margin: 0.6rem 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--code-block-bg);
+  border: 1px solid var(--code-block-border);
+}
+
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.3rem 0.65rem;
+  background: var(--code-block-header);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.75rem;
+}
+
+.code-lang-label {
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--code-lang-label);
+}
+
+.code-block-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.code-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: transparent;
+  border: 1px solid var(--border-main);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.code-copy-btn:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+  border-color: var(--border-light);
+}
+
+.code-block-pre {
+  margin: 0;
+  padding: 0.65rem 0.8rem;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--code-inline-text);
+  background: transparent;
+}
+
+.code-block code {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: transparent;
+  padding: 0;
+  border: none;
+}
+
+.code-block-pre.wrap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Tones: colour and scale only — never structure. */
+.code-block.tone-panel .code-block-pre {
+  font-size: 0.8rem;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.code-block.tone-error .code-lang-label {
+  color: var(--status-danger);
+}
+
+.code-block.tone-error .code-block-pre {
+  font-size: 0.8rem;
+  color: var(--error-box-code-text);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.code-block.tone-muted .code-block-pre {
+  font-size: 0.68rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+/* Prose keeps its breathing room: a block at the edge of a message loses its
+   outer margin (this used to be .message-code-block:first/:last-child). */
+.message-markdown > .code-block:first-child {
+  margin-top: 0;
+}
+
+.message-markdown > .code-block:last-child {
+  margin-bottom: 0;
+}
+
+.message-blockquote {
+  margin: 0.5rem 0;
+  padding: 0.4rem 0.75rem;
+  border-left: 3px solid var(--story-blockquote-border);
+  background: var(--story-blockquote-bg);
+  border-radius: 0 4px 4px 0;
+  color: var(--story-blockquote-text);
+  font-style: italic;
+}
+
+.message-blockquote:last-child {
+  margin-bottom: 0;
+}
+
+.message-blockquote p {
+  margin: 0 0 0.65em 0;
+}
+
+.message-blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+.message-hr {
+  border: 0;
+  border-top: 1px solid var(--border-main);
+  margin: 1rem 0;
+  opacity: 0.75;
+}
+
+.message-heading {
+  margin: 0.75rem 0 0.35rem 0;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--story-emphasis, var(--text-primary));
+}
+
+.message-heading:first-child {
+  margin-top: 0;
+}
+
+.message-heading--1 {
+  font-size: 1.12rem;
+  padding-bottom: 0.2rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.message-heading--2 {
+  font-size: 1.03rem;
+}
+
+.message-heading--3,
+.message-heading--4,
+.message-heading--5,
+.message-heading--6 {
+  font-size: 0.96rem;
+}
+
+.message-list {
+  margin: 0.4rem 0 0.65rem 0;
+  padding-left: 1.4rem;
+}
+
+.message-list li::marker {
+  color: var(--text-muted);
+}
+
+.message-list:last-child {
+  margin-bottom: 0;
+}
+
+.message-list li {
+  margin-bottom: 0.25rem;
+}
+
+.message-list li:last-child {
+  margin-bottom: 0;
+}
+
+.empty-chat {
+  color: var(--text-muted);
+}
+
+.message.optimistic {
+  opacity: 0.75;
+}
+
+.message.generating {
+  opacity: 0.85;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.generating-placeholder {
+  font-style: italic;
+  margin: 0;
+  color: var(--text-muted);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.cancelled-notice {
+  background: var(--chat-system-bg);
+  border: 1px solid var(--chat-system-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.cancelled-notice p {
+  color: var(--chat-system-text);
+  font-style: italic;
+  margin: 0;
+}
+
+.error-notice {
+  background: var(--status-danger-bg);
+  border: 1px solid var(--status-danger-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 8px;
+}
+
+.error-notice-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.error-notice-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--status-danger);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.error-notice-title strong {
+  color: var(--status-danger);
+  font-weight: 600;
+}
+
+.error-notice-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.error-notice-duration {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-left: 0.25rem;
+}
+
+.error-notice-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.1rem;
+}
+
+.error-retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--btn-danger-bg);
+  border: 1px solid var(--btn-danger-border);
+  color: var(--btn-danger-text);
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.error-retry-btn:hover:not(:disabled) {
+  background: var(--btn-danger-hover);
+  border-color: var(--btn-danger-border);
+  color: #ffffff;
+}
+
+.error-retry-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dismiss-notice {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+}
+
+.dismiss-notice:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+
+.cancel-btn {
+  background: var(--btn-danger-bg);
+  border-color: var(--btn-danger-border);
+  color: var(--btn-danger-text);
+}
+
+.cancel-btn:hover:not(:disabled) {
+  background: var(--btn-danger-hover);
+}
+
+/* ── Unified Prompt Card Container ── */
+.prompt-card-container {
+  display: flex;
+  flex-direction: column;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  padding: 0.35rem 0.5rem 0.4rem 0.5rem;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+  position: relative;
+}
+
+.prompt-card-container:focus-within {
+  border-color: var(--input-focus-border);
+  box-shadow: 0 0 0 2px var(--input-focus-ring);
+}
+
+.prompt-card-container .base-form-field {
+  margin-bottom: 0;
+}
+
+.prompt-card-container .prompt-card-textarea.base-form-textarea,
+.prompt-card-container .prompt-card-textarea {
+  width: 100%;
+  min-height: 1.75rem;
+  max-height: 110px;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0.25rem 0.35rem;
+  color: var(--input-text);
+  font-size: 0.95rem;
+  line-height: 1.45;
+  resize: none;
+}
+
+.prompt-card-container .prompt-card-textarea::placeholder {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.prompt-card-container .prompt-card-textarea:focus {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.prompt-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 0.2rem;
+}
+
+.prompt-card-hints {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.prompt-hint-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.prompt-kbd {
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 500;
+  padding: 0.08rem 0.32rem;
+  border-radius: 4px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.prompt-hint-dot {
+  color: var(--border-light);
+  user-select: none;
+}
+
+.prompt-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.prompt-card-actions .send-btn {
+  border-radius: 4px;
+  font-weight: 600;
+  padding: 0.3rem 0.85rem;
+  letter-spacing: 0.01em;
+}
+
+.prompt-card-actions .cancel-btn {
+  border-radius: 4px;
+  padding: 0.3rem 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .prompt-card-container {
+    flex-direction: row;
+    align-items: flex-end;
+    gap: 0.35rem;
+    padding: 0.3rem 0.4rem;
+  }
+
+  .prompt-card-container .prompt-card-textarea.base-form-textarea,
+  .prompt-card-container .prompt-card-textarea {
+    padding: 0.2rem 0.3rem;
+  }
+
+  .prompt-card-footer {
+    border-top: none;
+    padding-top: 0;
+    margin-top: 0;
+    flex-shrink: 0;
+  }
+
+  .prompt-card-hints {
+    display: none;
+  }
+
+  .prompt-card-actions .send-btn,
+  .prompt-card-actions .cancel-btn {
+    height: 32px;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.82rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .prompt-card-hints {
+    display: none;
+  }
+  .prompt-card-footer {
+    justify-content: flex-end;
+  }
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.choice-btn {
+  border-radius: 4px;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.82rem;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-main);
+  color: var(--text-primary);
+  transition: all 0.15s ease;
+}
+
+.choice-btn:hover:not(:disabled) {
+  border-color: var(--accent-highlight, var(--accent-base));
+  background: var(--accent-translucent);
+  color: var(--text-primary);
+  box-shadow: 0 0 0 1px var(--accent-highlight, var(--accent-base));
+}
+
+.card {
+  border: 1px solid var(--border-main);
+  background: var(--bg-surface-elevated);
+  border-radius: 4px;
+  padding: 0.5rem 0.65rem;
+  margin-bottom: 0.5rem;
+}
+
+.error-box {
+  border: 1px solid var(--error-box-border);
+  background: var(--error-box-bg);
+  color: var(--error-box-title);
+  border-radius: 10px;
+  padding: 0.75rem;
+  overflow-x: auto;
+}
+
+.debug-box {
+  border: 1px solid var(--border-main);
+  background: var(--bg-surface-elevated);
+  border-radius: 10px;
+  padding: 0.75rem;
+  overflow-x: hidden;
+}
+
+.debug-summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--text-secondary);
+  user-select: none;
+  margin-bottom: 0.5rem;
+}
+
+.debug-summary:hover {
+  color: var(--text-primary);
+}
+
+.debug-tabs {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.debug-tab {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px 6px 0 0;
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.debug-tab:hover:not(.active) {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+
+.debug-tab.active {
+  background: var(--bg-surface-elevated);
+  color: var(--text-primary);
+  border-color: var(--border-main);
+  border-bottom-color: var(--bg-surface-elevated);
+  border-top: 2px solid var(--accent-base);
+  font-weight: 500;
+}
+
+.message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  /* The action row (Edit/Retry/Branch) cannot shrink, so on a phone-width panel the
+     header must wrap rather than push the transcript into a sideways scroll. */
+  flex-wrap: wrap;
+}
+
+.message-header-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.message-number-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.68rem;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-muted);
+  background: var(--bg-surface-elevated, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  line-height: 1.2;
+  cursor: default;
+  user-select: none;
+  letter-spacing: 0.02em;
+}
+
+.message.user .message-number-badge {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.message-timestamp {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 400;
+  cursor: default;
+  user-select: none;
+}
+
+.message-timestamp.sending {
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.message-duration {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  background: var(--accent-translucent);
+  border: 1px solid var(--border-subtle);
+  padding: 0.05rem 0.38rem;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: default;
+  user-select: none;
+  line-height: 1.3;
+}
+
+.message-duration svg {
+  color: var(--accent-highlight, var(--accent-base));
+}
+
+.model-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  background: var(--bg-surface-hover);
+  border: 1px solid var(--border-subtle);
+  padding: 0.05rem 0.38rem;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: default;
+  user-select: none;
+  line-height: 1.3;
+  transition: all 0.15s ease;
+}
+
+.model-badge:hover {
+  background: var(--bg-surface-elevated);
+  border-color: var(--border-main);
+  color: var(--text-primary);
+}
+
+.model-badge svg {
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.model-badge.model-family-openai svg {
+  color: #10a37f;
+}
+.model-badge.model-family-anthropic svg {
+  color: #d97706;
+}
+.model-badge.model-family-deepseek svg {
+  color: #3b82f6;
+}
+.model-badge.model-family-gemini svg {
+  color: #38bdf8;
+}
+.model-badge.model-family-meta svg {
+  color: #06b6d4;
+}
+.model-badge.model-family-mistral svg {
+  color: #f97316;
+}
+.model-badge.model-family-qwen svg {
+  color: #a855f7;
+}
+.model-badge.model-family-cohere svg {
+  color: #ec4899;
+}
+.model-badge.model-family-grok svg {
+  color: #e2e8f0;
+}
+.model-badge.model-family-ollama svg {
+  color: #f59e0b;
+}
+.model-badge.model-family-openrouter svg {
+  color: #6366f1;
+}
+
+.message-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  /* A full chapter opening carries several actions and its longest label — "Re-summarize previous
+     chapter" — is wider than a phone's chat column. Without a wrap and a shrinkable floor the row
+     widened the message list instead, which let the whole chat be dragged sideways. */
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.message:hover .message-actions,
+.message-actions:focus-within {
+  opacity: 1;
+}
+
+/* ── A retry in flight ─────────────────────────────────────────────────────────────────────────
+   Nothing is written until the new response arrives, so the response being replaced stays on screen
+   — and the wait has to say what is about to change. Its bubble is dimmed and its action row reads
+   Retrying…; the messages the server will take with it are dimmed under one note that agrees with
+   the count the confirm dialog promised. */
+.message.message-retrying {
+  opacity: 0.55;
+}
+
+.message.message-doomed {
+  opacity: 0.4;
+}
+
+.messages-doomed-note {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.4rem 0 0.25rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.message-action {
+  font-size: 0.72rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  color: var(--text-secondary);
+}
+
+.message-action:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-surface-hover);
+}
+
+.message-action.retry {
+  color: var(--status-warning);
+}
+
+.message-action.retry:hover:not(:disabled) {
+  background: var(--status-warning-bg);
+  color: var(--status-warning);
+}
+
+.message-action.branch {
+  color: var(--accent-highlight, var(--accent-base));
+}
+
+.message-action.branch:hover:not(:disabled) {
+  background: var(--accent-translucent);
+  color: var(--accent-highlight, var(--accent-base));
+}
+
+.message-action.resummarize {
+  color: var(--text-secondary);
+}
+
+/* ── Generated images, stacked inside the assistant message ── */
+
+.message-images {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.7rem;
+}
+
+/* `margin: 0 auto` suppresses the parent's `align-items: stretch` (auto cross-axis
+   margins win over stretch), so the width must be stated explicitly — otherwise the
+   figure is sized fit-content and the nowrap caption's max-content width (long model
+   names run ~390px) pushes it, and the image inside it, past the panel edge. */
+.message-image {
+  position: relative;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-width: 420px;
+}
+
+.message-image img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--border-main);
+  border-radius: 10px;
+  background: var(--bg-panel);
+}
+
+.message-image figcaption {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  /* Wraps instead of ellipsizing: the caption carries the model, BOTH provider
+     times and the seed, which does not fit one line at 320-420px of width — and
+     the ellipsis was hiding the seed entirely (measured: 495px of text in a 311px
+     box on a phone, 420px on desktop). */
+  overflow-wrap: anywhere;
+  cursor: default;
+}
+
+/* Groups one image and its diagnostic disclosures. The image figure is centered
+   inside it; the disclosures below span the full available width. */
+.message-image-block {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+/* Diagnostic provenance: the JSON body sent to the image provider, collapsed
+   under the image it belongs to. Deliberately quiet — small, muted, monospace,
+   height-capped, and horizontally scrollable so a long prompt cannot widen or
+   push the message off screen. */
+.message-image-request {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  width: 100%;
+}
+
+/* Copy button row above the request body — the disclosure has one affordance
+   that ErrorNotice already had: copy the JSON to paste it into a report. */
+.message-image-request-summary {
+  display: inline-block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  cursor: pointer;
+  opacity: 0.65;
+  transition: opacity 0.15s ease;
+}
+
+.message-image-request-summary:hover,
+.message-image-request-summary:focus-visible {
+  opacity: 1;
+}
+
+/* The prompt-writing side call, disclosed under the image-request disclosure.
+   Same quiet treatment, plus two labelled blocks (request, response) that a
+   reader can tell apart without expanding a JSON blob first. */
+.message-image-prompt-call {
+  margin-top: 0.05rem;
+}
+
+.message-image-prompt-call-label {
+  margin: 0.45rem 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+/* Remove control: revealed on hover/focus like the message actions, and always
+   visible while its own delete is in flight. */
+/* Two classes: `.base-btn` declares `position: relative` in components.css,
+   which loads after this file, so a single-class rule loses on load order. */
+.base-btn.message-image-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+/* Touch devices have no hover, so the affordance must simply be there. */
+@media (hover: none) {
+  /* Also two classes, or it would lose to the rule above. */
+  .base-btn.message-image-remove {
+    opacity: 1;
+  }
+}
+.message-image:hover .message-image-remove,
+.message-image-remove:focus-visible,
+.message-image-remove:disabled {
+  opacity: 1;
+}
+
+/* Destructive state of an overlay control. Four classes so it out-specifies
+   `.base-btn--overlay:hover`, which is declared in a later-loaded file — and
+   OPAQUE, because a translucent tint leaves the glyph's contrast at the mercy
+   of whatever artwork is behind it (the app's danger tint measures 2:1 over a
+   dark image). Semantic red, white glyph, readable over anything. */
+.base-btn--overlay.message-image-remove:hover:not(:disabled) {
+  background: var(--status-danger);
+  border-color: var(--status-danger);
+  color: var(--media-icon);
+}
+
+.message-image-remove:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.message-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+  min-height: 1.35rem;
+}
+
+.message-image-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+/* The live phase counter beside `Writing image prompt…` / `Generating image…`.
+   Tabular figures so a ticking number does not jitter the row's width. */
+.message-image-elapsed {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.message-image-generate {
+  color: var(--accent-highlight, var(--accent-base));
+}
+
+.message-image-generate:hover:not(:disabled) {
+  background: var(--accent-translucent);
+  color: var(--accent-highlight, var(--accent-base));
+}
+
+/* Live sampling readout in the message footer — a1111 only, since it is the one
+   dialect that reports progress. A slim bar plus the `Sampling 12/28 · 43%`
+   text, inline with the spinner and Cancel so the row never reflows. */
+.message-image-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.message-image-progress-bar {
+  position: relative;
+  width: 72px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border-subtle);
+  overflow: hidden;
+}
+
+.message-image-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-highlight, var(--accent-base));
+  transition: width 0.25s linear;
+}
+
+.message-image-progress-text {
+  white-space: nowrap;
+}
+
+/* ── Image prompt review modal ── */
+
+.image-prompt-modal {
+  width: min(720px, 100%);
+}
+
+.image-prompt-subtitle {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  max-width: 52ch;
+}
+
+.image-prompt-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.image-prompt-form .field-counter-text {
+  font-variant-numeric: tabular-nums;
+}
+
+.image-prompt-over-limit .field-counter-text {
+  color: var(--status-danger);
+}
+
+.image-prompt-caption {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+/* Prompt-length estimate, a1111 only. The review modal is the last place an
+   over-long prompt can be seen before it is rendered — CLIP weights everything
+   past its first 75-token chunk less, and nothing downstream would say so. */
+.image-prompt-estimate {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-surface);
+}
+
+.image-prompt-estimate-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.image-prompt-estimate-icon {
+  flex: 0 0 auto;
+  color: var(--accent-highlight, var(--accent-base));
+}
+
+.image-prompt-estimate-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--status-warning, var(--accent-highlight));
+}
+
+.image-prompt-estimate-note {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* Advisory notes from the prompt-writing call, above the editable prompt. Same
+   warn treatment as the connection editor's status line (`.conn-status.warn`):
+   visible, but clearly a caution rather than a failure — the text below is
+   still editable and still Generates. */
+.image-prompt-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.image-prompt-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: var(--status-warning, var(--accent-highlight));
+  background: var(--status-warning-bg, var(--accent-translucent));
+  border: 1px solid var(--status-warning-border, var(--border-subtle));
+  border-radius: 8px;
+}
+
+.image-prompt-warning-icon {
+  flex: 0 0 auto;
+  margin-top: 0.15rem;
+  color: var(--status-warning, var(--accent-highlight));
+}
+
+.image-prompt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* The row's right end belongs to the way out (Cancel), not to a utility that replaces your text, so
+   this button carries no `margin-left: auto` — the row is left-aligned like every other form dialog. */
+.image-prompt-rerun {
+  color: var(--text-secondary);
+}
+
+/* ── Image request re-send ── */
+
+/* Retry / Edit request, in the image's own block rather than overlaid on the
+   artwork: these read in the theme's own tokens, where a control floating over
+   an image the app did not draw would need the scrim trio. */
+.message-image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.message-image-actions .base-btn {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.message-image-actions .base-btn:hover:not(:disabled),
+.message-image-actions .base-btn:focus-visible {
+  color: var(--text-primary);
+}
+
+/* The body editor's field. A real textarea (selection, IME, undo) carrying the
+   code surface's own tokens, so it matches the read-only `request` disclosure it
+   edits. Two classes on purpose: the base form rules live in components.css,
+   which loads AFTER this file, so a single-class rule loses at equal
+   specificity. */
+.image-request-modal {
+  width: min(760px, 100%);
+}
+
+.image-request-modal .base-form-textarea {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--code-inline-text);
+  background: var(--code-block-bg);
+  border-color: var(--code-block-border);
+  tab-size: 2;
+}
+
+/* The connection this body belongs to has been deleted, so the re-send cannot be
+   aimed anywhere. Same warn treatment as the review modal's advisory notes: the
+   body stays readable and copyable, only Send is unavailable. */
+.image-request-missing-connection {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: var(--status-warning, var(--accent-highlight));
+  background: var(--status-warning-bg, var(--accent-translucent));
+  border: 1px solid var(--status-warning-border, var(--border-subtle));
+  border-radius: 8px;
+}
+
+/* Copy sits at the far end of the editor's action row, like Re-run text call
+   does in the review modal — editing actions on the left, utilities on the
+   right. */
+.image-request-copy {
+  margin-left: auto;
+  color: var(--text-secondary);
+}
+
+.edited-tag {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.edit-area {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.edit-area textarea,
+.edit-draft-textarea {
+  width: 100%;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--input-text);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  resize: vertical;
+}
+
+.edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.inline-action {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 6px;
+}
+
+
+.chapter-view-banner {
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--accent-base);
+  box-shadow: 0 2px 8px var(--accent-translucent);
+  border-radius: 8px;
+  padding: 8px 14px;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.chapter-view-banner button {
+  white-space: nowrap;
+}
+
+
+/* The thumbnail IS the control that opens the full-screen viewer. The wrapper
+   stays deliberately bare so the `.message-image img` rules above keep
+   applying — the img is still a descendant of .message-image. */
+.message-image-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+
+.message-image-open:focus-visible {
+  outline: 2px solid var(--accent-base);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
+
+@media (max-width: 1100px) {
+
+  /* Message actions are revealed by :hover on desktop. A phone has no hover, so
+     the row would be invisible until tapped blind — show it outright. */
+  .message-actions {
+    opacity: 1;
+  }
+
+  .prompt-card-hints {
+    display: none;
+  }
+
+  .prompt-card-footer {
+    border-top: none;
+    padding-top: 0.15rem;
+    margin-top: 0.1rem;
+    justify-content: flex-end;
+  }
+
+  .scroll-to-bottom-floating-btn {
+    bottom: 0.5rem;
+    right: 0.75rem;
+    width: 32px;
+    height: 32px;
+  }
+
+  .choices {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .choices::-webkit-scrollbar {
+    display: none;
+  }
+
+  .choice-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+
+}

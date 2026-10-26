@@ -32,6 +32,7 @@ import {
 } from "../../../../../engine/chapterLifecycle";
 import { GalleryModal } from "../../../modals/GalleryModal";
 import { CloseChapterModal } from "../../../modals/CloseChapterModal";
+import "./JournalTab.css";
 
 export function JournalTab({
   playthrough,

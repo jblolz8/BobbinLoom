@@ -1,6 +1,7 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
-import { Icon, type IconName } from "../Icon";
+import { Icon, type IconName } from "../Icon/Icon";
 import { Tooltip, type TooltipProps } from "../Tooltip/Tooltip";
+import "./Button.css";
 
 export type ButtonVariant =
   | "primary"

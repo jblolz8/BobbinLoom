@@ -44,11 +44,12 @@ import {
   type SortDirection,
 } from "./providers/ProviderConnectionList";
 import { TextConnectionEditor } from "./providers/TextConnectionEditor";
-import { ConfirmModal } from "../common/ConfirmModal";
+import { ConfirmModal } from "../common";
 import {
   cleanStateAfterSave,
   isConnectionDirty,
 } from "../../utils/connectionDraft";
+import "./ProviderConnectionsPanel.css";
 
 type EditorState =
   | { mode: "closed" }

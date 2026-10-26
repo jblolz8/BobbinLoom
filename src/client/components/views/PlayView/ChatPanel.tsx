@@ -23,9 +23,9 @@ import type {
   FailedResponseNotice,
   ImagePromptRequest,
 } from "../../../hooks/usePlaythrough";
-import { ContextMeter } from "../../common/ContextMeter";
-import { MarkdownView } from "../../common/MarkdownView";
-import { ImageViewer, type ImageViewerImage } from "../../common/ImageViewer";
+import { ContextMeter } from "../../common";
+import { MarkdownView } from "../../common";
+import { ImageViewer, type ImageViewerImage } from "../../common";
 import {
   Badge,
   Button,
@@ -37,6 +37,7 @@ import {
 } from "../../base";
 import { ImagePromptModal } from "./ImagePromptModal";
 import { triggerHaptic } from "../../../utils/haptics";
+import "./ChatPanel.css";
 
 export type ChatPanelProps = {
   playthrough: Playthrough;

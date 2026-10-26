@@ -161,6 +161,9 @@ export const PlayerPersonaSchema = z.object({
   appearance: z.string(),
   initialClothing: z.array(ClothingItemSchema),
   isDefault: z.boolean(),
+  customPortrait: z.string().optional(),
+  profileImage: z.string().optional(),
+  avatarUpdatedAt: z.number().optional(),
 });
 export type PlayerPersona = z.infer<typeof PlayerPersonaSchema>;
 
@@ -525,6 +528,9 @@ export const CharacterContextScopeSchema = z.enum([
 ]);
 export type CharacterContextScope = z.infer<typeof CharacterContextScopeSchema>;
 
+export const ExportFormatSchema = z.enum(["webp", "png", "json"]);
+export type ExportFormat = z.infer<typeof ExportFormatSchema>;
+
 export const ViewPreferencesSchema = z.object({
   /** The Chat tab's display toggles. Leaves mirror the client's own field names one for one, so a
    *  migrated toggle needs no translation table and the hook's per-field writers can send the single
@@ -609,6 +615,11 @@ export const ViewPreferencesSchema = z.object({
     })
     .optional(),
   nav: z.object({ showPlayNavTabs: z.boolean().optional() }).optional(),
+  storage: z
+    .object({
+      exportFormat: ExportFormatSchema.optional(),
+    })
+    .optional(),
   /** The Settings dialog's own memory: which tab was open, and which provider kind it was showing. */
   ui: z
     .object({
@@ -620,6 +631,7 @@ export const ViewPreferencesSchema = z.object({
           "chat",
           "interface",
           "appearance",
+          "storage",
         ])
         .optional(),
       settingsProviderKind: z.enum(["text", "image", "overrides"]).optional(),
@@ -637,6 +649,9 @@ export const AppSettingsSchema = z.object({
   // it no longer means "default for new playthroughs" — there is one active
   // config for everything).
   activePresetId: z.string().optional(),
+  /** ID of the user's chosen default persona. Stored in user-settings.json (gitignored)
+   *  so changing the default persona never dirties committed persona seed files. */
+  defaultPersonaId: z.string().optional(),
   promptConfig: PromptConfigSchema.optional(),
   tagTaxonomy: TagTaxonomyConfigSchema.optional(),
   avatarShape: AvatarShapeSchema.optional(),

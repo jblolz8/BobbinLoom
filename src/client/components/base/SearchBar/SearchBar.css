@@ -1,0 +1,122 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   BASE SEARCH BAR COMPONENT
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.base-search-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.base-search-bar--flex-1 {
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+
+@media (max-width: 680px) {
+  .base-search-bar--flex-1 {
+    max-width: 100%;
+    width: 100%;
+    flex: 1 1 100%;
+  }
+}
+
+.base-search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease;
+  z-index: 1;
+}
+
+.base-search-bar:focus-within .base-search-icon {
+  color: var(--accent-highlight, var(--accent-base));
+}
+
+.base-search-input {
+  width: 100%;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  color: var(--input-text);
+  font-size: 0.85rem;
+  box-sizing: border-box;
+  transition: all 0.18s ease;
+}
+
+.base-search-input:hover {
+  border-color: var(--border-main);
+}
+
+.base-search-input:focus {
+  outline: none;
+  border-color: var(--input-focus-border);
+  background: var(--input-bg);
+  box-shadow: 0 0 0 2px var(--accent-translucent);
+}
+
+.base-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Sizing variants */
+.search-bar-sm .base-search-input {
+  padding: 0.42rem 2rem 0.42rem 1.95rem;
+  font-size: 0.82rem;
+  border-radius: 7px;
+}
+
+.search-bar-sm .base-search-icon {
+  left: 8px;
+}
+
+.search-bar-md .base-search-input {
+  padding: 0.52rem 2.2rem 0.52rem 2.2rem;
+  font-size: 0.85rem;
+  border-radius: 8px;
+}
+
+.search-bar-md .base-search-icon {
+  left: 10px;
+}
+
+.search-bar-lg .base-search-input {
+  padding: 0.65rem 2.4rem 0.65rem 2.4rem;
+  font-size: 0.95rem;
+  border-radius: 10px;
+}
+
+.search-bar-lg .base-search-icon {
+  left: 12px;
+}
+
+.base-search-clear-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  transition: all 0.15s ease;
+  z-index: 2;
+}
+
+.base-search-clear-btn:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+}

@@ -6,7 +6,8 @@ import {
   type ReactNode,
 } from "react";
 import { Button } from "../Button/Button";
-import { Icon, type IconName } from "../Icon";
+import { Icon, type IconName } from "../Icon/Icon";
+import "./StatusMessage.css";
 
 export type StatusMessageVariant = "inline" | "banner";
 export type StatusMessageTone = "neutral" | "ok" | "warn" | "err";

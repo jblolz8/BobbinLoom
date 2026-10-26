@@ -5,7 +5,8 @@ import {
   type HTMLAttributes,
   type ReactNode,
 } from "react";
-import { Icon } from "../Icon";
+import { Icon } from "../Icon/Icon";
+import "./Card.css";
 
 export type CardVariant = "elevated" | "panel" | "active";
 export type CardPadding = "none" | "xs" | "sm" | "md" | "lg";
@@ -70,12 +71,14 @@ const CardBase = forwardRef<HTMLElement, CardProps>(function Card(
 
 export interface CardCoverProps extends HTMLAttributes<HTMLDivElement> {
   position?: "top" | "row";
+  aspect?: "portrait" | "square";
   children?: ReactNode;
 }
 
 /** Media cover slot for vertical cards (`position="top"`) or horizontal list rows (`position="row"`). */
 export function CardCover({
   position = "top",
+  aspect,
   className = "",
   children,
   ...props
@@ -83,6 +86,37 @@ export function CardCover({
   const classNames = [
     "base-card__cover",
     `base-card__cover--${position}`,
+    aspect ? `base-card__cover--aspect-${aspect}` : "",
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <div className={classNames} {...props}>
+      {children}
+    </div>
+  );
+}
+
+export interface CardBodyProps extends HTMLAttributes<HTMLDivElement> {
+  padding?: CardPadding;
+  gap?: "2xs" | "xs" | "sm" | "md";
+  children?: ReactNode;
+}
+
+/** Structured body container inside a Card (useful when the Card itself has `padding="none"` for full-bleed covers). */
+export function CardBody({
+  padding = "sm",
+  gap = "xs",
+  className = "",
+  children,
+  ...props
+}: CardBodyProps) {
+  const classNames = [
+    "base-card__body",
+    `base-card--pad-${padding}`,
+    `base-card__body--gap-${gap}`,
     className,
   ]
     .filter(Boolean)
@@ -140,12 +174,14 @@ export function CardInteractive({
 
 export type CardCompound = typeof CardBase & {
   Cover: typeof CardCover;
+  Body: typeof CardBody;
   TitleButton: typeof CardTitleButton;
   Interactive: typeof CardInteractive;
 };
 
 export const Card = Object.assign(CardBase, {
   Cover: CardCover,
+  Body: CardBody,
   TitleButton: CardTitleButton,
   Interactive: CardInteractive,
 }) as CardCompound;

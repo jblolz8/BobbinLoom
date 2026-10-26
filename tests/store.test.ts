@@ -21,6 +21,7 @@ import {
   deletePersonaRecord,
   getCharacterTemplate,
   getPersona,
+  getPersonaAvatarPath,
   getPlaythroughRecord,
   importCharacterCard,
   listCharacterTemplates,
@@ -28,8 +29,11 @@ import {
   listPlaythroughRecords,
   listPlaythroughSummaries,
   removeCharacterImportRecord,
+  removePersonaPortraitAvatar,
+  removePersonaProfileAvatar,
   resolveCast,
   resolvePresetForGeneration,
+  savePersonaAvatar,
   setDefaultPersonaRecord,
   updateCharacterTemplateRecord,
   updatePersonaRecord,
@@ -414,7 +418,7 @@ describe("persona store — folder-per-entity", () => {
     expect(listPersonas(dir).map((p) => p.id)).toEqual([b.id]);
   });
 
-  it("setDefaultPersonaRecord flips flags across files", () => {
+  it("setDefaultPersonaRecord stores defaultPersonaId in user-settings.json without dirtying persona files on disk", () => {
     const dir = mkdtempSync(join(tmpdir(), "bobbinloom-personas-default-"));
     tempDirs.push(dir);
 
@@ -428,6 +432,59 @@ describe("persona store — folder-per-entity", () => {
     setDefaultPersonaRecord(b.id, dir);
     expect(getPersona(a.id, dir)?.isDefault).toBe(false);
     expect(getPersona(b.id, dir)?.isDefault).toBe(true);
+
+    const userSettings = JSON.parse(
+      readFileSync(join(dir, "user-settings.json"), "utf8"),
+    );
+    expect(userSettings.defaultPersonaId).toBe(b.id);
+  });
+
+  it("saves, resolves, and removes portrait and 1:1 profile avatars inside the persona folder", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bobbinloom-personas-avatar-"));
+    tempDirs.push(dir);
+
+    const p = createPersonaRecord("John Bobbin", undefined, dir);
+    expect(getPersonaAvatarPath(p.id, "portrait", dir)).toBeNull();
+    expect(getPersonaAvatarPath(p.id, "profile", dir)).toBeNull();
+
+    const withPortrait = savePersonaAvatar(
+      p.id,
+      "portrait",
+      Buffer.from("portrait-bytes"),
+      "png",
+      dir,
+    );
+    expect(withPortrait?.customPortrait).toBe("portrait.png");
+    expect(withPortrait?.avatarUpdatedAt).toBeTypeOf("number");
+    expect(getPersonaAvatarPath(p.id, "portrait", dir)).toBe(
+      join(dir, "john-bobbin", "portrait.png"),
+    );
+    // Profile falls back to portrait when no dedicated 1:1 profile image is uploaded
+    expect(getPersonaAvatarPath(p.id, "profile", dir)).toBe(
+      join(dir, "john-bobbin", "portrait.png"),
+    );
+
+    const withProfile = savePersonaAvatar(
+      p.id,
+      "profile",
+      Buffer.from("profile-bytes"),
+      "png",
+      dir,
+    );
+    expect(withProfile?.profileImage).toBe("profile.png");
+    expect(getPersonaAvatarPath(p.id, "profile", dir)).toBe(
+      join(dir, "john-bobbin", "profile.png"),
+    );
+
+    const resetProfile = removePersonaProfileAvatar(p.id, dir);
+    expect(resetProfile?.profileImage).toBeUndefined();
+    expect(getPersonaAvatarPath(p.id, "profile", dir)).toBe(
+      join(dir, "john-bobbin", "portrait.png"),
+    );
+
+    const removedPortrait = removePersonaPortraitAvatar(p.id, dir);
+    expect(removedPortrait?.customPortrait).toBeUndefined();
+    expect(getPersonaAvatarPath(p.id, "portrait", dir)).toBeNull();
   });
 });
 

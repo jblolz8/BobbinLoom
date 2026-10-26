@@ -46,9 +46,11 @@ A persona is a reusable player template: the same person, ready to drop into any
 data/personas/<slug>/     one folder per persona
 ```
 
-A persona holds a name, description, body type, appearance, and starting clothing — added slot
-by slot, one item per slot. The persona library lists them with the default marked, and lets
-you create, edit, delete, and choose which one is the default.
+A persona holds a name, description, body, appearance, and initial clothing — authored as
+guided `- Key: Value` and `- Slot: Garment` bullets that parse into structured clothing slots.
+The shipped default persona is **John Bobbin** (`data/personas/player/player.json`). Choosing a
+different default persona saves `defaultPersonaId` in `data/user-settings.json` (gitignored) so
+the committed default persona file remains untouched.
 
 The default persona is pre-selected when you start a new playthrough, and the setup step lets
 you pick a different one for that story.

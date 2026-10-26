@@ -1,7 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { computeLineDiff } from "../../engine/diff";
-import { Button, Icon } from "../base";
+import {
+  Badge,
+  Button,
+  Card,
+  Header,
+  Icon,
+  Modal,
+  Spinner,
+  Stack,
+  StatusMessage,
+  Tabs,
+  Text,
+  TextArea,
+} from "../base";
 import { TwoPaneDiff } from "./TwoPaneDiff";
+import "./DiffModal.css";
 
 export type DiffModalProps = {
   title: string;
@@ -45,214 +59,211 @@ export function DiffModal({
     "split",
   );
 
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !loading) {
-        onClose();
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [loading, onClose]);
-
   const addedCount = diffLines.filter((l) => l.type === "added").length;
   const removedCount = diffLines.filter((l) => l.type === "removed").length;
   const isReadOnly = !onAccept && !onRetry;
 
   return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget && !loading) onClose();
-      }}
+    <Modal
+      open={true}
+      onClose={onClose}
+      dismissDisabled={loading}
+      size="wide"
+      ariaLabelledBy="diff-modal-title"
     >
-      <section className="modal diff-modal" aria-labelledby="diff-modal-title">
-        <header className="modal-header diff-modal-header">
-          <div className="diff-modal-title-wrap">
-            <div className="diff-modal-title-row">
-              <span className="diff-modal-icon-badge">
-                <Icon name="Sparkles" size={18} />
-              </span>
-              <h2 id="diff-modal-title">{title}</h2>
-            </div>
-            <div className="diff-stats-pills">
-              <span className="diff-stat-pill added">
-                <Icon name="Plus" size={12} /> {addedCount} added
-              </span>
-              <span className="diff-stat-pill removed">
-                <Icon name="Minus" size={12} /> {removedCount} removed
-              </span>
-              {isReadOnly ? (
-                <span className="diff-stat-pill readonly">Read-Only</span>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="diff-header-right-actions">
-            {/* View Mode Toggle */}
-            <div
-              className="diff-pane-toggle-group"
-              role="tablist"
-              aria-label="Diff View Mode"
-            >
-              <button
-                type="button"
-                className={`diff-pane-toggle-btn ${paneViewMode === "split" ? "active" : ""}`}
-                onClick={() => setPaneViewMode("split")}
-                title="View side-by-side comparison"
-              >
-                <Icon name="Columns" size={12} />
-                <span>Split</span>
-              </button>
-              <button
-                type="button"
-                className={`diff-pane-toggle-btn ${paneViewMode === "right" ? "active" : ""}`}
-                onClick={() => setPaneViewMode("right")}
-                title={`View only ${newLabel}`}
-              >
-                <span>{newLabel}</span>
-              </button>
-              <button
-                type="button"
-                className={`diff-pane-toggle-btn ${paneViewMode === "left" ? "active" : ""}`}
-                onClick={() => setPaneViewMode("left")}
-                title={`View only ${oldLabel}`}
-              >
-                <span>{oldLabel}</span>
-              </button>
-            </div>
-
+      <Header
+        variant="modal"
+        titleId="diff-modal-title"
+        icon="Sparkles"
+        title={title}
+        subtitle={
+          <Stack direction="row" gap="xs" align="center" wrap>
+            <Badge variant="success" size="xs" pill leftIcon="Plus">
+              {addedCount} added
+            </Badge>
+            <Badge variant="danger" size="xs" pill leftIcon="Minus">
+              {removedCount} removed
+            </Badge>
+            {isReadOnly ? (
+              <Badge variant="neutral" size="xs" pill>
+                Read-Only
+              </Badge>
+            ) : null}
+          </Stack>
+        }
+        actions={
+          <Stack direction="row" gap="sm" align="center">
+            <Tabs<"split" | "left" | "right">
+              variant="segmented"
+              size="sm"
+              ariaLabel="Diff View Mode"
+              activeTab={paneViewMode}
+              onChange={setPaneViewMode}
+              tabs={[
+                {
+                  id: "split",
+                  label: "Split",
+                  icon: "Columns",
+                },
+                {
+                  id: "right",
+                  label: newLabel,
+                },
+                {
+                  id: "left",
+                  label: oldLabel,
+                },
+              ]}
+            />
             <Button
               type="button"
-              variant="ghost"
-              size="sm"
-              iconOnly
-              className="diff-close-btn"
+              variant="secondary"
+              size="xs"
+              leftIcon="X"
               onClick={onClose}
               disabled={loading}
-              aria-label="Close modal"
-              title="Close modal"
             >
-              <Icon name="X" size={16} />
+              Close
             </Button>
-          </div>
-        </header>
+          </Stack>
+        }
+      />
 
-        {/* Active AI Retry / Generation Status Banner */}
-        {loading ? (
-          <div className="diff-retry-status-banner">
-            <span className="diff-retry-spinner">
-              <Icon name="Sparkles" size={17} className="sparkle-pulse" />
-            </span>
-            <div className="diff-retry-status-text">
-              <strong>Regenerating BL format with AI…</strong>
-              {feedback.trim() ? (
-                <span className="diff-retry-feedback-quote">
-                  Applying guidance: &ldquo;{feedback.trim()}&rdquo;
-                </span>
-              ) : (
-                <span className="diff-retry-feedback-quote">
-                  Generating updated character sheet…
-                </span>
-              )}
+      <Modal.Body>
+        <Modal.Content>
+          <Stack
+            direction="column"
+            gap="sm"
+            flex1
+            style={{ minHeight: 0 }}
+          >
+            {loading ? (
+              <StatusMessage variant="banner" tone="neutral" icon="Sparkles">
+                <strong>Regenerating BL format with AI…</strong>{" "}
+                {feedback.trim()
+                  ? `Applying guidance: "${feedback.trim()}"`
+                  : "Generating updated character sheet…"}
+              </StatusMessage>
+            ) : null}
+
+            {error ? (
+              <StatusMessage variant="banner" tone="err">
+                {error}
+              </StatusMessage>
+            ) : null}
+
+            <div className={`diff-viewer-wrapper ${loading ? "is-loading" : ""}`}>
+              <TwoPaneDiff
+                leftLabel={oldLabel}
+                rightLabel={newLabel}
+                leftContent={oldContent}
+                rightContent={newContent}
+                viewMode={paneViewMode}
+              />
+              {loading ? (
+                <div className="diff-loading-overlay">
+                  <Card variant="elevated" padding="md">
+                    <Stack direction="row" gap="sm" align="center">
+                      <Spinner size={18} />
+                      <Text as="span" size="sm" weight="medium">
+                        AI Generation in progress…
+                      </Text>
+                    </Stack>
+                  </Card>
+                </div>
+              ) : null}
             </div>
-          </div>
-        ) : null}
+          </Stack>
+        </Modal.Content>
+      </Modal.Body>
 
-        {error ? (
-          <div className="diff-error-banner">
-            <Icon name="AlertCircle" size={16} />
-            <span>{error}</span>
-          </div>
-        ) : null}
-
-        <div className={`diff-viewer-wrapper ${loading ? "is-loading" : ""}`}>
-          <TwoPaneDiff
-            leftLabel={oldLabel}
-            rightLabel={newLabel}
-            leftContent={oldContent}
-            rightContent={newContent}
-            viewMode={paneViewMode}
-          />
-          {loading ? (
-            <div className="diff-loading-overlay">
-              <div className="diff-loading-card">
-                <Icon name="Sparkles" size={24} className="sparkle-pulse" />
-                <span>AI Generation in progress…</span>
-              </div>
-            </div>
-          ) : null}
-        </div>
-
+      <Modal.Footer>
         {isReadOnly ? (
-          <footer className="diff-footer">
-            <div className="diff-footer-left">
-              <span className="diff-readonly-note">
-                <Icon name="FileText" size={14} /> Comparing original CCv2 card
-                with converted BobbinLoom sheet.
-              </span>
-            </div>
-            <div className="diff-footer-right">
-              <Button variant="primary" onClick={onClose}>
-                Close
-              </Button>
-            </div>
-          </footer>
+          <Stack
+            direction="row"
+            justify="between"
+            align="center"
+            gap="md"
+            wrap
+            fullWidth
+          >
+            <Stack direction="row" gap="xs" align="center">
+              <Icon name="FileText" size={14} />
+              <Text as="span" size="xs" tone="secondary">
+                Comparing original CCv2 card with converted BobbinLoom sheet.
+              </Text>
+            </Stack>
+            <Button variant="primary" onClick={onClose}>
+              Close
+            </Button>
+          </Stack>
         ) : (
-          <footer className="diff-footer">
-            <div className="diff-footer-left">
-              <div className="diff-feedback-label">
-                <div className="diff-feedback-header-row">
-                  <span className="diff-feedback-title">
-                    <Icon name="MessageSquare" size={13} /> Guidance for AI
-                    retry (optional)
-                  </span>
-                  {feedback.trim() && !loading && (
-                    <button
-                      type="button"
-                      className="diff-feedback-clear-btn"
-                      onClick={() => setFeedback("")}
-                      title="Clear guidance input"
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-                <textarea
-                  rows={2}
-                  value={feedback}
-                  onChange={(e) => setFeedback(e.target.value)}
-                  placeholder="e.g. Focus more on personality quirks, make appearance description more detailed, format inventory items as bullet points..."
-                  disabled={loading}
-                  className="diff-feedback-textarea"
-                />
-                <div className="diff-presets-row">
-                  <span className="diff-presets-label">Suggestions:</span>
-                  <div className="diff-presets-list">
-                    {QUICK_SUGGESTIONS.map((suggestion) => (
-                      <button
-                        key={suggestion}
+          <Stack direction="column" gap="sm" fullWidth>
+            <Stack direction="column" gap="xs">
+              <TextArea
+                rows={2}
+                size="sm"
+                label={
+                  <Stack
+                    direction="row"
+                    justify="between"
+                    align="center"
+                    gap="sm"
+                    fullWidth
+                  >
+                    <span>Guidance for AI retry (optional)</span>
+                    {feedback.trim() && !loading ? (
+                      <Button
                         type="button"
-                        className="diff-preset-chip-btn"
-                        disabled={loading}
-                        onClick={() => {
-                          setFeedback((prev) => {
-                            const trimmed = prev.trim();
-                            if (!trimmed) return suggestion;
-                            if (trimmed.includes(suggestion)) return prev;
-                            return `${trimmed}, ${suggestion.toLowerCase()}`;
-                          });
-                        }}
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => setFeedback("")}
+                        title="Clear guidance input"
                       >
-                        + {suggestion}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+                        Clear
+                      </Button>
+                    ) : null}
+                  </Stack>
+                }
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+                placeholder="e.g. Focus more on personality quirks, make appearance description more detailed, format inventory items as bullet points..."
+                disabled={loading}
+              />
+              <Stack direction="row" gap="xs" align="center" wrap>
+                <Text as="span" size="xs" tone="muted" weight="medium">
+                  Suggestions:
+                </Text>
+                {QUICK_SUGGESTIONS.map((suggestion) => (
+                  <Button
+                    key={suggestion}
+                    type="button"
+                    variant="secondary"
+                    size="xs"
+                    disabled={loading}
+                    onClick={() => {
+                      setFeedback((prev) => {
+                        const trimmed = prev.trim();
+                        if (!trimmed) return suggestion;
+                        if (trimmed.includes(suggestion)) return prev;
+                        return `${trimmed}, ${suggestion.toLowerCase()}`;
+                      });
+                    }}
+                  >
+                    + {suggestion}
+                  </Button>
+                ))}
+              </Stack>
+            </Stack>
 
-            <div className="diff-footer-right">
+            <Stack
+              direction="row"
+              justify="end"
+              align="center"
+              gap="sm"
+              wrap
+              fullWidth
+            >
               <Button
                 type="button"
                 variant="secondary"
@@ -266,12 +277,9 @@ export function DiffModal({
                 variant="secondary"
                 onClick={() => onRetry?.(feedback)}
                 disabled={loading}
+                isLoading={loading}
                 leftIcon={
-                  <Icon
-                    name={loading ? "Sparkles" : "RotateCcw"}
-                    size={14}
-                    className={loading ? "sparkle-pulse" : ""}
-                  />
+                  !loading ? <Icon name="RotateCcw" size={14} /> : undefined
                 }
                 title="Regenerate BL character sheet with optional feedback"
               >
@@ -286,10 +294,10 @@ export function DiffModal({
               >
                 Accept &amp; Apply
               </Button>
-            </div>
-          </footer>
+            </Stack>
+          </Stack>
         )}
-      </section>
-    </div>
+      </Modal.Footer>
+    </Modal>
   );
 }

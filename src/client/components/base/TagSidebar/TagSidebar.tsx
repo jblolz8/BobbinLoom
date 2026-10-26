@@ -1,4 +1,11 @@
-import { useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   cleanTag,
   groupTagsByCategory,
@@ -11,9 +18,69 @@ import {
   groupPlaythroughTagsByCategory,
   resolvePlaythroughTagStyle,
 } from "../../../../engine/playthroughTagTaxonomy";
-import { Icon } from "../Icon";
-import { TagChip } from "../TagChip";
+import { Icon } from "../Icon/Icon";
+import { TagChip } from "../TagChip/TagChip";
 import "./TagSidebar.css";
+
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+export type TagSidebarLayoutMetrics = {
+  /** Visible height of the scroll container (0 in non-layout test environments) */
+  containerHeight: number;
+  /** Bottom inner content edge of the scroll container in viewport coordinates */
+  containerContentBottom: number;
+  /** Current vertical scroll offset of the scroll container */
+  scrollTop: number;
+  /** Top edge of the parent flex row in viewport coordinates */
+  rowTop: number;
+  /** Top edge of the sticky sidebar in viewport coordinates */
+  sidebarTop: number;
+  /** Height of the sibling content column beside the sidebar */
+  siblingHeight: number;
+};
+
+/**
+ * Computes the maximum pixel height for `TagSidebar` so that:
+ * 1. When the sibling content column fits within the viewport (`siblingHeight <= unscrolledAvailable`),
+ *    `TagSidebar` caps at `unscrolledAvailable` (the space from the sidebar's initial top edge to the
+ *    bottom of the scroll container), preventing the sidebar from forcing a page-level scrollbar.
+ * 2. When the sibling content column is taller than the viewport and the user scrolls down,
+ *    `TagSidebar` smoothly expands up to `currentVisibleAvailable` (capped by `siblingHeight`) as the
+ *    page header scrolls out of view.
+ */
+export function computeTagSidebarMaxHeight(
+  metrics: TagSidebarLayoutMetrics,
+): number | null {
+  if (metrics.containerHeight <= 0) return null;
+
+  const unscrolledRowTop = metrics.rowTop + metrics.scrollTop;
+  const unscrolledAvailable = Math.floor(
+    metrics.containerContentBottom - unscrolledRowTop - 1,
+  );
+  const currentVisibleAvailable = Math.floor(
+    metrics.containerContentBottom - metrics.sidebarTop - 1,
+  );
+
+  const maxAllowed = Math.max(
+    unscrolledAvailable,
+    Math.min(currentVisibleAvailable, Math.floor(metrics.siblingHeight)),
+  );
+
+  return Math.max(160, maxAllowed);
+}
+
+function findScrollContainer(el: HTMLElement | null): HTMLElement | null {
+  let node = el?.parentElement ?? null;
+  while (node) {
+    const style = window.getComputedStyle(node);
+    if (/(auto|scroll|overlay)/.test(style.overflowY)) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
 
 export type TagSidebarProps = {
   /** Array of tags and their occurrence counts across the library */
@@ -46,6 +113,14 @@ export type TagSidebarProps = {
   emptyMessage?: string;
   /** Initial view mode: "grouped" by category or "flat" by count */
   defaultMode?: "grouped" | "flat";
+  /** Optional controlled view mode ("grouped" | "flat") */
+  mode?: "grouped" | "flat";
+  /** Callback when view mode changes */
+  onModeChange?: (mode: "grouped" | "flat") => void;
+  /** Optional controlled set of collapsed category IDs */
+  collapsedCategories?: ReadonlySet<string>;
+  /** Callback when a category header is toggled */
+  onToggleCategory?: (categoryId: string) => void;
   /** Extra CSS class name */
   className?: string;
 };
@@ -63,14 +138,122 @@ export function TagSidebar({
   title = "Tags",
   emptyMessage = "No tags yet.",
   defaultMode = "grouped",
+  mode: controlledMode,
+  onModeChange,
+  collapsedCategories: controlledCollapsed,
+  onToggleCategory,
   className = "",
 }: TagSidebarProps) {
   const [search, setSearch] = useState("");
-  const [mode, setMode] = useState<"grouped" | "flat">(defaultMode);
-  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(
+  const [internalMode, setInternalMode] = useState<"grouped" | "flat">(
+    defaultMode,
+  );
+  const [internalCollapsed, setInternalCollapsed] = useState<Set<string>>(
     new Set(),
   );
+  const mode = controlledMode ?? internalMode;
+  const collapsedCategories = controlledCollapsed ?? internalCollapsed;
   const [mobileCollapsed, setMobileCollapsed] = useState(true);
+  const sidebarRef = useRef<HTMLElement | null>(null);
+
+  const recalculateMaxHeight = useCallback(() => {
+    const sidebar = sidebarRef.current;
+    if (!sidebar || typeof window === "undefined") return;
+
+    const scrollContainer = findScrollContainer(sidebar);
+    const containerRect = scrollContainer
+      ? scrollContainer.getBoundingClientRect()
+      : null;
+    const containerHeight = containerRect
+      ? containerRect.height
+      : window.innerHeight;
+
+    let containerContentBottom: number;
+    if (scrollContainer && containerRect) {
+      const style = window.getComputedStyle(scrollContainer);
+      const paddingBottom = parseFloat(style.paddingBottom) || 0;
+      const borderBottom = parseFloat(style.borderBottomWidth) || 0;
+      containerContentBottom =
+        containerRect.bottom - paddingBottom - borderBottom;
+    } else {
+      containerContentBottom = window.innerHeight - 16;
+    }
+
+    const scrollTop = scrollContainer
+      ? scrollContainer.scrollTop
+      : window.scrollY;
+
+    const row = sidebar.parentElement;
+    const sidebarRect = sidebar.getBoundingClientRect();
+    const rowTop = row ? row.getBoundingClientRect().top : sidebarRect.top;
+
+    let siblingHeight = 0;
+    if (row) {
+      for (const child of Array.from(row.children)) {
+        if (child !== sidebar && child instanceof HTMLElement) {
+          siblingHeight = Math.max(
+            siblingHeight,
+            child.getBoundingClientRect().height,
+          );
+        }
+      }
+    }
+
+    const maxHeight = computeTagSidebarMaxHeight({
+      containerHeight,
+      containerContentBottom,
+      scrollTop,
+      rowTop,
+      sidebarTop: sidebarRect.top,
+      siblingHeight,
+    });
+
+    if (maxHeight !== null) {
+      sidebar.style.setProperty("--tag-sidebar-max-height", `${maxHeight}px`);
+    }
+  }, []);
+
+  useIsomorphicLayoutEffect(() => {
+    recalculateMaxHeight();
+  }, [recalculateMaxHeight, tagCounts.length, activeTags.length]);
+
+  useEffect(() => {
+    const sidebar = sidebarRef.current;
+    if (!sidebar || typeof window === "undefined") return;
+
+    const scrollContainer = findScrollContainer(sidebar);
+    const row = sidebar.parentElement;
+    const scrollTarget: EventTarget = scrollContainer ?? window;
+
+    const handleScrollOrResize = () => {
+      recalculateMaxHeight();
+    };
+
+    scrollTarget.addEventListener("scroll", handleScrollOrResize, {
+      passive: true,
+    });
+    window.addEventListener("resize", handleScrollOrResize, { passive: true });
+
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(handleScrollOrResize);
+      if (scrollContainer) observer.observe(scrollContainer);
+      if (row) {
+        observer.observe(row);
+        for (const child of Array.from(row.children)) {
+          if (child !== sidebar) {
+            observer.observe(child);
+          }
+        }
+      }
+    }
+
+    return () => {
+      scrollTarget.removeEventListener("scroll", handleScrollOrResize);
+      window.removeEventListener("resize", handleScrollOrResize);
+      observer?.disconnect();
+    };
+  }, [recalculateMaxHeight]);
 
   const activeSet = useMemo(
     () => new Set(activeTags.map((t) => cleanTag(t))),
@@ -103,12 +286,25 @@ export function TagSidebar({
   }, [filteredCounts, groupTags, taxonomy, userConfig]);
 
   function toggleCategory(catId: string) {
-    setCollapsedCategories((prev) => {
+    if (onToggleCategory) {
+      onToggleCategory(catId);
+      return;
+    }
+    setInternalCollapsed((prev) => {
       const next = new Set(prev);
       if (next.has(catId)) next.delete(catId);
       else next.add(catId);
       return next;
     });
+  }
+
+  function handleToggleMode() {
+    const nextMode = mode === "grouped" ? "flat" : "grouped";
+    if (onModeChange) {
+      onModeChange(nextMode);
+    } else {
+      setInternalMode(nextMode);
+    }
   }
 
   const classes = [
@@ -120,7 +316,11 @@ export function TagSidebar({
     .join(" ");
 
   return (
-    <aside className={classes} aria-label={`${title} filter sidebar`}>
+    <aside
+      ref={sidebarRef}
+      className={classes}
+      aria-label={`${title} filter sidebar`}
+    >
       <div className="base-tag-sidebar__header">
         <div className="base-tag-sidebar__title-group">
           <h4 className="base-tag-sidebar__title">
@@ -147,9 +347,7 @@ export function TagSidebar({
           <button
             type="button"
             className={`base-tag-sidebar__icon-btn ${mode === "grouped" ? "is-active" : ""}`}
-            onClick={() =>
-              setMode((prev) => (prev === "grouped" ? "flat" : "grouped"))
-            }
+            onClick={handleToggleMode}
             title={
               mode === "grouped"
                 ? "Grouped by category (click for flat list)"

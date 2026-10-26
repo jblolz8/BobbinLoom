@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { listProviderConnections, type ProviderConnection } from "../../api";
-import { Button, SimpleSelect } from "../base";
-import { Dialog } from "../base/Dialog";
+import { Button, Checkbox, Dialog, SimpleSelect, Stack } from "../base";
 
 export type BrainstormSettingsModalProps = {
   /** Whether this card has an original CCv2 copy — the context setting needs one to mean anything. */
@@ -78,7 +77,6 @@ export function BrainstormSettingsModal({
   return (
     <Dialog
       title="AI Brainstorm Assistant Settings"
-      className="brainstorm-settings-modal"
       maxWidth={460}
       onClose={onClose}
       description="Both choices are remembered as you change them."
@@ -88,46 +86,31 @@ export function BrainstormSettingsModal({
         </Button>
       }
     >
-      <div className="form-field">
-        <label className="brainstorm-settings-toggle">
-          <input
-            type="checkbox"
-            checked={includeOriginalCard}
-            disabled={!hasOriginalCcv2}
-            onChange={(event) =>
-              onToggleIncludeOriginalCard(event.target.checked)
-            }
-          />
-          <span>Include Original Card Context</span>
-        </label>
-        <span className="field-hint">
-          {hasOriginalCcv2
-            ? "Sends the imported CCv2 card alongside the current sheet, so the assistant can see what the character was."
-            : "This card has no imported CCv2 original to send."}
-        </span>
-      </div>
+      <Stack direction="column" gap="md">
+        <Checkbox
+          label="Include Original Card Context"
+          checked={includeOriginalCard}
+          disabled={!hasOriginalCcv2}
+          onChange={(event) =>
+            onToggleIncludeOriginalCard(event.target.checked)
+          }
+          description={
+            hasOriginalCcv2
+              ? "Sends the imported CCv2 card alongside the current sheet, so the assistant can see what the character was."
+              : "This card has no imported CCv2 original to send."
+          }
+        />
 
-      <div className="form-field">
-        <label className="brainstorm-settings-toggle">
-          <input
-            type="checkbox"
-            checked={allowNewSections}
-            onChange={(event) => onToggleAllowNewSections(event.target.checked)}
-          />
-          <span>Allow sections outside the current structure</span>
-        </label>
-        <span className="field-hint">
-          The assistant may propose a section the format does not list — [Daily
-          Life], [Cat Traits] — and it is added at the end of the sheet. A name
-          that nearly matches one of the format's own sections is applied to
-          that section instead.
-        </span>
-      </div>
+        <Checkbox
+          label="Allow sections outside the current structure"
+          checked={allowNewSections}
+          onChange={(event) => onToggleAllowNewSections(event.target.checked)}
+          description="The assistant may propose a section the format does not list — [Daily Life], [Cat Traits] — and it is added at the end of the sheet. A name that nearly matches one of the format's own sections is applied to that section instead."
+        />
 
-      <div className="form-field">
-        <span className="field-label-text">Text Provider</span>
         <SimpleSelect
           id="brainstorm-provider"
+          label="Text Provider"
           size="sm"
           variant="filled"
           fullWidth
@@ -136,14 +119,10 @@ export function BrainstormSettingsModal({
           options={options}
           placeholder="Active connection"
           aria-label="Text provider"
+          helperText="Writes the brainstorm replies. Remembered for the next one."
+          error={errorMessage ?? undefined}
         />
-        <span className="field-hint">
-          Writes the brainstorm replies. Remembered for the next one.
-        </span>
-        {errorMessage ? (
-          <span className="field-hint error">{errorMessage}</span>
-        ) : null}
-      </div>
+      </Stack>
     </Dialog>
   );
 }

@@ -1,0 +1,79 @@
+/* --------------------------------------------------------------------------
+   Base Form Grid (.base-form-grid)
+   -------------------------------------------------------------------------- */
+.base-form-grid {
+  display: grid;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.base-form-grid--gap-xs {
+  gap: 0.35rem;
+}
+
+.base-form-grid--gap-sm {
+  gap: 0.5rem;
+}
+
+.base-form-grid--gap-md {
+  gap: 0.7rem;
+}
+
+.base-form-grid--gap-lg {
+  gap: 1rem;
+}
+
+.base-form-grid--cols-1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.base-form-grid--cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.base-form-grid--cols-2-asymmetric {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+}
+
+.base-form-grid--cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.base-form-grid--cols-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.base-form-grid--cols-cards {
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(min(100%, var(--cover-card-min-col, 260px)), 1fr)
+  );
+}
+
+.base-form-grid--cols-portrait {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+}
+
+.base-form-grid--cols-compact {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr));
+}
+
+@media (max-width: 640px) {
+  .base-form-grid--cols-2,
+  .base-form-grid--cols-2-asymmetric,
+  .base-form-grid--cols-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .base-form-grid--cols-3,
+  .base-form-grid--cols-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .base-form-grid--cols-3,
+  .base-form-grid--cols-4 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

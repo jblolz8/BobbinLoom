@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import type { ImageApiStyle } from "../../../../schemas";
 import { Button, Icon, TextArea } from "../../base";
-import { ConfirmModal } from "../../common/ConfirmModal";
+import { ConfirmModal } from "../../common";
+import "./ChatPanel.css";
 
 /** What the editor knows about the connection the image was made with. Null when
  *  that connection no longer exists — the body can still be SAVED (a save renders

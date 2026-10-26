@@ -1,12 +1,13 @@
 import { useState } from "react";
 import type { Playthrough } from "../../../schemas";
 import { getPlaythrough, type Persona } from "../../api";
-import { Header } from "../base";
+import { Header, StatusMessage } from "../base";
 import { PlaythroughLibrary } from "../library/PlaythroughLibrary";
 import { CharacterLibrary } from "../library/CharacterLibrary";
 import { LorebookLibrary } from "../library/LorebookLibrary";
 import { PersonaLibrary } from "../library/PersonaLibrary";
 import { DocsView } from "./DocsView";
+import "./HomeView.css";
 
 export type HomeTab =
   | "playthroughs"
@@ -45,7 +46,11 @@ export function HomeView({
 
   return (
     <main className="app-shell home-workspace-shell">
-      {error ? <pre className="error-box">{error}</pre> : null}
+      {error ? (
+        <StatusMessage variant="banner" tone="err" className="error-box">
+          {error}
+        </StatusMessage>
+      ) : null}
 
       {activeTab === "characters" ? (
         <section className="home-workspace-page">
@@ -71,12 +76,10 @@ export function HomeView({
         </section>
       ) : activeTab === "personas" ? (
         <section className="home-workspace-page">
-          <Header
+          <PersonaLibrary
             variant="page"
-            title="Persona Manager"
-            subtitle="Manage player character personas and initial clothing states."
+            onPersonasChanged={onPersonasChanged}
           />
-          <PersonaLibrary onPersonasChanged={onPersonasChanged} />
         </section>
       ) : (
         <section className="home-page">

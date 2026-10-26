@@ -7,7 +7,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { CodeBlock } from "../src/client/components/base/CodeBlock";
+import { CodeBlock } from "../src/client/components/base";
 import {
   renderDocMarkdown,
   slugifyHeading,
@@ -310,7 +310,7 @@ describe("table wrapper", () => {
 
   it("emits the very class the stylesheet styles", () => {
     const css = readFileSync(
-      new URL("../src/client/styles/docs.css", import.meta.url),
+      new URL("../src/client/components/views/DocsView.css", import.meta.url),
       "utf8",
     );
     expect(css).toContain(".doc-table-wrap");
@@ -330,11 +330,14 @@ describe("table wrapper", () => {
  */
 describe("docs width chain", () => {
   const docs = readFileSync(
-    new URL("../src/client/styles/docs.css", import.meta.url),
+    new URL("../src/client/components/views/DocsView.css", import.meta.url),
     "utf8",
   );
   const views = readFileSync(
-    new URL("../src/client/styles/views.css", import.meta.url),
+    new URL(
+      "../src/client/components/base/CodeBlock/CodeBlock.css",
+      import.meta.url,
+    ),
     "utf8",
   );
 

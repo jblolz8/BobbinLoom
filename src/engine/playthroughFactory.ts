@@ -98,7 +98,7 @@ export function createInitialPlaythrough(
 
   const p = persona ?? {
     id: "persona_default",
-    name: "Player",
+    name: "John Bobbin",
     description: "A newcomer, ready for anything.",
     bodyType: "average",
     appearance: "Travel-worn clothes, alert posture.",
@@ -236,7 +236,7 @@ export function createPlaythroughFromSeed(
     playerCharacter: (() => {
       const p = persona ?? {
         id: "persona_default",
-        name: "Player",
+        name: "John Bobbin",
         description: "A newcomer, ready for anything.",
         bodyType: "average",
         appearance: "Travel-worn clothes, alert posture.",
@@ -296,7 +296,7 @@ export function createBlankPlaythrough(
 
   const p = persona ?? {
     id: "persona_default",
-    name: "Player",
+    name: "John Bobbin",
     description: "A newcomer, ready for anything.",
     bodyType: "average",
     appearance: "Travel-worn clothes, alert posture.",

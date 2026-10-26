@@ -114,6 +114,7 @@ A playthrough is one JSON document. The parts you'll see while playing:
 | `memoryEvents`, `memoryLayers` | The memory pipeline — see [Chapters & memory](chapters-and-memory.md) |
 | `itemCatalog` | The world's items |
 | `worldState`, `inventory` | World state |
+| `tags` | Theme, setting, and trope tags ? used to filter the shelf and expanded into turn prompts via `{{playthroughTags}}` |
 | `lorebookIds`, `lorebookTimingStates` | Attached lorebooks and their per-entry timers |
 | `snapshots` | One restore point per turn, which is what makes Retry possible |
 | `scenarioDescription`, `personaId`, `initialCastIds` | Creation-time metadata, kept so a scenario can be replayed |

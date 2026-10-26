@@ -1,10 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Icon } from "../base";
+import {
+  Badge,
+  Button,
+  Card,
+  Header,
+  Icon,
+  Modal,
+  SearchBar,
+  Stack,
+  StatusMessage,
+  Text,
+  TextInput,
+} from "../base";
 import {
   resolveTagStyle,
   sortTags,
   type TagTaxonomyConfig,
 } from "../../../engine/tagTaxonomy";
+import "./TagSuggestionModal.css";
 
 export type TagSuggestionModalProps = {
   characterName: string;
@@ -97,17 +110,6 @@ export function TagSuggestionModal({
   useEffect(() => {
     setDismissedError(false);
   }, [error]);
-
-  // Handle escape key to close modal
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        onClose();
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
 
   const allAvailableTags = useMemo(() => {
     return sortTags(
@@ -290,30 +292,21 @@ export function TagSuggestionModal({
         </span>
 
         {source === "ai_new" ? (
-          <span className="tag-source-badge ai" title="New tag suggested by AI">
-            <Icon name="Sparkles" size={10} /> New AI
-          </span>
+          <Badge variant="accent" size="xs" leftIcon="Sparkles">
+            New AI
+          </Badge>
         ) : source === "ai_confirmed" ? (
-          <span
-            className="tag-source-badge confirmed"
-            title="AI also recommends keeping this tag"
-          >
-            <Icon name="CheckCircle2" size={10} /> Confirmed
-          </span>
+          <Badge variant="success" size="xs" leftIcon="CheckCircle2">
+            Confirmed
+          </Badge>
         ) : source === "saved" ? (
-          <span
-            className="tag-source-badge current"
-            title="Previously saved on character card"
-          >
-            <Icon name="Tag" size={10} /> Saved
-          </span>
+          <Badge variant="info" size="xs" leftIcon="Tag">
+            Saved
+          </Badge>
         ) : (
-          <span
-            className="tag-source-badge custom"
-            title="Custom tag added in this session"
-          >
-            <Icon name="Plus" size={10} /> Custom
-          </span>
+          <Badge variant="neutral" size="xs" leftIcon="Plus">
+            Custom
+          </Badge>
         )}
 
         {source === "custom" && (
@@ -334,461 +327,478 @@ export function TagSuggestionModal({
   }
 
   return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <Modal
+      open={true}
+      onClose={onClose}
+      size="md"
+      ariaLabelledBy="tag-modal-title"
     >
-      <section
-        className="modal tag-suggestion-modal"
-        aria-labelledby="tag-modal-title"
-      >
-        <header className="modal-header tag-suggestion-header">
-          <div className="tag-modal-title-wrap">
-            <div className="tag-modal-title-row">
-              <span className="tag-modal-icon-badge">
-                <Icon name="Sparkles" size={18} />
-              </span>
-              <h2 id="tag-modal-title">AI Tag Suggestions</h2>
-            </div>
-            <p className="tag-modal-subtitle">
-              Review and select tags for{" "}
-              <strong className="tag-char-name-badge">
-                &quot;{characterName || "New Character"}&quot;
-              </strong>
-            </p>
-          </div>
-          <button
+      <Header
+        variant="modal"
+        titleId="tag-modal-title"
+        icon="Sparkles"
+        title="AI Tag Suggestions"
+        subtitle={
+          <Text as="span" size="xs" tone="secondary">
+            Review and select tags for{" "}
+            <Badge variant="accent" size="xs">
+              &quot;{characterName || "New Character"}&quot;
+            </Badge>
+          </Text>
+        }
+        actions={
+          <Button
             type="button"
-            className="diff-close-btn"
+            variant="secondary"
+            size="xs"
+            leftIcon="X"
             onClick={onClose}
-            title="Close and cancel"
-            aria-label="Close modal"
           >
-            <Icon name="X" size={16} />
-          </button>
-        </header>
+            Close
+          </Button>
+        }
+      />
 
-        {/* Optional AI Tagging Guidance Bar */}
-        <div className="tag-modal-guidance-section">
-          <div className="tag-guidance-toggle-row">
-            <button
-              type="button"
-              className="tag-guidance-toggle-btn"
-              onClick={() => setShowGuidanceInput(!showGuidanceInput)}
-            >
-              <Icon
-                name={showGuidanceInput ? "ChevronUp" : "Sliders"}
-                size={13}
-              />
-              <span>
-                {showGuidanceInput
-                  ? "Hide AI Prompt Focus / Guidance"
-                  : "Add Custom Focus / Instructions for AI"}
-              </span>
-            </button>
-            {!loading && (
-              <button
-                type="button"
-                className="tag-mini-btn tag-regenerate-btn"
-                onClick={handleRegenerateClick}
-                title="Regenerate tag suggestions with optional guidance"
+      <Modal.Body>
+        <Modal.Content>
+          <Stack direction="column" gap="md">
+          {/* Optional AI Tagging Guidance Bar */}
+          <Card variant="elevated" padding="sm">
+            <Stack direction="column" gap="sm">
+              <Stack
+                direction="row"
+                justify="between"
+                align="center"
+                gap="sm"
+                wrap
               >
-                <Icon name="Sparkles" size={12} /> Regenerate Suggestions
-              </button>
-            )}
-          </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  leftIcon={showGuidanceInput ? "ChevronUp" : "Sliders"}
+                  onClick={() => setShowGuidanceInput(!showGuidanceInput)}
+                >
+                  {showGuidanceInput
+                    ? "Hide AI Prompt Focus / Guidance"
+                    : "Add Custom Focus / Instructions for AI"}
+                </Button>
+                {!loading && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="xs"
+                    leftIcon="Sparkles"
+                    onClick={handleRegenerateClick}
+                    title="Regenerate tag suggestions with optional guidance"
+                  >
+                    Regenerate Suggestions
+                  </Button>
+                )}
+              </Stack>
 
-          {showGuidanceInput && (
-            <div className="tag-guidance-content-wrap">
-              <div className="tag-guidance-input-row">
-                <div className="tag-guidance-input-inner">
+              {showGuidanceInput && (
+                <Stack direction="column" gap="xs">
+                  <Stack direction="row" gap="xs" align="center">
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <TextInput
+                        size="sm"
+                        leftIcon={<Icon name="Sparkles" size={14} />}
+                        placeholder="e.g. Focus on species:demon traits, gothic outfit, magical combat abilities, rating:sfw..."
+                        value={guidanceInput}
+                        onChange={(e) => setGuidanceInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !loading) {
+                            handleRegenerateClick();
+                          }
+                        }}
+                      />
+                    </div>
+                    {guidanceInput && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        iconOnly
+                        onClick={() => setGuidanceInput("")}
+                        title="Clear guidance text"
+                        aria-label="Clear guidance text"
+                      >
+                        <Icon name="X" size={12} />
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      leftIcon="Sparkles"
+                      onClick={handleRegenerateClick}
+                      disabled={loading}
+                    >
+                      Apply &amp; Regenerate
+                    </Button>
+                  </Stack>
+
+                  {/* Quick Guidance Preset Pills */}
+                  <Stack direction="row" gap="xs" align="center" wrap>
+                    <Text as="span" size="xs" tone="muted" weight="medium">
+                      Quick Presets:
+                    </Text>
+                    {GUIDANCE_PRESETS.map((preset) => (
+                      <Button
+                        key={preset.label}
+                        type="button"
+                        variant="secondary"
+                        size="xs"
+                        onClick={() => handleApplyPresetGuidance(preset.text)}
+                        title={`Add "${preset.text}" to prompt focus`}
+                      >
+                        {preset.label}
+                      </Button>
+                    ))}
+                  </Stack>
+                </Stack>
+              )}
+            </Stack>
+          </Card>
+
+          {/* Modal Main Content */}
+          {loading ? (
+            <div className="tag-suggestion-loading-state">
+              <div className="tag-loading-orb-wrap">
+                <div className="tag-pulse-ring ring-1" />
+                <div className="tag-pulse-ring ring-2" />
+                <div className="tag-loading-orb">
                   <Icon
                     name="Sparkles"
-                    size={14}
-                    className="tag-guidance-inner-icon"
+                    size={28}
+                    className="tag-loading-sparkle-icon"
                   />
-                  <input
-                    type="text"
-                    className="tag-guidance-input"
-                    placeholder="e.g. Focus on species:demon traits, gothic outfit, magical combat abilities, rating:sfw..."
-                    value={guidanceInput}
-                    onChange={(e) => setGuidanceInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !loading) {
-                        handleRegenerateClick();
-                      }
-                    }}
-                  />
-                  {guidanceInput && (
-                    <button
-                      type="button"
-                      className="tag-guidance-clear-btn"
-                      onClick={() => setGuidanceInput("")}
-                      title="Clear guidance text"
-                    >
-                      <Icon name="X" size={12} />
-                    </button>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  className="primary-btn tag-guidance-apply-btn"
-                  onClick={handleRegenerateClick}
-                  disabled={loading}
-                >
-                  <Icon name="Sparkles" size={13} /> Apply &amp; Regenerate
-                </button>
-              </div>
-
-              {/* Quick Guidance Preset Pills */}
-              <div className="tag-guidance-presets-row">
-                <span className="tag-guidance-presets-label">
-                  Quick Presets:
-                </span>
-                <div className="tag-guidance-presets-list">
-                  {GUIDANCE_PRESETS.map((preset) => (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      className="tag-preset-chip-btn"
-                      onClick={() => handleApplyPresetGuidance(preset.text)}
-                      title={`Add "${preset.text}" to prompt focus`}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
                 </div>
               </div>
-            </div>
-          )}
-        </div>
 
-        {/* Modal Main Content */}
-        {loading ? (
-          <div className="tag-suggestion-loading-state">
-            {/* Glowing Cosmic AI Orb */}
-            <div className="tag-loading-orb-wrap">
-              <div className="tag-pulse-ring ring-1" />
-              <div className="tag-pulse-ring ring-2" />
-              <div className="tag-loading-orb">
-                <Icon
-                  name="Sparkles"
-                  size={30}
-                  className="tag-loading-sparkle-icon"
-                />
+              <Stack direction="column" gap="2xs" align="center">
+                <Text as="h3" size="md" weight="semibold">
+                  Analyzing Character Sheet…
+                </Text>
+                <Text as="p" size="xs" tone="secondary">
+                  Evaluating character lore and matching taxonomy to curate
+                  relevant tags.
+                </Text>
+              </Stack>
+
+              <div className="tag-loading-line-track">
+                <div className="tag-loading-line-bar" />
               </div>
-            </div>
 
-            {/* Clear and honest title and subtitle */}
-            <div className="tag-loading-status-wrap">
-              <h3 className="tag-loading-stage-title">
-                Analyzing Character Sheet…
-              </h3>
-              <p className="tag-loading-stage-desc">
-                Evaluating character lore and matching taxonomy to curate
-                relevant tags.
-              </p>
-            </div>
+              {guidanceInput.trim() ? (
+                <Badge variant="accent" size="xs" leftIcon="Sliders">
+                  Applying focus: &ldquo;{guidanceInput.trim()}&rdquo;
+                </Badge>
+              ) : null}
 
-            {/* Indeterminate Glowing Line */}
-            <div className="tag-loading-line-track">
-              <div className="tag-loading-line-bar" />
-            </div>
+              <Card variant="elevated" padding="sm" fullWidth>
+                <Stack direction="column" gap="xs" align="center">
+                  <Text
+                    as="span"
+                    size="xs"
+                    tone="muted"
+                    weight="semibold"
+                    uppercase
+                  >
+                    Incoming Tag Recommendations
+                  </Text>
+                  <div className="tag-skeleton-grid">
+                    {SKELETON_WIDTHS.map((width, i) => (
+                      <div
+                        key={i}
+                        className="tag-skeleton-pill"
+                        style={{ width, animationDelay: `${(i % 6) * 0.15}s` }}
+                      />
+                    ))}
+                  </div>
+                </Stack>
+              </Card>
 
-            {/* Active Guidance Reminder (if provided) */}
-            {guidanceInput.trim() ? (
-              <div className="tag-loading-guidance-pill">
-                <Icon name="Sliders" size={12} />
-                <span>
-                  Applying focus: <em>&ldquo;{guidanceInput.trim()}&rdquo;</em>
-                </span>
-              </div>
-            ) : null}
-
-            {/* Tag Skeleton Cloud Preview */}
-            <div className="tag-loading-skeleton-preview">
-              <span className="tag-skeleton-caption">
-                Incoming Tag Recommendations
-              </span>
-              <div className="tag-skeleton-grid">
-                {SKELETON_WIDTHS.map((width, i) => (
-                  <div
-                    key={i}
-                    className="tag-skeleton-pill skeleton-shimmer"
-                    style={{ width, animationDelay: `${(i % 6) * 0.15}s` }}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Explicit Cancel Button */}
-            <div className="tag-loading-actions">
               <Button
-                variant="secondary"
+                variant="danger"
                 size="sm"
-                className="tag-cancel-generation-btn"
                 onClick={onClose}
                 leftIcon={<Icon name="XCircle" size={14} />}
               >
                 Cancel Generation
               </Button>
             </div>
-          </div>
-        ) : error && !dismissedError ? (
-          <div className="tag-suggestion-error-state">
-            <div className="tag-modal-error-banner">
-              <div className="tag-error-icon-wrap">
-                <Icon name="AlertCircle" size={24} />
-              </div>
-              <div className="tag-error-text-wrap">
-                <h4>AI Tag Generation Failed</h4>
-                <p>{error}</p>
-              </div>
-            </div>
-            <div className="tag-error-actions">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setDismissedError(true)}
-                leftIcon={<Icon name="Edit3" size={14} />}
-              >
-                Continue Manually
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                className="tag-error-retry-btn"
-                onClick={handleRegenerateClick}
-                leftIcon={<Icon name="RefreshCw" size={14} />}
-              >
-                Retry Generation
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="tag-suggestion-body">
-            {/* Toolbar */}
-            <div className="tag-suggestion-toolbar">
-              <div className="tag-count-indicator">
-                <span className="tag-count-number">{selectedTags.size}</span>
-                <span className="tag-count-text">
-                  of {allAvailableTags.length} tags selected
-                </span>
-              </div>
-
-              {/* Tag Search Filter */}
-              <div className="tag-filter-search-wrap">
-                <Icon
-                  name="Search"
-                  size={12}
-                  className="tag-filter-search-icon"
-                />
-                <input
-                  type="text"
-                  className="tag-filter-search-input"
-                  placeholder="Filter tags…"
-                  value={filterQuery}
-                  onChange={(e) => setFilterQuery(e.target.value)}
-                />
-                {filterQuery && (
-                  <button
-                    type="button"
-                    className="tag-filter-clear-btn"
-                    onClick={() => setFilterQuery("")}
-                    title="Clear filter"
-                  >
-                    <Icon name="X" size={10} />
-                  </button>
-                )}
-              </div>
-
-              {/* Batch Select Actions */}
-              <div className="tag-selection-actions">
-                <button
-                  type="button"
-                  className="tag-mini-btn"
-                  onClick={handleSelectAll}
-                  title="Select all tags"
+          ) : error && !dismissedError ? (
+            <Stack direction="column" gap="md">
+              <StatusMessage variant="banner" tone="err">
+                <strong>AI Tag Generation Failed:</strong> {error}
+              </StatusMessage>
+              <Stack direction="row" justify="end" gap="sm">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setDismissedError(true)}
+                  leftIcon={<Icon name="Edit3" size={14} />}
                 >
-                  Select All
-                </button>
-                {suggestedTags.length > 0 && otherCardTags.length > 0 && (
-                  <button
-                    type="button"
-                    className="tag-mini-btn"
-                    onClick={handleSelectOnlyAi}
-                    title="Select only AI suggestions"
-                  >
-                    AI Only
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="tag-mini-btn"
-                  onClick={handleDeselectAll}
-                  title="Deselect all tags"
+                  Continue Manually
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleRegenerateClick}
+                  leftIcon={<Icon name="RefreshCw" size={14} />}
                 >
-                  Clear All
-                </button>
-              </div>
-            </div>
+                  Retry Generation
+                </Button>
+              </Stack>
+            </Stack>
+          ) : (
+            <Stack direction="column" gap="md">
+              {/* Toolbar */}
+              <Stack
+                direction="row"
+                justify="between"
+                align="center"
+                gap="sm"
+                wrap
+              >
+                <Stack direction="row" gap="xs" align="center">
+                  <Badge variant="accent" size="xs" pill>
+                    {selectedTags.size}
+                  </Badge>
+                  <Text as="span" size="xs" tone="muted">
+                    of {allAvailableTags.length} tags selected
+                  </Text>
+                </Stack>
 
-            {/* AI Suggested Tags Group */}
-            {aiSuggestedTagsList.length > 0 ? (
-              <div className="tag-modal-group ai-group">
-                <div className="tag-modal-group-title">
-                  <Icon name="Sparkles" size={13} />
-                  <span>
-                    AI Recommended Tags ({aiSuggestedTagsList.length})
-                  </span>
+                <div style={{ flex: "1 1 180px", maxWidth: "240px" }}>
+                  <SearchBar
+                    size="sm"
+                    placeholder="Filter tags…"
+                    value={filterQuery}
+                    onChange={setFilterQuery}
+                  />
                 </div>
-                <div className="tag-suggestion-chips-grid">
-                  {aiSuggestedTagsList.map((tag) => {
-                    const isNew = !currentTags.includes(tag);
-                    return renderTagToggle(
-                      tag,
-                      isNew ? "ai_new" : "ai_confirmed",
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
 
-            {/* Other Existing Saved Tags Group */}
-            {otherCardTags.length > 0 ? (
-              <div className="tag-modal-group saved-group">
-                <div className="tag-modal-group-title">
-                  <Icon name="Tag" size={13} />
-                  <span>Other Saved Card Tags ({otherCardTags.length})</span>
-                </div>
-                <div className="tag-suggestion-chips-grid">
-                  {otherCardTags.map((tag) => renderTagToggle(tag, "saved"))}
-                </div>
-              </div>
-            ) : null}
-
-            {/* Custom Added Tags Group */}
-            {customTagsList.length > 0 ? (
-              <div className="tag-modal-group custom-group">
-                <div className="tag-modal-group-title">
-                  <Icon name="Plus" size={13} />
-                  <span>Custom Added Tags ({customTagsList.length})</span>
-                </div>
-                <div className="tag-suggestion-chips-grid">
-                  {customTagsList.map((tag) => renderTagToggle(tag, "custom"))}
-                </div>
-              </div>
-            ) : null}
-
-            {/* Filter Empty State */}
-            {filteredTags.length === 0 ? (
-              <div className="tag-empty-filter-state">
-                <Icon name="SearchX" size={24} className="tag-empty-icon" />
-                <p>
-                  No matching tags found for &ldquo;
-                  <strong>{filterQuery}</strong>&rdquo;.
-                </p>
-                <div className="tag-empty-actions">
-                  <button
+                <Stack direction="row" gap="xs" align="center">
+                  <Button
                     type="button"
-                    className="tag-mini-btn"
-                    onClick={() => {
-                      setCustomTagInput(filterQuery);
-                      setFilterQuery("");
+                    variant="secondary"
+                    size="xs"
+                    onClick={handleSelectAll}
+                    title="Select all tags"
+                  >
+                    Select All
+                  </Button>
+                  {suggestedTags.length > 0 && otherCardTags.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="xs"
+                      onClick={handleSelectOnlyAi}
+                      title="Select only AI suggestions"
+                    >
+                      AI Only
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="xs"
+                    onClick={handleDeselectAll}
+                    title="Deselect all tags"
+                  >
+                    Clear All
+                  </Button>
+                </Stack>
+              </Stack>
+
+              {/* AI Suggested Tags Group */}
+              {aiSuggestedTagsList.length > 0 ? (
+                <Card variant="elevated" padding="sm">
+                  <Stack direction="column" gap="xs">
+                    <Stack direction="row" gap="xs" align="center">
+                      <Icon name="Sparkles" size={13} />
+                      <Text
+                        as="span"
+                        size="xs"
+                        tone="muted"
+                        weight="semibold"
+                        uppercase
+                      >
+                        AI Recommended Tags ({aiSuggestedTagsList.length})
+                      </Text>
+                    </Stack>
+                    <div className="tag-suggestion-chips-grid">
+                      {aiSuggestedTagsList.map((tag) => {
+                        const isNew = !currentTags.includes(tag);
+                        return renderTagToggle(
+                          tag,
+                          isNew ? "ai_new" : "ai_confirmed",
+                        );
+                      })}
+                    </div>
+                  </Stack>
+                </Card>
+              ) : null}
+
+              {/* Other Existing Saved Tags Group */}
+              {otherCardTags.length > 0 ? (
+                <Card variant="elevated" padding="sm">
+                  <Stack direction="column" gap="xs">
+                    <Stack direction="row" gap="xs" align="center">
+                      <Icon name="Tag" size={13} />
+                      <Text
+                        as="span"
+                        size="xs"
+                        tone="muted"
+                        weight="semibold"
+                        uppercase
+                      >
+                        Other Saved Card Tags ({otherCardTags.length})
+                      </Text>
+                    </Stack>
+                    <div className="tag-suggestion-chips-grid">
+                      {otherCardTags.map((tag) => renderTagToggle(tag, "saved"))}
+                    </div>
+                  </Stack>
+                </Card>
+              ) : null}
+
+              {/* Custom Added Tags Group */}
+              {customTagsList.length > 0 ? (
+                <Card variant="elevated" padding="sm">
+                  <Stack direction="column" gap="xs">
+                    <Stack direction="row" gap="xs" align="center">
+                      <Icon name="Plus" size={13} />
+                      <Text
+                        as="span"
+                        size="xs"
+                        tone="muted"
+                        weight="semibold"
+                        uppercase
+                      >
+                        Custom Added Tags ({customTagsList.length})
+                      </Text>
+                    </Stack>
+                    <div className="tag-suggestion-chips-grid">
+                      {customTagsList.map((tag) =>
+                        renderTagToggle(tag, "custom"),
+                      )}
+                    </div>
+                  </Stack>
+                </Card>
+              ) : null}
+
+              {/* Filter Empty State */}
+              {filteredTags.length === 0 ? (
+                <Card variant="elevated" padding="md">
+                  <Stack direction="column" gap="xs" align="center">
+                    <Icon name="SearchX" size={24} />
+                    <Text as="p" size="sm" tone="secondary" align="center">
+                      No matching tags found for &ldquo;
+                      <strong>{filterQuery}</strong>&rdquo;.
+                    </Text>
+                    <Stack direction="row" gap="xs" align="center">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="xs"
+                        leftIcon="Plus"
+                        onClick={() => {
+                          setCustomTagInput(filterQuery);
+                          setFilterQuery("");
+                        }}
+                      >
+                        Add &ldquo;{filterQuery}&rdquo; as Custom Tag
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => setFilterQuery("")}
+                      >
+                        Clear Filter
+                      </Button>
+                    </Stack>
+                  </Stack>
+                </Card>
+              ) : null}
+
+              {/* Quick Add Custom Tag Row */}
+              <Stack direction="row" gap="xs" align="center">
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <TextInput
+                    size="sm"
+                    leftIcon={<Icon name="Plus" size={13} />}
+                    placeholder="Add custom tag(s)… (comma-separated e.g. species:elf, archer, gothic)"
+                    value={customTagInput}
+                    onChange={(e) => setCustomTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddCustomTag();
+                      }
                     }}
-                  >
-                    <Icon name="Plus" size={12} /> Add &ldquo;{filterQuery}
-                    &rdquo; as Custom Tag
-                  </button>
-                  <button
-                    type="button"
-                    className="tag-mini-btn"
-                    onClick={() => setFilterQuery("")}
-                  >
-                    Clear Filter
-                  </button>
+                  />
                 </div>
-              </div>
-            ) : null}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  leftIcon="Plus"
+                  onClick={handleAddCustomTag}
+                  disabled={!customTagInput.trim()}
+                >
+                  Add
+                </Button>
+              </Stack>
+            </Stack>
+          )}
+        </Stack>
+        </Modal.Content>
+      </Modal.Body>
 
-            {/* Quick Add Custom Tag Row */}
-            <div className="tag-modal-add-row">
-              <div className="tag-custom-input-wrap">
-                <Icon name="Plus" size={13} className="tag-custom-icon" />
-                <input
-                  type="text"
-                  placeholder="Add custom tag(s)… (comma-separated e.g. species:elf, archer, gothic)"
-                  value={customTagInput}
-                  onChange={(e) => setCustomTagInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleAddCustomTag();
-                    }
-                  }}
-                  className="tag-custom-input"
-                />
-              </div>
-              <button
-                type="button"
-                className="secondary-btn add-custom-tag-btn"
-                onClick={handleAddCustomTag}
-                disabled={!customTagInput.trim()}
-              >
-                <Icon name="Plus" size={14} /> Add
-              </button>
-            </div>
-          </div>
-        )}
-
-        <footer className="tag-modal-footer">
-          <div className="tag-footer-status">
+      <Modal.Footer>
+        <Stack
+          direction="row"
+          justify="between"
+          align="center"
+          gap="sm"
+          wrap
+          fullWidth
+        >
+          <div>
             {!loading && (
-              <span className="tag-footer-breakdown">
-                <strong>{selectedTags.size}</strong> selected
-                {aiSelectedCount > 0 && (
-                  <span className="tag-breakdown-sub">
-                    {" "}
-                    · {aiSelectedCount} AI
-                  </span>
-                )}
-                {savedSelectedCount > 0 && (
-                  <span className="tag-breakdown-sub">
-                    {" "}
-                    · {savedSelectedCount} Saved
-                  </span>
-                )}
-                {customSelectedCount > 0 && (
-                  <span className="tag-breakdown-sub">
-                    {" "}
-                    · {customSelectedCount} Custom
-                  </span>
-                )}
-              </span>
+              <Text as="span" size="xs" tone="muted">
+                <Text as="strong" size="xs" tone="primary" weight="semibold">
+                  {selectedTags.size}
+                </Text>{" "}
+                selected
+                {aiSelectedCount > 0 ? ` · ${aiSelectedCount} AI` : ""}
+                {savedSelectedCount > 0 ? ` · ${savedSelectedCount} Saved` : ""}
+                {customSelectedCount > 0
+                  ? ` · ${customSelectedCount} Custom`
+                  : ""}
+              </Text>
             )}
           </div>
-          <div className="tag-footer-actions">
-            <Button
-              variant="secondary"
-              className="diff-cancel-btn"
-              onClick={onClose}
-            >
+          <Stack direction="row" gap="sm" align="center">
+            <Button variant="secondary" onClick={onClose}>
               Cancel
             </Button>
             <Button
               variant="primary"
-              className="tag-apply-btn"
               onClick={handleConfirm}
               disabled={loading}
               leftIcon={<Icon name="Check" size={15} />}
             >
               Apply ({selectedTags.size}) Tags
             </Button>
-          </div>
-        </footer>
-      </section>
-    </div>
+          </Stack>
+        </Stack>
+      </Modal.Footer>
+    </Modal>
   );
 }

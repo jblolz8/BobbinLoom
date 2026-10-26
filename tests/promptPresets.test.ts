@@ -105,4 +105,20 @@ describe("shipped prompt presets", () => {
       expect(core!.content).not.toContain("BobbinLoom");
     }
   });
+
+  it("Story Theme carries the {{playthroughTags}} macro in both default presets", () => {
+    for (const preset of presets) {
+      const storyTheme = preset.modules.turn.find(
+        (m) => m.id === "story-theme",
+      );
+      expect(
+        storyTheme,
+        `${preset.id} has a story-theme module`,
+      ).toBeDefined();
+      expect(storyTheme!.name).toBe("Story Theme");
+      expect(storyTheme!.content).toContain(
+        "The themes, settings, and tropes of the story are {{playthroughTags}}.",
+      );
+    }
+  });
 });

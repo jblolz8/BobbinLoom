@@ -22,7 +22,8 @@
   overflow: visible;
 }
 
-.base-tag-row > .color-tag-chip {
+.base-tag-row > .color-tag-chip,
+.base-tag-row > .base-badge {
   flex-shrink: 0;
 }
 
