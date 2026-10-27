@@ -1,3 +1,4 @@
+export * from "./Accordion/Accordion";
 export * from "./AvatarBadge/AvatarBadge";
 export * from "./Badge/Badge";
 export * from "./Button/Button";

@@ -165,6 +165,7 @@ export type PageSizeSurface =
   | "lorebook"
   | "persona"
   | "setupCast"
+  | "setupLorebook"
   | "home";
 
 /** The shape every resolver below shares: defaults first, so a stored value always wins — including one
@@ -183,6 +184,7 @@ export const SETUP_PREFERENCE_DEFAULTS: ResolvedSetupPreferences = {
   castSortDir: "asc",
   castViewMode: "portrait",
   showTagFilters: false,
+  showLorebooks: false,
 };
 
 export type ResolvedSetupPreferences = {
@@ -191,6 +193,7 @@ export type ResolvedSetupPreferences = {
   castSortDir: "asc" | "desc";
   castViewMode: "portrait" | "list" | "grid";
   showTagFilters: boolean;
+  showLorebooks: boolean;
 };
 
 export function resolveSetupPreferences(

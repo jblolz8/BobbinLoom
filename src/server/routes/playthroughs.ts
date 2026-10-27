@@ -531,10 +531,13 @@ export const playthroughRoutes: FastifyPluginAsync<
     const preset = resolvePresetForGeneration(body.presetId);
     if (body.presetId && !preset)
       return reply.code(404).send({ error: "Preset not found" });
+    const allowAdditionalCharacters = body.allowAdditionalCharacters ?? true;
+    const openingChoices = body.generateOpeningChoices ?? false;
     const preferences: ScenarioPreferences = {
       name: body.name,
       setting: body.setting,
-      allowAdditionalCharacters: body.allowAdditionalCharacters ?? true,
+      allowAdditionalCharacters,
+      generateOpeningChoices: openingChoices,
     };
     if (body.castIds && body.castIds.length) {
       const castTemplates = resolveCast(body.castIds) ?? [];
@@ -580,10 +583,13 @@ export const playthroughRoutes: FastifyPluginAsync<
           body.castIds,
           body.lorebookIds,
           body.setting,
+          /* includeOpening */ true,
+          allowAdditionalCharacters,
         );
         updatePlaythroughRecord(dataDir, playthrough);
         return reply.code(201).send({
           state: playthrough,
+          choices: openingChoices ? seed.choices : undefined,
           tokenUsage: null,
           rawInput: null,
           rawOutput: null,
@@ -601,6 +607,7 @@ export const playthroughRoutes: FastifyPluginAsync<
         body.lorebookIds,
         body.setting,
         /* includeOpening */ false,
+        allowAdditionalCharacters,
       );
 
       if (openingMode === "fleshedOut") {
@@ -657,15 +664,16 @@ export const playthroughRoutes: FastifyPluginAsync<
       }
       if (body.sessionId)
         publishGenerationProgress(body.sessionId, "Writing opening scene...");
-      const openingChoices = body.generateOpeningChoices ?? false;
       const result = await executeTurn(
         fleshed,
-        buildOpeningPrompt(body.setting, seed),
+        buildOpeningPrompt(body.setting, seed, allowAdditionalCharacters),
         provider,
         openingChoices,
         contextWindow,
         {
           signal: controller.signal,
+          hideUserMessage: true,
+          allowAdditionalCharacters,
           characterProvider: manager.getProvider(
             manager.characterTextProviderId() ?? undefined,
           ),
@@ -675,14 +683,10 @@ export const playthroughRoutes: FastifyPluginAsync<
 
       if (controller.signal.aborted) return;
 
-      result.state.messages = result.state.messages.filter(
-        (m) => m.role !== "user",
-      );
-      result.state.snapshots = {};
-
       updatePlaythroughRecord(dataDir, result.state);
       return reply.code(201).send({
         state: result.state,
+        choices: result.choices,
         tokenUsage: result.tokenUsage,
         rawInput: result.rawInput,
         rawOutput: result.rawOutput,

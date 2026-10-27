@@ -146,6 +146,7 @@ export function createPlaythroughFromSeed(
   persona?: PlayerPersona,
   cast?: CharacterTemplate[],
   includeOpening = true,
+  allowAdditionalCharacters = true,
 ): Playthrough {
   const createdAt = nowIso();
   const playthroughId = newId("play");
@@ -160,22 +161,26 @@ export function createPlaythroughFromSeed(
   let characterTemplates: CharacterTemplate[];
 
   if (castTemplates.length === 0) {
-    const template: CharacterTemplate = {
-      id: newId("tmpl"),
-      name: seed.character.name,
-      version: 1,
-      content: seed.character.content,
-      summary: "",
-      startingClothing: [],
-    };
-    characters = [instantiateTemplate(template, playthroughId, branchId)];
-    characterTemplates = [template];
+    if (allowAdditionalCharacters && seed.character?.name?.trim()) {
+      const template: CharacterTemplate = {
+        id: newId("tmpl"),
+        name: seed.character.name.trim(),
+        version: 1,
+        content: seed.character.content,
+        summary: "",
+        startingClothing: [],
+      };
+      characters = [instantiateTemplate(template, playthroughId, branchId)];
+      characterTemplates = [template];
+    } else {
+      characters = [];
+      characterTemplates = [];
+    }
   } else {
+    const seedLeadName = seed.character?.name?.trim().toLowerCase() ?? "";
     const lead =
       castTemplates.find(
-        (t) =>
-          t.name.trim().toLowerCase() ===
-          seed.character.name.trim().toLowerCase(),
+        (t) => t.name.trim().toLowerCase() === seedLeadName,
       ) ?? castTemplates[0];
     const ordered = [lead, ...castTemplates.filter((t) => t.id !== lead.id)];
     characters = ordered.map((t) =>
@@ -184,27 +189,29 @@ export function createPlaythroughFromSeed(
     characterTemplates = clone(ordered);
   }
 
-  // Map seed.additionalCharacters into simple instances
-  for (const ac of seed.additionalCharacters) {
-    if (!castNames.has(ac.name.trim().toLowerCase())) {
-      const createdAt = nowIso();
-      const inst: CharacterInstance = {
-        id: newId("inst"),
-        playthroughId,
-        branchId,
-        name: ac.name,
-        storyRole: ac.storyRole || "Stranger",
-        description: ac.description,
-        mood: "neutral",
-        towardPlayer: "neutral",
-        memorySummary: `${ac.name} has not formed a strong opinion of the player yet.`,
-        conditions: [],
-        flags: [],
-        clothing: [],
-        createdAt,
-        updatedAt: createdAt,
-      };
-      characters.push(inst);
+  // Map seed.additionalCharacters into simple instances when allowed
+  if (allowAdditionalCharacters) {
+    for (const ac of seed.additionalCharacters) {
+      if (!castNames.has(ac.name.trim().toLowerCase())) {
+        const createdAt = nowIso();
+        const inst: CharacterInstance = {
+          id: newId("inst"),
+          playthroughId,
+          branchId,
+          name: ac.name,
+          storyRole: ac.storyRole || "Stranger",
+          description: ac.description,
+          mood: "neutral",
+          towardPlayer: "neutral",
+          memorySummary: `${ac.name} has not formed a strong opinion of the player yet.`,
+          conditions: [],
+          flags: [],
+          clothing: [],
+          createdAt,
+          updatedAt: createdAt,
+        };
+        characters.push(inst);
+      }
     }
   }
 

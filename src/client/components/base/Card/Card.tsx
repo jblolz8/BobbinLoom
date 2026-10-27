@@ -78,6 +78,8 @@ const CardBase = forwardRef<HTMLElement, CardProps>(function Card(
 export interface CardCoverProps extends HTMLAttributes<HTMLDivElement> {
   position?: "top" | "row";
   aspect?: "portrait" | "square";
+  /** Optional floating badge or selection indicator anchored to the top-right of the cover. */
+  overlay?: ReactNode;
   children?: ReactNode;
 }
 
@@ -85,6 +87,7 @@ export interface CardCoverProps extends HTMLAttributes<HTMLDivElement> {
 export function CardCover({
   position = "top",
   aspect,
+  overlay,
   className = "",
   children,
   ...props
@@ -101,7 +104,36 @@ export function CardCover({
   return (
     <div className={classNames} {...props}>
       {children}
+      {overlay ? (
+        <div className="base-card__cover-overlay">{overlay}</div>
+      ) : null}
     </div>
+  );
+}
+
+export interface CardSelectIndicatorProps
+  extends HTMLAttributes<HTMLSpanElement> {
+  checked: boolean;
+}
+
+/** Circular selection indicator for selectable cards (Persona, Cast, Lorebook pickers). */
+export function CardSelectIndicator({
+  checked,
+  className = "",
+  ...props
+}: CardSelectIndicatorProps) {
+  const classes = [
+    "base-card__select-indicator",
+    checked ? "base-card__select-indicator--checked" : "",
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <span className={classes} aria-hidden="true" {...props}>
+      {checked ? <Icon name="Check" size={13} strokeWidth={3} /> : null}
+    </span>
   );
 }
 
@@ -183,6 +215,7 @@ export type CardCompound = typeof CardBase & {
   Body: typeof CardBody;
   TitleButton: typeof CardTitleButton;
   Interactive: typeof CardInteractive;
+  SelectIndicator: typeof CardSelectIndicator;
 };
 
 export const Card = Object.assign(CardBase, {
@@ -190,6 +223,7 @@ export const Card = Object.assign(CardBase, {
   Body: CardBody,
   TitleButton: CardTitleButton,
   Interactive: CardInteractive,
+  SelectIndicator: CardSelectIndicator,
 }) as CardCompound;
 
 export interface DragHandleProps extends HTMLAttributes<HTMLSpanElement> {

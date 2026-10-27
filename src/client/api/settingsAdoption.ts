@@ -148,6 +148,7 @@ const PAGE_SIZE_KEYS: Record<PageSizeSurface, string> = {
   lorebook: "bobbinloom_lorebook_page_size",
   persona: "bobbinloom_persona_page_size",
   setupCast: "bobbinloom_setup_cast_page_size",
+  setupLorebook: "bobbinloom_setup_lorebook_page_size",
   home: "bobbinloom_home_page_size",
 };
 

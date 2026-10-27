@@ -1393,12 +1393,15 @@ export function usePlaythrough() {
     }
   }
 
-  function resetTurnState(newPlaythrough: Playthrough | null) {
+  function resetTurnState(
+    newPlaythrough: Playthrough | null,
+    initialChoices: string[] = [],
+  ) {
     // Flush the current playthrough's draft before switching away.
     const oldId = playthrough?.id ?? null;
     if (oldId && oldId !== newPlaythrough?.id) void persistDraft(oldId, input);
     setPlaythrough(newPlaythrough);
-    setChoices([]);
+    setChoices(initialChoices);
     setLastPatchInfo({ applied: [], rejected: [], warnings: [] });
     setRawInput(null);
     setRawOutput(null);

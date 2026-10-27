@@ -1513,6 +1513,7 @@ export function createPlaythroughFromSeedRecord(
   lorebookIds?: string[],
   scenarioDescription?: string,
   includeOpening = true,
+  allowAdditionalCharacters = true,
 ): Playthrough {
   const persona = personaId
     ? (getPersona(personaId) ?? loadDefaultPersona())
@@ -1523,6 +1524,7 @@ export function createPlaythroughFromSeedRecord(
     persona,
     resolveCast(castIds),
     includeOpening,
+    allowAdditionalCharacters,
   );
   if (lorebookIds) playthrough.lorebookIds = lorebookIds;
   if (scenarioDescription)

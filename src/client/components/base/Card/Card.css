@@ -32,6 +32,11 @@
   align-items: center;
   gap: 0.85rem;
   min-height: 0;
+}
+
+.base-card--layout-row.base-card--full-width,
+.base-form-grid > .base-card--layout-row {
+  width: 100%;
   container-type: inline-size;
   container-name: card-row;
 }
@@ -108,9 +113,61 @@ button.base-card {
 }
 
 /* Cover slots */
+.base-card__cover {
+  position: relative;
+}
+
 .base-card__cover--top {
   width: 100%;
   flex-shrink: 0;
+}
+
+.base-card__cover-overlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.base-card__select-indicator {
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--bg-panel) 82%, transparent);
+  border: 1.5px solid var(--border-light);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-text, #ffffff);
+  flex-shrink: 0;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.base-card--hoverable:hover .base-card__select-indicator:not(.base-card__select-indicator--checked) {
+  border-color: var(--accent-highlight, var(--accent-base));
+}
+
+.base-card__select-indicator--checked {
+  background: var(--accent-base);
+  border-color: var(--accent-highlight, var(--accent-base));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent-base) 55%, transparent);
+}
+
+.base-card[role="button"],
+.base-card[role="checkbox"],
+.base-card[role="radio"] {
+  cursor: pointer;
+  user-select: none;
+}
+
+.base-card[role="checkbox"][aria-disabled="true"] {
+  cursor: not-allowed;
 }
 
 .base-card__cover--aspect-portrait {

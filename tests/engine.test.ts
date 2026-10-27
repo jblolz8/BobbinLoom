@@ -638,6 +638,30 @@ describe("createPlaythroughFromSeed — cast reuse", () => {
     expect(pt.characters[0].name).toBe("Mira");
     expect(pt.messages.map((m) => m.content)).toContain("Open.");
   });
+
+  it("no cast + allowAdditionalCharacters=false => creates a true solo playthrough with zero characters", () => {
+    const seed = {
+      character: { name: "Mira", content: "c" },
+      startingWorldState: [],
+      items: [],
+      additionalCharacters: [
+        { name: "Borg", description: "Blacksmith", storyRole: "Smith" },
+      ],
+      openingText: "Solo open.",
+    } as ScenarioSeed;
+    const pt = createPlaythroughFromSeed(
+      "Solo",
+      seed,
+      undefined,
+      [],
+      true,
+      false,
+    );
+    expect(pt.characters).toHaveLength(0);
+    expect(pt.characterTemplates).toHaveLength(0);
+    expect(pt.activeCharacters).toHaveLength(0);
+    expect(pt.messages.map((m) => m.content)).toContain("Solo open.");
+  });
 });
 describe("applyStatePatch — character section item ops", () => {
   it("adds an item to a present character's section", () => {

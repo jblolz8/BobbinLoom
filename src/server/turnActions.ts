@@ -85,6 +85,8 @@ export type TurnOptions = {
   /** Mark the assistant message as the opening of a new chapter. Drives the
    *  "Re-summarize previous chapter" action in the chat UI. */
   chapterOpening?: boolean;
+  /** When false, strips any AI-invented `charactersAdded` from the turn's statePatch. */
+  allowAdditionalCharacters?: boolean;
   /** External abort signal (e.g. client disconnect) — forwarded to the
    *  provider so in-flight model calls stop and nothing is persisted. */
   signal?: AbortSignal;
@@ -123,6 +125,13 @@ export async function executeTurn(
     options?.signal,
   );
   const durationMs = Math.round(performance.now() - startTime);
+
+  if (
+    options?.allowAdditionalCharacters === false &&
+    assistantTurn.statePatch?.characterAddSimple
+  ) {
+    delete assistantTurn.statePatch.characterAddSimple;
+  }
 
   const charProvider = options?.characterProvider ?? provider;
   if (assistantTurn.statePatch?.characterFleshOut) {
@@ -781,6 +790,7 @@ function sweepAfterDeleteForward(
 export function buildOpeningPrompt(
   scenarioDescription: string | undefined,
   seed: ScenarioSeed,
+  allowAdditionalCharacters = true,
 ): string {
   const parts: string[] = [];
   if (scenarioDescription?.trim())
@@ -788,6 +798,9 @@ export function buildOpeningPrompt(
   parts.push(
     "Introduce the scene to the player character. Establish the atmosphere and immediate surroundings. " +
       "Write in second person. Do not take actions on behalf of the player. " +
+      (allowAdditionalCharacters === false
+        ? "Do not invent or introduce any new characters beyond those already present in the scene. "
+        : "") +
       "End by presenting the current moment as an invitation for the player to act.",
   );
   return parts.join("\n\n");

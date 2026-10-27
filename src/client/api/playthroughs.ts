@@ -62,6 +62,7 @@ export type ScenarioPreferences = {
 
 export type GeneratePlaythroughResponse = {
   state: Playthrough;
+  choices?: string[];
   tokenUsage: TokenUsage;
   rawInput?: string;
   rawOutput?: string;

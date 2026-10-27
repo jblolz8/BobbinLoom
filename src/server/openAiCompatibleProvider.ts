@@ -346,6 +346,11 @@ export class OpenAICompatibleProvider {
     const fmt = resolveCharacterFormat(format);
     const sheetExample = toJsonExampleContent(buildFormatExample(fmt));
     const rules = buildFormatRules(fmt);
+    const hasExistingCast = Boolean(
+      preferences.cast && preferences.cast.length > 0,
+    );
+    const isSoloNoInvent =
+      !hasExistingCast && preferences.allowAdditionalCharacters === false;
 
     const prompt = [
       "You are a scenario generator for a local RPG chat engine called BobbinLoom.",
@@ -354,8 +359,9 @@ export class OpenAICompatibleProvider {
       "Return ONLY a JSON object with this exact shape:",
       "{",
       '  "character": {',
-      '    "name": "Character Name",',
-      `    "content": "${sheetExample}"`,
+      isSoloNoInvent
+        ? '    "name": "",\n    "content": ""'
+        : `    "name": "Character Name",\n    "content": "${sheetExample}"`,
       "  },",
       '  "startingWorldState": [',
       '    { "name": "Objective / World Situation", "description": "Context and goal description." }',
@@ -364,9 +370,12 @@ export class OpenAICompatibleProvider {
       '    { "id": "item_id", "name": "Item Name", "type": "weapon", "description": "What it does.", "quantity": 1 }',
       "  ],",
       '  "additionalCharacters": [',
-      '    { "name": "Borg", "description": "Gruff blacksmith at the forge.", "storyRole": "Local Blacksmith" }',
-      "  ],",
-      '  "openingText": "Setting the stage: 2-3 sentences of introduction to the situation."',
+      preferences.allowAdditionalCharacters === false
+        ? "  ],"
+        : '    { "name": "Borg", "description": "Gruff blacksmith at the forge.", "storyRole": "Local Blacksmith" }\n  ],',
+      preferences.generateOpeningChoices
+        ? '  "openingText": "Setting the stage: 2-3 sentences of introduction to the situation.",\n  "choices": ["First suggested action", "Second suggested action", "Third suggested action"]'
+        : '  "openingText": "Setting the stage: 2-3 sentences of introduction to the situation."',
       "}",
       "",
       "USER PREFERENCES:",
@@ -374,7 +383,7 @@ export class OpenAICompatibleProvider {
       preferences.setting ? `Setting: ${preferences.setting}` : "",
       "",
       ...(lorebookContext ? [lorebookContext, ""] : []),
-      ...(preferences.cast && preferences.cast.length
+      ...(hasExistingCast && preferences.cast
         ? [
             "",
             "EXISTING CAST (already chosen — do NOT create new versions of these):",
@@ -388,14 +397,23 @@ export class OpenAICompatibleProvider {
         : []),
       "Guidelines:",
       "- Write in a neutral tone; let the user's setting description carry the genre and atmosphere.",
-      "- Provide 1 starting companion character template with a complete character sheet in the content field. Write a compelling, detailed character sheet; these rules define its shape:",
-      rules,
+      ...(isSoloNoInvent
+        ? [
+            '- The player chose a solo start with no AI-invented characters. Set "character" to { "name": "", "content": "" } and do NOT invent a companion.',
+          ]
+        : [
+            "- Provide 1 starting companion character template with a complete character sheet in the content field. Write a compelling, detailed character sheet; these rules define its shape:",
+            rules,
+          ]),
       "- startingWorldState: Provide 1 to 2 clear starting world state entries (active objectives, situations, or notable world facts) with concise names and descriptions.",
       "- Provide 2 to 4 starting items with snake_case IDs (item_ prefix), unique names, type words, descriptions, and quantities (1-5).",
       preferences.allowAdditionalCharacters === false
         ? "- additionalCharacters: Keep this array empty []. Do NOT invent or create any new background characters. The story must only involve the existing cast or characters explicitly named in the setting."
         : "- additionalCharacters: Provide 0 to 2 simple characters who appear in the opening scene with names, one-line descriptions, and their storyRole (e.g. 'Town Guard', 'Tavern Keeper', 'Mysterious Stranger').",
       "- Make openingText engaging, setting up immediate atmosphere and context for the player.",
+      preferences.generateOpeningChoices
+        ? "- choices: Provide 3 concise, distinct suggested actions the player can take next based on openingText."
+        : "",
       "- Return ONLY the JSON object. No markdown, no explanation.",
     ]
       .filter(Boolean)

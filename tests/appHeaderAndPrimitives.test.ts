@@ -29,6 +29,11 @@ import {
   EditTagsModal,
 } from "../src/client/components/common";
 import { DocsView } from "../src/client/components/views/DocsView";
+import {
+  CreateNewPlaythroughView,
+  defaultSetupForm,
+  SettingStepPanel,
+} from "../src/client/components/views/CreateNewPlaythroughView";
 import { SettingsModal } from "../src/client/components/modals/SettingsModal";
 import { AppearanceSettingsPanel } from "../src/client/components/settings/AppearanceSettingsPanel";
 import { ChatSettingsPanel } from "../src/client/components/settings/ChatSettingsPanel";
@@ -1480,5 +1485,124 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
     expect(dialogHtml).toContain("side-nav-layout");
     expect(dialogHtml).toContain("doc-markdown");
     expect(dialogHtml).not.toContain("docs-overlay");
+  });
+
+  it("renders CreateNewPlaythroughView and SettingStepPanel using Modal, Tabs, Card, FormGrid, and CheckboxRow primitives without legacy setup classes", () => {
+    const wizardHtml = renderToStaticMarkup(
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(CreateNewPlaythroughView, {
+          open: true,
+          onClose: noop,
+          personas: [
+            {
+              id: "persona_1",
+              name: "Alden",
+              description: "Wandering knight",
+              bodyType: "Athletic",
+              appearance: "Tall with scarred armor",
+              initialClothing: [{ slot: "Torso", name: "Plate Armor" }],
+              isDefault: true,
+            },
+          ],
+          selectedPersonaId: "persona_1",
+          onSelectPersona: noop,
+          castLibrary: [],
+          selectedCastIds: [],
+          onToggleCastId: noop,
+          lorebookLibrary: [],
+          selectedLorebookIds: [],
+          onToggleLorebookId: noop,
+          cardSettings: [],
+          setupForm: defaultSetupForm,
+          onSetupFormChange: noop,
+          generating: false,
+          genError: null,
+          onGenerate: noop,
+          onCancelGenerate: noop,
+          onStartBlank: noop,
+          onBack: noop,
+          onOpenPersonaManager: noop,
+          onOpenLorebookManager: noop,
+        }),
+      ),
+    );
+
+    expect(wizardHtml).toContain(
+      "base-modal base-modal--wide base-modal--fullscreen-mobile",
+    );
+    expect(wizardHtml).toContain("Create New Playthrough");
+    expect(wizardHtml).toContain("base-tabs--segmented");
+    expect(wizardHtml).toContain("1. Persona");
+    expect(wizardHtml).toContain("2. Cast");
+    expect(wizardHtml).toContain("3. Setting &amp; Story");
+    expect(wizardHtml).toContain("Manage Personas");
+    expect(wizardHtml).toContain("base-card__select-indicator--checked");
+    expect(wizardHtml).not.toContain("setup-wizard-modal");
+    expect(wizardHtml).not.toContain("setup-wizard-tabs");
+
+    const settingHtml = renderToStaticMarkup(
+      createElement(SettingStepPanel, {
+        lorebookLibrary: [
+          { id: "lb_1", name: "Elder Lore", entryCount: 12, scanDepth: 4 },
+        ],
+        selectedLorebookIds: ["lb_1"],
+        onToggleLorebookId: noop,
+        onOpenLorebookManager: noop,
+        cardSettings: [],
+        setupForm: defaultSetupForm,
+        onSetupFormChange: noop,
+        textProviderOptions: [{ value: "", label: "Current active" }],
+        onProviderChange: noop,
+        characterProviderId: "",
+        characterProviderOptions: [{ value: "", label: "Current active" }],
+        onCharacterProviderChange: noop,
+        providerChoiceError: null,
+        genError: null,
+        onGenerate: noop,
+        onStartBlank: noop,
+      }),
+    );
+
+    expect(settingHtml).toContain("base-accordion");
+    expect(settingHtml).toContain("Manage Lorebooks");
+    expect(settingHtml).toContain("Elder Lore");
+    expect(settingHtml).toContain("base-separator");
+    expect(settingHtml).toContain("Allow AI to invent additional characters");
+    expect(settingHtml).toContain("Generate Initial Choices");
+    expect(settingHtml).toContain("base-toggle-row__checkbox");
+
+    const expandedSettingHtml = renderToStaticMarkup(
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(SettingStepPanel, {
+          lorebookLibrary: [
+            { id: "lb_1", name: "Elder Lore", entryCount: 12, scanDepth: 4 },
+          ],
+          selectedLorebookIds: ["lb_1"],
+          onToggleLorebookId: noop,
+          onOpenLorebookManager: noop,
+          showLorebooks: true,
+          onChangeShowLorebooks: noop,
+          cardSettings: [],
+          setupForm: defaultSetupForm,
+          onSetupFormChange: noop,
+          textProviderOptions: [{ value: "", label: "Current active" }],
+          onProviderChange: noop,
+          characterProviderId: "",
+          characterProviderOptions: [{ value: "", label: "Current active" }],
+          onCharacterProviderChange: noop,
+          providerChoiceError: null,
+          genError: null,
+          onGenerate: noop,
+          onStartBlank: noop,
+        }),
+      ),
+    );
+
+    expect(expandedSettingHtml).toContain("base-accordion--open");
+    expect(expandedSettingHtml).toContain("base-pagination");
   });
 });

@@ -586,6 +586,7 @@ export const ViewPreferencesSchema = z.object({
       lorebook: PageSizeSchema.optional(),
       persona: PageSizeSchema.optional(),
       setupCast: PageSizeSchema.optional(),
+      setupLorebook: PageSizeSchema.optional(),
       home: PageSizeSchema.optional(),
     })
     .optional(),
@@ -597,6 +598,7 @@ export const ViewPreferencesSchema = z.object({
       castSortDir: z.enum(["asc", "desc"]).optional(),
       castViewMode: z.enum(["portrait", "list", "grid"]).optional(),
       showTagFilters: z.boolean().optional(),
+      showLorebooks: z.boolean().optional(),
     })
     .optional(),
   /** The play view's cast tab. */
@@ -1483,6 +1485,7 @@ export const ScenarioPreferencesSchema = z.object({
     )
     .optional(),
   allowAdditionalCharacters: z.boolean().default(true),
+  generateOpeningChoices: z.boolean().optional(),
 });
 export type ScenarioPreferences = z.infer<typeof ScenarioPreferencesSchema>;
 
@@ -1500,7 +1503,10 @@ export const ScenarioSeedItemSchema = z.object({
 });
 
 export const ScenarioSeedSchema = z.object({
-  character: ScenarioSeedCharacterSchema,
+  character: ScenarioSeedCharacterSchema.optional().default({
+    name: "",
+    content: "",
+  }),
   startingWorldState: z
     .array(
       z.object({
@@ -1520,5 +1526,6 @@ export const ScenarioSeedSchema = z.object({
     )
     .default([]),
   openingText: z.string().optional(),
+  choices: z.array(z.string()).optional(),
 });
 export type ScenarioSeed = z.infer<typeof ScenarioSeedSchema>;

@@ -22,10 +22,10 @@ import { useModalState } from "./hooks/useModalState";
 import { HomeView, type HomeTab } from "./components/views/HomeView";
 import { DocsView } from "./components/views/DocsView";
 import {
+  CreateNewPlaythroughView,
   defaultSetupForm,
-  SetupView,
   type SetupFormState,
-} from "./components/views/SetupView";
+} from "./components/views/CreateNewPlaythroughView";
 import { PlayView } from "./components/views/PlayView/PlayView";
 import { SettingsModal } from "./components/modals/SettingsModal";
 import { PersonaManager } from "./components/modals/PersonaManager";
@@ -95,6 +95,7 @@ export default function App() {
     form?: Partial<SetupFormState>;
     personaId?: string;
     castIds?: string[];
+    lorebookIds?: string[];
   }) {
     setSetupForm({ ...defaultSetupForm, ...initial?.form });
     setGenError(null);
@@ -102,7 +103,7 @@ export default function App() {
     if (initial?.personaId) setSelectedPersonaId(initial.personaId);
     void loadPersonasForPicker(initial?.personaId);
     void loadCastLibrary(initial?.castIds);
-    void loadLorebookLibrary();
+    void loadLorebookLibrary(initial?.lorebookIds);
     void loadCardSettings();
   }
 
@@ -153,13 +154,33 @@ export default function App() {
     );
   }
 
-  async function loadLorebookLibrary() {
+  async function loadLorebookLibrary(preSelectIds?: string[]) {
     try {
-      setLorebookLibrary(await listLorebooks());
-      setSelectedLorebookIds([]);
+      const library = await listLorebooks();
+      setLorebookLibrary(library);
+      if (preSelectIds && preSelectIds.length > 0) {
+        const available = preSelectIds.filter((id) =>
+          library.some((lb) => lb.id === id),
+        );
+        setSelectedLorebookIds(available);
+      } else {
+        setSelectedLorebookIds([]);
+      }
     } catch {
       setLorebookLibrary([]);
       setSelectedLorebookIds([]);
+    }
+  }
+
+  async function refreshLorebookLibraryPreservingSelection() {
+    try {
+      const library = await listLorebooks();
+      setLorebookLibrary(library);
+      setSelectedLorebookIds((prev) =>
+        prev.filter((id) => library.some((lb) => lb.id === id)),
+      );
+    } catch {
+      /* keep current list on transient failure */
     }
   }
 
@@ -208,7 +229,7 @@ export default function App() {
         controller.signal,
         sessionId,
       );
-      playthroughHook.resetTurnState(response.state);
+      playthroughHook.resetTurnState(response.state, response.choices ?? []);
       playthroughHook.setTokenUsage(response.tokenUsage ?? null);
       playthroughHook.setRawInput(response.rawInput ?? null);
       playthroughHook.setRawOutput(response.rawOutput ?? null);
@@ -233,6 +254,7 @@ export default function App() {
   }
 
   async function handleStartBlank() {
+    setGenError(null);
     try {
       const created = await createPlaythrough(
         setupForm.name || "New Story",
@@ -246,7 +268,9 @@ export default function App() {
       modalHook.closeModal();
       setView("play");
     } catch (e) {
-      playthroughHook.setError(e instanceof Error ? e.message : String(e));
+      const message = e instanceof Error ? e.message : String(e);
+      setGenError(message);
+      playthroughHook.setError(message);
     }
   }
 
@@ -255,6 +279,7 @@ export default function App() {
     personaId: string | undefined,
     initialCastIds: string[] | undefined,
     originalName: string,
+    lorebookIds?: string[],
   ) {
     setSelectedPersonaId(personaId ?? "");
     openSetup({
@@ -264,6 +289,7 @@ export default function App() {
       },
       personaId,
       castIds: initialCastIds,
+      lorebookIds: lorebookIds ?? playthroughHook.playthrough?.lorebookIds,
     });
   }
 
@@ -279,6 +305,14 @@ export default function App() {
       setSelectedPersonaId(nextDef?.id ?? "");
     }
   }
+
+  const prevLorebookModalOpenRef = useRef(modalHook.lorebookManagerOpen);
+  useEffect(() => {
+    if (prevLorebookModalOpenRef.current && !modalHook.lorebookManagerOpen) {
+      void refreshLorebookLibraryPreservingSelection();
+    }
+    prevLorebookModalOpenRef.current = modalHook.lorebookManagerOpen;
+  }, [modalHook.lorebookManagerOpen]);
 
   function handleOpenModal(
     modal:
@@ -459,7 +493,7 @@ export default function App() {
         />
       )}
 
-      <SetupView
+      <CreateNewPlaythroughView
         open={modalHook.setupOpen}
         onClose={modalHook.closeModal}
         personas={personas}
@@ -533,7 +567,10 @@ export default function App() {
           />
           <LorebookManager
             open={modalHook.lorebookManagerOpen}
-            onClose={modalHook.closeModal}
+            onClose={() => {
+              void refreshLorebookLibraryPreservingSelection();
+              modalHook.closeModal();
+            }}
           />
         </>
       ) : null}
