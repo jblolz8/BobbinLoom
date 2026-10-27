@@ -310,7 +310,10 @@ describe("table wrapper", () => {
 
   it("emits the very class the stylesheet styles", () => {
     const css = readFileSync(
-      new URL("../src/client/components/views/DocsView.css", import.meta.url),
+      new URL(
+        "../src/client/components/common/MarkdownView/MarkdownView.css",
+        import.meta.url,
+      ),
       "utf8",
     );
     expect(css).toContain(".doc-table-wrap");
@@ -320,20 +323,24 @@ describe("table wrapper", () => {
 
 /**
  * The docs viewer's width chain. Each link can be removed on its own and the
- * symptom only shows once it reaches a phone, so all four are pinned: the view
- * shrinks inside the overlay's flex sheet, the pane shrinks, the sheet clips
+ * symptom only shows once it reaches a phone, so all four are pinned: the layout
+ * shrinks inside the dialog's flex sheet, the main pane shrinks, the modal clips
  * rather than growing a scrollbar of its own, and the code fence is left as the
  * thing that scrolls when a line is genuinely too long.
- *
- * Geometry itself can only be proven in a browser; the live check that the view's
- * right edge stays inside the viewport is in references/ui-verification-cdp.md.
  */
 describe("docs width chain", () => {
-  const docs = readFileSync(
-    new URL("../src/client/components/views/DocsView.css", import.meta.url),
+  const sideNavCss = readFileSync(
+    new URL(
+      "../src/client/components/base/SideNav/SideNav.css",
+      import.meta.url,
+    ),
     "utf8",
   );
-  const views = readFileSync(
+  const modalCss = readFileSync(
+    new URL("../src/client/components/base/Modal/Modal.css", import.meta.url),
+    "utf8",
+  );
+  const codeBlockCss = readFileSync(
     new URL(
       "../src/client/components/base/CodeBlock/CodeBlock.css",
       import.meta.url,
@@ -341,19 +348,22 @@ describe("docs width chain", () => {
     "utf8",
   );
 
-  it("lets the viewer shrink inside the overlay's flex sheet", () => {
-    expect(docs).toMatch(/\.docs-view \{[^}]*min-width: 0/);
+  it("lets the viewer layout shrink inside the dialog's flex sheet", () => {
+    expect(sideNavCss).toMatch(/\.side-nav-layout \{[^}]*min-width: 0/);
   });
 
   it("keeps the content pane shrinkable as well", () => {
-    expect(docs).toMatch(/\.docs-content \{[^}]*min-width: 0/);
+    expect(sideNavCss).toMatch(/\.side-nav-main \{[^}]*min-width: 0/);
+    expect(modalCss).toMatch(/\.base-modal__content \{[^}]*min-width: 0/);
   });
 
-  it("keeps the overlay clipping instead of growing a scrollbar of its own", () => {
-    expect(docs).toMatch(/\.docs-overlay \{[^}]*overflow: hidden/);
+  it("keeps the wide dialog clipping instead of growing a scrollbar of its own", () => {
+    expect(modalCss).toMatch(
+      /\.base-modal\.base-modal--wide \{[^}]*overflow: hidden/,
+    );
   });
 
   it("leaves the code fence as the thing that scrolls", () => {
-    expect(views).toMatch(/\.code-block-pre \{[^}]*overflow-x: auto/);
+    expect(codeBlockCss).toMatch(/\.code-block-pre \{[^}]*overflow-x: auto/);
   });
 });

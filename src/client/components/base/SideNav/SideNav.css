@@ -34,6 +34,18 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
+.side-nav-toolbar--sticky {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg-app);
+  padding-top: 0.15rem;
+}
+
+.base-modal .side-nav-toolbar--sticky {
+  background: var(--bg-panel);
+}
+
 .side-nav-toolbar--mobile-only {
   display: none;
 }
@@ -295,6 +307,70 @@
   color: var(--text-muted);
   font-size: 0.82rem;
   padding: 0 0.35rem;
+}
+
+/* ── Search results in SideNav (used by DocsView & searchable nav lists) ── */
+.side-nav-search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.side-nav-search-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding-bottom: 0.35rem;
+}
+
+.side-nav-search-page-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.side-nav-search-count {
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--accent-translucent);
+  border-radius: 999px;
+  padding: 0 0.4rem;
+}
+
+.side-nav-search-hit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-left: 2px solid var(--border-subtle);
+  border-radius: 0;
+  padding: 0.2rem 0 0.2rem 0.5rem;
+  cursor: pointer;
+  font: inherit;
+}
+
+.side-nav-search-hit:hover {
+  border-left-color: var(--accent-highlight, var(--accent-base));
+}
+
+.side-nav-search-hit-heading {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.side-nav-search-hit-snippet {
+  font-size: 0.74rem;
+  line-height: 1.35;
+  color: var(--text-secondary);
 }
 
 @media (max-width: 767px) {

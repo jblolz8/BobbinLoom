@@ -321,10 +321,7 @@ export function CharacterBrainstormPanel({
                         : "0 2px 6px var(--ai-accent-translucent)",
                     }}
                   >
-                    <Icon
-                      name={isUser ? "User" : "Sparkles"}
-                      size={14}
-                    />
+                    <Icon name={isUser ? "User" : "Sparkles"} size={14} />
                   </div>
 
                   <div

@@ -417,24 +417,25 @@ export function LorebookLibrary({
                     key={s.id}
                     as="article"
                     variant="panel"
-                    padding="sm"
+                    padding="xs"
                     layout="row"
                     hoverable
                     fullWidth
                   >
                     <Stack
-                      direction="column"
-                      align="stretch"
-                      gap="xs"
+                      direction="row"
+                      align="center"
+                      justify="between"
+                      gap="sm"
                       flex1
                       fullWidth
                     >
                       <Stack
                         direction="row"
-                        align="start"
-                        justify="between"
+                        align="center"
                         gap="sm"
-                        fullWidth
+                        wrap
+                        flex1
                       >
                         <Card.TitleButton
                           title={s.name}
@@ -450,63 +451,63 @@ export function LorebookLibrary({
                           </Text>
                         </Card.TitleButton>
 
-                        <Card.Interactive>
-                          <Stack inline gap="xs" hideBelow="sm">
-                            <Button
-                              variant="secondary"
-                              size="xs"
-                              leftIcon="Pencil"
-                              onClick={() => void selectLorebook(s.id)}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              size="xs"
-                              leftIcon="Copy"
-                              disabled={saving}
-                              onClick={() => void handleDuplicateLorebook(s)}
-                            >
-                              Duplicate
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              size="xs"
-                              leftIcon="Download"
-                              onClick={() => void handleExportFromShelf(s)}
-                            >
-                              Export
-                            </Button>
-                            <Button
-                              variant="danger"
-                              size="xs"
-                              leftIcon="Trash2"
-                              disabled={saving}
-                              onClick={() =>
-                                setDeleteTarget({ id: s.id, name: s.name })
-                              }
-                            >
-                              Delete
-                            </Button>
-                          </Stack>
-                          <Stack inline showBelow="sm">
-                            <ActionsMenu
-                              label={`Actions for ${s.name}`}
-                              items={buildLorebookMenuItems(s)}
-                            />
-                          </Stack>
-                        </Card.Interactive>
+                        <Stack direction="row" align="center" gap="xs" wrap>
+                          <Badge variant="info" size="xs" leftIcon="BookOpen">
+                            {s.entryCount}{" "}
+                            {s.entryCount === 1 ? "entry" : "entries"}
+                          </Badge>
+                          <Badge variant="neutral" size="xs" leftIcon="Search">
+                            Scan depth: {s.scanDepth}
+                          </Badge>
+                        </Stack>
                       </Stack>
 
-                      <Stack direction="row" align="center" gap="xs" wrap>
-                        <Badge variant="info" size="xs" leftIcon="BookOpen">
-                          {s.entryCount}{" "}
-                          {s.entryCount === 1 ? "entry" : "entries"}
-                        </Badge>
-                        <Badge variant="neutral" size="xs" leftIcon="Search">
-                          Scan depth: {s.scanDepth}
-                        </Badge>
-                      </Stack>
+                      <Card.Interactive>
+                        <Stack inline gap="xs" hideBelow="sm">
+                          <Button
+                            variant="secondary"
+                            size="xs"
+                            leftIcon="Pencil"
+                            onClick={() => void selectLorebook(s.id)}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="xs"
+                            leftIcon="Copy"
+                            disabled={saving}
+                            onClick={() => void handleDuplicateLorebook(s)}
+                          >
+                            Duplicate
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="xs"
+                            leftIcon="Download"
+                            onClick={() => void handleExportFromShelf(s)}
+                          >
+                            Export
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="xs"
+                            leftIcon="Trash2"
+                            disabled={saving}
+                            onClick={() =>
+                              setDeleteTarget({ id: s.id, name: s.name })
+                            }
+                          >
+                            Delete
+                          </Button>
+                        </Stack>
+                        <Stack inline showBelow="sm">
+                          <ActionsMenu
+                            label={`Actions for ${s.name}`}
+                            items={buildLorebookMenuItems(s)}
+                          />
+                        </Stack>
+                      </Card.Interactive>
                     </Stack>
                   </Card>
                 ))}

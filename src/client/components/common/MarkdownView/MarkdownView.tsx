@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useCallback, useMemo } from "react";
 import {
   parseMarkdown,
   renderInlineNodes,
@@ -11,6 +11,60 @@ export interface MarkdownViewProps {
   content: string;
   className?: string;
 }
+
+export interface DocMarkdownViewProps {
+  /** Pre-rendered safe HTML from `renderDocMarkdown`. */
+  html: string;
+  /** Called when an internal `.md` link (`a[data-doc-link]`) is clicked. */
+  onNavigateDoc?: (slug: string, anchor?: string) => void;
+  className?: string;
+}
+
+export const DocMarkdownView = React.memo(function DocMarkdownView({
+  html,
+  onNavigateDoc,
+  className = "",
+}: DocMarkdownViewProps) {
+  /** Cross-page links in the docs are markdown links; intercept them here so a
+   *  click loads the page in place instead of navigating the whole app away.
+   *  Copy buttons arrive the same way (the body is injected HTML, so the
+   *  control's "copied" state is a DOM attribute rather than React state). */
+  const handleContentClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const copyButton = (event.target as HTMLElement).closest(
+        "[data-copy-code]",
+      );
+      if (copyButton) {
+        const code =
+          copyButton.closest(".code-block")?.querySelector("code")
+            ?.textContent ?? "";
+        void navigator.clipboard.writeText(code);
+        copyButton.setAttribute("data-copied", "true");
+        window.setTimeout(
+          () => copyButton.removeAttribute("data-copied"),
+          2000,
+        );
+        return;
+      }
+
+      const link = (event.target as HTMLElement).closest("a[data-doc-link]");
+      if (!link || !onNavigateDoc) return;
+      event.preventDefault();
+      const target = link.getAttribute("data-doc-link") ?? "";
+      const [file, anchor] = target.split("#");
+      onNavigateDoc(file.replace(/\.md$/i, ""), anchor);
+    },
+    [onNavigateDoc],
+  );
+
+  return (
+    <div
+      className={`doc-markdown ${className}`.trim()}
+      onClick={handleContentClick}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+});
 
 export const MarkdownView = React.memo(function MarkdownView({
   content,

@@ -5,20 +5,22 @@
  *  each page's front-matter (`section` + `order`), so adding a page needs no
  *  registration anywhere.
  *
- *  `page` renders into the home workspace; `overlay` renders the same viewer as
- *  a full-screen dialog so it is reachable from inside a playthrough.
+ *  `page` renders into the home workspace; `dialog` (or `overlay`) renders the
+ *  same viewer as a full-screen-capable modal dialog so it is reachable from
+ *  inside a playthrough.
  *
  *  The search box searches the page BODIES (`/api/docs/search`), not just the
  *  titles, and while a query is active the matched phrase stays highlighted in
  *  every page the reader opens — the highlight is part of the rendered markdown,
  *  so changing pages re-applies it and nothing has to be undone.
  *
- *  Below 768px the page list becomes a drawer over the content; above it the same
- *  control collapses the column instead.
+ *  Below 768px (or when the workspace container is <= 767px) the page list becomes
+ *  a drawer over the content; above it the same control collapses the column instead.
  */
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -33,14 +35,32 @@ import {
   type DocSearchResult,
 } from "../../api";
 import { MIN_QUERY_LENGTH } from "../../../engine/docsSearch";
-import { Icon, IconButton, SearchBar, SideNav, StatusMessage } from "../base";
+import {
+  Badge,
+  Button,
+  findScrollContainer,
+  Header,
+  Icon,
+  IconButton,
+  Modal,
+  SearchBar,
+  SideNav,
+  Stack,
+  StatusMessage,
+  Text,
+} from "../base";
+import { DocMarkdownView } from "../common";
 import { renderDocMarkdown } from "../../utils/docsMarkdown";
 import { useSideNavMode } from "../../hooks/useSideNavMode";
-import "./DocsView.css";
 
 export type DocsViewProps = {
-  variant?: "page" | "overlay";
+  variant?: "page" | "dialog" | "overlay";
+  open?: boolean;
   onClose?: () => void;
+  /** Optional pre-loaded page list (used for SSR / unit tests). */
+  initialPages?: DocPageMeta[];
+  /** Optional pre-loaded active page (used for SSR / unit tests). */
+  initialPage?: DocPage | null;
 };
 
 /** Group the ordered page list by section, preserving the order sections first
@@ -84,15 +104,25 @@ function splitSnippet(snippet: string, needle: string): ReactNode[] {
   return parts;
 }
 
-export function DocsView({ variant = "page", onClose }: DocsViewProps) {
-  const [pages, setPages] = useState<DocPageMeta[]>([]);
-  const [activeSlug, setActiveSlug] = useState<string | null>(null);
-  const [page, setPage] = useState<DocPage | null>(null);
+export function DocsView({
+  variant = "page",
+  open = true,
+  onClose,
+  initialPages = [],
+  initialPage = null,
+}: DocsViewProps) {
+  const isDialog = variant === "dialog" || variant === "overlay";
+  const titleId = useId();
+  const [pages, setPages] = useState<DocPageMeta[]>(initialPages);
+  const [activeSlug, setActiveSlug] = useState<string | null>(
+    initialPage?.slug ?? initialPages[0]?.slug ?? null,
+  );
+  const [page, setPage] = useState<DocPage | null>(initialPage);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<DocSearchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const nav = useSideNavMode({ respectWorkspaceWidth: variant === "page" });
+  const nav = useSideNavMode({ respectWorkspaceWidth: !isDialog });
 
   const contentRef = useRef<HTMLDivElement | null>(null);
   /** An anchor requested with the page, applied once it has rendered. */
@@ -103,6 +133,7 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
 
   // The nav lists whatever is on disk; the landing page is index.md when it exists.
   useEffect(() => {
+    if (isDialog && !open) return;
     let cancelled = false;
     listDocs()
       .then((loaded) => {
@@ -127,10 +158,10 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isDialog, open]);
 
   useEffect(() => {
-    if (!activeSlug) return;
+    if ((isDialog && !open) || !activeSlug) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -153,7 +184,7 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [activeSlug]);
+  }, [activeSlug, isDialog, open]);
 
   // Search the bodies, debounced: typing must not fire a request per keystroke.
   useEffect(() => {
@@ -193,7 +224,8 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
         return;
       }
     }
-    container.scrollTo({ top: 0 });
+    const scrollTarget = findScrollContainer(container) ?? container;
+    scrollTarget.scrollTo({ top: 0 });
   }, [page]);
 
   const openDoc = useCallback(
@@ -206,7 +238,10 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
           ? container?.querySelector(`[id="${CSS.escape(anchor)}"]`)
           : null;
         if (target) target.scrollIntoView({ block: "start" });
-        else container?.scrollTo({ top: 0 });
+        else if (container) {
+          const scrollTarget = findScrollContainer(container) ?? container;
+          scrollTarget.scrollTo({ top: 0 });
+        }
         return;
       }
       pendingAnchor.current = anchor ?? null;
@@ -214,58 +249,6 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
     },
     [activeSlug, nav],
   );
-
-  /** Cross-page links in the docs are markdown links; intercept them here so a
-   *  click loads the page in place instead of navigating the whole app away.
-   *  Copy buttons arrive the same way (the body is injected HTML, so the
-   *  control's "copied" state is a DOM attribute rather than React state). */
-  const handleContentClick = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      const copyButton = (event.target as HTMLElement).closest(
-        "[data-copy-code]",
-      );
-      if (copyButton) {
-        const code =
-          copyButton.closest(".code-block")?.querySelector("code")
-            ?.textContent ?? "";
-        void navigator.clipboard.writeText(code);
-        copyButton.setAttribute("data-copied", "true");
-        window.setTimeout(
-          () => copyButton.removeAttribute("data-copied"),
-          2000,
-        );
-        return;
-      }
-
-      const link = (event.target as HTMLElement).closest("a[data-doc-link]");
-      if (!link) return;
-      event.preventDefault();
-      const target = link.getAttribute("data-doc-link") ?? "";
-      const [file, anchor] = target.split("#");
-      openDoc(file.replace(/\.md$/i, ""), anchor);
-    },
-    [openDoc],
-  );
-
-  // Escape closes the drawer first, then the dialog — closing the whole viewer
-  // because the reader wanted the page list out of the way would lose their
-  // place. The listener is on the document: a wrapper's onKeyDown only fires for
-  // events that originate in its own subtree, which after opening is the header
-  // button.
-  useEffect(() => {
-    if (variant !== "overlay" || !onClose) return;
-    function onDocumentKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      event.stopPropagation();
-      if (nav.drawerOpen) {
-        nav.closeDrawer();
-        return;
-      }
-      onClose?.();
-    }
-    document.addEventListener("keydown", onDocumentKeyDown);
-    return () => document.removeEventListener("keydown", onDocumentKeyDown);
-  }, [nav.drawerOpen, nav.closeDrawer, onClose, variant]);
 
   const renderedMarkdown = useMemo(
     () =>
@@ -287,10 +270,11 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
   );
 
   const groups = useMemo(() => groupBySection(pages), [pages]);
-  const viewClass = `docs-view docs-view-${variant}`;
 
-  return (
-    <div className={viewClass}>
+  if (isDialog && !open) return null;
+
+  const viewerBody = (
+    <SideNav.Layout>
       <SideNav
         id="docs-nav"
         ariaLabel="Documentation"
@@ -301,9 +285,9 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
         }
         sections={groups.map((group) => ({
           label: group.section,
-          items: group.pages.map((page) => ({
-            id: page.slug,
-            label: page.title,
+          items: group.pages.map((entry) => ({
+            id: entry.slug,
+            label: entry.title,
           })),
         }))}
         activeId={activeSlug ?? undefined}
@@ -314,45 +298,43 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
             onChange={setQuery}
             placeholder="Search the documentation…"
             size="sm"
-            containerClassName="docs-search"
           />
         }
         listOverride={
           searching ? (
-            <div
-              className="side-nav-list docs-search-results"
-              aria-live="polite"
-            >
+            <div className="side-nav-search-results" aria-live="polite">
               <span className="side-nav-group-label">
                 {results
                   ? `${results.total} ${results.total === 1 ? "match" : "matches"} in ${results.pages.length} ${results.pages.length === 1 ? "page" : "pages"}`
                   : "Searching…"}
               </span>
               {results?.pages.map((entry) => (
-                <div className="docs-search-page" key={entry.slug}>
+                <div className="side-nav-search-page" key={entry.slug}>
                   <button
-                    className={`side-nav-item docs-search-page-title ${entry.slug === activeSlug ? "active" : ""}`}
+                    type="button"
+                    className={`side-nav-item side-nav-search-page-title ${entry.slug === activeSlug ? "active" : ""}`}
                     onClick={() =>
                       openDoc(entry.slug, entry.hits[0]?.anchor ?? undefined)
                     }
                   >
                     <span>{entry.title}</span>
-                    <span className="docs-search-count">{entry.count}</span>
+                    <span className="side-nav-search-count">{entry.count}</span>
                   </button>
                   {entry.hits.slice(0, 2).map((hit, index) => (
                     <button
-                      className="docs-search-hit"
+                      type="button"
+                      className="side-nav-search-hit"
                       key={`${entry.slug}-${index}`}
                       onClick={() =>
                         openDoc(entry.slug, hit.anchor ?? undefined)
                       }
                     >
                       {hit.heading ? (
-                        <span className="docs-search-hit-heading">
+                        <span className="side-nav-search-hit-heading">
                           {hit.heading}
                         </span>
                       ) : null}
-                      <span className="docs-search-hit-snippet">
+                      <span className="side-nav-search-hit-snippet">
                         {splitSnippet(hit.snippet, needle)}
                       </span>
                     </button>
@@ -367,8 +349,8 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
             </div>
           ) : undefined
         }
-        /* The drawer choice is per-viewport: wide screens collapse the column, narrow screens
-           swing the drawer. The primitive is told which, and owns neither decision. */
+        /* The drawer choice is per-viewport/workspace: wide screens collapse the column,
+           narrow screens swing the drawer. */
         hidden={!nav.narrow && nav.collapsed}
         open={nav.narrow && nav.drawerOpen}
         showScrim={nav.narrow && nav.drawerOpen}
@@ -376,65 +358,132 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
         emptyLabel="No documentation pages found."
       />
 
-      <section className="docs-content" ref={contentRef}>
-        {/* This toolbar sits OUTSIDE the nav on purpose: a collapse or a closed
-            drawer must never take away the control that brings the page list
-            back, and a phone has no Escape key for the dialog's close. */}
-        <div className="docs-toolbar">
-          <IconButton
-            icon={nav.shown ? "PanelLeftClose" : "PanelLeft"}
-            size="md"
-            label={nav.shown ? "Hide the page list" : "Show the page list"}
-            aria-expanded={nav.shown}
-            aria-controls="docs-nav"
-            onClick={nav.toggle}
-          />
-          {searching ? (
-            <span className="docs-hit-chip">
-              {hitCount} highlighted
-              <IconButton
-                icon="X"
-                size="xs"
-                variant="ghost"
-                label="Clear the search"
-                onClick={() => setQuery("")}
-              />
-            </span>
-          ) : null}
-          <span className="docs-toolbar-spacer" />
-          {variant === "overlay" && onClose ? (
-            <IconButton
-              icon="X"
-              label="Close documentation"
-              size="md"
-              onClick={onClose}
+      <SideNav.Main ref={contentRef}>
+        <SideNav.Toolbar bordered sticky>
+          <Stack direction="row" align="center" gap="sm" wrap>
+            <SideNav.Trigger
+              controlsId="docs-nav"
+              open={nav.shown}
+              onClick={nav.toggle}
+              label={
+                nav.narrow
+                  ? page
+                    ? `Pages: ${page.title}`
+                    : "Browse Pages"
+                  : nav.shown
+                    ? "Hide Pages"
+                    : "Show Pages"
+              }
+              badge={
+                pages.length > 0 ? (
+                  <Badge variant="neutral" size="xs" pill>
+                    {pages.length}
+                  </Badge>
+                ) : undefined
+              }
+              trailingIcon={nav.narrow ? "ChevronRight" : undefined}
+              tooltip={nav.shown ? "Hide the page list" : "Show the page list"}
             />
-          ) : null}
-        </div>
+            {searching ? (
+              <Badge
+                variant="warning"
+                size="sm"
+                pill
+                rightIcon={
+                  <IconButton
+                    icon="X"
+                    size="xs"
+                    variant="ghost"
+                    label="Clear the search"
+                    onClick={() => setQuery("")}
+                  />
+                }
+              >
+                {hitCount} highlighted
+              </Badge>
+            ) : null}
+          </Stack>
+        </SideNav.Toolbar>
+
         {error ? (
-          <StatusMessage variant="banner" tone="err" className="error-box">
+          <StatusMessage variant="banner" tone="err">
             {error}
           </StatusMessage>
         ) : null}
+
         {!error && loading && !page ? (
-          <p className="docs-loading">Loading…</p>
+          <Text size="sm" tone="muted">
+            Loading…
+          </Text>
         ) : null}
+
         {!error && page ? (
-          <>
-            <header className="docs-page-header">
-              <h1>{page.title}</h1>
-              {page.section ? (
-                <span className="docs-page-section">{page.section}</span>
-              ) : null}
-            </header>
-            <div
-              className="doc-markdown"
-              onClick={handleContentClick}
-              dangerouslySetInnerHTML={{ __html: renderedMarkdown }}
+          <Stack direction="column" align="stretch" gap="md" fullWidth>
+            <Header
+              variant="section"
+              bordered
+              title={page.title}
+              badge={
+                page.section ? (
+                  <Badge variant="neutral" size="xs">
+                    {page.section}
+                  </Badge>
+                ) : undefined
+              }
             />
-          </>
+            <DocMarkdownView html={renderedMarkdown} onNavigateDoc={openDoc} />
+          </Stack>
         ) : null}
-      </section>
-    </div>
+      </SideNav.Main>
+    </SideNav.Layout>
+  );
+
+  if (isDialog) {
+    return (
+      <Modal
+        open={open}
+        onClose={onClose}
+        dismissDisabled={nav.drawerOpen}
+        size="wide"
+        fullScreenMobile
+        ariaLabelledBy={titleId}
+      >
+        <Header
+          variant="modal"
+          title="Documentation"
+          titleId={titleId}
+          subtitle="Guides, architecture, and reference documentation."
+          bordered
+          actions={
+            onClose ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                iconOnly
+                leftIcon="X"
+                tooltip="Close"
+                tooltipSide="bottom"
+                onClick={onClose}
+                aria-label="Close documentation"
+              />
+            ) : undefined
+          }
+        />
+        <Modal.Body>
+          <Modal.Content>{viewerBody}</Modal.Content>
+        </Modal.Body>
+      </Modal>
+    );
+  }
+
+  return (
+    <Stack direction="column" align="stretch" gap="md" fullWidth>
+      <Header
+        variant="page"
+        title="Documentation"
+        subtitle="Guides, architecture, and reference documentation."
+      />
+      {viewerBody}
+    </Stack>
   );
 }

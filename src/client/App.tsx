@@ -12,7 +12,7 @@ import {
   listLorebooks,
   listPersonas,
   type Persona,
-  type ScenarioPreferences
+  type ScenarioPreferences,
 } from "./api";
 import type { CharacterTemplate, LorebookSummary } from "../schemas";
 import { collectCardSettings } from "../engine/characterCards";
@@ -21,7 +21,11 @@ import { useResponsive } from "./hooks/useResponsive";
 import { useModalState } from "./hooks/useModalState";
 import { HomeView, type HomeTab } from "./components/views/HomeView";
 import { DocsView } from "./components/views/DocsView";
-import { defaultSetupForm, SetupView, type SetupFormState } from "./components/views/SetupView";
+import {
+  defaultSetupForm,
+  SetupView,
+  type SetupFormState,
+} from "./components/views/SetupView";
 import { PlayView } from "./components/views/PlayView/PlayView";
 import { SettingsModal } from "./components/modals/SettingsModal";
 import { PersonaManager } from "./components/modals/PersonaManager";
@@ -61,7 +65,9 @@ export default function App() {
   const [selectedLorebookIds, setSelectedLorebookIds] = useState<string[]>([]);
 
   // Existing-setting selector fed by imported CCv2 card scenarios (D7/F6)
-  const [cardSettings, setCardSettings] = useState<Array<{ title: string; scenario: string }>>([]);
+  const [cardSettings, setCardSettings] = useState<
+    Array<{ title: string; scenario: string }>
+  >([]);
 
   // Live appearance re-apply only: the server paints these tokens into the first frame it serves,
   // so nothing is read from the device here. The GET covers a theme changed on another device.
@@ -70,7 +76,8 @@ export default function App() {
       .then((res) => {
         if (res.avatarShape) applyAvatarShapeTheme(res.avatarShape);
         if (res.coverAspect) applyCoverAspect(res.coverAspect);
-        if (typeof res.workspaceWidthPercent === "number") applyWorkspaceWidth(res.workspaceWidthPercent);
+        if (typeof res.workspaceWidthPercent === "number")
+          applyWorkspaceWidth(res.workspaceWidthPercent);
         applyTheme({
           themeMode: res.themeMode,
           themePreset: res.themePreset,
@@ -117,7 +124,9 @@ export default function App() {
       }
       const def = all.find((p) => p.isDefault) ?? all[0];
       if (def) setSelectedPersonaId(def.id);
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
   }
 
   async function loadCastLibrary(preSelectIds?: string[]) {
@@ -125,7 +134,9 @@ export default function App() {
       const library = await listCharacters();
       setCastLibrary(library);
       if (preSelectIds && preSelectIds.length > 0) {
-        const available = preSelectIds.filter((id) => library.some((t) => t.id === id));
+        const available = preSelectIds.filter((id) =>
+          library.some((t) => t.id === id),
+        );
         setSelectedCastIds(available);
       } else {
         setSelectedCastIds([]);
@@ -137,7 +148,9 @@ export default function App() {
   }
 
   function toggleCastId(id: string) {
-    setSelectedCastIds((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
+    setSelectedCastIds((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id],
+    );
   }
 
   async function loadLorebookLibrary() {
@@ -151,7 +164,9 @@ export default function App() {
   }
 
   function toggleLorebookId(id: string) {
-    setSelectedLorebookIds((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
+    setSelectedLorebookIds((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id],
+    );
   }
 
   async function handleGenerate() {
@@ -159,9 +174,9 @@ export default function App() {
     setGenError(null);
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    
+
     const sessionId = `gen_${Math.random().toString(36).substring(2)}`;
-    
+
     const pollProgress = setInterval(async () => {
       try {
         const p = await getGenerationProgress(sessionId);
@@ -170,7 +185,9 @@ export default function App() {
         } else if (!p.active) {
           setGenProgressPhase(null);
         }
-      } catch (e) { /* ignore */ }
+      } catch (e) {
+        /* ignore */
+      }
     }, 500);
 
     try {
@@ -189,7 +206,7 @@ export default function App() {
         undefined,
         setupForm.providerId || undefined,
         controller.signal,
-        sessionId
+        sessionId,
       );
       playthroughHook.resetTurnState(response.state);
       playthroughHook.setTokenUsage(response.tokenUsage ?? null);
@@ -223,7 +240,7 @@ export default function App() {
         selectedCastIds,
         true,
         selectedLorebookIds,
-        setupForm.setting || undefined
+        setupForm.setting || undefined,
       );
       playthroughHook.resetTurnState(created);
       modalHook.closeModal();
@@ -237,16 +254,16 @@ export default function App() {
     scenarioDescription: string,
     personaId: string | undefined,
     initialCastIds: string[] | undefined,
-    originalName: string
+    originalName: string,
   ) {
     setSelectedPersonaId(personaId ?? "");
     openSetup({
       form: {
         name: `${originalName} (new)`,
-        setting: scenarioDescription
+        setting: scenarioDescription,
       },
       personaId,
-      castIds: initialCastIds
+      castIds: initialCastIds,
     });
   }
 
@@ -263,7 +280,14 @@ export default function App() {
     }
   }
 
-  function handleOpenModal(modal: "playthroughs" | "characters" | "lorebooks" | "personas" | "settings") {
+  function handleOpenModal(
+    modal:
+      | "playthroughs"
+      | "characters"
+      | "lorebooks"
+      | "personas"
+      | "settings",
+  ) {
     switch (modal) {
       case "playthroughs":
         setSaveLoadOpen(true);
@@ -285,7 +309,8 @@ export default function App() {
 
   // --- RENDER ---
 
-  const currentView = view === "home" || !playthroughHook.playthrough ? "home" : view;
+  const currentView =
+    view === "home" || !playthroughHook.playthrough ? "home" : view;
 
   return (
     <div className="app-root">
@@ -409,7 +434,9 @@ export default function App() {
           handleResummarizeChapter={playthroughHook.handleResummarizeChapter}
           handleWorldStateAction={playthroughHook.handleWorldStateAction}
           handleDismissNotice={() => playthroughHook.setCancelledNotice(null)}
-          handleDismissFailedNotice={() => playthroughHook.setFailedNotice(null)}
+          handleDismissFailedNotice={() =>
+            playthroughHook.setFailedNotice(null)
+          }
           openPersonaManager={modalHook.openPersona}
           handlePersonasChanged={handlePersonasChanged}
           handleStartNewWithSameScenario={handleStartNewWithSameScenario}
@@ -452,9 +479,13 @@ export default function App() {
         generating={generating}
         genError={genError}
         genProgressPhase={genProgressPhase}
-        onGenerate={() => { void handleGenerate(); }}
+        onGenerate={() => {
+          void handleGenerate();
+        }}
         onCancelGenerate={handleCancelGenerate}
-        onStartBlank={() => { void handleStartBlank(); }}
+        onStartBlank={() => {
+          void handleStartBlank();
+        }}
         onBack={modalHook.closeModal}
         onOpenPersonaManager={modalHook.openPersona}
         onOpenLorebookManager={modalHook.openLorebook}
@@ -510,13 +541,11 @@ export default function App() {
       {/* Docs are reachable in every view: a workspace tab on Home, this dialog
           from inside a playthrough (mirroring how the nav tabs open their
           managers there). */}
-      {docsOpen ? (
-        <div className="modal-backdrop docs-backdrop" onClick={() => setDocsOpen(false)}>
-          <section className="modal docs-overlay" onClick={(e) => e.stopPropagation()}>
-            <DocsView variant="overlay" onClose={() => setDocsOpen(false)} />
-          </section>
-        </div>
-      ) : null}
+      <DocsView
+        variant="dialog"
+        open={docsOpen}
+        onClose={() => setDocsOpen(false)}
+      />
     </div>
   );
 }

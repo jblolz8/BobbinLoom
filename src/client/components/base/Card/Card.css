@@ -29,11 +29,16 @@
 .base-card--layout-row {
   display: flex;
   flex-direction: row;
-  align-items: stretch;
+  align-items: center;
   gap: 0.85rem;
-  min-height: var(--cover-row-height, 148px);
+  min-height: 0;
   container-type: inline-size;
   container-name: card-row;
+}
+
+.base-card--layout-row:has(.base-card__cover--row) {
+  align-items: stretch;
+  min-height: var(--cover-row-height, 148px);
 }
 
 .base-card--layout-row:has(.card-list-avatar) {

@@ -24,7 +24,11 @@ import {
   TextInput,
 } from "../src/client/components/base";
 import { PlaythroughShelfContent } from "../src/client/components/library/PlaythroughLibrary";
-import { CardFamilyModal, EditTagsModal } from "../src/client/components/common";
+import {
+  CardFamilyModal,
+  EditTagsModal,
+} from "../src/client/components/common";
+import { DocsView } from "../src/client/components/views/DocsView";
 import { SettingsModal } from "../src/client/components/modals/SettingsModal";
 import { AppearanceSettingsPanel } from "../src/client/components/settings/AppearanceSettingsPanel";
 import { ChatSettingsPanel } from "../src/client/components/settings/ChatSettingsPanel";
@@ -1411,5 +1415,70 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
     expect(html).toContain("Make Pure BL (Cut CCv2 Ties)");
     expect(html).toContain("Matching Character Name: Averi");
     expect(html).toContain("Averi - Fox");
+  });
+
+  it("renders DocsView in page and dialog variants using SideNav.Layout, SideNav.Trigger, Header, Modal, and DocMarkdownView primitives", () => {
+    const samplePages = [
+      { slug: "index", title: "BobbinLoom", section: "Overview", order: 1 },
+      {
+        slug: "playthroughs",
+        title: "Playthroughs",
+        section: "Playing",
+        order: 10,
+      },
+    ];
+    const samplePage = {
+      slug: "index",
+      title: "BobbinLoom",
+      section: "Overview",
+      order: 1,
+      markdown: "# Welcome\n\nSee [Playthroughs](playthroughs.md).",
+    };
+
+    const pageHtml = renderToStaticMarkup(
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(DocsView, {
+          variant: "page",
+          initialPages: samplePages,
+          initialPage: samplePage,
+        }),
+      ),
+    );
+
+    expect(pageHtml).toContain("base-header base-header--page");
+    expect(pageHtml).toContain("side-nav-layout");
+    expect(pageHtml).toContain("side-nav-main");
+    expect(pageHtml).toContain(
+      "side-nav-toolbar side-nav-toolbar--bordered side-nav-toolbar--sticky",
+    );
+    expect(pageHtml).toContain("side-nav-trigger");
+    expect(pageHtml).toContain("Hide Pages");
+    expect(pageHtml).toContain("doc-markdown");
+    expect(pageHtml).not.toContain("docs-view");
+    expect(pageHtml).not.toContain("docs-toolbar");
+
+    const dialogHtml = renderToStaticMarkup(
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(DocsView, {
+          variant: "dialog",
+          open: true,
+          onClose: noop,
+          initialPages: samplePages,
+          initialPage: samplePage,
+        }),
+      ),
+    );
+
+    expect(dialogHtml).toContain(
+      "base-modal base-modal--wide base-modal--fullscreen-mobile",
+    );
+    expect(dialogHtml).toContain("base-header base-header--modal");
+    expect(dialogHtml).toContain("side-nav-layout");
+    expect(dialogHtml).toContain("doc-markdown");
+    expect(dialogHtml).not.toContain("docs-overlay");
   });
 });

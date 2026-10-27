@@ -52,6 +52,25 @@
   border-color: var(--border-light);
 }
 
+/* The docs copy button's two states, swapped by the attribute the viewer sets
+   on click — the same markup the React primitive renders. */
+.code-copy-btn [data-state="copied"] {
+  display: none;
+}
+
+.code-copy-btn[data-copied="true"] [data-state="idle"] {
+  display: none;
+}
+
+.code-copy-btn[data-copied="true"] [data-state="copied"] {
+  display: inline-flex;
+}
+
+.code-copy-btn svg {
+  display: inline-block;
+  vertical-align: middle;
+}
+
 .code-block-pre {
   margin: 0;
   padding: 0.65rem 0.8rem;

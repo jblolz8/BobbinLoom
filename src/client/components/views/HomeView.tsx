@@ -60,8 +60,8 @@ export function HomeView({
           <LorebookLibrary variant="page" />
         </PageShell.Section>
       ) : activeTab === "docs" ? (
-        <PageShell.Section flush>
-          <DocsView />
+        <PageShell.Section>
+          <DocsView variant="page" />
         </PageShell.Section>
       ) : activeTab === "personas" ? (
         <PageShell.Section>

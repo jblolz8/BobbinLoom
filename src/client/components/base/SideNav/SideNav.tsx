@@ -108,19 +108,29 @@ export type SideNavToolbarProps = React.HTMLAttributes<HTMLDivElement> & {
   mobileOnly?: boolean;
   /** Draw a subtle bottom divider below the toolbar. */
   bordered?: boolean;
+  /** Keep the toolbar sticky at the top of its scroll container while reading long content. */
+  sticky?: boolean;
 };
 
 export const SideNavToolbar = React.forwardRef<
   HTMLDivElement,
   SideNavToolbarProps
 >(function SideNavToolbar(
-  { mobileOnly = false, bordered = false, className = "", children, ...props },
+  {
+    mobileOnly = false,
+    bordered = false,
+    sticky = false,
+    className = "",
+    children,
+    ...props
+  },
   ref,
 ) {
   const classes = [
     "side-nav-toolbar",
     mobileOnly ? "side-nav-toolbar--mobile-only" : "",
     bordered ? "side-nav-toolbar--bordered" : "",
+    sticky ? "side-nav-toolbar--sticky" : "",
     className,
   ]
     .filter(Boolean)
@@ -227,11 +237,7 @@ function renderNavItem(
         <span className="side-nav-item-row">
           <span className="side-nav-item-leading">
             {item.icon ? (
-              <Icon
-                name={item.icon}
-                size={15}
-                className="side-nav-item-icon"
-              />
+              <Icon name={item.icon} size={15} className="side-nav-item-icon" />
             ) : null}
             <span className="side-nav-item-label">{item.label}</span>
           </span>
@@ -376,6 +382,17 @@ function SideNavRoot({
       observer?.disconnect();
     };
   }, [recalculateMaxHeight, hidden]);
+
+  useEffect(() => {
+    if (!open || !onScrimClick || typeof document === "undefined") return;
+    function onDocumentKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      onScrimClick?.();
+    }
+    document.addEventListener("keydown", onDocumentKeyDown);
+    return () => document.removeEventListener("keydown", onDocumentKeyDown);
+  }, [open, onScrimClick]);
 
   const className = [
     "side-nav",
