@@ -80,6 +80,7 @@
 }
 
 .base-modal__body--split {
+  position: relative;
   flex-direction: row;
   gap: 0.7rem;
 }
@@ -138,7 +139,7 @@
     overflow: hidden;
   }
 
-  .base-modal__body--split {
+  .base-modal__body--split:not(:has(> .side-nav)) {
     flex-direction: column;
     gap: 0.4rem;
   }

@@ -9,10 +9,13 @@ export function getLorebook(id: string): Promise<LorebookFile> {
   return request<LorebookFile>(`/api/lorebooks/${id}`);
 }
 
-export function createLorebook(name: string): Promise<LorebookFile> {
-  return request<LorebookFile>("/api/lorebooks", {
+export function createLorebook(
+  name: string,
+  data?: Partial<LorebookFile>,
+): Promise<LorebookFile & { id?: string }> {
+  return request<LorebookFile & { id?: string }>("/api/lorebooks", {
     method: "POST",
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(data ? { name, data } : { name }),
   });
 }
 

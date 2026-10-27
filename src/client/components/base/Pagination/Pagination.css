@@ -215,3 +215,43 @@
     min-height: 26px !important;
   }
 }
+
+@container workspace (max-width: 640px) {
+  .base-pagination {
+    justify-content: center;
+    text-align: center;
+    padding: 0.3rem 0.5rem;
+    gap: 0.35rem 0.65rem;
+  }
+
+  .base-pagination--with-progress {
+    padding-top: calc(0.3rem + 2px);
+  }
+
+  .base-pagination__summary {
+    order: 1;
+    justify-content: center;
+    font-size: 0.74rem;
+  }
+
+  .base-pagination__size {
+    order: 2;
+    margin-left: 0;
+    justify-content: center;
+  }
+
+  .base-pagination__controls {
+    order: 3;
+    width: 100%;
+    justify-content: space-between;
+    box-sizing: border-box;
+    padding: 2px 4px;
+  }
+
+  .base-pagination__nav-btn {
+    width: 26px !important;
+    height: 26px !important;
+    min-width: 26px !important;
+    min-height: 26px !important;
+  }
+}

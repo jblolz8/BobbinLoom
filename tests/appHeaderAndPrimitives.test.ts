@@ -268,6 +268,10 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
       "base-modal base-modal--wide base-modal--fullscreen-mobile",
     );
     expect(html).toContain("base-modal__body base-modal__body--split");
+    expect(html).toContain("side-nav side-nav--sm");
+    expect(html).toContain("settings-category-nav");
+    expect(html).toContain("side-nav-toolbar");
+    expect(html).toContain("side-nav-trigger");
     expect(html).toContain("base-modal__content");
     expect(html).toContain('role="tabpanel"');
     expect(html).toContain("base-tab-panel");

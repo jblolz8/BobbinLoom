@@ -1,3 +1,4 @@
+import { scanLorebooks } from "../engine/contextBudgeting";
 import type { LorebookEntry } from "../schemas";
 import { getLorebook } from "./store";
 
@@ -10,18 +11,24 @@ export function buildLorebookContextFromEntries(
   entries: LorebookEntry[],
   haystackText: string,
   budgetChars: number,
+  lorebookDefaults: {
+    scanDepth: number;
+    caseSensitive: boolean;
+    matchWholeWords: boolean;
+  } = {
+    scanDepth: 2,
+    caseSensitive: false,
+    matchWholeWords: false,
+  },
 ): string {
-  const constants = entries.filter((e) => e.constant && !e.disable);
-  const selective = entries.filter((e) => {
-    if (e.disable || e.constant || !e.key || e.key.length === 0) return false;
-    const hay = haystackText.toLowerCase();
-    return e.key.some(
-      (k) => k.trim().length > 0 && hay.includes(k.trim().toLowerCase()),
-    );
+  const activated = scanLorebooks({
+    messages: [{ role: "user", content: haystackText }],
+    entries,
+    lorebookDefaults,
   });
   let used = 0;
   const included: string[] = [];
-  for (const e of [...constants, ...selective]) {
+  for (const { entry: e } of activated) {
     if (used + e.content.length > budgetChars) break;
     included.push(e.content);
     used += e.content.length;
@@ -41,7 +48,18 @@ export function buildLorebookContext(
   const entries: LorebookEntry[] = [];
   for (const id of lorebookIds) {
     const lb = getLorebook(id);
-    if (lb) entries.push(...Object.values(lb.entries));
+    if (!lb) continue;
+    const lbScanDepth = lb.scanDepth ?? 2;
+    const lbCaseSensitive = Boolean(lb.caseSensitive);
+    const lbMatchWholeWords = Boolean(lb.matchWholeWords);
+    for (const entry of Object.values(lb.entries)) {
+      entries.push({
+        ...entry,
+        scanDepth: entry.scanDepth ?? lbScanDepth,
+        caseSensitive: Boolean(entry.caseSensitive || lbCaseSensitive),
+        matchWholeWords: Boolean(entry.matchWholeWords || lbMatchWholeWords),
+      });
+    }
   }
   return buildLorebookContextFromEntries(entries, haystackText, budgetChars);
 }

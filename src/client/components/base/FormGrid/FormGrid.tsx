@@ -5,6 +5,8 @@ export type FormGridCols =
   | 1
   | 2
   | "2-asymmetric"
+  | "sidebar-left"
+  | "sidebar-right"
   | 3
   | 4
   | "cards"

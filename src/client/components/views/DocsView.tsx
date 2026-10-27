@@ -92,7 +92,7 @@ export function DocsView({ variant = "page", onClose }: DocsViewProps) {
   const [results, setResults] = useState<DocSearchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const nav = useSideNavMode();
+  const nav = useSideNavMode({ respectWorkspaceWidth: variant === "page" });
 
   const contentRef = useRef<HTMLDivElement | null>(null);
   /** An anchor requested with the page, applied once it has rendered. */

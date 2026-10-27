@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Playthrough } from "../../../schemas";
 import { getPlaythrough, type Persona } from "../../api";
-import { Header, PageShell, StatusMessage } from "../base";
+import { PageShell, StatusMessage } from "../base";
 import { PlaythroughLibrary } from "../library/PlaythroughLibrary";
 import { CharacterLibrary } from "../library/CharacterLibrary";
 import { LorebookLibrary } from "../library/LorebookLibrary";
@@ -57,12 +57,7 @@ export function HomeView({
         </PageShell.Section>
       ) : activeTab === "lorebooks" ? (
         <PageShell.Section>
-          <Header
-            variant="page"
-            title="Lorebook Library"
-            subtitle="Manage World Info lorebooks for prompt context injection."
-          />
-          <LorebookLibrary />
+          <LorebookLibrary variant="page" />
         </PageShell.Section>
       ) : activeTab === "docs" ? (
         <PageShell.Section flush>

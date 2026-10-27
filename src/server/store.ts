@@ -2064,6 +2064,20 @@ export function listLorebooks(dir?: string): LorebookSummary[] {
   });
 }
 
+export function uniqueLorebookId(nameOrFilename: string, dir?: string): string {
+  const cleaned = nameOrFilename
+    .replace(/\.json$/i, "")
+    .replace(/[^a-zA-Z0-9_\- ]/g, "_")
+    .trim();
+  const base =
+    cleaned
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .replace(/^-+|-+$/g, "") || "lorebook";
+  const existingIds = new Set(listLorebooks(dir).map((l) => l.id));
+  return uniqueSlug(base, existingIds);
+}
+
 export function getLorebook(id: string, dir?: string): LorebookFile | null {
   const dirPath = dir ?? LOREBOOKS_DIR;
   const path = lorebookPath(id);

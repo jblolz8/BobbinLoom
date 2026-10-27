@@ -70,7 +70,7 @@ export function computeTagSidebarMaxHeight(
   return Math.max(160, maxAllowed);
 }
 
-function findScrollContainer(el: HTMLElement | null): HTMLElement | null {
+export function findScrollContainer(el: HTMLElement | null): HTMLElement | null {
   let node = el?.parentElement ?? null;
   while (node) {
     const style = window.getComputedStyle(node);
@@ -87,7 +87,7 @@ function findScrollContainer(el: HTMLElement | null): HTMLElement | null {
  * up to `scrollContainer` (inclusive) so intermediate containers like `PageShell.Section`
  * (`padding-bottom: 1.5rem`) are accounted for when capping `TagSidebar` height.
  */
-function computeBottomInsetToScrollContainer(
+export function computeBottomInsetToScrollContainer(
   row: HTMLElement | null,
   scrollContainer: HTMLElement | null,
 ): number {

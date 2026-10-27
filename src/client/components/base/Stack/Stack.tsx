@@ -11,6 +11,7 @@ export type StackAlign = "start" | "center" | "end" | "stretch" | "baseline";
 export type StackJustify = "start" | "center" | "end" | "between";
 export type StackGap = "none" | "2xs" | "xs" | "sm" | "md" | "lg";
 export type StackCollapseBreakpoint = "sm" | "md";
+export type StackScrollableSize = boolean | "sm" | "md" | "lg";
 
 export interface StackProps extends HTMLAttributes<HTMLElement> {
   as?: ElementType;
@@ -27,7 +28,7 @@ export interface StackProps extends HTMLAttributes<HTMLElement> {
   pushBottom?: boolean;
   sticky?: boolean;
   dimmed?: boolean;
-  scrollable?: boolean;
+  scrollable?: StackScrollableSize;
   /** Collapses a row Stack into a vertical column below the specified viewport breakpoint (`sm` = 680px, `md` = 820px). */
   stackBelow?: StackCollapseBreakpoint;
   /** Hides the stack below the specified viewport breakpoint (`sm` = 680px, `md` = 820px). */
@@ -80,6 +81,7 @@ export const Stack = forwardRef<HTMLElement, StackProps>(function Stack(
     sticky ? "base-stack--sticky" : "",
     dimmed ? "base-stack--dimmed" : "",
     scrollable ? "base-stack--scrollable" : "",
+    typeof scrollable === "string" ? `base-stack--scrollable-${scrollable}` : "",
     stackBelow ? `base-stack--stack-below-${stackBelow}` : "",
     hideBelow ? `base-stack--hide-below-${hideBelow}` : "",
     showBelow ? `base-stack--show-below-${showBelow}` : "",

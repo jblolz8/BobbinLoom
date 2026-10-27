@@ -324,8 +324,12 @@ export function scanLorebooks(options: LorebookScanOptions): ActivatedEntry[] {
     const scanText = buildScanText(messages, scanDepth);
 
     const matchOpts = {
-      caseSensitive: entry.caseSensitive,
-      matchWholeWords: entry.matchWholeWords,
+      caseSensitive: Boolean(
+        entry.caseSensitive || lorebookDefaults.caseSensitive,
+      ),
+      matchWholeWords: Boolean(
+        entry.matchWholeWords || lorebookDefaults.matchWholeWords,
+      ),
       useRegex: entry.useRegex,
     };
 

@@ -19,6 +19,7 @@ export interface CardProps extends HTMLAttributes<HTMLElement> {
   layout?: CardLayout;
   active?: boolean;
   hoverable?: boolean;
+  dimmed?: boolean;
   dirty?: boolean;
   aiPulse?: boolean;
   dragging?: boolean;
@@ -37,6 +38,7 @@ const CardBase = forwardRef<HTMLElement, CardProps>(function Card(
     layout,
     active = false,
     hoverable = false,
+    dimmed = false,
     dirty = false,
     aiPulse = false,
     dragging = false,
@@ -55,6 +57,7 @@ const CardBase = forwardRef<HTMLElement, CardProps>(function Card(
     layout ? `base-card--layout-${layout}` : "",
     active ? "base-card--active" : "",
     hoverable ? "base-card--hoverable" : "",
+    dimmed ? "base-card--dimmed" : "",
     dirty ? "base-card--dirty" : "",
     aiPulse ? "base-card--ai-pulse" : "",
     dragging ? "base-card--dragging" : "",

@@ -227,7 +227,29 @@
   }
 }
 
+@container workspace (max-width: 768px) {
+  .base-btn--collapse-md {
+    aspect-ratio: 1;
+    padding: 0;
+    gap: 0;
+  }
+  .base-btn--collapse-md .base-btn__label {
+    display: none;
+  }
+}
+
 @media (max-width: 540px) {
+  .base-btn--collapse-sm {
+    aspect-ratio: 1;
+    padding: 0;
+    gap: 0;
+  }
+  .base-btn--collapse-sm .base-btn__label {
+    display: none;
+  }
+}
+
+@container workspace (max-width: 540px) {
   .base-btn--collapse-sm {
     aspect-ratio: 1;
     padding: 0;

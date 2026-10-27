@@ -14,8 +14,19 @@ import { AppearanceSettingsPanel } from "../settings/AppearanceSettingsPanel";
 import { InterfaceSettingsPanel } from "../settings/InterfaceSettingsPanel";
 import { FilesStorageSettingsPanel } from "../settings/FilesStorageSettingsPanel";
 import { ChatSettingsPanel } from "../settings/ChatSettingsPanel";
+import { useSideNavMode } from "../../hooks/useSideNavMode";
 import { ConfirmModal } from "../common";
-import { Button, Header, Modal, Stack, Tabs, type TabItem } from "../base";
+import {
+  Button,
+  Header,
+  Icon,
+  Modal,
+  SideNav,
+  Stack,
+  Tabs,
+  Text,
+  type TabItem,
+} from "../base";
 
 type SettingsTab =
   | "provider"
@@ -114,10 +125,13 @@ export function SettingsModal(props: SettingsModalProps) {
   } = props;
 
   const titleId = useId();
+  const nav = useSideNavMode();
 
   const [settingsTab, setSettingsTabState] = useState<SettingsTab>(
     UI_PREFERENCE_DEFAULTS.settingsTab,
   );
+  const activeTabItem =
+    SETTINGS_TABS.find((t) => t.id === settingsTab) ?? SETTINGS_TABS[0];
   const [providerKind, setProviderKindState] = useState<ProviderSubTab>(
     UI_PREFERENCE_DEFAULTS.settingsProviderKind,
   );
@@ -251,16 +265,48 @@ export function SettingsModal(props: SettingsModalProps) {
       />
 
       <Modal.Body layout="split">
-        <Tabs<SettingsTab>
-          tabs={SETTINGS_TABS}
-          activeTab={settingsTab}
-          onChange={setSettingsTab}
-          variant="sidebar"
-          size="sm"
+        <SideNav
+          id="settings-category-nav"
           ariaLabel="Settings categories"
+          width="sm"
+          items={SETTINGS_TABS}
+          activeId={settingsTab}
+          onSelect={(id) => {
+            setSettingsTab(id as SettingsTab);
+            if (nav.narrow) nav.closeDrawer();
+          }}
+          hidden={!nav.narrow && nav.collapsed}
+          open={nav.narrow && nav.drawerOpen}
+          showScrim={nav.narrow && nav.drawerOpen}
+          onScrimClick={nav.closeDrawer}
         />
 
         <Modal.Content>
+          <SideNav.Toolbar bordered>
+            <SideNav.Trigger
+              controlsId="settings-category-nav"
+              open={nav.shown}
+              onClick={nav.toggle}
+              label={
+                <Stack direction="row" align="center" gap="xs" inline>
+                  <Text as="span" size="xs" tone="secondary">
+                    {nav.shown ? "Hide Categories ·" : "Categories:"}
+                  </Text>
+                  {activeTabItem.icon ? (
+                    <Icon name={activeTabItem.icon} size={14} />
+                  ) : null}
+                  <span>{activeTabItem.label}</span>
+                </Stack>
+              }
+              trailingIcon={nav.shown ? undefined : "ChevronsUpDown"}
+              tooltip={
+                nav.shown
+                  ? "Hide settings categories"
+                  : "Show settings categories"
+              }
+            />
+          </SideNav.Toolbar>
+
           <Tabs.Panel active={settingsTab === "provider"}>
             {visitedTabs.has("provider") && (
               <Stack direction="column" align="stretch" gap="xs">

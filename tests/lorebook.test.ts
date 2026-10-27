@@ -1,3 +1,9 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import * as RadixTooltip from "@radix-ui/react-tooltip";
+import { mkdtempSync, rmSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 import { describe, expect, it } from "vitest";
 import {
   scanLorebooks,
@@ -5,6 +11,9 @@ import {
   type ActivatedEntry,
   type LorebookScanOptions,
 } from "../src/engine/engine";
+import { saveLorebook, uniqueLorebookId } from "../src/server/store";
+import { LorebookLibrary } from "../src/client/components/library/LorebookLibrary";
+import { LorebookEditor } from "../src/client/components/library/editor";
 import type { EntryTimingState, LorebookEntry } from "../src/schemas";
 
 function entry(overrides: Partial<LorebookEntry> = {}): LorebookEntry {
@@ -583,5 +592,146 @@ describe("LorebookFileSchema", () => {
       },
     });
     expect(result.success).toBe(true);
+  });
+});
+
+describe("scanLorebooks - lorebookDefaults inheritance", () => {
+  it("inherits lorebook-level caseSensitive when entry caseSensitive is false", () => {
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [entry({ uid: 1, key: ["KNIGHT"], caseSensitive: false })],
+        lorebookDefaults: {
+          scanDepth: 2,
+          caseSensitive: true,
+          matchWholeWords: false,
+        },
+      }),
+    );
+    expect(result.length).toBe(0);
+  });
+
+  it("inherits lorebook-level matchWholeWords when entry matchWholeWords is false", () => {
+    const result = scanLorebooks(
+      scanOpts({
+        entries: [entry({ uid: 1, key: ["cast"], matchWholeWords: false })],
+        lorebookDefaults: {
+          scanDepth: 2,
+          caseSensitive: false,
+          matchWholeWords: true,
+        },
+      }),
+    );
+    expect(result.length).toBe(0);
+  });
+});
+
+describe("uniqueLorebookId collision protection", () => {
+  it("generates unique numeric suffixes when a lorebook id already exists", () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "bl-lorebooks-"));
+    try {
+      const firstId = uniqueLorebookId("Kanto Region", tempDir);
+      expect(firstId).toBe("kanto-region");
+      saveLorebook(
+        firstId,
+        {
+          name: "Kanto Region",
+          scanDepth: 2,
+          caseSensitive: false,
+          matchWholeWords: false,
+          entries: {},
+        },
+        tempDir,
+      );
+
+      const secondId = uniqueLorebookId("Kanto Region", tempDir);
+      expect(secondId).toBe("kanto-region-2");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("LorebookLibrary and LorebookEditor base/common primitive composition", () => {
+  it("renders LorebookLibrary in page and dialog variants without legacy lorebook-* CSS classes", () => {
+    const pageHtml = renderToStaticMarkup(
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(LorebookLibrary, { variant: "page" }),
+      ),
+    );
+    expect(pageHtml).toContain("base-header base-header--page");
+    expect(pageHtml).toContain("Lorebook Library");
+    expect(pageHtml).toContain("Import Lorebook");
+    expect(pageHtml).toContain("New Lorebook");
+    expect(pageHtml).toContain("base-search-bar");
+    expect(pageHtml).not.toContain("lorebook-library-container");
+
+    const dialogHtml = renderToStaticMarkup(
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(LorebookLibrary, {
+          variant: "dialog",
+          onClose: () => {},
+        }),
+      ),
+    );
+    expect(dialogHtml).toContain("base-modal--wide");
+    expect(dialogHtml).toContain("base-header base-header--section");
+    expect(dialogHtml).not.toContain("lorebook-manager-modal");
+  });
+
+  it("renders LorebookEditor with collapsible SideNav, CheckboxRow rules, FormSection collapsible, and Card entry rows", () => {
+    const sampleLorebook = {
+      name: "Chronicles Lore",
+      scanDepth: 3,
+      caseSensitive: true,
+      matchWholeWords: false,
+      entries: {
+        "1": entry({
+          uid: 1,
+          key: ["amber", "pattern"],
+          comment: "The Pattern of Amber",
+          content: "The primal Pattern inscribed beneath Castle Amber.",
+          constant: true,
+        }),
+      },
+    };
+    const html = renderToStaticMarkup(
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(LorebookEditor, {
+          lorebookId: "chronicles-lore",
+          lorebook: sampleLorebook,
+          persistedJson: JSON.stringify(sampleLorebook),
+          variant: "page",
+          saving: false,
+          status: null,
+          onDismissStatus: () => {},
+          onChangeLorebook: () => {},
+          onSaveLorebook: async () => {},
+          onExportLorebook: () => {},
+          onBackToLibrary: () => {},
+          initialEditingUid: 1,
+        }),
+      ),
+    );
+
+    expect(html).toContain("Chronicles Lore");
+    expect(html).toContain("base-form-section--collapsible");
+    expect(html).toContain("side-nav-layout");
+    expect(html).toContain("lorebook-entries-nav");
+    expect(html).toContain("side-nav-toolbar");
+    expect(html).toContain("side-nav-trigger");
+    expect(html).toContain("base-toggle-row--checkbox");
+    expect(html).toContain("Case Sensitive (Lorebook Default)");
+    expect(html).toContain("Whole Words (Lorebook Default)");
+    expect(html).toContain("The Pattern of Amber");
+    expect(html).toContain("Constant");
+    expect(html).not.toContain("lorebook-master-detail");
+    expect(html).not.toContain("lorebook-entry-row");
+    expect(html).not.toContain("lorebook-sidebar-section");
   });
 });

@@ -15,6 +15,8 @@
 
 .base-card--full-width {
   width: 100%;
+  container-type: inline-size;
+  container-name: card-row;
 }
 
 .base-card--layout-column {
@@ -220,6 +222,27 @@ button.base-card {
           var(--cover-art-h, 9)
       );
   }
+}
+
+@container workspace (max-width: 640px) {
+  .base-card--layout-row {
+    align-items: stretch;
+    gap: 0.65rem;
+  }
+
+  .base-card__cover--row {
+    max-width: calc(50% - 0.325rem);
+    flex: 0 1
+      calc(
+        var(--cover-row-thumb, 148px) * var(--cover-art-w, 16) /
+          var(--cover-art-h, 9)
+      );
+  }
+}
+
+/* Dimmed / disabled item state */
+.base-card--dimmed {
+  opacity: 0.55;
 }
 
 /* Unsaved / modified warning state */

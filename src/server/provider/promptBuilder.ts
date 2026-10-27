@@ -572,13 +572,16 @@ function collectLorebookSegments(state: Playthrough): LorebookSegments {
     for (const lbId of state.lorebookIds) {
       const lb = getLorebook(lbId);
       if (!lb) continue;
-      if (lb.scanDepth !== undefined) lorebookDefaults.scanDepth = lb.scanDepth;
-      if (lb.caseSensitive !== undefined)
-        lorebookDefaults.caseSensitive = lb.caseSensitive;
-      if (lb.matchWholeWords !== undefined)
-        lorebookDefaults.matchWholeWords = lb.matchWholeWords;
+      const lbScanDepth = lb.scanDepth ?? 2;
+      const lbCaseSensitive = Boolean(lb.caseSensitive);
+      const lbMatchWholeWords = Boolean(lb.matchWholeWords);
       for (const entry of Object.values(lb.entries)) {
-        allEntries.push(entry);
+        allEntries.push({
+          ...entry,
+          scanDepth: entry.scanDepth ?? lbScanDepth,
+          caseSensitive: Boolean(entry.caseSensitive || lbCaseSensitive),
+          matchWholeWords: Boolean(entry.matchWholeWords || lbMatchWholeWords),
+        });
       }
     }
 
