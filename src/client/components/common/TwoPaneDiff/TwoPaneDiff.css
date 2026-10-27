@@ -1,6 +1,54 @@
 /* ── Two-pane diff viewer ── */
+.two-pane-diff-wrapper {
+  position: relative;
+  border-radius: 6px;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.two-pane-diff--fill {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 100%;
+}
+
+.two-pane-diff--fill-viewport {
+  flex: 0 0 100%;
+  height: 100%;
+  min-height: 100%;
+  max-height: 100%;
+}
+
+.two-pane-diff-wrapper.is-loading .two-pane-diff-scroll {
+  opacity: 0.4;
+  filter: blur(1px);
+  pointer-events: none;
+  transition:
+    opacity 0.2s,
+    filter 0.2s;
+}
+
+.two-pane-diff-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 14, 22, 0.45);
+  z-index: 10;
+  backdrop-filter: blur(2px);
+  border-radius: 6px;
+}
+
 .two-pane-diff-scroll {
   width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border-radius: 6px;
@@ -9,6 +57,10 @@
 .two-pane-diff {
   width: 100%;
   min-width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--border-main, var(--border-color, #333));
   border-radius: 6px;
   overflow: hidden;
@@ -41,13 +93,33 @@
 }
 
 .two-pane-diff-body {
-  max-height: 50vh;
+  flex: 1;
+  max-height: 55vh;
   overflow-y: auto;
   font-family: var(--mono-font, "Consolas", "Courier New", monospace);
   font-size: 0.82rem;
   line-height: 1.5;
   background: var(--bg-surface-elevated, var(--bg-code, #0d1117));
   color: var(--text-primary);
+}
+
+.two-pane-diff-body--sm {
+  max-height: 15vh;
+  min-height: 3.5em;
+}
+
+.two-pane-diff-body--md {
+  max-height: 40vh;
+}
+
+.two-pane-diff-body--lg {
+  max-height: 62vh;
+}
+
+.two-pane-diff-body--fill {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: none;
 }
 
 .two-pane-diff-row {
@@ -107,18 +179,23 @@
   color: var(--status-danger, #ef4444);
 }
 
-/* Edit-form Both-tab sizing */
-.editor-both-diff .two-pane-diff-body {
-  max-height: 40vh;
-}
-.editor-both-diff.notes-diff .two-pane-diff-body {
-  max-height: 15vh;
-  min-height: 3.5em;
-}
-
 @media (max-width: 768px) {
-  .two-pane-diff-body {
-    max-height: 36vh;
+  .two-pane-diff-body,
+  .two-pane-diff-body--lg {
+    max-height: 62dvh;
+  }
+
+  .two-pane-diff-body--fill {
+    max-height: none;
+  }
+
+  .two-pane-diff-body--md {
+    max-height: 35vh;
+  }
+
+  .two-pane-diff-body--sm {
+    max-height: 18vh;
+    min-height: 4em;
   }
 
   .two-pane-diff:not(.diff-mode-left):not(.diff-mode-right) {
@@ -144,13 +221,5 @@
   .diff-cell {
     padding: 0 2px;
     font-size: 0.78rem;
-  }
-
-  .editor-both-diff .two-pane-diff-body {
-    max-height: 35vh;
-  }
-  .editor-both-diff.notes-diff .two-pane-diff-body {
-    max-height: 18vh;
-    min-height: 4em;
   }
 }

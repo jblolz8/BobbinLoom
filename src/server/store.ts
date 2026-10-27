@@ -1057,6 +1057,21 @@ export function updateCharacterTemplateRecord(
     ...updates,
     ...("title" in updates
       ? { title: updates.title?.trim() ? updates.title.trim() : undefined }
+      : updates.name !== undefined &&
+          current.title &&
+          current.title.trim().toLowerCase() ===
+            current.name.trim().toLowerCase()
+        ? { title: updates.name.trim() }
+        : {}),
+    ...("creator" in updates
+      ? { creator: updates.creator?.trim() ? updates.creator.trim() : undefined }
+      : {}),
+    ...("cardVersion" in updates
+      ? {
+          cardVersion: updates.cardVersion?.trim()
+            ? updates.cardVersion.trim()
+            : undefined,
+        }
       : {}),
     ...resolvedParentPatch,
   };
@@ -1321,6 +1336,20 @@ export function saveCharacterTemplateRecord(
     ...("title" in template
       ? { title: template.title?.trim() ? template.title.trim() : undefined }
       : {}),
+    ...("creator" in template
+      ? {
+          creator: template.creator?.trim()
+            ? template.creator.trim()
+            : undefined,
+        }
+      : {}),
+    ...("cardVersion" in template
+      ? {
+          cardVersion: template.cardVersion?.trim()
+            ? template.cardVersion.trim()
+            : undefined,
+        }
+      : {}),
     createdAt: template.createdAt ?? existing?.createdAt ?? now,
     updatedAt: template.updatedAt ?? now,
   };
@@ -1399,7 +1428,7 @@ export function importCharacterCard(
     extensions: {},
     format: "ccv2",
     cardRef: { file: originalFile, kind },
-    cardVersion: card.characterVersion || undefined,
+    cardVersion: card.characterVersion.trim() || undefined,
     scenario: card.scenario || undefined, // D7
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,

@@ -11,3 +11,4 @@ export * from "./ImageViewer/ImageViewer";
 export * from "./MarkdownView/MarkdownView";
 export * from "./RenameModal/RenameModal";
 export * from "./RevertConfirmModal/RevertConfirmModal";
+export * from "./TwoPaneDiff/TwoPaneDiff";

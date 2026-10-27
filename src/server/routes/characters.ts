@@ -21,6 +21,12 @@ import {
 import { displayTitle, normalizeCreator } from "../../engine/characterCards";
 import { parseCard } from "../characterCards/parseCard";
 import {
+  exportCharacterPackage,
+  importCharacterPackage,
+  tryExtractBobbinLoomCharacterPackage,
+} from "../characterCards/characterPackage";
+import { ExportFormatSchema } from "../../schemas";
+import {
   deleteBrainstormSession,
   readBrainstormSession,
   writeBrainstormSession,
@@ -40,13 +46,17 @@ import { saveToLibraryAction } from "../stateActions";
 import {
   abortOnClientDisconnect,
   dataDir as defaultDataDir,
+  loadAppSettings,
   providerManager,
+  settingsDir,
 } from "./helpers";
 import type { CharacterFormat } from "../../schemas";
 
 const UpdateCharacterBody = z.object({
   name: z.string().min(1).optional(),
   title: z.string().optional(),
+  creator: z.string().optional(),
+  cardVersion: z.string().optional(),
   parentId: z.string().nullable().optional(),
   content: z.string().optional(),
   creatorNotes: z.string().optional(),
@@ -162,25 +172,65 @@ export const characterRoutes: FastifyPluginAsync<
     return { ok: true };
   });
 
-  // Import a CCv2 card (PNG with embedded `chara` JSON, or standalone JSON).
+  // Export a BobbinLoom character card (and optional CCv2 source / related family cards)
+  // in .webp, .png, or .json format.
+  app.get("/api/characters/:id/export", async (request, reply) => {
+    const params = z.object({ id: z.string() }).parse(request.params);
+    const query = z
+      .object({
+        format: ExportFormatSchema.optional(),
+        includeCcv2: z.enum(["true", "false"]).optional(),
+        includeFamily: z.enum(["true", "false"]).optional(),
+      })
+      .parse(request.query ?? {});
+    const requestedFormat = query.format ?? "webp";
+    const exported = await exportCharacterPackage(params.id, {
+      format: requestedFormat,
+      includeCcv2: query.includeCcv2 === "true",
+      includeFamily: query.includeFamily === "true",
+    });
+    if (!exported) {
+      return reply.code(404).send({
+        error:
+          "Character not found or is an unconverted CCv2 card (convert to BL first).",
+      });
+    }
+    return reply
+      .header(
+        "Content-Disposition",
+        `attachment; filename="${exported.fileName}"`,
+      )
+      .header("X-Export-Format", exported.actualFormat)
+      .type(exported.mimeType)
+      .send(exported.buffer);
+  });
+
+  // Import a BobbinLoom character package (.webp, .png, .json) or a CCv2 card (PNG/JSON).
   // Route-level bodyLimit override: Fastify 4 only honors the TOP-LEVEL option,
-  // so multi-MB card PNGs are accepted here even though the default is 1MB.
+  // so multi-MB card PNGs and multi-card family bundles are accepted here.
   app.post(
     "/api/characters/import",
-    { bodyLimit: 10 * 1024 * 1024 },
+    { bodyLimit: 25 * 1024 * 1024 },
     async (request, reply) => {
       const body = z
         .object({
           fileName: z.string().min(1),
-          dataBase64: z.string().min(1), // base64 of the raw PNG or JSON file
+          dataBase64: z.string().min(1), // base64 of the raw WebP, PNG, or JSON file
         })
         .parse(request.body ?? {});
       const bytes = Buffer.from(body.dataBase64, "base64");
-      const kind =
-        bytes.length >= 8 && bytes.subarray(0, 8).equals(PNG_SIG)
-          ? "png"
-          : "json";
       try {
+        // First check if this is a BobbinLoom character package (`spec: "bobbinloom_chara"`)
+        const blPkg = tryExtractBobbinLoomCharacterPackage(bytes);
+        if (blPkg) {
+          const imported = await importCharacterPackage(bytes);
+          return reply.code(201).send(imported);
+        }
+
+        const kind =
+          bytes.length >= 8 && bytes.subarray(0, 8).equals(PNG_SIG)
+            ? "png"
+            : "json";
         const card = parseCard(body.fileName, bytes);
 
         // Check if a BL-converted record with matching title/name+creator already exists.
@@ -283,6 +333,7 @@ export const characterRoutes: FastifyPluginAsync<
     currentContent: z.string().optional(), // active draft for targeted retry "generate"
     feedback: z.string().optional(), // optional retry feedback for "generate"
     format: z.record(z.any()).optional(), // target character format (from the active preset)
+    providerId: z.string().optional(), // optional text provider connection id
   });
 
   app.post("/api/characters/:id/convert", async (request, reply) => {
@@ -307,7 +358,7 @@ export const characterRoutes: FastifyPluginAsync<
     if (body.action === "generate") {
       try {
         const controller = abortOnClientDisconnect(reply);
-        const provider = providerManager.getProvider();
+        const provider = providerManager.getProvider(body.providerId);
         const result = await convertCardGenerate(
           provider,
           {
@@ -349,6 +400,7 @@ export const characterRoutes: FastifyPluginAsync<
     format: z.record(z.any()).optional(), // target character format
     currentContent: z.string().optional(), // source sheet for retry-with-feedback
     feedback: z.string().optional(), // user guidance for a retry
+    providerId: z.string().optional(), // optional text provider connection id
   });
 
   app.post("/api/characters/:id/reformat", async (request, reply) => {
@@ -376,7 +428,7 @@ export const characterRoutes: FastifyPluginAsync<
     if (body.action === "generate") {
       try {
         const controller = abortOnClientDisconnect(reply);
-        const provider = providerManager.getProvider();
+        const provider = providerManager.getProvider(body.providerId);
         const format = resolveCharacterFormat(
           body.format as CharacterFormat | undefined,
         );
@@ -507,8 +559,12 @@ export const characterRoutes: FastifyPluginAsync<
   app.post("/api/characters/brainstorm", async (request, reply) => {
     const body = BrainstormCharacterBody.parse(request.body ?? {});
     const controller = abortOnClientDisconnect(reply);
-    // The chosen connection, or the active one: `getProvider` takes the same id shape everywhere.
-    const provider = providerManager.getProvider(body.providerId);
+    // The chosen connection, or the saved brainstorm override, or the active one.
+    const effectiveProviderId =
+      body.providerId ||
+      loadAppSettings(settingsDir).brainstormTextProviderId ||
+      undefined;
+    const provider = providerManager.getProvider(effectiveProviderId);
     try {
       const result = await provider.brainstormCharacter(
         {

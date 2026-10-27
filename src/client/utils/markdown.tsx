@@ -8,14 +8,33 @@ export type InlineNode =
   | { type: "italic"; children: InlineNode[] }
   | { type: "strikethrough"; children: InlineNode[] }
   | { type: "inlineCode"; code: string }
+  | { type: "link"; href: string; children: InlineNode[] }
   | { type: "linebreak" };
+
+export type TableAlign = "left" | "center" | "right" | null;
+
+export type NestedListBlock = {
+  ordered: boolean;
+  items: InlineNode[][];
+};
 
 export type BlockNode =
   | { type: "paragraph"; children: InlineNode[] }
   | { type: "heading"; level: number; children: InlineNode[] }
   | { type: "codeBlock"; code: string; language?: string }
   | { type: "blockquote"; children: InlineNode[]; paragraphs?: InlineNode[][] }
-  | { type: "list"; ordered: boolean; items: InlineNode[][] }
+  | {
+      type: "list";
+      ordered: boolean;
+      items: InlineNode[][];
+      sublists?: Record<number, NestedListBlock[]>;
+    }
+  | {
+      type: "table";
+      headers: InlineNode[][];
+      alignments: TableAlign[];
+      rows: InlineNode[][][];
+    }
   | { type: "hr" };
 
 interface MatchCandidate {
@@ -23,6 +42,7 @@ interface MatchCandidate {
   endIndex: number;
   type:
     | "inlineCode"
+    | "link"
     | "quote"
     | "boldItalic"
     | "bold"
@@ -30,6 +50,7 @@ interface MatchCandidate {
     | "strikethrough";
   rawOpen?: string;
   rawClose?: string;
+  href?: string;
   content: string;
 }
 
@@ -38,6 +59,84 @@ const HR_PATTERN =
 
 export function isHorizontalRule(line: string): boolean {
   return HR_PATTERN.test(line);
+}
+
+/**
+ * Split a GFM table row into cell strings, respecting escaped pipes `\|` and inline code spans.
+ */
+function splitTableCells(line: string): string[] {
+  let trimmed = line.trim();
+  if (trimmed.startsWith("|")) trimmed = trimmed.slice(1);
+  if (trimmed.endsWith("|") && !trimmed.endsWith("\\|")) {
+    trimmed = trimmed.slice(0, -1);
+  }
+
+  const cells: string[] = [];
+  let current = "";
+  let inCode = false;
+
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i]!;
+    if (ch === "`") {
+      inCode = !inCode;
+      current += ch;
+    } else if (ch === "\\" && i + 1 < trimmed.length && trimmed[i + 1] === "|") {
+      current += "|";
+      i++;
+    } else if (ch === "|" && !inCode) {
+      cells.push(current.trim());
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+/**
+ * Parse a GFM table delimiter row (e.g. `| :--- | :---: | ---: |`).
+ * Returns column alignments if valid, or `null` if not a delimiter row.
+ */
+function parseTableDelimiterRow(line: string): TableAlign[] | null {
+  const trimmed = line.trim();
+  if (!trimmed.includes("|") && !/^:?-{3,}:?$/.test(trimmed)) return null;
+  if (!trimmed.includes("-")) return null;
+
+  const rawCells = splitTableCells(trimmed);
+  if (rawCells.length === 0) return null;
+
+  const alignments: TableAlign[] = [];
+  for (const cell of rawCells) {
+    if (!/^:?-+:?$/.test(cell)) return null;
+    const left = cell.startsWith(":");
+    const right = cell.endsWith(":");
+    if (left && right) alignments.push("center");
+    else if (right) alignments.push("right");
+    else if (left) alignments.push("left");
+    else alignments.push(null);
+  }
+  return alignments;
+}
+
+/**
+ * Check if `headerLine` and `delimiterLine` form the start of a valid GFM table.
+ */
+function isTableStart(headerLine: string, delimiterLine?: string): boolean {
+  if (!delimiterLine) return false;
+  const hTrim = headerLine.trim();
+  if (!hTrim.includes("|")) return false;
+  if (
+    hTrim.startsWith("```") ||
+    hTrim.startsWith(">") ||
+    isHorizontalRule(headerLine)
+  ) {
+    return false;
+  }
+  const alignments = parseTableDelimiterRow(delimiterLine);
+  if (!alignments) return false;
+  const headerCells = splitTableCells(hTrim);
+  return headerCells.length > 0 && headerCells.length === alignments.length;
 }
 
 /**
@@ -61,6 +160,19 @@ export function parseInline(text: string): InlineNode[] {
         endIndex: codeMatch.index + codeMatch[0].length,
         type: "inlineCode",
         content: codeMatch[1],
+      });
+    }
+
+    // 1b. Markdown Link: [label](https://... or mailto:...)
+    const linkMatch =
+      /\[([^\]\n]+)\]\(((?:https?:\/\/|mailto:)[^\s)]+)\)/.exec(remaining);
+    if (linkMatch && linkMatch.index !== undefined) {
+      candidates.push({
+        startIndex: linkMatch.index,
+        endIndex: linkMatch.index + linkMatch[0].length,
+        type: "link",
+        content: linkMatch[1],
+        href: linkMatch[2],
       });
     }
 
@@ -179,6 +291,13 @@ export function parseInline(text: string): InlineNode[] {
       case "inlineCode":
         nodes.push({ type: "inlineCode", code: best.content });
         break;
+      case "link":
+        nodes.push({
+          type: "link",
+          href: best.href ?? "#",
+          children: parseInline(best.content),
+        });
+        break;
       case "quote":
         nodes.push({
           type: "quote",
@@ -230,6 +349,48 @@ function appendPlainTextWithLinebreaks(nodes: InlineNode[], text: string) {
       nodes.push({ type: "linebreak" });
     }
   }
+}
+
+/**
+ * Consume any indented nested sublists (`  - subitem` or `  1. subitem`) following a parent list item.
+ */
+function consumeIndentedSublists(
+  lines: string[],
+  startIdx: number,
+): { nextIdx: number; sublists: NestedListBlock[] } {
+  let i = startIdx;
+  const sublists: NestedListBlock[] = [];
+
+  while (i < lines.length) {
+    if (isHorizontalRule(lines[i]!)) break;
+    const ulSub = lines[i]!.match(/^[ \t]{2,}([*\-+])\s+(.+)$/);
+    if (ulSub) {
+      const items: InlineNode[][] = [];
+      while (i < lines.length && !isHorizontalRule(lines[i]!)) {
+        const m = lines[i]!.match(/^[ \t]{2,}([*\-+])\s+(.+)$/);
+        if (!m) break;
+        items.push(parseInline(m[2]!));
+        i++;
+      }
+      sublists.push({ ordered: false, items });
+      continue;
+    }
+    const olSub = lines[i]!.match(/^[ \t]{2,}(\d+)\.\s+(.+)$/);
+    if (olSub) {
+      const items: InlineNode[][] = [];
+      while (i < lines.length && !isHorizontalRule(lines[i]!)) {
+        const m = lines[i]!.match(/^[ \t]{2,}(\d+)\.\s+(.+)$/);
+        if (!m) break;
+        items.push(parseInline(m[2]!));
+        i++;
+      }
+      sublists.push({ ordered: true, items });
+      continue;
+    }
+    break;
+  }
+
+  return { nextIdx: i, sublists };
 }
 
 /**
@@ -336,39 +497,95 @@ export function parseMarkdown(raw: string): BlockNode[] {
       continue;
     }
 
-    // 6. Unordered List: - item, * item, + item
+    // 5b. GFM Table: header row + delimiter row (| --- | --- |) + zero or more body rows
+    if (i + 1 < lines.length && isTableStart(line, lines[i + 1])) {
+      const headerCells = splitTableCells(line);
+      const alignments = parseTableDelimiterRow(lines[i + 1]!)!;
+      const colCount = headerCells.length;
+      const headers = headerCells.map((cell) => parseInline(cell));
+      const rows: InlineNode[][][] = [];
+      i += 2;
+
+      while (i < lines.length) {
+        const rowLine = lines[i]!;
+        const trimmedRow = rowLine.trim();
+        if (
+          trimmedRow.length === 0 ||
+          !trimmedRow.includes("|") ||
+          trimmedRow.startsWith("```") ||
+          trimmedRow.startsWith(">") ||
+          isHorizontalRule(rowLine) ||
+          /^#{1,6}\s+/.test(rowLine)
+        ) {
+          break;
+        }
+        const rawRowCells = splitTableCells(rowLine);
+        const normalizedCells: InlineNode[][] = [];
+        for (let c = 0; c < colCount; c++) {
+          normalizedCells.push(parseInline(rawRowCells[c] ?? ""));
+        }
+        rows.push(normalizedCells);
+        i++;
+      }
+
+      blocks.push({
+        type: "table",
+        headers,
+        alignments,
+        rows,
+      });
+      continue;
+    }
+
+    // 6. Unordered List: - item, * item, + item (with optional indented sublists)
     const ulMatch = line.match(/^([*\-+])\s+(.+)$/);
     if (ulMatch) {
       const items: InlineNode[][] = [];
+      const sublists: Record<number, NestedListBlock[]> = {};
       while (i < lines.length) {
         if (isHorizontalRule(lines[i])) break;
         const itemMatch = lines[i].match(/^([*\-+])\s+(.+)$/);
         if (!itemMatch) break;
+        const itemIdx = items.length;
         items.push(parseInline(itemMatch[2]));
         i++;
+        const nested = consumeIndentedSublists(lines, i);
+        if (nested.sublists.length > 0) {
+          sublists[itemIdx] = nested.sublists;
+          i = nested.nextIdx;
+        }
       }
       blocks.push({
         type: "list",
         ordered: false,
         items,
+        ...(Object.keys(sublists).length > 0 ? { sublists } : {}),
       });
       continue;
     }
 
-    // 7. Ordered List: 1. item, 2. item
+    // 7. Ordered List: 1. item, 2. item (with optional indented sublists)
     const olMatch = line.match(/^(\d+)\.\s+(.+)$/);
     if (olMatch) {
       const items: InlineNode[][] = [];
+      const sublists: Record<number, NestedListBlock[]> = {};
       while (i < lines.length) {
         const itemMatch = lines[i].match(/^(\d+)\.\s+(.+)$/);
         if (!itemMatch) break;
+        const itemIdx = items.length;
         items.push(parseInline(itemMatch[2]));
         i++;
+        const nested = consumeIndentedSublists(lines, i);
+        if (nested.sublists.length > 0) {
+          sublists[itemIdx] = nested.sublists;
+          i = nested.nextIdx;
+        }
       }
       blocks.push({
         type: "list",
         ordered: true,
         items,
+        ...(Object.keys(sublists).length > 0 ? { sublists } : {}),
       });
       continue;
     }
@@ -383,7 +600,8 @@ export function parseMarkdown(raw: string): BlockNode[] {
       !isHorizontalRule(lines[i]) &&
       !lines[i].match(/^#{1,6}\s+/) &&
       !lines[i].match(/^[*\-+]\s+/) &&
-      !lines[i].match(/^\d+\.\s+/)
+      !lines[i].match(/^\d+\.\s+/) &&
+      !(i + 1 < lines.length && isTableStart(lines[i], lines[i + 1]))
     ) {
       paraLines.push(lines[i]);
       i++;
@@ -419,6 +637,18 @@ export function renderInlineNodes(
           <code key={key} className="inline-code">
             {node.code}
           </code>
+        );
+      case "link":
+        return (
+          <a
+            key={key}
+            href={node.href}
+            target="_blank"
+            rel="noreferrer"
+            className="message-link"
+          >
+            {renderInlineNodes(node.children, `${key}-lnk`)}
+          </a>
         );
       case "quote":
         return (

@@ -348,6 +348,74 @@ describe("convertCardGenerate", () => {
     expect(result.content).toContain("[Species]: Cat");
   });
 
+  it("prefers convertCharacterSheet on initial conversion when implemented on the provider", async () => {
+    const { convertCardGenerate } =
+      await import("../src/server/characterCards/convertCard");
+    const mockProvider = {
+      convertCharacterSheet: vi
+        .fn()
+        .mockResolvedValue("[Species]: Fox\n[Gender]: Female\n[Body]\n- Height: 5'5\""),
+      generateCharacterSheet: vi.fn(),
+      refineCharacterSheet: vi.fn(),
+    } as any;
+
+    const tpl = makeEntry({
+      name: "Kitsune",
+      format: "ccv2",
+      content: "A clever shrine fox spirit.",
+      scenario: "Mountain shrine",
+      creatorNotes: "Speaks archaically",
+      tags: ["fox", "shrine"],
+    });
+
+    const result = await convertCardGenerate(mockProvider, {
+      template: tpl,
+      feedback: "Preserve archaic speech",
+    });
+
+    expect(mockProvider.convertCharacterSheet).toHaveBeenCalledTimes(1);
+    expect(mockProvider.generateCharacterSheet).not.toHaveBeenCalled();
+    expect(mockProvider.convertCharacterSheet).toHaveBeenCalledWith(
+      {
+        name: "Kitsune",
+        content: "A clever shrine fox spirit.",
+        scenario: "Mountain shrine",
+        creatorNotes: "Speaks archaically",
+        tags: ["fox", "shrine"],
+        feedback: "Preserve archaic speech",
+      },
+      DEFAULT_CHARACTER_FORMAT,
+      undefined,
+    );
+    expect(result.content).toContain("[Species]: Fox");
+  });
+
+  it("extractSheetContentFromOutput handles canonical JSON, unescaped quotes, and raw [Section] markdown", async () => {
+    const { extractSheetContentFromOutput } =
+      await import("../src/server/openAiCompatibleProvider");
+
+    // 1. Canonical JSON
+    expect(
+      extractSheetContentFromOutput(
+        JSON.stringify({ content: "[Species]: Human\n[Gender]: Female" }),
+      ),
+    ).toBe("[Species]: Human\n[Gender]: Female");
+
+    // 2. Unescaped inch-mark quote inside JSON string (e.g. Height: 5'7")
+    const brokenJson =
+      '{"content": "[Species]: Fox\\n[Gender]: Female\\n\\n[Body]\\n- Height: 5\'7"\\n- Build: Athletic"}';
+    expect(extractSheetContentFromOutput(brokenJson)).toContain(
+      "- Height: 5'7\"",
+    );
+
+    // 3. Raw [Section] output after <think> block without JSON wrapper
+    const rawMarkdown =
+      "<think>Converting card sections...</think>\n[Species]: Anthro Wolf\n[Gender]: Female\n\n[Personality]\n- Loyal and protective";
+    expect(extractSheetContentFromOutput(rawMarkdown)).toBe(
+      "[Species]: Anthro Wolf\n[Gender]: Female\n\n[Personality]\n- Loyal and protective",
+    );
+  });
+
   it("calls refineCharacterSheet when both feedback and currentContent are provided", async () => {
     const { convertCardGenerate } =
       await import("../src/server/characterCards/convertCard");
@@ -821,6 +889,170 @@ describe("groupByLineage and sortVersionGroups", () => {
       );
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("exports and imports BobbinLoom character packages with optional CCv2 source and related family cards", async () => {
+    const { mkdtempSync, rmSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const {
+      createCharacterTemplateRecord,
+      listCharacterTemplates,
+      saveCharacterTemplateRecord,
+    } = await import("../src/server/store");
+    const { exportCharacterPackage, importCharacterPackage } = await import(
+      "../src/server/characterCards/characterPackage"
+    );
+
+    const srcDir = mkdtempSync(join(tmpdir(), "bl-char-export-src-"));
+    const dstDir = mkdtempSync(join(tmpdir(), "bl-char-export-dst-"));
+    try {
+      const rootCard = createCharacterTemplateRecord("Averi", srcDir);
+      const childCard = createCharacterTemplateRecord(
+        "Averi",
+        srcDir,
+        "Averi — Knight",
+      );
+      const ccv2OnlyCard = createCharacterTemplateRecord("RawCcv2", srcDir);
+
+      // Save rootCard with CCv2 source metadata
+      const rootFolder = join(srcDir, "averi");
+      writeFileSync(
+        join(rootFolder, "averi.card.json"),
+        '{"name":"Averi","description":"Original CCv2"}',
+      );
+      saveCharacterTemplateRecord(
+        {
+          ...rootCard,
+          content: "[Species]: Elf\n\n[Personality]\nCalm",
+          creator: "author1",
+          cardVersion: "2.0",
+          tags: ["species:elf"],
+          ccv2Content: "Original CCv2 sheet",
+          ccv2CreatorNotes: "Original CCv2 notes",
+          ccv2Tags: ["elf"],
+          scenario: "Original scenario",
+          cardRef: { file: "averi.card.json", kind: "json" },
+        },
+        srcDir,
+      );
+
+      // Save childCard linked to rootCard
+      saveCharacterTemplateRecord(
+        {
+          ...childCard,
+          parentId: rootCard.id,
+          content: "[Species]: Elf\n\n[Personality]\nChivalrous",
+          tags: ["species:elf", "role:knight"],
+        },
+        srcDir,
+      );
+
+      // Save ccv2OnlyCard as unconverted CCv2 (also linked to rootCard to verify it is excluded from BL export)
+      saveCharacterTemplateRecord(
+        {
+          ...ccv2OnlyCard,
+          parentId: rootCard.id,
+          format: "ccv2",
+        },
+        srcDir,
+      );
+
+      // 1. Unconverted CCv2 card cannot be exported as a BL package
+      const rejected = await exportCharacterPackage(
+        ccv2OnlyCard.id,
+        { format: "json" },
+        srcDir,
+      );
+      expect(rejected).toBeNull();
+
+      // 2. Export rootCard as BL-only (includeCcv2: false, includeFamily: false), requesting webp without portrait -> falls back to json
+      const blOnlyPkg = await exportCharacterPackage(
+        rootCard.id,
+        { format: "webp", includeCcv2: false, includeFamily: false },
+        srcDir,
+      );
+      expect(blOnlyPkg).not.toBeNull();
+      expect(blOnlyPkg!.actualFormat).toBe("json");
+      expect(blOnlyPkg!.fileName).toBe("averi.chara.json");
+
+      const importedSingle = await importCharacterPackage(
+        blOnlyPkg!.buffer,
+        dstDir,
+      );
+      expect(importedSingle.records).toHaveLength(1);
+      expect(importedSingle.record.name).toBe("Averi");
+      expect(importedSingle.record.cardVersion).toBe("2.0");
+      expect(hasCcv2Source(importedSingle.record)).toBe(false);
+
+      // 3. Export rootCard WITH CCv2 source AND related family cards (includeCcv2: true, includeFamily: true) as JSON
+      const fullFamilyPkg = await exportCharacterPackage(
+        rootCard.id,
+        { format: "json", includeCcv2: true, includeFamily: true },
+        srcDir,
+      );
+      expect(fullFamilyPkg).not.toBeNull();
+      expect(fullFamilyPkg!.fileName).toBe("averi.averi-knight.charapack.json");
+
+      const importedFamily = await importCharacterPackage(
+        fullFamilyPkg!.buffer,
+        dstDir,
+      );
+      expect(importedFamily.records).toHaveLength(2);
+      const [importedRoot, importedChild] = importedFamily.records;
+      expect(hasCcv2Source(importedRoot)).toBe(true);
+      expect(importedRoot.ccv2Content).toBe("Original CCv2 sheet");
+      expect(importedRoot.scenario).toBe("Original scenario");
+      expect(importedChild.title).toBe("Averi — Knight");
+      expect(importedChild.parentId).toBe(importedRoot.id);
+
+      // 4. Add a portrait to rootCard and export multi-card .charapack.webp with collage image
+      const { loadSharp } = await import("../src/server/imageTranscode");
+      const sharp = await loadSharp();
+      const redPng = await sharp({
+        create: {
+          width: 40,
+          height: 60,
+          channels: 4,
+          background: { r: 220, g: 50, b: 50, alpha: 1 },
+        },
+      })
+        .png()
+        .toBuffer();
+      const { saveCharacterAvatar } = await import("../src/server/store");
+      saveCharacterAvatar(rootCard.id, "portrait", redPng, "png", srcDir);
+
+      const webpCollagePkg = await exportCharacterPackage(
+        rootCard.id,
+        { format: "webp", includeCcv2: false, includeFamily: true },
+        srcDir,
+      );
+      expect(webpCollagePkg).not.toBeNull();
+      expect(webpCollagePkg!.actualFormat).toBe("webp");
+      expect(webpCollagePkg!.fileName).toBe(
+        "averi.averi-knight.charapack.webp",
+      );
+
+      // Verify the outer WebP image is a 2-tile collage (width = 2 * 360 + 6 = 726, height = 540)
+      const collageMeta = await sharp(webpCollagePkg!.buffer).metadata();
+      expect(collageMeta.width).toBe(726);
+      expect(collageMeta.height).toBe(540);
+
+      const importedWebpFamily = await importCharacterPackage(
+        webpCollagePkg!.buffer,
+        dstDir,
+      );
+      expect(importedWebpFamily.records).toHaveLength(2);
+      // Primary card has its individual customPortrait restored, while child had no portrait so it stays empty
+      expect(importedWebpFamily.records[0].customPortrait).toBeDefined();
+      expect(importedWebpFamily.records[1].customPortrait).toBeUndefined();
+
+      const allInDst = listCharacterTemplates(dstDir);
+      expect(allInDst).toHaveLength(5); // 1 single + 2 JSON family + 2 WebP family (duplicates kept separately)
+    } finally {
+      rmSync(srcDir, { recursive: true, force: true });
+      rmSync(dstDir, { recursive: true, force: true });
     }
   });
 });

@@ -6,7 +6,16 @@ import {
   resolveStoragePreferences,
   updateViewPreferences,
 } from "../../api";
-import { Badge, Card, FormGrid, Header, Icon, Stack, Text } from "../base";
+import {
+  Badge,
+  Card,
+  FormGrid,
+  Header,
+  Icon,
+  Stack,
+  SwitchRow,
+  Text,
+} from "../base";
 
 const EXPORT_FORMAT_OPTIONS: Array<{
   id: ExportFormat;
@@ -46,12 +55,16 @@ export function FilesStorageSettingsPanel() {
   const [exportFormat, setExportFormat] = useState<ExportFormat>(
     STORAGE_PREFERENCE_DEFAULTS.exportFormat,
   );
+  const [alwaysAskExportFormat, setAlwaysAskExportFormat] = useState<boolean>(
+    STORAGE_PREFERENCE_DEFAULTS.alwaysAskExportFormat,
+  );
 
   useEffect(() => {
     getViewPreferences()
       .then((prefs) => {
         const resolved = resolveStoragePreferences(prefs);
         setExportFormat(resolved.exportFormat);
+        setAlwaysAskExportFormat(resolved.alwaysAskExportFormat);
       })
       .catch(() => {
         /* fallback to state defaults */
@@ -62,6 +75,13 @@ export function FilesStorageSettingsPanel() {
     setExportFormat(format);
     void updateViewPreferences({
       storage: { exportFormat: format },
+    }).catch(() => {});
+  }
+
+  function handleToggleAlwaysAsk(next: boolean) {
+    setAlwaysAskExportFormat(next);
+    void updateViewPreferences({
+      storage: { alwaysAskExportFormat: next },
     }).catch(() => {});
   }
 
@@ -139,6 +159,13 @@ export function FilesStorageSettingsPanel() {
             );
           })}
         </FormGrid>
+
+        <SwitchRow
+          title="Always ask for Export Format"
+          description="Show the export format picker in the Character Export dialog before downloading. Unchecking this (or selecting 'Always Remember Export Format' during export) uses the active format above automatically."
+          checked={alwaysAskExportFormat}
+          onChange={(e) => handleToggleAlwaysAsk(e.target.checked)}
+        />
       </Stack>
     </Stack>
   );

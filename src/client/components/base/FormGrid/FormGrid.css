@@ -61,11 +61,11 @@
 @media (max-width: 640px) {
   .base-form-grid--cols-2,
   .base-form-grid--cols-2-asymmetric,
+  .base-form-grid--cols-3,
   .base-form-grid--cols-cards {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .base-form-grid--cols-3,
   .base-form-grid--cols-4 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

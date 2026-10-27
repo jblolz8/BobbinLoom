@@ -1,6 +1,8 @@
-import { useMemo } from "react";
-import { computeTwoPaneDiff, type DiffPaneRow } from "../../engine/diff";
+import { useMemo, type ReactNode } from "react";
+import { computeTwoPaneDiff, type DiffPaneRow } from "../../../engine/diff";
 import "./TwoPaneDiff.css";
+
+export type TwoPaneDiffSize = "sm" | "md" | "lg" | "fill";
 
 export type TwoPaneDiffProps = {
   leftLabel: string;
@@ -9,6 +11,16 @@ export type TwoPaneDiffProps = {
   rightContent: string;
   className?: string;
   viewMode?: "split" | "left" | "right";
+  size?: TwoPaneDiffSize;
+  /**
+   * When `size="fill"` inside a scrollable parent container, forces the diff viewer
+   * to occupy 100% of the parent container's viewport height (`flex: 0 0 100%; height: 100%`)
+   * so scrolling to the bottom of the parent shows the diff across the entire view.
+   * When false (default), `size="fill"` uses `flex: 1 1 0` to take remaining space without overflowing.
+   */
+  fullViewportHeight?: boolean;
+  loading?: boolean;
+  loadingContent?: ReactNode;
 };
 
 function Cell({ cell }: { cell: DiffPaneRow["left"] }) {
@@ -29,15 +41,26 @@ export function TwoPaneDiff({
   rightContent,
   className,
   viewMode = "split",
+  size = "lg",
+  fullViewportHeight = false,
+  loading = false,
+  loadingContent,
 }: TwoPaneDiffProps) {
   const rows = useMemo(
     () => computeTwoPaneDiff(leftContent, rightContent),
     [leftContent, rightContent],
   );
 
-  return (
+  const fillClass =
+    size === "fill"
+      ? fullViewportHeight
+        ? "two-pane-diff--fill two-pane-diff--fill-viewport"
+        : "two-pane-diff--fill"
+      : "";
+
+  const diffScroll = (
     <div
-      className={`two-pane-diff-scroll diff-mode-${viewMode} ${className ?? ""}`}
+      className={`two-pane-diff-scroll diff-mode-${viewMode} ${!loading && !loadingContent ? fillClass : ""} ${className ?? ""}`.trim()}
     >
       <div className={`two-pane-diff diff-mode-${viewMode}`}>
         <div className={`two-pane-diff-header diff-mode-${viewMode}`}>
@@ -48,7 +71,7 @@ export function TwoPaneDiff({
             <span className="two-pane-diff-label">{rightLabel}</span>
           )}
         </div>
-        <div className="two-pane-diff-body">
+        <div className={`two-pane-diff-body two-pane-diff-body--${size}`}>
           {rows.map((row, i) => {
             if (viewMode === "left") {
               if (!row.left && !row.right) return null;
@@ -75,6 +98,21 @@ export function TwoPaneDiff({
           })}
         </div>
       </div>
+    </div>
+  );
+
+  if (!loading && !loadingContent) {
+    return diffScroll;
+  }
+
+  return (
+    <div
+      className={`two-pane-diff-wrapper ${fillClass} ${loading ? "is-loading" : ""}`.trim()}
+    >
+      {diffScroll}
+      {loading && loadingContent ? (
+        <div className="two-pane-diff-loading-overlay">{loadingContent}</div>
+      ) : null}
     </div>
   );
 }

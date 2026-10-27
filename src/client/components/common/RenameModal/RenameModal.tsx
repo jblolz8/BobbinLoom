@@ -1,7 +1,6 @@
 import { useId, useRef, useState, type FormEvent } from "react";
 import { isRenameable } from "../../../engine/dialogFocus";
 import { Button, Dialog, TextInput } from "../../base";
-import "./RenameModal.css";
 
 export type RenameModalProps = {
   /** The dialog's heading, e.g. "Rename Playthrough". */
@@ -52,6 +51,7 @@ export function RenameModal({
     <Dialog
       title={title}
       className="rename-modal"
+      maxWidth={420}
       onClose={onCancel}
       isBusy={isSaving}
       // Unlike a destructive dialog this one opens on the field: the reason the dialog is open at all

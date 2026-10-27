@@ -8,7 +8,7 @@ import { request } from "./client";
 import type { BrainstormSession } from "../../engine/brainstorm";
 
 export type CharacterTemplateUpdate = Partial<
-  Pick<CharacterTemplate, "name" | "title" | "parentId" | "content" | "creatorNotes" | "tags">
+  Pick<CharacterTemplate, "name" | "title" | "creator" | "cardVersion" | "parentId" | "content" | "creatorNotes" | "tags">
 >;
 
 export type SaveToLibraryResult = {
@@ -18,6 +18,7 @@ export type SaveToLibraryResult = {
 
 export type ImportCharacterResult = {
   record: CharacterTemplate;
+  records?: CharacterTemplate[];
   created: boolean;
 };
 
@@ -119,6 +120,59 @@ export function detachCharacterCcv2(id: string): Promise<{ record: CharacterTemp
   });
 }
 
+export type CharacterExportOptions = {
+  format: "webp" | "png" | "json";
+  includeCcv2?: boolean;
+  includeFamily?: boolean;
+};
+
+export async function downloadCharacterExport(
+  id: string,
+  name: string,
+  options: CharacterExportOptions,
+): Promise<"webp" | "png" | "json"> {
+  const query = new URLSearchParams();
+  query.set("format", options.format);
+  if (options.includeCcv2) query.set("includeCcv2", "true");
+  if (options.includeFamily) query.set("includeFamily", "true");
+
+  const res = await fetch(
+    `/api/characters/${encodeURIComponent(id)}/export?${query.toString()}`,
+  );
+  if (!res.ok) {
+    let errText = "Failed to export character card.";
+    try {
+      const json = (await res.json()) as { error?: string };
+      if (json.error) errText = json.error;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(errText);
+  }
+  const actualFormat = (res.headers.get("X-Export-Format") ||
+    options.format) as "webp" | "png" | "json";
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const filenameMatch = disposition.match(/filename="([^"]+)"/);
+  const fallbackSlug =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "character";
+  const filename =
+    filenameMatch?.[1] ?? `${fallbackSlug}.chara.${actualFormat}`;
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  return actualFormat;
+}
+
 export function deleteCharacter(id: string): Promise<void> {
   return request<void>(`/api/characters/${id}`, { method: "DELETE" });
 }
@@ -206,16 +260,19 @@ export type ConvertGenerateResult = {
   content: string;
   originalContent: string;
   record: CharacterTemplate;
+  records?: CharacterTemplate[];
 };
 
 export type ConvertApplyResult = {
   record: CharacterTemplate;
+  records?: CharacterTemplate[];
 };
 
 export type ConvertGenerateOptions = {
   feedback?: string;
   currentContent?: string;
   /** Target character format (defaults to the active preset's format). */
+  providerId?: string;
   format?: CharacterFormat;
   signal?: AbortSignal;
 };
@@ -233,6 +290,7 @@ export function convertCharacterGenerate(
         ? { currentContent: options.currentContent }
         : {}),
       ...(options?.format ? { format: options.format } : {}),
+      ...(options?.providerId ? { providerId: options.providerId } : {}),
     }),
     signal: options?.signal,
   });
@@ -253,6 +311,7 @@ export function convertCharacterApply(
 export type ReformatGenerateOptions = {
   format?: CharacterFormat;
   /** Source sheet for retry-with-feedback; defaults to the stored template content. */
+  providerId?: string;
   currentContent?: string;
   feedback?: string;
   signal?: AbortSignal;
@@ -267,6 +326,7 @@ export function reformatCharacterGenerate(
     body: JSON.stringify({
       action: "generate",
       ...(options?.format ? { format: options.format } : {}),
+      ...(options?.providerId ? { providerId: options.providerId } : {}),
       ...(options?.currentContent
         ? { currentContent: options.currentContent }
         : {}),

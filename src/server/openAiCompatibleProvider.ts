@@ -55,6 +55,101 @@ type ChatMessage = {
   content: string;
 };
 
+/**
+ * Extract a character sheet string from a model response.
+ * Supports:
+ * 1. Canonical JSON `{ "content": "..." }` (plus common alias keys like `sheetContent` / `sheet`).
+ * 2. Section-keyed JSON objects (e.g. `{ "Species": "Fox", "Body": ["- Height: 5'5\""] }`).
+ * 3. JSON envelopes whose inner string had unescaped quotes (e.g. `Height: 5'7"`).
+ * 4. Direct or code-fenced `[Section]` markdown when at least 2 section headers are present.
+ */
+export function extractSheetContentFromOutput(
+  rawContent: string,
+): string | null {
+  if (!rawContent || !rawContent.trim()) return null;
+  const cleaned = rawContent
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .trim();
+  if (!cleaned) return null;
+
+  const extracted = extractJsonPayload(cleaned);
+  if (extracted && typeof extracted === "object" && !Array.isArray(extracted)) {
+    const obj = extracted as Record<string, unknown>;
+    for (const key of [
+      "content",
+      "sheetContent",
+      "sheet",
+      "characterSheet",
+      "character_sheet",
+    ]) {
+      const val = obj[key];
+      if (typeof val === "string" && val.trim()) {
+        return val.trim();
+      }
+    }
+
+    // Fallback for section-keyed JSON objects (e.g. { "Species": "Fox", "Body": ["- ..."] })
+    const entries = Object.entries(obj).filter(
+      ([k, v]) =>
+        k.trim().length > 0 &&
+        (typeof v === "string" ||
+          (Array.isArray(v) && v.every((item) => typeof item === "string"))),
+    );
+    if (entries.length >= 2) {
+      const blocks = entries.map(([rawKey, val]) => {
+        const header = rawKey.replace(/^\[|\]$/g, "").trim();
+        if (Array.isArray(val)) {
+          const lines = (val as string[])
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .map((line) => (line.startsWith("-") ? line : `- ${line}`));
+          return `[${header}]\n${lines.join("\n")}`;
+        }
+        const strVal = String(val).trim();
+        const isInline =
+          !strVal.includes("\n") &&
+          !strVal.startsWith("-") &&
+          strVal.length <= 60;
+        return isInline ? `[${header}]: ${strVal}` : `[${header}]\n${strVal}`;
+      });
+      return blocks.join("\n\n").trim();
+    }
+  }
+
+  // Strip outer markdown code fences if present
+  const unfenced = cleaned
+    .replace(/^```(?:json|markdown|md|text)?\s*\r?\n([\s\S]*?)\r?\n```\s*$/i, "$1")
+    .trim();
+
+  // Fallback for JSON envelope where unescaped quotes (e.g. Height: 5'7") broke JSON.parse
+  const brokenEnvelopeMatch = unfenced.match(
+    /\{\s*"(?:content|sheetContent|sheet|characterSheet|character_sheet)"\s*:\s*"([\s\S]*)"\s*\}\s*$/,
+  );
+  if (brokenEnvelopeMatch) {
+    const inner = brokenEnvelopeMatch[1]
+      .replace(/\\r\\n/g, "\n")
+      .replace(/\\n/g, "\n")
+      .replace(/\\r/g, "\r")
+      .replace(/\\t/g, "\t")
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, "\\")
+      .trim();
+    if (/^\[[A-Za-z][^\]]*\]/m.test(inner)) {
+      return inner;
+    }
+  }
+
+  // Fallback for raw `[Section]` sheet output without JSON wrapper
+  const headerMatches = [
+    ...unfenced.matchAll(/^\[([A-Za-z][^\][\r\n]{1,40})\](?::[ \t]*.*|[ \t]*)$/gm),
+  ];
+  if (headerMatches.length >= 2 && headerMatches[0].index !== undefined) {
+    return unfenced.slice(headerMatches[0].index).trim();
+  }
+
+  return null;
+}
+
 export class OpenAICompatibleProvider {
   constructor(
     private readonly config: ResolvedProviderConfig,
@@ -577,6 +672,73 @@ export class OpenAICompatibleProvider {
     );
   }
 
+  async convertCharacterSheet(
+    card: {
+      name: string;
+      content: string;
+      scenario?: string;
+      creatorNotes?: string;
+      tags?: string[];
+      feedback?: string;
+    },
+    format?: CharacterFormat,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    const fmt = resolveCharacterFormat(format);
+    const example = toJsonExampleContent(buildFormatExample(fmt));
+    const rules = buildFormatRules(fmt);
+
+    const metadataLines: string[] = [];
+    if (card.scenario?.trim()) {
+      metadataLines.push(`Scenario / Setting: ${card.scenario.trim()}`);
+    }
+    if (card.creatorNotes?.trim()) {
+      metadataLines.push(`Creator's Notes: ${card.creatorNotes.trim()}`);
+    }
+    if (card.tags && card.tags.length > 0) {
+      metadataLines.push(`Tags: ${card.tags.join(", ")}`);
+    }
+
+    const prompt = [
+      "You are an expert character card converter for a local RPG chat engine called BobbinLoom.",
+      `Convert the imported Character Card (CCv2) for "${card.name}" into a structured BobbinLoom character sheet.`,
+      "",
+      "Return ONLY a JSON object with this exact shape:",
+      "{",
+      `  "content": "${example}"`,
+      "}",
+      "",
+      "TARGET FORMAT:",
+      rules,
+      "",
+      "CONVERSION RULES:",
+      "1. Extract and reorganize ALL established character traits, physical appearance, body details, clothing, personality, public/private communication style, likes, dislikes, background lore, and intimacy preferences from the source card into the target sections.",
+      "2. The source card may use prose paragraphs, W++ ([character(\"...\"){...}]), PList, bullet lists, or Ali:Chat dialogue examples — translate whatever notation it uses into clean, natural BobbinLoom section bullets.",
+      '3. Ensure every section in the target format is present, in the exact order listed. When a section (such as Likes, Dislikes, or Communication) is only implied by their personality, backstory, or dialogue examples, derive fitting bullets that stay 100% faithful to the character. Only write "(not established)" when nothing can reasonably be inferred.',
+      "4. Do NOT invent unrelated RPG plot hooks or contradict established facts from the source card.",
+      "5. Preserve {{char}} and {{user}} macros where appropriate, and replace hardcoded references to the player with {{user}}.",
+      "6. Sections marked inline are written as `[Name]: value` on one line; block sections use `[Name]` followed by `- ` bullet lines.",
+      "7. Escape any double quotes inside the JSON `content` string (for example, write `5'7\\\"` for height).",
+      "",
+      ...(card.feedback?.trim()
+        ? ["--- USER GUIDANCE FOR THIS CONVERSION ---", card.feedback.trim(), ""]
+        : []),
+      `--- SOURCE CHARACTER CARD (${card.name}) ---`,
+      card.content,
+      "",
+      ...(metadataLines.length > 0
+        ? ["--- CARD METADATA & CONTEXT ---", ...metadataLines, ""]
+        : []),
+      "Return ONLY the JSON object. No markdown, no explanation.",
+    ].join("\n");
+
+    return this.executeSheetJsonRequest(
+      prompt,
+      signal,
+      "The model did not return a valid converted character sheet.",
+    );
+  }
+
   async refineCharacterSheet(
     currentContent: string,
     originalCardContent: string,
@@ -668,7 +830,7 @@ export class OpenAICompatibleProvider {
   }
 
   /** Shared `{ "content": "..." }` JSON request for the sheet generation,
-   *  refinement, and reformatting methods. */
+   *  conversion, refinement, and reformatting methods. */
   private async executeSheetJsonRequest(
     prompt: string,
     signal: AbortSignal | undefined,
@@ -680,42 +842,56 @@ export class OpenAICompatibleProvider {
       model: this.config.model,
       messages,
       temperature: this.config.temperature ?? 0.7,
-      max_tokens: Math.min(4000, this.config.maxTokens),
+      max_tokens: Math.max(4000, this.config.maxTokens),
       ...buildTextSamplingParams(this.config, {
-        includeStop: true,
+        includeStop: false,
         jsonObject: true,
       }),
+    };
+
+    const validateSheetPayload = (rawText: string): string | null => {
+      try {
+        const parsed = JSON.parse(rawText) as {
+          choices?: Array<{ message?: { content?: string | null } }>;
+        };
+        const content = parsed.choices?.[0]?.message?.content?.trim() ?? "";
+        if (extractSheetContentFromOutput(content)) return null;
+        return "Model response did not contain a valid character sheet.";
+      } catch {
+        return "Provider response was not valid JSON.";
+      }
     };
 
     const response = await this.executeRequest(
       body,
       "/chat/completions",
-      undefined,
+      validateSheetPayload,
       signal,
     );
     const payload = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
+      choices?: Array<{
+        message?: { content?: string | null };
+        finish_reason?: string | null;
+      }>;
     };
 
     const rawContent = payload.choices?.[0]?.message?.content?.trim() ?? "";
-    const extracted = extractJsonPayload(rawContent);
-
-    if (
-      extracted &&
-      typeof extracted === "object" &&
-      extracted !== null &&
-      "content" in extracted
-    ) {
-      const sheetContent = (extracted as Record<string, unknown>).content;
-      if (typeof sheetContent === "string" && sheetContent.trim()) {
-        return sheetContent.trim();
-      }
+    const finishReason = payload.choices?.[0]?.finish_reason ?? null;
+    const sheetContent = extractSheetContentFromOutput(rawContent);
+    if (sheetContent) {
+      return sheetContent;
     }
 
     const errSnippet = rawContent
       ? rawContent.slice(0, 300)
       : "(empty response)";
-    throw new Error(`${errorPrefix} Raw response snippet: "${errSnippet}"`);
+    const truncationHint =
+      finishReason === "length"
+        ? ' The response was cut off at the token limit (finish_reason: "length") — raise Max Tokens for this connection in Settings and try again.'
+        : "";
+    throw new Error(
+      `${errorPrefix} Raw response snippet: "${errSnippet}"${truncationHint}`,
+    );
   }
 
   async suggestCharacterTags(

@@ -127,6 +127,20 @@ export interface TurnProvider {
     format?: CharacterFormat,
   ): Promise<string>;
 
+  /** Convert an imported CCv2 character card into a structured BobbinLoom character sheet. */
+  convertCharacterSheet?(
+    card: {
+      name: string;
+      content: string;
+      scenario?: string;
+      creatorNotes?: string;
+      tags?: string[];
+      feedback?: string;
+    },
+    format?: CharacterFormat,
+    signal?: AbortSignal,
+  ): Promise<string>;
+
   /** Refine an existing character sheet draft based on targeted user feedback and
    *  original card reference. Preserves untouched sections while applying requested changes. */
   refineCharacterSheet(

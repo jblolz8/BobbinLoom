@@ -99,6 +99,6 @@ export function parseCard(fileName: string, bytes: Buffer): ParsedCard {
     creator: str(data.creator),
     creatorNotes,
     tags,
-    characterVersion: str(data.character_version),
+    characterVersion: str(data.character_version).trim(),
   };
 }

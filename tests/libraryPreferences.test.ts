@@ -48,6 +48,24 @@ describe("resolveLibraryPreferences", () => {
       [],
     );
   });
+
+  it("defaults character card display options (compact title/comments, full tags) and respects stored overrides", () => {
+    const defaults = resolveLibraryPreferences(undefined);
+    expect(defaults.characterShowFullTitle).toBe(false);
+    expect(defaults.characterShowFullComments).toBe(false);
+    expect(defaults.characterShowAllTags).toBe(true);
+
+    const overridden = resolveLibraryPreferences({
+      library: {
+        characterShowFullTitle: true,
+        characterShowFullComments: true,
+        characterShowAllTags: false,
+      },
+    });
+    expect(overridden.characterShowFullTitle).toBe(true);
+    expect(overridden.characterShowFullComments).toBe(true);
+    expect(overridden.characterShowAllTags).toBe(false);
+  });
 });
 
 describe("adopting the library and shelf keys", () => {

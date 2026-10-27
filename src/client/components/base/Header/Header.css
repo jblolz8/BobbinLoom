@@ -3,6 +3,8 @@
    ========================================================================== */
 .base-header {
   box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
 }
 
 .base-header--bordered {
@@ -23,6 +25,7 @@
   gap: 0.75rem;
   flex-wrap: wrap;
   width: 100%;
+  min-width: 0;
 }
 
 .base-header__leading {
@@ -35,7 +38,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  min-width: 0;
+  min-width: 140px;
   flex: 1 1 auto;
 }
 
@@ -43,8 +46,16 @@
   margin: 0;
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.4rem;
+  min-width: 0;
+  max-width: 100%;
   color: var(--text-primary);
+}
+
+.base-header__title-text {
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .base-header__title-icon {
@@ -64,6 +75,13 @@
   align-items: center;
   gap: 0.4rem;
   flex-shrink: 0;
+}
+
+.base-header:not(.base-header--app) .base-header__actions {
+  flex-wrap: wrap;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* ── Variant: Page / Workspace Header (.base-header--page) ── */
@@ -94,13 +112,18 @@
   padding-bottom: 0.35rem;
 }
 
+.base-header--modal .base-header__row {
+  align-items: flex-start;
+}
+
 .base-header--modal .base-header__title {
   font-size: 1.05rem;
   font-weight: 700;
 }
 
 .base-header--modal .base-header__subtitle {
-  font-size: 0.82rem;
+  font-size: 0.86rem;
+  line-height: 1.45;
 }
 
 /* ── Variant: Panel Header (.base-header--panel) ── */

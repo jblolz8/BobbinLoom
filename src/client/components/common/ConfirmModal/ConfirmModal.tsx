@@ -1,6 +1,5 @@
 import { useRef, type ReactNode, type RefObject } from "react";
-import { Button, Dialog } from "../../base";
-import "./ConfirmModal.css";
+import { Button, Dialog, Stack } from "../../base";
 
 export type ConfirmModalProps = {
   title: string;
@@ -54,7 +53,7 @@ export function ConfirmActions({
   cancelRef,
 }: ConfirmActionsProps) {
   return (
-    <div className="settings-actions">
+    <Stack direction="row" align="center" justify="end" gap="xs" wrap>
       <Button
         variant={danger ? "danger" : "primary"}
         onClick={onConfirm}
@@ -72,7 +71,7 @@ export function ConfirmActions({
       >
         {cancelLabel}
       </Button>
-    </div>
+    </Stack>
   );
 }
 
@@ -93,7 +92,7 @@ export function ConfirmModal(props: ConfirmModalProps) {
     danger = false,
     isLoading = false,
     confirmDisabled = false,
-    maxWidth,
+    maxWidth = 480,
     className = "",
     secondaryActions,
     children,

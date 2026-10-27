@@ -1,5 +1,6 @@
 import React from "react";
 import * as LucideIcons from "lucide-react";
+import "./Icon.css";
 
 export type IconName = keyof typeof LucideIcons;
 
@@ -8,6 +9,7 @@ export interface IconProps extends React.SVGProps<SVGSVGElement> {
   size?: number | string;
   color?: string;
   strokeWidth?: number | string;
+  pulse?: boolean;
   className?: string;
 }
 
@@ -16,6 +18,7 @@ export function Icon({
   size = 18,
   color,
   strokeWidth = 2,
+  pulse = false,
   className = "",
   style,
   ...props
@@ -38,7 +41,7 @@ export function Icon({
       size={size}
       color={color}
       strokeWidth={strokeWidth}
-      className={`inline-block align-middle shrink-0 ${className}`.trim()}
+      className={`inline-block align-middle shrink-0 ${pulse ? "sparkle-pulse" : ""} ${className}`.trim()}
       style={{ display: "inline-block", verticalAlign: "middle", ...style }}
       aria-hidden="true"
       {...props}

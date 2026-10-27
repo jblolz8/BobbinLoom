@@ -115,7 +115,7 @@ export const StatusMessage = forwardRef<HTMLDivElement, StatusMessageProps>(
       "base-status",
       `base-status--${variant}`,
       `base-status--${tone}`,
-      isCompact || Boolean(onDismiss) ? "base-status--compact" : "",
+      isCompact ? "base-status--compact" : "",
       sticky ? "base-status--sticky" : "",
       className,
     ]

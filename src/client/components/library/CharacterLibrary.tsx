@@ -1,20 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
-import type { CharacterTemplate } from "../../../schemas";
+import type { CharacterTemplate, ExportFormat } from "../../../schemas";
 import type { CharacterFormat } from "../../../schemas";
 import type { ViewPreferences } from "../../../schemas";
 import {
-  createCharacter,
   deleteCharacter,
   detachCharacterCcv2,
+  downloadCharacterExport,
   duplicateCharacter,
   importCharacter,
   listCharacters,
   updateCharacter,
-  uploadCharacterAvatar,
-  restoreOriginalCharacterAvatar,
-  deleteCharacterProfileAvatar,
-  getCharacterAvatarUrl,
 } from "../../api";
 import {
   convertCharacterApply,
@@ -22,38 +18,25 @@ import {
   reformatCharacterApply,
   reformatCharacterGenerate,
   suggestCharacterTags,
-  brainstormCharacter,
   getPromptConfig,
   listPresets,
   getPreset,
 } from "../../api";
 import {
   LIBRARY_PREFERENCE_DEFAULTS,
+  STORAGE_PREFERENCE_DEFAULTS,
   adoptLocalPreferences,
+  getViewPreferences,
   resolveLibraryPreferences,
+  resolveStoragePreferences,
   updateViewPreferences,
-  getBrainstormSession,
-  saveBrainstormSession,
-  clearBrainstormSession,
 } from "../../api";
-import type {
-  CharacterTemplateUpdate,
-  ProposedSectionChange,
-  CharacterBrainstormResult,
-  Preset,
-  ResolvedLibraryPreferences,
-} from "../../api";
-import {
-  CHARACTER_SHEET_EXAMPLE,
-  applySectionChanges,
-} from "../../../engine/characterSections";
-import {
-  isFormatAligned,
-  resolveCharacterFormat,
-} from "../../../engine/characterFormat";
+import type { Preset, ResolvedLibraryPreferences } from "../../api";
+import { resolveCharacterFormat } from "../../../engine/characterFormat";
 import {
   buildCharacterFamilyTree,
   displayTitle,
+  hasCcv2Source,
   hasDistinctTitle,
   entryKind,
   filterLibraryEntries,
@@ -65,6 +48,10 @@ import {
   type SortDirection,
 } from "../../../engine/characterCards";
 import {
+  CharacterExportModal,
+  type CharacterExportModalSubmitOptions,
+} from "./CharacterExportModal";
+import {
   ActionsMenu,
   Badge,
   Button,
@@ -73,12 +60,10 @@ import {
   Dialog,
   FormGrid,
   Header,
-  Icon,
   Modal,
   Pagination,
   SearchBar,
   Separator,
-  SimpleSelect,
   SortSelect,
   Stack,
   StatusMessage,
@@ -87,8 +72,6 @@ import {
   TagRow,
   TagSidebar,
   Text,
-  TextArea,
-  TextInput,
   Tooltip,
   type ActionsMenuItem,
 } from "../base";
@@ -96,37 +79,14 @@ export { CharacterAvatar } from "../base";
 import { usePagination } from "../../hooks/usePagination";
 import {
   CardFamilyModal,
-  CharacterPortraitDrawer,
   ConfirmModal,
   EditTagsModal,
   type EditTagsAiContextOption,
 } from "../common";
-import { DiffModal } from "./DiffModal";
-import { TwoPaneDiff } from "./TwoPaneDiff";
-import { TagSuggestionModal } from "./TagSuggestionModal";
 import { TagTaxonomyModal } from "./TagTaxonomyModal";
-import {
-  CharacterBrainstormPanel,
-  type BrainstormChatMessage,
-} from "./CharacterBrainstormPanel";
-import { BrainstormSettingsModal } from "./BrainstormSettingsModal";
-import {
-  brainstormHistoryContent,
-  brainstormStorageKey,
-  decodeLegacyBrainstormSession,
-  isBrainstormMessage,
-  trimBrainstormMessages,
-} from "../../../engine/brainstorm";
-import {
-  getBrainstormSettings,
-  getTagTaxonomy,
-  setBrainstormSettings,
-} from "../../api";
-import {
-  sortTags,
-  type TagTaxonomyConfig,
-} from "../../../engine/tagTaxonomy";
-import "./CharacterLibrary.css";
+import { CharacterEditor, ConvertToBLModal } from "./editor";
+import { getTagTaxonomy } from "../../api";
+import { sortTags, type TagTaxonomyConfig } from "../../../engine/tagTaxonomy";
 
 export type CharacterLibraryProps = {
   variant?: "page" | "dialog";
@@ -136,352 +96,6 @@ export type CharacterLibraryProps = {
 };
 
 export type ViewMode = "portrait" | "list" | "grid";
-
-type CharacterForm = {
-  name: string;
-  title: string;
-  creatorNotes: string;
-  tags: string[];
-  content: string;
-};
-
-function blankForm(): CharacterForm {
-  return { name: "", title: "", creatorNotes: "", tags: [], content: "" };
-}
-
-function templateToForm(t: CharacterTemplate): CharacterForm {
-  const distinctTitle =
-    t.title && t.title.trim().toLowerCase() !== t.name.trim().toLowerCase()
-      ? t.title.trim()
-      : "";
-  return {
-    name: t.name,
-    title: distinctTitle,
-    creatorNotes: t.creatorNotes ?? "",
-    tags: t.tags ?? [],
-    content: t.content,
-  };
-}
-
-function formToUpdate(form: CharacterForm): CharacterTemplateUpdate {
-  const trimmedTitle = form.title.trim();
-  const trimmedName = form.name.trim();
-  return {
-    name: form.name,
-    title:
-      trimmedTitle && trimmedTitle.toLowerCase() !== trimmedName.toLowerCase()
-        ? trimmedTitle
-        : "",
-    creatorNotes: form.creatorNotes,
-    tags: form.tags,
-    content: form.content,
-  };
-}
-
-/** Interactive Tag Editor with chips, typeahead suggestions, and AI suggestion trigger */
-function TagChipEditor({
-  tags,
-  onChange,
-  allLibraryTags,
-  disabled,
-  onSuggestAI,
-  suggestingAI,
-  taxonomyConfig,
-}: {
-  tags: string[];
-  onChange: (tags: string[]) => void;
-  allLibraryTags: string[];
-  disabled?: boolean;
-  onSuggestAI?: () => void;
-  suggestingAI?: boolean;
-  taxonomyConfig?: TagTaxonomyConfig | null;
-}) {
-  const [inputVal, setInputVal] = useState("");
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [focusedSuggestionIdx, setFocusedSuggestionIdx] = useState(-1);
-
-  const availableSuggestions = useMemo(() => {
-    const q = inputVal.trim().toLowerCase();
-    if (!q) return allLibraryTags.filter((t) => !tags.includes(t)).slice(0, 8);
-    return allLibraryTags
-      .filter((t) => t.includes(q) && !tags.includes(t))
-      .slice(0, 10);
-  }, [allLibraryTags, tags, inputVal]);
-
-  // Reset focus index when suggestions change
-  useEffect(() => {
-    setFocusedSuggestionIdx(-1);
-  }, [availableSuggestions]);
-
-  function addTag(raw: string) {
-    const norm = raw.trim().toLowerCase();
-    if (!norm) return;
-    if (!tags.includes(norm)) {
-      onChange(sortTags([...tags, norm], taxonomyConfig));
-    }
-    setInputVal("");
-    setShowSuggestions(false);
-    setFocusedSuggestionIdx(-1);
-  }
-
-  function removeTag(tagToRemove: string) {
-    onChange(
-      sortTags(
-        tags.filter((t) => t !== tagToRemove),
-        taxonomyConfig,
-      ),
-    );
-  }
-
-  return (
-    <div className="editor-field tag-editor-field">
-      <div className="editor-field-header-row">
-        <span className="editor-field-label">Tags</span>
-        {onSuggestAI ? (
-          <Button
-            type="button"
-            variant="ai"
-            size="xs"
-            onClick={() => onSuggestAI()}
-            disabled={disabled || suggestingAI}
-            leftIcon={
-              <Icon
-                name="Sparkles"
-                size={13}
-                className={suggestingAI ? "sparkle-pulse" : ""}
-              />
-            }
-            title="Use AI to analyze character content and suggest tags based on library taxonomy"
-          >
-            {suggestingAI ? "Analyzing Tags…" : "Edit Tags by AI"}
-          </Button>
-        ) : null}
-      </div>
-
-      <div className="tag-chip-editor-box">
-        <div className="tag-chip-list">
-          {tags.map((tag) => (
-            <TagChip
-              key={tag}
-              tag={tag}
-              userConfig={taxonomyConfig}
-              disabled={disabled}
-              size="md"
-              onRemove={!disabled ? () => removeTag(tag) : undefined}
-            />
-          ))}
-
-          {!disabled ? (
-            <div className="tag-input-wrap">
-              <input
-                type="text"
-                placeholder={
-                  tags.length === 0
-                    ? "Add tags (e.g. species:elf, rating:sfw)…"
-                    : "Add tag…"
-                }
-                value={inputVal}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val.includes(",")) {
-                    const parts = val.split(",");
-                    for (const p of parts) {
-                      if (p.trim()) addTag(p);
-                    }
-                    setInputVal("");
-                  } else {
-                    setInputVal(val);
-                    setShowSuggestions(true);
-                  }
-                }}
-                onFocus={() => setShowSuggestions(true)}
-                onBlur={() => {
-                  setTimeout(() => {
-                    setShowSuggestions(false);
-                    setFocusedSuggestionIdx(-1);
-                  }, 200);
-                }}
-                onKeyDown={(e) => {
-                  if (showSuggestions && availableSuggestions.length > 0) {
-                    if (e.key === "Tab") {
-                      e.preventDefault();
-                      if (e.shiftKey) {
-                        setFocusedSuggestionIdx((prev) =>
-                          prev <= 0
-                            ? availableSuggestions.length - 1
-                            : prev - 1,
-                        );
-                      } else {
-                        setFocusedSuggestionIdx((prev) =>
-                          prev >= availableSuggestions.length - 1
-                            ? 0
-                            : prev + 1,
-                        );
-                      }
-                      return;
-                    } else if (e.key === "ArrowDown") {
-                      e.preventDefault();
-                      setFocusedSuggestionIdx((prev) =>
-                        prev >= availableSuggestions.length - 1 ? 0 : prev + 1,
-                      );
-                      return;
-                    } else if (e.key === "ArrowUp") {
-                      e.preventDefault();
-                      setFocusedSuggestionIdx((prev) =>
-                        prev <= 0 ? availableSuggestions.length - 1 : prev - 1,
-                      );
-                      return;
-                    } else if (e.key === "Escape") {
-                      e.preventDefault();
-                      setShowSuggestions(false);
-                      setFocusedSuggestionIdx(-1);
-                      return;
-                    }
-                  }
-
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    if (
-                      showSuggestions &&
-                      focusedSuggestionIdx >= 0 &&
-                      focusedSuggestionIdx < availableSuggestions.length
-                    ) {
-                      addTag(availableSuggestions[focusedSuggestionIdx]);
-                    } else if (inputVal.trim()) {
-                      addTag(inputVal);
-                    }
-                  } else if (
-                    e.key === "Backspace" &&
-                    !inputVal &&
-                    tags.length > 0
-                  ) {
-                    removeTag(tags[tags.length - 1]);
-                  }
-                }}
-                className="tag-inline-input"
-              />
-
-              {showSuggestions && availableSuggestions.length > 0 ? (
-                <div className="tag-autocomplete-dropdown" role="listbox">
-                  <span className="autocomplete-header">
-                    Library Suggestions:
-                  </span>
-                  {availableSuggestions.map((sug, idx) => (
-                    <button
-                      key={sug}
-                      type="button"
-                      role="option"
-                      aria-selected={idx === focusedSuggestionIdx}
-                      className={`autocomplete-item ${idx === focusedSuggestionIdx ? "selected focused" : ""}`}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        addTag(sug);
-                      }}
-                      onMouseEnter={() => setFocusedSuggestionIdx(idx)}
-                    >
-                      <TagChip
-                        tag={sug}
-                        userConfig={taxonomyConfig}
-                        size="xs"
-                      />
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Side-by-side tag diff viewer for the "Both" tab with restore button */
-function TagDiffViewer({
-  originalTags,
-  currentTags,
-  onRestore,
-  taxonomyConfig,
-}: {
-  originalTags: string[];
-  currentTags: string[];
-  onRestore: () => void;
-  taxonomyConfig?: TagTaxonomyConfig | null;
-}) {
-  const normOriginal = useMemo(
-    () => originalTags.map((t) => t.toLowerCase()),
-    [originalTags],
-  );
-  const normCurrent = useMemo(
-    () => currentTags.map((t) => t.toLowerCase()),
-    [currentTags],
-  );
-
-  const added = normCurrent.filter((t) => !normOriginal.includes(t));
-  const removed = normOriginal.filter((t) => !normCurrent.includes(t));
-
-  return (
-    <div className="editor-field tag-diff-field">
-      <div className="editor-field-header-row">
-        <span className="editor-field-label">Tags Comparison</span>
-        {originalTags.length > 0 ? (
-          <Button
-            type="button"
-            variant="secondary"
-            size="xs"
-            leftIcon={<Icon name="RotateCcw" size={13} />}
-            onClick={onRestore}
-            title="Restore original CCv2 tags"
-          >
-            Restore Original Tags
-          </Button>
-        ) : null}
-      </div>
-
-      <div className="tag-diff-container">
-        <div className="tag-diff-pane">
-          <span className="tag-diff-pane-header">
-            Original CCv2 Tags ({originalTags.length})
-          </span>
-          <div className="tag-diff-pane-chips">
-            {originalTags.length === 0 ? (
-              <span className="empty-tags-hint">(no original tags)</span>
-            ) : (
-              originalTags.map((tag) => (
-                <span
-                  key={tag}
-                  className={`diff-tag-chip-wrap ${removed.includes(tag.toLowerCase()) ? "removed" : "same"}`}
-                >
-                  <TagChip tag={tag} userConfig={taxonomyConfig} size="sm" />
-                </span>
-              ))
-            )}
-          </div>
-        </div>
-
-        <div className="tag-diff-pane">
-          <span className="tag-diff-pane-header">
-            BL Format Tags ({currentTags.length})
-          </span>
-          <div className="tag-diff-pane-chips">
-            {currentTags.length === 0 ? (
-              <span className="empty-tags-hint">(none)</span>
-            ) : (
-              currentTags.map((tag) => (
-                <span
-                  key={tag}
-                  className={`diff-tag-chip-wrap ${added.includes(tag.toLowerCase()) ? "added" : "same"}`}
-                >
-                  <TagChip tag={tag} userConfig={taxonomyConfig} size="sm" />
-                </span>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function formatLibraryDate(isoOrStr?: string): string {
   if (!isoOrStr) return "";
@@ -507,17 +121,8 @@ export function CharacterLibrary({
   const resolvedVariant: "page" | "dialog" =
     variant ?? (isModal ? "dialog" : "page");
   const [templates, setTemplates] = useState<CharacterTemplate[]>([]);
-  const [form, setForm] = useState<CharacterForm>(blankForm());
-  const [initialForm, setInitialForm] = useState<CharacterForm>(blankForm());
-  /** The action to run once the reader accepts losing their unsaved work — closing the editor or
-   *  opening a different character. Null means the confirmation is not up. */
-  const [discardConfirm, setDiscardConfirm] = useState<{
-    after: () => void;
-  } | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingIsCcv2, setEditingIsCcv2] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [search, setSearchState] = useState(LIBRARY_PREFERENCE_DEFAULTS.search);
 
@@ -557,21 +162,23 @@ export function CharacterLibrary({
     setSortDirectionState(nextDir);
     writeLibraryPreference({ sortDir: nextDir });
   };
-  const [conversionFailed, setConversionFailed] = useState<{
-    template: CharacterTemplate;
-    error: string;
-  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Conversion state ──
   const [convertingId, setConvertingId] = useState<string | null>(null);
   const [convertLoading, setConvertLoading] = useState(false);
   const [convertError, setConvertError] = useState<string | null>(null);
+  const [convertProviderId, setConvertProviderIdState] = useState(
+    LIBRARY_PREFERENCE_DEFAULTS.characterConvertProviderId,
+  );
+  const [characterConvertImmediately, setCharacterConvertImmediatelyState] =
+    useState<boolean>(LIBRARY_PREFERENCE_DEFAULTS.characterConvertImmediately);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [diffData, setDiffData] = useState<{
     oldContent: string;
     newContent: string;
     recordId: string;
+    characterName?: string;
     readOnly?: boolean;
     kind?: "convert" | "reformat";
   } | null>(null);
@@ -606,9 +213,6 @@ export function CharacterLibrary({
     };
   }, []);
 
-  // ── Edit-form tab (converted cards): BL Format (default) / Original / Both ──
-  const [viewTab, setViewTab] = useState<"bl" | "original" | "both">("bl");
-
   // ── Import notice state ──
   const [importNotice, setImportNotice] = useState<{
     message: string;
@@ -628,7 +232,21 @@ export function CharacterLibrary({
     recordId: string;
     recordName: string;
     template: CharacterTemplate;
+    extraCount?: number;
   } | null>(null);
+
+  // ── Export state ──
+  const [exportFormat, setExportFormat] = useState<ExportFormat>(
+    STORAGE_PREFERENCE_DEFAULTS.exportFormat,
+  );
+  const [alwaysAskExportFormat, setAlwaysAskExportFormat] = useState<boolean>(
+    STORAGE_PREFERENCE_DEFAULTS.alwaysAskExportFormat,
+  );
+  const [exportTarget, setExportTarget] = useState<CharacterTemplate | null>(
+    null,
+  );
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   // ── Delete success banner state ──
   const [deleteSuccess, setDeleteSuccess] = useState<{
@@ -637,13 +255,6 @@ export function CharacterLibrary({
 
   // ── Library error banner state ──
   const [libraryError, setLibraryError] = useState<string | null>(null);
-
-  // ── AI Tag Suggestion state (Option B) ──
-  const [tagSuggestModalOpen, setTagSuggestModalOpen] = useState(false);
-  const [tagSuggestLoading, setTagSuggestLoading] = useState(false);
-  const [tagSuggestError, setTagSuggestError] = useState<string | null>(null);
-  const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
-  const tagSuggestAbortControllerRef = useRef<AbortController | null>(null);
 
   // ── Tag Taxonomy & Categorization State ──
   const [taxonomyConfig, setTaxonomyConfig] =
@@ -700,14 +311,6 @@ export function CharacterLibrary({
       await detachCharacterCcv2(cardId);
       const refreshed = await listCharacters();
       setTemplates(refreshed);
-      if (editingId === cardId) {
-        const updated = refreshed.find((t) => t.id === cardId);
-        if (updated) {
-          const nextForm = templateToForm(updated);
-          setForm(nextForm);
-          setInitialForm(nextForm);
-        }
-      }
     } catch (e) {
       setFamilyError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -727,12 +330,6 @@ export function CharacterLibrary({
       setTemplates((prev) =>
         prev.map((t) => (t.id === updated.id ? updated : t)),
       );
-      if (editingId === updated.id) {
-        setForm((f) => ({ ...f, tags: updated.tags ?? normalized }));
-        setInitialForm((f) =>
-          f ? { ...f, tags: updated.tags ?? normalized } : f,
-        );
-      }
       setTagsTargetId(null);
     } catch (e) {
       setTagsError(e instanceof Error ? e.message : String(e));
@@ -752,6 +349,14 @@ export function CharacterLibrary({
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(
     () => new Set(LIBRARY_PREFERENCE_DEFAULTS.collapsedCategories),
   );
+  const [characterShowFullTitle, setCharacterShowFullTitle] = useState<boolean>(
+    LIBRARY_PREFERENCE_DEFAULTS.characterShowFullTitle,
+  );
+  const [characterShowFullComments, setCharacterShowFullComments] =
+    useState<boolean>(LIBRARY_PREFERENCE_DEFAULTS.characterShowFullComments);
+  const [characterShowAllTags, setCharacterShowAllTags] = useState<boolean>(
+    LIBRARY_PREFERENCE_DEFAULTS.characterShowAllTags,
+  );
 
   /** Set the moment the reader changes any of these, so a read that lands later never overwrites what
    *  they just chose. */
@@ -766,6 +371,16 @@ export function CharacterLibrary({
     });
   };
 
+  const setConvertProviderId = (providerId: string) => {
+    setConvertProviderIdState(providerId);
+    writeLibraryPreference({ characterConvertProviderId: providerId });
+  };
+
+  const handleToggleConvertImmediately = (checked: boolean) => {
+    setCharacterConvertImmediatelyState(checked);
+    writeLibraryPreference({ characterConvertImmediately: checked });
+  };
+
   const applyLibraryPreferences = (prefs: ResolvedLibraryPreferences) => {
     setViewModeState(prefs.viewMode);
     setSortByState(prefs.sortBy);
@@ -773,6 +388,11 @@ export function CharacterLibrary({
     setSidebarViewModeState(prefs.sidebarViewMode);
     setCollapsedCategories(new Set(prefs.collapsedCategories));
     setSearchState(prefs.search);
+    setCharacterShowFullTitle(prefs.characterShowFullTitle);
+    setCharacterShowFullComments(prefs.characterShowFullComments);
+    setCharacterShowAllTags(prefs.characterShowAllTags);
+    setCharacterConvertImmediatelyState(prefs.characterConvertImmediately);
+    setConvertProviderIdState(prefs.characterConvertProviderId);
   };
 
   // These preferences live on the server now (adopting whatever this device still holds first), so they
@@ -782,8 +402,22 @@ export function CharacterLibrary({
     let cancelled = false;
     void (async () => {
       const { preferences } = await adoptLocalPreferences();
-      if (cancelled || libraryPrefsTouchedRef.current) return;
-      applyLibraryPreferences(resolveLibraryPreferences(preferences));
+      if (cancelled) return;
+      const resolvedStorage = resolveStoragePreferences(preferences);
+      setExportFormat(resolvedStorage.exportFormat);
+      setAlwaysAskExportFormat(resolvedStorage.alwaysAskExportFormat);
+      const resolved = resolveLibraryPreferences(preferences);
+      if (!libraryPrefsTouchedRef.current) {
+        applyLibraryPreferences(resolved);
+      } else {
+        setCharacterShowFullTitle(resolved.characterShowFullTitle);
+        setCharacterShowFullComments(resolved.characterShowFullComments);
+        setCharacterShowAllTags(resolved.characterShowAllTags);
+        setCharacterConvertImmediatelyState(
+          resolved.characterConvertImmediately,
+        );
+        setConvertProviderIdState(resolved.characterConvertProviderId);
+      }
     })().catch(() => {
       /* A failed read leaves the defaults; the next load tries again. */
     });
@@ -792,122 +426,45 @@ export function CharacterLibrary({
     };
   }, []);
 
-  // ── AI Brainstorming State ──
-  const [aiBrainstormOpen, setAiBrainstormOpen] = useState(false);
-  const [aiMessages, setAiMessages] = useState<BrainstormChatMessage[]>([]);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-  const [includeOriginalCcv2, setIncludeOriginalCcv2] = useState(false);
-  const [brainstormProviderId, setBrainstormProviderId] = useState<
-    string | null
-  >(null);
-  const [brainstormAllowNewSections, setBrainstormAllowNewSections] =
-    useState(true);
-  const [brainstormSettingsOpen, setBrainstormSettingsOpen] = useState(false);
-  const [brainstormSettingsError, setBrainstormSettingsError] = useState<
-    string | null
-  >(null);
-  const [revertRetryTarget, setRevertRetryTarget] = useState<{
-    id: string;
-    drops: number;
-  } | null>(null);
-  const aiAbortControllerRef = useRef<AbortController | null>(null);
-
-  // The assistant's settings are global, so they are read once and written as they change.
   useEffect(() => {
-    let cancelled = false;
-    getBrainstormSettings()
-      .then((settings) => {
-        if (cancelled) return;
-        setIncludeOriginalCcv2(settings.includeOriginalCard);
-        setBrainstormProviderId(settings.textProviderId);
-        setBrainstormAllowNewSections(settings.allowNewSections);
-      })
-      .catch(() => {
-        /* Nothing to read is not a failure: the defaults change nothing. */
-      });
+    function handlePrefsUpdated(event: Event) {
+      const detail = (
+        event as CustomEvent<NonNullable<ViewPreferences["library"]>>
+      ).detail;
+      if (!detail) return;
+      if (typeof detail.characterShowFullTitle === "boolean") {
+        setCharacterShowFullTitle(detail.characterShowFullTitle);
+      }
+      if (typeof detail.characterShowFullComments === "boolean") {
+        setCharacterShowFullComments(detail.characterShowFullComments);
+      }
+      if (typeof detail.characterShowAllTags === "boolean") {
+        setCharacterShowAllTags(detail.characterShowAllTags);
+      }
+      if (typeof detail.characterConvertImmediately === "boolean") {
+        setCharacterConvertImmediatelyState(detail.characterConvertImmediately);
+      }
+      if (typeof detail.characterConvertProviderId === "string") {
+        setConvertProviderIdState(detail.characterConvertProviderId);
+      }
+    }
+    window.addEventListener(
+      "bobbinloom:library-prefs-updated",
+      handlePrefsUpdated,
+    );
     return () => {
-      cancelled = true;
+      window.removeEventListener(
+        "bobbinloom:library-prefs-updated",
+        handlePrefsUpdated,
+      );
     };
   }, []);
-
-  // A saved character's session lives on the server, so closing the editor no longer throws a
-  // long brainstorm away. A brand-new character has no id to key one to, and keeps the discard
-  // warning.
-  useEffect(() => {
-    if (!editorOpen || !editingId) return;
-    let cancelled = false;
-    const key = brainstormStorageKey(editingId);
-    // The device's old localStorage copy is handed to the server once. The server always wins, so a
-    // session that already exists there is not overwritten by whatever this browser still holds.
-    const legacy = (
-      decodeLegacyBrainstormSession(window.localStorage.getItem(key)) ?? []
-    ).filter(isBrainstormMessage) as BrainstormChatMessage[];
-    void (async () => {
-      const fromServer = await getBrainstormSession(editingId);
-      if (cancelled) return;
-      if (fromServer && fromServer.messages.length > 0) {
-        setAiMessages(fromServer.messages as BrainstormChatMessage[]);
-      } else if (legacy.length > 0) {
-        setAiMessages(legacy);
-        persistBrainstormSession(legacy, editingId);
-      } else {
-        setAiMessages([]);
-      }
-      // The server now owns the session, so keeping the local copy would let a stale one win later.
-      try {
-        window.localStorage.removeItem(key);
-      } catch {
-        /* A blocked storage is not a reason to lose the panel. */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [editorOpen, editingId]);
-
-  function persistBrainstormSession(
-    messages: BrainstormChatMessage[],
-    id = editingId,
-  ) {
-    // The id is a parameter because the first save of a new character sets state that this closure
-    // will not see until the next render, and those messages are exactly the ones at risk.
-    if (!id) return;
-    void saveBrainstormSession(id, trimBrainstormMessages(messages)).catch(
-      () => {
-        /* A failed write must not break the conversation. */
-      },
-    );
-  }
 
   // ── Deletion Confirmation Modal State ──
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;
     name: string;
   } | null>(null);
-
-  const isFormDirty = useMemo(() => {
-    if (!editorOpen) return false;
-    if (form.name !== initialForm.name) return true;
-    if (form.title !== initialForm.title) return true;
-    if (form.creatorNotes !== initialForm.creatorNotes) return true;
-    if (form.content !== initialForm.content) return true;
-    if (form.tags.length !== initialForm.tags.length) return true;
-    for (let i = 0; i < form.tags.length; i++) {
-      if (form.tags[i] !== initialForm.tags[i]) return true;
-    }
-    return false;
-  }, [form, initialForm, editorOpen]);
-
-  // A saved character's session is restored from browser storage, so having one is not a loss and
-  // should not warn. A brand-new character has no id to key a session to, and only unsaved form
-  // edits are lost for anyone else.
-  const hasUnsavedWork = isFormDirty || (!editingId && aiMessages.length > 0);
-
-  const convertingCharacter = useMemo(() => {
-    if (!convertingId) return null;
-    return templates.find((t) => t.id === convertingId) ?? null;
-  }, [templates, convertingId]);
 
   async function loadData() {
     try {
@@ -940,467 +497,28 @@ export function CharacterLibrary({
     }
   }, [initialEditingId, templates, editorOpen]);
 
-  function handleCancelTagSuggest() {
-    if (tagSuggestAbortControllerRef.current) {
-      tagSuggestAbortControllerRef.current.abort();
-      tagSuggestAbortControllerRef.current = null;
-    }
-    setTagSuggestModalOpen(false);
-    setTagSuggestLoading(false);
-    setTagSuggestError(null);
-    setSuggestedTags([]);
-  }
-
-  function handleCancelBrainstorm() {
-    if (aiAbortControllerRef.current) {
-      aiAbortControllerRef.current.abort();
-      aiAbortControllerRef.current = null;
-    }
-    setAiLoading(false);
-  }
-
   function openCreate() {
-    handleCancelTagSuggest();
-    handleCancelBrainstorm();
-    const blank = blankForm();
-    setForm(blank);
-    setInitialForm(blank);
     setEditingId(null);
-    setEditingIsCcv2(false);
-    setAiBrainstormOpen(false);
-    setAiMessages([]);
-    setAiError(null);
-    setIncludeOriginalCcv2(false);
     setEditorOpen(true);
     setStatus(null);
     setConvertedSuccess(null);
-    setDiscardConfirm(null);
   }
 
   function openEdit(t: CharacterTemplate) {
-    handleCancelTagSuggest();
-    handleCancelBrainstorm();
-    const initial = templateToForm(t);
-    setForm(initial);
-    setInitialForm(initial);
     setEditingId(t.id);
-    setEditingIsCcv2(t.format === "ccv2");
-    setViewTab("bl");
-    setAiBrainstormOpen(false);
-    setAiMessages([]);
-    setAiError(null);
-    setIncludeOriginalCcv2(false);
     setEditorOpen(true);
     setStatus(null);
     setConvertedSuccess(null);
-    setDiscardConfirm(null);
   }
 
   function closeEditor() {
-    handleCancelTagSuggest();
-    handleCancelBrainstorm();
     setEditorOpen(false);
     setEditingId(null);
-    setEditingIsCcv2(false);
-    setViewTab("bl");
     setStatus(null);
-    setDiscardConfirm(null);
-    setAiBrainstormOpen(false);
-    setAiMessages([]);
-    setAiError(null);
-    setIncludeOriginalCcv2(false);
   }
 
-  function handleCancelClick() {
-    if (hasUnsavedWork) {
-      setDiscardConfirm({ after: closeEditor });
-    } else {
-      closeEditor();
-    }
-  }
-
-  /** Opening another character discards the open draft exactly the way closing does. */
   function requestOpenEdit(template: CharacterTemplate) {
-    if (hasUnsavedWork) {
-      setDiscardConfirm({ after: () => openEdit(template) });
-    } else {
-      openEdit(template);
-    }
-  }
-
-  function handleConfirmDiscard() {
-    const after = discardConfirm?.after;
-    setDiscardConfirm(null);
-    after?.();
-  }
-
-  /**
-   * One turn: the history as the model should see it, and the question being asked.
-   *
-   * Every way of asking again — sending, editing a question, reverting a reply, regenerating one —
-   * goes through here, so the history is built in exactly one place.
-   */
-  async function runBrainstormTurn(
-    history: BrainstormChatMessage[],
-    userMessage: BrainstormChatMessage,
-  ) {
-    if (aiAbortControllerRef.current) {
-      aiAbortControllerRef.current.abort();
-    }
-    const controller = new AbortController();
-    aiAbortControllerRef.current = controller;
-
-    const nextHistory = [...history, userMessage];
-    setAiMessages(nextHistory);
-    persistBrainstormSession(nextHistory);
-    setAiLoading(true);
-    setAiError(null);
-
-    try {
-      const activeTpl = editingId
-        ? templates.find((t) => t.id === editingId)
-        : undefined;
-      const res = await brainstormCharacter(
-        {
-          character: {
-            name: form.name,
-            content: form.content,
-            creatorNotes: form.creatorNotes,
-            tags: form.tags,
-            ccv2Content: activeTpl?.ccv2Content,
-          },
-          // The proposals go back with the reply: without them a follow-up like "make the second one
-          // shorter" has nothing to refer to.
-          chatHistory: history.map((m) => ({
-            role: m.role,
-            content: brainstormHistoryContent(m),
-          })),
-          userMessage: userMessage.content,
-          includeOriginalCard: includeOriginalCcv2,
-          allowNewSections: brainstormAllowNewSections,
-          ...(brainstormProviderId ? { providerId: brainstormProviderId } : {}),
-          format: targetFormat,
-        },
-        { signal: controller.signal },
-      );
-
-      const assistantMsg: BrainstormChatMessage = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: res.reply,
-        proposedChanges: res.proposedChanges,
-        unmappedHeaders: res.unmappedHeaders,
-        newSections: res.newSections,
-        model: res.model,
-        appliedChanges: {},
-      };
-
-      const settled = [...nextHistory, assistantMsg];
-      setAiMessages(settled);
-      persistBrainstormSession(settled);
-    } catch (e) {
-      if (
-        (e instanceof Error &&
-          (e.name === "AbortError" ||
-            e.message.includes("abort") ||
-            e.message.includes("cancelled"))) ||
-        controller.signal.aborted
-      ) {
-        return;
-      }
-      setAiError(e instanceof Error ? e.message : String(e));
-    } finally {
-      if (aiAbortControllerRef.current === controller) {
-        setAiLoading(false);
-        aiAbortControllerRef.current = null;
-      }
-    }
-  }
-
-  function handleSendBrainstormMessage(userText: string) {
-    return runBrainstormTurn(aiMessages, {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: userText,
-    });
-  }
-
-  /** The question an assistant reply was answering, and the history before it. */
-  function questionBefore(messageId: string) {
-    const index = aiMessages.findIndex((m) => m.id === messageId);
-    if (index <= 0) return null;
-    for (let i = index - 1; i >= 0; i -= 1) {
-      const candidate = aiMessages[i];
-      if (candidate?.role === "user") {
-        return { history: aiMessages.slice(0, i), question: candidate };
-      }
-    }
-    return null;
-  }
-
-  function performRevertRetry(messageId: string) {
-    const found = questionBefore(messageId);
-    if (!found) return;
-    void runBrainstormTurn(found.history, found.question);
-  }
-
-  function handleRegenerateBrainstorm(messageId: string) {
-    performRevertRetry(messageId);
-  }
-
-  function handleRevertAndRetryBrainstorm(messageId: string) {
-    const index = aiMessages.findIndex((m) => m.id === messageId);
-    const drops = index === -1 ? 0 : aiMessages.length - (index + 1);
-    // Dropping turns silently is the surprising part of reverting; re-asking the last question is not.
-    if (drops > 0) {
-      setRevertRetryTarget({ id: messageId, drops });
-      return;
-    }
-    performRevertRetry(messageId);
-  }
-
-  function handleEditBrainstormMessage(messageId: string, text: string) {
-    const index = aiMessages.findIndex((m) => m.id === messageId);
-    if (index === -1) return;
-    const edited: BrainstormChatMessage = {
-      ...aiMessages[index]!,
-      content: text,
-    };
-    // Whatever followed the edited question no longer follows from it.
-    const kept = [...aiMessages.slice(0, index), edited];
-    setAiMessages(kept);
-    persistBrainstormSession(kept);
-    if (index === aiMessages.length - 1) {
-      void runBrainstormTurn(aiMessages.slice(0, index), edited);
-    }
-  }
-
-  function handleToggleIncludeOriginalCard(include: boolean) {
-    setIncludeOriginalCcv2(include);
-    setBrainstormSettingsError(null);
-    setBrainstormSettings({ includeOriginalCard: include }).catch(
-      (error: unknown) => {
-        // The switch does not claim a preference that could not be stored.
-        setIncludeOriginalCcv2(!include);
-        setBrainstormSettingsError(
-          error instanceof Error
-            ? error.message
-            : "Could not save that preference",
-        );
-      },
-    );
-  }
-
-  function handleToggleAllowNewSections(allow: boolean) {
-    setBrainstormAllowNewSections(allow);
-    setBrainstormSettingsError(null);
-    setBrainstormSettings({ allowNewSections: allow }).catch(
-      (error: unknown) => {
-        // The switch does not claim a preference that could not be stored.
-        setBrainstormAllowNewSections(!allow);
-        setBrainstormSettingsError(
-          error instanceof Error
-            ? error.message
-            : "Could not save that preference",
-        );
-      },
-    );
-  }
-
-  function handleBrainstormProviderChange(id: string | null) {
-    const previous = brainstormProviderId;
-    setBrainstormProviderId(id);
-    setBrainstormSettingsError(null);
-    setBrainstormSettings({ textProviderId: id }).catch((error: unknown) => {
-      setBrainstormProviderId(previous);
-      setBrainstormSettingsError(
-        error instanceof Error
-          ? error.message
-          : "Could not save that connection",
-      );
-    });
-  }
-
-  function handleApplySection(
-    section: ProposedSectionChange,
-    messageId: string,
-  ) {
-    const updatedContent = applySectionChanges(form.content, [section]);
-    setForm((f) => ({ ...f, content: updatedContent }));
-
-    const next = aiMessages.map((msg) =>
-      msg.id === messageId
-        ? {
-            ...msg,
-            appliedChanges: {
-              ...msg.appliedChanges,
-              [`section:${section.header.toLowerCase()}`]: true,
-            },
-          }
-        : msg,
-    );
-    setAiMessages(next);
-    persistBrainstormSession(next);
-  }
-
-  function handleApplyAllProposed(
-    proposed: CharacterBrainstormResult["proposedChanges"],
-    messageId: string,
-  ) {
-    if (!proposed) return;
-
-    setForm((f) => {
-      let content = f.content;
-      if (proposed.fullContent) {
-        content = proposed.fullContent;
-      } else if (proposed.sections && proposed.sections.length > 0) {
-        content = applySectionChanges(content, proposed.sections);
-      }
-
-      let tags = f.tags;
-      if (proposed.tags && proposed.tags.length > 0) {
-        const tagSet = new Set(f.tags.map((t) => t.toLowerCase()));
-        const merged = [...f.tags];
-        for (const t of proposed.tags) {
-          if (!tagSet.has(t.toLowerCase())) {
-            tagSet.add(t.toLowerCase());
-            merged.push(t);
-          }
-        }
-        tags = sortTags(merged, taxonomyConfig);
-      }
-
-      return {
-        ...f,
-        content,
-        tags,
-        ...(proposed.creatorNotes
-          ? { creatorNotes: proposed.creatorNotes }
-          : {}),
-        ...(proposed.name ? { name: proposed.name } : {}),
-      };
-    });
-
-    const next = aiMessages.map((msg) =>
-      msg.id === messageId
-        ? {
-            ...msg,
-            appliedChanges: {
-              ...msg.appliedChanges,
-              all: true,
-              ...(proposed.sections
-                ? Object.fromEntries(
-                    proposed.sections.map((s) => [
-                      `section:${s.header.toLowerCase()}`,
-                      true,
-                    ]),
-                  )
-                : {}),
-            },
-          }
-        : msg,
-    );
-    setAiMessages(next);
-    persistBrainstormSession(next);
-  }
-
-  function handleClearBrainstormChat() {
-    setAiMessages([]);
-    setAiError(null);
-    if (!editingId) return;
-    void clearBrainstormSession(editingId).catch(() => {
-      /* Nothing to clear. */
-    });
-  }
-
-  async function handleOpenAiTagSuggestions(guidance?: unknown) {
-    if (tagSuggestAbortControllerRef.current) {
-      tagSuggestAbortControllerRef.current.abort();
-    }
-    const controller = new AbortController();
-    tagSuggestAbortControllerRef.current = controller;
-
-    const cleanGuidance =
-      typeof guidance === "string" ? guidance.trim() || undefined : undefined;
-    setSuggestedTags([]);
-    setTagSuggestLoading(true);
-    setTagSuggestError(null);
-    setTagSuggestModalOpen(true);
-    try {
-      const allTagsList = allTagCounts.map((t) => t.tag);
-      const res = await suggestCharacterTags(
-        {
-          name: form.name,
-          content: form.content,
-          creatorNotes: form.creatorNotes,
-          currentTags: form.tags,
-          guidance: cleanGuidance,
-          libraryTags: allTagsList,
-        },
-        { signal: controller.signal },
-      );
-      setSuggestedTags(res.tags);
-    } catch (e) {
-      if (
-        (e instanceof Error &&
-          (e.name === "AbortError" ||
-            e.message.includes("abort") ||
-            e.message.includes("cancelled"))) ||
-        controller.signal.aborted
-      ) {
-        return;
-      }
-      setTagSuggestError(e instanceof Error ? e.message : String(e));
-    } finally {
-      if (tagSuggestAbortControllerRef.current === controller) {
-        setTagSuggestLoading(false);
-        tagSuggestAbortControllerRef.current = null;
-      }
-    }
-  }
-
-  async function handleSave() {
-    if (!form.name.trim()) return;
-    setSaving(true);
-    setStatus(null);
-    try {
-      const canonicalTags = sortTags(form.tags, taxonomyConfig);
-      const update = formToUpdate({ ...form, tags: canonicalTags });
-      const effectiveLabel = update.title || form.name.trim();
-      if (editingId) {
-        await updateCharacter(
-          editingId,
-          editingIsCcv2
-            ? { name: update.name, title: update.title }
-            : update,
-        );
-        setStatus(`"${effectiveLabel}" saved successfully.`);
-      } else {
-        const created = await createCharacter(form.name, update.title);
-        await updateCharacter(created.id, {
-          title: update.title,
-          content: form.content,
-          creatorNotes: form.creatorNotes,
-          tags: canonicalTags,
-        });
-        setEditingId(created.id);
-        // Now that the character has an id, the conversation it already has can be kept.
-        persistBrainstormSession(aiMessages, created.id);
-        setStatus(`"${effectiveLabel}" created and saved successfully.`);
-      }
-      const nextForm = {
-        ...form,
-        title: update.title ?? "",
-        tags: canonicalTags,
-      };
-      setForm(nextForm);
-      setInitialForm(nextForm);
-      setTemplates(await listCharacters());
-    } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSaving(false);
-    }
+    openEdit(template);
   }
 
   async function handleDuplicateAsVariant(template: CharacterTemplate) {
@@ -1446,6 +564,90 @@ export function CharacterLibrary({
     }
   }
 
+  async function performExportCharacter(
+    card: CharacterTemplate,
+    options: CharacterExportModalSubmitOptions,
+  ) {
+    setExporting(true);
+    setExportError(null);
+    setLibraryError(null);
+    try {
+      if (options.rememberFormat) {
+        setExportFormat(options.format);
+        setAlwaysAskExportFormat(false);
+        void updateViewPreferences({
+          storage: {
+            exportFormat: options.format,
+            alwaysAskExportFormat: false,
+          },
+        }).catch(() => {});
+      }
+      await downloadCharacterExport(card.id, displayTitle(card), {
+        format: options.format,
+        includeCcv2: options.includeCcv2,
+        includeFamily: options.includeFamily,
+      });
+      setExportTarget(null);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (exportTarget) {
+        setExportError(msg);
+      } else {
+        setLibraryError(msg);
+      }
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleRequestExport(card: CharacterTemplate) {
+    if (entryKind(card) === "ccv2") return;
+    setExportError(null);
+
+    let currentFormat = exportFormat;
+    let currentAlwaysAsk = alwaysAskExportFormat;
+    try {
+      const prefs = await getViewPreferences();
+      const resolved = resolveStoragePreferences(prefs);
+      currentFormat = resolved.exportFormat;
+      currentAlwaysAsk = resolved.alwaysAskExportFormat;
+      setExportFormat(currentFormat);
+      setAlwaysAskExportFormat(currentAlwaysAsk);
+    } catch {
+      /* fallback to state */
+    }
+
+    const family = buildCharacterFamilyTree(card.id, templates);
+    const relatedBlFamily = family
+      ? family.members.filter((m) => m.id !== card.id && m.format !== "ccv2")
+      : [];
+    const hasCcv2 = hasCcv2Source(card);
+    const hasPortrait = Boolean(
+      card.customPortrait ||
+        card.cardRef?.kind === "png" ||
+        card.avatarUpdatedAt,
+    );
+    const needsFallbackConfirm =
+      (currentFormat === "webp" || currentFormat === "png") && !hasPortrait;
+
+    if (
+      !currentAlwaysAsk &&
+      !hasCcv2 &&
+      relatedBlFamily.length === 0 &&
+      !needsFallbackConfirm
+    ) {
+      await performExportCharacter(card, {
+        format: currentFormat,
+        includeCcv2: false,
+        includeFamily: false,
+        rememberFormat: false,
+      });
+      return;
+    }
+
+    setExportTarget(card);
+  }
+
   async function handleImportFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = ""; // allow re-importing the same file
@@ -1481,10 +683,15 @@ export function CharacterLibrary({
       }
       const refreshed = await listCharacters();
       setTemplates(refreshed);
+      const extraCount =
+        Array.isArray(result.records) && result.records.length > 1
+          ? result.records.length - 1
+          : 0;
       setImportSuccess({
         recordId: result.record.id,
         recordName: displayTitle(result.record),
         template: result.record,
+        ...(extraCount > 0 ? { extraCount } : {}),
       });
     } catch (e) {
       setLibraryError(e instanceof Error ? e.message : String(e));
@@ -1496,89 +703,118 @@ export function CharacterLibrary({
   // ── Conversion handlers ──
 
   async function handleConvert(template: CharacterTemplate) {
-    setConvertingId(template.id);
-    setConvertLoading(true);
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+
     setConvertError(null);
-    setConversionFailed(null);
+    setDiffData({
+      oldContent: template.content,
+      newContent: "",
+      recordId: template.id,
+      characterName: displayTitle(template),
+      kind: "convert",
+    });
+
+    if (!characterConvertImmediately) {
+      setConvertingId(null);
+      setConvertLoading(false);
+      return;
+    }
+
     const controller = new AbortController();
     abortControllerRef.current = controller;
+    setConvertingId(template.id);
+    setConvertLoading(true);
+
     try {
       const result = await convertCharacterGenerate(template.id, {
         format: targetFormat,
+        providerId: convertProviderId || undefined,
         signal: controller.signal,
       });
       setDiffData({
         oldContent: result.originalContent,
         newContent: result.content,
         recordId: template.id,
+        characterName: displayTitle(template),
         kind: "convert",
       });
     } catch (e) {
       if (
-        e instanceof Error &&
-        (e.name === "AbortError" ||
-          e.message.includes("aborted") ||
-          e.message.includes("cancelled"))
+        controller.signal.aborted ||
+        (e instanceof Error &&
+          (e.name === "AbortError" ||
+            e.message.includes("aborted") ||
+            e.message.includes("cancelled")))
       ) {
-        setStatus("Conversion cancelled.");
-      } else {
-        const errMsg = e instanceof Error ? e.message : String(e);
-        setConversionFailed({ template, error: errMsg });
+        return;
       }
+      const errMsg = e instanceof Error ? e.message : String(e);
+      setConvertError(errMsg);
     } finally {
-      setConvertingId(null);
-      setConvertLoading(false);
-      abortControllerRef.current = null;
+      if (abortControllerRef.current === controller) {
+        setConvertingId(null);
+        setConvertLoading(false);
+        abortControllerRef.current = null;
+      }
     }
   }
 
   async function handleConvertRetry(feedback: string) {
     if (!diffData) return;
-    setConvertLoading(true);
-    setConvertError(null);
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-    try {
-      const result = await convertCharacterGenerate(diffData.recordId, {
-        feedback: feedback || undefined,
-        currentContent: diffData.newContent,
-        format: targetFormat,
-        signal: controller.signal,
-      });
-      setDiffData({
-        oldContent: result.originalContent,
-        newContent: result.content,
-        recordId: diffData.recordId,
-        kind: "convert",
-      });
-    } catch (e) {
-      if (
-        e instanceof Error &&
-        (e.name === "AbortError" ||
-          e.message.includes("aborted") ||
-          e.message.includes("cancelled"))
-      ) {
-        setStatus("Conversion retry cancelled.");
-      } else {
-        setConvertError(e instanceof Error ? e.message : String(e));
-      }
-    } finally {
-      setConvertLoading(false);
-      abortControllerRef.current = null;
-    }
-  }
-
-  function handleCancelConvert() {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-    setConvertLoading(false);
-    setConvertingId(null);
-    setStatus("Conversion cancelled.");
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    setConvertingId(diffData.recordId);
+    setConvertLoading(true);
+    setConvertError(null);
+    try {
+      const result = await convertCharacterGenerate(diffData.recordId, {
+        feedback: feedback.trim() || undefined,
+        currentContent: diffData.newContent.trim()
+          ? diffData.newContent
+          : undefined,
+        format: targetFormat,
+        providerId: convertProviderId || undefined,
+        signal: controller.signal,
+      });
+      setDiffData((prev) =>
+        prev
+          ? {
+              ...prev,
+              oldContent: result.originalContent,
+              newContent: result.content,
+              kind: "convert",
+            }
+          : null,
+      );
+    } catch (e) {
+      if (
+        controller.signal.aborted ||
+        (e instanceof Error &&
+          (e.name === "AbortError" ||
+            e.message.includes("aborted") ||
+            e.message.includes("cancelled")))
+      ) {
+        return;
+      }
+      setConvertError(e instanceof Error ? e.message : String(e));
+    } finally {
+      if (abortControllerRef.current === controller) {
+        setConvertingId(null);
+        setConvertLoading(false);
+        abortControllerRef.current = null;
+      }
+    }
   }
 
   async function handleConvertAccept() {
-    if (!diffData) return;
+    if (!diffData || !diffData.newContent.trim()) return;
     setConvertLoading(true);
     setConvertError(null);
     try {
@@ -1600,15 +836,6 @@ export function CharacterLibrary({
         template: targetTpl,
         kind: "convert",
       });
-
-      // If the editor was open for this card, refresh the form
-      if (editingId === convertedRecordId) {
-        setEditingIsCcv2(false);
-        setViewTab("bl");
-        const updated = templateToForm(targetTpl);
-        setForm(updated);
-        setInitialForm(updated);
-      }
     } catch (e) {
       setConvertError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1616,80 +843,134 @@ export function CharacterLibrary({
     }
   }
 
+  function handleStopConvertLoading() {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setConvertLoading(false);
+    setConvertingId(null);
+  }
+
   function closeDiffModal() {
-    setDiffData(null);
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setConvertLoading(false);
     setConvertingId(null);
     setConvertError(null);
+    setDiffData(null);
   }
 
   // ── Reformat an existing BL sheet into the target format (preview/accept) ──
-  async function handleReformat() {
+  async function handleReformat(currentContent?: string) {
     if (!editingId) return;
-    setConvertLoading(true);
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+
+    const activeTpl = templates.find((t) => t.id === editingId);
     setConvertError(null);
+    setDiffData({
+      oldContent: currentContent || activeTpl?.content || "",
+      newContent: "",
+      recordId: editingId,
+      characterName: activeTpl ? displayTitle(activeTpl) : "",
+      kind: "reformat",
+    });
+
+    if (!characterConvertImmediately) {
+      setConvertLoading(false);
+      return;
+    }
+
     const controller = new AbortController();
     abortControllerRef.current = controller;
+    setConvertLoading(true);
+
     try {
       const result = await reformatCharacterGenerate(editingId, {
         format: targetFormat,
+        providerId: convertProviderId || undefined,
         signal: controller.signal,
       });
-      setDiffData({
-        oldContent: result.originalContent,
-        newContent: result.content,
-        recordId: editingId,
-        kind: "reformat",
-      });
+      setDiffData((prev) =>
+        prev
+          ? {
+              ...prev,
+              oldContent: result.originalContent,
+              newContent: result.content,
+              kind: "reformat",
+            }
+          : null,
+      );
     } catch (e) {
       if (
-        e instanceof Error &&
-        (e.name === "AbortError" ||
-          e.message.includes("aborted") ||
-          e.message.includes("cancelled"))
+        controller.signal.aborted ||
+        (e instanceof Error &&
+          (e.name === "AbortError" ||
+            e.message.includes("aborted") ||
+            e.message.includes("cancelled")))
       ) {
-        setStatus("Reformat cancelled.");
-      } else {
-        setConvertError(e instanceof Error ? e.message : String(e));
+        return;
       }
+      setConvertError(e instanceof Error ? e.message : String(e));
     } finally {
-      setConvertLoading(false);
-      abortControllerRef.current = null;
+      if (abortControllerRef.current === controller) {
+        setConvertLoading(false);
+        abortControllerRef.current = null;
+      }
     }
   }
 
   async function handleReformatRetry(feedback: string) {
     if (!diffData) return;
-    setConvertLoading(true);
-    setConvertError(null);
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
     const controller = new AbortController();
     abortControllerRef.current = controller;
+
+    setConvertLoading(true);
+    setConvertError(null);
     try {
       const result = await reformatCharacterGenerate(diffData.recordId, {
         format: targetFormat,
-        currentContent: diffData.newContent,
-        feedback: feedback || undefined,
+        providerId: convertProviderId || undefined,
+        currentContent: diffData.newContent.trim()
+          ? diffData.newContent
+          : undefined,
+        feedback: feedback.trim() || undefined,
         signal: controller.signal,
       });
-      setDiffData({
-        oldContent: result.originalContent,
-        newContent: result.content,
-        recordId: diffData.recordId,
-        kind: "reformat",
-      });
+      setDiffData((prev) =>
+        prev
+          ? {
+              ...prev,
+              oldContent: result.originalContent,
+              newContent: result.content,
+              kind: "reformat",
+            }
+          : null,
+      );
     } catch (e) {
       if (
-        e instanceof Error &&
-        (e.name === "AbortError" ||
-          e.message.includes("aborted") ||
-          e.message.includes("cancelled"))
+        controller.signal.aborted ||
+        (e instanceof Error &&
+          (e.name === "AbortError" ||
+            e.message.includes("aborted") ||
+            e.message.includes("cancelled")))
       ) {
-        setStatus("Reformat retry cancelled.");
-      } else {
-        setConvertError(e instanceof Error ? e.message : String(e));
+        return;
       }
+      setConvertError(e instanceof Error ? e.message : String(e));
     } finally {
-      setConvertLoading(false);
-      abortControllerRef.current = null;
+      if (abortControllerRef.current === controller) {
+        setConvertLoading(false);
+        abortControllerRef.current = null;
+      }
     }
   }
 
@@ -1716,13 +997,6 @@ export function CharacterLibrary({
         template: targetTpl,
         kind: "reformat",
       });
-
-      // If the editor was open for this card, refresh the form
-      if (editingId === reformattedRecordId) {
-        const updated = templateToForm(targetTpl);
-        setForm(updated);
-        setInitialForm(updated);
-      }
     } catch (e) {
       setConvertError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1853,6 +1127,13 @@ export function CharacterLibrary({
         icon: "Copy",
         onClick: () => void handleDuplicateAsVariant(latest),
       },
+      entryKind(latest) === "bl"
+        ? {
+            label: "Export",
+            icon: "Download",
+            onClick: () => void handleRequestExport(latest),
+          }
+        : null,
       entryKind(latest) === "ccv2"
         ? {
             label: isConverting ? "Converting…" : "Convert to BL",
@@ -1932,9 +1213,11 @@ export function CharacterLibrary({
             BL
           </Badge>
         ) : null}
-        <Badge variant="neutral" size="xs">
-          v{latest.cardVersion ?? String(latest.version)}
-        </Badge>
+        {latest.cardVersion?.trim() ? (
+          <Badge variant="neutral" size="xs">
+            {latest.cardVersion.trim()}
+          </Badge>
+        ) : null}
         {group.versions.length > 1 ? (
           <Badge variant="neutral" size="xs">
             {group.versions.length} versions
@@ -1983,36 +1266,8 @@ export function CharacterLibrary({
         </Stack>
       ) : null}
 
-      {convertLoading && convertingCharacter ? (
-        <StatusMessage variant="banner" tone="neutral" icon="Sparkles" sticky>
-          <Stack
-            direction="row"
-            justify="between"
-            align="center"
-            gap="sm"
-            wrap
-          >
-            <span>
-              Converting{" "}
-              <strong>&quot;{displayTitle(convertingCharacter)}&quot;</strong>{" "}
-              to BobbinLoom format with AI…
-            </span>
-            <Button
-              type="button"
-              variant="danger"
-              size="xs"
-              leftIcon="X"
-              onClick={handleCancelConvert}
-              title="Cancel ongoing conversion"
-            >
-              Cancel
-            </Button>
-          </Stack>
-        </StatusMessage>
-      ) : null}
-
       {importing ? (
-        <StatusMessage variant="banner" tone="neutral" icon="Upload" sticky>
+        <StatusMessage variant="banner" tone="neutral" icon="Upload" loading>
           Importing character card…
         </StatusMessage>
       ) : null}
@@ -2022,7 +1277,6 @@ export function CharacterLibrary({
           variant="banner"
           tone="ok"
           icon="CheckCircle2"
-          sticky
           onDismiss={() => setConvertedSuccess(null)}
         >
           <Stack direction="row" align="center" gap="sm" wrap>
@@ -2036,23 +1290,25 @@ export function CharacterLibrary({
               ) : (
                 <>
                   Successfully converted and saved{" "}
-                  <strong>&quot;{convertedSuccess.recordName}&quot;</strong>{" "}
-                  to BobbinLoom format!
+                  <strong>&quot;{convertedSuccess.recordName}&quot;</strong> to
+                  BobbinLoom format!
                 </>
               )}
             </span>
-            <Button
-              type="button"
-              variant="secondary"
-              size="xs"
-              rightIcon="ArrowRight"
-              onClick={() => {
-                openEdit(convertedSuccess.template);
-                setConvertedSuccess(null);
-              }}
-            >
-              Open in Editor
-            </Button>
+            {!editorOpen || editingId !== convertedSuccess.recordId ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="xs"
+                rightIcon="ArrowRight"
+                onClick={() => {
+                  openEdit(convertedSuccess.template);
+                  setConvertedSuccess(null);
+                }}
+              >
+                Open in Editor
+              </Button>
+            ) : null}
           </Stack>
         </StatusMessage>
       ) : null}
@@ -2062,14 +1318,20 @@ export function CharacterLibrary({
           variant="banner"
           tone="ok"
           icon="CheckCircle2"
-          sticky
           onDismiss={() => setImportSuccess(null)}
         >
           <Stack direction="row" align="center" gap="sm" wrap>
             <span>
               Successfully imported{" "}
-              <strong>&quot;{importSuccess.recordName}&quot;</strong> into the
-              library!
+              <strong>&quot;{importSuccess.recordName}&quot;</strong>
+              {importSuccess.extraCount && importSuccess.extraCount > 0 ? (
+                <>
+                  {" "}
+                  and <strong>{importSuccess.extraCount}</strong> related family{" "}
+                  {importSuccess.extraCount === 1 ? "card" : "cards"}
+                </>
+              ) : null}{" "}
+              into the library!
             </span>
             <Button
               type="button"
@@ -2090,14 +1352,12 @@ export function CharacterLibrary({
       {deleteSuccess ? (
         <StatusMessage
           variant="banner"
-          tone="err"
+          tone="neutral"
           icon="Trash2"
-          sticky
           onDismiss={() => setDeleteSuccess(null)}
         >
-          Character card{" "}
-          <strong>&quot;{deleteSuccess.recordName}&quot;</strong> was deleted
-          from the library.
+          Character card <strong>&quot;{deleteSuccess.recordName}&quot;</strong>{" "}
+          was deleted from the library.
         </StatusMessage>
       ) : null}
 
@@ -2106,1184 +1366,447 @@ export function CharacterLibrary({
           variant="banner"
           tone="err"
           icon="AlertTriangle"
-          sticky
+          autoCollapseDetail
           onDismiss={() => setLibraryError(null)}
         >
           {libraryError}
         </StatusMessage>
       ) : null}
 
-      {conversionFailed ? (
-        <StatusMessage
-          variant="banner"
-          tone="err"
-          icon="AlertCircle"
-          sticky
-          onDismiss={() => setConversionFailed(null)}
-        >
-          <Stack direction="row" align="center" gap="sm" wrap>
-            <span>
-              Failed to convert{" "}
-              <strong>
-                &quot;{displayTitle(conversionFailed.template)}&quot;
-              </strong>{" "}
-              to BobbinLoom format: {conversionFailed.error}
-            </span>
-            <Button
-              type="button"
-              variant="secondary"
-              size="xs"
-              onClick={() => {
-                const tpl = conversionFailed.template;
-                setConversionFailed(null);
-                void handleConvert(tpl);
-              }}
-              leftIcon="RefreshCw"
-            >
-              Retry
-            </Button>
-          </Stack>
-        </StatusMessage>
-      ) : null}
+      {editorOpen ? (
+        <CharacterEditor
+          template={
+            editingId
+              ? (templates.find((t) => t.id === editingId) ?? null)
+              : null
+          }
+          initialStatus={status}
+          allLibraryTags={allTagCounts.map((t) => t.tag)}
+          taxonomyConfig={taxonomyConfig}
+          presetOptions={presetOptions}
+          targetFormatId={targetFormatId}
+          onTargetFormatChange={(val) => setTargetFormatId(val)}
+          targetFormat={targetFormat}
+          convertLoading={convertLoading}
+          onRequestConvert={(tpl) => void handleConvert(tpl)}
+          onRequestReformat={(currentContent) =>
+            void handleReformat(currentContent)
+          }
+          onRequestDelete={(id, name) => requestDelete(id, name)}
+          onTemplateUpdated={(updated) => {
+            setTemplates((prev) =>
+              prev.map((t) => (t.id === updated.id ? updated : t)),
+            );
+          }}
+          onSaved={async (savedId) => {
+            setEditingId(savedId);
+            setTemplates(await listCharacters());
+          }}
+          onClose={closeEditor}
+        />
+      ) : (
+        <Stack direction="row" align="start" gap="lg" fullWidth stackBelow="md">
+          {/* ── Left-side Booru Tag Sidebar (shared primitive) ── */}
+          <TagSidebar
+            taxonomy="character"
+            userConfig={taxonomyConfig}
+            tagCounts={allTagCounts}
+            activeTags={activeFilterTags}
+            onToggleTag={toggleTag}
+            onClearTags={search.trim() ? () => setSearch("") : undefined}
+            mode={sidebarViewMode}
+            onModeChange={setSidebarViewMode}
+            collapsedCategories={collapsedCategories}
+            onToggleCategory={toggleCategoryCollapse}
+          />
 
-        {editorOpen ? (
-          <div
-            className={`character-editor-inline ${aiBrainstormOpen ? "split-layout" : ""}`}
-          >
-            <div className="editor-top-bar">
-              <div className="editor-title-wrap">
-                  <Button
-                  type="button"
-                  variant="secondary"
+          {/* ── Main Gallery Area ── */}
+          <Stack direction="column" align="stretch" gap="sm" flex1 fullWidth>
+            {/* Top Toolbar (mirrors PlaythroughLibrary & PersonaLibrary) */}
+            <Card variant="elevated" padding="xs" fullWidth>
+              <Stack
+                direction="row"
+                align="center"
+                justify="between"
+                gap="xs"
+                wrap
+                fullWidth
+              >
+                <SearchBar
+                  value={search}
+                  onChange={setSearch}
+                  onClear={() => setSearch("")}
+                  placeholder="Search characters by name, tags, creator:…"
                   size="sm"
-                  onClick={handleCancelClick}
-                  leftIcon={<Icon name="ArrowLeft" size={15} />}
-                  title="Return to Character Library"
-                >
-                  Back
-                </Button>
-                <h3>
-                  {editingId
-                    ? `Edit: ${form.title.trim() || form.name}`
-                    : "New Character"}
-                </h3>
-                {status ? (
-                  <Badge
-                    variant={
-                      status.toLowerCase().includes("error") ||
-                      status.toLowerCase().includes("fail")
-                        ? "danger"
-                        : "success"
-                    }
-                    pill
-                    leftIcon={
-                      <Icon
-                        name={
-                          status.toLowerCase().includes("error") ||
-                          status.toLowerCase().includes("fail")
-                            ? "AlertCircle"
-                            : "Check"
-                        }
-                        size={13}
-                      />
-                    }
-                  >
-                    {status}
-                  </Badge>
-                ) : null}
-              </div>
+                  flex1
+                  aria-label="Search characters"
+                />
 
-              <div className="editor-header-actions">
-                <div
-                  className="format-picker-label"
-                  title="Target character format used by Convert to BL and Update into Newer Format"
-                >
-                  <span>Format</span>
-                  <SimpleSelect<string>
-                    value={targetFormatId ?? (presetOptions[0]?.id || "")}
-                    onChange={(val) => setTargetFormatId(val)}
-                    options={presetOptions.map((p) => ({
-                      value: p.id,
-                      label: p.name,
-                    }))}
-                    size="xs"
-                  />
-                </div>
+                <SortSelect<CharacterSortOption>
+                  value={sortBy}
+                  onChange={setSortBy}
+                  direction={sortDirection}
+                  onToggleDirection={toggleSortDirection}
+                  options={[
+                    { value: "name", label: "Name" },
+                    { value: "createdAt", label: "Created Date" },
+                    { value: "updatedAt", label: "Updated Date" },
+                  ]}
+                  size="sm"
+                  groupAriaLabel="Sort library"
+                  aria-label="Sort characters by"
+                />
 
-                {!editingIsCcv2 ? (
-                  <Button
-                    type="button"
-                    variant="ai"
-                    size="sm"
-                    onClick={() => setAiBrainstormOpen(!aiBrainstormOpen)}
-                    leftIcon={
-                      <Icon
-                        name="Sparkles"
-                        size={14}
-                        className={aiLoading ? "sparkle-pulse" : ""}
-                      />
-                    }
-                    title={
-                      aiBrainstormOpen
-                        ? "Hide AI Assistant"
-                        : "Open AI Brainstorm Assistant"
-                    }
-                  >
-                    <span>AI Assistant</span>
-                    {aiMessages.length > 0 && (
-                      <span className="ai-msg-count-badge">
-                        {aiMessages.length}
-                      </span>
-                    )}
-                  </Button>
-                ) : null}
+                <Tabs<ViewMode>
+                  variant="segmented"
+                  size="sm"
+                  activeTab={viewMode}
+                  onChange={setViewMode}
+                  ariaLabel="View mode"
+                  tabs={[
+                    {
+                      id: "portrait",
+                      label: "Portrait",
+                      icon: "IdCard",
+                    },
+                    {
+                      id: "list",
+                      label: "List",
+                      icon: "List",
+                    },
+                    {
+                      id: "grid",
+                      label: "Grid",
+                      icon: "LayoutGrid",
+                    },
+                  ]}
+                />
+              </Stack>
+            </Card>
 
-                {!editingIsCcv2 &&
-                editingId &&
-                !isFormatAligned(form.content, targetFormat) ? (
-                  <Button
-                    type="button"
-                    variant="ai"
-                    size="xs"
-                    onClick={() => void handleReformat()}
-                    disabled={convertLoading}
-                    title="Restructure this sheet to match the selected format, with a preview before applying"
-                    leftIcon={
-                      <Icon
-                        name="Sparkles"
-                        size={14}
-                        className={convertLoading ? "sparkle-pulse" : ""}
-                      />
-                    }
-                  >
-                    {convertLoading
-                      ? "Updating…"
-                      : "Update into Newer Format with AI"}
-                  </Button>
-                ) : null}
-
-                {editingIsCcv2 ? (
-                  <Button
-                    type="button"
-                    size="xs"
-                    variant="primary"
-                    onClick={() => {
-                      const tpl = templates.find((t) => t.id === editingId);
-                      if (tpl) handleConvert(tpl);
-                    }}
-                    disabled={convertLoading}
-                  >
-                    {convertLoading ? "Converting…" : "Convert to BL Format"}
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="editor-split-container">
-              <div className="editor-main-pane">
-                {(() => {
-                  const editingTemplate = editingId
-                    ? templates.find((t) => t.id === editingId)
-                    : null;
-                  const hasOriginalCcv2 =
-                    editingTemplate?.cardRef?.kind === "png";
-                  const updatedAt = editingTemplate?.avatarUpdatedAt;
-                  return (
-                    <CharacterPortraitDrawer
-                      entityId={editingTemplate?.id}
-                      entityName={form.name}
-                      entityLabel="character card"
-                      portraitUrl={
-                        editingTemplate
-                          ? getCharacterAvatarUrl(
-                              editingTemplate.id,
-                              "portrait",
-                              updatedAt,
-                            )
-                          : null
-                      }
-                      profileUrl={
-                        editingTemplate
-                          ? getCharacterAvatarUrl(
-                              editingTemplate.id,
-                              "profile",
-                              updatedAt,
-                            )
-                          : null
-                      }
-                      originalUrl={
-                        editingTemplate && hasOriginalCcv2
-                          ? getCharacterAvatarUrl(
-                              editingTemplate.id,
-                              "original",
-                              updatedAt,
-                            )
-                          : null
-                      }
-                      hasOriginalCcv2={hasOriginalCcv2}
-                      hasCustomPortrait={!!editingTemplate?.customPortrait}
-                      hasProfileImage={!!editingTemplate?.profileImage}
-                      onUploadPortrait={async (dataBase64, fileName) => {
-                        if (!editingId) return;
-                        const res = await uploadCharacterAvatar(
-                          editingId,
-                          "portrait",
-                          dataBase64,
-                          fileName,
-                        );
-                        setTemplates((prev) =>
-                          prev.map((t) =>
-                            t.id === editingId ? res.record : t,
-                          ),
-                        );
-                      }}
-                      onUploadProfile={async (dataBase64, fileName) => {
-                        if (!editingId) return;
-                        const res = await uploadCharacterAvatar(
-                          editingId,
-                          "profile",
-                          dataBase64,
-                          fileName,
-                        );
-                        setTemplates((prev) =>
-                          prev.map((t) =>
-                            t.id === editingId ? res.record : t,
-                          ),
-                        );
-                      }}
-                      onRestoreOriginalPortrait={async () => {
-                        if (!editingId) return;
-                        const res =
-                          await restoreOriginalCharacterAvatar(editingId);
-                        setTemplates((prev) =>
-                          prev.map((t) =>
-                            t.id === editingId ? res.record : t,
-                          ),
-                        );
-                      }}
-                      onDeletePortrait={async () => {
-                        if (!editingId) return;
-                        const res =
-                          await restoreOriginalCharacterAvatar(editingId);
-                        setTemplates((prev) =>
-                          prev.map((t) =>
-                            t.id === editingId ? res.record : t,
-                          ),
-                        );
-                      }}
-                      onDeleteProfile={async () => {
-                        if (!editingId) return;
-                        const res =
-                          await deleteCharacterProfileAvatar(editingId);
-                        setTemplates((prev) =>
-                          prev.map((t) =>
-                            t.id === editingId ? res.record : t,
-                          ),
-                        );
-                      }}
-                      disabled={saving}
+            {/* Active Search Summary Filter Chips */}
+            {activeFilterTags.length > 0 ? (
+              <Card variant="panel" padding="xs" fullWidth>
+                <Stack direction="row" align="center" gap="xs" wrap>
+                  <Text variant="overline" size="2xs" tone="muted">
+                    Active filters:
+                  </Text>
+                  {activeFilterTags.map((tag) => (
+                    <TagChip
+                      key={tag}
+                      tag={tag}
+                      userConfig={taxonomyConfig}
+                      active
+                      size="sm"
+                      onRemove={() => removeFilterTag(tag)}
                     />
-                  );
-                })()}
+                  ))}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setSearch("")}
+                  >
+                    Clear all
+                  </Button>
+                </Stack>
+              </Card>
+            ) : null}
 
-                <FormGrid cols={2} gap="sm">
-                  <TextInput
-                    label="Character Name (In-Story / AI)"
-                    value={form.name}
-                    placeholder="e.g. Miku"
-                    helperText="The name used inside stories and seen by the AI."
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, name: e.target.value }))
-                    }
-                  />
-                  <TextInput
-                    label="Card Title / Variant (Optional)"
-                    value={form.title}
-                    placeholder={
-                      form.name.trim()
-                        ? `e.g. ${form.name.trim()} — Anthro Fox`
-                        : "e.g. Miku — Anthro Fox"
-                    }
-                    helperText="Displayed in the library only (hidden from the AI). Defaults to Character Name if blank."
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, title: e.target.value }))
-                    }
-                    rightElement={
-                      !form.title.trim() && form.name.trim() ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="xs"
-                          onClick={() =>
-                            setForm((f) => ({ ...f, title: f.name.trim() }))
-                          }
-                          title="Copy current Character Name into Card Title so you can shorten the in-story Character Name"
-                        >
-                          Copy Name
-                        </Button>
-                      ) : undefined
-                    }
-                  />
-                </FormGrid>
-
-                {(() => {
-                  const tpl = editingId
-                    ? templates.find((t) => t.id === editingId)
-                    : undefined;
-                  const isConverted =
-                    editingId !== null && !!tpl?.ccv2Content && !editingIsCcv2;
-                  const originalCreatorNotes =
-                    tpl?.ccv2CreatorNotes ?? tpl?.creatorNotes ?? "";
-                  const originalTags =
-                    tpl?.ccv2Tags ??
-                    (tpl?.format === "ccv2" ? (tpl.tags ?? []) : []) ??
-                    [];
-
-                  if (!isConverted) {
-                    // Unconverted CCv2 (read-only) or native BL (editable) — single view.
-                    return (
-                      <>
-                        <TextArea
-                          label={
-                            <Stack direction="row" align="center" gap="xs">
-                              <span>Creator&apos;s Notes</span>
-                              {editingIsCcv2 ? (
-                                <Badge variant="outline" size="xs" pill>
-                                  Read-only CCv2 sheet
-                                </Badge>
-                              ) : null}
-                            </Stack>
-                          }
-                          rows={3}
-                          value={form.creatorNotes}
-                          onChange={(e) =>
-                            setForm((f) => ({
-                              ...f,
-                              creatorNotes: e.target.value,
-                            }))
-                          }
-                          placeholder="Optional notes from the creator (e.g. usage guidelines, character background, tags)..."
-                          disabled={editingIsCcv2}
-                        />
-
-                        <TagChipEditor
-                          tags={form.tags}
-                          onChange={(tags) => setForm((f) => ({ ...f, tags }))}
-                          allLibraryTags={allTagCounts.map((t) => t.tag)}
-                          disabled={editingIsCcv2}
-                          onSuggestAI={
-                            !editingIsCcv2
-                              ? () => void handleOpenAiTagSuggestions()
-                              : undefined
-                          }
-                          suggestingAI={tagSuggestLoading}
-                          taxonomyConfig={taxonomyConfig}
-                        />
-
-                        <TextArea
-                          label={
-                            <Stack direction="row" align="center" gap="xs">
-                              <span>Content (full character sheet)</span>
-                              {editingIsCcv2 ? (
-                                <Badge variant="outline" size="xs" pill>
-                                  Read-only CCv2 sheet
-                                </Badge>
-                              ) : null}
-                            </Stack>
-                          }
-                          rows={20}
-                          value={form.content}
-                          onChange={(e) =>
-                            setForm((f) => ({
-                              ...f,
-                              content: e.target.value,
-                            }))
-                          }
-                          placeholder={CHARACTER_SHEET_EXAMPLE}
-                          disabled={editingIsCcv2}
-                        />
-                      </>
-                    );
-                  }
-
-                  // Converted → tabs: BL Format (editable) / Original (read-only) / Both (live).
-                  return (
-                    <div className="editor-tabs-wrap">
-                      <Tabs<"bl" | "original" | "both">
-                        variant="underline"
-                        activeTab={viewTab}
-                        onChange={(val) => setViewTab(val)}
-                        tabs={[
-                          { id: "bl", label: "BL Format" },
-                          { id: "original", label: "Original" },
-                          { id: "both", label: "Both" },
-                        ]}
-                      />
-                      {viewTab === "bl" ? (
-                        <>
-                          <TextArea
-                            label="Creator's Notes (BL format — editable)"
-                            rows={3}
-                            value={form.creatorNotes}
-                            onChange={(e) =>
-                              setForm((f) => ({
-                                ...f,
-                                creatorNotes: e.target.value,
-                              }))
-                            }
-                            placeholder="Optional notes from the creator (e.g. usage guidelines, character background, tags)..."
-                          />
-
-                          <TagChipEditor
-                            tags={form.tags}
-                            onChange={(tags) =>
-                              setForm((f) => ({ ...f, tags }))
-                            }
-                            allLibraryTags={allTagCounts.map((t) => t.tag)}
-                            onSuggestAI={() =>
-                              void handleOpenAiTagSuggestions()
-                            }
-                            suggestingAI={tagSuggestLoading}
-                            taxonomyConfig={taxonomyConfig}
-                          />
-
-                          <TextArea
-                            label="Content (BL format — editable)"
-                            rows={20}
-                            value={form.content}
-                            onChange={(e) =>
-                              setForm((f) => ({
-                                ...f,
-                                content: e.target.value,
-                              }))
-                            }
-                          />
-                        </>
-                      ) : viewTab === "original" ? (
-                        <>
-                          <TextArea
-                            label={
-                              <Stack direction="row" align="center" gap="xs">
-                                <span>Original Creator&apos;s Notes</span>
-                                <Badge variant="outline" size="xs" pill>
-                                  Read-only
-                                </Badge>
-                              </Stack>
-                            }
-                            rows={3}
-                            value={originalCreatorNotes}
-                            readOnly
-                            placeholder="(no original creator notes)"
-                          />
-
-                          <div className="editor-field read-only">
-                            <div className="editor-field-header-row">
-                              <span className="editor-field-label">
-                                Original CCv2 Tags
-                              </span>
-                              {originalTags.length > 0 ? (
-                                <Button
-                                  type="button"
-                                  size="xs"
-                                  variant="secondary"
-                                  onClick={() =>
-                                    setForm((f) => ({
-                                      ...f,
-                                      tags: [...originalTags],
-                                    }))
-                                  }
-                                  title="Restore original CCv2 tags to current character sheet"
-                                  leftIcon={<Icon name="RotateCcw" size={13} />}
-                                >
-                                  Restore Original Tags
-                                </Button>
-                              ) : null}
-                            </div>
-                            <div className="read-only-tags-wrap">
-                              {originalTags.length > 0 ? (
-                                originalTags.map((tag) => (
-                                  <TagChip
-                                    key={tag}
-                                    tag={tag}
-                                    userConfig={taxonomyConfig}
-                                    size="sm"
-                                  />
-                                ))
-                              ) : (
-                                <span className="empty-tags-hint">
-                                  (no original tags)
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <TextArea
-                            label={
-                              <Stack direction="row" align="center" gap="xs">
-                                <span>Original CCv2 Content</span>
-                                <Badge variant="outline" size="xs" pill>
-                                  Read-only
-                                </Badge>
-                              </Stack>
-                            }
-                            rows={20}
-                            value={tpl!.ccv2Content ?? ""}
-                            readOnly
-                          />
-                        </>
-                      ) : (
-                        <>
-                          <div className="editor-field">
-                            <span className="editor-field-label">
-                              Creator&apos;s Notes
-                            </span>
-                            <TwoPaneDiff
-                              leftLabel="Original Creator's Notes"
-                              rightLabel="BL Format"
-                              leftContent={originalCreatorNotes}
-                              rightContent={form.creatorNotes}
-                              className="editor-both-diff notes-diff"
-                            />
-                          </div>
-
-                          <TagDiffViewer
-                            originalTags={originalTags}
-                            currentTags={form.tags}
-                            onRestore={() =>
-                              setForm((f) => ({
-                                ...f,
-                                tags: [...originalTags],
-                              }))
-                            }
-                            taxonomyConfig={taxonomyConfig}
-                          />
-
-                          <div className="editor-field">
-                            <span className="editor-field-label">Content</span>
-                            <TwoPaneDiff
-                              leftLabel="Original CCv2"
-                              rightLabel="BL Format"
-                              leftContent={tpl!.ccv2Content!}
-                              rightContent={form.content}
-                              className="editor-both-diff"
-                            />
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                <div className="editor-footer-actions">
-                  {editingId ? (
-                    <Tooltip content="Delete this character card from the library">
-                      <Button
-                        type="button"
-                        variant="danger"
-                        onClick={() => {
-                          const targetTpl = templates.find(
-                            (t) => t.id === editingId,
-                          );
-                          const targetName = targetTpl
-                            ? displayTitle(targetTpl)
-                            : form.name;
-                          requestDelete(editingId, targetName);
-                        }}
-                        disabled={saving}
-                        leftIcon={<Icon name="Trash2" size={14} />}
-                      >
-                        Delete
-                      </Button>
-                    </Tooltip>
-                  ) : (
-                    <div />
-                  )}
-                  <div className="editor-footer-right-actions">
+            {/* Results Gallery according to ViewMode */}
+            {groups.length === 0 ? (
+              <Card variant="panel" padding="lg">
+                <Stack direction="column" align="center" gap="sm">
+                  <Text size="md" weight="semibold">
+                    {templates.length === 0
+                      ? "No characters yet"
+                      : "No characters match your search"}
+                  </Text>
+                  <Text size="sm" tone="secondary" align="center">
+                    {templates.length === 0
+                      ? "Create a new character sheet or import a CCv2 / BobbinLoom card to get started."
+                      : "Try adjusting your search query or clearing active tag filters."}
+                  </Text>
+                  {search ? (
                     <Button
                       type="button"
                       variant="secondary"
-                      onClick={handleCancelClick}
-                      disabled={saving}
-                    >
-                      Cancel
-                    </Button>
-                    <Tooltip
-                      content={
-                        !isFormDirty
-                          ? "No changes to save"
-                          : "Save character card"
-                      }
-                    >
-                      <Button
-                        type="button"
-                        variant="primary"
-                        onClick={handleSave}
-                        disabled={saving || !form.name.trim() || !isFormDirty}
-                        isLoading={saving}
-                        leftIcon={<Icon name="Check" size={14} />}
-                      >
-                        Save
-                      </Button>
-                    </Tooltip>
-                  </div>
-                </div>
-              </div>
-
-              {aiBrainstormOpen && (
-                <div className="editor-ai-pane">
-                  <CharacterBrainstormPanel
-                    characterName={form.name}
-                    hasOriginalCcv2={
-                      !!templates.find((t) => t.id === editingId)?.ccv2Content
-                    }
-                    includeOriginalCcv2={includeOriginalCcv2}
-                    onOpenSettings={() => setBrainstormSettingsOpen(true)}
-                    messages={aiMessages}
-                    onSendMessage={handleSendBrainstormMessage}
-                    onEditMessage={handleEditBrainstormMessage}
-                    onRevertAndRetry={handleRevertAndRetryBrainstorm}
-                    onRegenerate={handleRegenerateBrainstorm}
-                    onApplySection={handleApplySection}
-                    onApplyAll={handleApplyAllProposed}
-                    onClearChat={handleClearBrainstormChat}
-                    onClose={() => setAiBrainstormOpen(false)}
-                    loading={aiLoading}
-                    error={aiError}
-                    onCancel={handleCancelBrainstorm}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <Stack
-            direction="row"
-            align="start"
-            gap="lg"
-            fullWidth
-            stackBelow="md"
-          >
-            {/* ── Left-side Booru Tag Sidebar (shared primitive) ── */}
-            <TagSidebar
-              taxonomy="character"
-              userConfig={taxonomyConfig}
-              tagCounts={allTagCounts}
-              activeTags={activeFilterTags}
-              onToggleTag={toggleTag}
-              onClearTags={search.trim() ? () => setSearch("") : undefined}
-              mode={sidebarViewMode}
-              onModeChange={setSidebarViewMode}
-              collapsedCategories={collapsedCategories}
-              onToggleCategory={toggleCategoryCollapse}
-            />
-
-            {/* ── Main Gallery Area ── */}
-            <Stack
-              direction="column"
-              align="stretch"
-              gap="sm"
-              flex1
-              fullWidth
-            >
-              {/* Top Toolbar (mirrors PlaythroughLibrary & PersonaLibrary) */}
-              <Card variant="elevated" padding="xs" fullWidth>
-                <Stack
-                  direction="row"
-                  align="center"
-                  justify="between"
-                  gap="xs"
-                  wrap
-                  fullWidth
-                >
-                  <SearchBar
-                    value={search}
-                    onChange={setSearch}
-                    onClear={() => setSearch("")}
-                    placeholder="Search characters by name, tags, creator:…"
-                    size="sm"
-                    flex1
-                    aria-label="Search characters"
-                  />
-
-                  <SortSelect<CharacterSortOption>
-                    value={sortBy}
-                    onChange={setSortBy}
-                    direction={sortDirection}
-                    onToggleDirection={toggleSortDirection}
-                    options={[
-                      { value: "name", label: "Name" },
-                      { value: "createdAt", label: "Created Date" },
-                      { value: "updatedAt", label: "Updated Date" },
-                    ]}
-                    size="sm"
-                    groupAriaLabel="Sort library"
-                    aria-label="Sort characters by"
-                  />
-
-                  <Tabs<ViewMode>
-                    variant="segmented"
-                    size="sm"
-                    activeTab={viewMode}
-                    onChange={setViewMode}
-                    ariaLabel="View mode"
-                    tabs={[
-                      {
-                        id: "portrait",
-                        label: "Portrait",
-                        icon: "IdCard",
-                      },
-                      {
-                        id: "list",
-                        label: "List",
-                        icon: "List",
-                      },
-                      {
-                        id: "grid",
-                        label: "Grid",
-                        icon: "LayoutGrid",
-                      },
-                    ]}
-                  />
-                </Stack>
-              </Card>
-
-              {/* Active Search Summary Filter Chips */}
-              {activeFilterTags.length > 0 ? (
-                <Card variant="panel" padding="xs" fullWidth>
-                  <Stack direction="row" align="center" gap="xs" wrap>
-                    <Text variant="overline" size="2xs" tone="muted">
-                      Active filters:
-                    </Text>
-                    {activeFilterTags.map((tag) => (
-                      <TagChip
-                        key={tag}
-                        tag={tag}
-                        userConfig={taxonomyConfig}
-                        active
-                        size="sm"
-                        onRemove={() => removeFilterTag(tag)}
-                      />
-                    ))}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="xs"
+                      size="sm"
                       onClick={() => setSearch("")}
                     >
-                      Clear all
+                      Reset filters
                     </Button>
-                  </Stack>
-                </Card>
-              ) : null}
+                  ) : null}
+                </Stack>
+              </Card>
+            ) : (
+              <Stack direction="column" align="stretch" gap="sm" fullWidth>
+                {pager.totalPages > 1 ? paginationElement : null}
 
-              {/* Results Gallery according to ViewMode */}
-              {groups.length === 0 ? (
-                <Card variant="panel" padding="lg">
-                  <Stack direction="column" align="center" gap="sm">
-                    <Text size="md" weight="semibold">
-                      {templates.length === 0
-                        ? "No characters yet"
-                        : "No characters match your search"}
-                    </Text>
-                    <Text size="sm" tone="secondary" align="center">
-                      {templates.length === 0
-                        ? "Create a new character sheet or import a CCv2 / BobbinLoom card to get started."
-                        : "Try adjusting your search query or clearing active tag filters."}
-                    </Text>
-                    {search ? (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setSearch("")}
-                      >
-                        Reset filters
-                      </Button>
-                    ) : null}
-                  </Stack>
-                </Card>
-              ) : (
-                <Stack direction="column" align="stretch" gap="sm" fullWidth>
-                  {pager.totalPages > 1 ? paginationElement : null}
-
-                  {/* 1. Card Portrait View */}
-                  {viewMode === "portrait" && (
-                    <FormGrid cols="portrait" gap="md">
-                      {paginatedGroups.map((group) => {
-                        const latest = group.versions[0];
-                        const badge = cardBadgeLabel(latest);
-                        const isConverting =
-                          convertingId === latest.id && convertLoading;
-                        const sortedTags = sortTags(
-                          latest.tags ?? [],
-                          taxonomyConfig,
-                        );
-                        return (
-                          <Card
-                            key={group.key}
-                            as="article"
-                            variant="panel"
-                            padding="none"
-                            layout="column"
-                            hoverable
-                            aiPulse={isConverting}
-                          >
-                            <Card.Cover position="top" aspect="portrait">
-                              <CharacterAvatar
-                                template={latest}
-                                variant="portrait"
-                              />
-                            </Card.Cover>
-
-                            <Card.Body padding="sm" gap="xs">
-                              {/* Row 1: Name + Action Menu */}
-                              <Stack
-                                direction="row"
-                                align="start"
-                                justify="between"
-                                gap="xs"
-                                fullWidth
-                              >
-                                <Card.TitleButton
-                                  title={displayTitle(latest)}
-                                  onClick={() => requestOpenEdit(latest)}
-                                >
-                                  <Text
-                                    as="span"
-                                    size="md"
-                                    weight="semibold"
-                                    preWrap
-                                  >
-                                    {displayTitle(latest)}
-                                  </Text>
-                                </Card.TitleButton>
-                                <Card.Interactive>
-                                  <ActionsMenu
-                                    label={`Actions for ${displayTitle(latest)}`}
-                                    items={buildCharacterMenuItems(
-                                      latest,
-                                      isConverting,
-                                    )}
-                                  />
-                                </Card.Interactive>
-                              </Stack>
-
-                              {/* Row 2: Format, Version, Date */}
-                              <Stack
-                                direction="row"
-                                align="center"
-                                justify="between"
-                                gap="2xs"
-                                wrap
-                                fullWidth
-                              >
-                                <Stack
-                                  direction="row"
-                                  align="center"
-                                  gap="2xs"
-                                  wrap
-                                >
-                                  {renderCharacterBadges(group, latest, badge)}
-                                </Stack>
-                                {renderCharacterDate(group)}
-                              </Stack>
-
-                              {/* Row 3: Author */}
-                              {latest.creator?.trim() ? (
-                                <Text
-                                  as="span"
-                                  size="xs"
-                                  tone="muted"
-                                  italic
-                                >
-                                  by {latest.creator.trim()}
-                                </Text>
-                              ) : null}
-
-                              {/* Row 4: Comment */}
-                              {latest.creatorNotes?.trim() ? (
-                                <Card variant="elevated" padding="xs" fullWidth>
-                                  <Text
-                                    as="p"
-                                    size="xs"
-                                    tone="secondary"
-                                    preWrap
-                                  >
-                                    {latest.creatorNotes.trim()}
-                                  </Text>
-                                </Card>
-                              ) : null}
-
-                                {/* Rows 5 & 6: Separator + Tags (anchored at bottom) */}
-                              <Stack
-                                direction="column"
-                                align="stretch"
-                                gap="xs"
-                                fullWidth
-                                pushBottom
-                              >
-                                <Separator spacing="none" />
-                                <TagRow
-                                  taxonomy="character"
-                                  userConfig={taxonomyConfig}
-                                  tags={sortedTags}
-                                  activeTags={activeFilterTags}
-                                  onToggleTag={toggleTag}
-                                  onEditTags={() =>
-                                    handleEditTagsRequest(latest)
-                                  }
-                                  wrapAll
-                                />
-                              </Stack>
-                            </Card.Body>
-                          </Card>
-                        );
-                      })}
-                    </FormGrid>
-                  )}
-
-                  {/* 2. List View */}
-                  {viewMode === "list" && (
-                    <Stack
-                      direction="column"
-                      align="stretch"
-                      gap="sm"
-                      fullWidth
-                    >
-                      {paginatedGroups.map((group) => {
-                        const latest = group.versions[0];
-                        const badge = cardBadgeLabel(latest);
-                        const isConverting =
-                          convertingId === latest.id && convertLoading;
-                        const sortedTags = sortTags(
-                          latest.tags ?? [],
-                          taxonomyConfig,
-                        );
-                        return (
-                          <Card
-                            key={group.key}
-                            as="article"
-                            variant="panel"
-                            padding="sm"
-                            layout="row"
-                            hoverable
-                            aiPulse={isConverting}
-                          >
+                {/* 1. Card Portrait View */}
+                {viewMode === "portrait" && (
+                  <FormGrid cols="portrait" gap="md">
+                    {paginatedGroups.map((group) => {
+                      const latest = group.versions[0];
+                      const badge = cardBadgeLabel(latest);
+                      const isConverting =
+                        convertingId === latest.id && convertLoading;
+                      const sortedTags = sortTags(
+                        latest.tags ?? [],
+                        taxonomyConfig,
+                      );
+                      return (
+                        <Card
+                          key={group.key}
+                          as="article"
+                          variant="panel"
+                          padding="none"
+                          layout="column"
+                          hoverable
+                          aiPulse={isConverting}
+                        >
+                          <Card.Cover position="top" aspect="portrait">
                             <CharacterAvatar
                               template={latest}
-                              variant="list"
+                              variant="portrait"
                             />
+                          </Card.Cover>
+
+                          <Card.Body padding="sm" gap="xs">
+                            {/* Row 1: Name + Action Menu */}
                             <Stack
-                              direction="column"
-                              align="stretch"
+                              direction="row"
+                              align="start"
+                              justify="between"
                               gap="xs"
-                              flex1
+                              fullWidth
+                            >
+                              <Card.TitleButton
+                                title={displayTitle(latest)}
+                                onClick={() => requestOpenEdit(latest)}
+                              >
+                                <Text
+                                  as="span"
+                                  size="md"
+                                  weight="semibold"
+                                  lineClamp={
+                                    characterShowFullTitle ? undefined : 2
+                                  }
+                                  preWrap={characterShowFullTitle}
+                                >
+                                  {displayTitle(latest)}
+                                </Text>
+                              </Card.TitleButton>
+                              <Card.Interactive>
+                                <ActionsMenu
+                                  label={`Actions for ${displayTitle(latest)}`}
+                                  items={buildCharacterMenuItems(
+                                    latest,
+                                    isConverting,
+                                  )}
+                                />
+                              </Card.Interactive>
+                            </Stack>
+
+                            {/* Row 2: Format, Version, Date */}
+                            <Stack
+                              direction="row"
+                              align="center"
+                              justify="between"
+                              gap="2xs"
+                              wrap
                               fullWidth
                             >
                               <Stack
                                 direction="row"
-                                align="start"
-                                justify="between"
-                                gap="sm"
-                                fullWidth
+                                align="center"
+                                gap="2xs"
+                                wrap
                               >
-                                <Stack
-                                  direction="row"
-                                  align="center"
-                                  gap="xs"
-                                  wrap
-                                  flex1
+                                {renderCharacterBadges(group, latest, badge)}
+                              </Stack>
+                              {renderCharacterDate(group)}
+                            </Stack>
+
+                            {/* Row 3: Author */}
+                            {latest.creator?.trim() ? (
+                              <Text as="span" size="xs" tone="muted" italic>
+                                by {latest.creator.trim()}
+                              </Text>
+                            ) : null}
+
+                            {/* Row 4: Comment */}
+                            {latest.creatorNotes?.trim() ? (
+                              <Card variant="elevated" padding="xs" fullWidth>
+                                <Text
+                                  as="p"
+                                  size="xs"
+                                  tone="secondary"
+                                  lineClamp={
+                                    characterShowFullComments ? undefined : 3
+                                  }
+                                  preWrap
                                 >
-                                  <Card.TitleButton
-                                    title={displayTitle(latest)}
+                                  {latest.creatorNotes.trim()}
+                                </Text>
+                              </Card>
+                            ) : null}
+
+                            {/* Rows 5 & 6: Separator + Tags (top-anchored below card content) */}
+                            <Separator spacing="none" />
+                            <TagRow
+                              taxonomy="character"
+                              userConfig={taxonomyConfig}
+                              tags={sortedTags}
+                              activeTags={activeFilterTags}
+                              maxRows={3}
+                              onToggleTag={toggleTag}
+                              onEditTags={() => handleEditTagsRequest(latest)}
+                              wrapAll={characterShowAllTags}
+                            />
+                          </Card.Body>
+                        </Card>
+                      );
+                    })}
+                  </FormGrid>
+                )}
+
+                {/* 2. List View */}
+                {viewMode === "list" && (
+                  <Stack direction="column" align="stretch" gap="sm" fullWidth>
+                    {paginatedGroups.map((group) => {
+                      const latest = group.versions[0];
+                      const badge = cardBadgeLabel(latest);
+                      const isConverting =
+                        convertingId === latest.id && convertLoading;
+                      const sortedTags = sortTags(
+                        latest.tags ?? [],
+                        taxonomyConfig,
+                      );
+                      return (
+                        <Card
+                          key={group.key}
+                          as="article"
+                          variant="panel"
+                          padding="sm"
+                          layout="row"
+                          hoverable
+                          aiPulse={isConverting}
+                        >
+                          <CharacterAvatar template={latest} variant="list" />
+                          <Stack
+                            direction="column"
+                            align="stretch"
+                            gap="xs"
+                            flex1
+                            fullWidth
+                          >
+                            <Stack
+                              direction="row"
+                              align="start"
+                              justify="between"
+                              gap="sm"
+                              fullWidth
+                            >
+                              <Card.TitleButton
+                                title={displayTitle(latest)}
+                                onClick={() => requestOpenEdit(latest)}
+                              >
+                                <Text
+                                  as="span"
+                                  size="md"
+                                  weight="semibold"
+                                  lineClamp={
+                                    characterShowFullTitle ? undefined : 2
+                                  }
+                                  preWrap={characterShowFullTitle}
+                                >
+                                  {displayTitle(latest)}
+                                </Text>
+                              </Card.TitleButton>
+
+                              <Card.Interactive>
+                                <Stack inline gap="xs" hideBelow="md">
+                                  {entryKind(latest) === "ccv2" ? (
+                                    <Button
+                                      variant="ai"
+                                      size="xs"
+                                      leftIcon="Sparkles"
+                                      isLoading={isConverting}
+                                      disabled={isConverting}
+                                      onClick={() => void handleConvert(latest)}
+                                    >
+                                      {isConverting
+                                        ? "Converting…"
+                                        : "Convert to BL"}
+                                    </Button>
+                                  ) : null}
+                                  <Button
+                                    variant="secondary"
+                                    size="xs"
+                                    leftIcon="Tag"
+                                    onClick={() =>
+                                      handleEditTagsRequest(latest)
+                                    }
+                                  >
+                                    Edit Tags
+                                  </Button>
+                                  <Button
+                                    variant="secondary"
+                                    size="xs"
+                                    leftIcon="GitBranch"
+                                    onClick={() => handleOpenCardFamily(latest)}
+                                    title="Manage Parent, Child, and Sibling card relationships"
+                                  >
+                                    Family
+                                  </Button>
+                                  <Button
+                                    variant="secondary"
+                                    size="xs"
+                                    leftIcon="Copy"
+                                    onClick={() =>
+                                      void handleDuplicateAsVariant(latest)
+                                    }
+                                    title="Duplicate this card as a new variant while keeping the same in-story Character Name"
+                                  >
+                                    Duplicate
+                                  </Button>
+                                  {entryKind(latest) === "bl" ? (
+                                    <Button
+                                      variant="secondary"
+                                      size="xs"
+                                      leftIcon="Download"
+                                      onClick={() =>
+                                        void handleRequestExport(latest)
+                                      }
+                                      title="Export this BobbinLoom character card"
+                                    >
+                                      Export
+                                    </Button>
+                                  ) : null}
+                                  <Button
+                                    variant="secondary"
+                                    size="xs"
+                                    leftIcon="Pencil"
                                     onClick={() => requestOpenEdit(latest)}
                                   >
-                                    <Text
-                                      as="span"
-                                      size="md"
-                                      weight="semibold"
-                                      preWrap
-                                    >
-                                      {displayTitle(latest)}
-                                    </Text>
-                                  </Card.TitleButton>
-                                  {renderCharacterBadges(group, latest, badge)}
-                                  {renderCharacterDate(group)}
-                                  {latest.creator?.trim() ? (
-                                    <Text
-                                      as="span"
-                                      size="xs"
-                                      tone="muted"
-                                      italic
-                                    >
-                                      by {latest.creator.trim()}
-                                    </Text>
-                                  ) : null}
-                                </Stack>
-
-                                <Card.Interactive>
-                                  <Stack inline gap="xs" hideBelow="md">
-                                    {entryKind(latest) === "ccv2" ? (
-                                      <Button
-                                        variant="ai"
-                                        size="xs"
-                                        leftIcon="Sparkles"
-                                        isLoading={isConverting}
-                                        disabled={isConverting}
-                                        onClick={() => void handleConvert(latest)}
-                                      >
-                                        {isConverting
-                                          ? "Converting…"
-                                          : "Convert to BL"}
-                                      </Button>
-                                    ) : null}
-                                    <Button
-                                      variant="secondary"
-                                      size="xs"
-                                      leftIcon="Tag"
-                                      onClick={() =>
-                                        handleEditTagsRequest(latest)
-                                      }
-                                    >
-                                      Edit Tags
-                                    </Button>
-                                    <Button
-                                      variant="secondary"
-                                      size="xs"
-                                      leftIcon="GitBranch"
-                                      onClick={() =>
-                                        handleOpenCardFamily(latest)
-                                      }
-                                      title="Manage Parent, Child, and Sibling card relationships"
-                                    >
-                                      Family
-                                    </Button>
-                                    <Button
-                                      variant="secondary"
-                                      size="xs"
-                                      leftIcon="Copy"
-                                      onClick={() =>
-                                        void handleDuplicateAsVariant(latest)
-                                      }
-                                      title="Duplicate this card as a new variant while keeping the same in-story Character Name"
-                                    >
-                                      Duplicate
-                                    </Button>
-                                    <Button
-                                      variant="secondary"
-                                      size="xs"
-                                      leftIcon="Pencil"
-                                      onClick={() => requestOpenEdit(latest)}
-                                    >
-                                      Edit
-                                    </Button>
-                                    <Button
-                                      variant="danger"
-                                      size="xs"
-                                      leftIcon="Trash2"
-                                      onClick={() =>
-                                        requestDelete(
-                                          latest.id,
-                                          displayTitle(latest),
-                                        )
-                                      }
-                                    >
-                                      Delete
-                                    </Button>
-                                  </Stack>
-                                  <Stack inline showBelow="md">
-                                    <ActionsMenu
-                                      label={`Actions for ${displayTitle(latest)}`}
-                                      items={buildCharacterMenuItems(
-                                        latest,
-                                        isConverting,
-                                      )}
-                                    />
-                                  </Stack>
-                                </Card.Interactive>
-                              </Stack>
-
-                              {latest.creatorNotes?.trim() ? (
-                                <Card variant="elevated" padding="xs" fullWidth>
-                                  <Text
-                                    as="p"
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    variant="danger"
                                     size="xs"
-                                    tone="secondary"
-                                    preWrap
+                                    leftIcon="Trash2"
+                                    onClick={() =>
+                                      requestDelete(
+                                        latest.id,
+                                        displayTitle(latest),
+                                      )
+                                    }
                                   >
-                                    {latest.creatorNotes.trim()}
-                                  </Text>
-                                </Card>
-                              ) : null}
-
-                              <Separator spacing="none" />
-
-                              <TagRow
-                                taxonomy="character"
-                                userConfig={taxonomyConfig}
-                                tags={sortedTags}
-                                activeTags={activeFilterTags}
-                                onToggleTag={toggleTag}
-                                onEditTags={() => handleEditTagsRequest(latest)}
-                                wrapAll
-                              />
-                            </Stack>
-                          </Card>
-                        );
-                      })}
-                    </Stack>
-                  )}
-
-                  {/* 3. Grid View (Compact 1:1 square cards with 1-row interactive TagRow) */}
-                  {viewMode === "grid" && (
-                    <FormGrid cols="compact" gap="sm">
-                      {paginatedGroups.map((group) => {
-                        const latest = group.versions[0];
-                        const badge = cardBadgeLabel(latest);
-                        const isConverting =
-                          convertingId === latest.id && convertLoading;
-                        const sortedTags = sortTags(
-                          latest.tags ?? [],
-                          taxonomyConfig,
-                        );
-                        return (
-                          <Card
-                            key={group.key}
-                            as="article"
-                            variant="panel"
-                            padding="none"
-                            layout="column"
-                            hoverable
-                            aiPulse={isConverting}
-                          >
-                            <Card.Cover position="top" aspect="square">
-                              <CharacterAvatar
-                                template={latest}
-                                variant="grid"
-                              />
-                            </Card.Cover>
-                            <Card.Body padding="sm" gap="xs">
-                              <Stack
-                                direction="row"
-                                align="start"
-                                justify="between"
-                                gap="2xs"
-                                fullWidth
-                              >
-                                <Card.TitleButton
-                                  title={displayTitle(latest)}
-                                  onClick={() => requestOpenEdit(latest)}
-                                >
-                                  <Text
-                                    as="span"
-                                    size="sm"
-                                    weight="semibold"
-                                    preWrap
-                                  >
-                                    {displayTitle(latest)}
-                                  </Text>
-                                </Card.TitleButton>
-                                <Card.Interactive>
+                                    Delete
+                                  </Button>
+                                </Stack>
+                                <Stack inline showBelow="md">
                                   <ActionsMenu
                                     label={`Actions for ${displayTitle(latest)}`}
                                     items={buildCharacterMenuItems(
@@ -3291,66 +1814,180 @@ export function CharacterLibrary({
                                       isConverting,
                                     )}
                                   />
-                                </Card.Interactive>
-                              </Stack>
+                                </Stack>
+                              </Card.Interactive>
+                            </Stack>
 
+                            <Stack
+                              direction="row"
+                              align="center"
+                              justify="between"
+                              gap="xs"
+                              wrap
+                              fullWidth
+                            >
                               <Stack
                                 direction="row"
                                 align="center"
-                                justify="between"
+                                gap="xs"
+                                wrap
+                              >
+                                {renderCharacterBadges(group, latest, badge)}
+                                {latest.creator?.trim() ? (
+                                  <Text as="span" size="xs" tone="muted" italic>
+                                    by {latest.creator.trim()}
+                                  </Text>
+                                ) : null}
+                              </Stack>
+                              {renderCharacterDate(group)}
+                            </Stack>
+
+                            {latest.creatorNotes?.trim() ? (
+                              <Card variant="elevated" padding="xs" fullWidth>
+                                <Text
+                                  as="p"
+                                  size="xs"
+                                  tone="secondary"
+                                  lineClamp={
+                                    characterShowFullComments ? undefined : 3
+                                  }
+                                  preWrap
+                                >
+                                  {latest.creatorNotes.trim()}
+                                </Text>
+                              </Card>
+                            ) : null}
+
+                            <Separator spacing="none" />
+
+                            <TagRow
+                              taxonomy="character"
+                              userConfig={taxonomyConfig}
+                              tags={sortedTags}
+                              activeTags={activeFilterTags}
+                              maxRows={3}
+                              onToggleTag={toggleTag}
+                              onEditTags={() => handleEditTagsRequest(latest)}
+                              wrapAll={characterShowAllTags}
+                            />
+                          </Stack>
+                        </Card>
+                      );
+                    })}
+                  </Stack>
+                )}
+
+                {/* 3. Grid View (Compact 1:1 square cards with 1-row interactive TagRow) */}
+                {viewMode === "grid" && (
+                  <FormGrid cols="compact" gap="sm">
+                    {paginatedGroups.map((group) => {
+                      const latest = group.versions[0];
+                      const badge = cardBadgeLabel(latest);
+                      const isConverting =
+                        convertingId === latest.id && convertLoading;
+                      const sortedTags = sortTags(
+                        latest.tags ?? [],
+                        taxonomyConfig,
+                      );
+                      return (
+                        <Card
+                          key={group.key}
+                          as="article"
+                          variant="panel"
+                          padding="none"
+                          layout="column"
+                          hoverable
+                          aiPulse={isConverting}
+                        >
+                          <Card.Cover position="top" aspect="square">
+                            <CharacterAvatar template={latest} variant="grid" />
+                          </Card.Cover>
+                          <Card.Body padding="sm" gap="xs">
+                            <Stack
+                              direction="row"
+                              align="start"
+                              justify="between"
+                              gap="2xs"
+                              fullWidth
+                            >
+                              <Card.TitleButton
+                                title={displayTitle(latest)}
+                                onClick={() => requestOpenEdit(latest)}
+                              >
+                                <Text
+                                  as="span"
+                                  size="sm"
+                                  weight="semibold"
+                                  lineClamp={
+                                    characterShowFullTitle ? undefined : 2
+                                  }
+                                  preWrap={characterShowFullTitle}
+                                >
+                                  {displayTitle(latest)}
+                                </Text>
+                              </Card.TitleButton>
+                              <Card.Interactive>
+                                <ActionsMenu
+                                  label={`Actions for ${displayTitle(latest)}`}
+                                  items={buildCharacterMenuItems(
+                                    latest,
+                                    isConverting,
+                                  )}
+                                />
+                              </Card.Interactive>
+                            </Stack>
+
+                            <Stack
+                              direction="row"
+                              align="center"
+                              justify="between"
+                              gap="2xs"
+                              wrap
+                              fullWidth
+                            >
+                              <Stack
+                                direction="row"
+                                align="center"
                                 gap="2xs"
                                 wrap
-                                fullWidth
                               >
-                                <Stack
-                                  direction="row"
-                                  align="center"
-                                  gap="2xs"
-                                  wrap
-                                >
-                                  {renderCharacterBadges(group, latest, badge)}
-                                </Stack>
-                                {renderCharacterDate(group)}
+                                {renderCharacterBadges(group, latest, badge)}
                               </Stack>
+                              {renderCharacterDate(group)}
+                            </Stack>
 
-                              <Stack
-                                direction="column"
-                                align="stretch"
-                                gap="xs"
-                                fullWidth
-                                pushBottom
-                              >
-                                <Separator spacing="none" />
-                                <TagRow
-                                  taxonomy="character"
-                                  userConfig={taxonomyConfig}
-                                  tags={sortedTags}
-                                  activeTags={activeFilterTags}
-                                  onToggleTag={toggleTag}
-                                  onEditTags={() =>
-                                    handleEditTagsRequest(latest)
-                                  }
-                                />
-                              </Stack>
-                            </Card.Body>
-                          </Card>
-                        );
-                      })}
-                    </FormGrid>
-                  )}
+                            <Separator spacing="none" />
+                            <TagRow
+                              taxonomy="character"
+                              userConfig={taxonomyConfig}
+                              tags={sortedTags}
+                              activeTags={activeFilterTags}
+                              maxRows={3}
+                              onToggleTag={toggleTag}
+                              onEditTags={() => handleEditTagsRequest(latest)}
+                              wrapAll={characterShowAllTags}
+                            />
+                          </Card.Body>
+                        </Card>
+                      );
+                    })}
+                  </FormGrid>
+                )}
 
-                  {paginationElement}
-                </Stack>
-              )}
-            </Stack>
+                {paginationElement}
+              </Stack>
+            )}
           </Stack>
-        )}
+        </Stack>
+      )}
 
-      {/* Diff comparison modal */}
+      {/* Diff / Convert to BL modal */}
       {diffData ? (
         diffData.readOnly ? (
-          <DiffModal
+          <ConvertToBLModal
             title="Compare: Original CCv2 vs Current BL"
+            characterName={diffData.characterName}
+            kind="compare"
             oldLabel="Original CCv2"
             newLabel="Current BL"
             oldContent={diffData.oldContent}
@@ -3360,30 +1997,50 @@ export function CharacterLibrary({
             error={null}
           />
         ) : diffData.kind === "reformat" ? (
-          <DiffModal
+          <ConvertToBLModal
             title="Update into Newer Format"
+            characterName={diffData.characterName}
+            kind="reformat"
             oldLabel="Current Sheet"
             newLabel="Updated Sheet"
             oldContent={diffData.oldContent}
             newContent={diffData.newContent}
             onAccept={handleReformatAccept}
             onRetry={handleReformatRetry}
+            onStopLoading={handleStopConvertLoading}
             onClose={closeDiffModal}
             loading={convertLoading}
             error={convertError}
+            formatOptions={presetOptions}
+            selectedFormatId={targetFormatId ?? (presetOptions[0]?.id || "")}
+            onFormatChange={(val) => setTargetFormatId(val)}
+            selectedProviderId={convertProviderId}
+            onProviderChange={setConvertProviderId}
+            alwaysConvertImmediately={characterConvertImmediately}
+            onToggleAlwaysConvertImmediately={handleToggleConvertImmediately}
           />
         ) : (
-          <DiffModal
+          <ConvertToBLModal
             title="Convert to BL Format"
+            characterName={diffData.characterName}
+            kind="convert"
             oldLabel="Original CCv2"
             newLabel="Generated BL"
             oldContent={diffData.oldContent}
             newContent={diffData.newContent}
             onAccept={handleConvertAccept}
             onRetry={handleConvertRetry}
+            onStopLoading={handleStopConvertLoading}
             onClose={closeDiffModal}
             loading={convertLoading}
             error={convertError}
+            formatOptions={presetOptions}
+            selectedFormatId={targetFormatId ?? (presetOptions[0]?.id || "")}
+            onFormatChange={(val) => setTargetFormatId(val)}
+            selectedProviderId={convertProviderId}
+            onProviderChange={setConvertProviderId}
+            alwaysConvertImmediately={characterConvertImmediately}
+            onToggleAlwaysConvertImmediately={handleToggleConvertImmediately}
           />
         )
       ) : null}
@@ -3392,6 +2049,7 @@ export function CharacterLibrary({
       {importNotice ? (
         <Dialog
           title="Already Imported"
+          maxWidth={480}
           onClose={() => setImportNotice(null)}
           footer={
             <>
@@ -3428,30 +2086,6 @@ export function CharacterLibrary({
             </Card>
           </Stack>
         </Dialog>
-      ) : null}
-
-      {/* AI Tag Suggestion Modal (Option B) */}
-      {tagSuggestModalOpen ? (
-        <TagSuggestionModal
-          characterName={form.name}
-          suggestedTags={suggestedTags}
-          currentTags={form.tags}
-          loading={tagSuggestLoading}
-          error={tagSuggestError}
-          taxonomyConfig={taxonomyConfig}
-          onApply={(selectedTags) => {
-            setForm((f) => ({
-              ...f,
-              tags: sortTags(selectedTags, taxonomyConfig),
-            }));
-            setTagSuggestModalOpen(false);
-            setSuggestedTags([]);
-          }}
-          onRegenerate={(guidance) => {
-            void handleOpenAiTagSuggestions(guidance);
-          }}
-          onClose={handleCancelTagSuggest}
-        />
       ) : null}
 
       {/* Tag Taxonomy & Color Settings Modal */}
@@ -3512,7 +2146,7 @@ export function CharacterLibrary({
             const hasOriginalSheetOrScenario = Boolean(
               (tagsTarget.ccv2Content?.trim() &&
                 tagsTarget.ccv2Content.trim() !== tagsTarget.content?.trim()) ||
-                tagsTarget.scenario?.trim(),
+              tagsTarget.scenario?.trim(),
             );
             const contextOptions: EditTagsAiContextOption[] = [
               {
@@ -3663,79 +2297,41 @@ export function CharacterLibrary({
           })()
         : null}
 
-      {/* Discard Changes Warning Modal */}
-      {discardConfirm && (
-        <ConfirmModal
-          title="Discard unsaved changes?"
-          confirmLabel="Discard Changes"
-          cancelLabel="Keep Editing"
-          danger
-          onConfirm={handleConfirmDiscard}
-          onCancel={() => setDiscardConfirm(null)}
-          message={
-            !editingId && aiMessages.length > 0 ? (
-              <span>
-                <strong>&quot;{form.name || "New Character"}&quot;</strong> has
-                not been saved yet, so its AI brainstorming session (
-                {aiMessages.length} message
-                {aiMessages.length === 1 ? "" : "s"}) cannot be kept
-                {isFormDirty
-                  ? ", and your edits to the sheet go with it"
-                  : ""}
-                .
-              </span>
-            ) : (
-              <span>
-                You have unsaved changes to{" "}
-                <strong>&quot;{form.name || "New Character"}&quot;</strong>
-                {aiMessages.length > 0
-                  ? `, and an AI brainstorming session (${aiMessages.length} message${aiMessages.length === 1 ? "" : "s"}) which is kept`
-                  : ""}
-                . Your unsaved edits will be discarded.
-              </span>
-            )
+      {exportTarget ? (
+        <CharacterExportModal
+          character={exportTarget}
+          allTemplates={templates}
+          initialFormat={exportFormat}
+          showFormatPicker={alwaysAskExportFormat}
+          hasPortrait={Boolean(
+            exportTarget.customPortrait ||
+              exportTarget.cardRef?.kind === "png" ||
+              exportTarget.avatarUpdatedAt,
+          )}
+          exporting={exporting}
+          error={exportError}
+          onExport={(options) =>
+            void performExportCharacter(exportTarget, options)
           }
-        />
-      )}
-
-      {/* Brainstorm Settings Modal */}
-      {brainstormSettingsOpen ? (
-        <BrainstormSettingsModal
-          hasOriginalCcv2={
-            !!templates.find((t) => t.id === editingId)?.ccv2Content
-          }
-          includeOriginalCard={includeOriginalCcv2}
-          allowNewSections={brainstormAllowNewSections}
-          providerId={brainstormProviderId}
-          errorMessage={brainstormSettingsError}
-          onToggleIncludeOriginalCard={handleToggleIncludeOriginalCard}
-          onToggleAllowNewSections={handleToggleAllowNewSections}
-          onProviderChange={handleBrainstormProviderChange}
           onClose={() => {
-            setBrainstormSettingsOpen(false);
-            setBrainstormSettingsError(null);
+            if (!exporting) {
+              setExportTarget(null);
+              setExportError(null);
+            }
           }}
-        />
-      ) : null}
-
-      {revertRetryTarget ? (
-        <ConfirmModal
-          title="Revert & Retry"
-          message={`Go back to the question this answered and ask it again? The ${revertRetryTarget.drops} message${revertRetryTarget.drops === 1 ? "" : "s"} after it will be dropped.`}
-          confirmLabel="Revert & Retry"
-          onConfirm={() => {
-            const target = revertRetryTarget;
-            setRevertRetryTarget(null);
-            if (target) performRevertRetry(target.id);
-          }}
-          onCancel={() => setRevertRetryTarget(null)}
         />
       ) : null}
 
       {deleteTarget ? (
         <ConfirmModal
-          title="Delete Character"
-          message={`Delete "${deleteTarget.name}" from the library? This cannot be undone.`}
+          title="Delete Character?"
+          message={
+            <>
+              Are you sure you want to permanently delete{" "}
+              <strong>&ldquo;{deleteTarget.name}&rdquo;</strong> from the
+              library? This action cannot be undone.
+            </>
+          }
           confirmLabel="Delete"
           danger
           onConfirm={() => void handleConfirmDelete()}
@@ -3746,7 +2342,7 @@ export function CharacterLibrary({
       <input
         ref={fileInputRef}
         type="file"
-        accept=".png,.json"
+        accept=".webp,.png,.json,image/webp,image/png,application/json"
         hidden
         onChange={handleImportFile}
       />
@@ -3776,7 +2372,7 @@ export function CharacterLibrary({
                     size="sm"
                     leftIcon="Upload"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={saving || importing}
+                    disabled={importing}
                     isLoading={importing}
                   >
                     {importing ? "Importing…" : "Import Card"}
@@ -3786,7 +2382,7 @@ export function CharacterLibrary({
                     size="sm"
                     leftIcon="Plus"
                     onClick={openCreate}
-                    disabled={saving || importing}
+                    disabled={importing}
                   >
                     New Character
                   </Button>
@@ -3821,7 +2417,7 @@ export function CharacterLibrary({
                 size="md"
                 leftIcon="Upload"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={saving || importing}
+                disabled={importing}
                 isLoading={importing}
               >
                 {importing ? "Importing…" : "Import Card"}
@@ -3831,7 +2427,7 @@ export function CharacterLibrary({
                 size="md"
                 leftIcon="Plus"
                 onClick={openCreate}
-                disabled={saving || importing}
+                disabled={importing}
               >
                 New Character
               </Button>

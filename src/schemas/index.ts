@@ -571,6 +571,11 @@ export const ViewPreferencesSchema = z.object({
       playthroughCompactLandscape: z.boolean().optional(),
       playthroughShowFullTitle: z.boolean().optional(),
       playthroughShowAllTags: z.boolean().optional(),
+      characterShowFullTitle: z.boolean().optional(),
+      characterShowFullComments: z.boolean().optional(),
+      characterShowAllTags: z.boolean().optional(),
+      characterConvertImmediately: z.boolean().optional(),
+      characterConvertProviderId: z.string().optional(),
     })
     .optional(),
   /** How many rows each list shows, one leaf per pager. Deliberately NOT inside `library`: three of the
@@ -620,6 +625,7 @@ export const ViewPreferencesSchema = z.object({
   storage: z
     .object({
       exportFormat: ExportFormatSchema.optional(),
+      alwaysAskExportFormat: z.boolean().optional(),
     })
     .optional(),
   /** The Settings dialog's own memory: which tab was open, and which provider kind it was showing. */

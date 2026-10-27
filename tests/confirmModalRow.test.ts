@@ -37,7 +37,7 @@ describe("the confirm dialog's action row", () => {
       "Duplicate as backup",
       "Cancel",
     ]);
-    expect(html.startsWith('<div class="settings-actions">')).toBe(true);
+    expect(html.startsWith('<div class="base-stack')).toBe(true);
     expect(html).toContain("base-btn--danger");
   });
 

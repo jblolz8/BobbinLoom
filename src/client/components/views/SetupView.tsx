@@ -58,7 +58,6 @@ import {
   sortTags,
   type TagTaxonomyConfig,
 } from "../../../engine/tagTaxonomy";
-import "../library/CharacterLibrary.css";
 import "./SetupView.css";
 
 export type SetupFormState = {
@@ -1152,11 +1151,11 @@ export function SetupView(props: SetupViewProps) {
                                           CCv2 / BL
                                         </span>
                                       ) : null}
-                                      <span className="version-badge">
-                                        v
-                                        {latest.cardVersion ??
-                                          String(latest.version)}
-                                      </span>
+                                      {latest.cardVersion?.trim() ? (
+                                        <span className="version-badge">
+                                          {latest.cardVersion.trim()}
+                                        </span>
+                                      ) : null}
                                       {sortBy === "createdAt" &&
                                       getGroupCreatedAt(group) ? (
                                         <span
@@ -1241,11 +1240,11 @@ export function SetupView(props: SetupViewProps) {
                                           CCv2 / BL
                                         </span>
                                       ) : null}
-                                      <span className="version-badge">
-                                        v
-                                        {latest.cardVersion ??
-                                          String(latest.version)}
-                                      </span>
+                                      {latest.cardVersion?.trim() ? (
+                                        <span className="version-badge">
+                                          {latest.cardVersion.trim()}
+                                        </span>
+                                      ) : null}
                                       {group.versions.length > 1 ? (
                                         <span className="version-count">
                                           ({group.versions.length} v)
@@ -1401,11 +1400,11 @@ export function SetupView(props: SetupViewProps) {
                                           CCv2 / BL
                                         </span>
                                       ) : null}
-                                      <span className="version-badge">
-                                        v
-                                        {latest.cardVersion ??
-                                          String(latest.version)}
-                                      </span>
+                                      {latest.cardVersion?.trim() ? (
+                                        <span className="version-badge">
+                                          {latest.cardVersion.trim()}
+                                        </span>
+                                      ) : null}
                                       {sortBy === "createdAt" &&
                                       getGroupCreatedAt(group) ? (
                                         <span

@@ -122,6 +122,11 @@ export const LIBRARY_PREFERENCE_DEFAULTS = {
   playthroughCompactLandscape: false,
   playthroughShowFullTitle: false,
   playthroughShowAllTags: false,
+  characterShowFullTitle: false,
+  characterShowFullComments: false,
+  characterShowAllTags: true,
+  characterConvertImmediately: false,
+  characterConvertProviderId: "",
 } satisfies ResolvedLibraryPreferences;
 
 export type ResolvedLibraryPreferences = {
@@ -137,6 +142,11 @@ export type ResolvedLibraryPreferences = {
   playthroughCompactLandscape: boolean;
   playthroughShowFullTitle: boolean;
   playthroughShowAllTags: boolean;
+  characterShowFullTitle: boolean;
+  characterShowFullComments: boolean;
+  characterShowAllTags: boolean;
+  characterConvertImmediately: boolean;
+  characterConvertProviderId: string;
 };
 
 /** The library group, defaults filled. Absent means "never chosen", so the defaults are applied HERE
@@ -241,10 +251,12 @@ export function resolveNavPreferences(
 
 export const STORAGE_PREFERENCE_DEFAULTS: ResolvedStoragePreferences = {
   exportFormat: "webp",
+  alwaysAskExportFormat: true,
 };
 
 export type ResolvedStoragePreferences = {
   exportFormat: ExportFormat;
+  alwaysAskExportFormat: boolean;
 };
 
 export function resolveStoragePreferences(

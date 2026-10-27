@@ -57,8 +57,21 @@ export async function convertCardGenerate(
       signal,
       fmt,
     );
+  } else if (typeof provider.convertCharacterSheet === "function") {
+    content = await provider.convertCharacterSheet(
+      {
+        name: t.name,
+        content: t.content,
+        scenario: t.scenario,
+        creatorNotes: t.creatorNotes,
+        tags: t.tags,
+        feedback: input.feedback,
+      },
+      fmt,
+      signal,
+    );
   } else {
-    // Initial generation from source CCv2 card
+    // Fallback for test mocks that only implement generateCharacterSheet
     content = await provider.generateCharacterSheet(
       { name: t.name, description: t.content },
       context,

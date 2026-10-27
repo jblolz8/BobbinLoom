@@ -3,6 +3,7 @@ import {
   useEffect,
   useId,
   useRef,
+  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
   type RefObject,
@@ -10,6 +11,9 @@ import {
 import { createPortal } from "react-dom";
 import { FOCUSABLE_SELECTOR, wrapIndex } from "../../../engine/dialogFocus";
 import { isTopDialog, popDialog, pushDialog } from "../../../engine/dialogStack";
+import { Header } from "../Header/Header";
+import { ModalFooter } from "../Modal/Modal";
+import "../Modal/Modal.css";
 
 export type DialogProps = {
   title: string;
@@ -124,9 +128,20 @@ export function Dialog({
     return () => window.removeEventListener("keydown", onWindowKeyDown);
   }, [id, isBusy, onClose]);
 
+  const resolvedStyle: CSSProperties | undefined =
+    maxWidth !== undefined
+      ? {
+          width:
+            typeof maxWidth === "number"
+              ? `min(${maxWidth}px, 100%)`
+              : `min(${maxWidth}, 100%)`,
+          maxWidth,
+        }
+      : undefined;
+
   return createPortal(
     <div
-      className="modal-backdrop"
+      className="base-modal-backdrop"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !isBusy && isTopDialog(id))
           onClose();
@@ -138,25 +153,19 @@ export function Dialog({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`modal ${className}`.trim()}
-        style={maxWidth !== undefined ? { maxWidth } : undefined}
+        className={["base-modal", className].filter(Boolean).join(" ")}
+        style={resolvedStyle}
         onKeyDown={handleKeyDown}
       >
-        <header className="modal-header">
-          <div>
-            <h2 id={titleId}>{title}</h2>
-            {description ? (
-              typeof description === "string" ? (
-                <p>{description}</p>
-              ) : (
-                description
-              )
-            ) : null}
-          </div>
-          {headerAction ?? null}
-        </header>
+        <Header
+          variant="modal"
+          title={title}
+          titleId={titleId}
+          subtitle={description}
+          actions={headerAction}
+        />
         {children}
-        <div className="settings-actions">{footer}</div>
+        <ModalFooter>{footer}</ModalFooter>
       </section>
     </div>,
     document.body,

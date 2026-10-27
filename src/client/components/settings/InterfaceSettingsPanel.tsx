@@ -115,6 +115,16 @@ export function InterfaceSettingsPanel() {
   const [showAllTags, setShowAllTags] = useState<boolean>(
     LIBRARY_PREFERENCE_DEFAULTS.playthroughShowAllTags,
   );
+  const [characterShowFullTitle, setCharacterShowFullTitle] = useState<boolean>(
+    LIBRARY_PREFERENCE_DEFAULTS.characterShowFullTitle,
+  );
+  const [characterShowFullComments, setCharacterShowFullComments] =
+    useState<boolean>(LIBRARY_PREFERENCE_DEFAULTS.characterShowFullComments);
+  const [characterShowAllTags, setCharacterShowAllTags] = useState<boolean>(
+    LIBRARY_PREFERENCE_DEFAULTS.characterShowAllTags,
+  );
+  const [characterConvertImmediately, setCharacterConvertImmediately] =
+    useState<boolean>(LIBRARY_PREFERENCE_DEFAULTS.characterConvertImmediately);
 
   useEffect(() => {
     getAppearanceSettings()
@@ -146,6 +156,10 @@ export function InterfaceSettingsPanel() {
         setCompactLandscape(resolved.playthroughCompactLandscape);
         setShowFullTitle(resolved.playthroughShowFullTitle);
         setShowAllTags(resolved.playthroughShowAllTags);
+        setCharacterShowFullTitle(resolved.characterShowFullTitle);
+        setCharacterShowFullComments(resolved.characterShowFullComments);
+        setCharacterShowAllTags(resolved.characterShowAllTags);
+        setCharacterConvertImmediately(resolved.characterConvertImmediately);
         applyLandscapeCardWidth(resolved.playthroughCompactLandscape);
       })
       .catch(() => {
@@ -223,6 +237,34 @@ export function InterfaceSettingsPanel() {
     setShowAllTags(enabled);
     void updateViewPreferences({
       library: { playthroughShowAllTags: enabled },
+    }).catch(() => {});
+  }
+
+  function handleToggleCharacterShowFullTitle(enabled: boolean) {
+    setCharacterShowFullTitle(enabled);
+    void updateViewPreferences({
+      library: { characterShowFullTitle: enabled },
+    }).catch(() => {});
+  }
+
+  function handleToggleCharacterShowFullComments(enabled: boolean) {
+    setCharacterShowFullComments(enabled);
+    void updateViewPreferences({
+      library: { characterShowFullComments: enabled },
+    }).catch(() => {});
+  }
+
+  function handleToggleCharacterShowAllTags(enabled: boolean) {
+    setCharacterShowAllTags(enabled);
+    void updateViewPreferences({
+      library: { characterShowAllTags: enabled },
+    }).catch(() => {});
+  }
+
+  function handleToggleCharacterConvertImmediately(enabled: boolean) {
+    setCharacterConvertImmediately(enabled);
+    void updateViewPreferences({
+      library: { characterConvertImmediately: enabled },
     }).catch(() => {});
   }
 
@@ -440,6 +482,62 @@ export function InterfaceSettingsPanel() {
             description="Wrap all playthrough tags across multiple lines instead of collapsing overflow tags into a single-line (+N) badge (may cause bottom pagination to shift height between pages)."
             checked={showAllTags}
             onChange={(e) => handleToggleShowAllTags(e.target.checked)}
+          />
+        </Stack>
+      </Stack>
+
+      <Separator spacing="none" />
+
+      {/* ── Character Library Cards Section ── */}
+      <Stack direction="column" align="stretch" gap="xs">
+        <Header
+          variant="section"
+          icon="Users"
+          title="Character Library Cards"
+          badge={
+            <Badge variant="neutral" size="xs">
+              Character Library
+            </Badge>
+          }
+          subtitle="Control how character names, creator comments, and tags are truncated or expanded on the Character Library shelf."
+        />
+
+        <Stack direction="column" align="stretch" gap="2xs">
+          <SwitchRow
+            icon="Type"
+            title="Show Full Character Name & Title"
+            description="Display the entire character name and variant title on cards and rows without truncating at 2 lines."
+            checked={characterShowFullTitle}
+            onChange={(e) =>
+              handleToggleCharacterShowFullTitle(e.target.checked)
+            }
+          />
+          <SwitchRow
+            icon="MessageSquare"
+            title="Show Full Creator Comments"
+            description="Display the entire creator comment / note on Portrait and List cards instead of clamping long notes at 3 lines."
+            checked={characterShowFullComments}
+            onChange={(e) =>
+              handleToggleCharacterShowFullComments(e.target.checked)
+            }
+          />
+          <SwitchRow
+            icon="Tag"
+            title="Show Full List of Character Tags"
+            description="Wrap all character tags without limit (Default). Turn off to collapse tags beyond 3 rows into a (+N) badge with tooltip."
+            checked={characterShowAllTags}
+            onChange={(e) =>
+              handleToggleCharacterShowAllTags(e.target.checked)
+            }
+          />
+          <SwitchRow
+            icon="Zap"
+            title="Always Convert to BL Right Away"
+            description="Immediately send CCv2 character cards to the AI when opening Convert to BL Format, instead of waiting to review format and provider options first."
+            checked={characterConvertImmediately}
+            onChange={(e) =>
+              handleToggleCharacterConvertImmediately(e.target.checked)
+            }
           />
         </Stack>
       </Stack>

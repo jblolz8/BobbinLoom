@@ -64,32 +64,98 @@ export const MarkdownView = React.memo(function MarkdownView({
             );
           }
 
-          case "list":
-            if (block.ordered) {
-              return (
-                <ol
-                  key={`block-${index}`}
-                  className="message-list message-ordered-list"
-                >
-                  {block.items.map((item, itemIdx) => (
-                    <li key={`li-${itemIdx}`}>
-                      {renderInlineNodes(item, `ol-${index}-${itemIdx}`)}
-                    </li>
-                  ))}
-                </ol>
-              );
-            }
+          case "list": {
+            const ListTag = block.ordered ? "ol" : "ul";
+            const listKindClass = block.ordered
+              ? "message-ordered-list"
+              : "message-unordered-list";
+            const prefix = block.ordered ? "ol" : "ul";
             return (
-              <ul
+              <ListTag
                 key={`block-${index}`}
-                className="message-list message-unordered-list"
+                className={`message-list ${listKindClass}`}
               >
-                {block.items.map((item, itemIdx) => (
-                  <li key={`li-${itemIdx}`}>
-                    {renderInlineNodes(item, `ul-${index}-${itemIdx}`)}
-                  </li>
-                ))}
-              </ul>
+                {block.items.map((item, itemIdx) => {
+                  const nested = block.sublists?.[itemIdx];
+                  return (
+                    <li key={`li-${itemIdx}`}>
+                      {renderInlineNodes(item, `${prefix}-${index}-${itemIdx}`)}
+                      {nested && nested.length > 0
+                        ? nested.map((sub, subIdx) => {
+                            const SubTag = sub.ordered ? "ol" : "ul";
+                            const subKindClass = sub.ordered
+                              ? "message-ordered-list"
+                              : "message-unordered-list";
+                            return (
+                              <SubTag
+                                key={`sub-${itemIdx}-${subIdx}`}
+                                className={`message-list message-sublist ${subKindClass}`}
+                              >
+                                {sub.items.map((subItem, sItemIdx) => (
+                                  <li key={`sli-${sItemIdx}`}>
+                                    {renderInlineNodes(
+                                      subItem,
+                                      `${prefix}-${index}-${itemIdx}-sub-${subIdx}-${sItemIdx}`,
+                                    )}
+                                  </li>
+                                ))}
+                              </SubTag>
+                            );
+                          })
+                        : null}
+                    </li>
+                  );
+                })}
+              </ListTag>
+            );
+          }
+
+          case "table":
+            return (
+              <div key={`block-${index}`} className="message-table-wrap">
+                <table className="message-table">
+                  <thead>
+                    <tr>
+                      {block.headers.map((headerCells, colIdx) => {
+                        const align = block.alignments[colIdx] ?? undefined;
+                        return (
+                          <th
+                            key={`th-${colIdx}`}
+                            style={align ? { textAlign: align } : undefined}
+                          >
+                            {renderInlineNodes(
+                              headerCells,
+                              `th-${index}-${colIdx}`,
+                            )}
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  {block.rows.length > 0 ? (
+                    <tbody>
+                      {block.rows.map((row, rowIdx) => (
+                        <tr key={`tr-${rowIdx}`}>
+                          {row.map((cellNodes, colIdx) => {
+                            const align = block.alignments[colIdx] ?? undefined;
+                            return (
+                              <td
+                                key={`td-${colIdx}`}
+                                style={align ? { textAlign: align } : undefined}
+                              >
+                                {renderInlineNodes(
+                                  cellNodes,
+                                  `td-${index}-${rowIdx}-${colIdx}`,
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  ) : null}
+                </table>
+              </div>
             );
 
           case "codeBlock":

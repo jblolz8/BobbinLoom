@@ -1,7 +1,0 @@
-.confirm-modal {
-  max-width: 480px;
-}
-
-.modal.confirm-modal .settings-actions {
-  justify-content: flex-end;
-}

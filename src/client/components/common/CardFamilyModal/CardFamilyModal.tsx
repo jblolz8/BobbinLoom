@@ -274,9 +274,11 @@ export function CardFamilyModal({
                         BL
                       </Badge>
                     ) : null}
-                    <Badge variant="neutral" size="xs">
-                      v{card.cardVersion ?? String(card.version)}
-                    </Badge>
+                    {card.cardVersion?.trim() ? (
+                      <Badge variant="neutral" size="xs">
+                        {card.cardVersion.trim()}
+                      </Badge>
+                    ) : null}
                   </Stack>
                 </Stack>
               </Stack>

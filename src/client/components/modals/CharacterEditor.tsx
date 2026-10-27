@@ -18,8 +18,7 @@ import {
   TextArea,
   TextInput,
 } from "../base";
-import { TwoPaneDiff } from "../library/TwoPaneDiff";
-import { ConfirmModal } from "../common";
+import { ConfirmModal, TwoPaneDiff } from "../common";
 import {
   applySectionChanges,
   parseClothingFromContent,

@@ -96,3 +96,54 @@
 .message-list li:last-child {
   margin-bottom: 0;
 }
+
+.message-sublist {
+  margin: 0.25rem 0 0.25rem 0;
+  padding-left: 1.25rem;
+}
+
+.message-link {
+  color: var(--accent-highlight, var(--accent-base));
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.message-link:hover {
+  opacity: 0.9;
+}
+
+/* Scrollable wrapper for GFM tables inside chat/assistant bubbles */
+.message-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0.35rem 0;
+  border-radius: 6px;
+}
+
+.message-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.message-table th,
+.message-table td {
+  border: 1px solid var(--border-subtle);
+  padding: 0.38rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: break-word;
+}
+
+.message-table th {
+  background: var(--bg-surface-elevated, var(--bg-surface));
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.message-table tbody tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.015);
+}

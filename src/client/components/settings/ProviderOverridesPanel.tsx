@@ -13,7 +13,9 @@ import {
   type SimpleSelectOption,
 } from "../base";
 import {
+  getBrainstormSettings,
   listProviderConnections,
+  setBrainstormSettings,
   setChapterTextProvider,
   setCharacterTextProvider,
   setGenerationTextProvider,
@@ -80,6 +82,7 @@ export function ProviderOverridesPanel({
   active = true,
 }: ProviderOverridesPanelProps) {
   const [registry, setRegistry] = useState<ProviderRegistry | null>(null);
+  const [brainstormProviderId, setBrainstormProviderId] = useState<string>("");
   const [status, setStatus] = useState<{
     kind: "ok" | "err";
     text: string;
@@ -95,6 +98,13 @@ export function ProviderOverridesPanel({
           text: err instanceof Error ? err.message : String(err),
         }),
       );
+    getBrainstormSettings()
+      .then((settings) => {
+        setBrainstormProviderId(settings.textProviderId ?? "");
+      })
+      .catch(() => {
+        /* Defaults apply when settings cannot be read. */
+      });
   }, [active]);
 
   const textConnections = useMemo(
@@ -286,6 +296,29 @@ export function ProviderOverridesPanel({
                             err instanceof Error ? err.message : String(err),
                         }),
                       );
+                  }}
+                />
+
+                <OverrideFieldRow
+                  icon="Bot"
+                  label="AI Brainstorm Assistant"
+                  value={brainstormProviderId}
+                  options={textOptions}
+                  ariaLabel="AI Brainstorm Assistant Provider"
+                  badges={renderOverrideStatusBadge(brainstormProviderId)}
+                  onChange={(val) => {
+                    const prev = brainstormProviderId;
+                    setBrainstormProviderId(val);
+                    void setBrainstormSettings({
+                      textProviderId: val || null,
+                    }).catch((err) => {
+                      setBrainstormProviderId(prev);
+                      setStatus({
+                        kind: "err",
+                        text:
+                          err instanceof Error ? err.message : String(err),
+                      });
+                    });
                   }}
                 />
 

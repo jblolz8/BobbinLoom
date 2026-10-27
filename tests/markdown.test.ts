@@ -345,3 +345,84 @@ describe("parseMarkdown", () => {
     ]);
   });
 });
+
+
+describe("parseMarkdown tables, nested lists, and inline links", () => {
+  it("parses inline markdown links", () => {
+    const nodes = parseInline(
+      "Check out [BobbinLoom Docs](https://example.com/docs) for details.",
+    );
+    expect(nodes).toEqual([
+      { type: "text", value: "Check out " },
+      {
+        type: "link",
+        href: "https://example.com/docs",
+        children: [{ type: "text", value: "BobbinLoom Docs" }],
+      },
+      { type: "text", value: " for details." },
+    ]);
+  });
+
+  it("parses GFM tables with alignments and inline formatting in cells", () => {
+    const raw = [
+      "Here is a trait comparison:",
+      "",
+      "| Section | Current | Proposed |",
+      "| :--- | :---: | ---: |",
+      '| [Likes] | Tea | **Matcha** & "honey" |',
+      "| [Dislikes] | `loud noise` | Crowds \\| chaos |",
+    ].join("\n");
+
+    const blocks = parseMarkdown(raw);
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]?.type).toBe("paragraph");
+    expect(blocks[1]?.type).toBe("table");
+    if (blocks[1]?.type === "table") {
+      expect(blocks[1].alignments).toEqual(["left", "center", "right"]);
+      expect(blocks[1].headers).toEqual([
+        [{ type: "text", value: "Section" }],
+        [{ type: "text", value: "Current" }],
+        [{ type: "text", value: "Proposed" }],
+      ]);
+      expect(blocks[1].rows).toHaveLength(2);
+      expect(blocks[1].rows[0]?.[2]).toEqual([
+        { type: "bold", children: [{ type: "text", value: "Matcha" }] },
+        { type: "text", value: " & " },
+        {
+          type: "quote",
+          rawOpen: '"',
+          rawClose: '"',
+          children: [{ type: "text", value: "honey" }],
+        },
+      ]);
+      expect(blocks[1].rows[1]?.[2]).toEqual([
+        { type: "text", value: "Crowds | chaos" },
+      ]);
+    }
+  });
+
+  it("parses indented sublists inside unordered and ordered lists", () => {
+    const raw = [
+      "- Primary trait",
+      "  - Subtrait A",
+      "  - Subtrait B",
+      "- Secondary trait",
+    ].join("\n");
+
+    const blocks = parseMarkdown(raw);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]?.type).toBe("list");
+    if (blocks[0]?.type === "list") {
+      expect(blocks[0].items).toHaveLength(2);
+      expect(blocks[0].sublists?.[0]).toEqual([
+        {
+          ordered: false,
+          items: [
+            [{ type: "text", value: "Subtrait A" }],
+            [{ type: "text", value: "Subtrait B" }],
+          ],
+        },
+      ]);
+    }
+  });
+});
