@@ -1,8 +1,17 @@
 import { useEffect, useState } from "react";
 import type { ImageApiStyle } from "../../../../schemas";
-import { Button, Icon, TextArea } from "../../base";
+import {
+  Button,
+  Header,
+  Icon,
+  IconButton,
+  Modal,
+  Stack,
+  StatusMessage,
+  Text,
+  TextArea,
+} from "../../base";
 import { ConfirmModal } from "../../common";
-import "./ChatPanel.css";
 
 /** What the editor knows about the connection the image was made with. Null when
  *  that connection no longer exists — the body can still be SAVED (a save renders
@@ -73,144 +82,139 @@ export function ImageRequestBodyModal(props: ImageRequestBodyModalProps) {
     onClose();
   }
 
-  // Escape is a close path like the X and Cancel, so it is guarded the same way.
-  // While the discard question is up IT owns Escape (its own handler cancels it),
-  // which is why this one steps aside.
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key !== "Escape" || confirmingDiscard) return;
-      attemptClose();
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  });
-
   async function handleSave() {
     const error = await onSave(draft);
     setSaveError(error);
   }
 
   return (
-    <div className="modal-backdrop">
-      <section
-        className="modal module-edit-modal image-request-modal"
-        role="dialog"
-        aria-label="Edit image request"
+    <>
+      <Modal
+        open
+        size="md"
+        ariaLabel="Edit image request"
+        dismissDisabled={saving || confirmingDiscard}
+        onClose={attemptClose}
       >
-        <header className="modal-header">
-          <div>
-            <h2>Edit Image Request</h2>
-            <p className="image-prompt-subtitle">
-              The JSON body that went to the image provider. Saving it renders
-              nothing — the image stays as it is, and this body becomes what
-              Retry sends.
-            </p>
-          </div>
-          <Button
-            size="xs"
-            variant="ghost"
-            iconOnly
-            onClick={attemptClose}
-            leftIcon={<Icon name="X" size={14} />}
-            title="Close the editor"
-            aria-label="Close the editor"
-          />
-        </header>
-
-        <div className="settings-form image-prompt-form">
-          <TextArea
-            label="Request body (JSON)"
-            value={draft}
-            onChange={(e) => {
-              setDraft(e.target.value);
-              // The error belonged to the text that failed, not to this one.
-              setSaveError(null);
-            }}
-            rows={16}
-            disabled={saving}
-            className="image-request-body-json"
-            error={saveError ?? undefined}
-            helperText={
-              saveError
-                ? undefined
-                : "Saved as one line of JSON. No image is generated, nothing is clamped, and no field is added or removed."
-            }
-          />
-
-          {connection ? (
-            <p className="image-prompt-caption">
-              Image provider: {connection.label} · {connection.model}
-            </p>
-          ) : (
-            <p className="image-request-missing-connection" role="status">
-              <Icon
-                name="AlertTriangle"
-                size={13}
-                className="image-prompt-warning-icon"
-              />
-              <span>
-                The connection this image was made with no longer exists. The
-                body can still be saved, but a re-send has nowhere to go until
-                it is restored.
-              </span>
-            </p>
-          )}
-
-          {connection ? (
-            <p className="image-prompt-caption">
-              {DIALECT_NOTES[connection.apiStyle]}
-            </p>
-          ) : null}
-
-          <div className="settings-actions image-prompt-actions">
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={() => void handleSave()}
-              disabled={saving || !draft.trim() || !dirty}
-              isLoading={saving}
-              leftIcon={<Icon name="Save" size={13} />}
-            >
-              Save
-            </Button>
-            <Button
-              size="sm"
+        <Header
+          variant="modal"
+          title="Edit Image Request"
+          subtitle="The JSON body that went to the image provider. Saving it renders nothing — the image stays as it is, and this body becomes what Retry sends."
+          actions={
+            <IconButton
               variant="ghost"
-              className="image-request-reset"
-              onClick={() => {
-                setDraft(body);
-                setSaveError(null);
-              }}
-              disabled={saving || !dirty}
-              leftIcon={<Icon name="RotateCcw" size={12} />}
-              title="Restore the stored body, discarding your edits"
-            >
-              Reset
-            </Button>
-            <Button
               size="sm"
-              variant="ghost"
-              className="image-request-copy"
-              onClick={() => void navigator.clipboard.writeText(draft)}
-              disabled={saving}
-              leftIcon={<Icon name="Copy" size={12} />}
-              title="Copy this body"
-            >
-              Copy
-            </Button>
-            {/* Cancel last: the row's order is a contract — the confirming action, then the
-                secondary actions beside it, then the way out. */}
-            <Button
-              size="sm"
-              variant="secondary"
+              icon="X"
+              label="Close the editor"
+              title="Close the editor"
               onClick={attemptClose}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      </section>
+            />
+          }
+        />
+
+        <Modal.Body>
+          <Modal.Content>
+            <Stack gap="md">
+              <TextArea
+                label="Request body (JSON)"
+                value={draft}
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  // The error belonged to the text that failed, not to this one.
+                  setSaveError(null);
+                }}
+                rows={16}
+                disabled={saving}
+                mono
+                error={saveError ?? undefined}
+                helperText={
+                  saveError
+                    ? undefined
+                    : "Saved as one line of JSON. No image is generated, nothing is clamped, and no field is added or removed."
+                }
+              />
+
+              {connection ? (
+                <Text size="xs" tone="muted">
+                  Image provider: {connection.label} · {connection.model}
+                </Text>
+              ) : (
+                <StatusMessage variant="banner" tone="warn">
+                  The connection this image was made with no longer exists. The
+                  body can still be saved, but a re-send has nowhere to go until
+                  it is restored.
+                </StatusMessage>
+              )}
+
+              {connection ? (
+                <Text size="xs" tone="muted">
+                  {DIALECT_NOTES[connection.apiStyle]}
+                </Text>
+              ) : null}
+            </Stack>
+          </Modal.Content>
+        </Modal.Body>
+
+        <Modal.Footer>
+          <Stack
+            direction="row"
+            align="center"
+            justify="between"
+            gap="sm"
+            wrap
+            fullWidth
+          >
+            <Stack direction="row" align="center" gap="sm" wrap>
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() => void handleSave()}
+                disabled={saving || !draft.trim() || !dirty}
+                isLoading={saving}
+                leftIcon={<Icon name="Save" size={13} />}
+              >
+                Save
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setDraft(body);
+                  setSaveError(null);
+                }}
+                disabled={saving || !dirty}
+                leftIcon={<Icon name="RotateCcw" size={12} />}
+                title="Restore the stored body, discarding your edits"
+              >
+                Reset
+              </Button>
+            </Stack>
+
+            <Stack direction="row" align="center" gap="sm" wrap>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => void navigator.clipboard.writeText(draft)}
+                disabled={saving}
+                leftIcon={<Icon name="Copy" size={12} />}
+                title="Copy this body"
+              >
+                Copy
+              </Button>
+              {/* Cancel last: the row's order is a contract — the confirming action, then the
+                  secondary actions beside it, then the way out. */}
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={attemptClose}
+                disabled={saving}
+              >
+                Cancel
+              </Button>
+            </Stack>
+          </Stack>
+        </Modal.Footer>
+      </Modal>
 
       {/* The discard guard, over the editor it belongs to. The question names what
           is NOT lost, because "discard" otherwise reads like it might throw the
@@ -227,6 +231,6 @@ export function ImageRequestBodyModal(props: ImageRequestBodyModalProps) {
           onCancel={() => setConfirmingDiscard(false)}
         />
       ) : null}
-    </div>
+    </>
   );
 }

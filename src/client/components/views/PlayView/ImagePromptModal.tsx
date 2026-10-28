@@ -1,14 +1,24 @@
 import { useEffect, useState } from "react";
 import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../../../../engine/imageDefaults";
 import type { ImageApiStyle, ImageInstructionMode } from "../../../../schemas";
+import { formatDuration } from "../../../engine/displayFormat";
 import {
   CLIP_CHUNK_TOKENS,
   chunkWarning,
   estimatePromptChunks,
 } from "../../../utils/imagePromptEstimate";
-import { Button, Icon, Text, TextArea } from "../../base";
-import { formatDuration } from "../../../engine/displayFormat";
-import "./ChatPanel.css";
+import {
+  Button,
+  Card,
+  Header,
+  Icon,
+  IconButton,
+  Modal,
+  Stack,
+  StatusMessage,
+  Text,
+  TextArea,
+} from "../../base";
 
 /**
  * The review step between the text model writing an image prompt and the image
@@ -105,180 +115,167 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
   const estimateWarning = a1111 ? chunkWarning(promptDraft) : null;
 
   return (
-    <div className="modal-backdrop">
-      <section
-        className="modal module-edit-modal image-prompt-modal"
-        role="dialog"
-        aria-label="Review image prompt"
-      >
-        <header className="modal-header">
-          <div>
-            <h2>Review Image Prompt</h2>
-            <p className="image-prompt-subtitle">
-              Written by the text model, sent to the image provider verbatim —
-              edit it and the image model gets your text (the text model is not
-              called a second time).
-            </p>
-          </div>
-          <Button
-            size="xs"
+    <Modal
+      open
+      size="md"
+      ariaLabel="Review image prompt"
+      dismissDisabled={generating}
+      onClose={onClose}
+    >
+      <Header
+        variant="modal"
+        title="Review Image Prompt"
+        subtitle="Written by the text model, sent to the image provider verbatim — edit it and the image model gets your text (the text model is not called a second time)."
+        actions={
+          <IconButton
             variant="ghost"
-            iconOnly
-            onClick={onClose}
-            leftIcon={<Icon name="X" size={14} />}
+            size="sm"
+            icon="X"
+            label="Close without generating"
             title="Close without generating"
-            aria-label="Close without generating"
+            onClick={onClose}
           />
-        </header>
+        }
+      />
 
-        <div className="settings-form image-prompt-form">
-          {/* Advisory, never blocking: the text below is editable and still
-              Generates. Surfaced here so a refusal or a key-less JSON answer is
-              seen BEFORE the image call is paid for. */}
-          {warnings.length > 0 ? (
-            <div className="image-prompt-warnings" role="status">
-              {warnings.map((warning) => (
-                <p key={warning} className="image-prompt-warning">
-                  <Icon
-                    name="AlertTriangle"
-                    size={13}
-                    className="image-prompt-warning-icon"
-                  />
-                  <span>{warning}</span>
-                </p>
-              ))}
-            </div>
-          ) : null}
+      <Modal.Body>
+        <Modal.Content>
+          <Stack gap="md">
+            {/* Advisory, never blocking: the text below is editable and still
+                Generates. Surfaced here so a refusal or a key-less JSON answer is
+                seen BEFORE the image call is paid for. */}
+            {warnings.length > 0 ? (
+              <Stack gap="xs" role="status">
+                {warnings.map((warning) => (
+                  <StatusMessage key={warning} variant="banner" tone="warn">
+                    {warning}
+                  </StatusMessage>
+                ))}
+              </Stack>
+            ) : null}
 
-          <TextArea
-            label="Prompt"
-            value={promptDraft}
-            onChange={(e) => setPromptDraft(e.target.value)}
-            rows={9}
-            autoGrow
-            autoGrowMax={320}
-            disabled={generating}
-            characterCount={promptDraft.length}
-            maxCharacterCount={limit}
-            containerClassName={
-              overLimit ? "image-prompt-over-limit" : undefined
-            }
-            helperText={
-              overLimit
-                ? `Over the ${limit}-character limit — the server clamps the composed prompt before sending.`
-                : undefined
-            }
-          />
-          {/* Prompt-length estimate, a1111 only. Advisory: it changes nothing
-              about what is sent — the text below is posted verbatim. */}
-          {estimate ? (
-            <div className="image-prompt-estimate" role="status">
-              <p className="image-prompt-estimate-line">
-                <Icon
-                  name="Ruler"
-                  size={13}
-                  className="image-prompt-estimate-icon"
-                />
-                <span>
-                  About <strong>{estimate.tokens}</strong> tokens —{" "}
-                  {estimate.chunks} CLIP chunk
-                  {estimate.chunks === 1 ? "" : "s"} of {CLIP_CHUNK_TOKENS}.{" "}
-                  {estimate.chunks === 1
-                    ? "The whole prompt fits the first chunk."
-                    : "Everything past the first chunk is weighted less."}
-                </span>
-              </p>
-              {estimateWarning ? (
-                <p className="image-prompt-estimate-warning">
-                  <Icon
-                    name="AlertTriangle"
-                    size={13}
-                    className="image-prompt-warning-icon"
-                  />
-                  <span>{estimateWarning}</span>
-                </p>
-              ) : null}
-              <p className="image-prompt-estimate-note">
-                An approximation (~4 characters per token), not a tokenizer —
-                and never a limit: the text is sent unchanged.
-              </p>
-            </div>
-          ) : null}
-          <TextArea
-            label="Negative Prompt"
-            value={negativeDraft}
-            onChange={(e) => setNegativeDraft(e.target.value)}
-            rows={4}
-            disabled={generating}
-            characterCount={negativeDraft.length}
-            maxCharacterCount={limit}
-            helperText={
-              a1111
-                ? "Sent as negative_prompt — this dialect applies it, so put what you do not want here."
-                : "Dropped entirely by the OpenAI-compatible dialect, which has no negative prompt."
-            }
-          />
-
-          {caption ? (
-            <p className="image-prompt-caption">Image provider: {caption}</p>
-          ) : null}
-          {/* What the writer was actually given. The prompt above can look wrong
-              for reasons that have nothing to do with the model — the window is
-              empty on a first message, or the scene instruction is in force — and
-              this is the one place to see that before paying for the render. */}
-          {context ? (
-            <p className="image-prompt-caption">
-              {context.historyMessages > 0
-                ? `Context: ${context.historyMessages} previous message${context.historyMessages === 1 ? "" : "s"}`
-                : "Context: this message only"}
-              {context.instructionMode === "scene"
-                ? " · Scene instruction (third-person)"
-                : " · POV instruction"}
-            </p>
-          ) : null}
-
-          <div className="settings-actions image-prompt-actions">
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={() => onGenerate(promptDraft, negativeDraft)}
-              disabled={busy || !promptDraft.trim()}
-              isLoading={generating}
-              leftIcon={<Icon name="Image" size={13} />}
-            >
-              Generate
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="image-prompt-rerun"
-              onClick={onRerun}
-              disabled={busy}
-              isLoading={rerunning}
-              leftIcon={<Icon name="RefreshCw" size={12} />}
-              title="Ask the text model for a fresh draft (replaces the text above)"
-            >
-              Re-run text call
-            </Button>
-            {/* Cancel last: the row's order is a contract — the confirming action, then the secondary
-                actions beside it, then the way out. It also keeps the two "replace my text" actions
-                next to each other instead of splitting them around the safe one. */}
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={onClose}
+            <TextArea
+              label="Prompt"
+              value={promptDraft}
+              onChange={(e) => setPromptDraft(e.target.value)}
+              rows={9}
+              autoGrow
+              autoGrowMax={320}
               disabled={generating}
-            >
-              Cancel
-            </Button>
-            {rerunning && promptElapsedMs !== null ? (
-              <Text as="span" size="xs" tone="muted" mono>
-                {formatDuration(promptElapsedMs)}
+              characterCount={promptDraft.length}
+              maxCharacterCount={limit}
+              overLimit={overLimit}
+              helperText={
+                overLimit
+                  ? `Over the ${limit}-character limit — the server clamps the composed prompt before sending.`
+                  : undefined
+              }
+            />
+
+            {/* Prompt-length estimate, a1111 only. Advisory: it changes nothing
+                about what is sent — the text below is posted verbatim. */}
+            {estimate ? (
+              <Card padding="sm" role="status">
+                <Stack gap="xs">
+                  <Stack direction="row" align="center" gap="xs">
+                    <Icon name="Ruler" size={13} className="ds-icon-accent" />
+                    <Text as="span" size="xs" tone="secondary">
+                      About <strong>{estimate.tokens}</strong> tokens —{" "}
+                      {estimate.chunks} CLIP chunk
+                      {estimate.chunks === 1 ? "" : "s"} of {CLIP_CHUNK_TOKENS}.{" "}
+                      {estimate.chunks === 1
+                        ? "The whole prompt fits the first chunk."
+                        : "Everything past the first chunk is weighted less."}
+                    </Text>
+                  </Stack>
+                  {estimateWarning ? (
+                    <StatusMessage variant="inline" tone="warn">
+                      {estimateWarning}
+                    </StatusMessage>
+                  ) : null}
+                  <Text size="xs" tone="muted">
+                    An approximation (~4 characters per token), not a tokenizer
+                    — and never a limit: the text is sent unchanged.
+                  </Text>
+                </Stack>
+              </Card>
+            ) : null}
+
+            <TextArea
+              label="Negative Prompt"
+              value={negativeDraft}
+              onChange={(e) => setNegativeDraft(e.target.value)}
+              rows={4}
+              disabled={generating}
+              characterCount={negativeDraft.length}
+              maxCharacterCount={limit}
+              helperText={
+                a1111
+                  ? "Sent as negative_prompt — this dialect applies it, so put what you do not want here."
+                  : "Dropped entirely by the OpenAI-compatible dialect, which has no negative prompt."
+              }
+            />
+
+            {caption ? (
+              <Text size="xs" tone="muted">
+                Image provider: {caption}
               </Text>
             ) : null}
-          </div>
-        </div>
-      </section>
-    </div>
+
+            {context ? (
+              <Text size="xs" tone="muted">
+                {context.historyMessages > 0
+                  ? `Context: ${context.historyMessages} previous message${context.historyMessages === 1 ? "" : "s"}`
+                  : "Context: this message only"}
+                {context.instructionMode === "scene"
+                  ? " · Scene instruction (third-person)"
+                  : " · POV instruction"}
+              </Text>
+            ) : null}
+          </Stack>
+        </Modal.Content>
+      </Modal.Body>
+
+      <Modal.Footer>
+        <Stack direction="row" align="center" gap="sm" wrap>
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => onGenerate(promptDraft, negativeDraft)}
+            disabled={busy || !promptDraft.trim()}
+            isLoading={generating}
+            leftIcon={<Icon name="Image" size={13} />}
+          >
+            Generate
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onRerun}
+            disabled={busy}
+            isLoading={rerunning}
+            leftIcon={<Icon name="RefreshCw" size={12} />}
+            title="Ask the text model for a fresh draft (replaces the text above)"
+          >
+            Re-run text call
+          </Button>
+          {/* Cancel last: the row's order is a contract — the confirming action, then the secondary
+              actions beside it, then the way out. */}
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={onClose}
+            disabled={generating}
+          >
+            Cancel
+          </Button>
+          {rerunning && promptElapsedMs !== null ? (
+            <Text as="span" size="xs" tone="muted" mono>
+              {formatDuration(promptElapsedMs)}
+            </Text>
+          ) : null}
+        </Stack>
+      </Modal.Footer>
+    </Modal>
   );
 }

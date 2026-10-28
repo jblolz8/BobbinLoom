@@ -28,6 +28,12 @@ export interface TextAreaProps extends Omit<
   containerClassName?: string;
   characterCount?: number;
   maxCharacterCount?: number;
+  /** Highlight the character counter in danger color when over the limit. */
+  overLimit?: boolean;
+  /** Render the textarea with monospace code styling (for JSON/code editors). */
+  mono?: boolean;
+  /** Render a borderless, transparent textarea (for embedded card composers). */
+  borderless?: boolean;
   /** Opt-in: grow the field height to fit its content instead of a fixed `rows`. */
   autoGrow?: boolean;
   /** When `autoGrow`, hard cap the grown height (px). Past the cap the field scrolls internally. */
@@ -51,6 +57,9 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
       disabled,
       characterCount,
       maxCharacterCount,
+      overLimit = false,
+      mono = false,
+      borderless = false,
       rows = 3,
       autoGrow = false,
       autoGrowMax,
@@ -115,7 +124,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
 
     return (
       <label
-        className={`base-form-field form-field ${fullWidth ? "base-form-field--full" : ""} ${disabled ? "base-form-field--disabled" : ""} ${containerClassName}`.trim()}
+        className={`base-form-field form-field ${fullWidth ? "base-form-field--full" : ""} ${disabled ? "base-form-field--disabled" : ""} ${overLimit ? "base-form-field--over-limit" : ""} ${containerClassName}`.trim()}
         htmlFor={textareaId}
       >
         {label && (
@@ -148,7 +157,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
             value={value}
             aria-invalid={!!error}
             aria-describedby={describedBy}
-            className={`base-form-input base-form-textarea form-input base-form-input--${variant} base-form-input--${size} ${dirty ? "base-form-input--dirty" : ""} ${error ? "base-form-input--error has-error" : ""} ${className}`.trim()}
+            className={`base-form-input base-form-textarea form-input base-form-input--${variant} base-form-input--${size} ${mono ? "base-form-textarea--mono" : ""} ${borderless ? "base-form-textarea--borderless" : ""} ${dirty ? "base-form-input--dirty" : ""} ${error ? "base-form-input--error has-error" : ""} ${className}`.trim()}
             {...textareaProps}
           />
         </div>

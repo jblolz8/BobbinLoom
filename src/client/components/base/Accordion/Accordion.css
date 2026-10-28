@@ -29,6 +29,60 @@
   padding: 0.45rem 0.65rem;
 }
 
+.base-accordion--ghost {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* Compact size ("sm") */
+.base-accordion--sm {
+  border-radius: 7px;
+}
+
+.base-accordion--sm.base-accordion--default,
+.base-accordion--sm.base-accordion--panel,
+.base-accordion--sm.base-accordion--elevated {
+  padding: 0.25rem 0.55rem;
+}
+
+.base-accordion--sm.base-accordion--ghost {
+  padding: 0;
+}
+
+.base-accordion--sm .base-accordion__trigger {
+  padding: 0.1rem 0;
+  gap: 0.35rem;
+}
+
+.base-accordion--sm .base-accordion__title-group {
+  gap: 0.35rem;
+}
+
+.base-accordion--sm .base-accordion__title {
+  font-size: 0.72rem;
+}
+
+.base-accordion__title--mono {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.base-accordion--sm .base-accordion__body {
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+}
+
+.base-accordion--ghost .base-accordion__body {
+  border-top: none;
+  margin-top: 0.25rem;
+  padding-top: 0;
+}
+
 .base-accordion__header {
   display: flex;
   flex-direction: column;

@@ -23,3 +23,40 @@ textarea.base-form-input--lg,
   padding: 0.6rem 0.85rem;
   font-size: 0.92rem;
 }
+
+.base-form-field .field-counter-text {
+  font-variant-numeric: tabular-nums;
+}
+
+.base-form-field--over-limit .field-counter-text {
+  color: var(--status-danger);
+}
+
+.base-form-input.base-form-textarea--mono {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--code-inline-text);
+  background: var(--code-block-bg);
+  border-color: var(--code-block-border);
+  tab-size: 2;
+}
+
+.base-form-input.base-form-textarea--borderless {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  padding: 0.15rem 0.25rem;
+  min-height: 2.25rem;
+  resize: none;
+  border-radius: 0;
+}
+
+.base-form-input.base-form-textarea--borderless:hover:not(:focus):not(:disabled),
+.base-form-input.base-form-textarea--borderless:focus,
+.base-form-input.base-form-textarea--borderless:focus-visible {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}

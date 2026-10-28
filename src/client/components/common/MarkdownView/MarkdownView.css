@@ -2,13 +2,89 @@
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--story-text, var(--chat-ai-text, var(--text-primary)));
+}
+
+.message.user .message-markdown,
+.message.user .message-paragraph {
+  color: var(--chat-user-text, var(--story-text, var(--text-primary)));
 }
 
 .message-paragraph {
   margin: 0;
   white-space: pre-wrap;
-  line-height: 1.62;
-  color: var(--story-text, var(--text-primary));
+  line-height: 1.55;
+  color: var(--story-text, var(--chat-ai-text, var(--text-primary)));
+}
+
+/* ── Story Roleplay Inline Tokens (Dialogue, Action/Thought Italics, Bold Emphasis) ── */
+
+.message-markdown strong,
+.message strong {
+  font-weight: 700;
+  color: var(--story-emphasis);
+}
+
+.message-header-info strong {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.message-markdown em,
+.message em {
+  font-style: italic;
+  color: var(--story-italic);
+}
+
+.message-markdown strong em,
+.message-markdown em strong,
+.message strong em,
+.message em strong {
+  color: var(--story-emphasis);
+}
+
+.quote-text {
+  color: var(--story-quote);
+  font-weight: 500;
+}
+
+.quote-text em,
+.quote-text strong,
+.quote-text strong em,
+.quote-text em strong {
+  color: inherit;
+}
+
+.quote-text strong {
+  font-weight: 700;
+}
+
+.message-markdown del,
+.message del {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.inline-code {
+  background: var(--code-inline-bg);
+  border: 1px solid var(--code-inline-border);
+  padding: 0.12rem 0.35rem;
+  border-radius: 4px;
+  font-family:
+    var(--font-mono),
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    "Courier New",
+    monospace;
+  font-size: 0.85em;
+  color: var(--code-inline-text);
 }
 
 .message-markdown > .code-block:first-child {

@@ -8,7 +8,8 @@ import { Icon, type IconName } from "../Icon/Icon";
 import { TooltipIcon } from "../Tooltip/Tooltip";
 import "./Accordion.css";
 
-export type AccordionVariant = "default" | "elevated" | "panel";
+export type AccordionVariant = "default" | "elevated" | "panel" | "ghost";
+export type AccordionSize = "sm" | "md";
 
 export interface AccordionProps extends Omit<
   HTMLAttributes<HTMLDivElement>,
@@ -24,6 +25,8 @@ export interface AccordionProps extends Omit<
   icon?: IconName | ReactNode;
   /** Header title. */
   title: ReactNode;
+  /** Render the title in monospace without uppercase transformation (useful for technical disclosures). */
+  monoTitle?: boolean;
   /** Optional tooltip icon next to the title. */
   tooltip?: ReactNode;
   /** Optional helper description shown below the header row. */
@@ -36,13 +39,18 @@ export interface AccordionProps extends Omit<
   summary?: ReactNode;
   /** Visual surface style. */
   variant?: AccordionVariant;
+  /** Size density (`"sm"` for compact single-line bars like Debug or provenance disclosures). */
+  size?: AccordionSize;
   children?: ReactNode;
 }
 
-function renderAccordionIcon(icon: IconName | ReactNode | undefined): ReactNode {
+function renderAccordionIcon(
+  icon: IconName | ReactNode | undefined,
+  size: AccordionSize,
+): ReactNode {
   if (!icon) return null;
   if (typeof icon === "string") {
-    return <Icon name={icon} size={14} />;
+    return <Icon name={icon} size={size === "sm" ? 13 : 14} />;
   }
   return icon;
 }
@@ -53,12 +61,14 @@ export function Accordion({
   onOpenChange,
   icon,
   title,
+  monoTitle = false,
   tooltip,
   description,
   badge,
   action,
   summary,
   variant = "default",
+  size = "md",
   className = "",
   children,
   ...props
@@ -80,6 +90,7 @@ export function Accordion({
   const rootClassName = [
     "base-accordion",
     `base-accordion--${variant}`,
+    `base-accordion--${size}`,
     isOpen ? "base-accordion--open" : "",
     className,
   ]
@@ -101,10 +112,14 @@ export function Accordion({
             <span className="base-accordion__title-group">
               {icon ? (
                 <span className="base-accordion__icon">
-                  {renderAccordionIcon(icon)}
+                  {renderAccordionIcon(icon, size)}
                 </span>
               ) : null}
-              <span className="base-accordion__title">{title}</span>
+              <span
+                className={`base-accordion__title${monoTitle ? " base-accordion__title--mono" : ""}`}
+              >
+                {title}
+              </span>
               {tooltip ? <TooltipIcon content={tooltip} /> : null}
               {badge ? (
                 <span className="base-accordion__badge">{badge}</span>
@@ -112,7 +127,7 @@ export function Accordion({
             </span>
             <Icon
               name="ChevronDown"
-              size={15}
+              size={size === "sm" ? 13 : 15}
               className="base-accordion__chevron"
             />
           </button>
