@@ -21,6 +21,7 @@ import {
   readImageProgress,
 } from "../src/server/imageProgress";
 import { saveImageBytes } from "../src/server/imageStore";
+import { loadSharp } from "../src/server/imageTranscode";
 import { clearForgeCoupleCache } from "../src/server/imageProvider/shared";
 import { ProviderManager } from "../src/server/providerManager";
 import { imageRoutes } from "../src/server/routes/images";
@@ -1620,12 +1621,40 @@ describe("image prompt context: the writer's answer and the reference", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json().writerPrompt).toBe("a woman in the rain");
+    expect(typeof res.json().promptRequest).toBe("string");
+    expect(typeof res.json().promptResponse).toBe("string");
     // The count is what the window CARRIED: this fixture's frame is the third
     // message, so two. The modal says that rather than what the preset asks for.
     expect(res.json().context).toEqual({
       historyMessages: 2,
       instructionMode: "pov",
     });
+  });
+
+  it("stores echoed promptRequest and promptResponse when the dry run already ran the text call", async () => {
+    const h = harness();
+    const preview = await post(
+      h.app,
+      imageUrl(h, h.assistantMessageId, "/prompt"),
+      {},
+    );
+    expect(preview.statusCode).toBe(200);
+    const previewJson = preview.json();
+
+    const res = await post(h.app, imageUrl(h), {
+      promptOverride: previewJson.prompt,
+      negativeOverride: previewJson.negativePrompt,
+      promptDurationMs: previewJson.promptDurationMs,
+      writerPrompt: previewJson.writerPrompt,
+      writerNegative: previewJson.writerNegative,
+      promptRequest: previewJson.promptRequest,
+      promptResponse: previewJson.promptResponse,
+    });
+    expect(res.statusCode).toBe(200);
+    const image = res.json().image;
+    expect(image.promptDurationMs).toBe(previewJson.promptDurationMs);
+    expect(image.promptRequest).toBe(previewJson.promptRequest);
+    expect(image.promptResponse).toBe(previewJson.promptResponse);
   });
 
   it("offers one earlier answer as a reference when the preset asks for it", async () => {
@@ -2078,3 +2107,52 @@ describe("saving an edited request body", () => {
     expect(imagesOf(stored, h.assistantMessageId)[0].request).toBeUndefined();
   });
 });
+
+describe("POST /api/playthroughs/:id/messages/:messageId/image WebP transcode", () => {
+  it("transcodes real raster PNG bytes from the provider into .webp on disk", async () => {
+    const sharp = loadSharp();
+    const realPng = await sharp({
+      create: {
+        width: 4,
+        height: 4,
+        channels: 4,
+        background: { r: 120, g: 80, b: 200, alpha: 1 },
+      },
+    })
+      .png()
+      .toBuffer();
+
+    const h = harness({
+      imagePayload: {
+        id: "gen_webp",
+        images: [realPng.toString("base64")],
+        timing: { total: 450 },
+      },
+    });
+
+    const res = await post(h.app, imageUrl(h), {
+      prompt: "a portrait in neon light",
+      negativePrompt: "blurry",
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      image: MessageImage;
+      images: MessageImage[];
+      playthrough: Playthrough;
+    };
+    expect(body.image.file).toMatch(/^[a-f0-9]{64}\.webp$/);
+    expect(storedFiles(h.imagesDir)).toEqual([body.image.file]);
+
+    const served = await h.app.inject({
+      method: "GET",
+      url: `/api/images/${body.image.file}`,
+    });
+    expect(served.statusCode).toBe(200);
+    expect(served.headers["content-type"]).toBe("image/webp");
+    // Verify the stored bytes carry the RIFF....WEBP header signature
+    expect(served.rawPayload.subarray(0, 4).toString("ascii")).toBe("RIFF");
+    expect(served.rawPayload.subarray(8, 12).toString("ascii")).toBe("WEBP");
+  });
+});
+

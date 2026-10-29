@@ -39,7 +39,7 @@ describe("shortModelName", () => {
 });
 
 describe("imageCaption", () => {
-  it("labels both providers' halves once the text side is known", () => {
+  it("labels both providers' halves and their total once the text side is known", () => {
     expect(
       imageCaption({
         model: "waiANINSFWPONYXL_v140.safetensors [4817ae4643]",
@@ -47,11 +47,11 @@ describe("imageCaption", () => {
         durationMs: 25_900,
         seed: 81,
       }),
-    ).toBe("waiANINSFWPONYXL_v140 · prompt 3.1s · render 25.9s · seed 81");
+    ).toBe(
+      "waiANINSFWPONYXL_v140 · prompt 3.1s · render 25.9s · total 29.0s · seed 81",
+    );
     // Shortening the model name is what keeps the caption near the 420px figure's
     // budget; wrapping (CSS) is what guarantees nothing is hidden either way.
-    // Measured at 375px: 93 chars = 495px of text in a 311px box, 68 chars when
-    // the extension and hash are dropped, and it wraps rather than ellipsizing.
     const full = imageCaption({
       model: "waiANINSFWPONYXL_v140.safetensors [4817ae4643]",
       promptDurationMs: 7000,
@@ -59,7 +59,7 @@ describe("imageCaption", () => {
       seed: 2790359849,
     });
     expect(full).toBe(
-      "waiANINSFWPONYXL_v140 · prompt 7.0s · render 25.2s · seed 2790359849",
+      "waiANINSFWPONYXL_v140 · prompt 7.0s · render 25.2s · total 32.2s · seed 2790359849",
     );
     expect(full).not.toContain(".safetensors");
     expect(full.length).toBeLessThan(93);

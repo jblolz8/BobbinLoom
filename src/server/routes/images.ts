@@ -28,6 +28,7 @@ import {
   sweepOrphansInDataDir,
   IMAGES_DIR,
 } from "../imageStore";
+import { transcodeToWebp } from "../imageTranscode";
 import type { ProviderManager } from "../providerManager";
 import {
   buildImageCastBlock,
@@ -70,6 +71,11 @@ const GenerateImageBody = z.object({
    *  wrote is for the client to hand it over. */
   writerPrompt: z.string().optional(),
   writerNegative: z.string().optional(),
+  /** The prompt call's raw request and response bodies, echoed back by the
+   *  client when the dry run already ran the text call (so the stored ref can
+   *  still show the `prompt call` disclosure even on the reviewed path). */
+  promptRequest: z.string().optional(),
+  promptResponse: z.string().optional(),
   /** The RE-SEND path: a request body to send verbatim instead of composing one.
    *  The client hands back a body it stored on an image (or a hand-edited version
    *  of it), and this request makes no text call and applies no clamping — what
@@ -310,20 +316,16 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (
 
       const imageConn = manager.imageConnection(body.imageProviderId);
       if (!imageConn)
-        return reply
-          .code(400)
-          .send({
-            error:
-              "No image provider configured — add one in Settings → Provider → Images.",
-          });
+        return reply.code(400).send({
+          error:
+            "No image provider configured — add one in Settings → Provider → Images.",
+        });
 
       const promptConfig = manager.resolveImagePromptConfig(imageConn);
       if (!promptConfig)
-        return reply
-          .code(400)
-          .send({
-            error: "No text provider available to write the image prompt.",
-          });
+        return reply.code(400).send({
+          error: "No text provider available to write the image prompt.",
+        });
 
       const settings = resolveImageSettings(
         loadPromptConfig(settingsDir).promptConfig.imageGeneration,
@@ -337,6 +339,8 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (
       let promptDurationMs: number;
       let writerPrompt: string;
       let writerNegative: string;
+      let promptRequest: string;
+      let promptResponse: string;
       const promptContext = buildImagePromptInput(
         playthrough,
         message,
@@ -359,6 +363,8 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (
         // makes no text call of its own can still store what the writer wrote.
         writerPrompt = result.writerPrompt;
         writerNegative = result.writerNegative;
+        promptRequest = result.rawInput;
+        promptResponse = clampStoredPromptResponse(result.rawOutput);
       } catch (error) {
         if (controller.signal.aborted) return;
         const reason =
@@ -393,10 +399,12 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (
         // so the preview modal can show it AND so the client can hand it back on
         // the generate request that stores the ref.
         promptDurationMs,
-        // …and the writer's own answer, which only this call can produce on the
-        // review path.
+        // …and the writer's own answer + raw provenance, which only this call can
+        // produce when the generate call reuses the dry-run output.
         writerPrompt,
         writerNegative,
+        promptRequest,
+        promptResponse,
         // What the writer was actually given, for the modal's context line. The count
         // is what the history block CARRIED, not what the preset asks for — on the
         // first message of a chat they differ.
@@ -545,12 +553,10 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (
 
       const imageConn = manager.imageConnection(body.imageProviderId);
       if (!imageConn)
-        return reply
-          .code(400)
-          .send({
-            error:
-              "No image provider configured — add one in Settings → Provider → Images.",
-          });
+        return reply.code(400).send({
+          error:
+            "No image provider configured — add one in Settings → Provider → Images.",
+        });
 
       // The re-send path: the body came from the client, so nothing is composed
       // and no text provider is called. It therefore needs no prompt writer at all
@@ -561,12 +567,10 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (
         (typeof body.promptOverride === "string" ||
           typeof body.negativeOverride === "string")
       ) {
-        return reply
-          .code(400)
-          .send({
-            error:
-              "Send either a raw request body or prompt overrides, not both.",
-          });
+        return reply.code(400).send({
+          error:
+            "Send either a raw request body or prompt overrides, not both.",
+        });
       }
       let rawBody: Record<string, unknown> | null = null;
       if (hasRaw) {
@@ -593,11 +597,9 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (
 
       const promptConfig = manager.resolveImagePromptConfig(imageConn);
       if (!hasRaw && !promptConfig)
-        return reply
-          .code(400)
-          .send({
-            error: "No text provider available to write the image prompt.",
-          });
+        return reply.code(400).send({
+          error: "No text provider available to write the image prompt.",
+        });
 
       const settings = resolveImageSettings(
         loadPromptConfig(settingsDir).promptConfig.imageGeneration,
@@ -657,6 +659,14 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (
           imageConn,
         ).text;
         negativeUsed = clampNegative(body.negativeOverride!, imageConn);
+        if (body.promptRequest) {
+          promptCall = {
+            request: body.promptRequest,
+            response: body.promptResponse
+              ? clampStoredPromptResponse(body.promptResponse)
+              : "",
+          };
+        }
       } else {
         try {
           const written = await generateImagePrompt(
@@ -730,55 +740,69 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (
       }
       if (controller.signal.aborted) return;
 
-      // 3) Persist the bytes content-addressed, then append the ref(s) to the
-      //    message. Every returned variant is kept; `image` is the first one.
+      // 3) Transcode returned raster images to WebP for compact storage, persist
+      //    the bytes content-addressed, then append the ref(s) to the message.
+      //    Every returned variant is kept; `image` is the first one.
       if (!result.images.length)
         return reply
           .code(502)
           .send({ error: "Image provider returned no image data" });
       const createdAt = new Date().toISOString();
-      const refs: MessageImage[] = result.images.map((image) => {
-        const { file } = saveImageBytes(image.bytes, image.mime, imagesDir);
-        return {
-          file,
-          prompt: promptUsed,
-          negativePrompt: negativeUsed || undefined,
-          providerId: result.providerId,
-          model: result.model,
-          // What the adapter ACTUALLY sent (its own report), not what we asked
-          // for: the OpenAI-compatible dialect has no seed field, so asking for
-          // one there must not stamp a seed the provider never saw. Absent when
-          // the provider picked one at random — which is what makes a re-roll
-          // comparable or not, honestly.
-          seed: result.seed,
-          durationMs: result.durationMs,
-          // Optional on the ref: absent when no text call was ever measured (a
-          // ref generated before this field existed, or both overrides supplied
-          // by a client that did not echo a time back).
-          promptDurationMs,
-          // The writer's own answer, when one was produced here or echoed back — the
-          // reference the NEXT image may be given. The composed text is on `prompt`.
-          ...(writerPrompt
-            ? { writerPrompt, writerNegative: writerNegative || undefined }
-            : {}),
-          // Diagnostic provenance: the exact body the adapter sent upstream. Body
-          // only (the adapters never fold headers or the key into it), and every
-          // variant of one call shares it. The raw RESPONSE is deliberately not
-          // stored — it carries the base64 payload and would bloat the record.
-          request: result.rawRequest,
-          // …and the PROMPT side call's provenance, when one ran. Body only, and
-          // the response is capped (`clampStoredPromptResponse`) so a verbose
-          // reasoning model cannot bloat the playthrough record. Absent on the
-          // both-overrides path, which makes no text call at all.
-          ...(promptCall
-            ? {
-                promptRequest: promptCall.request,
-                promptResponse: promptCall.response,
-              }
-            : {}),
-          createdAt,
-        };
-      });
+      const refs: MessageImage[] = await Promise.all(
+        result.images.map(async (image) => {
+          const fallbackExt =
+            image.mime === "image/jpeg"
+              ? "jpg"
+              : image.mime === "image/webp"
+                ? "webp"
+                : "png";
+          const transcoded = await transcodeToWebp(image.bytes, fallbackExt);
+          const { file } = saveImageBytes(
+            transcoded.bytes,
+            transcoded.mime,
+            imagesDir,
+          );
+          return {
+            file,
+            prompt: promptUsed,
+            negativePrompt: negativeUsed || undefined,
+            providerId: result.providerId,
+            model: result.model,
+            // What the adapter ACTUALLY sent (its own report), not what we asked
+            // for: the OpenAI-compatible dialect has no seed field, so asking for
+            // one there must not stamp a seed the provider never saw. Absent when
+            // the provider picked one at random — which is what makes a re-roll
+            // comparable or not, honestly.
+            seed: result.seed,
+            durationMs: result.durationMs,
+            // Optional on the ref: absent when no text call was ever measured (a
+            // ref generated before this field existed, or both overrides supplied
+            // by a client that did not echo a time back).
+            promptDurationMs,
+            // The writer's own answer, when one was produced here or echoed back — the
+            // reference the NEXT image may be given. The composed text is on `prompt`.
+            ...(writerPrompt
+              ? { writerPrompt, writerNegative: writerNegative || undefined }
+              : {}),
+            // Diagnostic provenance: the exact body the adapter sent upstream. Body
+            // only (the adapters never fold headers or the key into it), and every
+            // variant of one call shares it. The raw RESPONSE is deliberately not
+            // stored — it carries the base64 payload and would bloat the record.
+            request: result.rawRequest,
+            // …and the PROMPT side call's provenance, when one ran. Body only, and
+            // the response is capped (`clampStoredPromptResponse`) so a verbose
+            // reasoning model cannot bloat the playthrough record. Absent on the
+            // both-overrides path, which makes no text call at all.
+            ...(promptCall
+              ? {
+                  promptRequest: promptCall.request,
+                  promptResponse: promptCall.response,
+                }
+              : {}),
+            createdAt,
+          };
+        }),
+      );
       const existing = message.images ?? [];
       // The re-send path REPLACES the image it came from. The drop happens here,
       // in the same write as the append, and never on the client: a render that

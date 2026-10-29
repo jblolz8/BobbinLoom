@@ -174,6 +174,8 @@ export type PlayViewProps = {
   openImageRequestEditor?: (msg: ChatMessage, file: string) => Promise<void>;
   closeImageRequestEditor?: () => void;
   saveImageRequestBody?: (body: string) => Promise<string | null>;
+  resendEditedImageRequest?: (body: string) => Promise<string | null>;
+  generateNewFromImageRequest?: (body: string) => Promise<string | null>;
   imageSaving?: boolean;
   alwaysDiscardOldImage?: boolean;
   setAlwaysDiscardOldImage?: (always: boolean) => void;
@@ -287,6 +289,8 @@ export function PlayView(props: PlayViewProps) {
     openImageRequestEditor,
     closeImageRequestEditor,
     saveImageRequestBody,
+    resendEditedImageRequest,
+    generateNewFromImageRequest,
     imageSaving = false,
     alwaysDiscardOldImage = false,
     setAlwaysDiscardOldImage,
@@ -383,6 +387,7 @@ export function PlayView(props: PlayViewProps) {
       renderScenePane={(paneProps) => (
         <ScenePanel
           playthrough={playthrough}
+          onPlaythroughChange={setPlaythrough}
           actionLoading={actionLoading}
           onWorldStateAction={handleWorldStateAction}
           {...paneProps}
@@ -552,9 +557,20 @@ export function PlayView(props: PlayViewProps) {
         <ImageRequestBodyModal
           body={imageRequestEditor.body}
           connection={imageRequestEditor.connection}
+          image={imageRequestEditor.image}
           saving={imageSaving}
           onSave={async (body) =>
             saveImageRequestBody ? await saveImageRequestBody(body) : null
+          }
+          onResend={
+            resendEditedImageRequest
+              ? async (body) => await resendEditedImageRequest(body)
+              : undefined
+          }
+          onGenerateNew={
+            generateNewFromImageRequest
+              ? async (body) => await generateNewFromImageRequest(body)
+              : undefined
           }
           onClose={() => closeImageRequestEditor?.()}
         />
@@ -669,7 +685,13 @@ export function PlayView(props: PlayViewProps) {
             {branchTarget.content.slice(0, 200)}
             {branchTarget.content.length > 200 ? "…" : ""}
           </blockquote>
-          <Stack gap="sm" className="modal-form-fields">
+          <Stack
+            direction="column"
+            align="stretch"
+            gap="sm"
+            fullWidth
+            className="modal-form-fields"
+          >
             <TextInput
               label="Branch Name (optional)"
               value={branchNameInput}

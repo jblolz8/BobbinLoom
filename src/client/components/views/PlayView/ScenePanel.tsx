@@ -1,13 +1,32 @@
 import type { CSSProperties } from "react";
-import { useState } from "react";
-import type { Playthrough, WorldStateEntry } from "../../../../schemas";
-import type { WorldStateAction } from "../../../api";
-import { ConfirmModal } from "../../common";
-import { Badge, Button, Icon, TextArea, TextInput } from "../../base";
-import "./ScenePanel.css";
+import { useMemo, useState } from "react";
+import { sortPlaythroughTags } from "../../../../engine/playthroughTagTaxonomy";
+import type { Playthrough } from "../../../../schemas";
+import {
+  listPlaythroughs,
+  suggestPlaythroughTags,
+  updatePlaythroughTags,
+  type WorldStateAction,
+} from "../../../api";
+import {
+  AvatarBadge,
+  Badge,
+  Button,
+  Card,
+  Icon,
+  Separator,
+  Stack,
+  StatusMessage,
+  TagChip,
+  Text,
+  TextArea,
+  TextInput,
+} from "../../base";
+import { ConfirmModal, EditTagsModal } from "../../common";
 
 export type ScenePanelProps = {
   playthrough: Playthrough;
+  onPlaythroughChange?: (updated: Playthrough) => void;
   actionLoading: boolean;
   onWorldStateAction: (
     wsId: string,
@@ -32,6 +51,7 @@ type DeleteConfirm = {
 
 export function ScenePanel({
   playthrough,
+  onPlaythroughChange,
   actionLoading,
   onWorldStateAction,
   className,
@@ -42,6 +62,11 @@ export function ScenePanel({
   const [addName, setAddName] = useState("");
   const [addDescription, setAddDescription] = useState("");
   const [deleting, setDeleting] = useState<DeleteConfirm>(null);
+
+  const [tagsModalOpen, setTagsModalOpen] = useState(false);
+  const [tagsSaving, setTagsSaving] = useState(false);
+  const [tagsError, setTagsError] = useState<string | null>(null);
+  const [libraryTags, setLibraryTags] = useState<string[]>([]);
 
   function handleDelete() {
     if (!deleting) return;
@@ -62,6 +87,44 @@ export function ScenePanel({
     setAddDescription("");
   }
 
+  function handleOpenEditTags() {
+    setTagsError(null);
+    setTagsModalOpen(true);
+    void listPlaythroughs({ page: 1, pageSize: 1 })
+      .then((res) => {
+        if (res.tagCounts) {
+          setLibraryTags(res.tagCounts.map((t) => t.tag));
+        }
+      })
+      .catch(() => {
+        /* fallback to current playthrough tags if listing fails */
+      });
+  }
+
+  async function handleSaveTags(nextTags: string[]) {
+    setTagsSaving(true);
+    setTagsError(null);
+    try {
+      const updated = await updatePlaythroughTags(playthrough.id, nextTags);
+      const normalized = sortPlaythroughTags(updated.tags ?? nextTags);
+      onPlaythroughChange?.({ ...updated, tags: normalized });
+      setTagsModalOpen(false);
+    } catch (e) {
+      setTagsError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setTagsSaving(false);
+    }
+  }
+
+  const tags = useMemo(
+    () => sortPlaythroughTags(playthrough.tags ?? []),
+    [playthrough.tags],
+  );
+  const effectiveLibraryTags = useMemo(() => {
+    const merged = new Set<string>([...libraryTags, ...tags]);
+    return [...merged];
+  }, [libraryTags, tags]);
+
   const worldState = playthrough.worldState || [];
   const activeCount = (playthrough.activeCharacters ?? []).length;
   const storyMessages = (playthrough.messages ?? []).filter(
@@ -76,61 +139,189 @@ export function ScenePanel({
       className={`panel left-panel${className ? ` ${className}` : ""}`}
       style={style}
     >
-      <div className="scene-panel-content">
-        <article className="card scene-overview-card">
-          <div className="scene-card-header">
-            <div className="scene-avatar-badge">
-              <Icon name="Compass" size={18} />
-            </div>
-            <div>
-              <h3 className="scene-title">Scene Overview</h3>
-              <p className="scene-subtitle-text">Current environment status</p>
-            </div>
-          </div>
+      <Stack direction="column" align="stretch" gap="md" fullWidth>
+        <Card
+          as="article"
+          variant="elevated"
+          padding="md"
+          layout="column"
+          fullWidth
+        >
+          <Stack direction="row" align="center" gap="sm" fullWidth>
+            <AvatarBadge icon="Compass" size="md" shape="circle" />
+            <Stack direction="column" align="start" gap="2xs">
+              <Text as="h3" variant="title" size="md" weight="semibold">
+                Scene Overview
+              </Text>
+              <Text variant="caption" size="xs" tone="muted">
+                Current environment status
+              </Text>
+            </Stack>
+          </Stack>
 
-          <div className="scene-meta-grid">
-            <div className="scene-meta-item">
-              <span className="meta-label">
-                <Icon name="Clock" size={13} /> Turn
-              </span>
+          <Separator spacing="none" />
+
+          <Stack direction="column" align="stretch" gap="xs" fullWidth>
+            <Stack
+              direction="row"
+              align="center"
+              justify="between"
+              gap="xs"
+              fullWidth
+            >
+              <Stack direction="row" align="center" gap="2xs">
+                <Icon name="Clock" size={13} />
+                <Text variant="caption" size="xs" tone="muted">
+                  Turn
+                </Text>
+              </Stack>
               <Badge variant="accent" size="sm">
                 #{playthrough.turn}
               </Badge>
-            </div>
+            </Stack>
 
-            <div className="scene-meta-item scene-meta-messages">
-              <span className="meta-label">
-                <Icon name="MessageSquare" size={13} /> Messages
-              </span>
-              <div className="scene-meta-stat-group">
+            <Stack
+              direction="row"
+              align="center"
+              justify="between"
+              gap="xs"
+              fullWidth
+            >
+              <Stack direction="row" align="center" gap="2xs">
+                <Icon name="MessageSquare" size={13} />
+                <Text variant="caption" size="xs" tone="muted">
+                  Messages
+                </Text>
+              </Stack>
+              <Stack
+                direction="row"
+                align="center"
+                justify="end"
+                gap="2xs"
+                wrap
+              >
                 <Badge variant="neutral" size="sm">
                   {totalMsgCount} msgs
                 </Badge>
-                <span className="scene-meta-subtext">
+                <Text variant="caption" size="2xs" tone="muted" nowrap>
                   ({userMsgCount} You · {aiMsgCount} AI)
-                </span>
-              </div>
-            </div>
+                </Text>
+              </Stack>
+            </Stack>
 
-            <div className="scene-meta-item">
-              <span className="meta-label">
-                <Icon name="Users" size={13} /> In Scene
-              </span>
+            <Stack
+              direction="row"
+              align="center"
+              justify="between"
+              gap="xs"
+              fullWidth
+            >
+              <Stack direction="row" align="center" gap="2xs">
+                <Icon name="Users" size={13} />
+                <Text variant="caption" size="xs" tone="muted">
+                  In Scene
+                </Text>
+              </Stack>
               <Badge variant="neutral" size="sm">
                 {activeCount} active
               </Badge>
-            </div>
-          </div>
-        </article>
+            </Stack>
+          </Stack>
+        </Card>
 
-        <section className="scene-section">
-          <h3 className="section-subtitle flex items-center justify-between">
-            <span className="flex items-center gap-1.5">
-              <Icon name="Globe" size={15} /> World State
+        <Stack
+          as="section"
+          direction="column"
+          align="stretch"
+          gap="xs"
+          fullWidth
+        >
+          <Stack
+            direction="row"
+            align="center"
+            justify="between"
+            gap="xs"
+            fullWidth
+          >
+            <Stack direction="row" align="center" gap="xs">
+              <Icon name="Tags" size={15} />
+              <Text
+                as="h3"
+                variant="label"
+                size="xs"
+                weight="semibold"
+                tone="secondary"
+                uppercase
+              >
+                Story Tags
+              </Text>
+              <Badge variant="neutral" size="xs" pill>
+                {tags.length}
+              </Badge>
+            </Stack>
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={handleOpenEditTags}
+              disabled={actionLoading}
+              leftIcon={
+                <Icon name={tags.length > 0 ? "Pencil" : "Plus"} size={12} />
+              }
+            >
+              {tags.length > 0 ? "Edit" : "Add"}
+            </Button>
+          </Stack>
+
+          {tags.length > 0 ? (
+            <Card variant="elevated" padding="sm" fullWidth>
+              <Stack direction="row" align="center" gap="xs" wrap fullWidth>
+                {tags.map((tag) => (
+                  <TagChip
+                    key={tag}
+                    tag={tag}
+                    taxonomy="playthrough"
+                    size="sm"
+                  />
+                ))}
+              </Stack>
+            </Card>
+          ) : (
+            <StatusMessage variant="inline" tone="neutral" icon="Tags">
+              No story tags assigned yet
+            </StatusMessage>
+          )}
+        </Stack>
+
+        <Stack
+          as="section"
+          direction="column"
+          align="stretch"
+          gap="xs"
+          fullWidth
+        >
+          <Stack
+            direction="row"
+            align="center"
+            justify="between"
+            gap="xs"
+            fullWidth
+          >
+            <Stack direction="row" align="center" gap="xs">
+              <Icon name="Globe" size={15} />
+              <Text
+                as="h3"
+                variant="label"
+                size="xs"
+                weight="semibold"
+                tone="secondary"
+                uppercase
+              >
+                World State
+              </Text>
               <Badge variant="neutral" size="xs" pill>
                 {worldState.length}
               </Badge>
-            </span>
+            </Stack>
             <Button
               variant="ghost"
               size="xs"
@@ -144,20 +335,50 @@ export function ScenePanel({
             >
               Add
             </Button>
-          </h3>
+          </Stack>
+
           {worldState.length > 0 ? (
-            <div className="quests-container">
+            <Stack direction="column" align="stretch" gap="xs" fullWidth>
               {worldState.map((ws) => (
-                <div key={ws.id} className="quest-card">
-                  <div className="quest-card-header">
-                    <strong className="quest-title">{ws.name}</strong>
-                  </div>
+                <Card
+                  key={ws.id}
+                  variant="elevated"
+                  padding="sm"
+                  layout="column"
+                  fullWidth
+                >
+                  <Stack
+                    direction="row"
+                    align="center"
+                    justify="between"
+                    gap="xs"
+                    fullWidth
+                  >
+                    <Text as="strong" size="sm" weight="semibold" truncate>
+                      {ws.name}
+                    </Text>
+                  </Stack>
 
                   {ws.description ? (
-                    <p className="quest-summary">{ws.description}</p>
+                    <Text
+                      variant="body"
+                      size="xs"
+                      tone="secondary"
+                      leading="snug"
+                    >
+                      {ws.description}
+                    </Text>
                   ) : null}
 
-                  <div className="quest-card-actions">
+                  <Separator spacing="none" />
+
+                  <Stack
+                    direction="row"
+                    align="center"
+                    justify="end"
+                    gap="xs"
+                    fullWidth
+                  >
                     <Button
                       size="xs"
                       variant="ghost"
@@ -185,18 +406,92 @@ export function ScenePanel({
                     >
                       Delete
                     </Button>
-                  </div>
-                </div>
+                  </Stack>
+                </Card>
               ))}
-            </div>
+            </Stack>
           ) : (
-            <div className="info-empty-state">
-              <Icon name="Globe" size={15} />
-              <span>No notable world states</span>
-            </div>
+            <StatusMessage variant="inline" tone="neutral" icon="Globe">
+              No notable world states
+            </StatusMessage>
           )}
-        </section>
-      </div>
+        </Stack>
+      </Stack>
+
+      {tagsModalOpen ? (
+        <EditTagsModal
+          entityName={playthrough.name}
+          taxonomy="playthrough"
+          initialTags={tags}
+          libraryTags={effectiveLibraryTags}
+          busy={tagsSaving}
+          error={tagsError}
+          contextOptions={[
+            {
+              id: "worldState",
+              icon: "Globe",
+              title: "World State & Premise",
+              description: "Scenario setup and active world state entries.",
+              defaultChecked: true,
+            },
+            {
+              id: "castAndPersona",
+              icon: "Users",
+              title: "Player Persona & Cast",
+              description: "Player details, main cast sheets, and NPCs.",
+              defaultChecked: true,
+            },
+            {
+              id: "chaptersAndTimeline",
+              icon: "BookOpen",
+              title: "Chapters & Event Timeline",
+              description: "Archived chapter summaries and memory events.",
+              defaultChecked: true,
+            },
+            {
+              id: "currentChapterMessages",
+              icon: "MessageSquare",
+              title: "Current Chapter Chat History",
+              description: "Visible messages from the active chapter.",
+              defaultChecked: true,
+            },
+          ]}
+          onSuggestAiTags={async ({
+            providerId,
+            currentTags,
+            guidance,
+            selectedContext,
+            signal,
+          }) => {
+            const res = await suggestPlaythroughTags(
+              playthrough.id,
+              {
+                providerId,
+                currentTags,
+                libraryTags: effectiveLibraryTags,
+                guidance,
+                includeWorldState: selectedContext.worldState ?? true,
+                includeCastAndPersona: selectedContext.castAndPersona ?? true,
+                includeChaptersAndTimeline:
+                  selectedContext.chaptersAndTimeline ?? true,
+                includeCurrentChapterMessages:
+                  selectedContext.currentChapterMessages ?? true,
+              },
+              signal,
+            );
+            return res.tags;
+          }}
+          onSave={(nextTags) => {
+            void handleSaveTags(nextTags);
+          }}
+          onClose={() => {
+            if (!tagsSaving) {
+              setTagsModalOpen(false);
+              setTagsError(null);
+            }
+          }}
+        />
+      ) : null}
 
       {editing ? (
         <ConfirmModal
@@ -208,7 +503,13 @@ export function ScenePanel({
           onCancel={() => setEditing(null)}
           maxWidth={460}
         >
-          <div className="modal-form-fields">
+          <Stack
+            direction="column"
+            align="stretch"
+            gap="sm"
+            fullWidth
+            className="modal-form-fields"
+          >
             <TextInput
               label="Name / Status"
               value={editing.name}
@@ -225,7 +526,7 @@ export function ScenePanel({
               rows={3}
               disabled={actionLoading}
             />
-          </div>
+          </Stack>
         </ConfirmModal>
       ) : null}
 
@@ -256,7 +557,13 @@ export function ScenePanel({
           onCancel={() => setIsAdding(false)}
           maxWidth={460}
         >
-          <div className="modal-form-fields">
+          <Stack
+            direction="column"
+            align="stretch"
+            gap="sm"
+            fullWidth
+            className="modal-form-fields"
+          >
             <TextInput
               label="Name / Status"
               value={addName}
@@ -273,7 +580,7 @@ export function ScenePanel({
               disabled={actionLoading}
               placeholder="What this means for the world..."
             />
-          </div>
+          </Stack>
         </ConfirmModal>
       ) : null}
     </aside>

@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 import {
   checkImageRequestBody,
   formatImageRequestBody,
+  updateImageRequestField,
+  updateImageRequestFields,
 } from "../src/client/utils/imageRequestBody";
 
 describe("checkImageRequestBody", () => {
@@ -62,5 +64,37 @@ describe("formatImageRequestBody", () => {
     const check = checkImageRequestBody(formatted);
     expect(check.ok).toBe(true);
     if (check.ok) expect(check.value).toEqual({ model: "flux-dev", seed: 3 });
+  });
+});
+
+describe("updateImageRequestField / updateImageRequestFields", () => {
+  it("updates top-level fields while preserving unknown dialect keys untouched", () => {
+    const original = JSON.stringify({
+      prompt: "old prompt",
+      negative_prompt: "blurry",
+      steps: 28,
+      alwayson_scripts: { "Forge Couple": { args: [true] } },
+    });
+    const updated = updateImageRequestField(original, "prompt", "new prompt");
+    expect(JSON.parse(updated)).toEqual({
+      prompt: "new prompt",
+      negative_prompt: "blurry",
+      steps: 28,
+      alwayson_scripts: { "Forge Couple": { args: [true] } },
+    });
+  });
+
+  it("removes a key when updated with undefined and leaves invalid JSON untouched", () => {
+    const withSeed = '{"prompt":"tags","seed":42}';
+    const withoutSeed = updateImageRequestFields(withSeed, {
+      seed: undefined,
+      steps: 30,
+    });
+    expect(JSON.parse(withoutSeed)).toEqual({ prompt: "tags", steps: 30 });
+    expect("seed" in JSON.parse(withoutSeed)).toBe(false);
+
+    expect(updateImageRequestField("not valid json", "prompt", "x")).toBe(
+      "not valid json",
+    );
   });
 });

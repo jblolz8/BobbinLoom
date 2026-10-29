@@ -54,6 +54,8 @@ export type ImagePromptModalProps = {
    *  phase. Rendered while the re-run runs, so a slow provider looks slow
    *  instead of frozen. */
   promptElapsedMs?: number | null;
+  /** Completed duration of the text call that wrote this prompt draft. */
+  promptDurationMs?: number;
   /** What the dry run reported giving the prompt writer: how many messages of
    *  history it actually carried, and which perspective the instruction was read
    *  in. Diagnostic — it answers "why does this prompt look like that?" before the
@@ -79,6 +81,7 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
     generating,
     rerunning,
     promptElapsedMs = null,
+    promptDurationMs,
     context,
     apiStyle,
     onGenerate,
@@ -140,12 +143,18 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
 
       <Modal.Body>
         <Modal.Content>
-          <Stack gap="md">
+          <Stack direction="column" align="stretch" gap="md" fullWidth>
             {/* Advisory, never blocking: the text below is editable and still
                 Generates. Surfaced here so a refusal or a key-less JSON answer is
                 seen BEFORE the image call is paid for. */}
             {warnings.length > 0 ? (
-              <Stack gap="xs" role="status">
+              <Stack
+                direction="column"
+                align="stretch"
+                gap="xs"
+                fullWidth
+                role="status"
+              >
                 {warnings.map((warning) => (
                   <StatusMessage key={warning} variant="banner" tone="warn">
                     {warning}
@@ -175,8 +184,8 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
             {/* Prompt-length estimate, a1111 only. Advisory: it changes nothing
                 about what is sent — the text below is posted verbatim. */}
             {estimate ? (
-              <Card padding="sm" role="status">
-                <Stack gap="xs">
+              <Card padding="sm" role="status" fullWidth>
+                <Stack direction="column" align="stretch" gap="xs" fullWidth>
                   <Stack direction="row" align="center" gap="xs">
                     <Icon name="Ruler" size={13} className="ds-icon-accent" />
                     <Text as="span" size="xs" tone="secondary">
@@ -222,14 +231,25 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
               </Text>
             ) : null}
 
-            {context ? (
+            {context || promptDurationMs !== undefined ? (
               <Text size="xs" tone="muted">
-                {context.historyMessages > 0
-                  ? `Context: ${context.historyMessages} previous message${context.historyMessages === 1 ? "" : "s"}`
-                  : "Context: this message only"}
-                {context.instructionMode === "scene"
-                  ? " · Scene instruction (third-person)"
-                  : " · POV instruction"}
+                {[
+                  promptDurationMs !== undefined
+                    ? `Prompt written in ${formatDuration(promptDurationMs)}`
+                    : null,
+                  context
+                    ? context.historyMessages > 0
+                      ? `Context: ${context.historyMessages} previous message${context.historyMessages === 1 ? "" : "s"}`
+                      : "Context: this message only"
+                    : null,
+                  context
+                    ? context.instructionMode === "scene"
+                      ? "Scene instruction (third-person)"
+                      : "POV instruction"
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               </Text>
             ) : null}
           </Stack>
@@ -272,6 +292,16 @@ export function ImagePromptModal(props: ImagePromptModalProps) {
           {rerunning && promptElapsedMs !== null ? (
             <Text as="span" size="xs" tone="muted" mono>
               {formatDuration(promptElapsedMs)}
+            </Text>
+          ) : !rerunning && promptDurationMs !== undefined ? (
+            <Text
+              as="span"
+              size="xs"
+              tone="muted"
+              mono
+              title="Time spent by the text model writing this image prompt"
+            >
+              prompt {formatDuration(promptDurationMs)}
             </Text>
           ) : null}
         </Stack>

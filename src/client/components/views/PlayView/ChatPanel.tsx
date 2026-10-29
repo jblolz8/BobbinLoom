@@ -586,6 +586,7 @@ export function ChatPanel(props: ChatPanelProps) {
           onRerun={() => onImagePromptRerun?.()}
           onClose={() => onImagePromptClose?.()}
           promptElapsedMs={promptElapsedMs}
+          promptDurationMs={imagePromptRequest.promptDurationMs}
         />
       ) : null}
 

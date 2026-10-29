@@ -40,3 +40,33 @@ export function checkImageRequestBody(text: string): ImageRequestBodyCheck {
   }
   return { ok: true, value: parsed as Record<string, unknown> };
 }
+
+/** Update one or more top-level keys on a JSON request body string while
+ *  preserving every other key untouched. Setting a key to `undefined` removes
+ *  it from the object. Returns the original string unchanged when it does not
+ *  currently parse as a JSON object. */
+export function updateImageRequestFields(
+  bodyText: string,
+  updates: Record<string, unknown>,
+): string {
+  const check = checkImageRequestBody(bodyText);
+  if (!check.ok) return bodyText;
+  const next: Record<string, unknown> = { ...check.value };
+  for (const [key, val] of Object.entries(updates)) {
+    if (val === undefined) {
+      delete next[key];
+    } else {
+      next[key] = val;
+    }
+  }
+  return JSON.stringify(next, null, 2);
+}
+
+/** Convenience wrapper to update a single top-level key on a JSON request body. */
+export function updateImageRequestField(
+  bodyText: string,
+  key: string,
+  value: unknown,
+): string {
+  return updateImageRequestFields(bodyText, { [key]: value });
+}

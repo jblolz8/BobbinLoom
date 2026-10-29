@@ -362,7 +362,13 @@ export function GeneratingResponse({
   );
 }
 
-function ImageRequestDisclosure({ request }: { request: string }) {
+function ImageRequestDisclosure({
+  request,
+  durationMs,
+}: {
+  request: string;
+  durationMs?: number;
+}) {
   const formatted = useMemo(() => {
     try {
       return JSON.stringify(JSON.parse(request), null, 2);
@@ -371,12 +377,14 @@ function ImageRequestDisclosure({ request }: { request: string }) {
     }
   }, [request]);
 
+  const title = `image request${durationMs ? ` · ${formatDuration(durationMs)}` : ""}`;
+
   return (
     <Accordion
       variant="ghost"
       size="sm"
       monoTitle
-      title="request"
+      title={title}
       className="message-image-request"
     >
       <CodeBlock
@@ -767,7 +775,10 @@ export function ChatMessageCard({
                     ) : null}
 
                     {img.request ? (
-                      <ImageRequestDisclosure request={img.request} />
+                      <ImageRequestDisclosure
+                        request={img.request}
+                        durationMs={img.durationMs}
+                      />
                     ) : null}
                     {img.promptRequest ? (
                       <ImagePromptCallDisclosure

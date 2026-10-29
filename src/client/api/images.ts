@@ -32,6 +32,11 @@ export type ImagePromptPreview = {
    *  as a reference. */
   writerPrompt?: string;
   writerNegative?: string;
+  /** Raw request/response bodies of the prompt-writing side call, echoed back
+   *  on the generate request so the stored ref can show the `prompt call`
+   *  disclosure even when the prompt was written during the preview step. */
+  promptRequest?: string;
+  promptResponse?: string;
   /** What the prompt writer was actually given, for the modal's context line. */
   context?: { historyMessages: number; instructionMode: ImageInstructionMode };
   /** Advisory notes from the prompt-writing call — a suspected refusal used
@@ -56,6 +61,10 @@ export type GenerateMessageImageOptions = {
    *  reason — this request runs no text call, so the ref would otherwise lose it. */
   writerPrompt?: string;
   writerNegative?: string;
+  /** The dry run's raw prompt-call request and response bodies, echoed back so
+   *  the stored ref retains the `prompt call` disclosure on the reviewed path. */
+  promptRequest?: string;
+  promptResponse?: string;
   /** The RE-SEND path: a request body (from an existing image's `request`, or a
    *  hand-edited version of it) to send verbatim. The server then makes no text
    *  call and applies no clamping. Mutually exclusive with the overrides above —
@@ -153,6 +162,10 @@ export function generateMessageImage(
   if (opts.writerPrompt !== undefined) body.writerPrompt = opts.writerPrompt;
   if (opts.writerNegative !== undefined)
     body.writerNegative = opts.writerNegative;
+  if (opts.promptRequest !== undefined)
+    body.promptRequest = opts.promptRequest;
+  if (opts.promptResponse !== undefined)
+    body.promptResponse = opts.promptResponse;
   if (opts.rawRequest !== undefined) body.rawRequest = opts.rawRequest;
   if (opts.replaceFile !== undefined) body.replaceFile = opts.replaceFile;
 

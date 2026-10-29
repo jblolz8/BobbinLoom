@@ -454,6 +454,10 @@ export default function App() {
           openImageRequestEditor={playthroughHook.openImageRequestEditor}
           closeImageRequestEditor={playthroughHook.closeImageRequestEditor}
           saveImageRequestBody={playthroughHook.saveImageRequestBody}
+          resendEditedImageRequest={playthroughHook.resendEditedImageRequest}
+          generateNewFromImageRequest={
+            playthroughHook.generateNewFromImageRequest
+          }
           imageSaving={playthroughHook.imageSaving}
           alwaysDiscardOldImage={playthroughHook.alwaysDiscardOldImage}
           setAlwaysDiscardOldImage={playthroughHook.setAlwaysDiscardOldImage}

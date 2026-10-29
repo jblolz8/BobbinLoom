@@ -45,10 +45,14 @@ export type CaptionImage = {
  * unlabelled render time.
  */
 export function imageCaption(image: CaptionImage): string {
+  const hasBoth = Boolean(image.promptDurationMs && image.durationMs);
   const render = image.durationMs
     ? image.promptDurationMs
       ? `render ${formatDuration(image.durationMs)}`
       : formatDuration(image.durationMs)
+    : "";
+  const total = hasBoth
+    ? `total ${formatDuration(image.promptDurationMs! + image.durationMs!)}`
     : "";
   return [
     shortModelName(image.model),
@@ -56,6 +60,7 @@ export function imageCaption(image: CaptionImage): string {
       ? `prompt ${formatDuration(image.promptDurationMs)}`
       : "",
     render,
+    total,
     image.seed ? `seed ${image.seed}` : "",
   ]
     .filter(Boolean)

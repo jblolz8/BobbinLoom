@@ -4,6 +4,7 @@ import type {
   ChatMessage,
   ImageApiStyle,
   ImageInstructionMode,
+  MessageImage,
   Playthrough,
 } from "../../schemas";
 import {
@@ -100,6 +101,11 @@ export type ImageGenerationOverrides = {
   promptOverride?: string;
   negativeOverride?: string;
   imageProviderId?: string;
+  promptDurationMs?: number;
+  writerPrompt?: string;
+  writerNegative?: string;
+  promptRequest?: string;
+  promptResponse?: string;
   /** The RE-SEND path: a request body to send verbatim. The server runs no text
    *  call and applies no clamping, and the body's own fields (model, seed, size,
    *  the checkpoint) are what the provider gets — the connection supplies only
@@ -131,6 +137,8 @@ export type RetryImageTarget = {
 export type ImageRequestEditorState = {
   message: ChatMessage;
   file: string;
+  /** The image metadata for the preview header inside the request editor. */
+  image?: MessageImage;
   /** The stored `request`, pretty-printed — the seed, and what Reset restores. */
   body: string;
   /** The connection the re-send will use — the one this image was made with, not
@@ -153,6 +161,11 @@ export type ImagePromptRequest = {
    *  where the generate request makes no text call of its own. */
   writerPrompt?: string;
   writerNegative?: string;
+  /** Raw request/response bodies of the prompt-writing side call, echoed back
+   *  on the generate request so the stored ref retains the `prompt call`
+   *  disclosure even when the prompt was written during the preview step. */
+  promptRequest?: string;
+  promptResponse?: string;
   /** What the writer was given for THIS draft (history window + perspective),
    *  straight from the dry run's own report. */
   context?: { historyMessages: number; instructionMode: ImageInstructionMode };
@@ -668,10 +681,10 @@ export function usePlaythrough() {
       imageAbortRef.current
     )
       return;
-    const reviewing =
-      imagePromptPreview &&
-      !hasPromptOverrides(overrides) &&
-      !hasRawRequest(overrides);
+    const needsPromptCall =
+      !hasPromptOverrides(overrides) && !hasRawRequest(overrides);
+    const priorPromptRequest =
+      imagePromptRequest?.message.id === message.id ? imagePromptRequest : null;
     // Accepting the review modal hands the prompt straight to the renderer, and
     // the message itself already shows the progress bar and the Cancel control —
     // so the modal has nothing left to say and closes now, rather than sitting
@@ -699,7 +712,9 @@ export function usePlaythrough() {
       return;
     }
 
-    if (reviewing) {
+    let effectiveOverrides: ImageGenerationOverrides | undefined = overrides;
+
+    if (needsPromptCall) {
       setImagePreviewMessageId(message.id);
       setImagePromptStartedAt(performance.now());
       try {
@@ -709,19 +724,47 @@ export function usePlaythrough() {
           overrides?.imageProviderId,
           controller.signal,
         );
-        // A preview the user cancelled must not pop the modal open again.
-        if (controller.signal.aborted) return;
-        setImagePromptRequest({
-          message,
-          prompt: preview.prompt,
-          negativePrompt: preview.negativePrompt,
-          warnings: preview.warnings,
-          apiStyle: connection?.apiStyle,
+        // A preview the user cancelled must not pop the modal open or start a render.
+        if (controller.signal.aborted) {
+          setImagePreviewMessageId(null);
+          setImagePromptStartedAt(null);
+          imageAbortRef.current = null;
+          return;
+        }
+        if (imagePromptPreview) {
+          setImagePromptRequest({
+            message,
+            prompt: preview.prompt,
+            negativePrompt: preview.negativePrompt,
+            warnings: preview.warnings,
+            apiStyle: connection?.apiStyle,
+            promptDurationMs: preview.promptDurationMs,
+            writerPrompt: preview.writerPrompt,
+            writerNegative: preview.writerNegative,
+            promptRequest: preview.promptRequest,
+            promptResponse: preview.promptResponse,
+            context: preview.context,
+          });
+          setImagePreviewMessageId(null);
+          setImagePromptStartedAt(null);
+          imageAbortRef.current = null;
+          return;
+        }
+        // Preview OFF: transition directly from the text phase ("Writing image
+        // prompt…") to the render phase ("Generating image…") so the live timer
+        // resets for the actual image render and the server skips a second text call.
+        effectiveOverrides = {
+          ...overrides,
+          promptOverride: preview.prompt,
+          negativeOverride: preview.negativePrompt,
           promptDurationMs: preview.promptDurationMs,
           writerPrompt: preview.writerPrompt,
           writerNegative: preview.writerNegative,
-          context: preview.context,
-        });
+          promptRequest: preview.promptRequest,
+          promptResponse: preview.promptResponse,
+        };
+        setImagePreviewMessageId(null);
+        setImagePromptStartedAt(null);
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") {
           setCancelledNotice("Image prompt cancelled.");
@@ -732,39 +775,41 @@ export function usePlaythrough() {
             "Image generation failed — nothing was changed.",
           );
         }
-      } finally {
         setImagePreviewMessageId(null);
         setImagePromptStartedAt(null);
         imageAbortRef.current = null;
+        return;
       }
-      return;
     }
 
     setImageGeneratingId(message.id);
     setImageGeneratingStartedAt(performance.now());
     // Live progress is a1111-only: this is a no-op for every other dialect.
     startImageProgress(connection, controller.signal);
+    const usePriorPrompt =
+      hasPromptOverrides(effectiveOverrides) && priorPromptRequest !== null;
     try {
       const res = await generateMessageImage(playthrough.id, message.id, {
-        ...overrides,
-        // The reviewed path: the prompt was written by the dry run, so THIS
-        // request makes no text call and can measure nothing — hand the number
-        // the modal already showed back so the stored ref can report it.
+        ...effectiveOverrides,
+        // The reviewed / two-phase path: the prompt was written by the dry run,
+        // so THIS request makes no text call and can measure nothing — hand the
+        // measured time, writer answer, and prompt-call provenance back so the
+        // stored ref can report both halves accurately.
         promptDurationMs:
-          overrides && imagePromptRequest?.message.id === message.id
-            ? imagePromptRequest.promptDurationMs
-            : undefined,
-        // The writer's own answer, echoed for the same reason as the measured time:
-        // this request makes no text call, so it can only come from the dry run that
-        // wrote it — and without it the ref cannot serve as a later reference.
+          effectiveOverrides?.promptDurationMs ??
+          (usePriorPrompt ? priorPromptRequest.promptDurationMs : undefined),
         writerPrompt:
-          overrides && imagePromptRequest?.message.id === message.id
-            ? imagePromptRequest.writerPrompt
-            : undefined,
+          effectiveOverrides?.writerPrompt ??
+          (usePriorPrompt ? priorPromptRequest.writerPrompt : undefined),
         writerNegative:
-          overrides && imagePromptRequest?.message.id === message.id
-            ? imagePromptRequest.writerNegative
-            : undefined,
+          effectiveOverrides?.writerNegative ??
+          (usePriorPrompt ? priorPromptRequest.writerNegative : undefined),
+        promptRequest:
+          effectiveOverrides?.promptRequest ??
+          (usePriorPrompt ? priorPromptRequest.promptRequest : undefined),
+        promptResponse:
+          effectiveOverrides?.promptResponse ??
+          (usePriorPrompt ? priorPromptRequest.promptResponse : undefined),
         signal: controller.signal,
       });
       // The response carries the authoritative record — set it exactly like
@@ -916,6 +961,8 @@ export function usePlaythrough() {
         promptDurationMs: preview.promptDurationMs,
         writerPrompt: preview.writerPrompt,
         writerNegative: preview.writerNegative,
+        promptRequest: preview.promptRequest,
+        promptResponse: preview.promptResponse,
         context: preview.context,
       });
     } catch (e) {
@@ -1059,6 +1106,7 @@ export function usePlaythrough() {
     setImageRequestEditor({
       message,
       file: image.file,
+      image,
       body: formatImageRequestBody(image.request),
       connection: connection
         ? {
@@ -1134,6 +1182,76 @@ export function usePlaythrough() {
     } finally {
       setImageSaving(false);
     }
+  }
+
+  /**
+   * Save the edited request body AND immediately trigger the replace/re-send
+   * workflow from inside the editor modal.
+   */
+  async function resendEditedImageRequest(
+    body: string,
+  ): Promise<string | null> {
+    const editor = imageRequestEditor;
+    if (!editor || !playthrough || imageActionBusy()) return null;
+    const check = checkImageRequestBody(body);
+    if (!check.ok) return check.error;
+    const serialized = JSON.stringify(check.value);
+    setImageSaving(true);
+    setCancelledNotice(null);
+    setFailedNotice(null);
+    let updatedMessage = editor.message;
+    try {
+      const res = await saveMessageImageRequest(
+        playthrough.id,
+        editor.message.id,
+        editor.file,
+        serialized,
+      );
+      setPlaythrough(res.playthrough);
+      updatedMessage =
+        res.playthrough.messages.find((m) => m.id === editor.message.id) ??
+        editor.message;
+      setImageRequestEditor(null);
+    } catch (error) {
+      setImageSaving(false);
+      return error instanceof Error ? error.message : String(error);
+    }
+    setImageSaving(false);
+
+    if (alwaysDiscardOldImage) {
+      void runImageRetry(updatedMessage, editor.file, serialized);
+      return null;
+    }
+    setRetryImageTarget({
+      message: updatedMessage,
+      file: editor.file,
+      body: serialized,
+      prompt:
+        typeof check.value.prompt === "string"
+          ? check.value.prompt
+          : (editor.image?.prompt ?? ""),
+    });
+    return null;
+  }
+
+  /**
+   * Send the edited request body to generate a NEW image variant alongside the
+   * existing image (leaves the existing image and its stored request untouched).
+   */
+  async function generateNewFromImageRequest(
+    body: string,
+  ): Promise<string | null> {
+    const editor = imageRequestEditor;
+    if (!editor || !playthrough || imageActionBusy()) return null;
+    const check = checkImageRequestBody(body);
+    if (!check.ok) return check.error;
+    const serialized = JSON.stringify(check.value);
+    setImageRequestEditor(null);
+    void handleGenerateImage(editor.message, {
+      rawRequest: serialized,
+      imageProviderId: editor.image?.providerId || undefined,
+    });
+    return null;
   }
 
   function startEdit(message: ChatMessage) {
@@ -1507,6 +1625,8 @@ export function usePlaythrough() {
     openImageRequestEditor,
     closeImageRequestEditor,
     saveImageRequestBody,
+    resendEditedImageRequest,
+    generateNewFromImageRequest,
     imageRequestEditor,
     imageSaving,
     startEdit,
