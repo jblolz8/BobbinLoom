@@ -1,4 +1,7 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, it, expect } from "vitest";
+import { ConvertToBLModal } from "../src/client/components/library/editor/character/ConvertToBLModal";
 import { computeLineDiff, computeTwoPaneDiff } from "../src/client/engine/diff";
 
 describe("computeLineDiff", () => {
@@ -98,5 +101,60 @@ describe("computeTwoPaneDiff", () => {
     expect(
       rows.every((r) => r.right === null && r.left?.type === "removed"),
     ).toBe(true);
+  });
+});
+
+describe("ConvertToBLModal mobile responsiveness", () => {
+  it("renders responsive header actions, mobile diff mode tabs, and collapsible conversion settings", () => {
+    const preConvertHtml = renderToStaticMarkup(
+      createElement(ConvertToBLModal, {
+        title: "Convert to BL Format",
+        characterName: "Seraphina",
+        kind: "convert",
+        oldLabel: "Original CCv2",
+        newLabel: "Generated BL",
+        oldContent: "Name: Seraphina",
+        newContent: "",
+        onAccept: () => {},
+        onRetry: () => {},
+        onClose: () => {},
+        formatOptions: [{ id: "default", name: "Default" }],
+        selectedFormatId: "default",
+        onFormatChange: () => {},
+        alwaysConvertImmediately: false,
+        onToggleAlwaysConvertImmediately: () => {},
+      }),
+    );
+
+    expect(preConvertHtml).toContain("base-modal--fullscreen-mobile");
+    expect(preConvertHtml).toContain("base-stack--hide-below-sm");
+    expect(preConvertHtml).toContain("base-stack--show-below-sm");
+    expect(preConvertHtml).toContain("base-btn--collapse-sm");
+    expect(preConvertHtml).toContain("base-accordion");
+    expect(preConvertHtml).toContain("Conversion View Mode");
+    expect(preConvertHtml).toContain("Options");
+
+    const draftHtml = renderToStaticMarkup(
+      createElement(ConvertToBLModal, {
+        title: "Convert to BL Format",
+        characterName: "Seraphina",
+        kind: "convert",
+        oldLabel: "Original CCv2",
+        newLabel: "Generated BL",
+        oldContent: "Name: Seraphina",
+        newContent: "# Seraphina\nRole: Knight",
+        onAccept: () => {},
+        onRetry: () => {},
+        onClose: () => {},
+        formatOptions: [{ id: "default", name: "Default" }],
+        selectedFormatId: "default",
+        onFormatChange: () => {},
+      }),
+    );
+
+    // When a draft is present, options start collapsed with truncating summary badges
+    expect(draftHtml).toContain("Format: Default");
+    expect(draftHtml).toContain("base-badge--truncate");
+    expect(draftHtml).toContain("Accept &amp; Apply");
   });
 });

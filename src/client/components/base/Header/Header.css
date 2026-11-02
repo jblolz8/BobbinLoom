@@ -137,6 +137,25 @@
   line-height: 1.4;
 }
 
+@media (max-width: 680px) {
+  .base-header--modal {
+    margin-bottom: 0.2rem;
+  }
+
+  .base-header--modal .base-header__row {
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .base-header--modal .base-header__title {
+    font-size: 0.95rem;
+  }
+
+  .base-header--modal .base-header__subtitle {
+    font-size: 0.78rem;
+  }
+}
+
 /* ── Variant: Panel Header (.base-header--panel) ── */
 .base-header--panel {
   display: flex;
