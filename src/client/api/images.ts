@@ -15,7 +15,10 @@ export type { MessageImage };
  * the browser can cache it forever and a branch that copies the reference does
  * not copy the bytes.
  */
-export function buildImageUrl(file: string): string {
+export function buildImageUrl(file: string, playthroughId?: string): string {
+  if (playthroughId) {
+    return `/api/images/${file}?playthroughId=${encodeURIComponent(playthroughId)}`;
+  }
   return `/api/images/${file}`;
 }
 

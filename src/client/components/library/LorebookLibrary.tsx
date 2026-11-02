@@ -36,8 +36,8 @@ export type LorebookSortDir = "asc" | "desc";
 export type LorebookLibraryProps = {
   /** `page` renders inline in the Home workspace; `dialog` renders inside a Modal shell. */
   variant?: LorebookLibraryVariant;
-  /** Legacy alias for `variant="dialog"`. */
-  isModal?: boolean;
+  /** Controls visibility when `variant === "dialog"`. Defaults to `true`. */
+  open?: boolean;
   onClose?: () => void;
   onLorebooksChanged?: () => void;
 };
@@ -66,14 +66,18 @@ export function downloadLorebookJson(lorebook: LorebookFile): void {
   URL.revokeObjectURL(url);
 }
 
-export function LorebookLibrary({
-  variant,
-  isModal,
+export function LorebookLibrary(props: LorebookLibraryProps) {
+  const { variant = "page", open = true } = props;
+  if (variant === "dialog" && !open) return null;
+  return <LorebookLibraryInner {...props} />;
+}
+
+function LorebookLibraryInner({
+  variant = "page",
   onClose,
   onLorebooksChanged,
 }: LorebookLibraryProps) {
-  const resolvedVariant: LorebookLibraryVariant =
-    variant ?? (isModal ? "dialog" : "page");
+  const resolvedVariant: LorebookLibraryVariant = variant;
 
   const [summaries, setSummaries] = useState<LorebookSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);

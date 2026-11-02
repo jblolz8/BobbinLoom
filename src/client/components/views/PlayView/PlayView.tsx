@@ -23,17 +23,20 @@ import type {
   ImageRequestEditorState,
   RetryImageTarget,
 } from "../../../hooks/usePlaythrough";
-import { CheckboxRow, Stack, StatusMessage, TextInput } from "../../base";
+import {
+  Card,
+  CheckboxRow,
+  Stack,
+  StatusMessage,
+  Text,
+  TextInput,
+} from "../../base";
 import {
   ConfirmModal,
   PlayWorkspace,
   RevertConfirmModal,
 } from "../../common";
 import { PlaythroughLibrary } from "../../library/PlaythroughLibrary";
-import { CharacterManager } from "../../modals/CharacterManager";
-import { LorebookManager } from "../../modals/LorebookManager";
-import { PersonaManager } from "../../modals/PersonaManager";
-import { SettingsModal } from "../../modals/SettingsModal";
 import { TimelineModal } from "../../modals/TimelineModal";
 import { ChatPanel } from "./ChatPanel";
 import { ImageRequestBodyModal } from "./ImageRequestBodyModal";
@@ -114,6 +117,7 @@ export type PlayViewProps = {
   handleDismissNotice: () => void;
   handleDismissFailedNotice?: () => void;
   openPersonaManager: () => void;
+  openCharacterManager: (editingId?: string) => void;
   handlePersonasChanged: (refreshed: Persona[]) => void;
   handleStartNewWithSameScenario: (
     scenarioDescription: string,
@@ -127,14 +131,7 @@ export type PlayViewProps = {
   moreMenuOpen: boolean;
   setMoreMenuOpen: React.Dispatch<React.SetStateAction<boolean>>;
   moreMenuRef: React.RefObject<HTMLDivElement>;
-  personaManagerOpen: boolean;
-  setPersonaManagerOpen: (open: boolean) => void;
-  characterManagerOpen: boolean;
-  setCharacterManagerOpen: (open: boolean) => void;
-  lorebookManagerOpen: boolean;
-  setLorebookManagerOpen: (open: boolean) => void;
   settingsOpen: boolean;
-  setSettingsOpen: (open: boolean) => void;
   saveLoadOpen: boolean;
   setSaveLoadOpen: (open: boolean) => void;
   // ── Generated images (owned by usePlaythrough in App, passed straight down) ──
@@ -186,22 +183,15 @@ export function PlayView(props: PlayViewProps) {
     playthrough,
     setPlaythrough,
     onGoHome,
+    onOpenSetup,
     choicesEnabled,
-    setChoicesEnabled,
     showDebug,
-    setShowDebug,
     showContextUsage,
-    setShowContextUsage,
     showGenerationTime = true,
-    setShowGenerationTime,
     showMessageTimestamps = true,
-    setShowMessageTimestamps,
     showModelName = true,
-    setShowModelName,
     showMessageNumbers = true,
-    setShowMessageNumbers,
     autoScrollBehavior = "start",
-    setAutoScrollBehavior,
     choices,
     input,
     setInput,
@@ -247,28 +237,17 @@ export function PlayView(props: PlayViewProps) {
     handleWorldStateAction,
     handleDismissNotice,
     handleDismissFailedNotice,
-    handlePersonasChanged,
+    openCharacterManager,
     handleStartNewWithSameScenario,
     isMobile,
     mobileTab,
     setMobileTab,
-    personaManagerOpen,
-    setPersonaManagerOpen,
-    characterManagerOpen,
-    setCharacterManagerOpen,
-    lorebookManagerOpen,
-    setLorebookManagerOpen,
     settingsOpen,
-    setSettingsOpen,
     saveLoadOpen,
     setSaveLoadOpen,
-    imagePromptPreview = true,
-    setImagePromptPreview,
     imageGeneratingId = null,
     imagePreviewMessageId = null,
     imageDeletingId = null,
-    autoImageAfterTurn = false,
-    setAutoImageAfterTurn,
     imagePromptStartedAt = null,
     imageGeneratingStartedAt = null,
     imageProgress = null,
@@ -292,8 +271,6 @@ export function PlayView(props: PlayViewProps) {
     resendEditedImageRequest,
     generateNewFromImageRequest,
     imageSaving = false,
-    alwaysDiscardOldImage = false,
-    setAlwaysDiscardOldImage,
   } = props;
 
   const [paneSwipeEnabled, setPaneSwipeEnabled] = useState(true);
@@ -313,9 +290,6 @@ export function PlayView(props: PlayViewProps) {
   const [timelinesOpen, setTimelinesOpen] = useState(false);
   const [branchNameInput, setBranchNameInput] = useState("");
   const [branchAsStandalone, setBranchAsStandalone] = useState(false);
-  const [characterManagerEditingId, setCharacterManagerEditingId] = useState<
-    string | undefined
-  >(undefined);
 
   const [hasImageProvider, setHasImageProvider] = useState(false);
   const [imageConnection, setImageConnection] = useState<{
@@ -361,6 +335,19 @@ export function PlayView(props: PlayViewProps) {
   useEffect(() => {
     refreshImageCharacterLimit();
   }, [refreshImageCharacterLimit]);
+
+  useEffect(() => {
+    if (!settingsOpen) {
+      void refreshImageProvider();
+      refreshImageCharacterLimit();
+      refreshPaneSwipe();
+    }
+  }, [
+    settingsOpen,
+    refreshImageProvider,
+    refreshImageCharacterLimit,
+    refreshPaneSwipe,
+  ]);
 
   function handleCurrentDeleted(remainingIds: string[]) {
     if (remainingIds.length > 0) {
@@ -497,30 +484,30 @@ export function PlayView(props: PlayViewProps) {
           onStartNewWithSameScenario={(sd, pid, cids, name) =>
             handleStartNewWithSameScenario(sd, pid, cids, name)
           }
-          onOpenLibrary={(templateId) => {
-            setCharacterManagerEditingId(templateId);
-            setCharacterManagerOpen(true);
-          }}
+          onOpenLibrary={(templateId) => openCharacterManager(templateId)}
           onOpenTimelines={() => setTimelinesOpen(true)}
           actionLoading={actionLoading}
           {...paneProps}
         />
       )}
     >
-      {saveLoadOpen ? (
-        <PlaythroughLibrary
-          variant="dialog"
-          currentPlaythroughId={playthrough.id}
-          onOpen={(id) => {
-            void loadPlaythrough(id);
-            setSaveLoadOpen(false);
-          }}
-          onClose={() => setSaveLoadOpen(false)}
-          onCurrentDeleted={handleCurrentDeleted}
-          onCurrentRenamed={setPlaythrough}
-          onError={setError}
-        />
-      ) : null}
+      <PlaythroughLibrary
+        variant="dialog"
+        open={saveLoadOpen}
+        currentPlaythroughId={playthrough.id}
+        onOpen={(id) => {
+          void loadPlaythrough(id);
+          setSaveLoadOpen(false);
+        }}
+        onNewPlaythrough={() => {
+          setSaveLoadOpen(false);
+          onOpenSetup();
+        }}
+        onClose={() => setSaveLoadOpen(false)}
+        onCurrentDeleted={handleCurrentDeleted}
+        onCurrentRenamed={setPlaythrough}
+        onError={setError}
+      />
 
       {deleteImageTarget ? (
         <ConfirmModal
@@ -543,13 +530,15 @@ export function PlayView(props: PlayViewProps) {
           }}
           onCancel={() => setDeleteImageTarget(null)}
         >
-          <div className="delete-image-preview">
-            <img
-              src={buildImageUrl(deleteImageTarget.file)}
-              alt={deleteImageTarget.prompt.slice(0, 120)}
-              title={deleteImageTarget.prompt}
-            />
-          </div>
+          <Card variant="panel" padding="xs" fullWidth>
+            <Card.Cover aspect="square">
+              <img
+                src={buildImageUrl(deleteImageTarget.file, playthrough.id)}
+                alt={deleteImageTarget.prompt.slice(0, 120)}
+                title={deleteImageTarget.prompt}
+              />
+            </Card.Cover>
+          </Card>
         </ConfirmModal>
       ) : null}
 
@@ -596,21 +585,23 @@ export function PlayView(props: PlayViewProps) {
             cancelImageRetry?.();
           }}
         >
-          <div className="delete-image-preview">
-            <img
-              src={buildImageUrl(retryImageTarget.file)}
-              alt={retryImageTarget.prompt.slice(0, 120)}
-              title={retryImageTarget.prompt}
-            />
-          </div>
-          <div className="modal-form-fields">
+          <Stack direction="column" align="stretch" gap="sm" fullWidth>
+            <Card variant="panel" padding="xs" fullWidth>
+              <Card.Cover aspect="square">
+                <img
+                  src={buildImageUrl(retryImageTarget.file, playthrough.id)}
+                  alt={retryImageTarget.prompt.slice(0, 120)}
+                  title={retryImageTarget.prompt}
+                />
+              </Card.Cover>
+            </Card>
             <CheckboxRow
               checked={retryDiscardAlways}
               onChange={(e) => setRetryDiscardAlways(e.target.checked)}
               disabled={imageGeneratingId === retryImageTarget.message.id}
               title="Always discard old image"
             />
-          </div>
+          </Stack>
         </ConfirmModal>
       ) : null}
 
@@ -654,10 +645,19 @@ export function PlayView(props: PlayViewProps) {
           }}
           onCancel={() => setTruncateTarget(null)}
         >
-          <blockquote className="retry-preview">
-            {truncateTarget.content.slice(0, 200)}
-            {truncateTarget.content.length > 200 ? "…" : ""}
-          </blockquote>
+          <Card variant="panel" padding="sm" fullWidth>
+            <Text
+              as="p"
+              size="xs"
+              tone="secondary"
+              italic
+              leading="relaxed"
+              preWrap
+            >
+              {truncateTarget.content.slice(0, 200)}
+              {truncateTarget.content.length > 200 ? "…" : ""}
+            </Text>
+          </Card>
         </ConfirmModal>
       ) : null}
 
@@ -681,17 +681,20 @@ export function PlayView(props: PlayViewProps) {
             setBranchAsStandalone(false);
           }}
         >
-          <blockquote className="retry-preview">
-            {branchTarget.content.slice(0, 200)}
-            {branchTarget.content.length > 200 ? "…" : ""}
-          </blockquote>
-          <Stack
-            direction="column"
-            align="stretch"
-            gap="sm"
-            fullWidth
-            className="modal-form-fields"
-          >
+          <Stack direction="column" align="stretch" gap="sm" fullWidth>
+            <Card variant="panel" padding="sm" fullWidth>
+              <Text
+                as="p"
+                size="xs"
+                tone="secondary"
+                italic
+                leading="relaxed"
+                preWrap
+              >
+                {branchTarget.content.slice(0, 200)}
+                {branchTarget.content.length > 200 ? "…" : ""}
+              </Text>
+            </Card>
             <TextInput
               label="Branch Name (optional)"
               value={branchNameInput}
@@ -708,58 +711,6 @@ export function PlayView(props: PlayViewProps) {
           </Stack>
         </ConfirmModal>
       ) : null}
-
-      <SettingsModal
-        open={settingsOpen}
-        onClose={() => {
-          setSettingsOpen(false);
-          void refreshImageProvider();
-          refreshImageCharacterLimit();
-          refreshPaneSwipe();
-        }}
-        choicesEnabled={choicesEnabled}
-        setChoicesEnabled={setChoicesEnabled}
-        showDebug={showDebug}
-        setShowDebug={setShowDebug}
-        showContextUsage={showContextUsage}
-        setShowContextUsage={setShowContextUsage}
-        showGenerationTime={showGenerationTime}
-        setShowGenerationTime={setShowGenerationTime}
-        showMessageTimestamps={showMessageTimestamps}
-        setShowMessageTimestamps={setShowMessageTimestamps}
-        showModelName={showModelName}
-        setShowModelName={setShowModelName}
-        showMessageNumbers={showMessageNumbers}
-        setShowMessageNumbers={setShowMessageNumbers}
-        imagePromptPreview={imagePromptPreview}
-        setImagePromptPreview={setImagePromptPreview}
-        autoImageAfterTurn={autoImageAfterTurn}
-        setAutoImageAfterTurn={setAutoImageAfterTurn}
-        alwaysDiscardOldImage={alwaysDiscardOldImage}
-        setAlwaysDiscardOldImage={setAlwaysDiscardOldImage}
-        autoScrollBehavior={autoScrollBehavior}
-        setAutoScrollBehavior={setAutoScrollBehavior}
-      />
-
-      <PersonaManager
-        open={personaManagerOpen}
-        onClose={() => setPersonaManagerOpen(false)}
-        onPersonasChanged={handlePersonasChanged}
-      />
-
-      <CharacterManager
-        open={characterManagerOpen}
-        onClose={() => {
-          setCharacterManagerOpen(false);
-          setCharacterManagerEditingId(undefined);
-        }}
-        initialEditingId={characterManagerEditingId}
-      />
-
-      <LorebookManager
-        open={lorebookManagerOpen}
-        onClose={() => setLorebookManagerOpen(false)}
-      />
 
       <TimelineModal
         open={timelinesOpen}

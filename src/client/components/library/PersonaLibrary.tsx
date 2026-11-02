@@ -48,8 +48,8 @@ export type PersonaSortDir = "asc" | "desc";
 export type PersonaLibraryProps = {
   /** `page` renders inline in the Home workspace; `dialog` renders inside a Modal shell. */
   variant?: PersonaLibraryVariant;
-  /** Legacy alias for `variant="dialog"`. */
-  isModal?: boolean;
+  /** Controls visibility when `variant === "dialog"`. Defaults to `true`. */
+  open?: boolean;
   onClose?: () => void;
   onPersonasChanged?: (personas: Persona[]) => void;
 };
@@ -70,14 +70,18 @@ function formatClothingBadgeLabel(c: ClothingItem): string {
   return `${c.slot}: ${c.name}${c.state ? ` (${c.state})` : ""}`;
 }
 
-export function PersonaLibrary({
-  variant,
-  isModal,
+export function PersonaLibrary(props: PersonaLibraryProps) {
+  const { variant = "page", open = true } = props;
+  if (variant === "dialog" && !open) return null;
+  return <PersonaLibraryInner {...props} />;
+}
+
+function PersonaLibraryInner({
+  variant = "page",
   onClose,
   onPersonasChanged,
 }: PersonaLibraryProps) {
-  const resolvedVariant: PersonaLibraryVariant =
-    variant ?? (isModal ? "dialog" : "page");
+  const resolvedVariant: PersonaLibraryVariant = variant;
 
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [characterFormat, setCharacterFormat] = useState<

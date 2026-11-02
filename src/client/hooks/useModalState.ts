@@ -11,6 +11,9 @@ export type ModalType =
 export function useModalState() {
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [returnToSetup, setReturnToSetup] = useState(false);
+  const [characterEditingId, setCharacterEditingId] = useState<
+    string | undefined
+  >(undefined);
 
   function openSubModal(target: Exclude<ModalType, "setup" | null>) {
     setActiveModal((prev) => {
@@ -22,6 +25,7 @@ export function useModalState() {
   }
 
   function closeModal() {
+    setCharacterEditingId(undefined);
     setActiveModal((prev) => {
       if (prev !== "setup" && returnToSetup) {
         setReturnToSetup(false);
@@ -34,6 +38,7 @@ export function useModalState() {
 
   return {
     activeModal,
+    characterEditingId,
     settingsOpen: activeModal === "settings",
     personaManagerOpen: activeModal === "persona",
     characterManagerOpen: activeModal === "character",
@@ -41,7 +46,10 @@ export function useModalState() {
     setupOpen: activeModal === "setup",
     openSettings: () => openSubModal("settings"),
     openPersona: () => openSubModal("persona"),
-    openCharacter: () => openSubModal("character"),
+    openCharacter: (editingId?: string) => {
+      setCharacterEditingId(editingId);
+      openSubModal("character");
+    },
     openLorebook: () => openSubModal("lorebook"),
     openSetup: () => {
       setReturnToSetup(false);

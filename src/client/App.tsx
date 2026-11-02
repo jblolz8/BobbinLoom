@@ -28,9 +28,9 @@ import {
 } from "./components/views/CreateNewPlaythroughView";
 import { PlayView } from "./components/views/PlayView/PlayView";
 import { SettingsModal } from "./components/modals/SettingsModal";
-import { PersonaManager } from "./components/modals/PersonaManager";
-import { CharacterManager } from "./components/modals/CharacterManager";
-import { LorebookManager } from "./components/modals/LorebookManager";
+import { CharacterLibrary } from "./components/library/CharacterLibrary";
+import { LorebookLibrary } from "./components/library/LorebookLibrary";
+import { PersonaLibrary } from "./components/library/PersonaLibrary";
 import { AppHeader } from "./components/navigation/AppHeader";
 
 type AppView = "play" | "setup" | "home";
@@ -476,6 +476,7 @@ export default function App() {
             playthroughHook.setFailedNotice(null)
           }
           openPersonaManager={modalHook.openPersona}
+          openCharacterManager={modalHook.openCharacter}
           handlePersonasChanged={handlePersonasChanged}
           handleStartNewWithSameScenario={handleStartNewWithSameScenario}
           isMobile={responsiveHook.isMobile}
@@ -484,14 +485,7 @@ export default function App() {
           moreMenuOpen={responsiveHook.moreMenuOpen}
           setMoreMenuOpen={responsiveHook.setMoreMenuOpen}
           moreMenuRef={responsiveHook.moreMenuRef}
-          personaManagerOpen={modalHook.personaManagerOpen}
-          setPersonaManagerOpen={modalHook.setPersonaManagerOpen}
-          characterManagerOpen={modalHook.characterManagerOpen}
-          setCharacterManagerOpen={modalHook.setCharacterManagerOpen}
-          lorebookManagerOpen={modalHook.lorebookManagerOpen}
-          setLorebookManagerOpen={modalHook.setLorebookManagerOpen}
           settingsOpen={modalHook.settingsOpen}
-          setSettingsOpen={modalHook.setSettingsOpen}
           saveLoadOpen={saveLoadOpen}
           setSaveLoadOpen={setSaveLoadOpen}
         />
@@ -528,56 +522,59 @@ export default function App() {
         onOpenPersonaManager={modalHook.openPersona}
         onOpenLorebookManager={modalHook.openLorebook}
       />
-      {/* Generic (home / no-active-playthrough) manager modals. PlayView renders
-          its OWN copies of these four with playthrough-scoped props when a
-          playthrough is open — so mount these only on Home to avoid two stacked
-          copies sharing one useModalState() open flag. */}
-      {currentView === "home" ? (
-        <>
-          <SettingsModal
-            open={modalHook.settingsOpen}
-            onClose={modalHook.closeModal}
-            choicesEnabled={playthroughHook.choicesEnabled}
-            setChoicesEnabled={playthroughHook.setChoicesEnabled}
-            showDebug={playthroughHook.showDebug}
-            setShowDebug={playthroughHook.setShowDebug}
-            showContextUsage={playthroughHook.showContextUsage}
-            setShowContextUsage={playthroughHook.setShowContextUsage}
-            showGenerationTime={playthroughHook.showGenerationTime}
-            setShowGenerationTime={playthroughHook.setShowGenerationTime}
-            showMessageTimestamps={playthroughHook.showMessageTimestamps}
-            setShowMessageTimestamps={playthroughHook.setShowMessageTimestamps}
-            showModelName={playthroughHook.showModelName}
-            setShowModelName={playthroughHook.setShowModelName}
-            showMessageNumbers={playthroughHook.showMessageNumbers}
-            setShowMessageNumbers={playthroughHook.setShowMessageNumbers}
-            imagePromptPreview={playthroughHook.imagePromptPreview}
-            autoImageAfterTurn={playthroughHook.autoImageAfterTurn}
-            setAutoImageAfterTurn={playthroughHook.setAutoImageAfterTurn}
-            alwaysDiscardOldImage={playthroughHook.alwaysDiscardOldImage}
-            setAlwaysDiscardOldImage={playthroughHook.setAlwaysDiscardOldImage}
-            setImagePromptPreview={playthroughHook.setImagePromptPreview}
-            autoScrollBehavior={playthroughHook.autoScrollBehavior}
-            setAutoScrollBehavior={playthroughHook.setAutoScrollBehavior}
-          />
-          <PersonaManager
-            open={modalHook.personaManagerOpen}
-            onClose={modalHook.closeModal}
-            onPersonasChanged={handlePersonasChanged}
-          />
-          <CharacterManager
-            open={modalHook.characterManagerOpen}
-            onClose={modalHook.closeModal}
-          />
-          <LorebookManager
-            open={modalHook.lorebookManagerOpen}
-            onClose={() => {
-              void refreshLorebookLibraryPreservingSelection();
-              modalHook.closeModal();
-            }}
-          />
-        </>
-      ) : null}
+
+      <SettingsModal
+        open={modalHook.settingsOpen}
+        onClose={modalHook.closeModal}
+        choicesEnabled={playthroughHook.choicesEnabled}
+        setChoicesEnabled={playthroughHook.setChoicesEnabled}
+        showDebug={playthroughHook.showDebug}
+        setShowDebug={playthroughHook.setShowDebug}
+        showContextUsage={playthroughHook.showContextUsage}
+        setShowContextUsage={playthroughHook.setShowContextUsage}
+        showGenerationTime={playthroughHook.showGenerationTime}
+        setShowGenerationTime={playthroughHook.setShowGenerationTime}
+        showMessageTimestamps={playthroughHook.showMessageTimestamps}
+        setShowMessageTimestamps={playthroughHook.setShowMessageTimestamps}
+        showModelName={playthroughHook.showModelName}
+        setShowModelName={playthroughHook.setShowModelName}
+        showMessageNumbers={playthroughHook.showMessageNumbers}
+        setShowMessageNumbers={playthroughHook.setShowMessageNumbers}
+        imagePromptPreview={playthroughHook.imagePromptPreview}
+        autoImageAfterTurn={playthroughHook.autoImageAfterTurn}
+        setAutoImageAfterTurn={playthroughHook.setAutoImageAfterTurn}
+        alwaysDiscardOldImage={playthroughHook.alwaysDiscardOldImage}
+        setAlwaysDiscardOldImage={playthroughHook.setAlwaysDiscardOldImage}
+        setImagePromptPreview={playthroughHook.setImagePromptPreview}
+        autoScrollBehavior={playthroughHook.autoScrollBehavior}
+        setAutoScrollBehavior={playthroughHook.setAutoScrollBehavior}
+      />
+
+      <PersonaLibrary
+        variant="dialog"
+        open={modalHook.personaManagerOpen}
+        onClose={modalHook.closeModal}
+        onPersonasChanged={handlePersonasChanged}
+      />
+
+      <CharacterLibrary
+        variant="dialog"
+        open={modalHook.characterManagerOpen}
+        initialEditingId={modalHook.characterEditingId}
+        onClose={modalHook.closeModal}
+      />
+
+      <LorebookLibrary
+        variant="dialog"
+        open={modalHook.lorebookManagerOpen}
+        onClose={() => {
+          void refreshLorebookLibraryPreservingSelection();
+          modalHook.closeModal();
+        }}
+        onLorebooksChanged={() => {
+          void refreshLorebookLibraryPreservingSelection();
+        }}
+      />
 
       {/* Docs are reachable in every view: a workspace tab on Home, this dialog
           from inside a playthrough (mirroring how the nav tabs open their

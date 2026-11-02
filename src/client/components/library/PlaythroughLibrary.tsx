@@ -64,6 +64,8 @@ export type PlaythroughLibraryProps = {
   /** `page` renders inline in the workspace (the home screen); `dialog` renders the same shelf
    *  inside the modal shell, for switching stories from inside one (the play view). */
   variant: PlaythroughLibraryVariant;
+  /** Controls visibility when `variant === "dialog"`. Defaults to `true`. */
+  open?: boolean;
   /** The playthrough currently installed. Its card is badged, and deleting it switches the
    *  caller to another one instead of leaving a dead view. */
   currentPlaythroughId?: string;
@@ -125,6 +127,12 @@ function formatShortDate(iso: string): string {
  * reaches both, and the save/load list it replaces cannot drift from the home grid it duplicated.
  */
 export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
+  const { variant, open = true } = props;
+  if (variant === "dialog" && !open) return null;
+  return <PlaythroughLibraryInner {...props} />;
+}
+
+function PlaythroughLibraryInner(props: PlaythroughLibraryProps) {
   const {
     variant,
     currentPlaythroughId,
@@ -691,12 +699,12 @@ export function PlaythroughLibrary(props: PlaythroughLibraryProps) {
         onClose={() => onClose?.()}
         size="wide"
         fullScreenMobile
-        ariaLabel="Playthroughs"
+        ariaLabel="Playthrough Library"
       >
         <Header
           variant="section"
           icon="BookOpen"
-          title="Playthroughs"
+          title="Playthrough Library"
           subtitle="Open another story, filter by theme or setting tags, or manage this shelf."
           actions={
             <Stack direction="row" align="center" gap="sm">

@@ -90,7 +90,8 @@ import { sortTags, type TagTaxonomyConfig } from "../../../engine/tagTaxonomy";
 
 export type CharacterLibraryProps = {
   variant?: "page" | "dialog";
-  isModal?: boolean;
+  /** Controls visibility when `variant === "dialog"`. Defaults to `true`. */
+  open?: boolean;
   onClose?: () => void;
   initialEditingId?: string;
 };
@@ -112,14 +113,18 @@ function formatLibraryDate(isoOrStr?: string): string {
   }
 }
 
-export function CharacterLibrary({
-  variant,
-  isModal,
+export function CharacterLibrary(props: CharacterLibraryProps) {
+  const { variant = "page", open = true } = props;
+  if (variant === "dialog" && !open) return null;
+  return <CharacterLibraryInner {...props} />;
+}
+
+function CharacterLibraryInner({
+  variant = "page",
   onClose,
   initialEditingId,
 }: CharacterLibraryProps) {
-  const resolvedVariant: "page" | "dialog" =
-    variant ?? (isModal ? "dialog" : "page");
+  const resolvedVariant: "page" | "dialog" = variant;
   const [templates, setTemplates] = useState<CharacterTemplate[]>([]);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -1247,25 +1252,7 @@ export function CharacterLibrary({
   }
 
   const contentBody = (
-    <Stack
-      direction="column"
-      align="stretch"
-      gap="md"
-      fullWidth
-      className={resolvedVariant === "dialog" ? "is-modal" : ""}
-    >
-      {resolvedVariant === "dialog" ? (
-        <Stack direction="row" align="center">
-          <Badge
-            variant="outline"
-            size="sm"
-            title="Edits modify global templates used for new playthroughs"
-          >
-            🌐 Global Character Templates
-          </Badge>
-        </Stack>
-      ) : null}
-
+    <Stack direction="column" align="stretch" gap="md" fullWidth>
       {importing ? (
         <StatusMessage variant="banner" tone="neutral" icon="Upload" loading>
           Importing character card…
