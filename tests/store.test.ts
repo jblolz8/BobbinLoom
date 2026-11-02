@@ -13,12 +13,15 @@ import { afterEach, describe, expect, it } from "vitest";
 import { CharacterTemplateSchema } from "../src/schemas";
 import type { Playthrough } from "../src/schemas";
 import {
+  branchPlaythroughRecord,
   createCharacterTemplateRecord,
   createPersonaRecord,
   createPlaythroughFromSeedRecord,
   createPlaythroughRecord,
   deleteCharacterTemplateRecord,
   deletePersonaRecord,
+  deletePlaythroughRecord,
+  duplicatePlaythroughRecord,
   getCharacterTemplate,
   getPersona,
   getPersonaAvatarPath,
@@ -28,6 +31,8 @@ import {
   listPersonas,
   listPlaythroughRecords,
   listPlaythroughSummaries,
+  playthroughImagesDir,
+  playthroughPath,
   removeCharacterImportRecord,
   removePersonaPortraitAvatar,
   removePersonaProfileAvatar,
@@ -39,6 +44,7 @@ import {
   updatePersonaRecord,
   updatePlaythroughRecord,
 } from "../src/server/store";
+import { saveImageBytes } from "../src/server/imageStore";
 import type { ParsedCard } from "../src/server/characterCards/parseCard";
 
 let tempDirs: string[] = [];
@@ -501,7 +507,7 @@ describe("playthrough store — validate on write", () => {
 
     // The original good file is untouched — the invalid object was never written.
     const onDisk = JSON.parse(
-      readFileSync(join(dir, `${created.id}.json`), "utf8"),
+      readFileSync(playthroughPath(dir, created.id), "utf8"),
     );
     expect(onDisk.name).toBe("Valid Run");
   });
@@ -748,5 +754,153 @@ describe("resolveCast — CCv2 guard", () => {
       "char_nonexistent_xyz",
     ]);
     expect(Array.isArray(pt.characters)).toBe(true);
+  });
+});
+
+describe("playthrough store — folder-per-playthrough & image migration", () => {
+  it("migrates a legacy flat <id>.json and its referenced images into <id>/<id>.json and <id>/images/", () => {
+    const root = mkdtempSync(join(tmpdir(), "bobbinloom-pt-migrate-"));
+    tempDirs.push(root);
+    const dataDir = join(root, "playthroughs");
+    const legacyImagesDir = join(root, "images");
+    mkdirSync(dataDir, { recursive: true });
+    mkdirSync(legacyImagesDir, { recursive: true });
+
+    const { file } = saveImageBytes(
+      Buffer.from("legacy-image-bytes"),
+      "image/webp",
+      legacyImagesDir,
+    );
+
+    const created = createPlaythroughRecord(dataDir, "Migrated Run");
+    created.messages.push({
+      id: "msg_img_1",
+      role: "assistant",
+      content: "Scene with art",
+      createdAt: new Date().toISOString(),
+      turn: 1,
+      images: [
+        {
+          file,
+          prompt: "a test scene",
+          providerId: "test",
+          model: "test",
+          durationMs: 100,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    });
+
+    // Simulate a pre-migration flat file at `<dataDir>/<id>.json` with no folder yet.
+    rmSync(join(dataDir, created.id), { recursive: true, force: true });
+    writeFileSync(
+      join(dataDir, `${created.id}.json`),
+      JSON.stringify(created),
+      "utf8",
+    );
+
+    const list = listPlaythroughRecords(dataDir);
+    expect(list.playthroughs.map((p) => p.id)).toEqual([created.id]);
+
+    // Legacy flat file is gone; folder-based `<id>/<id>.json` and `<id>/images/<file>` exist.
+    expect(existsSync(join(dataDir, `${created.id}.json`))).toBe(false);
+    expect(existsSync(playthroughPath(dataDir, created.id))).toBe(true);
+    expect(
+      existsSync(join(playthroughImagesDir(dataDir, created.id), file)),
+    ).toBe(true);
+  });
+
+  it("links referenced images into branched and duplicated playthrough folders, and deletes a playthrough's folder cleanly", () => {
+    const root = mkdtempSync(join(tmpdir(), "bobbinloom-pt-branch-imgs-"));
+    tempDirs.push(root);
+    const dataDir = join(root, "playthroughs");
+    mkdirSync(dataDir, { recursive: true });
+
+    const parent = createPlaythroughRecord(dataDir, "Parent Run");
+    const earlyImg = saveImageBytes(
+      Buffer.from("turn-1-image"),
+      "image/webp",
+      playthroughImagesDir(dataDir, parent.id),
+    ).file;
+    const lateImg = saveImageBytes(
+      Buffer.from("turn-2-image"),
+      "image/webp",
+      playthroughImagesDir(dataDir, parent.id),
+    ).file;
+
+    parent.messages = [
+      {
+        id: "msg_t1",
+        role: "assistant",
+        content: "Turn 1",
+        createdAt: new Date().toISOString(),
+        turn: 1,
+        images: [
+          {
+            file: earlyImg,
+            prompt: "turn 1",
+            providerId: "test",
+            model: "test",
+            durationMs: 100,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      },
+      {
+        id: "msg_u1",
+        role: "user",
+        content: "Next",
+        createdAt: new Date().toISOString(),
+        turn: 2,
+      },
+      {
+        id: "msg_t2",
+        role: "assistant",
+        content: "Turn 2",
+        createdAt: new Date().toISOString(),
+        turn: 2,
+        images: [
+          {
+            file: lateImg,
+            prompt: "turn 2",
+            providerId: "test",
+            model: "test",
+            durationMs: 100,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      },
+    ];
+    updatePlaythroughRecord(dataDir, parent);
+
+    // Branch at msg_t1: should only copy/link `earlyImg`, not `lateImg`.
+    const branch = branchPlaythroughRecord(dataDir, parent.id, "msg_t1");
+    expect(branch).not.toBeNull();
+    expect(
+      existsSync(join(playthroughImagesDir(dataDir, branch!.id), earlyImg)),
+    ).toBe(true);
+    expect(
+      existsSync(join(playthroughImagesDir(dataDir, branch!.id), lateImg)),
+    ).toBe(false);
+
+    // Duplicate parent: should copy/link both `earlyImg` and `lateImg`.
+    const duplicate = duplicatePlaythroughRecord(dataDir, parent.id);
+    expect(duplicate).not.toBeNull();
+    expect(
+      existsSync(join(playthroughImagesDir(dataDir, duplicate!.id), earlyImg)),
+    ).toBe(true);
+    expect(
+      existsSync(join(playthroughImagesDir(dataDir, duplicate!.id), lateImg)),
+    ).toBe(true);
+
+    // Delete parent: removes `parent.id` folder & images completely while `branch` and `duplicate` keep theirs.
+    expect(deletePlaythroughRecord(dataDir, parent.id)).toBe(true);
+    expect(existsSync(join(dataDir, parent.id))).toBe(false);
+    expect(
+      existsSync(join(playthroughImagesDir(dataDir, branch!.id), earlyImg)),
+    ).toBe(true);
+    expect(
+      existsSync(join(playthroughImagesDir(dataDir, duplicate!.id), lateImg)),
+    ).toBe(true);
   });
 });

@@ -12,7 +12,7 @@ import { createPortal } from "react-dom";
 import { FOCUSABLE_SELECTOR, wrapIndex } from "../../../engine/dialogFocus";
 import { isTopDialog, popDialog, pushDialog } from "../../../engine/dialogStack";
 import { Header } from "../Header/Header";
-import { ModalFooter } from "../Modal/Modal";
+import { ModalContent, ModalFooter } from "../Modal/Modal";
 import "../Modal/Modal.css";
 
 export type DialogProps = {
@@ -24,6 +24,10 @@ export type DialogProps = {
   isBusy?: boolean;
   className?: string;
   maxWidth?: number | string;
+  /** Wraps dialog body in a scrollable `<ModalContent>` container with sticky header and footer. */
+  scrollable?: boolean;
+  /** Stretches the dialog edge-to-edge (`100dvh`) on mobile viewports (`<= 680px`). */
+  fullScreenMobile?: boolean;
   initialFocusRef?: RefObject<HTMLElement | null>;
   headerAction?: ReactNode;
 };
@@ -37,6 +41,8 @@ export function Dialog({
   isBusy = false,
   className = "",
   maxWidth,
+  scrollable = false,
+  fullScreenMobile = false,
   initialFocusRef,
   headerAction,
 }: DialogProps) {
@@ -130,18 +136,30 @@ export function Dialog({
 
   const resolvedStyle: CSSProperties | undefined =
     maxWidth !== undefined
-      ? {
-          width:
-            typeof maxWidth === "number"
-              ? `min(${maxWidth}px, 100%)`
-              : `min(${maxWidth}, 100%)`,
-          maxWidth,
-        }
+      ? ({
+          "--dialog-max-width":
+            typeof maxWidth === "number" ? `${maxWidth}px` : maxWidth,
+        } as CSSProperties)
       : undefined;
+
+  const backdropClasses = [
+    "base-modal-backdrop",
+    fullScreenMobile ? "base-modal-backdrop--fullscreen-mobile" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const modalClasses = [
+    "base-modal",
+    fullScreenMobile ? "base-modal--fullscreen-mobile" : "",
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return createPortal(
     <div
-      className="base-modal-backdrop"
+      className={backdropClasses}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !isBusy && isTopDialog(id))
           onClose();
@@ -153,7 +171,7 @@ export function Dialog({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={["base-modal", className].filter(Boolean).join(" ")}
+        className={modalClasses}
         style={resolvedStyle}
         onKeyDown={handleKeyDown}
       >
@@ -164,7 +182,7 @@ export function Dialog({
           subtitle={description}
           actions={headerAction}
         />
-        {children}
+        {scrollable ? <ModalContent>{children}</ModalContent> : children}
         <ModalFooter>{footer}</ModalFooter>
       </section>
     </div>,

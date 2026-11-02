@@ -11,12 +11,19 @@ import {
   type TokenUsage,
 } from "../../../../api";
 import {
+  Accordion,
   AvatarBadge,
   Badge,
   Button,
+  Card,
+  FormGrid,
+  Header,
   Icon,
-  IconButton,
-  TextInput,
+  SearchBar,
+  Separator,
+  Stack,
+  StatusMessage,
+  Text,
 } from "../../../base";
 import {
   adoptLocalPreferences,
@@ -32,7 +39,6 @@ import {
 } from "../../../../../engine/chapterLifecycle";
 import { GalleryModal } from "../../../modals/GalleryModal";
 import { CloseChapterModal } from "../../../modals/CloseChapterModal";
-import "./JournalTab.css";
 
 export function JournalTab({
   playthrough,
@@ -287,11 +293,11 @@ export function JournalTab({
     void updateViewPreferences({ staleNoteDismissals: next }).catch(() => {});
   }
 
-  function toggleExpand(chapterId: string) {
+  function setChapterExpanded(chapterId: string, open: boolean) {
     setExpandedChapters((prev) => {
       const next = new Set(prev);
-      if (next.has(chapterId)) next.delete(chapterId);
-      else next.add(chapterId);
+      if (open) next.add(chapterId);
+      else next.delete(chapterId);
       return next;
     });
   }
@@ -299,8 +305,10 @@ export function JournalTab({
   function renderStars(importance: number) {
     const count = Math.max(1, Math.min(5, Math.round(importance)));
     return (
-      <div
-        className="timeline-stars"
+      <Stack
+        direction="row"
+        align="center"
+        gap="2xs"
         title={`Importance: ${importance.toFixed(1)}/5`}
       >
         {Array.from({ length: 5 }).map((_, i) => (
@@ -308,52 +316,69 @@ export function JournalTab({
             key={i}
             name="Star"
             size={11}
-            className="timeline-star-icon"
-            style={{ opacity: i < count ? 1 : 0.2 }}
+            style={{
+              opacity: i < count ? 1 : 0.2,
+              color: "var(--status-warning)",
+              fill: i < count ? "currentColor" : "none",
+            }}
           />
         ))}
-      </div>
+      </Stack>
     );
   }
 
   return (
-    <div className="journal-tab-container">
+    <Stack direction="column" align="stretch" gap="md" fullWidth>
       {/* Header Row */}
-      <div className="journal-header-row">
-        <h2 className="journal-header-title">
-          <Icon name="BookOpen" size={20} />
-          <span>Journal</span>
-        </h2>
-        {onOpenTimelines ? (
-          <Button
-            variant="outline"
-            size="sm"
-            leftIcon={<Icon name="GitFork" size={14} />}
-            onClick={onOpenTimelines}
-            title="View alternative timeline branches for this playthrough"
-          >
-            View Timelines
-          </Button>
-        ) : null}
-      </div>
+      <Header
+        variant="section"
+        icon="BookOpen"
+        title="Journal"
+        actions={
+          onOpenTimelines ? (
+            <Button
+              variant="outline"
+              size="sm"
+              leftIcon="GitFork"
+              onClick={onOpenTimelines}
+              title="View alternative timeline branches for this playthrough"
+            >
+              View Timelines
+            </Button>
+          ) : undefined
+        }
+      />
 
       {/* About this Playthrough (Setting & Scenario) */}
       {playthrough.scenarioDescription ? (
-        <article className="journal-card journal-about-card">
-          <div className="journal-card-header">
-            <h3 className="journal-section-title">
-              <Icon name="Compass" size={15} />
-              <span>Setting & Scenario</span>
-            </h3>
-          </div>
-          <p className="about-synopsis-text">
+        <Card
+          as="article"
+          variant="elevated"
+          padding="md"
+          layout="column"
+          fullWidth
+        >
+          <Stack direction="row" align="center" gap="xs">
+            <Icon name="Compass" size={15} />
+            <Text
+              as="h3"
+              variant="label"
+              size="xs"
+              weight="semibold"
+              tone="secondary"
+              uppercase
+            >
+              Setting &amp; Scenario
+            </Text>
+          </Stack>
+          <Text as="p" size="xs" tone="secondary" leading="relaxed" preWrap>
             {playthrough.scenarioDescription}
-          </p>
-          <div className="about-actions">
+          </Text>
+          <Stack direction="row" align="center" justify="end" fullWidth>
             <Button
               variant="primary"
               size="sm"
-              leftIcon={<Icon name="Copy" size={13} />}
+              leftIcon="Copy"
               onClick={() =>
                 onStartNewWithSameScenario(
                   playthrough.scenarioDescription!,
@@ -366,96 +391,148 @@ export function JournalTab({
             >
               Start New with Same Scenario
             </Button>
-          </div>
-        </article>
+          </Stack>
+        </Card>
       ) : null}
 
       {/* Lorebooks */}
-      <section className="journal-card">
-        <div className="journal-card-header">
-          <h3 className="journal-section-title">
+      <Card
+        as="section"
+        variant="elevated"
+        padding="md"
+        layout="column"
+        fullWidth
+      >
+        <Stack
+          direction="row"
+          align="center"
+          justify="between"
+          gap="xs"
+          fullWidth
+        >
+          <Stack direction="row" align="center" gap="xs">
             <Icon name="BookMarked" size={15} />
-            <span>Lorebooks</span>
-          </h3>
+            <Text
+              as="h3"
+              variant="label"
+              size="xs"
+              weight="semibold"
+              tone="secondary"
+              uppercase
+            >
+              Lorebooks
+            </Text>
+          </Stack>
           {attachedLorebooks.length > 0 ? (
             <Badge variant="neutral" size="xs" pill>
               {attachedLorebooks.length} attached
             </Badge>
           ) : null}
-        </div>
+        </Stack>
+
         {attachedLorebooks.length === 0 ? (
-          <div className="info-empty-state">
-            <Icon name="BookX" size={15} />
-            <span>No lorebooks attached to this playthrough</span>
-          </div>
+          <StatusMessage variant="inline" tone="neutral" icon="BookX">
+            No lorebooks attached to this playthrough
+          </StatusMessage>
         ) : (
-          <div className="lorebooks-grid">
+          <Stack direction="row" align="center" gap="xs" wrap fullWidth>
             {attachedLorebooks.map((lb) => (
-              <div
+              <Badge
                 key={lb.id}
-                className="lorebook-pill"
+                variant="outline"
+                size="sm"
+                leftIcon="BookOpen"
                 title={`${lb.entryCount} active lore entries`}
               >
-                <Icon name="BookOpen" size={13} />
-                <span>{lb.name}</span>
-                <Badge variant="neutral" size="xs" pill>
-                  {lb.entryCount} entries
-                </Badge>
-              </div>
+                <Text as="span" size="xs" weight="medium">
+                  {lb.name}
+                </Text>
+                <Text as="span" size="xs" tone="muted">
+                  ({lb.entryCount} entries)
+                </Text>
+              </Badge>
             ))}
-          </div>
+          </Stack>
         )}
-      </section>
+      </Card>
 
       {/* Chapters (The Chronicle) */}
-      <section className="journal-card">
-        <div className="journal-card-header">
-          <h3 className="journal-section-title">
+      <Card
+        as="section"
+        variant="elevated"
+        padding="md"
+        layout="column"
+        fullWidth
+      >
+        <Stack
+          direction="row"
+          align="center"
+          justify="between"
+          gap="xs"
+          fullWidth
+        >
+          <Stack direction="row" align="center" gap="xs">
             <Icon name="Scroll" size={15} />
-            <span>Chapters</span>
-          </h3>
+            <Text
+              as="h3"
+              variant="label"
+              size="xs"
+              weight="semibold"
+              tone="secondary"
+              uppercase
+            >
+              Chapters
+            </Text>
+          </Stack>
           <Badge variant="neutral" size="xs" pill>
             {(playthrough.chapters?.length ?? 0) + 1}{" "}
             {(playthrough.chapters?.length ?? 0) + 1 === 1
               ? "volume"
               : "volumes"}
           </Badge>
-        </div>
+        </Stack>
 
-        <div className="chapters-section-body">
+        <Stack direction="column" align="stretch" gap="sm" fullWidth>
           {/* Active / Current Chapter */}
-          <div className="chapter-current-banner">
-            <div className="current-chapter-header">
-              <h4 className="current-chapter-title">
-                <Icon
-                  name="BookOpen"
-                  size={15}
-                  className="current-chapter-icon"
-                />
-                <span>Current Chapter</span>
-              </h4>
-              <Badge
-                variant="accent"
-                size="xs"
-                pill
-                leftIcon={<span className="current-chapter-status-dot" />}
-              >
-                Ongoing
+          <Card variant="panel" padding="sm" layout="column" fullWidth>
+            <Stack
+              direction="row"
+              align="center"
+              justify="between"
+              gap="xs"
+              wrap
+              fullWidth
+            >
+              <Stack direction="row" align="center" gap="xs">
+                <Icon name="BookOpen" size={15} />
+                <Text as="h4" variant="title" size="sm" weight="semibold">
+                  Current Chapter
+                </Text>
+              </Stack>
+              <Badge variant="success" size="xs" pill>
+                ● Ongoing
               </Badge>
-            </div>
+            </Stack>
 
-            <div className="current-chapter-controls">
-              <span className="chapter-progress-hint">
+            <Stack
+              direction="row"
+              align="center"
+              justify="between"
+              gap="sm"
+              wrap
+              fullWidth
+            >
+              <Text size="xs" tone="muted">
                 {visibleMessages.length} message
                 {visibleMessages.length === 1 ? "" : "s"} in session
                 {!canClose
                   ? ` (need ${6 - visibleMessages.length} more to close)`
                   : " · Ready to summarize"}
-              </span>
+              </Text>
               <Button
                 variant="primary"
                 size="sm"
-                leftIcon={<Icon name="BookmarkCheck" size={13} />}
+                leftIcon="BookmarkCheck"
                 disabled={!canClose || closing}
                 isLoading={closing}
                 onClick={() => setCloseModalOpen(true)}
@@ -467,12 +544,12 @@ export function JournalTab({
               >
                 {closing ? "Closing…" : "Close Chapter"}
               </Button>
-            </div>
-          </div>
+            </Stack>
+          </Card>
 
           {/* Archived Volumes */}
           {[...(playthrough.chapters ?? [])].length > 0 ? (
-            <ul className="archived-volumes-list">
+            <Stack direction="column" align="stretch" gap="xs" fullWidth>
               {[...(playthrough.chapters ?? [])].reverse().map((ch) => {
                 const isExpanded = expandedChapters.has(ch.id);
                 // Derived, never stored: an edit after the summary was written makes it stale, and
@@ -487,85 +564,96 @@ export function JournalTab({
                   staleSignature !== null &&
                   staleDismissals[ch.id] !== staleSignature;
                 return (
-                  <li key={ch.id} className="archived-volume-card">
-                    <div
-                      className="volume-header"
-                      onClick={() => toggleExpand(ch.id)}
-                    >
-                      <div className="volume-title-group">
-                        <Icon
-                          name={isExpanded ? "ChevronDown" : "ChevronRight"}
-                          size={14}
-                          className="volume-expand-icon"
-                        />
-                        <h4>{ch.name}</h4>
-                      </div>
-                      <div className="volume-meta-pills">
-                        <Badge variant="neutral" size="xs">
-                          T{ch.turnRange.start} – T{ch.turnRange.end}
-                        </Badge>
-                      </div>
-                    </div>
-
-                    {ch.shortDescription && !isExpanded ? (
-                      <div className="volume-short-desc-wrapper">
-                        <p className="volume-short-desc">
+                  <Accordion
+                    key={ch.id}
+                    variant="panel"
+                    size="sm"
+                    icon="BookOpen"
+                    title={ch.name}
+                    open={isExpanded}
+                    onOpenChange={(open) => setChapterExpanded(ch.id, open)}
+                    badge={
+                      <Badge variant="neutral" size="xs">
+                        T{ch.turnRange.start} – T{ch.turnRange.end}
+                      </Badge>
+                    }
+                    summary={
+                      !isExpanded && ch.shortDescription ? (
+                        <Text size="xs" tone="muted" italic>
                           {ch.shortDescription}
-                        </p>
-                      </div>
-                    ) : null}
+                        </Text>
+                      ) : undefined
+                    }
+                  >
+                    <Stack
+                      direction="column"
+                      align="stretch"
+                      gap="sm"
+                      fullWidth
+                    >
+                      {ch.shortDescription ? (
+                        <Text as="p" size="xs" tone="muted" italic>
+                          {ch.shortDescription}
+                        </Text>
+                      ) : null}
 
-                    {isExpanded ? (
-                      <div className="volume-body">
-                        {ch.shortDescription ? (
-                          <p className="volume-short-desc">
-                            {ch.shortDescription}
-                          </p>
-                        ) : null}
-                        {staleNoteShown ? (
-                          <div className="chapter-stale-note" role="status">
-                            <Icon
-                              name="TriangleAlert"
-                              size={13}
-                              className="chapter-stale-note-icon"
-                            />
-                            <span>
-                              This summary was written before a later edit to
-                              this chapter's messages, so it may no longer match
-                              them.
-                            </span>
-                            <IconButton
-                              icon="X"
-                              size="xs"
-                              variant="ghost"
-                              label="Dismiss this note"
-                              onClick={() =>
-                                dismissStaleNote(ch.id, staleSignature)
-                              }
-                            />
-                          </div>
-                        ) : null}
-                        <p className="volume-full-summary">{ch.fullSummary}</p>
-                        <div className="volume-actions-bar">
-                          <span
-                            className="volume-date-meta"
-                            title={`Archived: ${ch.createdAt ? new Date(ch.createdAt).toLocaleString() : "Unknown"}${ch.summaryDurationMs ? ` (summarized in ${(ch.summaryDurationMs / 1000).toFixed(1)}s)` : ""}`}
-                          >
-                            {ch.createdAt
-                              ? new Date(ch.createdAt).toLocaleDateString(
-                                  undefined,
-                                  {
-                                    month: "short",
-                                    day: "numeric",
-                                    year: "numeric",
-                                  },
-                                )
-                              : ""}
-                          </span>
+                      {staleNoteShown ? (
+                        <StatusMessage
+                          variant="banner"
+                          tone="warn"
+                          icon="TriangleAlert"
+                          onDismiss={() =>
+                            dismissStaleNote(ch.id, staleSignature)
+                          }
+                        >
+                          This summary was written before a later edit to this
+                          chapter&apos;s messages, so it may no longer match
+                          them.
+                        </StatusMessage>
+                      ) : null}
+
+                      <Text
+                        as="p"
+                        size="xs"
+                        tone="secondary"
+                        leading="relaxed"
+                        preWrap
+                      >
+                        {ch.fullSummary}
+                      </Text>
+
+                      <Separator spacing="none" />
+
+                      <Stack
+                        direction="row"
+                        align="center"
+                        justify="between"
+                        gap="xs"
+                        wrap
+                        fullWidth
+                      >
+                        <Text
+                          size="xs"
+                          tone="muted"
+                          title={`Archived: ${ch.createdAt ? new Date(ch.createdAt).toLocaleString() : "Unknown"}${ch.summaryDurationMs ? ` (summarized in ${(ch.summaryDurationMs / 1000).toFixed(1)}s)` : ""}`}
+                        >
+                          {ch.createdAt
+                            ? new Date(ch.createdAt).toLocaleDateString(
+                                undefined,
+                                {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                },
+                              )
+                            : ""}
+                        </Text>
+
+                        <Stack direction="row" align="center" gap="xs" wrap>
                           <Button
                             variant="outline"
                             size="xs"
-                            leftIcon={<Icon name="RefreshCw" size={12} />}
+                            leftIcon="RefreshCw"
                             disabled={resummarizingChapterId === ch.id}
                             isLoading={resummarizingChapterId === ch.id}
                             title="Rewrite this chapter's summary from its messages"
@@ -581,7 +669,7 @@ export function JournalTab({
                           <Button
                             variant="outline"
                             size="xs"
-                            leftIcon={<Icon name="FileText" size={12} />}
+                            leftIcon="FileText"
                             onClick={(e) => {
                               e.stopPropagation();
                               onViewChapter(ch.id);
@@ -592,7 +680,7 @@ export function JournalTab({
                           <Button
                             variant="danger"
                             size="xs"
-                            leftIcon={<Icon name="Undo2" size={12} />}
+                            leftIcon="Undo2"
                             title="Discard every chapter after this one and make it the running chapter again"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -601,76 +689,132 @@ export function JournalTab({
                           >
                             Revert to this Chapter
                           </Button>
-                        </div>
-                      </div>
-                    ) : null}
-                  </li>
+                        </Stack>
+                      </Stack>
+                    </Stack>
+                  </Accordion>
                 );
               })}
-            </ul>
+            </Stack>
           ) : (
-            <div className="info-empty-state">
-              <Icon name="Layers" size={15} />
-              <span>
-                No archived chapters yet. When you close a chapter, its
-                transcript and summary will be saved here.
-              </span>
-            </div>
+            <StatusMessage variant="inline" tone="neutral" icon="Layers">
+              No archived chapters yet. When you close a chapter, its transcript
+              and summary will be saved here.
+            </StatusMessage>
           )}
-        </div>
-      </section>
+        </Stack>
+      </Card>
 
-      <section className="journal-card">
-        <div className="journal-card-header">
-          <h3 className="journal-section-title">
-            <Icon name="Image" size={15} /> Media
-          </h3>
-        </div>
-        {media.length === 0 ? (
-          <div className="info-empty-state">
+      {/* Media */}
+      <Card
+        as="section"
+        variant="elevated"
+        padding="md"
+        layout="column"
+        fullWidth
+      >
+        <Stack
+          direction="row"
+          align="center"
+          justify="between"
+          gap="xs"
+          fullWidth
+        >
+          <Stack direction="row" align="center" gap="xs">
             <Icon name="Image" size={15} />
-            <span>
-              No generated images yet. An image on an assistant message becomes
-              this story's cover, and every image from every chapter can be
-              chosen by hand here.
-            </span>
-          </div>
+            <Text
+              as="h3"
+              variant="label"
+              size="xs"
+              weight="semibold"
+              tone="secondary"
+              uppercase
+            >
+              Media
+            </Text>
+          </Stack>
+          {media.length > 0 ? (
+            <Badge variant="neutral" size="xs" pill>
+              {media.length}
+            </Badge>
+          ) : null}
+        </Stack>
+
+        {media.length === 0 ? (
+          <StatusMessage variant="inline" tone="neutral" icon="Image">
+            No generated images yet. An image on an assistant message becomes
+            this story&apos;s cover, and every image from every chapter can be
+            chosen by hand here.
+          </StatusMessage>
         ) : (
-          <div className="journal-media-body">
-            <div className="journal-media-strip">
-              {media.slice(0, 6).map((item) => (
-                <button
-                  key={item.file}
-                  type="button"
-                  className="journal-media-thumb"
-                  onClick={() => setGalleryOpen(true)}
-                  title={item.prompt || "Open the gallery"}
-                >
-                  <img
-                    src={buildImageUrl(item.file)}
-                    alt=""
-                    loading="lazy"
-                    decoding="async"
-                  />
-                </button>
-              ))}
-            </div>
-            <div className="journal-media-actions">
-              <span className="journal-media-count">
+          <Stack direction="column" align="stretch" gap="sm" fullWidth>
+            <FormGrid cols={2} gap="xs" keepColumnsOnMobile>
+              {media.slice(0, 4).map((item) => {
+                const isCurrentCover = playthrough.cover?.file === item.file;
+                return (
+                  <Card
+                    key={item.file}
+                    as="button"
+                    type="button"
+                    variant="panel"
+                    padding="none"
+                    active={isCurrentCover}
+                    hoverable
+                    onClick={() => setGalleryOpen(true)}
+                    title={item.prompt || "Open the gallery"}
+                  >
+                    <Card.Cover
+                      position="top"
+                      aspect="square"
+                      overlay={
+                        isCurrentCover ? (
+                          <Badge
+                            variant="accent"
+                            size="xs"
+                            pill
+                            leftIcon="Check"
+                          >
+                            Cover
+                          </Badge>
+                        ) : undefined
+                      }
+                    >
+                      <img
+                        src={buildImageUrl(item.file)}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    </Card.Cover>
+                  </Card>
+                );
+              })}
+            </FormGrid>
+
+            <Stack
+              direction="row"
+              align="center"
+              justify="between"
+              gap="xs"
+              wrap
+              fullWidth
+            >
+              <Text size="xs" tone="secondary">
                 {media.length} {media.length === 1 ? "image" : "images"} across
                 every chapter
-              </span>
+              </Text>
               <Button
                 variant="secondary"
                 size="sm"
+                leftIcon="Images"
                 onClick={() => setGalleryOpen(true)}
               >
                 Open Gallery Media
               </Button>
-            </div>
-          </div>
+            </Stack>
+          </Stack>
         )}
-      </section>
+      </Card>
 
       {galleryOpen ? (
         <GalleryModal
@@ -708,46 +852,86 @@ export function JournalTab({
       ) : null}
 
       {/* Dramatis Personae (Cast & Acquaintances) */}
-      <section className="journal-card">
-        <div className="journal-card-header">
-          <h3 className="journal-section-title">
+      <Card
+        as="section"
+        variant="elevated"
+        padding="md"
+        layout="column"
+        fullWidth
+      >
+        <Stack
+          direction="row"
+          align="center"
+          justify="between"
+          gap="xs"
+          fullWidth
+        >
+          <Stack direction="row" align="center" gap="xs">
             <Icon name="Users" size={15} />
-            <span>Dramatis Personae</span>
-          </h3>
+            <Text
+              as="h3"
+              variant="label"
+              size="xs"
+              weight="semibold"
+              tone="secondary"
+              uppercase
+            >
+              Dramatis Personae
+            </Text>
+          </Stack>
           <Badge variant="neutral" size="xs" pill>
             {playthrough.characters.length} persons
           </Badge>
-        </div>
+        </Stack>
 
         {playthrough.characters.length === 0 ? (
-          <div className="info-empty-state">
-            <Icon name="UserX" size={15} />
-            <span>No cast or characters encountered yet</span>
-          </div>
+          <StatusMessage variant="inline" tone="neutral" icon="UserX">
+            No cast or characters encountered yet
+          </StatusMessage>
         ) : (
-          <div className="dramatis-sections">
-            <div className="dramatis-grid">
-              {playthrough.characters.map((c) => {
-                const isActive = (playthrough.activeCharacters ?? []).includes(
-                  c.id,
-                );
-                return (
-                  <div key={c.id} className="dramatis-card">
+          <Stack direction="column" align="stretch" gap="xs" fullWidth>
+            {playthrough.characters.map((c) => {
+              const isActive = (playthrough.activeCharacters ?? []).includes(
+                c.id,
+              );
+              return (
+                <Card key={c.id} variant="panel" padding="sm" fullWidth>
+                  <Stack direction="row" align="start" gap="sm" fullWidth>
                     <AvatarBadge name={c.name} icon="User" size="sm" />
-                    <div className="dramatis-info">
-                      <div className="dramatis-title-row">
-                        <strong className="dramatis-name" title={c.name}>
-                          {c.name}
-                        </strong>
-                        {c.storyRole ? (
-                          <Badge
-                            variant="neutral"
+                    <Stack
+                      direction="column"
+                      align="stretch"
+                      gap="2xs"
+                      flex1
+                      fullWidth
+                    >
+                      <Stack
+                        direction="row"
+                        align="center"
+                        justify="between"
+                        gap="xs"
+                        wrap
+                        fullWidth
+                      >
+                        <Stack direction="row" align="center" gap="xs" wrap>
+                          <Text
+                            as="strong"
                             size="xs"
-                            title={`Role: ${c.storyRole}`}
+                            weight="semibold"
+                            title={c.name}
                           >
-                            {c.storyRole}
-                          </Badge>
-                        ) : null}
+                            {c.name}
+                          </Text>
+                          {c.storyRole ? (
+                            <Badge
+                              variant="neutral"
+                              size="xs"
+                              title={`Role: ${c.storyRole}`}
+                            >
+                              {c.storyRole}
+                            </Badge>
+                          ) : null}
+                        </Stack>
                         <Badge
                           variant={isActive ? "success" : "neutral"}
                           size="xs"
@@ -755,191 +939,252 @@ export function JournalTab({
                         >
                           {isActive ? "● In Scene" : "○ Off-Screen"}
                         </Badge>
-                      </div>
+                      </Stack>
                       {c.description ? (
-                        <p className="dramatis-desc">{c.description}</p>
+                        <Text as="p" size="xs" tone="muted" leading="snug">
+                          {c.description}
+                        </Text>
                       ) : c.memorySummary ? (
-                        <p className="dramatis-desc">{c.memorySummary}</p>
+                        <Text as="p" size="xs" tone="muted" leading="snug">
+                          {c.memorySummary}
+                        </Text>
                       ) : null}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+                    </Stack>
+                  </Stack>
+                </Card>
+              );
+            })}
+          </Stack>
         )}
-      </section>
+      </Card>
 
       {/* Event Timeline (Chronological Adventure Log) */}
-      <section className="journal-card">
-        <div className="journal-card-header">
-          <h3 className="journal-section-title">
+      <Card
+        as="section"
+        variant="elevated"
+        padding="md"
+        layout="column"
+        fullWidth
+      >
+        <Stack
+          direction="row"
+          align="center"
+          justify="between"
+          gap="xs"
+          fullWidth
+        >
+          <Stack direction="row" align="center" gap="xs">
             <Icon name="Clock" size={15} />
-            <span>Event Timeline</span>
-          </h3>
+            <Text
+              as="h3"
+              variant="label"
+              size="xs"
+              weight="semibold"
+              tone="secondary"
+              uppercase
+            >
+              Event Timeline
+            </Text>
+          </Stack>
           <Badge variant="neutral" size="xs" pill>
             {events.length} event{events.length === 1 ? "" : "s"}
           </Badge>
-        </div>
+        </Stack>
 
         {/* Filter Toolbar */}
-        <div className="timeline-filter-toolbar">
-          <TextInput
-            placeholder="Search events (turn, type, text)…"
-            value={eventSearch}
-            onChange={(e) => setEventSearch(e.target.value)}
-            containerClassName="timeline-search-input-container"
-            size="sm"
-          />
-          <div
-            className="timeline-importance-filter"
+        <Stack
+          direction="row"
+          align="center"
+          justify="between"
+          gap="xs"
+          wrap
+          fullWidth
+        >
+          <Stack flex1>
+            <SearchBar
+              value={eventSearch}
+              onChange={setEventSearch}
+              placeholder="Search events (turn, type, text)…"
+              size="sm"
+            />
+          </Stack>
+          <Card
+            variant="panel"
+            padding="xs"
             role="group"
             aria-label="Filter events by importance"
           >
-            <Button
-              variant={minImportance === 0 ? "secondary" : "ghost"}
-              size="xs"
-              className={`importance-filter-all-btn ${minImportance === 0 ? "active" : ""}`}
-              onClick={() => setMinImportance(0)}
-              title="Show all events"
-              aria-pressed={minImportance === 0}
-            >
-              All
-            </Button>
-            <div
-              className="timeline-stars-picker"
-              onMouseLeave={() => setHoverImportance(null)}
-              role="radiogroup"
-              aria-label="Minimum importance rating"
-            >
-              {[1, 2, 3, 4, 5].map((star) => {
-                const effectiveRating = hoverImportance ?? minImportance;
-                const isLit = star <= effectiveRating;
-                const isSelected = minImportance === star;
+            <Stack direction="row" align="center" gap="2xs">
+              <Button
+                variant={minImportance === 0 ? "secondary" : "ghost"}
+                size="xs"
+                onClick={() => setMinImportance(0)}
+                title="Show all events"
+                aria-pressed={minImportance === 0}
+              >
+                All
+              </Button>
+              <Stack
+                direction="row"
+                align="center"
+                gap="2xs"
+                onMouseLeave={() => setHoverImportance(null)}
+                role="radiogroup"
+                aria-label="Minimum importance rating"
+              >
+                {[1, 2, 3, 4, 5].map((star) => {
+                  const effectiveRating = hoverImportance ?? minImportance;
+                  const isLit = star <= effectiveRating;
+                  const isSelected = minImportance === star;
 
-                return (
-                  <button
-                    key={star}
-                    type="button"
-                    className={`timeline-star-picker-btn ${isLit ? "lit" : ""} ${isSelected ? "selected" : ""}`}
-                    onClick={() => {
-                      // Clicking on the currently selected star toggles back to All (0)
-                      setMinImportance((prev) => (prev === star ? 0 : star));
-                    }}
-                    onMouseEnter={() => setHoverImportance(star)}
-                    title={`Filter by ${star}★ or higher (click again to reset)`}
-                    aria-label={`${star} star${star === 1 ? "" : "s"} or higher`}
-                  >
-                    <Icon
-                      name="Star"
-                      size={13}
-                      className="timeline-star-picker-icon"
-                      style={{ fill: isLit ? "currentColor" : "none" }}
-                    />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+                  return (
+                    <Button
+                      key={star}
+                      type="button"
+                      size="xs"
+                      variant={isSelected ? "secondary" : "ghost"}
+                      iconOnly
+                      onClick={() => {
+                        setMinImportance((prev) => (prev === star ? 0 : star));
+                      }}
+                      onMouseEnter={() => setHoverImportance(star)}
+                      title={`Filter by ${star}★ or higher (click again to reset)`}
+                      aria-label={`${star} star${star === 1 ? "" : "s"} or higher`}
+                    >
+                      <Icon
+                        name="Star"
+                        size={12}
+                        style={{
+                          color: isLit
+                            ? "var(--status-warning, #fbbf24)"
+                            : "var(--text-disabled)",
+                          fill: isLit ? "currentColor" : "none",
+                        }}
+                      />
+                    </Button>
+                  );
+                })}
+              </Stack>
+            </Stack>
+          </Card>
+        </Stack>
 
         {events.length === 0 ? (
-          <div className="info-empty-state">
-            <Icon name="CalendarX" size={15} />
-            <span>No recorded events yet</span>
-          </div>
+          <StatusMessage variant="inline" tone="neutral" icon="CalendarX">
+            No recorded events yet
+          </StatusMessage>
         ) : filteredChapterGroups.length === 0 ? (
-          <div className="info-empty-state">
-            <Icon name="Search" size={15} />
-            <span>No events match current filter criteria</span>
-          </div>
+          <StatusMessage variant="inline" tone="neutral" icon="Search">
+            No events match current filter criteria
+          </StatusMessage>
         ) : (
-          <div className="vertical-timeline-container">
+          <Stack direction="column" align="stretch" gap="sm" fullWidth>
             {filteredChapterGroups.map((group) => {
               const groupKey = group.chapterId ?? "current";
               const isExpanded =
                 group.chapterId === null ||
                 expandedChapters.has(group.chapterId);
               return (
-                <div key={groupKey} className="timeline-chapter-accordion">
-                  <div
-                    className="timeline-chapter-accordion-header"
-                    onClick={() => {
-                      if (group.chapterId) toggleExpand(group.chapterId);
-                    }}
-                  >
-                    <h4>
-                      {group.chapterId ? (
-                        <Icon
-                          name={isExpanded ? "ChevronDown" : "ChevronRight"}
-                          size={14}
-                          className="timeline-expand-icon"
-                        />
-                      ) : (
-                        <Icon
-                          name="Bookmark"
-                          size={14}
-                          className="timeline-bookmark-icon"
-                        />
-                      )}
-                      <span>{group.chapterName}</span>
-                      <span className="timeline-events-count">
-                        ({group.events.length} event
-                        {group.events.length !== 1 ? "s" : ""})
-                      </span>
-                    </h4>
-                    {group.turnRange ? (
-                      <Badge variant="neutral" size="xs">
-                        T{group.turnRange.start} – T{group.turnRange.end}
+                <Accordion
+                  key={groupKey}
+                  variant="panel"
+                  size="sm"
+                  icon={group.chapterId ? "BookOpen" : "Bookmark"}
+                  title={group.chapterName}
+                  open={isExpanded}
+                  onOpenChange={(open) => {
+                    if (group.chapterId) {
+                      setChapterExpanded(group.chapterId, open);
+                    }
+                  }}
+                  badge={
+                    <Stack direction="row" align="center" gap="2xs">
+                      <Badge variant="neutral" size="xs" pill>
+                        {group.events.length} event
+                        {group.events.length !== 1 ? "s" : ""}
                       </Badge>
-                    ) : null}
-                  </div>
-
-                  {isExpanded ? (
-                    <div>
-                      {group.metaSummary ? (
-                        <p className="timeline-meta-summary">
-                          {group.metaSummary}
-                        </p>
+                      {group.turnRange ? (
+                        <Badge variant="outline" size="xs">
+                          T{group.turnRange.start} – T{group.turnRange.end}
+                        </Badge>
                       ) : null}
+                    </Stack>
+                  }
+                >
+                  <Stack direction="column" align="stretch" gap="xs" fullWidth>
+                    {group.metaSummary ? (
+                      <Text
+                        as="p"
+                        size="xs"
+                        tone="secondary"
+                        leading="relaxed"
+                        italic
+                      >
+                        {group.metaSummary}
+                      </Text>
+                    ) : null}
 
-                      <ul className="vertical-timeline-track">
-                        {group.events.map((e) => {
-                          const isHigh = e.importance >= 4 && e.importance < 5;
-                          const isCritical = e.importance >= 5;
-                          return (
-                            <li key={e.id} className="vertical-timeline-item">
-                              <span
-                                className={`timeline-dot ${isCritical ? "critical-importance" : isHigh ? "high-importance" : ""}`}
-                              />
-                              <div className="timeline-item-card">
-                                <div className="timeline-item-header">
-                                  <div className="timeline-item-meta">
-                                    <Badge variant="accent" size="xs">
-                                      T{e.turn}
-                                    </Badge>
-                                    <Badge variant="outline" size="xs">
-                                      {e.type}
-                                    </Badge>
-                                  </div>
-                                  {renderStars(e.importance)}
-                                </div>
-                                <p className="timeline-item-summary">
-                                  {e.summary}
-                                </p>
-                              </div>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  ) : null}
-                </div>
+                    {group.events.map((e) => {
+                      const isHigh = e.importance >= 4 && e.importance < 5;
+                      const isCritical = e.importance >= 5;
+                      return (
+                        <Card
+                          key={e.id}
+                          variant="elevated"
+                          padding="sm"
+                          layout="column"
+                          fullWidth
+                        >
+                          <Stack
+                            direction="row"
+                            align="center"
+                            justify="between"
+                            gap="xs"
+                            wrap
+                            fullWidth
+                          >
+                            <Stack
+                              direction="row"
+                              align="center"
+                              gap="xs"
+                              wrap
+                            >
+                              <Badge
+                                variant={
+                                  isCritical
+                                    ? "danger"
+                                    : isHigh
+                                      ? "warning"
+                                      : "accent"
+                                }
+                                size="xs"
+                              >
+                                T{e.turn}
+                              </Badge>
+                              <Badge variant="outline" size="xs">
+                                {e.type}
+                              </Badge>
+                            </Stack>
+                            {renderStars(e.importance)}
+                          </Stack>
+                          <Text
+                            as="p"
+                            size="xs"
+                            tone="secondary"
+                            leading="snug"
+                          >
+                            {e.summary}
+                          </Text>
+                        </Card>
+                      );
+                    })}
+                  </Stack>
+                </Accordion>
               );
             })}
-          </div>
+          </Stack>
         )}
-      </section>
-    </div>
+      </Card>
+    </Stack>
   );
 }

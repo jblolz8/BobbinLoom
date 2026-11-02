@@ -190,6 +190,37 @@ button.base-card {
   justify-content: center;
 }
 
+.base-card__cover--aspect-portrait > img,
+.base-card__cover--aspect-square > img,
+.base-card__cover--aspect-portrait > button > img,
+.base-card__cover--aspect-square > button > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.base-card__cover--aspect-portrait > button,
+.base-card__cover--aspect-square > button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.base-card__cover--aspect-portrait > button:focus-visible,
+.base-card__cover--aspect-square > button:focus-visible {
+  outline: 2px solid var(--accent-base);
+  outline-offset: -2px;
+}
+
 .base-card__body {
   display: flex;
   flex-direction: column;

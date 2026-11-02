@@ -1,4 +1,5 @@
 import { createReadStream } from "node:fs";
+import { join } from "node:path";
 import type { FastifyPluginAsync, FastifyPluginOptions } from "fastify";
 import { z } from "zod";
 import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../../engine/imageDefaults";
@@ -38,7 +39,12 @@ import {
 } from "../provider/imageContext";
 import type { ImagePromptInput } from "../provider/imagePrompt";
 import { generateImagePrompt } from "../provider/imagePrompt";
-import { getPlaythroughRecord, updatePlaythroughRecord } from "../store";
+import {
+  getPlaythroughRecord,
+  linkOrCopyFile,
+  playthroughImagesDir,
+  updatePlaythroughRecord,
+} from "../store";
 import { loadPromptConfig } from "../promptConfigStore";
 import {
   abortOnClientDisconnect,
@@ -288,7 +294,7 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (
   // header is safe. The name is validated before any filesystem call.
   app.get("/api/images/:file", async (request, reply) => {
     const { file } = z.object({ file: z.string() }).parse(request.params);
-    const path = imageFilePath(file, imagesDir);
+    const path = imageFilePath(file, imagesDir, dataDir);
     if (!path) return reply.code(404).send({ error: "Image not found" });
     reply.header("Cache-Control", "public, max-age=31536000, immutable");
     return reply.type(mimeForFile(file)).send(createReadStream(path));
@@ -757,11 +763,22 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (
                 ? "webp"
                 : "png";
           const transcoded = await transcodeToWebp(image.bytes, fallbackExt);
+          const ptImagesDir = playthroughImagesDir(dataDir, params.id);
           const { file } = saveImageBytes(
             transcoded.bytes,
             transcoded.mime,
-            imagesDir,
+            ptImagesDir,
           );
+          if (options.imagesDir) {
+            try {
+              linkOrCopyFile(
+                join(ptImagesDir, file),
+                join(options.imagesDir, file),
+              );
+            } catch {
+              /* ignore test-seam mirror failure */
+            }
+          }
           return {
             file,
             prompt: promptUsed,

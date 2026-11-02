@@ -1,10 +1,21 @@
 import { useState } from "react";
 import type { InventoryRef, Item, Playthrough } from "../../../../../schemas";
 import { ITEMS } from "../../../../../engine/demoData";
-import { AvatarBadge, Badge, Button, Icon, TextInput } from "../../../base";
+import {
+  AvatarBadge,
+  Badge,
+  Button,
+  Card,
+  Icon,
+  Separator,
+  Stack,
+  StatusMessage,
+  Text,
+  TextInput,
+  type IconName,
+} from "../../../base";
 import { ConfirmModal } from "../../../common";
 import { editPlayer, getPersonaAvatarUrl } from "../../../../api";
-import "./PlayerTab.css";
 
 function getItemDef(
   ref: InventoryRef,
@@ -20,7 +31,7 @@ function getItemDef(
   };
 }
 
-function getItemIconName(type: string): string {
+function getItemIconName(type: string): IconName {
   switch (type.toLowerCase()) {
     case "consumable":
       return "FlaskConical";
@@ -162,10 +173,38 @@ export function PlayerTab({
     }
   }
 
+  const flags = pc.flags ?? [];
+
+  const parseAttributeItems = (
+    raw?: string,
+  ): Array<{ key?: string; value: string }> => {
+    if (!raw) return [];
+    return raw
+      .split(/\r?\n|\s+(?=-\s*[A-Za-z])/)
+      .map((line) => line.replace(/^\s*[-•]\s*/, "").trim())
+      .filter((line) => line.length > 0 && !/^\(\s*not established\s*\)$/i.test(line))
+      .map((line) => {
+        const match = line.match(/^([^:]+):\s*(.+)$/);
+        return match
+          ? { key: match[1].trim(), value: match[2].trim() }
+          : { value: line };
+      });
+  };
+
+  const bodyItems = parseAttributeItems(pc.bodyType);
+  const appearanceItems = parseAttributeItems(pc.appearance);
+
   return (
-    <div className="player-tab-container">
-      <article className="card player-overview-card">
-        <div className="player-card-header">
+    <Stack direction="column" align="stretch" gap="md" fullWidth>
+      {/* Player Overview Card */}
+      <Card
+        as="article"
+        variant="elevated"
+        padding="md"
+        layout="column"
+        fullWidth
+      >
+        <Stack direction="row" align="start" gap="sm" fullWidth>
           <AvatarBadge
             src={getPersonaAvatarUrl(
               playthrough.personaId ?? "persona_default",
@@ -175,252 +214,410 @@ export function PlayerTab({
             icon="User"
             size="md"
           />
-          <div>
-            <h3 className="player-name">{pc.name}</h3>
+          <Stack direction="column" align="start" gap="2xs" flex1>
+            <Text as="h3" variant="title" size="md" weight="semibold">
+              {pc.name}
+            </Text>
             {pc.description ? (
-              <p className="player-desc">{pc.description}</p>
+              <Text variant="body" size="xs" tone="secondary" leading="snug">
+                {pc.description}
+              </Text>
             ) : null}
-          </div>
-        </div>
+          </Stack>
+        </Stack>
 
-        {pc.bodyType || pc.appearance ? (
-          <div className="player-meta-grid">
-            {pc.bodyType ? (
-              <div className="player-meta-item">
-                <span className="meta-label">
-                  <Icon name="Activity" size={12} /> Body
-                </span>
-                <span className="meta-val">{pc.bodyType}</span>
-              </div>
-            ) : null}
-            {pc.appearance ? (
-              <div className="player-meta-item">
-                <span className="meta-label">
-                  <Icon name="Eye" size={12} /> Appearance
-                </span>
-                <span className="meta-val">{pc.appearance}</span>
-              </div>
-            ) : null}
-          </div>
+        {bodyItems.length > 0 || appearanceItems.length > 0 ? (
+          <>
+            <Separator spacing="none" />
+            <Stack direction="column" align="stretch" gap="sm" fullWidth>
+              {bodyItems.length > 0 ? (
+                <Stack direction="column" align="stretch" gap="xs" fullWidth>
+                  <Stack direction="row" align="center" gap="2xs">
+                    <Icon name="Activity" size={13} />
+                    <Text
+                      as="h4"
+                      variant="label"
+                      size="xs"
+                      weight="semibold"
+                      tone="secondary"
+                      uppercase
+                    >
+                      Body
+                    </Text>
+                  </Stack>
+                  <Stack direction="row" align="center" gap="xs" wrap fullWidth>
+                    {bodyItems.map((item, i) => (
+                      <Badge key={i} variant="outline" size="sm">
+                        {item.key ? (
+                          <Text
+                            as="span"
+                            size="xs"
+                            tone="muted"
+                            weight="medium"
+                          >
+                            {item.key}:
+                          </Text>
+                        ) : null}
+                        <Text as="span" size="xs" weight="medium">
+                          {item.value}
+                        </Text>
+                      </Badge>
+                    ))}
+                  </Stack>
+                </Stack>
+              ) : null}
+              {appearanceItems.length > 0 ? (
+                <Stack direction="column" align="stretch" gap="xs" fullWidth>
+                  <Stack direction="row" align="center" gap="2xs">
+                    <Icon name="Eye" size={13} />
+                    <Text
+                      as="h4"
+                      variant="label"
+                      size="xs"
+                      weight="semibold"
+                      tone="secondary"
+                      uppercase
+                    >
+                      Appearance
+                    </Text>
+                  </Stack>
+                  <Stack direction="row" align="center" gap="xs" wrap fullWidth>
+                    {appearanceItems.map((item, i) => (
+                      <Badge key={i} variant="outline" size="sm">
+                        {item.key ? (
+                          <Text
+                            as="span"
+                            size="xs"
+                            tone="muted"
+                            weight="medium"
+                          >
+                            {item.key}:
+                          </Text>
+                        ) : null}
+                        <Text as="span" size="xs" weight="medium">
+                          {item.value}
+                        </Text>
+                      </Badge>
+                    ))}
+                  </Stack>
+                </Stack>
+              ) : null}
+            </Stack>
+          </>
         ) : null}
 
         {pc.clothing.length > 0 ? (
-          <div className="player-clothing-section">
-            <h4 className="subcard-title flex items-center gap-1">
-              <Icon name="Shirt" size={13} /> Clothing
-            </h4>
-            <div className="clothing-chip-grid">
-              {pc.clothing.map((c, i) => (
-                <div key={i} className="clothing-chip">
-                  <span className="clothing-slot">{c.slot}:</span>
-                  <span className="clothing-name">{c.name}</span>
-                  {c.state ? (
-                    <span className="clothing-state">({c.state})</span>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          </div>
+          <>
+            <Separator spacing="none" />
+            <Stack direction="column" align="stretch" gap="xs" fullWidth>
+              <Stack direction="row" align="center" gap="2xs">
+                <Icon name="Shirt" size={13} />
+                <Text
+                  as="h4"
+                  variant="label"
+                  size="xs"
+                  weight="semibold"
+                  tone="secondary"
+                  uppercase
+                >
+                  Clothing
+                </Text>
+              </Stack>
+              <Stack direction="row" align="center" gap="xs" wrap fullWidth>
+                {pc.clothing.map((c, i) => (
+                  <Badge key={i} variant="outline" size="sm">
+                    <Text as="span" size="xs" tone="muted" weight="medium">
+                      {c.slot}:
+                    </Text>
+                    <Text as="span" size="xs" weight="medium">
+                      {c.name}
+                    </Text>
+                    {c.state ? (
+                      <Text as="span" size="xs" tone="secondary" italic>
+                        ({c.state})
+                      </Text>
+                    ) : null}
+                  </Badge>
+                ))}
+              </Stack>
+            </Stack>
+          </>
         ) : null}
-      </article>
+      </Card>
 
       {/* Player Conditions */}
-      <section className="player-section">
-        <h3 className="section-subtitle flex items-center justify-between">
-          <span className="flex items-center gap-1.5">
-            <Icon name="Zap" size={15} /> Conditions
-          </span>
-          <div className="flex items-center gap-1.5">
+      <Stack as="section" direction="column" align="stretch" gap="xs" fullWidth>
+        <Stack
+          direction="row"
+          align="center"
+          justify="between"
+          gap="xs"
+          fullWidth
+        >
+          <Stack direction="row" align="center" gap="xs">
+            <Icon name="Zap" size={15} />
+            <Text
+              as="h3"
+              variant="label"
+              size="xs"
+              weight="semibold"
+              tone="secondary"
+              uppercase
+            >
+              Conditions
+            </Text>
             <Badge variant="neutral" size="xs" pill>
               {pc.conditions.length}
             </Badge>
-            {onPlaythroughChange ? (
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => {
-                  setIsAddingCondition(true);
-                  setNewConditionValue("");
-                }}
-                disabled={actionLoading}
-                leftIcon={<Icon name="Plus" size={12} />}
-              >
-                Add
-              </Button>
-            ) : null}
-          </div>
-        </h3>
+          </Stack>
+          {onPlaythroughChange ? (
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => {
+                setIsAddingCondition(true);
+                setNewConditionValue("");
+              }}
+              disabled={actionLoading}
+              leftIcon={<Icon name="Plus" size={12} />}
+            >
+              Add
+            </Button>
+          ) : null}
+        </Stack>
+
         {pc.conditions.length > 0 ? (
-          <div className="conditions-grid">
+          <Stack direction="column" align="stretch" gap="xs" fullWidth>
             {pc.conditions.map((c, i) => (
-              <div
+              <Card
                 key={i}
-                className="condition-chip group flex items-center justify-between"
+                variant="panel"
+                padding="xs"
+                hoverable={Boolean(onPlaythroughChange)}
+                fullWidth
+                onClick={() =>
+                  onPlaythroughChange &&
+                  setEditingCondition({ index: i, value: c })
+                }
+                title={
+                  onPlaythroughChange ? "Click to edit condition" : undefined
+                }
               >
-                <div
-                  className="flex items-center gap-1.5 min-w-0 cursor-pointer flex-1"
-                  onClick={() =>
-                    onPlaythroughChange &&
-                    setEditingCondition({ index: i, value: c })
-                  }
-                  title={
-                    onPlaythroughChange ? "Click to edit condition" : undefined
-                  }
+                <Stack
+                  direction="row"
+                  align="center"
+                  justify="between"
+                  gap="xs"
+                  fullWidth
                 >
-                  <Icon
-                    name="Activity"
-                    size={14}
-                    className="condition-icon shrink-0"
-                  />
-                  <span className="condition-text truncate">{c}</span>
-                </div>
-                {onPlaythroughChange ? (
-                  <button
-                    type="button"
-                    className="chip-remove-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemoveCondition(i);
-                    }}
-                    disabled={actionLoading}
-                    title="Remove condition"
-                    aria-label={`Remove condition ${c}`}
-                  >
-                    <Icon name="X" size={11} />
-                  </button>
-                ) : null}
-              </div>
+                  <Stack direction="row" align="center" gap="xs" flex1>
+                    <Text size="xs" weight="medium" truncate>
+                      {c}
+                    </Text>
+                  </Stack>
+                  {onPlaythroughChange ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      iconOnly
+                      leftIcon="X"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleRemoveCondition(i);
+                      }}
+                      disabled={actionLoading}
+                      title="Remove condition"
+                      aria-label={`Remove condition ${c}`}
+                    />
+                  ) : null}
+                </Stack>
+              </Card>
             ))}
-          </div>
+          </Stack>
         ) : (
-          <div className="info-empty-state">
-            <Icon name="ShieldCheck" size={15} />
-            <span>No active conditions</span>
-          </div>
+          <StatusMessage variant="inline" tone="neutral" icon="ShieldCheck">
+            No active conditions
+          </StatusMessage>
         )}
-      </section>
+      </Stack>
 
       {/* Player Flags */}
-      <section className="player-section">
-        <h3 className="section-subtitle flex items-center justify-between">
-          <span className="flex items-center gap-1.5">
-            <Icon name="Bookmark" size={15} /> Player Flags
-          </span>
-          <div className="flex items-center gap-1.5">
+      <Stack as="section" direction="column" align="stretch" gap="xs" fullWidth>
+        <Stack
+          direction="row"
+          align="center"
+          justify="between"
+          gap="xs"
+          fullWidth
+        >
+          <Stack direction="row" align="center" gap="xs">
+            <Icon name="Bookmark" size={15} />
+            <Text
+              as="h3"
+              variant="label"
+              size="xs"
+              weight="semibold"
+              tone="secondary"
+              uppercase
+            >
+              Player Flags
+            </Text>
             <Badge variant="neutral" size="xs" pill>
-              {(pc.flags ?? []).length}
+              {flags.length}
             </Badge>
-            {onPlaythroughChange ? (
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => {
-                  setIsAddingFlag(true);
-                  setNewFlagValue("");
-                }}
-                disabled={actionLoading}
-                leftIcon={<Icon name="Plus" size={12} />}
-              >
-                Add
-              </Button>
-            ) : null}
-          </div>
-        </h3>
-        {(pc.flags ?? []).length > 0 ? (
-          <div className="flags-chip-grid">
-            {(pc.flags ?? []).map((f, i) => (
-              <div
+          </Stack>
+          {onPlaythroughChange ? (
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => {
+                setIsAddingFlag(true);
+                setNewFlagValue("");
+              }}
+              disabled={actionLoading}
+              leftIcon={<Icon name="Plus" size={12} />}
+            >
+              Add
+            </Button>
+          ) : null}
+        </Stack>
+
+        {flags.length > 0 ? (
+          <Stack direction="column" align="stretch" gap="xs" fullWidth>
+            {flags.map((f, i) => (
+              <Card
                 key={i}
-                className="flag-chip group flex items-center justify-between"
+                variant="panel"
+                padding="xs"
+                hoverable={Boolean(onPlaythroughChange)}
+                fullWidth
+                onClick={() =>
+                  onPlaythroughChange && setEditingFlag({ index: i, value: f })
+                }
+                title={onPlaythroughChange ? "Click to edit flag" : undefined}
               >
-                <div
-                  className="flex items-center gap-1.5 min-w-0 cursor-pointer flex-1"
-                  onClick={() =>
-                    onPlaythroughChange &&
-                    setEditingFlag({ index: i, value: f })
-                  }
-                  title={onPlaythroughChange ? "Click to edit flag" : undefined}
+                <Stack
+                  direction="row"
+                  align="center"
+                  justify="between"
+                  gap="xs"
+                  fullWidth
                 >
-                  <Icon
-                    name="Bookmark"
-                    size={11}
-                    className="flag-icon shrink-0"
-                  />
-                  <span className="flag-text truncate">{f}</span>
-                </div>
-                {onPlaythroughChange ? (
-                  <button
-                    type="button"
-                    className="chip-remove-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemoveFlag(i);
-                    }}
-                    disabled={actionLoading}
-                    title="Remove flag"
-                    aria-label={`Remove flag ${f}`}
-                  >
-                    <Icon name="X" size={10} />
-                  </button>
-                ) : null}
-              </div>
+                  <Stack direction="row" align="center" gap="xs" flex1>
+                    <Text size="xs" weight="medium" truncate>
+                      {f}
+                    </Text>
+                  </Stack>
+                  {onPlaythroughChange ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      iconOnly
+                      leftIcon="X"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleRemoveFlag(i);
+                      }}
+                      disabled={actionLoading}
+                      title="Remove flag"
+                      aria-label={`Remove flag ${f}`}
+                    />
+                  ) : null}
+                </Stack>
+              </Card>
             ))}
-          </div>
+          </Stack>
         ) : (
-          <div className="info-empty-state">
-            <Icon name="BookmarkCheck" size={15} />
-            <span>No active player flags</span>
-          </div>
+          <StatusMessage variant="inline" tone="neutral" icon="BookmarkCheck">
+            No active player flags
+          </StatusMessage>
         )}
-      </section>
+      </Stack>
 
       {/* Inventory */}
-      <section className="player-section">
-        <h3 className="section-subtitle flex items-center justify-between">
-          <span className="flex items-center gap-1.5">
-            <Icon name="Package" size={15} /> Inventory
-          </span>
+      <Stack as="section" direction="column" align="stretch" gap="xs" fullWidth>
+        <Stack
+          direction="row"
+          align="center"
+          justify="between"
+          gap="xs"
+          fullWidth
+        >
+          <Stack direction="row" align="center" gap="xs">
+            <Icon name="Package" size={15} />
+            <Text
+              as="h3"
+              variant="label"
+              size="xs"
+              weight="semibold"
+              tone="secondary"
+              uppercase
+            >
+              Inventory
+            </Text>
+          </Stack>
           <Badge variant="neutral" size="xs" pill>
             {inventoryCount}
           </Badge>
-        </h3>
+        </Stack>
+
         {playthrough.inventory.length > 0 ? (
-          <div className="inventory-grid">
+          <Stack direction="column" align="stretch" gap="xs" fullWidth>
             {playthrough.inventory.map((item) => {
               const def = getItemDef(item, playthrough.itemCatalog);
               const iconName = getItemIconName(def.type);
               return (
-                <div key={item.itemId} className="inventory-card">
-                  <div className="inventory-card-top">
-                    <div className="inventory-card-title flex items-center gap-1.5">
-                      <span className="inventory-type-icon">
-                        <Icon name={iconName} size={14} />
-                      </span>
-                      <strong className="item-name">{def.name}</strong>
-                    </div>
-                    <Badge variant="accent" size="xs">
-                      x{item.quantity}
-                    </Badge>
-                  </div>
-                  <div className="inventory-card-meta">
-                    <Badge variant="outline" size="xs">
-                      {def.type}
-                    </Badge>
-                  </div>
+                <Card
+                  key={item.itemId}
+                  variant="elevated"
+                  padding="sm"
+                  layout="column"
+                  fullWidth
+                >
+                  <Stack
+                    direction="row"
+                    align="center"
+                    justify="between"
+                    gap="xs"
+                    fullWidth
+                  >
+                    <Stack direction="row" align="center" gap="xs" flex1>
+                      <AvatarBadge icon={iconName} size="xs" />
+                      <Text as="strong" size="sm" weight="semibold" truncate>
+                        {def.name}
+                      </Text>
+                    </Stack>
+                    <Stack direction="row" align="center" gap="2xs">
+                      <Badge variant="outline" size="xs">
+                        {def.type}
+                      </Badge>
+                      <Badge variant="accent" size="xs">
+                        x{item.quantity}
+                      </Badge>
+                    </Stack>
+                  </Stack>
                   {def.description ? (
-                    <p className="item-desc">{def.description}</p>
+                    <Text
+                      variant="body"
+                      size="xs"
+                      tone="secondary"
+                      leading="snug"
+                    >
+                      {def.description}
+                    </Text>
                   ) : null}
-                </div>
+                </Card>
               );
             })}
-          </div>
+          </Stack>
         ) : (
-          <div className="info-empty-state">
-            <Icon name="PackageOpen" size={16} />
-            <span>Inventory is empty</span>
-          </div>
+          <StatusMessage variant="inline" tone="neutral" icon="PackageOpen">
+            Inventory is empty
+          </StatusMessage>
         )}
-      </section>
+      </Stack>
 
       {/* Condition Modals */}
       {isAddingCondition ? (
@@ -433,7 +630,7 @@ export function PlayerTab({
           onCancel={() => setIsAddingCondition(false)}
           maxWidth={420}
         >
-          <div className="modal-form-fields">
+          <Stack direction="column" gap="sm" fullWidth>
             <TextInput
               label="Condition"
               placeholder="e.g. 🤕 Sprained Ankle, 😴 Exhausted"
@@ -442,7 +639,7 @@ export function PlayerTab({
               disabled={actionLoading}
               autoFocus
             />
-          </div>
+          </Stack>
         </ConfirmModal>
       ) : null}
 
@@ -456,7 +653,7 @@ export function PlayerTab({
           onCancel={() => setEditingCondition(null)}
           maxWidth={420}
         >
-          <div className="modal-form-fields">
+          <Stack direction="column" gap="sm" fullWidth>
             <TextInput
               label="Condition"
               value={editingCondition.value}
@@ -469,7 +666,7 @@ export function PlayerTab({
               disabled={actionLoading}
               autoFocus
             />
-          </div>
+          </Stack>
         </ConfirmModal>
       ) : null}
 
@@ -484,7 +681,7 @@ export function PlayerTab({
           onCancel={() => setIsAddingFlag(false)}
           maxWidth={420}
         >
-          <div className="modal-form-fields">
+          <Stack direction="column" gap="sm" fullWidth>
             <TextInput
               label="Player Flag"
               placeholder="e.g. 🗝️ Knows the Password"
@@ -493,7 +690,7 @@ export function PlayerTab({
               disabled={actionLoading}
               autoFocus
             />
-          </div>
+          </Stack>
         </ConfirmModal>
       ) : null}
 
@@ -507,7 +704,7 @@ export function PlayerTab({
           onCancel={() => setEditingFlag(null)}
           maxWidth={420}
         >
-          <div className="modal-form-fields">
+          <Stack direction="column" gap="sm" fullWidth>
             <TextInput
               label="Player Flag"
               value={editingFlag.value}
@@ -517,9 +714,9 @@ export function PlayerTab({
               disabled={actionLoading}
               autoFocus
             />
-          </div>
+          </Stack>
         </ConfirmModal>
       ) : null}
-    </div>
+    </Stack>
   );
 }

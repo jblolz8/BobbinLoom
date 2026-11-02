@@ -10,23 +10,33 @@ import {
   latestChange,
   type SectionChange,
 } from "../../../../engine/sheetProvenance";
-import { Tooltip } from "../../../base";
-import "./CharsTab.css";
+import { Badge, Icon, Stack, Text, Tooltip, type IconName } from "../../../base";
 
 type CharacterSheetSectionsProps = {
   content: string;
   /** Which sections to render, in the sheet's own order. Defaults to the physical trio the info card
    *  peeks at; the full sheet passes every header it has. */
   headers?: readonly string[];
+  /** Visual presentation style: `"prose"` (default, for full sheet reader) or `"badges"` (compact attribute chips, matching PlayerTab). */
+  variant?: "prose" | "badges";
   /** What the story changed in each section, from the turn log. Keys match case-insensitively. */
   marks?: Map<string, SectionChange[]>;
   /** Per-section extra content, after the body: the sheet's drift marker and its restore action. */
   renderSectionExtra?: (section: ContentSection) => ReactNode;
 };
 
+function resolveSectionIcon(header: string): IconName | undefined {
+  const norm = header.trim().toLowerCase();
+  if (norm === "body") return "Activity";
+  if (norm === "appearance") return "Eye";
+  if (norm === "clothing") return "Shirt";
+  return undefined;
+}
+
 export function CharacterSheetSections({
   content,
   headers,
+  variant = "prose",
   marks,
   renderSectionExtra,
 }: CharacterSheetSectionsProps) {
@@ -49,7 +59,7 @@ export function CharacterSheetSections({
 
   if (sections.length === 0) return null;
   return (
-    <div className="char-sheet-sections">
+    <Stack direction="column" align="stretch" gap="sm" fullWidth>
       {sections.map((section, i) => {
         const stub = isStubSection(section);
         const lines = section.body
@@ -58,42 +68,90 @@ export function CharacterSheetSections({
           .filter((l) => l.length > 0);
         const changes = changesFor(section.header);
         const latest = latestChange(changes ?? undefined);
+        const iconName =
+          variant === "badges" ? resolveSectionIcon(section.header) : undefined;
+
         return (
-          <section
-            className="char-sheet-section"
+          <Stack
+            as="section"
+            direction="column"
+            align="stretch"
+            gap="xs"
+            fullWidth
             key={`${section.header}-${i}`}
           >
-            <h4>
-              {section.header}
+            <Stack direction="row" align="center" gap="xs" wrap>
+              {iconName ? <Icon name={iconName} size={12} /> : null}
+              <Text
+                as="h4"
+                variant="label"
+                size="xs"
+                weight="semibold"
+                tone="secondary"
+                uppercase
+              >
+                {section.header}
+              </Text>
               {latest ? (
                 <Tooltip
                   content={
-                    <span className="sheet-mark-lines">
+                    <Stack direction="column" gap="2xs">
                       {(changes ?? []).map((change, index) => (
-                        <span key={index}>
+                        <Text key={index} as="span" size="xs">
                           turn {change.turn} — {change.note || "updated"}
-                        </span>
+                        </Text>
                       ))}
-                    </span>
+                    </Stack>
                   }
                 >
                   {/* The story grew this section; the turn is the anchor back to the exchange that did it. */}
-                  <span className="sheet-mark">
+                  <Badge variant="accent" size="xs" pill>
                     changed · turn {latest.turn}
-                  </span>
+                  </Badge>
                 </Tooltip>
               ) : null}
-            </h4>
+            </Stack>
             {stub ? (
-              <p className="sheet-stub">(not established)</p>
+              <Text as="p" size="xs" tone="muted" italic>
+                (not established)
+              </Text>
+            ) : variant === "badges" ? (
+              renderSheetBadges(lines)
             ) : (
               renderSheetBody(lines)
             )}
             {renderSectionExtra?.(section)}
-          </section>
+          </Stack>
         );
       })}
-    </div>
+    </Stack>
+  );
+}
+
+function renderSheetBadges(lines: string[]): ReactNode {
+  const items = lines.map((line) => {
+    const cleaned = line.replace(/^\s*[-•]\s*/, "").trim();
+    const match = cleaned.match(/^([^:]+):\s*(.+)$/);
+    return match
+      ? { key: match[1].trim(), value: match[2].trim() }
+      : { value: cleaned };
+  });
+
+  return (
+    <Stack direction="row" align="center" gap="xs" wrap fullWidth>
+      {items.map((item, i) => (
+        <Badge key={i} variant="outline" size="sm">
+          {item.key ? (
+            <Text as="span" size="xs" tone="muted" weight="medium">
+              {item.key}:
+            </Text>
+          ) : null}
+          <Text as="span" size="xs" weight="medium">
+            {item.value}
+          </Text>
+        </Badge>
+      ))}
+    </Stack>
   );
 }
 
@@ -103,11 +161,37 @@ function renderSheetBody(lines: string[]): ReactNode[] {
   const flush = () => {
     if (bullets.length === 0) return;
     out.push(
-      <ul key={`ul-${out.length}`} className="sheet-bullets">
-        {bullets.map((b, i) => (
-          <li key={i}>{b.replace(/^-\s*/, "")}</li>
-        ))}
-      </ul>,
+      <Stack
+        key={`ul-${out.length}`}
+        direction="column"
+        align="stretch"
+        gap="2xs"
+        fullWidth
+      >
+        {bullets.map((b, i) => {
+          const cleaned = b.replace(/^-\s*/, "").trim();
+          const match = cleaned.match(/^([^:]+):\s*(.+)$/);
+          return (
+            <Stack key={i} direction="row" align="baseline" gap="xs" fullWidth>
+              <Text as="span" size="xs" tone="muted">
+                •
+              </Text>
+              <Text as="span" size="xs" leading="snug">
+                {match ? (
+                  <>
+                    <Text as="span" size="xs" tone="secondary" weight="semibold">
+                      {match[1].trim()}:
+                    </Text>{" "}
+                    {match[2].trim()}
+                  </>
+                ) : (
+                  cleaned
+                )}
+              </Text>
+            </Stack>
+          );
+        })}
+      </Stack>,
     );
     bullets = [];
   };
@@ -115,7 +199,11 @@ function renderSheetBody(lines: string[]): ReactNode[] {
     if (line.startsWith("- ")) bullets.push(line);
     else {
       flush();
-      out.push(<p key={`p-${out.length}`}>{line}</p>);
+      out.push(
+        <Text key={`p-${out.length}`} as="p" size="xs" leading="snug" preWrap>
+          {line}
+        </Text>,
+      );
     }
   }
   flush();

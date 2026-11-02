@@ -1,15 +1,18 @@
 import {
   copyFileSync,
   existsSync,
+  linkSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   renameSync,
+  rmdirSync,
+  rmSync,
   statSync,
   unlinkSync,
 } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { z } from "zod";
 import {
   atomicWriteFile,
@@ -116,8 +119,106 @@ function findFolderContainingId(dir: string, id: string): string | null {
   return null;
 }
 
-function playthroughPath(dir: string, id: string): string {
+export function playthroughFolderPath(dir: string, id: string): string {
+  return join(dir, id);
+}
+
+export function playthroughPath(dir: string, id: string): string {
+  return join(playthroughFolderPath(dir, id), `${id}.json`);
+}
+
+export function playthroughImagesDir(dir: string, id: string): string {
+  return join(playthroughFolderPath(dir, id), "images");
+}
+
+function legacyFlatPlaythroughPath(dir: string, id: string): string {
   return join(dir, `${id}.json`);
+}
+
+/** Links `src` to `dest` via a zero-copy OS hardlink, falling back to `copyFileSync` across filesystems. */
+export function linkOrCopyFile(src: string, dest: string): void {
+  if (existsSync(dest)) return;
+  mkdirSync(dirname(dest), { recursive: true });
+  try {
+    linkSync(src, dest);
+  } catch {
+    copyFileSync(src, dest);
+  }
+}
+
+export function collectPlaythroughImageRefs(
+  playthrough: Playthrough,
+): Set<string> {
+  const refs = new Set<string>();
+  for (const message of playthrough.messages ?? []) {
+    for (const image of message.images ?? []) {
+      if (image?.file) refs.add(image.file);
+    }
+  }
+  if (playthrough.cover?.file) refs.add(playthrough.cover.file);
+  return refs;
+}
+
+function syncPlaythroughImagesFromLegacyDir(
+  dir: string,
+  playthrough: Playthrough,
+): void {
+  const refs = collectPlaythroughImageRefs(playthrough);
+  if (refs.size === 0) return;
+  const siblingImagesDir = join(dirname(dir), "images");
+  try {
+    if (!existsSync(siblingImagesDir) || !statSync(siblingImagesDir).isDirectory()) {
+      return;
+    }
+  } catch {
+    return;
+  }
+  const targetDir = playthroughImagesDir(dir, playthrough.id);
+  for (const file of refs) {
+    const dest = join(targetDir, file);
+    if (existsSync(dest)) continue;
+    const src = join(siblingImagesDir, file);
+    if (existsSync(src)) {
+      try {
+        linkOrCopyFile(src, dest);
+      } catch {
+        /* ignore best-effort legacy image migration */
+      }
+    }
+  }
+}
+
+function copyPlaythroughImages(
+  dir: string,
+  sourceId: string,
+  target: Playthrough,
+): void {
+  const refs = collectPlaythroughImageRefs(target);
+  if (refs.size === 0) return;
+  const sourceDir = playthroughImagesDir(dir, sourceId);
+  const targetDir = playthroughImagesDir(dir, target.id);
+  const siblingImagesDir = join(dirname(dir), "images");
+  for (const file of refs) {
+    const dest = join(targetDir, file);
+    if (existsSync(dest)) continue;
+    const fromPlaythrough = join(sourceDir, file);
+    if (existsSync(fromPlaythrough)) {
+      try {
+        linkOrCopyFile(fromPlaythrough, dest);
+      } catch {
+        /* ignore */
+      }
+      continue;
+    }
+    const fromLegacy = join(siblingImagesDir, file);
+    if (existsSync(fromLegacy)) {
+      try {
+        linkOrCopyFile(fromLegacy, dest);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
 }
 
 export const PERSONAS_DIR = join(process.cwd(), "data", "personas");
@@ -1538,7 +1639,15 @@ export function getPlaythroughRecord(
   dir: string,
   id: string,
 ): Playthrough | null {
-  const path = playthroughPath(dir, id);
+  const folderFilePath = playthroughPath(dir, id);
+  const legacyPath = legacyFlatPlaythroughPath(dir, id);
+  const path = existsSync(folderFilePath)
+    ? folderFilePath
+    : existsSync(legacyPath)
+      ? legacyPath
+      : folderFilePath;
+  const isLegacyFlat = path === legacyPath;
+
   const result = readJsonFile(path);
   if (!result.ok) {
     if (result.reason !== "missing") {
@@ -1559,8 +1668,18 @@ export function getPlaythroughRecord(
     return null;
   }
   const data = migrated.data;
-  if (repairMemoryEventTurns(data)) {
+  const repaired = repairMemoryEventTurns(data);
+  if (repaired || isLegacyFlat) {
     updatePlaythroughRecord(dir, data);
+    if (isLegacyFlat && existsSync(legacyPath)) {
+      try {
+        unlinkSync(legacyPath);
+      } catch {
+        /* ignore */
+      }
+    }
+  } else {
+    syncPlaythroughImagesFromLegacyDir(dir, data);
   }
   return data;
 }
@@ -1580,16 +1699,39 @@ export function updatePlaythroughRecord(
       `refusing to persist invalid playthrough ${playthrough.id}: ${issues}`,
     );
   }
-  ensureStoreDir(dir);
+  const folder = playthroughFolderPath(dir, playthrough.id);
+  ensureStoreDir(folder);
   // Write the ORIGINAL in-memory object (not the parsed copy).
   atomicWriteJson(playthroughPath(dir, playthrough.id), playthrough);
+  const legacyPath = legacyFlatPlaythroughPath(dir, playthrough.id);
+  if (existsSync(legacyPath)) {
+    try {
+      unlinkSync(legacyPath);
+    } catch {
+      /* ignore */
+    }
+  }
+  syncPlaythroughImagesFromLegacyDir(dir, playthrough);
 }
 
 export function deletePlaythroughRecord(dir: string, id: string): boolean {
   invalidatePlaythroughCache();
-  const path = playthroughPath(dir, id);
-  if (!existsSync(path)) return false;
-  unlinkSync(path);
+  const folder = playthroughFolderPath(dir, id);
+  const filePath = playthroughPath(dir, id);
+  const legacyPath = legacyFlatPlaythroughPath(dir, id);
+  const hasFolderRecord = existsSync(filePath) || existsSync(folder);
+  const hasLegacyRecord = existsSync(legacyPath);
+  if (!hasFolderRecord && !hasLegacyRecord) return false;
+  if (hasFolderRecord) {
+    rmSync(folder, { recursive: true, force: true });
+  }
+  if (hasLegacyRecord) {
+    try {
+      unlinkSync(legacyPath);
+    } catch {
+      /* ignore */
+    }
+  }
   return true;
 }
 
@@ -1669,6 +1811,7 @@ export function duplicatePlaythroughRecord(
   clone.updatedAt = now;
 
   updatePlaythroughRecord(dir, clone);
+  copyPlaythroughImages(dir, original.id, clone);
   return clone;
 }
 
@@ -1790,6 +1933,7 @@ export function branchPlaythroughRecord(
   clone.updatedAt = now;
 
   updatePlaythroughRecord(dir, clone);
+  copyPlaythroughImages(dir, original.id, clone);
   return clone;
 }
 
@@ -1829,9 +1973,11 @@ export type PlaythroughRecordList = {
 };
 
 let playthroughRecordsCache: PlaythroughRecordList | null = null;
+let playthroughRecordsCacheDir: string | null = null;
 
 export function invalidatePlaythroughCache() {
   playthroughRecordsCache = null;
+  playthroughRecordsCacheDir = null;
 }
 
 /** Reads EVERY playthrough file, migrating each one, sorted newest-first.
@@ -1842,21 +1988,38 @@ export function invalidatePlaythroughCache() {
  *  eight real documents, which is why the LIST route ships a projection rather than whole
  *  documents — parses stay, bytes on the wire do not. */
 function readAllPlaythroughRecords(dir: string): PlaythroughRecordList {
-  if (playthroughRecordsCache) {
+  if (playthroughRecordsCache && playthroughRecordsCacheDir === dir) {
     return playthroughRecordsCache;
   }
   ensureStoreDir(dir);
   const playthroughs: Playthrough[] = [];
   const failures: LoadFailure[] = [];
-  for (const file of readdirSync(dir).filter((f) => f.endsWith(".json"))) {
-    const id = file.replace(/\.json$/, "");
-    const path = join(dir, file);
+  const loadedIds = new Set<string>();
+
+  function loadAndQuarantineOnFailure(
+    id: string,
+    path: string,
+    migrateFlatFile: boolean,
+  ) {
     try {
       const result = readJsonFile(path);
       if (!result.ok) throw new Error(result.reason);
       const migrated = migratePlaythrough(result.data);
       if (!migrated.ok) throw new Error(migrated.reason);
-      playthroughs.push(migrated.data);
+      const data = migrated.data;
+      if (migrateFlatFile) {
+        const folder = playthroughFolderPath(dir, data.id);
+        ensureStoreDir(folder);
+        atomicWriteJson(playthroughPath(dir, data.id), data);
+        try {
+          unlinkSync(path);
+        } catch {
+          /* ignore */
+        }
+      }
+      syncPlaythroughImagesFromLegacyDir(dir, data);
+      playthroughs.push(data);
+      loadedIds.add(data.id);
     } catch (e) {
       const reason = e instanceof Error ? e.message : String(e);
       // Best-effort name from the raw file BEFORE quarantine
@@ -1876,8 +2039,73 @@ function readAllPlaythroughRecords(dir: string): PlaythroughRecordList {
       );
     }
   }
+
+  const entries = readdirSync(dir, { withFileTypes: true });
+
+  // 1) Legacy flat `<id>.json` files directly in `dir` — migrate valid playthroughs into
+  //    `<dir>/<id>/<id>.json`, and quarantine invalid/corrupt flat files in place.
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+    const id = entry.name.replace(/\.json$/, "");
+    const path = join(dir, entry.name);
+    loadAndQuarantineOnFailure(id, path, true);
+  }
+
+  // 2) Folder-per-playthrough `<dir>/<id>/<id>.json`.
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.endsWith(".bak")) continue;
+    const id = entry.name;
+    if (loadedIds.has(id)) continue;
+    const folderDir = join(dir, id);
+    const primaryFile = join(folderDir, `${id}.json`);
+    if (existsSync(primaryFile)) {
+      loadAndQuarantineOnFailure(id, primaryFile, false);
+      continue;
+    }
+    let jsonFiles: string[] = [];
+    try {
+      jsonFiles = readdirSync(folderDir).filter((f) => f.endsWith(".json"));
+    } catch {
+      continue;
+    }
+    for (const file of jsonFiles) {
+      const fileId = file.replace(/\.json$/, "");
+      if (loadedIds.has(fileId)) continue;
+      loadAndQuarantineOnFailure(fileId, join(folderDir, file), false);
+    }
+  }
+
+  // 3) In production (`data/playthroughs`), once all playthroughs have migrated their
+  //    referenced images into `data/playthroughs/<id>/images/`, clean up legacy `data/images`.
+  const prodPlaythroughsDir = join(process.cwd(), "data", "playthroughs");
+  if (dir === prodPlaythroughsDir) {
+    const legacyImagesDir = join(process.cwd(), "data", "images");
+    try {
+      if (
+        existsSync(legacyImagesDir) &&
+        statSync(legacyImagesDir).isDirectory()
+      ) {
+        for (const imgFile of readdirSync(legacyImagesDir)) {
+          if (/^[a-f0-9]{64}\.(png|jpg|webp)$/.test(imgFile)) {
+            try {
+              unlinkSync(join(legacyImagesDir, imgFile));
+            } catch {
+              /* ignore */
+            }
+          }
+        }
+        if (readdirSync(legacyImagesDir).length === 0) {
+          rmdirSync(legacyImagesDir);
+        }
+      }
+    } catch {
+      /* ignore best-effort cleanup */
+    }
+  }
+
   playthroughs.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   playthroughRecordsCache = { playthroughs, failures };
+  playthroughRecordsCacheDir = dir;
   return playthroughRecordsCache;
 }
 

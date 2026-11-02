@@ -1,19 +1,13 @@
 import type { CSSProperties } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Playthrough } from "../../../../../schemas";
 import type { TokenUsage } from "../../../../api";
-import { Tabs, type TabItem } from "../../../base";
+import { Badge, Tabs, type TabItem } from "../../../base";
 import { PlayerTab } from "./PlayerTab";
 import { CharsTab } from "./CharsTab";
 import { JournalTab } from "./JournalTab";
 
 type TabId = "player" | "chars" | "journal";
-
-const INFO_TABS: TabItem<TabId>[] = [
-  { id: "player", label: "Player", icon: "User" },
-  { id: "chars", label: "Chars", icon: "Users" },
-  { id: "journal", label: "Journal", icon: "BookOpen" },
-];
 
 export type InfoPanelProps = {
   playthrough: Playthrough;
@@ -42,6 +36,31 @@ export function InfoPanel(props: InfoPanelProps) {
   const { playthrough, className, style } = props;
   const [activeTab, setActiveTab] = useState<TabId>("player");
 
+  const activeCharsCount = (playthrough.activeCharacters ?? []).length;
+
+  const infoTabs = useMemo<TabItem<TabId>[]>(
+    () => [
+      { id: "player", label: "Player", icon: "User" },
+      {
+        id: "chars",
+        label: "Chars",
+        icon: "Users",
+        badge:
+          activeCharsCount > 0 ? (
+            <Badge
+              variant={activeTab === "chars" ? "accent" : "neutral"}
+              size="xs"
+              pill
+            >
+              {activeCharsCount}
+            </Badge>
+          ) : undefined,
+      },
+      { id: "journal", label: "Journal", icon: "BookOpen" },
+    ],
+    [activeCharsCount, activeTab],
+  );
+
   return (
     <aside
       className={`panel info-panel${className ? ` ${className}` : ""}`}
@@ -49,30 +68,31 @@ export function InfoPanel(props: InfoPanelProps) {
     >
       <div className="info-panel-tabs-header">
         <Tabs<TabId>
-          tabs={INFO_TABS}
+          tabs={infoTabs}
           activeTab={activeTab}
           onChange={setActiveTab}
-          variant="enclosed"
+          variant="segmented"
           size="sm"
           fullWidth
+          ariaLabel="Info Panel Sections"
         />
       </div>
 
       <div className="info-panel-body">
-        {activeTab === "player" ? (
+        <Tabs.Panel active={activeTab === "player"}>
           <PlayerTab
             playthrough={playthrough}
             onPlaythroughChange={props.onPlaythroughChange}
           />
-        ) : null}
-        {activeTab === "chars" ? (
+        </Tabs.Panel>
+        <Tabs.Panel active={activeTab === "chars"}>
           <CharsTab
             playthrough={playthrough}
             onPlaythroughChange={props.onPlaythroughChange}
             onOpenLibrary={props.onOpenLibrary}
           />
-        ) : null}
-        {activeTab === "journal" ? (
+        </Tabs.Panel>
+        <Tabs.Panel active={activeTab === "journal"}>
           <JournalTab
             playthrough={playthrough}
             onPlaythroughChange={props.onPlaythroughChange}
@@ -84,7 +104,7 @@ export function InfoPanel(props: InfoPanelProps) {
             onStartNewWithSameScenario={props.onStartNewWithSameScenario}
             onOpenTimelines={props.onOpenTimelines}
           />
-        ) : null}
+        </Tabs.Panel>
       </div>
     </aside>
   );

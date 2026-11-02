@@ -25,23 +25,33 @@ import {
   resolveCastPreferences,
   updateViewPreferences,
 } from "../../../../api";
-import { CharacterEditor } from "../../../modals/CharacterEditor";
-import { SimpleCharacterEditor } from "../../../modals/SimpleCharacterEditor";
+import { DetailedCharacterEditor } from "./DetailedCharacterEditor";
+import { SimpleCharacterEditor } from "./SimpleCharacterEditor";
 import { CharacterSheetSections } from "./CharacterSheetSections";
 import {
+  Accordion,
   AvatarBadge,
   Badge,
   Button,
+  Card,
+  CharacterAvatar,
+  Checkbox,
+  FormGrid,
   Icon,
   ModelIcon,
   resolveModelInfo,
   SearchBar,
+  Separator,
   SimpleSelect,
+  Stack,
+  StatusMessage,
+  Tabs,
+  Text,
   TextArea,
+  TextInput,
   type SimpleSelectOption,
 } from "../../../base";
 import { ConfirmModal } from "../../../common";
-import "./CharsTab.css";
 
 type SaveFeedback = { ok: boolean; text: string };
 
@@ -512,205 +522,193 @@ export function CharsTab({
   }
 
   return (
-    <div className="chars-tab-container">
+    <Stack direction="column" align="stretch" gap="md" fullWidth>
       {/* ── Character Manager Toolbar ── */}
-      <div className="char-provider-toolbar">
-        <div className="char-provider-header">
-          <div className="char-provider-label-wrap">
-            <Icon name="Sparkles" size={13} className="char-provider-sparkle" />
-            <span className="char-provider-title">Character Manager</span>
-          </div>
+      <Card variant="elevated" padding="sm" layout="column" fullWidth>
+        <Stack
+          direction="row"
+          align="center"
+          justify="between"
+          gap="xs"
+          wrap
+          fullWidth
+        >
+          <Stack direction="row" align="center" gap="xs">
+            <Icon name="Sparkles" size={14} />
+            <Text variant="label" size="xs" weight="semibold">
+              Character Manager
+            </Text>
+          </Stack>
           <Button
             size="xs"
-            variant="primary"
-            leftIcon={<Icon name="Plus" size={12} />}
+            variant="ai"
+            leftIcon="Plus"
             onClick={() => {
               setGenerateCharError(null);
               setGenerateModalOpen(true);
             }}
-            className="char-gen-trigger-btn"
             title="Generate New Character"
           >
-            <span>Generate</span>
-            <span className="char-gen-btn-label-extra"> Character</span>
+            Generate Character
           </Button>
-        </div>
+        </Stack>
 
-        <div className="char-provider-controls-grid">
-          <div className="char-provider-control-field">
-            <label htmlFor="char-provider-select" className="char-field-label">
-              AI Provider
-            </label>
-            <SimpleSelect
-              id="char-provider-select"
-              size="xs"
-              variant="filled"
-              fullWidth
-              value={characterProviderId}
-              onChange={handleCharacterProviderChange}
-              options={characterProviderOptions}
-              placeholder="Current active text provider"
-              aria-label="Character creator AI provider"
-            />
-          </div>
+        <Stack direction="column" align="stretch" gap="xs" fullWidth>
+          <SimpleSelect
+            id="char-provider-select"
+            label="AI Provider"
+            size="xs"
+            variant="filled"
+            fullWidth
+            value={characterProviderId}
+            onChange={handleCharacterProviderChange}
+            options={characterProviderOptions}
+            placeholder="Current active text provider"
+            aria-label="Character creator AI provider"
+          />
 
-          <div className="char-provider-control-field">
-            <div className="char-scope-header-row">
-              <label htmlFor="char-scope-select" className="char-field-label">
-                Context Scope
-              </label>
-              {contextScope === "recent" && (
-                <label className="char-recent-count-label">
-                  <span>Count:</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={50}
-                    value={recentCount}
-                    onChange={(e) =>
-                      setRecentCount(parseInt(e.target.value, 10) || 8)
-                    }
-                    className="char-recent-count-input"
-                    aria-label="Number of recent messages"
-                  />
-                </label>
-              )}
-            </div>
-            <SimpleSelect
-              id="char-scope-select"
-              size="xs"
-              variant="filled"
-              fullWidth
-              value={contextScope}
-              onChange={(val) => setContextScope(val as CharacterContextScope)}
-              options={contextScopeOptions}
-              aria-label="Story context scope for character operations"
+          <SimpleSelect
+            id="char-scope-select"
+            label="Context Scope"
+            size="xs"
+            variant="filled"
+            fullWidth
+            value={contextScope}
+            onChange={(val) => setContextScope(val as CharacterContextScope)}
+            options={contextScopeOptions}
+            aria-label="Story context scope for character operations"
+          />
+
+          {contextScope === "recent" ? (
+            <TextInput
+              type="number"
+              size="sm"
+              min={1}
+              max={50}
+              label="Recent Messages Count"
+              value={recentCount}
+              onChange={(e) =>
+                setRecentCount(parseInt(e.target.value, 10) || 8)
+              }
+              aria-label="Number of recent messages"
             />
-          </div>
-        </div>
-      </div>
+          ) : null}
+        </Stack>
+      </Card>
 
       {fleshOutError ? (
-        <div className="promote-error char-provider-error">
-          <Icon name="AlertTriangle" size={14} />
-          <span className="error-text">{fleshOutError}</span>
-          <button
-            className="dismiss"
-            onClick={() => setFleshOutError(null)}
-            aria-label="Dismiss"
-          >
-            ×
-          </button>
-        </div>
+        <StatusMessage
+          variant="banner"
+          tone="err"
+          onDismiss={() => setFleshOutError(null)}
+        >
+          {fleshOutError}
+        </StatusMessage>
       ) : null}
 
       {/* ── Search & View Mode Toolbar ── */}
-      {playthrough.characters.length > 0 && (
-        <div className="chars-filter-bar">
-          <SearchBar
-            value={charSearch}
-            onChange={setCharSearch}
-            placeholder="Search characters…"
+      {playthrough.characters.length > 0 ? (
+        <Stack
+          direction="row"
+          align="center"
+          justify="between"
+          gap="xs"
+          wrap
+          fullWidth
+        >
+          <Stack flex1>
+            <SearchBar
+              value={charSearch}
+              onChange={setCharSearch}
+              placeholder="Search characters…"
+              size="sm"
+            />
+          </Stack>
+          <Tabs<CastViewMode>
+            variant="segmented"
             size="sm"
-            containerClassName="chars-search-input"
+            ariaLabel="Cast View Mode"
+            activeTab={castViewMode}
+            onChange={setCastViewMode}
+            tabs={[
+              {
+                id: "portrait",
+                label: "Portrait",
+                icon: "IdCard",
+                title: "Full Portrait View",
+              },
+              {
+                id: "compact",
+                label: "Compact",
+                icon: "List",
+                title: "Compact Profile View",
+              },
+            ]}
           />
-          <div
-            className="view-mode-switcher cast-view-switcher"
-            role="group"
-            aria-label="Cast View Mode"
-          >
-            <button
-              type="button"
-              className={`view-mode-btn ${castViewMode === "portrait" ? "active" : ""}`}
-              onClick={() => setCastViewMode("portrait")}
-              title="Full Portrait View"
-            >
-              <Icon name="IdCard" size={13} />
-              <span>Portrait</span>
-            </button>
-            <button
-              type="button"
-              className={`view-mode-btn ${castViewMode === "compact" ? "active" : ""}`}
-              onClick={() => setCastViewMode("compact")}
-              title="Compact Profile View"
-            >
-              <Icon name="List" size={13} />
-              <span>Compact</span>
-            </button>
-          </div>
-        </div>
-      )}
+        </Stack>
+      ) : null}
 
       {/* ── 1. In Scene (Active) Section ── */}
-      <section className="chars-section">
-        <div className="section-header-clean">
-          <div className="section-title-wrap">
-            <Icon name="Users" size={14} />
-            <span className="section-title-text">In Scene (Active)</span>
-            <Badge variant="success" size="xs" pill>
-              {activeCharacters.length}
-            </Badge>
-          </div>
-        </div>
+      <Stack as="section" direction="column" align="stretch" gap="sm" fullWidth>
+        <Stack direction="row" align="center" gap="xs">
+          <Icon name="Users" size={14} />
+          <Text
+            as="h3"
+            variant="label"
+            size="xs"
+            weight="semibold"
+            tone="secondary"
+            uppercase
+          >
+            In Scene (Active)
+          </Text>
+          <Badge variant="success" size="xs" pill>
+            {activeCharacters.length}
+          </Badge>
+        </Stack>
 
         {activeCharacters.length === 0 ? (
-          <p className="info-empty-state">
+          <StatusMessage variant="inline" tone="neutral" icon="Users">
             {charSearch.trim()
               ? `No active characters match "${charSearch}".`
               : "No characters currently in the scene."}
-          </p>
+          </StatusMessage>
         ) : (
-          <div className={`chars-cards-list mode-${castViewMode}`}>
+          <Stack direction="column" align="stretch" gap="sm" fullWidth>
             {activeCharacters.map((c) => renderCharacterItem(c, true))}
-          </div>
+          </Stack>
         )}
-      </section>
+      </Stack>
 
       {/* ── 2. Off-Screen (Inactive) Section ── */}
-      <section className="chars-section background-section">
-        <div className="section-header-clean">
-          <button
-            type="button"
-            className="section-title-toggle-btn"
-            onClick={() => setOffScreenCollapsed(!offScreenCollapsed)}
-            aria-expanded={!offScreenCollapsed}
-            title={
-              offScreenCollapsed
-                ? "Expand off-screen characters"
-                : "Collapse off-screen characters"
-            }
-          >
-            <span className="section-title-wrap">
-              <Icon name="UserCheck" size={14} />
-              <span className="section-title-text">Off-Screen (Inactive)</span>
-              <Badge variant="neutral" size="xs" pill>
-                {inactiveCharacters.length}
-              </Badge>
-            </span>
-            <Icon
-              name={offScreenCollapsed ? "ChevronDown" : "ChevronUp"}
-              size={14}
-              className="toggle-chevron"
-            />
-          </button>
-        </div>
-
-        {!offScreenCollapsed &&
-          (inactiveCharacters.length === 0 ? (
-            <p className="info-empty-state">
-              {charSearch.trim()
-                ? `No off-screen characters match "${charSearch}".`
-                : "No off-screen characters."}
-            </p>
-          ) : (
-            <div className={`chars-cards-list mode-${castViewMode}`}>
-              {inactiveCharacters.map((c) => renderCharacterItem(c, false))}
-            </div>
-          ))}
-      </section>
+      <Accordion
+        variant="ghost"
+        size="sm"
+        icon="UserCheck"
+        title="Off-Screen (Inactive)"
+        badge={
+          <Badge variant="neutral" size="xs" pill>
+            {inactiveCharacters.length}
+          </Badge>
+        }
+        open={!offScreenCollapsed}
+        onOpenChange={(nextOpen) => setOffScreenCollapsed(!nextOpen)}
+      >
+        {inactiveCharacters.length === 0 ? (
+          <StatusMessage variant="inline" tone="neutral" icon="UserCheck">
+            {charSearch.trim()
+              ? `No off-screen characters match "${charSearch}".`
+              : "No off-screen characters."}
+          </StatusMessage>
+        ) : (
+          <Stack direction="column" align="stretch" gap="sm" fullWidth>
+            {inactiveCharacters.map((c) => renderCharacterItem(c, false))}
+          </Stack>
+        )}
+      </Accordion>
 
       {editingChar && editingChar.templateId ? (
-        <CharacterEditor
+        <DetailedCharacterEditor
           character={editingChar}
           playthrough={playthrough}
           inLibrary={library.some((t) => t.id === editingChar.templateId)}
@@ -734,7 +732,7 @@ export function CharsTab({
         />
       ) : null}
 
-      {generateModalOpen && (
+      {generateModalOpen ? (
         <ConfirmModal
           title="Generate New Character"
           confirmLabel={
@@ -747,107 +745,156 @@ export function CharsTab({
           onCancel={handleCancelGenerate}
           maxWidth={500}
         >
-          <div className="char-gen-modal-body">
-            <p className="char-gen-desc">
+          <Stack direction="column" align="stretch" gap="md" fullWidth>
+            <Text as="p" size="xs" tone="secondary" leading="relaxed">
               Instruct the Character Manager to generate a new character
               grounded in the story so far. You can provide a specific concept
               or leave it empty to invent an appropriate character.
-            </p>
+            </Text>
 
-            {generateCharError && (
-              <div className="promote-error char-gen-error">
-                <Icon name="AlertTriangle" size={14} />
-                <span className="error-text">{generateCharError}</span>
-              </div>
-            )}
+            {generateCharError ? (
+              <StatusMessage variant="banner" tone="err">
+                {generateCharError}
+              </StatusMessage>
+            ) : null}
 
-            <div className="char-gen-field">
-              <label htmlFor="char-gen-prompt-input" className="char-gen-label">
-                Concept or Prompt{" "}
-                <span className="char-gen-optional">(Optional)</span>
-              </label>
-              <TextArea
-                id="char-gen-prompt-input"
-                value={genPrompt}
-                onChange={(e) => setGenPrompt(e.target.value)}
-                placeholder="e.g. A suspicious dockmaster named Orson who recognizes the player, or leave empty to invent someone contextually relevant..."
-                rows={3}
-                disabled={isGeneratingChar}
-              />
-            </div>
+            <TextArea
+              id="char-gen-prompt-input"
+              label="Concept or Prompt (Optional)"
+              value={genPrompt}
+              onChange={(e) => setGenPrompt(e.target.value)}
+              placeholder="e.g. A suspicious dockmaster named Orson who recognizes the player, or leave empty to invent someone contextually relevant..."
+              rows={3}
+              disabled={isGeneratingChar}
+            />
 
-            <div className="char-gen-field">
-              <span className="char-gen-label">Character Tier</span>
-              <div className="char-gen-tier-options">
-                <label
-                  className={`char-gen-tier-pill ${genTier === "detailed" ? "active" : ""}`}
-                >
-                  <input
-                    type="radio"
-                    name="genTier"
-                    value="detailed"
-                    checked={genTier === "detailed"}
-                    onChange={() => setGenTier("detailed")}
-                    disabled={isGeneratingChar}
-                  />
-                  <div className="tier-pill-content">
-                    <span className="tier-pill-title">Detailed Character</span>
-                    <span className="tier-pill-desc">
-                      Full sheet with personality, background & clothing
-                    </span>
-                  </div>
-                </label>
-                <label
-                  className={`char-gen-tier-pill ${genTier === "simple" ? "active" : ""}`}
-                >
-                  <input
-                    type="radio"
-                    name="genTier"
-                    value="simple"
-                    checked={genTier === "simple"}
-                    onChange={() => setGenTier("simple")}
-                    disabled={isGeneratingChar}
-                  />
-                  <div className="tier-pill-content">
-                    <span className="tier-pill-title">Simple NPC</span>
-                    <span className="tier-pill-desc">
-                      Compact note card (can be fleshed out later)
-                    </span>
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            <div className="char-gen-field">
-              <label className="char-gen-checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={genInScene}
-                  onChange={(e) => setGenInScene(e.target.checked)}
+            <Stack direction="column" align="stretch" gap="xs" fullWidth>
+              <Text variant="label" size="xs" weight="semibold">
+                Character Tier
+              </Text>
+              <FormGrid cols={2} gap="sm">
+                <Card
+                  as="button"
+                  type="button"
+                  variant="panel"
+                  padding="sm"
+                  layout="column"
+                  active={genTier === "detailed"}
+                  hoverable
                   disabled={isGeneratingChar}
-                />
-                <span>Place in scene immediately (In Scene / Active)</span>
-              </label>
-            </div>
+                  onClick={() => setGenTier("detailed")}
+                >
+                  <Stack direction="row" align="center" gap="xs">
+                    <Icon name="FileText" size={14} />
+                    <Text size="xs" weight="semibold">
+                      Detailed Character
+                    </Text>
+                  </Stack>
+                  <Text size="xs" tone="muted" leading="snug">
+                    Full sheet with personality, background &amp; clothing
+                  </Text>
+                </Card>
 
-            <div className="char-gen-context-note">
-              <Icon name="Info" size={13} />
-              <span>
-                Using story context:{" "}
-                <strong>
-                  {contextScope === "chapter"
-                    ? "Current Chapter (All)"
-                    : contextScope === "timeline"
-                      ? "Timeline Highlights"
-                      : `Recent ${recentCount} messages`}
-                </strong>
-              </span>
-            </div>
-          </div>
+                <Card
+                  as="button"
+                  type="button"
+                  variant="panel"
+                  padding="sm"
+                  layout="column"
+                  active={genTier === "simple"}
+                  hoverable
+                  disabled={isGeneratingChar}
+                  onClick={() => setGenTier("simple")}
+                >
+                  <Stack direction="row" align="center" gap="xs">
+                    <Icon name="User" size={14} />
+                    <Text size="xs" weight="semibold">
+                      Simple NPC
+                    </Text>
+                  </Stack>
+                  <Text size="xs" tone="muted" leading="snug">
+                    Compact note card (can be fleshed out later)
+                  </Text>
+                </Card>
+              </FormGrid>
+            </Stack>
+
+            <Checkbox
+              checked={genInScene}
+              onChange={(e) => setGenInScene(e.target.checked)}
+              disabled={isGeneratingChar}
+              label="Place in scene immediately (In Scene / Active)"
+            />
+
+            <StatusMessage variant="inline" tone="neutral" icon="Info">
+              Using story context:{" "}
+              <strong>
+                {contextScope === "chapter"
+                  ? "Current Chapter (All)"
+                  : contextScope === "timeline"
+                    ? "Timeline Highlights"
+                    : `Recent ${recentCount} messages`}
+              </strong>
+            </StatusMessage>
+          </Stack>
         </ConfirmModal>
-      )}
-    </div>
+      ) : null}
+    </Stack>
   );
+}
+
+function renderPresenceControl(
+  characterName: string,
+  present: boolean,
+  onTogglePresence?: () => void,
+) {
+  const badge = (
+    <Badge
+      variant={present ? "success" : "neutral"}
+      size="xs"
+      pill
+      style={onTogglePresence ? { cursor: "pointer" } : undefined}
+      onClick={
+        onTogglePresence
+          ? (e) => {
+              e.stopPropagation();
+              onTogglePresence();
+            }
+          : undefined
+      }
+      title={
+        onTogglePresence
+          ? present
+            ? "In Scene (Active). Click to move Off-Screen"
+            : "Off-Screen (Inactive). Click to bring In Scene"
+          : undefined
+      }
+      aria-label={
+        onTogglePresence
+          ? present
+            ? `Move ${characterName} off-screen`
+            : `Bring ${characterName} into scene`
+          : undefined
+      }
+      role={onTogglePresence ? "button" : undefined}
+      tabIndex={onTogglePresence ? 0 : undefined}
+      onKeyDown={
+        onTogglePresence
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                onTogglePresence();
+              }
+            }
+          : undefined
+      }
+    >
+      {present ? "● In Scene" : "○ Off-Screen"}
+    </Badge>
+  );
+
+  return badge;
 }
 
 export function SimpleCharacterCard(props: {
@@ -875,262 +922,237 @@ export function SimpleCharacterCard(props: {
     onRemoveFlag,
   } = props;
 
-  const renderPresenceBadge = () => {
-    const badge = (
-      <Badge variant={present ? "success" : "neutral"} size="xs" pill>
-        {present ? "● In Scene" : "○ Off-Screen"}
-      </Badge>
-    );
-
-    if (!onTogglePresence) return badge;
-
-    return (
-      <button
-        type="button"
-        className="char-presence-toggle-btn"
-        onClick={(e) => {
-          e.stopPropagation();
-          onTogglePresence();
-        }}
-        title={
-          present
-            ? "In Scene (Active). Click to move Off-Screen"
-            : "Off-Screen (Inactive). Click to bring In Scene"
-        }
-        aria-label={
-          present
-            ? `Move ${character.name} off-screen`
-            : `Bring ${character.name} into scene`
-        }
-      >
-        {badge}
-      </button>
-    );
-  };
-
   return (
-    <article
-      className={`card playview-char-card simple-character-card mode-${viewMode}${isFleshingOut ? " is-fleshing-out" : ""}`}
+    <Card
+      as="article"
+      variant="elevated"
+      padding="md"
+      layout="column"
+      aiPulse={isFleshingOut}
+      fullWidth
     >
-      {viewMode === "portrait" ? (
-        <div className="char-simple-portrait-header">
-          <AvatarBadge
-            name={character.name}
-            size="lg"
-            className="char-simple-avatar"
-          />
-          <div className="char-simple-title-group">
-            <div className="char-title-row">
-              <h4 className="char-name">{character.name}</h4>
-              {renderPresenceBadge()}
-            </div>
-            <div className="char-badges-wrap">
-              {character.storyRole ? (
-                <Badge
-                  variant="accent"
-                  size="xs"
-                  title={`Story Role: ${character.storyRole}`}
-                >
-                  {character.storyRole}
-                </Badge>
-              ) : null}
+      <Stack direction="row" align="start" gap="sm" fullWidth>
+        <AvatarBadge
+          name={character.name}
+          size={viewMode === "portrait" ? "lg" : "md"}
+        />
+        <Stack direction="column" align="stretch" gap="2xs" flex1 fullWidth>
+          <Stack
+            direction="row"
+            align="center"
+            justify="between"
+            gap="xs"
+            wrap
+            fullWidth
+          >
+            <Text as="h4" variant="title" size="sm" weight="semibold">
+              {character.name}
+            </Text>
+            {renderPresenceControl(character.name, present, onTogglePresence)}
+          </Stack>
+
+          <Stack direction="row" align="center" gap="xs" wrap>
+            {character.storyRole ? (
               <Badge
-                variant="neutral"
+                variant="accent"
                 size="xs"
-                title="Basic story character. Click 'Flesh Out' to generate full lore & sheet."
-                leftIcon={<Icon name="Sparkles" size={10} />}
+                title={`Story Role: ${character.storyRole}`}
               >
-                Simple NPC
+                {character.storyRole}
               </Badge>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="char-compact-header-wrap">
-          <div className="char-compact-top-line">
-            <AvatarBadge
-              name={character.name}
-              size="md"
-              className="char-compact-avatar"
-            />
-            <div className="char-compact-name-row">
-              <h4 className="char-name">{character.name}</h4>
-              {character.storyRole ? (
-                <Badge
-                  variant="accent"
-                  size="xs"
-                  title={`Story Role: ${character.storyRole}`}
-                >
-                  {character.storyRole}
-                </Badge>
-              ) : null}
-              {renderPresenceBadge()}
-              <Badge
-                variant="neutral"
-                size="xs"
-                title="Basic story character without full sheet"
-                leftIcon={<Icon name="Sparkles" size={10} />}
-              >
-                Simple NPC
-              </Badge>
-            </div>
-          </div>
-        </div>
-      )}
+            ) : null}
+            <Badge
+              variant="neutral"
+              size="xs"
+              title="Basic story character. Click 'Flesh Out' to generate full lore & sheet."
+              leftIcon="Sparkles"
+            >
+              Simple NPC
+            </Badge>
+          </Stack>
+        </Stack>
+      </Stack>
 
       {character.description ? (
-        <p className="npc-desc">{character.description}</p>
+        <Text as="p" size="xs" tone="secondary" leading="snug">
+          {character.description}
+        </Text>
       ) : character.memorySummary ? (
-        <p className="npc-desc">{character.memorySummary}</p>
+        <Text as="p" size="xs" tone="secondary" leading="snug">
+          {character.memorySummary}
+        </Text>
       ) : null}
 
       {/* Glanceable Metrics (Mood & Toward Player) */}
-      {(character.mood || character.towardPlayer) && (
-        <div className="char-metrics-grid">
+      {character.mood || character.towardPlayer ? (
+        <Stack direction="row" align="center" gap="xs" wrap fullWidth>
           {character.mood ? (
-            <div className="char-metric-pill" title={`Mood: ${character.mood}`}>
-              <span className="metric-icon">
-                <Icon name="Smile" size={12} />
-              </span>
-              <span className="metric-label">Mood:</span>
-              <span className="metric-val">{character.mood}</span>
-            </div>
+            <Badge
+              variant="outline"
+              size="sm"
+              leftIcon="Smile"
+              title={`Mood: ${character.mood}`}
+            >
+              <Text as="span" size="xs" tone="muted" weight="medium">
+                Mood:
+              </Text>
+              <Text as="span" size="xs" weight="medium">
+                {character.mood}
+              </Text>
+            </Badge>
           ) : null}
 
           {character.towardPlayer ? (
-            <div
-              className="char-metric-pill"
+            <Badge
+              variant="outline"
+              size="sm"
+              leftIcon="Heart"
               title={`Toward Player: ${character.towardPlayer}`}
             >
-              <span className="metric-icon">
-                <Icon name="Heart" size={12} />
-              </span>
-              <span className="metric-label">Toward:</span>
-              <span className="metric-val">{character.towardPlayer}</span>
-            </div>
+              <Text as="span" size="xs" tone="muted" weight="medium">
+                Toward:
+              </Text>
+              <Text as="span" size="xs" weight="medium">
+                {character.towardPlayer}
+              </Text>
+            </Badge>
           ) : null}
-        </div>
-      )}
+        </Stack>
+      ) : null}
 
-      {/* Conditions & Flags Chips */}
-      {(character.conditions.length > 0 || character.flags.length > 0) && (
-        <div className="char-status-section">
-          {character.conditions.length > 0 && (
-            <div className="conditions-grid">
+      {/* Conditions & Flags */}
+      {character.conditions.length > 0 || character.flags.length > 0 ? (
+        <Stack direction="column" align="stretch" gap="xs" fullWidth>
+          {character.conditions.length > 0 ? (
+            <Stack direction="column" align="stretch" gap="2xs" fullWidth>
               {character.conditions.map((c, i) => (
-                <div
-                  key={i}
-                  className="condition-chip group flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <Icon
-                      name="Zap"
-                      size={12}
-                      className="condition-icon shrink-0"
-                    />
-                    <span className="condition-text truncate">{c}</span>
-                  </div>
-                  {onRemoveCondition ? (
-                    <button
-                      type="button"
-                      className="chip-remove-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRemoveCondition(i);
-                      }}
-                      title="Remove condition"
-                      aria-label={`Remove condition ${c}`}
-                    >
-                      <Icon name="X" size={10} />
-                    </button>
-                  ) : null}
-                </div>
+                <Card key={i} variant="panel" padding="xs" fullWidth>
+                  <Stack
+                    direction="row"
+                    align="center"
+                    justify="between"
+                    gap="xs"
+                    fullWidth
+                  >
+                    <Stack direction="row" align="center" gap="xs" flex1>
+                      <Icon name="Zap" size={12} />
+                      <Text as="span" size="xs" weight="medium" truncate>
+                        {c}
+                      </Text>
+                    </Stack>
+                    {onRemoveCondition ? (
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        iconOnly
+                        leftIcon="X"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveCondition(i);
+                        }}
+                        title="Remove condition"
+                        aria-label={`Remove condition ${c}`}
+                      />
+                    ) : null}
+                  </Stack>
+                </Card>
               ))}
-            </div>
-          )}
+            </Stack>
+          ) : null}
 
-          {character.flags.length > 0 && (
-            <div className="flags-chip-grid">
+          {character.flags.length > 0 ? (
+            <Stack direction="column" align="stretch" gap="2xs" fullWidth>
               {character.flags.map((f, i) => (
-                <div
-                  key={i}
-                  className="flag-chip group flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <Icon
-                      name="Bookmark"
-                      size={11}
-                      className="flag-icon shrink-0"
-                    />
-                    <span className="flag-text truncate">{f}</span>
-                  </div>
-                  {onRemoveFlag ? (
-                    <button
-                      type="button"
-                      className="chip-remove-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRemoveFlag(i);
-                      }}
-                      title="Remove flag"
-                      aria-label={`Remove flag ${f}`}
-                    >
-                      <Icon name="X" size={10} />
-                    </button>
-                  ) : null}
-                </div>
+                <Card key={i} variant="panel" padding="xs" fullWidth>
+                  <Stack
+                    direction="row"
+                    align="center"
+                    justify="between"
+                    gap="xs"
+                    fullWidth
+                  >
+                    <Stack direction="row" align="center" gap="xs" flex1>
+                      <Icon name="Bookmark" size={11} />
+                      <Text as="span" size="xs" weight="medium" truncate>
+                        {f}
+                      </Text>
+                    </Stack>
+                    {onRemoveFlag ? (
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        iconOnly
+                        leftIcon="X"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveFlag(i);
+                        }}
+                        title="Remove flag"
+                        aria-label={`Remove flag ${f}`}
+                      />
+                    ) : null}
+                  </Stack>
+                </Card>
               ))}
-            </div>
-          )}
-        </div>
-      )}
+            </Stack>
+          ) : null}
+        </Stack>
+      ) : null}
+
+      <Separator spacing="none" />
 
       {/* Action Row */}
-      <div className="char-actions-footer">
+      <Stack
+        direction="row"
+        align="center"
+        justify="between"
+        gap="xs"
+        wrap
+        fullWidth
+      >
         {onEdit ? (
           <Button
             size="sm"
             variant="secondary"
             onClick={onEdit}
             disabled={isFleshingOut}
-            leftIcon={<Icon name="Pencil" size={12} />}
+            leftIcon="Pencil"
             title="Edit character profile and notes"
           >
             Edit
           </Button>
         ) : (
-          <div />
+          <span />
         )}
 
         {isFleshingOut ? (
-          <span className="promote-actions flex items-center gap-1.5">
+          <Stack direction="row" align="center" gap="xs">
             <Button
               size="sm"
-              variant="secondary"
+              variant="ai"
+              isLoading
               disabled
-              leftIcon={
-                <Icon name="Sparkles" size={13} className="sparkle-pulse" />
-              }
+              leftIcon="Sparkles"
             >
               Fleshing Out…
             </Button>
             <Button size="sm" variant="ghost" onClick={onCancel}>
               Cancel
             </Button>
-          </span>
+          </Stack>
         ) : (
           <Button
             size="sm"
-            variant="primary"
+            variant="ai"
             onClick={onFleshOut}
-            leftIcon={<Icon name="Sparkles" size={13} />}
+            leftIcon="Sparkles"
             title="Generate a full character sheet and promote to Detailed Character"
           >
             Flesh Out
           </Button>
         )}
-      </div>
-    </article>
+      </Stack>
+    </Card>
   );
 }
 
@@ -1172,7 +1194,6 @@ export function CharacterCard(props: {
   } = props;
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [avatarFailed, setAvatarFailed] = useState(false);
 
   const templateId = character.templateId ?? "";
   const profileUrl = getCharacterAvatarUrl(
@@ -1180,98 +1201,42 @@ export function CharacterCard(props: {
     "profile",
     localTemplate?.avatarUpdatedAt,
   );
-  const portraitUrl = getCharacterAvatarUrl(
-    templateId,
-    "portrait",
-    localTemplate?.avatarUpdatedAt,
-  );
 
-  const renderPresenceBadge = () => {
-    const badge = (
-      <Badge variant={present ? "success" : "neutral"} size="xs" pill>
-        {present ? "● In Scene" : "○ Off-Screen"}
-      </Badge>
-    );
-
-    if (!onTogglePresence) return badge;
-
-    return (
-      <button
-        type="button"
-        className="char-presence-toggle-btn"
-        onClick={(e) => {
-          e.stopPropagation();
-          onTogglePresence();
-        }}
-        title={
-          present
-            ? "In Scene (Active). Click to move Off-Screen"
-            : "Off-Screen (Inactive). Click to bring In Scene"
-        }
-        aria-label={
-          present
-            ? `Move ${character.name} off-screen`
-            : `Bring ${character.name} into scene`
-        }
-      >
-        {badge}
-      </button>
-    );
-  };
-
-  return (
-    <article className={`card playview-char-card mode-${viewMode}`}>
-      {/* ── 1. Full Portrait View: Top Artwork Banner ── */}
-      {viewMode === "portrait" && (
-        <div className="char-portrait-banner-wrap">
-          {!avatarFailed ? (
-            <img
-              src={portraitUrl}
-              alt={`${character.name} portrait`}
-              className="char-full-portrait-img"
-              onError={() => setAvatarFailed(true)}
-            />
-          ) : (
-            <div className="char-portrait-fallback-header">
-              <AvatarBadge src={profileUrl} name={character.name} size="lg" />
-              <div className="char-fallback-text-wrap">
-                <span className="char-fallback-title">{character.name}</span>
-                <span className="char-no-art-hint">Detailed Character</span>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── 2. Card Header Row ── */}
+  const cardBodyContent = (
+    <>
+      {/* ── Header Row ── */}
       {viewMode === "compact" ? (
-        <div className="char-compact-header-wrap">
-          {/* Top Line: Avatar + Name + Presence */}
-          <div className="char-compact-top-line">
-            <AvatarBadge
-              src={profileUrl}
-              name={character.name}
-              size="md"
-              className="char-compact-avatar"
-            />
+        <Stack direction="column" align="stretch" gap="xs" fullWidth>
+          <Stack direction="row" align="center" gap="sm" fullWidth>
+            <AvatarBadge src={profileUrl} name={character.name} size="md" />
+            <Stack
+              direction="row"
+              align="center"
+              justify="between"
+              gap="xs"
+              wrap
+              flex1
+              fullWidth
+            >
+              <Stack direction="row" align="center" gap="xs" wrap>
+                <Text as="h4" variant="title" size="sm" weight="semibold">
+                  {character.name}
+                </Text>
+                {character.storyRole ? (
+                  <Badge
+                    variant="accent"
+                    size="xs"
+                    title={`Story Role: ${character.storyRole}`}
+                  >
+                    {character.storyRole}
+                  </Badge>
+                ) : null}
+              </Stack>
+              {renderPresenceControl(character.name, present, onTogglePresence)}
+            </Stack>
+          </Stack>
 
-            <div className="char-compact-name-row">
-              <h4 className="char-name">{character.name}</h4>
-              {character.storyRole ? (
-                <Badge
-                  variant="accent"
-                  size="xs"
-                  title={`Story Role: ${character.storyRole}`}
-                >
-                  {character.storyRole}
-                </Badge>
-              ) : null}
-              {renderPresenceBadge()}
-            </div>
-          </div>
-
-          {/* Bottom Line: Badges */}
-          <div className="char-badges-row compact-badges">
+          <Stack direction="row" align="center" gap="xs" wrap fullWidth>
             {readOnlySheet ? (
               <Badge variant="info" size="xs">
                 CCv2
@@ -1284,7 +1249,7 @@ export function CharacterCard(props: {
                   variant="warning"
                   size="xs"
                   title="Playthrough changes differ from global library template"
-                  leftIcon={<Icon name="AlertTriangle" size={11} />}
+                  leftIcon="AlertTriangle"
                 >
                   Diverged
                 </Badge>
@@ -1293,7 +1258,7 @@ export function CharacterCard(props: {
                   variant="success"
                   size="xs"
                   title="Synced with Character Library"
-                  leftIcon={<Icon name="Check" size={11} />}
+                  leftIcon="Check"
                 >
                   Library Linked
                 </Badge>
@@ -1308,37 +1273,47 @@ export function CharacterCard(props: {
               </Badge>
             )}
 
-            {inLibrary && onOpenLibrary && templateId && (
+            {inLibrary && onOpenLibrary && templateId ? (
               <Button
                 size="xs"
                 variant="ghost"
                 onClick={() => onOpenLibrary(templateId)}
                 title="Open and edit global template in Character Library"
-                leftIcon={<Icon name="ExternalLink" size={11} />}
+                leftIcon="ExternalLink"
               >
                 Library
               </Button>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="char-portrait-header-wrap">
-          {/* Portrait Mode Header */}
-          <div className="char-title-row">
-            <h4 className="char-name">{character.name}</h4>
-            {character.storyRole ? (
-              <Badge
-                variant="accent"
-                size="xs"
-                title={`Story Role: ${character.storyRole}`}
-              >
-                {character.storyRole}
-              </Badge>
             ) : null}
-            {renderPresenceBadge()}
-          </div>
+          </Stack>
+        </Stack>
+      ) : (
+        <Stack direction="column" align="stretch" gap="xs" fullWidth>
+          <Stack
+            direction="row"
+            align="center"
+            justify="between"
+            gap="xs"
+            wrap
+            fullWidth
+          >
+            <Stack direction="row" align="center" gap="xs" wrap>
+              <Text as="h4" variant="title" size="md" weight="semibold">
+                {character.name}
+              </Text>
+              {character.storyRole ? (
+                <Badge
+                  variant="accent"
+                  size="xs"
+                  title={`Story Role: ${character.storyRole}`}
+                >
+                  {character.storyRole}
+                </Badge>
+              ) : null}
+            </Stack>
+            {renderPresenceControl(character.name, present, onTogglePresence)}
+          </Stack>
 
-          <div className="char-badges-row">
+          <Stack direction="row" align="center" gap="xs" wrap fullWidth>
             {readOnlySheet ? (
               <Badge variant="info" size="xs">
                 CCv2 Sheet
@@ -1351,7 +1326,7 @@ export function CharacterCard(props: {
                   variant="warning"
                   size="xs"
                   title="Playthrough changes differ from global library template"
-                  leftIcon={<Icon name="AlertTriangle" size={11} />}
+                  leftIcon="AlertTriangle"
                 >
                   Diverged from Library
                 </Badge>
@@ -1360,7 +1335,7 @@ export function CharacterCard(props: {
                   variant="success"
                   size="xs"
                   title="Synced with Character Library"
-                  leftIcon={<Icon name="Check" size={11} />}
+                  leftIcon="Check"
                 >
                   Library Linked
                 </Badge>
@@ -1375,185 +1350,218 @@ export function CharacterCard(props: {
               </Badge>
             )}
 
-            {inLibrary && onOpenLibrary && templateId && (
+            {inLibrary && onOpenLibrary && templateId ? (
               <Button
                 size="xs"
                 variant="ghost"
                 onClick={() => onOpenLibrary(templateId)}
                 title="Open and edit global template in Character Library"
-                leftIcon={<Icon name="ExternalLink" size={11} />}
+                leftIcon="ExternalLink"
               >
                 Open in Library
               </Button>
-            )}
-          </div>
-        </div>
+            ) : null}
+          </Stack>
+        </Stack>
       )}
 
-      {/* Glanceable Metrics (Mood & Towards Player) */}
-      <div className="char-metrics-grid">
-        <div
-          className="char-metric-pill"
+      {/* Glanceable Metrics (Mood & Toward Player) */}
+      <Stack direction="row" align="center" gap="xs" wrap fullWidth>
+        <Badge
+          variant="outline"
+          size="sm"
+          leftIcon="Smile"
           title={`Mood: ${character.mood || "neutral"}`}
         >
-          <span className="metric-icon">
-            <Icon name="Smile" size={12} />
-          </span>
-          <span className="metric-label">Mood:</span>
-          <span className="metric-val">{character.mood || "neutral"}</span>
-        </div>
+          <Text as="span" size="xs" tone="muted" weight="medium">
+            Mood:
+          </Text>
+          <Text as="span" size="xs" weight="medium">
+            {character.mood || "neutral"}
+          </Text>
+        </Badge>
 
-        <div
-          className="char-metric-pill"
+        <Badge
+          variant="outline"
+          size="sm"
+          leftIcon="Heart"
           title={`Toward Player: ${character.towardPlayer || "neutral"}`}
         >
-          <span className="metric-icon">
-            <Icon name="Heart" size={12} />
-          </span>
-          <span className="metric-label">Toward:</span>
-          <span className="metric-val">
+          <Text as="span" size="xs" tone="muted" weight="medium">
+            Toward:
+          </Text>
+          <Text as="span" size="xs" weight="medium">
             {character.towardPlayer || "neutral"}
-          </span>
-        </div>
-      </div>
+          </Text>
+        </Badge>
+      </Stack>
 
-      {/* Conditions & Flags Chips */}
-      {(character.conditions.length > 0 || character.flags.length > 0) && (
-        <div className="char-status-section">
-          {character.conditions.length > 0 && (
-            <div className="conditions-grid">
+      {/* Conditions & Flags */}
+      {character.conditions.length > 0 || character.flags.length > 0 ? (
+        <Stack direction="column" align="stretch" gap="xs" fullWidth>
+          {character.conditions.length > 0 ? (
+            <Stack direction="column" align="stretch" gap="2xs" fullWidth>
               {character.conditions.map((c, i) => (
-                <div
-                  key={i}
-                  className="condition-chip group flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <Icon
-                      name="Zap"
-                      size={12}
-                      className="condition-icon shrink-0"
-                    />
-                    <span className="condition-text truncate">{c}</span>
-                  </div>
-                  {onRemoveCondition ? (
-                    <button
-                      type="button"
-                      className="chip-remove-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRemoveCondition(i);
-                      }}
-                      title="Remove condition"
-                      aria-label={`Remove condition ${c}`}
-                    >
-                      <Icon name="X" size={10} />
-                    </button>
-                  ) : null}
-                </div>
+                <Card key={i} variant="panel" padding="xs" fullWidth>
+                  <Stack
+                    direction="row"
+                    align="center"
+                    justify="between"
+                    gap="xs"
+                    fullWidth
+                  >
+                    <Stack direction="row" align="center" gap="xs" flex1>
+                      <Icon name="Zap" size={12} />
+                      <Text as="span" size="xs" weight="medium" truncate>
+                        {c}
+                      </Text>
+                    </Stack>
+                    {onRemoveCondition ? (
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        iconOnly
+                        leftIcon="X"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveCondition(i);
+                        }}
+                        title="Remove condition"
+                        aria-label={`Remove condition ${c}`}
+                      />
+                    ) : null}
+                  </Stack>
+                </Card>
               ))}
-            </div>
-          )}
+            </Stack>
+          ) : null}
 
-          {character.flags.length > 0 && (
-            <div className="flags-chip-grid">
+          {character.flags.length > 0 ? (
+            <Stack direction="column" align="stretch" gap="2xs" fullWidth>
               {character.flags.map((f, i) => (
-                <div
-                  key={i}
-                  className="flag-chip group flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <Icon
-                      name="Bookmark"
-                      size={11}
-                      className="flag-icon shrink-0"
-                    />
-                    <span className="flag-text truncate">{f}</span>
-                  </div>
-                  {onRemoveFlag ? (
-                    <button
-                      type="button"
-                      className="chip-remove-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRemoveFlag(i);
-                      }}
-                      title="Remove flag"
-                      aria-label={`Remove flag ${f}`}
-                    >
-                      <Icon name="X" size={10} />
-                    </button>
-                  ) : null}
-                </div>
+                <Card key={i} variant="panel" padding="xs" fullWidth>
+                  <Stack
+                    direction="row"
+                    align="center"
+                    justify="between"
+                    gap="xs"
+                    fullWidth
+                  >
+                    <Stack direction="row" align="center" gap="xs" flex1>
+                      <Icon name="Bookmark" size={11} />
+                      <Text as="span" size="xs" weight="medium" truncate>
+                        {f}
+                      </Text>
+                    </Stack>
+                    {onRemoveFlag ? (
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        iconOnly
+                        leftIcon="X"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveFlag(i);
+                        }}
+                        title="Remove flag"
+                        aria-label={`Remove flag ${f}`}
+                      />
+                    ) : null}
+                  </Stack>
+                </Card>
               ))}
-            </div>
-          )}
-        </div>
-      )}
+            </Stack>
+          ) : null}
+        </Stack>
+      ) : null}
 
       {/* Collapsible Details Drawer (Body, Appearance, Clothing) */}
-      <div
-        className={`char-details-drawer ${drawerOpen ? "is-open" : "is-closed"}`}
+      <Accordion
+        variant="panel"
+        size="sm"
+        icon="Shirt"
+        title="Physical & Clothing Details"
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        badge={
+          character.clothing.length > 0 ? (
+            <Badge variant="neutral" size="xs" pill>
+              {character.clothing.length}
+            </Badge>
+          ) : undefined
+        }
       >
-        <button
-          type="button"
-          className="drawer-toggle-btn"
-          onClick={() => setDrawerOpen(!drawerOpen)}
-          aria-expanded={drawerOpen}
-        >
-          <span className="toggle-left">
-            <Icon name="Shirt" size={13} />
-            <span>Physical &amp; Clothing Details</span>
-            {character.clothing.length > 0 && (
-              <span className="drawer-item-count">
-                ({character.clothing.length})
-              </span>
-            )}
-          </span>
-          <Icon name={drawerOpen ? "ChevronUp" : "ChevronDown"} size={13} />
-        </button>
+        <Stack direction="column" align="stretch" gap="sm" fullWidth>
+          {content ? (
+            <CharacterSheetSections
+              content={content}
+              headers={["Body", "Appearance"]}
+              variant="badges"
+            />
+          ) : null}
 
-        {drawerOpen && (
-          <div className="drawer-expanded-body">
-            {content ? <CharacterSheetSections content={content} /> : null}
+          {character.clothing.length > 0 ? (
+            <Stack direction="column" align="stretch" gap="xs" fullWidth>
+              <Stack direction="row" align="center" gap="2xs">
+                <Icon name="Shirt" size={12} />
+                <Text
+                  as="h4"
+                  variant="label"
+                  size="xs"
+                  weight="semibold"
+                  tone="secondary"
+                  uppercase
+                >
+                  Equipped Clothing
+                </Text>
+              </Stack>
+              <Stack direction="row" align="center" gap="xs" wrap fullWidth>
+                {character.clothing.map((c, i) => (
+                  <Badge key={i} variant="outline" size="sm">
+                    <Text as="span" size="xs" tone="muted" weight="medium">
+                      {c.slot}:
+                    </Text>
+                    <Text as="span" size="xs" weight="medium">
+                      {c.name}
+                    </Text>
+                    {c.state ? (
+                      <Text as="span" size="xs" tone="secondary" italic>
+                        ({c.state})
+                      </Text>
+                    ) : null}
+                  </Badge>
+                ))}
+              </Stack>
+            </Stack>
+          ) : (
+            <Text as="p" size="xs" tone="muted" italic>
+              No specific clothing registered.
+            </Text>
+          )}
+        </Stack>
+      </Accordion>
 
-            {character.clothing.length > 0 ? (
-              <div className="char-clothing-block">
-                <h5 className="subcard-title flex items-center gap-1">
-                  <Icon name="Shirt" size={11} /> Equipped Clothing
-                </h5>
-                <div className="clothing-chip-grid">
-                  {character.clothing.map((c, i) => (
-                    <div key={i} className="clothing-chip">
-                      <span className="clothing-slot">{c.slot}:</span>
-                      <span className="clothing-name">{c.name}</span>
-                      {c.state ? (
-                        <span className="clothing-state">({c.state})</span>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <p className="no-clothing-hint">
-                No specific clothing registered.
-              </p>
-            )}
-          </div>
-        )}
-      </div>
+      <Separator spacing="none" />
 
       {/* Footer Action Row */}
-      <div className="char-actions-footer">
+      <Stack
+        direction="row"
+        align="center"
+        justify="between"
+        gap="xs"
+        wrap
+        fullWidth
+      >
         <Button
           size="sm"
           variant="secondary"
           onClick={onEdit}
-          leftIcon={<Icon name="FileText" size={13} />}
+          leftIcon="FileText"
         >
           Full Sheet
         </Button>
 
-        <div className="library-sync-actions">
+        <Stack direction="row" align="center" gap="xs" wrap>
           {inLibrary ? (
             <>
               <Button
@@ -1589,16 +1597,53 @@ export function CharacterCard(props: {
               Save to Library
             </Button>
           )}
-        </div>
+        </Stack>
 
         {feedback ? (
-          <span
-            className={`save-feedback-toast ${feedback.ok ? "saved-flash" : "save-error"}`}
-          >
+          <Badge variant={feedback.ok ? "success" : "danger"} size="xs">
             {feedback.text}
-          </span>
+          </Badge>
         ) : null}
-      </div>
-    </article>
+      </Stack>
+    </>
+  );
+
+  if (viewMode === "portrait") {
+    return (
+      <Card
+        as="article"
+        variant="elevated"
+        padding="none"
+        layout="column"
+        fullWidth
+      >
+        <Card.Cover position="top" aspect="portrait">
+          <CharacterAvatar
+            template={
+              localTemplate ?? {
+                id: templateId,
+                name: character.name,
+              }
+            }
+            variant="portrait"
+          />
+        </Card.Cover>
+        <Card.Body padding="md" gap="sm">
+          {cardBodyContent}
+        </Card.Body>
+      </Card>
+    );
+  }
+
+  return (
+    <Card
+      as="article"
+      variant="elevated"
+      padding="md"
+      layout="column"
+      fullWidth
+    >
+      {cardBodyContent}
+    </Card>
   );
 }

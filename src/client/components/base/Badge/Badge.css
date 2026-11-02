@@ -4,13 +4,18 @@
 .base-badge {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 0.3rem;
   flex-shrink: 0;
+  min-width: 0;
+  max-width: 100%;
   font-family: inherit;
   font-weight: 600;
-  line-height: 1.25;
-  white-space: nowrap;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-align: left;
   vertical-align: middle;
   border-radius: var(--radius-sm, 6px);
   box-sizing: border-box;
@@ -55,8 +60,23 @@
 }
 
 .base-badge__content {
+  display: inline;
+  min-width: 0;
+  text-align: left;
+}
+
+.base-badge__content > :not(:last-child) {
+  margin-right: 0.25rem;
+}
+
+.base-badge__content:has(.selected-cast-avatar) {
   display: inline-flex;
   align-items: center;
+  gap: 0.35rem;
+}
+
+.base-badge__content:has(.selected-cast-avatar) > :not(:last-child) {
+  margin-right: 0;
 }
 
 .base-badge--truncate {

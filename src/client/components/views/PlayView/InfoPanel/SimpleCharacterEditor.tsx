@@ -1,18 +1,22 @@
 import { useMemo, useState } from "react";
-import type { CharacterInstance } from "../../../schemas";
-import type { CharacterEditPayload } from "../../api/characters";
+import type { CharacterInstance } from "../../../../../schemas";
+import type { CharacterEditPayload } from "../../../../api/characters";
 import {
+  Badge,
   Button,
+  Card,
   Dialog,
+  FormGrid,
   Icon,
+  Stack,
   StatusMessage,
   SwitchRow,
   TagInput,
+  Text,
   TextArea,
   TextInput,
-} from "../base";
-import { ConfirmModal } from "../common";
-import "./SimpleCharacterEditor.css";
+} from "../../../base";
+import { ConfirmModal } from "../../../common";
 
 export type SimpleCharacterEditorProps = {
   character: CharacterInstance;
@@ -114,9 +118,24 @@ export function SimpleCharacterEditor({
     <>
       <Dialog
         title={`Simple Character: ${form.name || character.name}`}
-        description="Lightweight cast member without a full character sheet."
-        className="simple-character-editor-modal"
+        description={
+          <Stack direction="row" align="center" gap="xs" wrap>
+            <Badge variant="neutral" size="xs">
+              Side character
+            </Badge>
+            <Text as="span" size="xs" tone="muted">
+              Lightweight cast member without a full character sheet.
+            </Text>
+            {isDirty ? (
+              <Badge variant="warning" size="xs" pill>
+                Unsaved changes
+              </Badge>
+            ) : null}
+          </Stack>
+        }
         maxWidth={640}
+        scrollable
+        fullScreenMobile
         isBusy={saving}
         onClose={handleRequestClose}
         headerAction={
@@ -134,7 +153,7 @@ export function SimpleCharacterEditor({
                 void handleSave(true);
               }}
             >
-              Save & Close
+              Save &amp; Close
             </Button>
             <Button
               variant="secondary"
@@ -155,7 +174,7 @@ export function SimpleCharacterEditor({
           </>
         }
       >
-        <div className="simple-char-editor-body">
+        <Stack direction="column" align="stretch" gap="md" fullWidth>
           {error ? (
             <StatusMessage variant="banner" tone="err">
               {error}
@@ -163,54 +182,75 @@ export function SimpleCharacterEditor({
           ) : null}
 
           {onFleshOut ? (
-            <div className="simple-char-flesh-out-callout">
-              <div className="simple-char-flesh-out-info">
-                <div className="simple-char-flesh-out-title">
-                  <Icon name="Sparkles" size={16} />
-                  <strong>Flesh Out into Full Sheet</strong>
-                </div>
-                <p>
-                  Use the Character Manager to expand this character with a full
-                  sheet format, backstory, appearance, and dialogue style.
-                </p>
-              </div>
-              <Button
-                size="sm"
-                variant="secondary"
-                leftIcon={<Icon name="Sparkles" size={14} />}
-                onClick={() => {
-                  onClose();
-                  onFleshOut();
-                }}
+            <Card variant="active" padding="sm" layout="row" fullWidth>
+              <Stack
+                direction="row"
+                align="center"
+                justify="between"
+                gap="sm"
+                wrap
+                fullWidth
               >
-                Flesh Out
-              </Button>
-            </div>
+                <Stack direction="column" gap="2xs" flex1>
+                  <Stack direction="row" align="center" gap="xs">
+                    <Icon name="Sparkles" size={16} />
+                    <Text as="strong" size="sm" weight="semibold">
+                      Flesh Out into Full Sheet
+                    </Text>
+                  </Stack>
+                  <Text as="p" size="xs" tone="secondary" leading="snug">
+                    Use the Character Manager to expand this character with a
+                    full sheet format, backstory, appearance, and dialogue
+                    style.
+                  </Text>
+                </Stack>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  leftIcon={<Icon name="Sparkles" size={14} />}
+                  onClick={() => {
+                    onClose();
+                    onFleshOut();
+                  }}
+                >
+                  Flesh Out
+                </Button>
+              </Stack>
+            </Card>
           ) : null}
 
-          <section className="simple-char-editor-section">
-            <h4 className="simple-char-editor-section-title">
-              Identity & Story Role
-            </h4>
-            <div className="simple-char-editor-fields">
-              <TextInput
-                label="Name"
-                value={form.name}
-                required
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, name: e.target.value }))
-                }
-                placeholder="Character name"
-              />
-              <TextInput
-                label="Story Role"
-                value={form.storyRole}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, storyRole: e.target.value }))
-                }
-                placeholder="e.g. Village Elder, Mercenary, Tavern Keeper"
-                helperText="Their narrative role or occupation in the story"
-              />
+          <Card variant="panel" padding="md" layout="column" fullWidth>
+            <Stack direction="column" align="stretch" gap="sm" fullWidth>
+              <Text
+                as="h4"
+                variant="label"
+                size="xs"
+                weight="semibold"
+                tone="muted"
+                uppercase
+              >
+                Identity &amp; Story Role
+              </Text>
+              <FormGrid cols={2} gap="sm">
+                <TextInput
+                  label="Name"
+                  value={form.name}
+                  required
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, name: e.target.value }))
+                  }
+                  placeholder="Character name"
+                />
+                <TextInput
+                  label="Story Role"
+                  value={form.storyRole}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, storyRole: e.target.value }))
+                  }
+                  placeholder="e.g. Village Elder, Mercenary, Tavern Keeper"
+                  helperText="Their narrative role or occupation in the story"
+                />
+              </FormGrid>
               <TextArea
                 label="Description"
                 value={form.description}
@@ -223,14 +263,21 @@ export function SimpleCharacterEditor({
                 placeholder="Key physical traits, personality notes, or quick background…"
                 helperText="Core visual and personality reference for the narrator"
               />
-            </div>
-          </section>
+            </Stack>
+          </Card>
 
-          <section className="simple-char-editor-section">
-            <h4 className="simple-char-editor-section-title">
-              Presence & Scene State
-            </h4>
-            <div className="simple-char-editor-fields">
+          <Card variant="panel" padding="md" layout="column" fullWidth>
+            <Stack direction="column" align="stretch" gap="sm" fullWidth>
+              <Text
+                as="h4"
+                variant="label"
+                size="xs"
+                weight="semibold"
+                tone="muted"
+                uppercase
+              >
+                Presence &amp; Scene State
+              </Text>
               <SwitchRow
                 icon="Users"
                 title="Present In Scene"
@@ -244,7 +291,7 @@ export function SimpleCharacterEditor({
                   setForm((f) => ({ ...f, inScene: e.target.checked }))
                 }
               />
-              <div className="simple-char-editor-row">
+              <FormGrid cols={2} gap="sm">
                 <TextInput
                   label="Mood"
                   value={form.mood}
@@ -263,13 +310,22 @@ export function SimpleCharacterEditor({
                   placeholder="e.g. friendly, skeptical, hostile"
                   helperText="Attitude toward the protagonist"
                 />
-              </div>
-            </div>
-          </section>
+              </FormGrid>
+            </Stack>
+          </Card>
 
-          <section className="simple-char-editor-section">
-            <h4 className="simple-char-editor-section-title">Memory Summary</h4>
-            <div className="simple-char-editor-fields">
+          <Card variant="panel" padding="md" layout="column" fullWidth>
+            <Stack direction="column" align="stretch" gap="sm" fullWidth>
+              <Text
+                as="h4"
+                variant="label"
+                size="xs"
+                weight="semibold"
+                tone="muted"
+                uppercase
+              >
+                Memory Summary
+              </Text>
               <TextArea
                 label="Memory Summary"
                 value={form.memorySummary}
@@ -282,33 +338,44 @@ export function SimpleCharacterEditor({
                 placeholder="What this character currently remembers about the player or recent events…"
                 helperText="Passed to the prompt to maintain continuity without a full sheet"
               />
-            </div>
-          </section>
+            </Stack>
+          </Card>
 
-          <section className="simple-char-editor-section">
-            <h4 className="simple-char-editor-section-title">
-              Conditions & Flags
-            </h4>
-            <div className="simple-char-editor-fields">
-              <label className="editor-field">
-                <span className="editor-field-label">Conditions</span>
+          <Card variant="panel" padding="md" layout="column" fullWidth>
+            <Stack direction="column" align="stretch" gap="sm" fullWidth>
+              <Text
+                as="h4"
+                variant="label"
+                size="xs"
+                weight="semibold"
+                tone="muted"
+                uppercase
+              >
+                Conditions &amp; Flags
+              </Text>
+              <Stack direction="column" gap="2xs" fullWidth>
+                <Text as="label" size="xs" weight="medium" tone="secondary">
+                  Conditions
+                </Text>
                 <TagInput
                   value={form.conditions}
                   onChange={(v) => setForm((f) => ({ ...f, conditions: v }))}
                   placeholder="Add a condition (press Enter or comma)…"
                 />
-              </label>
-              <label className="editor-field">
-                <span className="editor-field-label">Flags</span>
+              </Stack>
+              <Stack direction="column" gap="2xs" fullWidth>
+                <Text as="label" size="xs" weight="medium" tone="secondary">
+                  Flags
+                </Text>
                 <TagInput
                   value={form.flags}
                   onChange={(v) => setForm((f) => ({ ...f, flags: v }))}
                   placeholder="Add a flag (press Enter or comma)…"
                 />
-              </label>
-            </div>
-          </section>
-        </div>
+              </Stack>
+            </Stack>
+          </Card>
+        </Stack>
       </Dialog>
 
       {confirmDiscard ? (
@@ -328,3 +395,4 @@ export function SimpleCharacterEditor({
     </>
   );
 }
+

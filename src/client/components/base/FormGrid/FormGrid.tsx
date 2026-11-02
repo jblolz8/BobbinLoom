@@ -17,12 +17,15 @@ export type FormGridGap = "xs" | "sm" | "md" | "lg";
 export interface FormGridProps extends HTMLAttributes<HTMLDivElement> {
   cols?: FormGridCols;
   gap?: FormGridGap;
+  /** Keep the column count on mobile/narrow viewports instead of collapsing to a single column (useful for compact 2x2 thumbnail tile grids). */
+  keepColumnsOnMobile?: boolean;
   children?: ReactNode;
 }
 
 export function FormGrid({
   cols = 2,
   gap = "sm",
+  keepColumnsOnMobile = false,
   className = "",
   children,
   ...props
@@ -31,6 +34,7 @@ export function FormGrid({
     "base-form-grid",
     `base-form-grid--cols-${cols}`,
     `base-form-grid--gap-${gap}`,
+    keepColumnsOnMobile ? "base-form-grid--keep-cols" : "",
     className,
   ]
     .filter(Boolean)

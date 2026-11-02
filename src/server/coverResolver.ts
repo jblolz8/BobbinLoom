@@ -29,6 +29,8 @@ export type CoverResolverOptions = {
   /** Injectable seam: the content-addressed image directory. Every existence check goes
    *  through `imageFilePath`, so a malformed name can never reach the disk. */
   imagesDir: string;
+  /** Playthroughs root directory (`data/playthroughs`) where per-playthrough `<id>/images/` folders live. */
+  dataDir?: string;
   /** Injectable seam for the character library, where cast portraits live. Defaults to the
    *  real library directory. */
   charactersDir?: string;
@@ -39,7 +41,10 @@ export function resolvePlaythroughCover(
   options: CoverResolverOptions,
 ): PlaythroughCoverView | null {
   const manualFile = p.cover?.file;
-  if (manualFile && imageFilePath(manualFile, options.imagesDir)) {
+  if (
+    manualFile &&
+    imageFilePath(manualFile, options.imagesDir, options.dataDir, p.id)
+  ) {
     return { source: "manual", file: manualFile };
   }
 
@@ -52,7 +57,10 @@ export function resolvePlaythroughCover(
     const images = message.images ?? [];
     for (let imageIndex = images.length - 1; imageIndex >= 0; imageIndex -= 1) {
       const file = images[imageIndex]?.file;
-      if (file && imageFilePath(file, options.imagesDir))
+      if (
+        file &&
+        imageFilePath(file, options.imagesDir, options.dataDir, p.id)
+      )
         return { source: "latest", file };
     }
   }

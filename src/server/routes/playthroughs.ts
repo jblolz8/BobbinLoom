@@ -204,7 +204,7 @@ export const playthroughRoutes: FastifyPluginAsync<
       sortBy: query.sortBy,
       sortDir: query.sortDir,
       resolveCover: (p) =>
-        resolvePlaythroughCover(p, { imagesDir, charactersDir }),
+        resolvePlaythroughCover(p, { imagesDir, dataDir, charactersDir }),
     });
   });
 
@@ -444,7 +444,7 @@ export const playthroughRoutes: FastifyPluginAsync<
   app.post("/api/playthroughs/:id/cover", async (request, reply) => {
     const params = z.object({ id: z.string() }).parse(request.params);
     const body = CoverBody.parse(request.body ?? {});
-    if (!imageFilePath(body.file, imagesDir)) {
+    if (!imageFilePath(body.file, imagesDir, dataDir, params.id)) {
       return reply.code(400).send({ error: "Unknown image file" });
     }
     const updated = setPlaythroughCoverRecord(dataDir, params.id, {

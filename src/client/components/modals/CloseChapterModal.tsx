@@ -16,13 +16,11 @@ import type { ChapterOpeningMode } from "../../../schemas";
 import {
   Button,
   Dialog,
-  Icon,
   SimpleSelect,
   Stack,
   StatusMessage,
   TextArea,
 } from "../base";
-import "./CloseChapterModal.css";
 
 export type CloseChapterModalProps = {
   /** How many visible messages the running chapter holds — the operation's own gate already ran,
@@ -137,7 +135,7 @@ export function CloseChapterModal({
   return (
     <Dialog
       title="Close Chapter"
-      className="close-chapter-modal"
+      maxWidth={520}
       onClose={onCancel}
       isBusy={isLoading}
       initialFocusRef={cancelRef}
@@ -146,7 +144,7 @@ export function CloseChapterModal({
           type="button"
           variant="secondary"
           size="xs"
-          leftIcon={<Icon name="X" size={14} />}
+          leftIcon="X"
           onClick={onCancel}
           aria-label="Close"
         >
@@ -166,6 +164,7 @@ export function CloseChapterModal({
           <Button
             variant="primary"
             size="md"
+            leftIcon="BookmarkCheck"
             disabled={
               isLoading ||
               (chapterOpeningModeNeedsMessage(mode) && !openingMessage.trim())

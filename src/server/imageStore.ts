@@ -1,21 +1,20 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, unlinkSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from "node:fs";
+import { dirname, join } from "node:path";
 import type { Playthrough } from "../schemas";
 import { MIME_BY_EXT } from "./imageProvider/shared";
 import { atomicWriteFile } from "./persistence";
-import { listPlaythroughRecords } from "./store";
+import {
+  listPlaythroughRecords,
+  playthroughImagesDir,
+} from "./store";
 
-/** Content-addressed image store: `data/images/<sha256>.<ext>`.
- *
- *  Bytes are SHARED, never owned: `branchPlaythroughRecord` structuredClones a
- *  playthrough by value, so a branch's messages hold the same `file` names as
- *  its parent. That is why deletion is ref-counted by a sweep over every
- *  playthrough (branches included) rather than by unlink-on-delete. */
+/** Default fallback image store directory (`data/images`); primary storage is now
+ *  per-playthrough (`data/playthroughs/<play_id>/images/<sha256>.<ext>`). */
 export const IMAGES_DIR = join(process.cwd(), "data", "images");
 
 /** Traversal guard: 64 lowercase hex chars and one known extension. Nothing
- *  else is ever joined onto the images directory. */
+ *  else is ever joined onto an images directory. */
 const FILE_RE = /^[a-f0-9]{64}\.(png|jpg|webp)$/;
 
 const EXT_BY_MIME: Record<string, string> = {
@@ -24,8 +23,7 @@ const EXT_BY_MIME: Record<string, string> = {
   "image/webp": "webp",
 };
 
-/** Writes bytes under their sha256. Identical bytes (a re-roll that reproduces
- *  the same image, or a branch copying a message) reuse one file on disk. */
+/** Writes bytes under their sha256. Identical bytes reuse one file on disk. */
 export function saveImageBytes(
   bytes: Buffer,
   mime: string,
@@ -43,14 +41,48 @@ export function saveImageBytes(
 /** Absolute path for a stored file, or null when the name is malformed or the
  *  file is missing. EVERY read path goes through this (the serve route, the
  *  per-image delete) — the regex runs before any filesystem call, so a
- *  traversal attempt can never reach the disk. */
+ *  traversal attempt can never reach the disk.
+ *
+ *  Checks:
+ *  1) `data/playthroughs/<playthroughId>/images/<file>` when `dataDir` + `playthroughId` are given.
+ *  2) Direct `dir/<file>` (supports unit tests and custom `imagesDir` seams).
+ *  3) Per-playthrough `<dataDir>/<id>/images/<file>` across playthrough folders. */
 export function imageFilePath(
   file: string,
   dir: string = IMAGES_DIR,
+  dataDir?: string,
+  playthroughId?: string,
 ): string | null {
   if (!FILE_RE.test(file)) return null;
-  const path = join(dir, file);
-  return existsSync(path) ? path : null;
+
+  if (dataDir && playthroughId) {
+    const ptCandidate = join(playthroughImagesDir(dataDir, playthroughId), file);
+    if (existsSync(ptCandidate)) return ptCandidate;
+  }
+
+  const directPath = join(dir, file);
+  if (existsSync(directPath)) return directPath;
+
+  const playthroughsRoot =
+    dataDir ??
+    (existsSync(join(dirname(dir), "playthroughs"))
+      ? join(dirname(dir), "playthroughs")
+      : null);
+
+  if (playthroughsRoot && existsSync(playthroughsRoot)) {
+    try {
+      const entries = readdirSync(playthroughsRoot, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name.endsWith(".bak")) continue;
+        const candidate = join(playthroughsRoot, entry.name, "images", file);
+        if (existsSync(candidate)) return candidate;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return null;
 }
 
 export function mimeForFile(file: string): string {
@@ -59,9 +91,7 @@ export function mimeForFile(file: string): string {
 }
 
 /** Every file name referenced by any message — or by a manual cover — of any of the given
- *  playthroughs. A cover reference is easy to forget and invisible when it regresses: the
- *  sweep then deletes the bytes behind a deliberate user choice, and the card quietly falls
- *  back to its next source. Any new kind of stored reference to `data/images/` belongs here. */
+ *  playthroughs. */
 export function collectReferencedImages(
   playthroughs: Playthrough[],
 ): Set<string> {
@@ -72,12 +102,27 @@ export function collectReferencedImages(
         if (image?.file) refs.add(image.file);
       }
     }
-    // An auto-resolved cover is always a message reference (already collected above); only the
-    // manual pointer can exist outside the messages, and it is collected unconditionally so a
-    // future cover source cannot forget to.
     if (playthrough.cover?.file) refs.add(playthrough.cover.file);
   }
   return refs;
+}
+
+function sweepDirReturningRemoved(
+  referenced: Set<string>,
+  dir: string,
+): Set<string> {
+  const removed = new Set<string>();
+  if (!existsSync(dir)) return removed;
+  for (const entry of readdirSync(dir)) {
+    if (!FILE_RE.test(entry) || referenced.has(entry)) continue;
+    try {
+      unlinkSync(join(dir, entry));
+      removed.add(entry);
+    } catch {
+      // Raced with another sweep (or already gone) — not a failure.
+    }
+  }
+  return removed;
 }
 
 /** Deletes unreferenced files; returns the count removed. Files that are not
@@ -86,25 +131,13 @@ export function sweepOrphanImages(
   playthroughs: Playthrough[],
   dir: string = IMAGES_DIR,
 ): number {
-  if (!existsSync(dir)) return 0;
   const referenced = collectReferencedImages(playthroughs);
-  let removed = 0;
-  for (const entry of readdirSync(dir)) {
-    if (!FILE_RE.test(entry) || referenced.has(entry)) continue;
-    try {
-      unlinkSync(join(dir, entry));
-      removed += 1;
-    } catch {
-      // Raced with another sweep (or already gone) — not a failure.
-    }
-  }
-  return removed;
+  return sweepDirReturningRemoved(referenced, dir).size;
 }
 
-/** Sweep helper for call sites that only have the data directory. It MUST read
- *  the list with `includeTimelineBranches` — a timeline branch is excluded from
- *  the default list, so a sweep that skipped branches would delete a surviving
- *  branch's images the moment its parent was deleted. */
+/** Sweep helper for call sites that have the playthroughs data directory.
+ *  Sweeps each playthrough's dedicated `<dataDir>/<id>/images/` folder against that
+ *  playthrough's own references, plus any shared/legacy `imagesDir` when present. */
 export function sweepOrphansInDataDir(
   dataDir: string,
   imagesDir: string = IMAGES_DIR,
@@ -112,5 +145,24 @@ export function sweepOrphansInDataDir(
   const { playthroughs } = listPlaythroughRecords(dataDir, {
     includeTimelineBranches: true,
   });
-  return sweepOrphanImages(playthroughs, imagesDir);
+  const removedFiles = new Set<string>();
+
+  for (const pt of playthroughs) {
+    const ptDir = playthroughImagesDir(dataDir, pt.id);
+    if (existsSync(ptDir) && statSync(ptDir).isDirectory()) {
+      const ptRefs = collectReferencedImages([pt]);
+      for (const file of sweepDirReturningRemoved(ptRefs, ptDir)) {
+        removedFiles.add(file);
+      }
+    }
+  }
+
+  if (existsSync(imagesDir)) {
+    const allRefs = collectReferencedImages(playthroughs);
+    for (const file of sweepDirReturningRemoved(allRefs, imagesDir)) {
+      removedFiles.add(file);
+    }
+  }
+
+  return removedFiles.size;
 }
