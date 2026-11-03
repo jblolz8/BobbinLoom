@@ -9,6 +9,7 @@ import {
 import type {
   LoadFailure,
   Playthrough,
+  PlaythroughBranchSummary,
   ViewPreferences,
 } from "../../../schemas";
 import {
@@ -23,6 +24,7 @@ import {
   suggestPlaythroughTags,
   updatePlaythroughTags,
   updateViewPreferences,
+  type PlaythroughLineageFilter,
   type PlaythroughSummary,
   type ResolvedLibraryPreferences,
 } from "../../api";
@@ -35,6 +37,7 @@ import {
   Badge,
   Button,
   Card,
+  CheckboxRow,
   CoverArt,
   FormGrid,
   Header,
@@ -55,10 +58,12 @@ import {
   Tooltip,
 } from "../base";
 import { ConfirmModal, EditTagsModal, RenameModal } from "../common";
+import { TimelineModal } from "../modals/TimelineModal";
 
 export type PlaythroughLibraryVariant = "page" | "dialog";
 export type PlaythroughViewMode = "grid" | "list";
 export type PlaythroughSortOption = "updatedAt" | "name" | "turn";
+export type { PlaythroughLineageFilter };
 
 export type PlaythroughLibraryProps = {
   /** `page` renders inline in the workspace (the home screen); `dialog` renders the same shelf
@@ -171,6 +176,12 @@ function PlaythroughLibraryInner(props: PlaythroughLibraryProps) {
   const [tagsSaving, setTagsSaving] = useState(false);
   const [tagsError, setTagsError] = useState<string | null>(null);
 
+  // Timelines modal state
+  const [timelineTarget, setTimelineTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [prefsReady, setPrefsReady] = useState(false);
@@ -183,6 +194,10 @@ function PlaythroughLibraryInner(props: PlaythroughLibraryProps) {
   const [sortDir, setSortDirState] = useState<"asc" | "desc">(
     LIBRARY_PREFERENCE_DEFAULTS.playthroughSortDir,
   );
+  const [lineageFilter, setLineageFilterState] =
+    useState<PlaythroughLineageFilter>(
+      LIBRARY_PREFERENCE_DEFAULTS.playthroughLineageFilter,
+    );
   const [showFullTitle, setShowFullTitle] = useState<boolean>(
     LIBRARY_PREFERENCE_DEFAULTS.playthroughShowFullTitle,
   );
@@ -219,6 +234,7 @@ function PlaythroughLibraryInner(props: PlaythroughLibraryProps) {
         setViewModeState(resolved.playthroughViewMode);
         setSortByState(resolved.playthroughSortBy);
         setSortDirState(resolved.playthroughSortDir);
+        setLineageFilterState(resolved.playthroughLineageFilter);
       }
       setShowFullTitle(resolved.playthroughShowFullTitle);
       setShowAllTags(resolved.playthroughShowAllTags);
@@ -267,7 +283,7 @@ function PlaythroughLibraryInner(props: PlaythroughLibraryProps) {
   const pager = useServerPagination({
     totalItems: totalPlaythroughs,
     persistAs: "home",
-    resetDeps: [debouncedSearch, tagsKey, sortBy, sortDir],
+    resetDeps: [debouncedSearch, tagsKey, sortBy, sortDir, lineageFilter],
   });
 
   const activeRequestRef = useRef(0);
@@ -281,13 +297,20 @@ function PlaythroughLibraryInner(props: PlaythroughLibraryProps) {
 
   useEffect(() => {
     pageCacheRef.current.clear();
-  }, [debouncedSearch, tagsKey, sortBy, sortDir, pager.pageSize]);
+  }, [
+    debouncedSearch,
+    tagsKey,
+    sortBy,
+    sortDir,
+    lineageFilter,
+    pager.pageSize,
+  ]);
 
   const refresh = useCallback(
     async (options?: { force?: boolean }) => {
       if (!prefsReady || !pager.isReady) return;
 
-      const cacheKey = `${pager.page}:${pager.pageSize}:${debouncedSearch}:${tagsKey}:${sortBy}:${sortDir}`;
+      const cacheKey = `${pager.page}:${pager.pageSize}:${debouncedSearch}:${tagsKey}:${sortBy}:${sortDir}:${lineageFilter}`;
       if (!options?.force && pageCacheRef.current.has(cacheKey)) {
         const cached = pageCacheRef.current.get(cacheKey)!;
         setPlaythroughs(cached.list);
@@ -317,6 +340,8 @@ function PlaythroughLibraryInner(props: PlaythroughLibraryProps) {
           tags: selectedTags.length > 0 ? selectedTags : undefined,
           sortBy,
           sortDir,
+          lineageFilter:
+            lineageFilter === "parents" ? undefined : lineageFilter,
         });
         if (requestId !== activeRequestRef.current) return;
         pageCacheRef.current.set(cacheKey, {
@@ -352,6 +377,7 @@ function PlaythroughLibraryInner(props: PlaythroughLibraryProps) {
       selectedTags,
       sortBy,
       sortDir,
+      lineageFilter,
       prefsReady,
       onError,
     ],
@@ -364,6 +390,11 @@ function PlaythroughLibraryInner(props: PlaythroughLibraryProps) {
   function setViewMode(mode: PlaythroughViewMode) {
     setViewModeState(mode);
     writeShelfPreference({ playthroughViewMode: mode });
+  }
+
+  function setLineageFilter(next: PlaythroughLineageFilter) {
+    setLineageFilterState(next);
+    writeShelfPreference({ playthroughLineageFilter: next });
   }
 
   function setSortBy(option: PlaythroughSortOption) {
@@ -422,7 +453,16 @@ function PlaythroughLibraryInner(props: PlaythroughLibraryProps) {
   }
 
   function handleEditTagsRequest(id: string, name: string) {
-    const item = playthroughs.find((p) => p.id === id);
+    let item = playthroughs.find((p) => p.id === id);
+    if (!item) {
+      for (const p of playthroughs) {
+        const child = p.childSummaries?.find((c) => c.id === id);
+        if (child) {
+          item = child;
+          break;
+        }
+      }
+    }
     setTagsError(null);
     setTagsTarget({
       id,
@@ -452,6 +492,10 @@ function PlaythroughLibraryInner(props: PlaythroughLibraryProps) {
     } finally {
       setTagsSaving(false);
     }
+  }
+
+  function handleOpenTimelines(id: string, name: string) {
+    setTimelineTarget({ id, name });
   }
 
   function handleDuplicated() {
@@ -588,6 +632,24 @@ function PlaythroughLibraryInner(props: PlaythroughLibraryProps) {
     />
   ) : null;
 
+  const timelineDialog = timelineTarget ? (
+    <TimelineModal
+      open
+      onClose={() => setTimelineTarget(null)}
+      playthroughId={timelineTarget.id}
+      playthroughName={timelineTarget.name}
+      currentPlaythroughId={currentPlaythroughId}
+      onSwitchPlaythrough={(id) => {
+        setTimelineTarget(null);
+        openCard(id);
+      }}
+      onTimelinesChanged={() => {
+        pageCacheRef.current.clear();
+        void refresh({ force: true });
+      }}
+    />
+  ) : null;
+
   const body = (
     <Stack direction="column" align="stretch" gap="md" fullWidth>
       {loadFailures.length > 0 && !failuresDismissed ? (
@@ -626,6 +688,31 @@ function PlaythroughLibraryInner(props: PlaythroughLibraryProps) {
                 size="sm"
                 flex1
                 aria-label="Search playthroughs"
+              />
+
+              <Tabs<PlaythroughLineageFilter>
+                variant="segmented"
+                size="sm"
+                activeTab={lineageFilter}
+                onChange={setLineageFilter}
+                ariaLabel="Timeline lineage filter"
+                tabs={[
+                  {
+                    id: "parents",
+                    label: "Parents",
+                    icon: "BookOpen",
+                  },
+                  {
+                    id: "grouped",
+                    label: "Grouped",
+                    icon: "GitFork",
+                  },
+                  {
+                    id: "children",
+                    label: "Branches",
+                    icon: "GitBranch",
+                  },
+                ]}
               />
 
               <SortSelect<PlaythroughSortOption>
@@ -669,6 +756,7 @@ function PlaythroughLibraryInner(props: PlaythroughLibraryProps) {
             search={search}
             selectedTags={selectedTags}
             viewMode={viewMode}
+            lineageFilter={lineageFilter}
             showFullTitle={showFullTitle}
             showAllTags={showAllTags}
             currentPlaythroughId={currentPlaythroughId}
@@ -683,6 +771,7 @@ function PlaythroughLibraryInner(props: PlaythroughLibraryProps) {
             onSelect={openCard}
             onRenameRequest={handleRenameRequest}
             onEditTagsRequest={handleEditTagsRequest}
+            onOpenTimelines={handleOpenTimelines}
             onDuplicated={handleDuplicated}
             onDeleted={handleDeleted}
             onError={onError}
@@ -729,6 +818,7 @@ function PlaythroughLibraryInner(props: PlaythroughLibraryProps) {
         </Modal.Body>
         {renameDialog}
         {tagsDialog}
+        {timelineDialog}
       </Modal>
     );
   }
@@ -756,6 +846,7 @@ function PlaythroughLibraryInner(props: PlaythroughLibraryProps) {
       {body}
       {renameDialog}
       {tagsDialog}
+      {timelineDialog}
     </Stack>
   );
 }
@@ -768,6 +859,7 @@ export type PlaythroughShelfContentProps = {
   search: string;
   selectedTags: string[];
   viewMode: PlaythroughViewMode;
+  lineageFilter?: PlaythroughLineageFilter;
   showFullTitle?: boolean;
   showAllTags?: boolean;
   currentPlaythroughId?: string;
@@ -782,6 +874,7 @@ export type PlaythroughShelfContentProps = {
   onSelect: (id: string) => void;
   onRenameRequest: (id: string, currentName: string) => void;
   onEditTagsRequest: (id: string, currentName: string) => void;
+  onOpenTimelines?: (id: string, currentName: string) => void;
   onDuplicated: (clone: Playthrough) => void;
   onDeleted: (deletedId: string) => void;
   onError: (message: string) => void;
@@ -796,6 +889,7 @@ export function PlaythroughShelfContent(props: PlaythroughShelfContentProps) {
     search,
     selectedTags,
     viewMode,
+    lineageFilter = "parents",
     showFullTitle = false,
     showAllTags = false,
     currentPlaythroughId,
@@ -810,6 +904,7 @@ export function PlaythroughShelfContent(props: PlaythroughShelfContentProps) {
     onSelect,
     onRenameRequest,
     onEditTagsRequest,
+    onOpenTimelines,
     onDuplicated,
     onDeleted,
     onError,
@@ -822,7 +917,9 @@ export function PlaythroughShelfContent(props: PlaythroughShelfContentProps) {
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;
     name: string;
+    timelineCount: number;
   } | null>(null);
+  const [deleteAllBranches, setDeleteAllBranches] = useState(false);
   const [deleteSaving, setDeleteSaving] = useState(false);
 
   async function handleDuplicate(id: string) {
@@ -843,14 +940,26 @@ export function PlaythroughShelfContent(props: PlaythroughShelfContentProps) {
     const targetId = deleteTarget.id;
     setDeleteSaving(true);
     try {
-      await deletePlaythrough(targetId);
+      await deletePlaythrough(targetId, {
+        deleteBranches: deleteAllBranches,
+      });
       setDeleteTarget(null);
+      setDeleteAllBranches(false);
       onDeleted(targetId);
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
     } finally {
       setDeleteSaving(false);
     }
+  }
+
+  function requestDelete(p: PlaythroughSummary) {
+    setDeleteAllBranches(false);
+    setDeleteTarget({
+      id: p.id,
+      name: p.name,
+      timelineCount: p.timelineCount ?? (p.branches?.length || 1),
+    });
   }
 
   const paginationElement = (
@@ -878,7 +987,7 @@ export function PlaythroughShelfContent(props: PlaythroughShelfContentProps) {
     );
   }
 
-  if (total === 0 && !hasActiveFilters) {
+  if (total === 0 && !hasActiveFilters && lineageFilter !== "children") {
     return (
       <Card variant="panel" padding="lg">
         <Stack direction="column" align="center" gap="sm">
@@ -903,15 +1012,62 @@ export function PlaythroughShelfContent(props: PlaythroughShelfContentProps) {
       <Card variant="panel" padding="lg">
         <Stack direction="column" align="center" gap="sm">
           <Text size="sm" tone="secondary">
-            No playthroughs match your current search or tag filters.
+            {lineageFilter === "children" && !hasActiveFilters
+              ? "No child timeline branches yet. Branch from any message in chat to create an alternative timeline!"
+              : "No playthroughs match your current search or tag filters."}
           </Text>
-          <Button variant="secondary" size="sm" onClick={onClearSearch}>
-            Clear Filters
-          </Button>
+          {hasActiveFilters ? (
+            <Button variant="secondary" size="sm" onClick={onClearSearch}>
+              Clear Filters
+            </Button>
+          ) : null}
         </Stack>
       </Card>
     );
   }
+
+  const renderSingleItem = (p: PlaythroughSummary) =>
+    viewMode === "grid" ? (
+      <PlaythroughCard
+        key={p.id}
+        playthrough={p}
+        isCurrent={p.id === currentPlaythroughId}
+        currentPlaythroughId={currentPlaythroughId}
+        isDuplicating={duplicatingId === p.id}
+        selectedTags={selectedTags}
+        showFullTitle={showFullTitle}
+        showAllTags={showAllTags}
+        onSelect={onSelect}
+        onToggleTag={onToggleTag}
+        onRenameRequest={onRenameRequest}
+        onEditTagsRequest={onEditTagsRequest}
+        onOpenTimelines={onOpenTimelines}
+        onDuplicateRequest={() => void handleDuplicate(p.id)}
+        onDeleteRequest={() => requestDelete(p)}
+      />
+    ) : (
+      <PlaythroughRow
+        key={p.id}
+        playthrough={p}
+        isCurrent={p.id === currentPlaythroughId}
+        currentPlaythroughId={currentPlaythroughId}
+        isDuplicating={duplicatingId === p.id}
+        selectedTags={selectedTags}
+        showFullTitle={showFullTitle}
+        showAllTags={showAllTags}
+        onSelect={onSelect}
+        onToggleTag={onToggleTag}
+        onRenameRequest={onRenameRequest}
+        onEditTagsRequest={onEditTagsRequest}
+        onOpenTimelines={onOpenTimelines}
+        onDuplicateRequest={() => void handleDuplicate(p.id)}
+        onDeleteRequest={() => requestDelete(p)}
+      />
+    );
+
+  const hasGroupedFamilies =
+    lineageFilter === "grouped" &&
+    playthroughs.some((p) => (p.childSummaries?.length ?? 0) > 0);
 
   return (
     <Stack
@@ -924,49 +1080,89 @@ export function PlaythroughShelfContent(props: PlaythroughShelfContentProps) {
       {/* Top pagination only appears when there is more than 1 page */}
       {totalPages > 1 ? paginationElement : null}
 
-      {viewMode === "grid" ? (
+      {lineageFilter === "grouped" && hasGroupedFamilies ? (
+        <Stack direction="column" align="stretch" gap="md" fullWidth>
+          {playthroughs.map((p) => {
+            const children = p.childSummaries ?? [];
+            if (children.length === 0) {
+              return renderSingleItem(p);
+            }
+            return (
+              <div
+                key={`family_${p.id}`}
+                className="common-lineage-group"
+                aria-label={`Timeline Family for ${p.name}`}
+              >
+                <Stack
+                  direction="row"
+                  align="center"
+                  justify="between"
+                  gap="sm"
+                  wrap
+                  fullWidth
+                >
+                  <Stack direction="row" align="center" gap="xs" wrap>
+                    <Badge variant="accent" size="xs" leftIcon="GitFork">
+                      Timeline Family ({1 + children.length})
+                    </Badge>
+                    <Text size="sm" weight="semibold">
+                      {p.name}
+                    </Text>
+                  </Stack>
+                  {onOpenTimelines ? (
+                    <Button
+                      variant="secondary"
+                      size="xs"
+                      leftIcon="GitFork"
+                      onClick={() => onOpenTimelines(p.id, p.name)}
+                    >
+                      View Timeline Tree
+                    </Button>
+                  ) : null}
+                </Stack>
+
+                {renderSingleItem(p)}
+
+                <div className="common-lineage-group__branches">
+                  <Stack direction="row" align="center" gap="xs">
+                    <Icon
+                      name="GitBranch"
+                      size={13}
+                      className="ds-icon-muted"
+                    />
+                    <Text size="xs" weight="semibold" tone="secondary">
+                      Child Timeline{" "}
+                      {children.length === 1 ? "Branch" : "Branches"} (
+                      {children.length})
+                    </Text>
+                  </Stack>
+
+                  {viewMode === "grid" ? (
+                    <FormGrid cols="cards" gap="md">
+                      {children.map((child) => renderSingleItem(child))}
+                    </FormGrid>
+                  ) : (
+                    <Stack
+                      direction="column"
+                      align="stretch"
+                      gap="sm"
+                      fullWidth
+                    >
+                      {children.map((child) => renderSingleItem(child))}
+                    </Stack>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </Stack>
+      ) : viewMode === "grid" ? (
         <FormGrid cols="cards" gap="lg">
-          {playthroughs.map((p) => (
-            <PlaythroughCard
-              key={p.id}
-              playthrough={p}
-              isCurrent={p.id === currentPlaythroughId}
-              isDuplicating={duplicatingId === p.id}
-              selectedTags={selectedTags}
-              showFullTitle={showFullTitle}
-              showAllTags={showAllTags}
-              onSelect={onSelect}
-              onToggleTag={onToggleTag}
-              onRenameRequest={onRenameRequest}
-              onEditTagsRequest={onEditTagsRequest}
-              onDuplicateRequest={() => void handleDuplicate(p.id)}
-              onDeleteRequest={() =>
-                setDeleteTarget({ id: p.id, name: p.name })
-              }
-            />
-          ))}
+          {playthroughs.map((p) => renderSingleItem(p))}
         </FormGrid>
       ) : (
         <Stack direction="column" align="stretch" gap="sm" fullWidth>
-          {playthroughs.map((p) => (
-            <PlaythroughRow
-              key={p.id}
-              playthrough={p}
-              isCurrent={p.id === currentPlaythroughId}
-              isDuplicating={duplicatingId === p.id}
-              selectedTags={selectedTags}
-              showFullTitle={showFullTitle}
-              showAllTags={showAllTags}
-              onSelect={onSelect}
-              onToggleTag={onToggleTag}
-              onRenameRequest={onRenameRequest}
-              onEditTagsRequest={onEditTagsRequest}
-              onDuplicateRequest={() => void handleDuplicate(p.id)}
-              onDeleteRequest={() =>
-                setDeleteTarget({ id: p.id, name: p.name })
-              }
-            />
-          ))}
+          {playthroughs.map((p) => renderSingleItem(p))}
         </Stack>
       )}
 
@@ -976,8 +1172,18 @@ export function PlaythroughShelfContent(props: PlaythroughShelfContentProps) {
       {deleteTarget ? (
         <ConfirmModal
           title="Delete Playthrough"
-          message={`Delete "${deleteTarget.name}"? This cannot be undone.`}
-          confirmLabel="Delete"
+          message={
+            deleteTarget.timelineCount > 1
+              ? `Delete "${deleteTarget.name}"? Choose whether to delete only this timeline (promoting the earliest remaining branch) or delete the entire timeline family.`
+              : `Delete "${deleteTarget.name}"? This cannot be undone.`
+          }
+          confirmLabel={
+            deleteTarget.timelineCount > 1
+              ? deleteAllBranches
+                ? `Delete Entire Family (${deleteTarget.timelineCount})`
+                : "Delete This Timeline Only"
+              : "Delete"
+          }
           danger
           isLoading={deleteSaving}
           onConfirm={() => {
@@ -986,9 +1192,21 @@ export function PlaythroughShelfContent(props: PlaythroughShelfContentProps) {
           onCancel={() => {
             if (!deleteSaving) {
               setDeleteTarget(null);
+              setDeleteAllBranches(false);
             }
           }}
-        />
+        >
+          {deleteTarget.timelineCount > 1 ? (
+            <CheckboxRow
+              icon="Trash2"
+              title={`Delete entire timeline family (${deleteTarget.timelineCount} timelines)`}
+              description="When unchecked, only this timeline is deleted and its earliest child branch is promoted so the rest of the timeline family stays intact."
+              checked={deleteAllBranches}
+              disabled={deleteSaving}
+              onChange={(e) => setDeleteAllBranches(e.target.checked)}
+            />
+          ) : null}
+        </ConfirmModal>
       ) : null}
     </Stack>
   );
@@ -997,6 +1215,7 @@ export function PlaythroughShelfContent(props: PlaythroughShelfContentProps) {
 type ItemProps = {
   playthrough: PlaythroughSummary;
   isCurrent: boolean;
+  currentPlaythroughId?: string;
   isDuplicating: boolean;
   selectedTags: string[];
   showFullTitle: boolean;
@@ -1005,6 +1224,7 @@ type ItemProps = {
   onToggleTag: (tag: string) => void;
   onRenameRequest: (id: string, currentName: string) => void;
   onEditTagsRequest: (id: string, currentName: string) => void;
+  onOpenTimelines?: (id: string, currentName: string) => void;
   onDuplicateRequest: () => void;
   onDeleteRequest: () => void;
 };
@@ -1012,20 +1232,203 @@ type ItemProps = {
 const useIsomorphicLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
+function PlaythroughTimelineBadge({
+  playthrough,
+  compact = false,
+  currentPlaythroughId,
+  onSelectTimeline,
+  onOpenTimelines,
+}: {
+  playthrough: PlaythroughSummary;
+  compact?: boolean;
+  currentPlaythroughId?: string;
+  onSelectTimeline: (id: string) => void;
+  onOpenTimelines?: (id: string, name: string) => void;
+}) {
+  const branches: PlaythroughBranchSummary[] = playthrough.branches ?? [];
+  const timelineCount = playthrough.timelineCount ?? branches.length;
+  const isChild = Boolean(
+    playthrough.rootPlaythroughId &&
+    playthrough.rootPlaythroughId !== playthrough.id,
+  );
+
+  // Hide badge completely when there are no timeline branches
+  if (timelineCount <= 1 && !isChild) {
+    return null;
+  }
+
+  const badgeLabel = isChild
+    ? compact
+      ? `T${playthrough.createdFromTurn ?? playthrough.turn}`
+      : `From ${playthrough.parentName || playthrough.rootName || "Parent"}${
+          playthrough.createdFromTurn !== undefined
+            ? ` • T${playthrough.createdFromTurn}`
+            : ""
+        }`
+    : compact
+      ? `${timelineCount}`
+      : `${timelineCount} timelines`;
+
+  const popoverContent =
+    branches.length > 0 ? (
+      <div
+        className="common-timeline-popover"
+        onPointerDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Stack
+          direction="row"
+          align="center"
+          justify="between"
+          gap="xs"
+          fullWidth
+        >
+          <Text size="xs" weight="semibold">
+            Timelines ({branches.length})
+          </Text>
+          {onOpenTimelines ? (
+            <Button
+              variant="secondary"
+              size="xs"
+              leftIcon="GitFork"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenTimelines(playthrough.id, playthrough.name);
+              }}
+            >
+              View Graph
+            </Button>
+          ) : null}
+        </Stack>
+
+        <div className="common-timeline-popover__list">
+          {branches.map((b) => {
+            const isActive =
+              b.id === currentPlaythroughId || b.id === playthrough.id;
+            return (
+              <button
+                key={b.id}
+                type="button"
+                className={`common-timeline-popover__item${
+                  isActive ? " common-timeline-popover__item--active" : ""
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectTimeline(b.id);
+                }}
+                title={`Open timeline "${b.name}"`}
+              >
+                <Stack
+                  direction="column"
+                  align="start"
+                  gap="2xs"
+                  flex1
+                  style={{ minWidth: 0 }}
+                >
+                  <Text size="xs" weight="semibold">
+                    {b.name}
+                  </Text>
+                  <Stack direction="row" align="center" gap="2xs" wrap>
+                    <Badge variant="neutral" size="xs">
+                      Turn {b.turn}
+                    </Badge>
+                    {b.isRoot ? (
+                      <Badge variant="outline" size="xs">
+                        Root
+                      </Badge>
+                    ) : b.createdFromTurn !== undefined ? (
+                      <Badge variant="outline" size="xs">
+                        From T{b.createdFromTurn}
+                      </Badge>
+                    ) : null}
+                    {b.id === currentPlaythroughId ? (
+                      <Badge variant="accent" size="xs">
+                        Current
+                      </Badge>
+                    ) : null}
+                  </Stack>
+                </Stack>
+                <Icon name="Play" size={12} className="ds-icon-accent" />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    ) : (
+      `${timelineCount} timelines — click to view timeline graph`
+    );
+
+  return (
+    <Tooltip
+      content={popoverContent}
+      side="top"
+      align="start"
+      delayDuration={100}
+      interactive={branches.length > 0}
+    >
+      <span
+        aria-label={
+          isChild
+            ? `Branched timeline: ${badgeLabel}`
+            : `${timelineCount} timelines`
+        }
+      >
+        <Badge
+          variant={isChild ? "outline" : "accent"}
+          size="xs"
+          leftIcon={isChild ? "GitBranch" : "GitFork"}
+          role={onOpenTimelines ? "button" : undefined}
+          tabIndex={onOpenTimelines ? 0 : undefined}
+          onClick={
+            onOpenTimelines
+              ? (e) => {
+                  e.stopPropagation();
+                  onOpenTimelines(playthrough.id, playthrough.name);
+                }
+              : undefined
+          }
+          onKeyDown={
+            onOpenTimelines
+              ? (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onOpenTimelines(playthrough.id, playthrough.name);
+                  }
+                }
+              : undefined
+          }
+        >
+          {badgeLabel}
+        </Badge>
+      </span>
+    </Tooltip>
+  );
+}
+
 function PlaythroughInfoRow({
+  playthrough,
   turn,
   chapterCount,
   castCount,
   imageCount,
   updatedAt,
+  currentPlaythroughId,
+  onSelectTimeline,
+  onOpenTimelines,
   defaultCompact = false,
   stackDateOnMobile = false,
 }: {
+  playthrough: PlaythroughSummary;
   turn: number;
   chapterCount: number;
   castCount: number;
   imageCount: number;
   updatedAt: string;
+  currentPlaythroughId?: string;
+  onSelectTimeline: (id: string) => void;
+  onOpenTimelines?: (id: string, name: string) => void;
   defaultCompact?: boolean;
   stackDateOnMobile?: boolean;
 }) {
@@ -1040,8 +1443,33 @@ function PlaythroughInfoRow({
   const castLabel = `${castCount} cast`;
   const castTooltipLabel = `${castCount} ${castCount === 1 ? "cast member" : "cast members"}`;
   const imageLabel = `${imageCount} ${imageCount === 1 ? "image" : "images"}`;
-  const fullDate = formatDate(updatedAt);
-  const shortDate = formatShortDate(updatedAt);
+
+  // On parent cards, if a child timeline branch was updated more recently than the root parent,
+  // display the latest family timestamp so the date matches its bumped sort position.
+  const isChildCard = Boolean(
+    playthrough.rootPlaythroughId &&
+    playthrough.rootPlaythroughId !== playthrough.id,
+  );
+  const latestBranch = useMemo(() => {
+    if (
+      isChildCard ||
+      !playthrough.branches ||
+      playthrough.branches.length <= 1
+    )
+      return null;
+    let best = playthrough.branches[0];
+    for (const b of playthrough.branches) {
+      if (b.updatedAt > best.updatedAt) best = b;
+    }
+    return best && best.updatedAt > updatedAt ? best : null;
+  }, [isChildCard, playthrough.branches, updatedAt]);
+
+  const effectiveDateIso = latestBranch ? latestBranch.updatedAt : updatedAt;
+  const fullDate = formatDate(effectiveDateIso);
+  const shortDate = formatShortDate(effectiveDateIso);
+  const dateTooltip = latestBranch
+    ? `Latest timeline activity: "${latestBranch.name}" on ${fullDate} (Root updated ${formatDate(updatedAt)})`
+    : fullDate;
 
   const recalculate = useCallback(() => {
     const container = containerRef.current;
@@ -1100,6 +1528,13 @@ function PlaythroughInfoRow({
     >
       <Card.Interactive>
         <Stack direction="row" align="center" gap="2xs" wrap>
+          <PlaythroughTimelineBadge
+            playthrough={playthrough}
+            compact={isCompact}
+            currentPlaythroughId={currentPlaythroughId}
+            onSelectTimeline={onSelectTimeline}
+            onOpenTimelines={onOpenTimelines}
+          />
           <Tooltip content={turnLabel} disabled={!isCompact}>
             <span aria-label={turnLabel}>
               <Badge variant="neutral" size="xs" leftIcon="Clock">
@@ -1132,7 +1567,7 @@ function PlaythroughInfoRow({
       </Card.Interactive>
 
       <Card.Interactive>
-        <Tooltip content={fullDate} disabled={!isCompact}>
+        <Tooltip content={dateTooltip} disabled={!isCompact && !latestBranch}>
           <Text as="span" size="xs" tone="muted" truncate>
             {isCompact ? shortDate : fullDate}
           </Text>
@@ -1175,6 +1610,7 @@ function PlaythroughCard(props: ItemProps) {
   const {
     playthrough: p,
     isCurrent,
+    currentPlaythroughId,
     isDuplicating,
     selectedTags,
     showFullTitle,
@@ -1183,6 +1619,7 @@ function PlaythroughCard(props: ItemProps) {
     onToggleTag,
     onRenameRequest,
     onEditTagsRequest,
+    onOpenTimelines,
     onDuplicateRequest,
     onDeleteRequest,
   } = props;
@@ -1190,6 +1627,9 @@ function PlaythroughCard(props: ItemProps) {
   const tags = p.tags ?? [];
   const chapterCount = p.chapterCount ?? 1;
   const imageCount = p.imageCount ?? 0;
+  const hasTimelines =
+    (p.timelineCount ?? 1) > 1 ||
+    Boolean(p.rootPlaythroughId && p.rootPlaythroughId !== p.id);
 
   return (
     <Card
@@ -1229,48 +1669,74 @@ function PlaythroughCard(props: ItemProps) {
           </Card.TitleButton>
 
           <Card.Interactive>
-            {isCurrent ? (
-              <Badge variant="accent" size="xs" pill>
-                Current
-              </Badge>
-            ) : null}
-            <ActionsMenu
-              label="More options"
-              items={[
-                {
-                  label: "Rename",
-                  icon: "Pencil",
-                  onClick: () => onRenameRequest(p.id, p.name),
-                },
-                {
-                  label: "Edit Tags",
-                  icon: "Tag",
-                  onClick: () => onEditTagsRequest(p.id, p.name),
-                },
-                {
-                  label: isDuplicating ? "Duplicating…" : "Duplicate",
-                  icon: "Copy",
-                  disabled: isDuplicating,
-                  onClick: onDuplicateRequest,
-                },
-                {
-                  label: "Delete",
-                  icon: "Trash2",
-                  danger: true,
-                  onClick: onDeleteRequest,
-                },
-              ]}
-            />
+            <Stack direction="row" align="center" gap="2xs">
+              {isCurrent ? (
+                <Badge variant="accent" size="xs" pill>
+                  Current
+                </Badge>
+              ) : null}
+              {hasTimelines && onOpenTimelines ? (
+                <Button
+                  variant="secondary"
+                  size="xs"
+                  leftIcon="GitFork"
+                  onClick={() => onOpenTimelines(p.id, p.name)}
+                  title="View timeline branches"
+                >
+                  Timelines
+                </Button>
+              ) : null}
+              <ActionsMenu
+                label="More options"
+                items={[
+                  ...(onOpenTimelines
+                    ? [
+                        {
+                          label: "Timelines",
+                          icon: "GitFork" as const,
+                          onClick: () => onOpenTimelines(p.id, p.name),
+                        },
+                      ]
+                    : []),
+                  {
+                    label: "Rename",
+                    icon: "Pencil",
+                    onClick: () => onRenameRequest(p.id, p.name),
+                  },
+                  {
+                    label: "Edit Tags",
+                    icon: "Tag",
+                    onClick: () => onEditTagsRequest(p.id, p.name),
+                  },
+                  {
+                    label: isDuplicating ? "Duplicating…" : "Duplicate",
+                    icon: "Copy",
+                    disabled: isDuplicating,
+                    onClick: onDuplicateRequest,
+                  },
+                  {
+                    label: "Delete",
+                    icon: "Trash2",
+                    danger: true,
+                    onClick: onDeleteRequest,
+                  },
+                ]}
+              />
+            </Stack>
           </Card.Interactive>
         </Stack>
 
         <PlaythroughInfoRow
           defaultCompact
+          playthrough={p}
           turn={p.turn}
           chapterCount={chapterCount}
           castCount={p.castCount}
           imageCount={imageCount}
           updatedAt={p.updatedAt}
+          currentPlaythroughId={currentPlaythroughId}
+          onSelectTimeline={onSelect}
+          onOpenTimelines={onOpenTimelines}
         />
 
         <Separator spacing="none" />
@@ -1304,6 +1770,7 @@ function PlaythroughRow(props: ItemProps) {
   const {
     playthrough: p,
     isCurrent,
+    currentPlaythroughId,
     isDuplicating,
     selectedTags,
     showFullTitle,
@@ -1312,6 +1779,7 @@ function PlaythroughRow(props: ItemProps) {
     onToggleTag,
     onRenameRequest,
     onEditTagsRequest,
+    onOpenTimelines,
     onDuplicateRequest,
     onDeleteRequest,
   } = props;
@@ -1319,6 +1787,9 @@ function PlaythroughRow(props: ItemProps) {
   const tags = p.tags ?? [];
   const chapterCount = p.chapterCount ?? 1;
   const imageCount = p.imageCount ?? 0;
+  const hasTimelines =
+    (p.timelineCount ?? 1) > 1 ||
+    Boolean(p.rootPlaythroughId && p.rootPlaythroughId !== p.id);
 
   return (
     <Card
@@ -1358,48 +1829,74 @@ function PlaythroughRow(props: ItemProps) {
           </Card.TitleButton>
 
           <Card.Interactive>
-            {isCurrent ? (
-              <Badge variant="accent" size="xs" pill>
-                Current
-              </Badge>
-            ) : null}
-            <ActionsMenu
-              label="More options"
-              items={[
-                {
-                  label: "Rename",
-                  icon: "Pencil",
-                  onClick: () => onRenameRequest(p.id, p.name),
-                },
-                {
-                  label: "Edit Tags",
-                  icon: "Tag",
-                  onClick: () => onEditTagsRequest(p.id, p.name),
-                },
-                {
-                  label: isDuplicating ? "Duplicating…" : "Duplicate",
-                  icon: "Copy",
-                  disabled: isDuplicating,
-                  onClick: onDuplicateRequest,
-                },
-                {
-                  label: "Delete",
-                  icon: "Trash2",
-                  danger: true,
-                  onClick: onDeleteRequest,
-                },
-              ]}
-            />
+            <Stack direction="row" align="center" gap="2xs">
+              {isCurrent ? (
+                <Badge variant="accent" size="xs" pill>
+                  Current
+                </Badge>
+              ) : null}
+              {hasTimelines && onOpenTimelines ? (
+                <Button
+                  variant="secondary"
+                  size="xs"
+                  leftIcon="GitFork"
+                  onClick={() => onOpenTimelines(p.id, p.name)}
+                  title="View timeline branches"
+                >
+                  Timelines
+                </Button>
+              ) : null}
+              <ActionsMenu
+                label="More options"
+                items={[
+                  ...(onOpenTimelines
+                    ? [
+                        {
+                          label: "Timelines",
+                          icon: "GitFork" as const,
+                          onClick: () => onOpenTimelines(p.id, p.name),
+                        },
+                      ]
+                    : []),
+                  {
+                    label: "Rename",
+                    icon: "Pencil",
+                    onClick: () => onRenameRequest(p.id, p.name),
+                  },
+                  {
+                    label: "Edit Tags",
+                    icon: "Tag",
+                    onClick: () => onEditTagsRequest(p.id, p.name),
+                  },
+                  {
+                    label: isDuplicating ? "Duplicating…" : "Duplicate",
+                    icon: "Copy",
+                    disabled: isDuplicating,
+                    onClick: onDuplicateRequest,
+                  },
+                  {
+                    label: "Delete",
+                    icon: "Trash2",
+                    danger: true,
+                    onClick: onDeleteRequest,
+                  },
+                ]}
+              />
+            </Stack>
           </Card.Interactive>
         </Stack>
 
         <PlaythroughInfoRow
           stackDateOnMobile
+          playthrough={p}
           turn={p.turn}
           chapterCount={chapterCount}
           castCount={p.castCount}
           imageCount={imageCount}
           updatedAt={p.updatedAt}
+          currentPlaythroughId={currentPlaythroughId}
+          onSelectTimeline={onSelect}
+          onOpenTimelines={onOpenTimelines}
         />
 
         <Separator spacing="none" />

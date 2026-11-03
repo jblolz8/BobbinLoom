@@ -166,6 +166,7 @@ export const playthroughRoutes: FastifyPluginAsync<
     const query = z
       .object({
         includeBranches: z.string().optional(),
+        lineageFilter: z.enum(["parents", "grouped", "children"]).optional(),
         page: z.string().optional(),
         pageSize: z.string().optional(),
         search: z.string().optional(),
@@ -199,6 +200,7 @@ export const playthroughRoutes: FastifyPluginAsync<
     // store, which imports the store back, so the wiring lives here rather than in the store.
     return listPlaythroughSummaries(dataDir, {
       includeTimelineBranches,
+      lineageFilter: query.lineageFilter,
       page,
       pageSize,
       search: query.search,
@@ -236,7 +238,12 @@ export const playthroughRoutes: FastifyPluginAsync<
 
   app.delete("/api/playthroughs/:id", async (request, reply) => {
     const params = z.object({ id: z.string() }).parse(request.params);
-    const deleted = deletePlaythroughRecord(dataDir, params.id);
+    const query = z
+      .object({ deleteBranches: z.string().optional() })
+      .parse(request.query ?? {});
+    const deleted = deletePlaythroughRecord(dataDir, params.id, {
+      deleteBranches: query.deleteBranches === "true",
+    });
     if (!deleted)
       return reply.code(404).send({ error: "Playthrough not found" });
     // The record is gone, so any image only it referenced is now unreferenced.

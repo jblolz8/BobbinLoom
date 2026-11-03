@@ -12,8 +12,8 @@ opens on the home screen, which lists every playthrough you have.
 ## The playthrough shelf
 
 Each item shows a cover image, the playthrough's name, turn count, cast size, when it was last
-touched, and a two-line preview of the most recent message. The **⋮** menu offers **Rename**,
-**Duplicate** and **Delete**.
+touched, and a two-line preview of the most recent message. The **⋮** menu offers **Timelines**,
+**Rename**, **Edit Tags**, **Duplicate** and **Delete**.
 
 **Rename** opens a small dialog with the current name selected, so typing replaces it: Enter saves,
 Escape or Cancel leaves it alone, and a failure is reported in the dialog that asked. The name on a
@@ -24,8 +24,10 @@ than sent.
 
 Two view modes, switched by the toolbar's **Grid** / **List** buttons and remembered per device:
 **Grid** shows the cover as a wide banner above the text, **List** shows it as a small thumbnail
-beside the title. **Search** matches the name, the sort control orders by
-updated date, name or turn, and the pager keeps a page size of its own.
+beside the title. The lineage filter switches between **Parents** (root stories only), **Grouped**
+(root stories with their child timeline branches nested underneath), and **Branches** (child
+timeline branches only) — see [Timelines](timelines.md). **Search** matches the name, the sort
+control orders by updated date, name or turn, and the pager keeps a page size of its own.
 
 The whole shelf — search, sort, view modes, pager, the **⋮** menu — is also inside the play view,
 behind **Save / Load** in its header, where picking an item switches to that story. It is the
@@ -114,7 +116,7 @@ A playthrough is one JSON document. The parts you'll see while playing:
 | `memoryEvents`, `memoryLayers` | The memory pipeline — see [Chapters & memory](chapters-and-memory.md) |
 | `itemCatalog` | The world's items |
 | `worldState`, `inventory` | World state |
-| `tags` | Theme, setting, and trope tags ? used to filter the shelf and expanded into turn prompts via `{{playthroughTags}}` |
+| `tags` | Theme, setting, and trope tags — used to filter the shelf and expanded into turn prompts via `{{playthroughTags}}` |
 | `lorebookIds`, `lorebookTimingStates` | Attached lorebooks and their per-entry timers |
 | `snapshots` | One restore point per turn, which is what makes Retry possible |
 | `scenarioDescription`, `personaId`, `initialCastIds` | Creation-time metadata, kept so a scenario can be replayed |
@@ -130,14 +132,14 @@ switch, or moving between playthroughs. Sending the message clears it.
 ## Duplicating
 
 **Duplicate** deep-clones the entire playthrough — messages, snapshots, chapters, world state —
-under a new id, and appends `(copy)` to the name. The clone is an exact checkpoint you can take
-in a different direction without touching the original.
+under a new id and a fresh branch identity, and appends `(copy)` to the name. The clone is an
+exact standalone checkpoint you can take in a different direction without touching the original.
 
 ## Where it is stored
 
 ```
-data/playthroughs/<id>.json     one file per playthrough — a timeline branch is its own
-                                file, linked to the root by branchId / parentBranchId
+data/playthroughs/<id>/<id>.json   one folder per playthrough — a timeline branch is its own
+                                   playthrough record, linked to the root by branchId / parentBranchId
 ```
 
 Records are validated on load, and newer fields are filled in with defaults rather than

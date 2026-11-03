@@ -1,6 +1,7 @@
 export type {
   LoadFailure,
   ModuleContext,
+  PlaythroughBranchSummary,
   PlaythroughListResponse,
   PlaythroughSummary,
 } from "../../schemas";

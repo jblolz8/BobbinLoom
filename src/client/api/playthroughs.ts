@@ -80,6 +80,8 @@ export type CloseChapterBody = {
   providerId?: string;
 };
 
+export type PlaythroughLineageFilter = "parents" | "grouped" | "children";
+
 export type ListPlaythroughsOptions = {
   page?: number;
   pageSize?: number | "all";
@@ -87,6 +89,7 @@ export type ListPlaythroughsOptions = {
   tags?: string[];
   sortBy?: "updatedAt" | "name" | "turn";
   sortDir?: "asc" | "desc";
+  lineageFilter?: PlaythroughLineageFilter;
 };
 
 export function listPlaythroughs(
@@ -101,6 +104,9 @@ export function listPlaythroughs(
   }
   if (options?.sortBy) query.set("sortBy", options.sortBy);
   if (options?.sortDir) query.set("sortDir", options.sortDir);
+  if (options?.lineageFilter) {
+    query.set("lineageFilter", options.lineageFilter);
+  }
   const q = query.toString();
   return request<PlaythroughListResponse>(
     `/api/playthroughs${q ? `?${q}` : ""}`,
@@ -373,8 +379,12 @@ export const promoteNpc = fleshOutCharacter;
 /** @deprecated Use fleshOutCharacterDraft */
 export const promoteNpcDraft = fleshOutCharacterDraft;
 
-export function deletePlaythrough(id: string): Promise<void> {
-  return request<void>(`/api/playthroughs/${id}`, { method: "DELETE" });
+export function deletePlaythrough(
+  id: string,
+  options?: { deleteBranches?: boolean },
+): Promise<void> {
+  const query = options?.deleteBranches ? "?deleteBranches=true" : "";
+  return request<void>(`/api/playthroughs/${id}${query}`, { method: "DELETE" });
 }
 
 export function renamePlaythrough(

@@ -610,6 +610,9 @@ export const ViewPreferencesSchema = z.object({
       playthroughViewMode: z.enum(["grid", "list"]).optional(),
       playthroughSortBy: z.enum(["updatedAt", "name", "turn"]).optional(),
       playthroughSortDir: z.enum(["asc", "desc"]).optional(),
+      playthroughLineageFilter: z
+        .enum(["parents", "grouped", "children"])
+        .optional(),
       playthroughCompactLandscape: z.boolean().optional(),
       playthroughShowFullTitle: z.boolean().optional(),
       playthroughShowAllTags: z.boolean().optional(),
@@ -1031,7 +1034,22 @@ export const PlaythroughCoverViewSchema = z.object({
 });
 export type PlaythroughCoverView = z.infer<typeof PlaythroughCoverViewSchema>;
 
-export const PlaythroughSummarySchema = z.object({
+export const PlaythroughBranchSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  turn: z.number(),
+  branchId: z.string().optional(),
+  parentBranchId: z.string().optional(),
+  rootPlaythroughId: z.string().optional(),
+  createdFromTurn: z.number().optional(),
+  isRoot: z.boolean().optional(),
+  updatedAt: z.string(),
+});
+export type PlaythroughBranchSummary = z.infer<
+  typeof PlaythroughBranchSummarySchema
+>;
+
+export const PlaythroughSummaryBaseSchema = z.object({
   id: z.string(),
   name: z.string(),
   turn: z.number(),
@@ -1050,6 +1068,19 @@ export const PlaythroughSummarySchema = z.object({
   cover: PlaythroughCoverViewSchema.nullable(),
   tags: z.array(z.string()).default([]),
   updatedAt: z.string(),
+  /** Optional lineage & timeline family metadata (present when a playthrough belongs to a multi-branch family or is a child branch). */
+  branchId: z.string().optional(),
+  parentBranchId: z.string().optional(),
+  rootPlaythroughId: z.string().optional(),
+  parentName: z.string().optional(),
+  rootName: z.string().optional(),
+  createdFromTurn: z.number().optional(),
+  timelineCount: z.number().optional(),
+  branches: z.array(PlaythroughBranchSummarySchema).optional(),
+});
+
+export const PlaythroughSummarySchema = PlaythroughSummaryBaseSchema.extend({
+  childSummaries: z.array(PlaythroughSummaryBaseSchema).optional(),
 });
 export type PlaythroughSummary = z.infer<typeof PlaythroughSummarySchema>;
 

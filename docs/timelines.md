@@ -25,30 +25,54 @@ inventory and the quests come from the checkpoint.
 A branch is a full playthrough in its own right — it lives in `data/playthroughs/` alongside
 the original, and it can be retried, closed into chapters, duplicated and branched again.
 
-## A branch, or a separate story
+## Organizing timelines on the playthrough shelf
 
-Branches come in two flavours:
+The playthrough shelf toolbar includes a lineage filter with three modes, remembered per device:
 
-| Kind | Behaviour |
+| Mode | What it shows |
 |---|---|
-| **Internal timeline** | The branch belongs to the original's timeline. It's reachable from the timeline viewer and stays out of your main playthrough list |
-| **Standalone playthrough** | The branch also appears as its own entry in the playthrough list and in save/load |
+| **Parents** | Root playthroughs only, keeping your main shelf clean while surfacing each family's timeline count badge |
+| **Grouped** | Each root playthrough paired with its child timeline branches nested inside a visual family group container |
+| **Branches** | Child timeline branches only, each showing which parent and turn it forked from |
 
-Every internal branch can be promoted to standalone from the timeline viewer, and the choice is
-a toggle rather than something fixed at creation.
+When sorting by **Updated Date** in **Parents** or **Grouped** mode, playing or updating any child
+timeline branch automatically bumps its parent family to the top of the shelf and displays the
+latest family activity date on the parent card.
 
-## The timeline viewer
+Playthroughs with timeline branches also display a **Timelines** action button and a **Timelines
+count badge**:
 
-**Timelines** in the playthrough's actions menu opens the viewer for the story you're in. It
-shows the family as a tree: the root playthrough and each branch hanging off the point it
-forks from, labelled with the turn it starts from and the message it split on.
+- **Hovering the badge** opens an interactive quick-switch popover listing every branch in the
+  family for one-click loading, plus a **View Graph** shortcut.
+- **Clicking the badge or the Timelines button** opens the full Timeline Tree Graph viewer directly
+  from the shelf.
+- Playthroughs without branches hide the badge and button automatically.
 
-From there you can:
+## The timeline tree graph viewer
 
-- switch to any branch and keep playing it
-- rename a branch
-- promote an internal branch to a standalone playthrough, or fold it back in
-- delete a branch
+You can open **Timelines & Branches** from the playthrough shelf, from the play view's top
+toolbar, from **Scene Overview**, or from **View Timelines** in the **Journal** tab.
 
-Deleting a branch is not the same as deleting the story: branches are separate files, so the
-one you delete is removed and the rest of the timeline stays as it was.
+The viewer renders the entire story family as an interactive hierarchy graph:
+
+- **Orientation toggle:** Switch between **Left → Right** and **Top → Bottom** tree layouts
+  (automatically defaulting to **Top → Bottom** on narrow mobile screens).
+- **Active lineage path:** The path from the root playthrough to your currently active timeline is
+  highlighted with animated connectors.
+- **Pan, zoom & fit:** Drag the canvas (or use one-finger touch pan and two-finger pinch-to-zoom
+  on mobile), scroll to zoom at crisp native layout resolution, or click **Fit tree to view** to
+  re-center the tree.
+- **Selected timeline inspector:** Clicking any node inspects its turn, message/chapter/cast
+  counts, two-line latest message preview, clickable parent lineage chip, and actions to **Load**,
+  **Rename**, or **Delete** that timeline.
+
+## Deleting a timeline vs. a timeline family
+
+When you delete a playthrough that has child timeline branches, the confirmation dialog lets you
+choose between:
+
+- **Delete This Timeline Only (default):** Deletes only the selected timeline and automatically
+  promotes its earliest child branch to become the new root (or re-parents sub-branches to the
+  parent timeline), ensuring surviving branches are never orphaned.
+- **Delete Entire Timeline Family:** Deletes the root playthrough and every timeline branch in its
+  family together.

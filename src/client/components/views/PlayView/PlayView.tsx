@@ -285,7 +285,6 @@ export function PlayView(props: PlayViewProps) {
 
   const [timelinesOpen, setTimelinesOpen] = useState(false);
   const [branchNameInput, setBranchNameInput] = useState("");
-  const [branchAsStandalone, setBranchAsStandalone] = useState(false);
 
   const [hasImageProvider, setHasImageProvider] = useState(false);
   const [imageConnection, setImageConnection] = useState<{
@@ -371,6 +370,7 @@ export function PlayView(props: PlayViewProps) {
         <ScenePanel
           playthrough={playthrough}
           onPlaythroughChange={setPlaythrough}
+          onOpenTimelines={() => setTimelinesOpen(true)}
           actionLoading={actionLoading}
           onWorldStateAction={handleWorldStateAction}
           {...paneProps}
@@ -673,15 +673,12 @@ export function PlayView(props: PlayViewProps) {
           isLoading={actionLoading}
           onConfirm={async () => {
             const name = branchNameInput.trim();
-            const standalone = branchAsStandalone;
             setBranchNameInput("");
-            setBranchAsStandalone(false);
-            await confirmBranch(name || undefined, standalone);
+            await confirmBranch(name || undefined);
           }}
           onCancel={() => {
             setBranchTarget(null);
             setBranchNameInput("");
-            setBranchAsStandalone(false);
           }}
         >
           <Stack direction="column" align="stretch" gap="sm" fullWidth>
@@ -704,12 +701,6 @@ export function PlayView(props: PlayViewProps) {
               onChange={(e) => setBranchNameInput(e.target.value)}
               placeholder={`${playthrough.name} (Branch T${branchTarget.turn ?? playthrough.turn})`}
               disabled={actionLoading}
-            />
-            <CheckboxRow
-              checked={branchAsStandalone}
-              onChange={(e) => setBranchAsStandalone(e.target.checked)}
-              disabled={actionLoading}
-              title="Also create as separate Playthrough in Save/Load list"
             />
           </Stack>
         </ConfirmModal>

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import type { CharacterTemplate } from "../../../../schemas";
 import {
   buildCharacterFamilyTree,
@@ -22,8 +22,16 @@ import {
   SimpleSelect,
   Stack,
   StatusMessage,
+  Tabs,
   Text,
 } from "../../base";
+import {
+  HierarchyGraph,
+  type HierarchyGraphDirection,
+  type HierarchyGraphItem,
+} from "../HierarchyGraph/HierarchyGraph";
+
+export type CardFamilyViewMode = "graph" | "list";
 
 export type CardFamilyModalProps = {
   focusId: string;
@@ -56,6 +64,11 @@ export function CardFamilyModal({
 }: CardFamilyModalProps) {
   const [selectedChildCandidateId, setSelectedChildCandidateId] = useState("");
   const [detachOnLink, setDetachOnLink] = useState(true);
+  const [viewMode, setViewMode] = useState<CardFamilyViewMode>("graph");
+  const [graphDirection, setGraphDirection] = useState<HierarchyGraphDirection>(
+    () =>
+      typeof window !== "undefined" && window.innerWidth < 640 ? "TB" : "LR",
+  );
 
   const latestCards = useMemo(
     () =>
@@ -166,6 +179,170 @@ export function CardFamilyModal({
       }),
     ];
   }, [family, childCandidates]);
+
+  const graphItems = useMemo<HierarchyGraphItem<CharacterFamilyNode>[]>(() => {
+    if (!family) return [];
+    const items: HierarchyGraphItem<CharacterFamilyNode>[] = [];
+    const walk = (node: CharacterFamilyNode) => {
+      const card = node.template;
+      const isFocused = card.id === family.focus.id;
+      items.push({
+        id: card.id,
+        parentId: card.parentId ?? null,
+        edgeLabel: card.cardVersion?.trim()
+          ? `Variant (${card.cardVersion.trim()})`
+          : "Variant",
+        isActive: isFocused,
+        isSelected: isFocused,
+        data: node,
+      });
+      for (const child of node.children) {
+        walk(child);
+      }
+    };
+    walk(family.tree);
+    return items;
+  }, [family]);
+
+  const renderGraphNode = useCallback(
+    (item: HierarchyGraphItem<CharacterFamilyNode>) => {
+      const node = item.data;
+      const card = node.template;
+      const isFocused = card.id === family?.focus.id;
+      const isRoot = node.depth === 0;
+      const badge = cardBadgeLabel(card);
+      const canDetachCcv2 = hasCcv2Source(card);
+
+      return (
+        <Stack direction="column" align="stretch" gap="xs" fullWidth>
+          <Stack direction="row" align="center" gap="xs" fullWidth>
+            <CharacterAvatar template={card} variant="list" />
+            <Stack
+              direction="column"
+              align="start"
+              gap="2xs"
+              flex1
+              style={{ minWidth: 0 }}
+            >
+              <Text
+                size="sm"
+                weight="semibold"
+                truncate
+                title={displayTitle(card)}
+              >
+                {displayTitle(card)}
+              </Text>
+              <Stack direction="row" align="center" gap="2xs" wrap>
+                {isFocused ? (
+                  <Badge variant="accent" size="xs">
+                    Selected
+                  </Badge>
+                ) : null}
+                {isRoot && (family?.members.length ?? 0) > 1 ? (
+                  <Badge variant="outline" size="xs" leftIcon="GitBranch">
+                    Root Parent
+                  </Badge>
+                ) : !isRoot ? (
+                  <Badge variant="neutral" size="xs">
+                    Child Variant
+                  </Badge>
+                ) : null}
+                {badge === "ccv2" ? (
+                  <Badge variant="warning" size="xs">
+                    CCv2
+                  </Badge>
+                ) : badge === "ccv2bl" ? (
+                  <Badge variant="info" size="xs">
+                    CCv2 / BL
+                  </Badge>
+                ) : (
+                  <Badge variant="accent" size="xs">
+                    BL
+                  </Badge>
+                )}
+              </Stack>
+            </Stack>
+          </Stack>
+
+          {hasDistinctTitle(card) || card.cardVersion?.trim() ? (
+            <Stack direction="row" align="center" gap="2xs" wrap>
+              {hasDistinctTitle(card) ? (
+                <Badge
+                  variant="outline"
+                  size="xs"
+                  leftIcon="User"
+                  title={`In-story character name: ${card.name}`}
+                >
+                  {card.name}
+                </Badge>
+              ) : null}
+              {card.cardVersion?.trim() ? (
+                <Badge variant="neutral" size="xs">
+                  {card.cardVersion.trim()}
+                </Badge>
+              ) : null}
+            </Stack>
+          ) : null}
+
+          <Stack
+            direction="row"
+            align="center"
+            justify="end"
+            gap="2xs"
+            wrap
+            fullWidth
+          >
+            {canDetachCcv2 ? (
+              <Button
+                variant={!isRoot ? "primary" : "secondary"}
+                size="xs"
+                leftIcon="Unlink"
+                disabled={busy}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void onDetachCcv2(card.id);
+                }}
+                title="Cut ties to the embedded CCv2 source so this card becomes a pure BobbinLoom (BL) card"
+              >
+                Make Pure BL (Cut CCv2 Ties)
+              </Button>
+            ) : null}
+            {!isRoot ? (
+              <Button
+                variant="secondary"
+                size="xs"
+                leftIcon="X"
+                disabled={busy}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void onSetParent(card.id, undefined);
+                }}
+                title="Unlink this variant from its parent card"
+              >
+                Unlink
+              </Button>
+            ) : null}
+            {onOpenEditor ? (
+              <Button
+                variant="ghost"
+                size="xs"
+                leftIcon="Pencil"
+                disabled={busy}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose();
+                  onOpenEditor(card);
+                }}
+              >
+                Edit
+              </Button>
+            ) : null}
+          </Stack>
+        </Stack>
+      );
+    },
+    [family, busy, onDetachCcv2, onSetParent, onOpenEditor, onClose],
+  );
 
   if (!family) return null;
 
@@ -384,7 +561,7 @@ export function CardFamilyModal({
                 wrap
                 fullWidth
               >
-                <Stack direction="row" align="center" gap="xs">
+                <Stack direction="row" align="center" gap="xs" wrap>
                   <Icon
                     name="GitBranch"
                     size={15}
@@ -394,13 +571,47 @@ export function CardFamilyModal({
                     Family Hierarchy ({family.members.length}{" "}
                     {family.members.length === 1 ? "card" : "cards"})
                   </Text>
+                  <Text size="xs" tone="muted">
+                    — Click any card to focus and manage its links
+                  </Text>
                 </Stack>
-                <Text size="xs" tone="muted">
-                  Click any card in the tree to focus and manage its links.
-                </Text>
+
+                <Tabs<CardFamilyViewMode>
+                  variant="segmented"
+                  size="sm"
+                  activeTab={viewMode}
+                  onChange={setViewMode}
+                  ariaLabel="Family hierarchy view mode"
+                  tabs={[
+                    {
+                      id: "graph",
+                      label: "Tree Graph",
+                      icon: "GitFork",
+                    },
+                    {
+                      id: "list",
+                      label: "List",
+                      icon: "List",
+                    },
+                  ]}
+                />
               </Stack>
 
-              {renderTreeNodes(family.tree)}
+              {viewMode === "graph" ? (
+                <HierarchyGraph
+                  items={graphItems}
+                  renderNode={renderGraphNode}
+                  onSelectItem={(item) => onSelectFocus(item.id)}
+                  direction={graphDirection}
+                  onDirectionChange={setGraphDirection}
+                  nodeWidth={256}
+                  nodeHeight={136}
+                  size="compact"
+                  ariaLabel={`Card Family Tree Graph for ${displayTitle(family.focus)}`}
+                />
+              ) : (
+                renderTreeNodes(family.tree)
+              )}
             </Stack>
 
             <Separator spacing="none" />

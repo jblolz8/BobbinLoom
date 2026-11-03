@@ -27,6 +27,7 @@ import { ConfirmModal, EditTagsModal } from "../../common";
 export type ScenePanelProps = {
   playthrough: Playthrough;
   onPlaythroughChange?: (updated: Playthrough) => void;
+  onOpenTimelines?: () => void;
   actionLoading: boolean;
   onWorldStateAction: (
     wsId: string,
@@ -52,6 +53,7 @@ type DeleteConfirm = {
 export function ScenePanel({
   playthrough,
   onPlaythroughChange,
+  onOpenTimelines,
   actionLoading,
   onWorldStateAction,
   className,
@@ -226,6 +228,34 @@ export function ScenePanel({
                 {activeCount} active
               </Badge>
             </Stack>
+
+            {onOpenTimelines ? (
+              <Stack
+                direction="row"
+                align="center"
+                justify="between"
+                gap="xs"
+                fullWidth
+              >
+                <Stack direction="row" align="center" gap="2xs">
+                  <Icon name="GitFork" size={13} />
+                  <Text variant="caption" size="xs" tone="muted">
+                    Timelines
+                  </Text>
+                </Stack>
+                <Button
+                  variant="secondary"
+                  size="xs"
+                  leftIcon="GitFork"
+                  onClick={onOpenTimelines}
+                  title="Explore and switch between timeline branches"
+                >
+                  {playthrough.createdFromTurn !== undefined
+                    ? `Branch (T${playthrough.createdFromTurn})`
+                    : "View Tree"}
+                </Button>
+              </Stack>
+            ) : null}
           </Stack>
         </Card>
 

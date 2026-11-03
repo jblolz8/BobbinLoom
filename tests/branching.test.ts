@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   branchPlaythroughRecord,
   createPlaythroughRecord,
+  duplicatePlaythroughRecord,
   getPlaythroughRecord,
   listPlaythroughRecords,
   listPlaythroughTimelines,
@@ -509,5 +510,32 @@ describe("branching playthroughs", () => {
     const restored = branch.memoryLayers?.recent.find((e) => e.id === "r1");
     expect(restored?.branchId).toBe(branch.branchId);
     expect(restored?.playthroughId).toBe(branch.id);
+  });
+
+  it("duplicatePlaythroughRecord assigns a fresh branchId and clears timeline lineage fields", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bobbinloom-branch-"));
+    tempDirs.push(dir);
+
+    const root = createPlaythroughRecord(dir, "Original Story");
+    root.messages.push({
+      id: "m1",
+      role: "assistant",
+      content: "Scene 1",
+      createdAt: "2026-01-01T00:00:00Z",
+      turn: 1,
+    });
+    updatePlaythroughRecord(dir, root);
+
+    const branch = branchPlaythroughRecord(dir, root.id, "m1", "Child Branch")!;
+    const dup = duplicatePlaythroughRecord(dir, branch.id)!;
+
+    expect(dup).not.toBeNull();
+    expect(dup.id).not.toBe(branch.id);
+    expect(dup.branchId).not.toBe(branch.branchId);
+    expect(dup.branchId).not.toBe(root.branchId);
+    expect(dup.parentBranchId).toBeUndefined();
+    expect(dup.rootPlaythroughId).toBeUndefined();
+    expect(Boolean(dup.isTimelineBranch)).toBe(false);
+    expect(dup.createdFromTurn).toBeUndefined();
   });
 });

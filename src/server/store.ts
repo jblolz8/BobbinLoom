@@ -55,6 +55,7 @@ import type {
   LorebookSummary,
   PlayerPersona,
   Playthrough,
+  PlaythroughBranchSummary,
   PlaythroughCoverView,
   PlaythroughListResponse,
   PlaythroughSummary,
@@ -1731,8 +1732,7 @@ export function updatePlaythroughRecord(
   syncPlaythroughImagesFromLegacyDir(dir, playthrough);
 }
 
-export function deletePlaythroughRecord(dir: string, id: string): boolean {
-  invalidatePlaythroughCache();
+function removeSinglePlaythroughFiles(dir: string, id: string): boolean {
   const folder = playthroughFolderPath(dir, id);
   const filePath = playthroughPath(dir, id);
   const legacyPath = legacyFlatPlaythroughPath(dir, id);
@@ -1750,6 +1750,75 @@ export function deletePlaythroughRecord(dir: string, id: string): boolean {
     }
   }
   return true;
+}
+
+export function deletePlaythroughRecord(
+  dir: string,
+  id: string,
+  options?: { deleteBranches?: boolean },
+): boolean {
+  invalidatePlaythroughCache();
+  const target = getPlaythroughRecord(dir, id);
+  if (!target) {
+    return removeSinglePlaythroughFiles(dir, id);
+  }
+
+  const { playthroughs: all } = readAllPlaythroughRecords(dir);
+  const rootId = target.rootPlaythroughId ?? target.id;
+  const familyMembers = all.filter(
+    (p) =>
+      p.id !== target.id &&
+      ((p.rootPlaythroughId ?? p.id) === rootId ||
+        (Boolean(target.branchId) && p.parentBranchId === target.branchId)),
+  );
+
+  if (options?.deleteBranches && familyMembers.length > 0) {
+    for (const member of familyMembers) {
+      removeSinglePlaythroughFiles(dir, member.id);
+    }
+    const deleted = removeSinglePlaythroughFiles(dir, id);
+    invalidatePlaythroughCache();
+    return deleted;
+  }
+
+  if (familyMembers.length > 0) {
+    const isRoot = !target.rootPlaythroughId || target.rootPlaythroughId === target.id;
+    if (isRoot) {
+      // Promote the earliest child branch to become the new Root Playthrough
+      const sortedChildren = [...familyMembers].sort((a, b) => {
+        const aTurn = a.createdFromTurn ?? 0;
+        const bTurn = b.createdFromTurn ?? 0;
+        if (aTurn !== bTurn) return aTurn - bTurn;
+        return a.createdAt.localeCompare(b.createdAt);
+      });
+      const newRoot = sortedChildren[0];
+      newRoot.isTimelineBranch = false;
+      delete newRoot.rootPlaythroughId;
+      delete newRoot.parentBranchId;
+      delete newRoot.createdFromTurn;
+      updatePlaythroughRecord(dir, newRoot);
+
+      for (const other of sortedChildren.slice(1)) {
+        other.rootPlaythroughId = newRoot.id;
+        if (!other.parentBranchId || other.parentBranchId === target.branchId) {
+          other.parentBranchId = newRoot.branchId;
+        }
+        updatePlaythroughRecord(dir, other);
+      }
+    } else {
+      // Re-parent direct children of an intermediate branch to its own parent
+      for (const member of familyMembers) {
+        if (member.parentBranchId === target.branchId) {
+          member.parentBranchId = target.parentBranchId;
+          updatePlaythroughRecord(dir, member);
+        }
+      }
+    }
+  }
+
+  const deleted = removeSinglePlaythroughFiles(dir, id);
+  invalidatePlaythroughCache();
+  return deleted;
 }
 
 export function renamePlaythroughRecord(
@@ -1821,8 +1890,31 @@ export function duplicatePlaythroughRecord(
   if (!original) return null;
 
   const clone = structuredClone(original);
-  clone.id = `play_${randomUUID()}`;
+  const newPlaythroughId = `play_${randomUUID()}`;
+  const newBranchId = `branch_${randomUUID()}`;
+  clone.id = newPlaythroughId;
+  clone.branchId = newBranchId;
+  delete clone.parentBranchId;
+  delete clone.rootPlaythroughId;
+  delete clone.isTimelineBranch;
+  delete clone.createdFromTurn;
   clone.name = `${original.name} (copy)`;
+  for (const char of clone.characters) {
+    char.playthroughId = newPlaythroughId;
+    char.branchId = newBranchId;
+  }
+  for (const event of clone.memoryEvents) {
+    event.playthroughId = newPlaythroughId;
+    event.branchId = newBranchId;
+  }
+  for (const layer of clone.memoryLayers?.recent ?? []) {
+    layer.playthroughId = newPlaythroughId;
+    layer.branchId = newBranchId;
+  }
+  for (const layer of clone.memoryLayers?.compressed ?? []) {
+    layer.playthroughId = newPlaythroughId;
+    layer.branchId = newBranchId;
+  }
   const now = new Date().toISOString();
   clone.createdAt = now;
   clone.updatedAt = now;
@@ -2184,10 +2276,11 @@ export function toPlaythroughSummary(
   };
 }
 
-/** The playthrough LIST: one projection per playthrough, newest first. This is what the list route
+/**The playthrough LIST: one projection per playthrough, newest first. This is what the list route
  *  serves, and `total` is authoritative so the client's pager never has to infer it. */
 export type PlaythroughListOptions = {
   includeTimelineBranches?: boolean;
+  lineageFilter?: "parents" | "grouped" | "children";
   page?: number;
   pageSize?: number | "all";
   search?: string;
@@ -2201,10 +2294,167 @@ export function listPlaythroughSummaries(
   options?: PlaythroughListOptions & PlaythroughSummaryOptions,
 ): PlaythroughListResponse {
   const { playthroughs, failures } = readAllPlaythroughRecords(dir);
-  let summaries = filterBranches(
-    playthroughs,
-    options?.includeTimelineBranches === true,
-  ).map((p) => toPlaythroughSummary(p, options));
+
+  // Build lineage / family relationships across all loaded playthroughs
+  const byId = new Map<string, Playthrough>();
+  const byBranchId = new Map<string, Playthrough>();
+  for (const p of playthroughs) {
+    byId.set(p.id, p);
+  }
+  // Ensure root playthroughs claim their branchId first if a legacy duplicate collided
+  const sortedForClaim = [...playthroughs].sort((a, b) => {
+    const aIsChild = Boolean(a.isTimelineBranch || a.parentBranchId || a.rootPlaythroughId);
+    const bIsChild = Boolean(b.isTimelineBranch || b.parentBranchId || b.rootPlaythroughId);
+    if (aIsChild !== bIsChild) return aIsChild ? 1 : -1;
+    return a.createdAt.localeCompare(b.createdAt);
+  });
+  for (const p of sortedForClaim) {
+    const bId = p.branchId || p.id;
+    if (!byBranchId.has(bId)) {
+      byBranchId.set(bId, p);
+    }
+  }
+
+  function resolveParentRecord(p: Playthrough): Playthrough | undefined {
+    if (p.parentBranchId) {
+      const parent = byBranchId.get(p.parentBranchId);
+      if (parent && parent.id !== p.id) return parent;
+    }
+    if (p.rootPlaythroughId && p.rootPlaythroughId !== p.id) {
+      const root = byId.get(p.rootPlaythroughId);
+      if (root) return root;
+    }
+    return undefined;
+  }
+
+  function resolveRootRecord(p: Playthrough): Playthrough {
+    if (p.rootPlaythroughId && byId.has(p.rootPlaythroughId)) {
+      return byId.get(p.rootPlaythroughId)!;
+    }
+    let curr: Playthrough = p;
+    const visited = new Set<string>([curr.id]);
+    while (true) {
+      const parent = resolveParentRecord(curr);
+      if (!parent || visited.has(parent.id)) break;
+      visited.add(parent.id);
+      curr = parent;
+    }
+    return curr;
+  }
+
+  const familyByRootId = new Map<string, Playthrough[]>();
+  const rootByPlaythroughId = new Map<string, Playthrough>();
+  const parentByPlaythroughId = new Map<string, Playthrough | undefined>();
+
+  for (const p of playthroughs) {
+    const root = resolveRootRecord(p);
+    const parent = resolveParentRecord(p);
+    rootByPlaythroughId.set(p.id, root);
+    parentByPlaythroughId.set(p.id, parent);
+    const list = familyByRootId.get(root.id) ?? [];
+    list.push(p);
+    familyByRootId.set(root.id, list);
+  }
+
+  // Sort each family: root first, then by createdFromTurn asc, then createdAt asc
+  const branchSummariesByRootId = new Map<string, PlaythroughBranchSummary[]>();
+  for (const [rootId, members] of familyByRootId.entries()) {
+    members.sort((a, b) => {
+      if (a.id === rootId) return -1;
+      if (b.id === rootId) return 1;
+      const aTurn = a.createdFromTurn ?? 0;
+      const bTurn = b.createdFromTurn ?? 0;
+      if (aTurn !== bTurn) return aTurn - bTurn;
+      return a.createdAt.localeCompare(b.createdAt);
+    });
+    if (members.length > 1) {
+      branchSummariesByRootId.set(
+        rootId,
+        members.map((m) => ({
+          id: m.id,
+          name: m.name,
+          turn: m.turn,
+          ...(m.branchId ? { branchId: m.branchId } : {}),
+          ...(m.parentBranchId ? { parentBranchId: m.parentBranchId } : {}),
+          ...(m.rootPlaythroughId
+            ? { rootPlaythroughId: m.rootPlaythroughId }
+            : rootId !== m.id
+              ? { rootPlaythroughId: rootId }
+              : {}),
+          ...(m.createdFromTurn !== undefined
+            ? { createdFromTurn: m.createdFromTurn }
+            : {}),
+          isRoot: m.id === rootId,
+          updatedAt: m.updatedAt,
+        })),
+      );
+    }
+  }
+
+  function isChildPlaythrough(p: Playthrough): boolean {
+    const root = rootByPlaythroughId.get(p.id);
+    if (root && root.id !== p.id) return true;
+    return false;
+  }
+
+  function buildEnrichedSummary(p: Playthrough): PlaythroughSummary {
+    const base = toPlaythroughSummary(p, options);
+    const root = rootByPlaythroughId.get(p.id) ?? p;
+    const parent = parentByPlaythroughId.get(p.id);
+    const familyBranches = branchSummariesByRootId.get(root.id);
+    const isChild = root.id !== p.id;
+
+    if (!familyBranches && !isChild) {
+      return base;
+    }
+
+    return {
+      ...base,
+      ...(familyBranches
+        ? {
+            timelineCount: familyBranches.length,
+            branches: familyBranches,
+          }
+        : {}),
+      ...(isChild
+        ? {
+            rootPlaythroughId: root.id,
+            rootName: root.name,
+            ...(parent ? { parentName: parent.name } : {}),
+            ...(p.parentBranchId ? { parentBranchId: p.parentBranchId } : {}),
+            ...(p.createdFromTurn !== undefined
+              ? { createdFromTurn: p.createdFromTurn }
+              : {}),
+          }
+        : {}),
+    };
+  }
+
+  const lineageFilter = options?.lineageFilter;
+  let eligibleRecords: Playthrough[];
+  if (lineageFilter === "children") {
+    eligibleRecords = playthroughs.filter((p) => isChildPlaythrough(p));
+  } else if (lineageFilter === "parents" || lineageFilter === "grouped") {
+    eligibleRecords = playthroughs.filter((p) => !isChildPlaythrough(p));
+  } else if (options?.includeTimelineBranches === true) {
+    eligibleRecords = playthroughs;
+  } else {
+    eligibleRecords = playthroughs.filter(
+      (p) => !p.isTimelineBranch && !isChildPlaythrough(p),
+    );
+  }
+
+  let summaries = eligibleRecords.map((p) => {
+    const summary = buildEnrichedSummary(p);
+    if (lineageFilter === "grouped") {
+      const members = familyByRootId.get(p.id) ?? [];
+      const children = members.filter((m) => m.id !== p.id);
+      if (children.length > 0) {
+        summary.childSummaries = children.map((c) => buildEnrichedSummary(c));
+      }
+    }
+    return summary;
+  });
 
   // Compute global tag counts across all eligible summaries before filtering/slicing
   const tagMap = new Map<string, number>();
@@ -2225,10 +2475,17 @@ export function listPlaythroughSummaries(
       .map((t) => canonicalizePlaythroughTag(t))
       .filter(Boolean);
     if (requiredTags.length > 0) {
-      summaries = summaries.filter((p) => {
-        const pTags = new Set(p.tags.map((t) => canonicalizePlaythroughTag(t)));
+      const matchesTags = (item: { tags: string[] }) => {
+        const pTags = new Set(
+          item.tags.map((t) => canonicalizePlaythroughTag(t)),
+        );
         return requiredTags.every((req) => pTags.has(req));
-      });
+      };
+      summaries = summaries.filter(
+        (p) =>
+          matchesTags(p) ||
+          (p.childSummaries?.some((c) => matchesTags(c)) ?? false),
+      );
     }
   }
 
@@ -2236,14 +2493,19 @@ export function listPlaythroughSummaries(
     const needle = options.search.trim().toLowerCase();
     if (needle) {
       const normNeedle = cleanTag(needle);
+      const matchesNeedle = (item: { name: string; tags: string[] }) =>
+        item.name.toLowerCase().includes(needle) ||
+        item.tags.some(
+          (t) =>
+            t.toLowerCase().includes(needle) ||
+            Boolean(normNeedle && cleanTag(t).includes(normNeedle)),
+        );
       summaries = summaries.filter(
         (p) =>
-          p.name.toLowerCase().includes(needle) ||
-          p.tags.some(
-            (t) =>
-              t.toLowerCase().includes(needle) ||
-              (normNeedle && cleanTag(t).includes(normNeedle)),
-          ),
+          matchesNeedle(p) ||
+          (p.childSummaries?.some((c) => matchesNeedle(c)) ?? false) ||
+          (p.branches?.some((b) => b.name.toLowerCase().includes(needle)) ??
+            false),
       );
     }
   }
@@ -2252,10 +2514,38 @@ export function listPlaythroughSummaries(
   const sortDir = options?.sortDir ?? (sortBy === "name" ? "asc" : "desc");
   const dirMultiplier = sortDir === "asc" ? 1 : -1;
 
+  // For parent/grouped views, a playthrough family's effective updatedAt is the most recent
+  // updatedAt across the parent and all of its timeline branches so updating any child branch
+  // bumps the parent family to the top.
+  const effectiveUpdatedAt = (s: PlaythroughSummary): string => {
+    if (lineageFilter === "children" || !s.branches || s.branches.length === 0) {
+      return s.updatedAt;
+    }
+    let latest = s.updatedAt;
+    for (const b of s.branches) {
+      if (b.updatedAt > latest) latest = b.updatedAt;
+    }
+    return latest;
+  };
+
+  for (const s of summaries) {
+    if (s.childSummaries && s.childSummaries.length > 1) {
+      s.childSummaries.sort((a, b) => {
+        if (sortBy === "name")
+          return a.name.localeCompare(b.name) * dirMultiplier;
+        if (sortBy === "turn") return (a.turn - b.turn) * dirMultiplier;
+        return a.updatedAt.localeCompare(b.updatedAt) * dirMultiplier;
+      });
+    }
+  }
+
   summaries.sort((a, b) => {
     if (sortBy === "name") return a.name.localeCompare(b.name) * dirMultiplier;
     if (sortBy === "turn") return (a.turn - b.turn) * dirMultiplier;
-    return a.updatedAt.localeCompare(b.updatedAt) * dirMultiplier;
+    return (
+      effectiveUpdatedAt(a).localeCompare(effectiveUpdatedAt(b)) *
+      dirMultiplier
+    );
   });
 
   const total = summaries.length;

@@ -1,179 +1,128 @@
-import { useEffect, useState, useCallback } from "react";
-import { RenameModal } from "../common";
-import {
-  ReactFlow,
-  Controls,
-  Background,
-  MiniMap,
-  Handle,
-  Position,
-  type Node,
-  type Edge,
-  useNodesState,
-  useEdgesState,
-} from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Playthrough } from "../../../schemas";
 import {
-  listPlaythroughTimelines,
   deletePlaythrough,
+  listPlaythroughTimelines,
   renamePlaythrough,
-  promotePlaythroughBranch,
 } from "../../api";
-import { Badge, Button, Icon, IconButton, StatusMessage } from "../base";
-import "./TimelineModal.css";
+import {
+  Badge,
+  Button,
+  Card,
+  CheckboxRow,
+  Header,
+  Icon,
+  IconButton,
+  Modal,
+  Stack,
+  StatusMessage,
+  Text,
+} from "../base";
+import {
+  ConfirmModal,
+  HierarchyGraph,
+  RenameModal,
+  type HierarchyGraphDirection,
+  type HierarchyGraphItem,
+} from "../common";
 
 export type TimelineModalProps = {
   open: boolean;
   onClose: () => void;
-  activePlaythrough: Playthrough;
+  /** Full playthrough when opened from PlayView. */
+  activePlaythrough?: Playthrough;
+  /** Target playthrough ID when opened from PlaythroughLibrary shelf. */
+  playthroughId?: string;
+  /** Display name fallback while loading when opened from PlaythroughLibrary shelf. */
+  playthroughName?: string;
+  /** Currently active playthrough ID in the app (to badge the active timeline). */
+  currentPlaythroughId?: string;
   onSwitchPlaythrough: (id: string) => Promise<void> | void;
-};
-
-type TimelineNodeData = {
-  playthrough: Playthrough;
-  isActive: boolean;
-  isSelected: boolean;
-  onSelect: (p: Playthrough) => void;
-  onSwitch: (id: string) => void;
-};
-
-function TimelineCustomNode({ data }: { data: TimelineNodeData }) {
-  const { playthrough, isActive, isSelected, onSelect, onSwitch } = data;
-  const lastMsg = playthrough.messages[playthrough.messages.length - 1];
-
-  return (
-    <div
-      className={`timeline-custom-node ${isActive ? "is-active" : ""} ${isSelected ? "is-selected" : ""}`}
-      onClick={() => onSelect(playthrough)}
-    >
-      <Handle
-        type="target"
-        position={Position.Left}
-        className="timeline-handle"
-      />
-
-      <div className="timeline-node-header">
-        <span className="timeline-turn-badge">Turn {playthrough.turn}</span>
-        {isActive ? (
-          <span className="timeline-active-badge">ACTIVE</span>
-        ) : null}
-      </div>
-
-      <div className="timeline-node-title" title={playthrough.name}>
-        {playthrough.name}
-      </div>
-
-      <div className="timeline-node-meta">
-        {playthrough.createdFromTurn !== undefined &&
-        playthrough.createdFromTurn > 0 ? (
-          <span className="timeline-meta-branched">
-            <Icon name="GitBranch" size={10} /> T{playthrough.createdFromTurn}
-          </span>
-        ) : (
-          <span className="timeline-meta-origin">Root</span>
-        )}
-        <span className="timeline-meta-msgs">
-          {playthrough.messages.length} msgs
-        </span>
-      </div>
-
-      {lastMsg ? (
-        <div className="timeline-node-preview" title={lastMsg.content}>
-          <span className="preview-role">
-            {lastMsg.role === "user" ? "You" : "AI"}:
-          </span>{" "}
-          {lastMsg.content.slice(0, 50)}
-          {lastMsg.content.length > 50 ? "…" : ""}
-        </div>
-      ) : null}
-
-      <div className="timeline-node-actions">
-        {isActive ? (
-          <span className="timeline-current-label">Current Timeline</span>
-        ) : (
-          <Button
-            variant="secondary"
-            size="xs"
-            className="timeline-switch-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSwitch(playthrough.id);
-            }}
-          >
-            Switch
-          </Button>
-        )}
-      </div>
-
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="timeline-handle"
-      />
-    </div>
-  );
-}
-
-const nodeTypes = {
-  timelineNode: TimelineCustomNode,
+  /** Optional callback fired when a timeline is renamed or deleted so the caller can refresh. */
+  onTimelinesChanged?: () => void;
 };
 
 export function TimelineModal({
   open,
   onClose,
   activePlaythrough,
+  playthroughId,
+  playthroughName,
+  currentPlaythroughId,
   onSwitchPlaythrough,
+  onTimelinesChanged,
 }: TimelineModalProps) {
+  const effectiveTargetId = playthroughId ?? activePlaythrough?.id ?? "";
+  const effectiveCurrentId =
+    currentPlaythroughId ?? activePlaythrough?.id ?? "";
+  const effectiveTargetName =
+    playthroughName ?? activePlaythrough?.name ?? "Playthrough";
+
   const [playthroughs, setPlaythroughs] = useState<Playthrough[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedPlaythrough, setSelectedPlaythrough] =
     useState<Playthrough | null>(null);
+  const [direction, setDirection] = useState<HierarchyGraphDirection>(() =>
+    typeof window !== "undefined" && window.innerWidth < 640 ? "TB" : "LR",
+  );
+
   const [renameTarget, setRenameTarget] = useState<Playthrough | null>(null);
   const [renameSaving, setRenameSaving] = useState(false);
   const [renameError, setRenameError] = useState<string | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [deleteTarget, setDeleteTarget] = useState<Playthrough | null>(null);
+  const [deleteAllBranches, setDeleteAllBranches] = useState(false);
+  const [deleteSaving, setDeleteSaving] = useState(false);
 
-  // Load timelines for active playthrough when modal opens
   const fetchPlaythroughs = useCallback(async () => {
+    if (!effectiveTargetId) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await listPlaythroughTimelines(activePlaythrough.id);
+      const res = await listPlaythroughTimelines(effectiveTargetId);
       setPlaythroughs(res.timelines);
+      setSelectedPlaythrough((prev) => {
+        if (prev) {
+          const found = res.timelines.find((p) => p.id === prev.id);
+          if (found) return found;
+        }
+        return (
+          res.timelines.find((p) => p.id === effectiveTargetId) ??
+          res.timelines.find((p) => p.id === effectiveCurrentId) ??
+          res.timelines[0] ??
+          null
+        );
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
-  }, [activePlaythrough.id]);
+  }, [effectiveTargetId, effectiveCurrentId]);
 
   useEffect(() => {
-    if (open) {
-      void fetchPlaythroughs();
-      setSelectedPlaythrough(activePlaythrough);
-      setDeleteConfirmId(null);
+    if (open && effectiveTargetId) {
+      if (activePlaythrough && activePlaythrough.id === effectiveTargetId) {
+        setSelectedPlaythrough(activePlaythrough);
+      } else {
+        setSelectedPlaythrough(null);
+      }
+      setDeleteTarget(null);
+      setDeleteAllBranches(false);
       setRenameTarget(null);
+      void fetchPlaythroughs();
     }
-  }, [open, fetchPlaythroughs, activePlaythrough]);
+  }, [open, effectiveTargetId, activePlaythrough, fetchPlaythroughs]);
 
-  // Keep selectedPlaythrough in sync with loaded playthroughs
-  useEffect(() => {
-    if (selectedPlaythrough) {
-      const updated = playthroughs.find((p) => p.id === selectedPlaythrough.id);
-      if (updated) setSelectedPlaythrough(updated);
-    }
-  }, [playthroughs, selectedPlaythrough]);
-
-  const handleSelect = useCallback((p: Playthrough) => {
-    setSelectedPlaythrough(p);
-    setRenameTarget(null);
-    setDeleteConfirmId(null);
-  }, []);
+  const handleSelectItem = useCallback(
+    (item: HierarchyGraphItem<Playthrough>) => {
+      setSelectedPlaythrough(item.data);
+      setRenameTarget(null);
+      setDeleteTarget(null);
+    },
+    [],
+  );
 
   const handleSwitch = useCallback(
     async (id: string) => {
@@ -183,23 +132,6 @@ export function TimelineModal({
     [onSwitchPlaythrough, onClose],
   );
 
-  const handleDelete = useCallback(
-    async (id: string) => {
-      try {
-        await deletePlaythrough(id);
-        setDeleteConfirmId(null);
-        if (selectedPlaythrough?.id === id) {
-          setSelectedPlaythrough(activePlaythrough);
-        }
-        await fetchPlaythroughs();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    },
-    [selectedPlaythrough, activePlaythrough, fetchPlaythroughs],
-  );
-
-  // The name comes from the dialog; the row it belongs to is the selection.
   const handleRename = useCallback(
     async (name: string) => {
       const target = renameTarget;
@@ -213,417 +145,525 @@ export function TimelineModal({
         );
         setSelectedPlaythrough(updated);
         setRenameTarget(null);
+        onTimelinesChanged?.();
       } catch (err) {
         setRenameError(err instanceof Error ? err.message : String(err));
       } finally {
         setRenameSaving(false);
       }
     },
-    [renameTarget],
+    [renameTarget, onTimelinesChanged],
   );
 
-  const handlePromote = useCallback(async (id: string) => {
-    try {
-      const updated = await promotePlaythroughBranch(id);
-      setPlaythroughs((prev) => prev.map((p) => (p.id === id ? updated : p)));
-      setSelectedPlaythrough(updated);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }, []);
-
-  // Compute graph nodes and edges
-  useEffect(() => {
-    if (!open || playthroughs.length === 0) {
-      setNodes([]);
-      setEdges([]);
-      return;
-    }
-
-    // Branch ID mapping
+  // Build parent-child relationship map across the loaded family
+  const { graphItems, parentByChildId, childrenCountById } = useMemo(() => {
     const branchMap = new Map<string, Playthrough>();
     for (const p of playthroughs) {
       const bId = p.branchId || p.id;
-      branchMap.set(bId, p);
+      if (!branchMap.has(bId)) {
+        branchMap.set(bId, p);
+      }
     }
 
-    const relevantList = playthroughs;
+    const byId = new Map(playthroughs.map((p) => [p.id, p]));
+    const parentByChild = new Map<string, Playthrough>();
+    const childCount = new Map<string, number>();
 
-    // Build parent-child tree mapping within the relevant set
-    const relevantIds = new Set(relevantList.map((p) => p.id));
-    const childrenMap = new Map<string, string[]>();
-    const parentMap = new Map<string, string>();
-
-    for (const p of relevantList) {
+    for (const p of playthroughs) {
+      let resolvedParent: Playthrough | undefined;
       if (p.parentBranchId) {
-        const parent = branchMap.get(p.parentBranchId);
-        if (parent && relevantIds.has(parent.id) && parent.id !== p.id) {
-          parentMap.set(p.id, parent.id);
-          const list = childrenMap.get(parent.id) ?? [];
-          list.push(p.id);
-          childrenMap.set(parent.id, list);
+        const candidate = branchMap.get(p.parentBranchId);
+        if (candidate && candidate.id !== p.id) {
+          resolvedParent = candidate;
         }
       }
-    }
-
-    // Find roots (in-degree 0)
-    const roots = relevantList.filter((p) => !parentMap.has(p.id));
-
-    // Hierarchical layout with generous horizontal and vertical breathing room
-    const positions = new Map<string, { x: number; y: number }>();
-    let currentY = 50;
-
-    function layoutSubtree(nodeId: string, depth: number): number {
-      const children = childrenMap.get(nodeId) ?? [];
-      // 390px gives ~160px horizontal gap between 230px nodes for the connector line and text badge
-      const x = 50 + depth * 390;
-
-      if (children.length === 0) {
-        const y = currentY;
-        currentY += 215; // Vertical space between sibling branches
-        positions.set(nodeId, { x, y });
-        return y;
+      if (
+        !resolvedParent &&
+        p.rootPlaythroughId &&
+        p.rootPlaythroughId !== p.id
+      ) {
+        const rootCandidate = byId.get(p.rootPlaythroughId);
+        if (rootCandidate) {
+          resolvedParent = rootCandidate;
+        }
       }
-
-      const childYs = children.map((cId) => layoutSubtree(cId, depth + 1));
-      const y = (childYs[0] + childYs[childYs.length - 1]) / 2;
-      positions.set(nodeId, { x, y });
-      return y;
+      if (resolvedParent) {
+        parentByChild.set(p.id, resolvedParent);
+        childCount.set(
+          resolvedParent.id,
+          (childCount.get(resolvedParent.id) ?? 0) + 1,
+        );
+      }
     }
 
-    for (const root of roots) {
-      layoutSubtree(root.id, 0);
-      currentY += 60; // spacing between separate roots
-    }
+    // Sort playthroughs so roots and earlier fork turns appear cleanly in order
+    const sorted = [...playthroughs].sort((a, b) => {
+      const aTurn = a.createdFromTurn ?? 0;
+      const bTurn = b.createdFromTurn ?? 0;
+      if (aTurn !== bTurn) return aTurn - bTurn;
+      return a.createdAt.localeCompare(b.createdAt);
+    });
 
-    // Build React Flow nodes
-    const flowNodes: Node[] = relevantList.map((p) => {
-      const pos = positions.get(p.id) ?? { x: 50, y: 50 };
-      const isActive = p.id === activePlaythrough.id;
+    const items: HierarchyGraphItem<Playthrough>[] = sorted.map((p) => {
+      const parent = parentByChild.get(p.id);
+      const isActive = p.id === effectiveCurrentId;
       const isSelected = selectedPlaythrough?.id === p.id;
+      const edgeLabel =
+        parent && p.createdFromTurn !== undefined
+          ? `Forked at T${p.createdFromTurn}`
+          : undefined;
 
       return {
         id: p.id,
-        type: "timelineNode",
-        position: pos,
-        data: {
-          playthrough: p,
-          isActive,
-          isSelected,
-          onSelect: handleSelect,
-          onSwitch: handleSwitch,
-        },
+        parentId: parent?.id ?? null,
+        edgeLabel,
+        isActive,
+        isSelected,
+        data: p,
       };
     });
 
-    // Build React Flow edges
-    const flowEdges: Edge[] = [];
-    for (const p of relevantList) {
-      const parentId = parentMap.get(p.id);
-      if (parentId) {
-        const isPathActive = p.id === activePlaythrough.id;
-        const branchLabel =
-          p.createdFromTurn !== undefined
-            ? `Branched at T${p.createdFromTurn}`
-            : undefined;
+    return {
+      graphItems: items,
+      parentByChildId: parentByChild,
+      childrenCountById: childCount,
+    };
+  }, [playthroughs, effectiveCurrentId, selectedPlaythrough]);
 
-        flowEdges.push({
-          id: `edge_${parentId}_${p.id}`,
-          source: parentId,
-          target: p.id,
-          type: "smoothstep",
-          animated: isPathActive,
-          label: branchLabel,
-          labelShowBg: true,
-          labelBgPadding: [6, 10],
-          labelBgBorderRadius: 6,
-          style: {
-            stroke: isPathActive ? "#38bdf8" : "#475569",
-            strokeWidth: isPathActive ? 2.5 : 1.5,
-          },
-          labelStyle: {
-            fill: isPathActive ? "#38bdf8" : "#94a3b8",
-            fontSize: 11,
-            fontWeight: 600,
-            letterSpacing: "0.02em",
-          },
-          labelBgStyle: {
-            fill: "#0b0f17",
-            fillOpacity: 0.95,
-            stroke: isPathActive ? "rgba(56, 189, 248, 0.4)" : "#334155",
-            strokeWidth: 1,
-            rx: 6,
-            ry: 6,
-          },
-        });
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteTarget || deleteSaving) return;
+    setDeleteSaving(true);
+    setError(null);
+    try {
+      await deletePlaythrough(deleteTarget.id, {
+        deleteBranches: deleteAllBranches,
+      });
+      const deletedId = deleteTarget.id;
+      setDeleteTarget(null);
+      setDeleteAllBranches(false);
+      onTimelinesChanged?.();
+
+      if (deleteAllBranches || playthroughs.length <= 1) {
+        onClose();
+        return;
       }
-    }
 
-    setNodes(flowNodes);
-    setEdges(flowEdges);
+      await fetchPlaythroughs();
+      if (selectedPlaythrough?.id === deletedId) {
+        const remaining = playthroughs.filter((p) => p.id !== deletedId);
+        setSelectedPlaythrough(remaining[0] ?? null);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeleteSaving(false);
+    }
   }, [
-    open,
+    deleteTarget,
+    deleteSaving,
+    deleteAllBranches,
     playthroughs,
-    activePlaythrough,
     selectedPlaythrough,
-    handleSelect,
-    handleSwitch,
-    setNodes,
-    setEdges,
+    fetchPlaythroughs,
+    onTimelinesChanged,
+    onClose,
   ]);
+
+  const renderTimelineNode = useCallback(
+    (item: HierarchyGraphItem<Playthrough>) => {
+      const p = item.data;
+      const visibleMessages = p.messages.filter((m) => !m.hidden);
+      const lastMsg = visibleMessages[visibleMessages.length - 1];
+      const isRoot = !item.parentId;
+      const chapterCount = (p.chapters?.length ?? 0) + 1;
+
+      return (
+        <Stack direction="column" align="stretch" gap="xs" fullWidth>
+          <Stack
+            direction="row"
+            align="center"
+            justify="between"
+            gap="2xs"
+            wrap
+            fullWidth
+          >
+            <Stack direction="row" align="center" gap="2xs" wrap>
+              <Badge variant="accent" size="xs" leftIcon="Clock">
+                Turn {p.turn}
+              </Badge>
+              {isRoot ? (
+                <Badge variant="outline" size="xs" leftIcon="GitBranch">
+                  Root
+                </Badge>
+              ) : p.createdFromTurn !== undefined ? (
+                <Badge variant="neutral" size="xs" leftIcon="GitFork">
+                  From T{p.createdFromTurn}
+                </Badge>
+              ) : null}
+            </Stack>
+            {item.isActive ? (
+              <Badge variant="info" size="xs">
+                ACTIVE
+              </Badge>
+            ) : null}
+          </Stack>
+
+          <Text size="sm" weight="semibold" truncate title={p.name}>
+            {p.name}
+          </Text>
+
+          <Stack
+            direction="row"
+            align="center"
+            justify="between"
+            gap="xs"
+            fullWidth
+          >
+            <Text size="2xs" tone="muted">
+              {visibleMessages.length}{" "}
+              {visibleMessages.length === 1 ? "msg" : "msgs"} • {chapterCount}{" "}
+              {chapterCount === 1 ? "chapter" : "chapters"}
+            </Text>
+            <Text size="2xs" tone="muted">
+              {p.characters.length} cast
+            </Text>
+          </Stack>
+
+          {lastMsg ? (
+            <div
+              className="common-hierarchy-node__preview"
+              title={lastMsg.content}
+            >
+              <span className="common-hierarchy-node__preview-role">
+                {lastMsg.role === "user" ? "You" : "AI"}:
+              </span>{" "}
+              {lastMsg.content.slice(0, 58)}
+              {lastMsg.content.length > 58 ? "…" : ""}
+            </div>
+          ) : (
+            <div className="common-hierarchy-node__preview">
+              No visible messages yet
+            </div>
+          )}
+
+          <Stack
+            direction="row"
+            align="center"
+            justify="end"
+            gap="xs"
+            fullWidth
+          >
+            {item.isActive ? (
+              <Badge variant="accent" size="xs">
+                Current Timeline
+              </Badge>
+            ) : (
+              <Button
+                variant="secondary"
+                size="xs"
+                leftIcon="Play"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleSwitch(p.id);
+                }}
+              >
+                Switch
+              </Button>
+            )}
+          </Stack>
+        </Stack>
+      );
+    },
+    [handleSwitch],
+  );
+
+  const selectedVisibleMessages = useMemo(() => {
+    if (!selectedPlaythrough) return [];
+    return selectedPlaythrough.messages.filter((m) => !m.hidden);
+  }, [selectedPlaythrough]);
 
   if (!open) return null;
 
-  const selectedIsActive = selectedPlaythrough?.id === activePlaythrough.id;
-  const parentOfSelected = selectedPlaythrough?.parentBranchId
-    ? playthroughs.find(
-        (p) => (p.branchId || p.id) === selectedPlaythrough.parentBranchId,
-      )
-    : null;
+  const selectedIsActive = selectedPlaythrough?.id === effectiveCurrentId;
+  const parentOfSelected = selectedPlaythrough
+    ? parentByChildId.get(selectedPlaythrough.id)
+    : undefined;
+  const selectedVisibleMsgCount = selectedVisibleMessages.length;
+  const selectedLastMessage =
+    selectedVisibleMessages[selectedVisibleMessages.length - 1] ?? null;
+  const selectedChildCount = selectedPlaythrough
+    ? (childrenCountById.get(selectedPlaythrough.id) ?? 0)
+    : 0;
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <section
-        className="modal timeline-modal"
-        onClick={(e) => e.stopPropagation()}
-        aria-label="Timeline Branches Viewer"
-      >
-        <header className="timeline-modal-header">
-          <div className="timeline-header-titles">
-            <h2>
-              <Icon name="GitFork" size={20} className="timeline-header-icon" />
-              <span>Timelines & Branches</span>
-            </h2>
-            <p>
-              Explore and switch between timeline branches for{" "}
-              <strong>{activePlaythrough.name}</strong>.
-            </p>
-          </div>
+    <Modal
+      open={open}
+      onClose={onClose}
+      size="wide"
+      fullScreenMobile
+      ariaLabel="Timeline Branches Viewer"
+    >
+      <Header
+        variant="section"
+        icon="GitFork"
+        title="Timelines & Branches"
+        subtitle={`Explore and switch between ${playthroughs.length || 1} timeline ${playthroughs.length === 1 ? "branch" : "branches"} for "${effectiveTargetName}".`}
+        actions={
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            Close
+          </Button>
+        }
+      />
 
-          <div className="timeline-header-controls">
-            <IconButton
-              icon="X"
-              label="Close timeline"
-              title="Close modal"
-              size="md"
-              onClick={onClose}
-            />
-          </div>
-        </header>
-
+      <Modal.Body>
         {error ? (
           <StatusMessage
             variant="banner"
             tone="err"
-            className="timeline-error-banner"
             onDismiss={() => setError(null)}
           >
             {error}
           </StatusMessage>
         ) : null}
 
-        <div className="timeline-canvas-container">
-          {loading ? (
-            <div className="timeline-loading-overlay">
-              <span>Loading timelines…</span>
-            </div>
-          ) : nodes.length === 0 ? (
-            <div className="timeline-empty-state">
-              <Icon name="GitBranch" size={40} />
-              <h3>No Branches Found</h3>
-              <p>
-                Branch from any message in your chat to create alternative
-                timeline paths!
-              </p>
-            </div>
-          ) : (
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              nodeTypes={nodeTypes}
-              fitView
-              fitViewOptions={{ padding: 0.3 }}
-              minZoom={0.2}
-              maxZoom={1.5}
-            >
-              <Background color="#334155" gap={20} size={1} />
-              <Controls position="top-right" />
-              <MiniMap
-                className="timeline-minimap"
-                nodeColor={(n) =>
-                  n.id === activePlaythrough.id ? "#38bdf8" : "#475569"
-                }
-                maskColor="rgba(15, 19, 27, 0.75)"
-              />
-            </ReactFlow>
-          )}
-        </div>
+        <HierarchyGraph
+          items={graphItems}
+          renderNode={renderTimelineNode}
+          onSelectItem={handleSelectItem}
+          direction={direction}
+          onDirectionChange={setDirection}
+          nodeWidth={256}
+          nodeHeight={168}
+          size="fill"
+          loading={loading}
+          loadingLabel="Loading timelines…"
+          emptyIcon="GitBranch"
+          emptyTitle="No Branches Found"
+          emptyDescription="Branch from any message in your chat to create alternative timeline paths!"
+          ariaLabel="Playthrough Timeline Tree Graph"
+        />
 
-        {/* Selected Timeline Inspector Footer */}
         {selectedPlaythrough ? (
-          <footer className="timeline-inspector">
-            <div className="timeline-inspector-main">
-              <div className="inspector-info">
-                <div className="inspector-title-row">
-                  <h3 title={selectedPlaythrough.name}>
-                    {selectedPlaythrough.name}
-                  </h3>
-                  <IconButton
-                    icon="Edit3"
-                    size="xs"
-                    variant="ghost"
-                    className="rename-icon-btn"
-                    label="Rename timeline"
-                    title="Rename timeline"
+          <Card
+            variant="elevated"
+            padding="sm"
+            fullWidth
+            style={{ flexShrink: 0 }}
+          >
+            <Stack direction="column" align="stretch" gap="xs" fullWidth>
+              <Stack
+                direction="row"
+                align="center"
+                justify="between"
+                gap="md"
+                wrap
+                fullWidth
+              >
+                <Stack
+                  direction="column"
+                  align="start"
+                  gap="2xs"
+                  flex1
+                  style={{ minWidth: "min(220px, 100%)" }}
+                >
+                  <Stack direction="row" align="center" gap="xs" wrap>
+                    <Text size="md" weight="bold">
+                      {selectedPlaythrough.name}
+                    </Text>
+                    <IconButton
+                      icon="Pencil"
+                      size="xs"
+                      variant="ghost"
+                      label="Rename timeline"
+                      title="Rename timeline"
+                      onClick={() => {
+                        setRenameError(null);
+                        setRenameTarget(selectedPlaythrough);
+                      }}
+                    />
+                    {selectedIsActive ? (
+                      <Badge variant="accent" size="xs">
+                        CURRENT TIMELINE
+                      </Badge>
+                    ) : null}
+                    {!parentOfSelected ? (
+                      <Badge variant="outline" size="xs" leftIcon="GitBranch">
+                        Root Lineage
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="neutral"
+                        size="xs"
+                        leftIcon="GitFork"
+                        style={{ cursor: "pointer" }}
+                        title={`Click to select parent timeline "${parentOfSelected.name}"`}
+                        onClick={() => setSelectedPlaythrough(parentOfSelected)}
+                      >
+                        Forked from {parentOfSelected.name}
+                        {selectedPlaythrough.createdFromTurn !== undefined
+                          ? ` at Turn ${selectedPlaythrough.createdFromTurn}`
+                          : ""}
+                      </Badge>
+                    )}
+                    {selectedChildCount > 0 ? (
+                      <Badge variant="info" size="xs" leftIcon="GitBranch">
+                        {selectedChildCount} child{" "}
+                        {selectedChildCount === 1 ? "branch" : "branches"}
+                      </Badge>
+                    ) : null}
+                  </Stack>
+
+                  <Stack direction="row" align="center" gap="xs" wrap>
+                    <Text size="xs" tone="secondary">
+                      <strong>Turn {selectedPlaythrough.turn}</strong>
+                    </Text>
+                    <Text size="xs" tone="muted">
+                      •
+                    </Text>
+                    <Text size="xs" tone="secondary">
+                      {selectedVisibleMsgCount}{" "}
+                      {selectedVisibleMsgCount === 1 ? "message" : "messages"}
+                    </Text>
+                    <Text size="xs" tone="muted">
+                      •
+                    </Text>
+                    <Text size="xs" tone="secondary">
+                      {(selectedPlaythrough.chapters?.length ?? 0) + 1}{" "}
+                      {(selectedPlaythrough.chapters?.length ?? 0) + 1 === 1
+                        ? "chapter"
+                        : "chapters"}
+                    </Text>
+                    <Text size="xs" tone="muted">
+                      •
+                    </Text>
+                    <Text size="xs" tone="secondary">
+                      {selectedPlaythrough.characters.length} cast
+                    </Text>
+                    <Text size="xs" tone="muted">
+                      •
+                    </Text>
+                    <Text size="xs" tone="muted">
+                      Updated{" "}
+                      {new Date(
+                        selectedPlaythrough.updatedAt,
+                      ).toLocaleDateString()}
+                    </Text>
+                  </Stack>
+                </Stack>
+
+                <Stack direction="row" align="center" gap="xs" wrap>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    leftIcon={<Icon name="Pencil" size={14} />}
                     onClick={() => {
                       setRenameError(null);
                       setRenameTarget(selectedPlaythrough);
                     }}
-                  />
-                  {renameTarget ? (
-                    <RenameModal
-                      title="Rename Timeline"
-                      label="Timeline name"
-                      initialValue={renameTarget.name}
-                      isSaving={renameSaving}
-                      errorMessage={renameError}
-                      onSave={(name) => {
-                        void handleRename(name);
-                      }}
-                      onCancel={() => setRenameTarget(null)}
-                    />
-                  ) : null}
+                  >
+                    Rename
+                  </Button>
+
                   {selectedIsActive ? (
-                    <Badge
-                      variant="accent"
-                      size="xs"
-                      className="inspector-active-pill"
+                    <Button variant="secondary" size="sm" disabled>
+                      Currently Active
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      leftIcon={<Icon name="Play" size={14} />}
+                      onClick={() => void handleSwitch(selectedPlaythrough.id)}
                     >
-                      CURRENT TIMELINE
-                    </Badge>
-                  ) : null}
-                </div>
-
-                <div className="inspector-meta-row">
-                  <span>
-                    <strong>Turn {selectedPlaythrough.turn}</strong>
-                  </span>
-                  <span>•</span>
-                  <span>{selectedPlaythrough.messages.length} messages</span>
-                  {selectedPlaythrough.createdFromTurn !== undefined &&
-                  parentOfSelected ? (
-                    <>
-                      <span>•</span>
-                      <span>
-                        Branched from <em>{parentOfSelected.name}</em> at Turn{" "}
-                        {selectedPlaythrough.createdFromTurn}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span>•</span>
-                      <span>Root Lineage</span>
-                    </>
+                      Load This Timeline
+                    </Button>
                   )}
-                  <span>•</span>
-                  <span
-                    style={{
-                      color: selectedPlaythrough.isTimelineBranch
-                        ? "#94a3b8"
-                        : "#38bdf8",
-                    }}
-                  >
-                    {selectedPlaythrough.isTimelineBranch
-                      ? "Internal Timeline"
-                      : "Standalone Playthrough"}
-                  </span>
-                  <span>•</span>
-                  <span>
-                    Updated{" "}
-                    {new Date(
-                      selectedPlaythrough.updatedAt,
-                    ).toLocaleDateString()}
-                  </span>
-                </div>
-              </div>
 
-              <div className="inspector-actions">
-                {selectedPlaythrough.isTimelineBranch ? (
-                  <Button
-                    variant="ai"
-                    size="sm"
-                    className="timeline-action-btn promote"
-                    leftIcon={<Icon name="ExternalLink" size={14} />}
-                    onClick={() => void handlePromote(selectedPlaythrough.id)}
-                    title="Make this branch appear as a standalone playthrough in the Save/Load menu"
-                  >
-                    Promote to Playthrough
-                  </Button>
-                ) : null}
-
-                {selectedIsActive ? (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="timeline-action-btn current"
-                    disabled
-                  >
-                    Currently Active
-                  </Button>
-                ) : (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    className="timeline-action-btn switch primary"
-                    leftIcon={<Icon name="Play" size={14} />}
-                    onClick={() => void handleSwitch(selectedPlaythrough.id)}
-                  >
-                    Load This Timeline
-                  </Button>
-                )}
-
-                {!selectedIsActive ? (
-                  deleteConfirmId === selectedPlaythrough.id ? (
-                    <div className="delete-confirm-group">
-                      <span className="confirm-text">Delete?</span>
-                      <Button
-                        variant="danger"
-                        size="xs"
-                        className="danger-btn confirm"
-                        onClick={() =>
-                          void handleDelete(selectedPlaythrough.id)
-                        }
-                      >
-                        Yes
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="xs"
-                        className="cancel-btn"
-                        onClick={() => setDeleteConfirmId(null)}
-                      >
-                        No
-                      </Button>
-                    </div>
-                  ) : (
+                  {!selectedIsActive ? (
                     <IconButton
                       icon="Trash2"
                       size="sm"
                       variant="danger"
-                      className="timeline-action-btn delete"
-                      label="Delete this branch"
-                      title="Delete this branch"
-                      onClick={() => setDeleteConfirmId(selectedPlaythrough.id)}
+                      label="Delete this timeline"
+                      title="Delete this timeline"
+                      onClick={() => {
+                        setDeleteAllBranches(false);
+                        setDeleteTarget(selectedPlaythrough);
+                      }}
                     />
-                  )
-                ) : null}
-              </div>
-            </div>
-          </footer>
+                  ) : null}
+                </Stack>
+              </Stack>
+
+              {selectedLastMessage ? (
+                <div className="common-hierarchy-inspector-preview">
+                  <span className="common-hierarchy-node__preview-role">
+                    {selectedLastMessage.role === "user" ? "You: " : "Story: "}
+                  </span>
+                  {selectedLastMessage.content}
+                </div>
+              ) : null}
+            </Stack>
+          </Card>
         ) : null}
-      </section>
-    </div>
+      </Modal.Body>
+
+      {renameTarget ? (
+        <RenameModal
+          title="Rename Timeline"
+          label="Timeline name"
+          initialValue={renameTarget.name}
+          isSaving={renameSaving}
+          errorMessage={renameError}
+          onSave={(name) => {
+            void handleRename(name);
+          }}
+          onCancel={() => {
+            if (!renameSaving) {
+              setRenameTarget(null);
+              setRenameError(null);
+            }
+          }}
+        />
+      ) : null}
+
+      {deleteTarget ? (
+        <ConfirmModal
+          title="Delete Timeline"
+          message={
+            selectedChildCount > 0 && playthroughs.length > 1
+              ? `Delete "${deleteTarget.name}"? Choose whether to keep its child timeline branches or delete the entire timeline family.`
+              : `Delete "${deleteTarget.name}"? This cannot be undone.`
+          }
+          confirmLabel={
+            deleteAllBranches
+              ? `Delete Entire Family (${playthroughs.length})`
+              : "Delete This Timeline Only"
+          }
+          danger
+          isLoading={deleteSaving}
+          onConfirm={() => {
+            void handleConfirmDelete();
+          }}
+          onCancel={() => {
+            if (!deleteSaving) {
+              setDeleteTarget(null);
+              setDeleteAllBranches(false);
+            }
+          }}
+        >
+          {selectedChildCount > 0 && playthroughs.length > 1 ? (
+            <CheckboxRow
+              icon="Trash2"
+              title={`Delete entire timeline family (${playthroughs.length} timelines)`}
+              description="When unchecked, only this timeline is deleted and its earliest child branch is promoted to keep the rest of the family intact."
+              checked={deleteAllBranches}
+              disabled={deleteSaving}
+              onChange={(e) => setDeleteAllBranches(e.target.checked)}
+            />
+          ) : null}
+        </ConfirmModal>
+      ) : null}
+    </Modal>
   );
 }

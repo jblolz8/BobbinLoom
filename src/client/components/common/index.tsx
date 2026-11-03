@@ -8,6 +8,7 @@ export * from "./ContextMeter/ContextMeter";
 export * from "./EditTagsModal/EditTagsModal";
 export * from "./FleshOutPreview/FleshOutPreview";
 export * from "./GuidedTextArea/GuidedTextArea";
+export * from "./HierarchyGraph/HierarchyGraph";
 export * from "./ImageViewer/ImageViewer";
 export * from "./MarkdownView/MarkdownView";
 export * from "./PlayWorkspace/PlayWorkspace";

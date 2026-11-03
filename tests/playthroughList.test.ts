@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { playthroughRoutes } from "../src/server/routes/playthroughs";
 import { saveImageBytes } from "../src/server/imageStore";
 import {
+  branchPlaythroughRecord,
   createPlaythroughRecord,
   updatePlaythroughRecord,
 } from "../src/server/store";
@@ -428,5 +429,169 @@ describe("GET /api/playthroughs ships summaries, not documents", () => {
       "trope",
       "general",
     ]);
+  });
+
+  it("supports lineageFilter (parents, grouped, children) and attaches timeline metadata only to multi-timeline families", async () => {
+    const { app, dataDir } = harness();
+    const standalone = createPlaythroughRecord(dataDir, "Solo Run");
+
+    const parent = createPlaythroughRecord(dataDir, "Root Story");
+    parent.messages.push(message("m1", "A fork in the road."));
+    parent.turn = 1;
+    updatePlaythroughRecord(dataDir, parent);
+
+    const branch1 = branchPlaythroughRecord(
+      dataDir,
+      parent.id,
+      "m1",
+      "Left Path",
+    )!;
+    const branch2 = branchPlaythroughRecord(
+      dataDir,
+      parent.id,
+      "m1",
+      "Right Path",
+    )!;
+
+    // 1. Default / lineageFilter=parents: lists standalone + root parent; parent gets timelineCount & branches
+    const parentsRes = (await list(app, "?lineageFilter=parents")).json() as {
+      playthroughs: Record<string, unknown>[];
+      total: number;
+    };
+    expect(parentsRes.total).toBe(2);
+    const soloSummary = parentsRes.playthroughs.find(
+      (p) => p.id === standalone.id,
+    )!;
+    const rootSummary = parentsRes.playthroughs.find(
+      (p) => p.id === parent.id,
+    )!;
+    expect(soloSummary.timelineCount).toBeUndefined();
+    expect(soloSummary.branches).toBeUndefined();
+    expect(rootSummary.timelineCount).toBe(3);
+    expect(
+      (rootSummary.branches as { id: string }[]).map((b) => b.id).sort(),
+    ).toEqual([parent.id, branch1.id, branch2.id].sort());
+    expect(rootSummary.childSummaries).toBeUndefined();
+
+    // 2. lineageFilter=grouped: attaches childSummaries under the root parent
+    const groupedRes = (await list(app, "?lineageFilter=grouped")).json() as {
+      playthroughs: Record<string, unknown>[];
+      total: number;
+    };
+    expect(groupedRes.total).toBe(2);
+    const groupedRoot = groupedRes.playthroughs.find(
+      (p) => p.id === parent.id,
+    )!;
+    const childSummaries = groupedRoot.childSummaries as {
+      id: string;
+      parentName?: string;
+      rootPlaythroughId?: string;
+    }[];
+    expect(childSummaries).toHaveLength(2);
+    expect(childSummaries.map((c) => c.id).sort()).toEqual(
+      [branch1.id, branch2.id].sort(),
+    );
+    expect(childSummaries[0].parentName).toBe("Root Story");
+    expect(childSummaries[0].rootPlaythroughId).toBe(parent.id);
+
+    // 3. lineageFilter=children: lists only child timeline branches
+    const childrenRes = (await list(app, "?lineageFilter=children")).json() as {
+      playthroughs: {
+        id: string;
+        parentName?: string;
+        rootName?: string;
+        timelineCount?: number;
+      }[];
+      total: number;
+    };
+    expect(childrenRes.total).toBe(2);
+    expect(childrenRes.playthroughs.map((p) => p.id).sort()).toEqual(
+      [branch1.id, branch2.id].sort(),
+    );
+    expect(childrenRes.playthroughs[0].parentName).toBe("Root Story");
+    expect(childrenRes.playthroughs[0].rootName).toBe("Root Story");
+    expect(childrenRes.playthroughs[0].timelineCount).toBe(3);
+
+    // 4. Updating a child timeline bumps its parent family above a newer standalone playthrough in parents & grouped modes
+    parent.updatedAt = "2026-01-01T00:00:00.000Z";
+    updatePlaythroughRecord(dataDir, parent);
+    branch1.updatedAt = "2026-01-02T00:00:00.000Z";
+    updatePlaythroughRecord(dataDir, branch1);
+    standalone.updatedAt = "2026-05-01T00:00:00.000Z";
+    updatePlaythroughRecord(dataDir, standalone);
+    branch2.updatedAt = "2026-09-01T00:00:00.000Z";
+    updatePlaythroughRecord(dataDir, branch2);
+
+    const bumpedParents = (
+      await list(app, "?lineageFilter=parents&sortBy=updatedAt&sortDir=desc")
+    ).json() as { playthroughs: { id: string }[] };
+    expect(bumpedParents.playthroughs.map((p) => p.id)).toEqual([
+      parent.id,
+      standalone.id,
+    ]);
+
+    const bumpedGrouped = (
+      await list(app, "?lineageFilter=grouped&sortBy=updatedAt&sortDir=desc")
+    ).json() as {
+      playthroughs: { id: string; childSummaries?: { id: string }[] }[];
+    };
+    expect(bumpedGrouped.playthroughs.map((p) => p.id)).toEqual([
+      parent.id,
+      standalone.id,
+    ]);
+    expect(
+      bumpedGrouped.playthroughs[0].childSummaries?.map((c) => c.id),
+    ).toEqual([branch2.id, branch1.id]);
+  });
+
+  it("DELETE /api/playthroughs/:id promotes earliest child when deleteBranches=false and deletes entire family when deleteBranches=true", async () => {
+    const { app, dataDir } = harness();
+    const root = createPlaythroughRecord(dataDir, "Family Root");
+    root.messages.push(message("m1", "Opening"));
+    updatePlaythroughRecord(dataDir, root);
+
+    const child1 = branchPlaythroughRecord(dataDir, root.id, "m1", "Child 1")!;
+    const child2 = branchPlaythroughRecord(dataDir, root.id, "m1", "Child 2")!;
+
+    // Delete only the root (deleteBranches=false default) -> child1 is promoted to root, child2 re-links to child1
+    const delSingle = await app.inject({
+      method: "DELETE",
+      url: `/api/playthroughs/${root.id}`,
+    });
+    expect(delSingle.statusCode).toBe(200);
+    expect(delSingle.json()).toEqual({ ok: true });
+
+    const afterSingle = (await list(app, "?lineageFilter=grouped")).json() as {
+      playthroughs: {
+        id: string;
+        isTimelineBranch: boolean;
+        timelineCount?: number;
+        childSummaries?: { id: string; rootPlaythroughId?: string }[];
+      }[];
+      total: number;
+    };
+    expect(afterSingle.total).toBe(1);
+    expect(afterSingle.playthroughs[0].id).toBe(child1.id);
+    expect(afterSingle.playthroughs[0].isTimelineBranch).toBe(false);
+    expect(afterSingle.playthroughs[0].timelineCount).toBe(2);
+    expect(afterSingle.playthroughs[0].childSummaries?.map((c) => c.id)).toEqual(
+      [child2.id],
+    );
+    expect(
+      afterSingle.playthroughs[0].childSummaries?.[0].rootPlaythroughId,
+    ).toBe(child1.id);
+
+    // Delete entire remaining family (deleteBranches=true)
+    const delFamily = await app.inject({
+      method: "DELETE",
+      url: `/api/playthroughs/${child1.id}?deleteBranches=true`,
+    });
+    expect(delFamily.statusCode).toBe(200);
+    expect(delFamily.json()).toEqual({ ok: true });
+
+    const afterFamily = (
+      await list(app, "?includeBranches=true")
+    ).json() as { playthroughs: unknown[]; total: number };
+    expect(afterFamily.total).toBe(0);
   });
 });

@@ -119,6 +119,7 @@ export const LIBRARY_PREFERENCE_DEFAULTS = {
   playthroughViewMode: "grid",
   playthroughSortBy: "updatedAt",
   playthroughSortDir: "desc",
+  playthroughLineageFilter: "parents",
   playthroughCompactLandscape: false,
   playthroughShowFullTitle: false,
   playthroughShowAllTags: false,
@@ -139,6 +140,7 @@ export type ResolvedLibraryPreferences = {
   playthroughViewMode: "grid" | "list";
   playthroughSortBy: "updatedAt" | "name" | "turn";
   playthroughSortDir: "asc" | "desc";
+  playthroughLineageFilter: "parents" | "grouped" | "children";
   playthroughCompactLandscape: boolean;
   playthroughShowFullTitle: boolean;
   playthroughShowAllTags: boolean;
