@@ -230,12 +230,16 @@ export function saveCharacterToLibrary(
   playthroughId: string,
   characterId: string,
   mode: "update" | "newVersion" = "update",
+  overwritePortrait?: boolean,
 ): Promise<SaveToLibraryResult> {
   return request<SaveToLibraryResult>(
     `/api/playthroughs/${playthroughId}/characters/${characterId}/save-to-library`,
     {
       method: "POST",
-      body: JSON.stringify({ mode }),
+      body: JSON.stringify({
+        mode,
+        ...(overwritePortrait !== undefined ? { overwritePortrait } : {}),
+      }),
     },
   );
 }

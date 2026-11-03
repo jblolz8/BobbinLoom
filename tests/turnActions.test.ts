@@ -695,7 +695,7 @@ describe("retryAssistantTurn", () => {
     ).state;
     updatePlaythroughRecord(dir, playthrough);
 
-    const file = join(dir, `${playthrough.id}.json`);
+    const file = join(dir, playthrough.id, `${playthrough.id}.json`);
     const before = readFileSync(file, "utf8");
 
     class FailingProvider extends MockProvider {

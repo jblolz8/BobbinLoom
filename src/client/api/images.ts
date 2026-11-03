@@ -1,5 +1,6 @@
 import { request } from "./client";
 import type {
+  CharacterPortrait,
   GalleryImage,
   ImageInstructionMode,
   MessageImage,
@@ -8,7 +9,7 @@ import type {
 
 /** The persisted message attachment, straight from the schema (one source of
  *  truth shared with the server). */
-export type { GalleryImage, MessageImage };
+export type { CharacterPortrait, GalleryImage, MessageImage };
 
 /**
  * URL of the served bytes for a content-addressed image file
@@ -266,5 +267,119 @@ export function attachMessageImage(
       method: "POST",
       body: JSON.stringify(payload),
     },
+  );
+}
+
+export type GenerateCharacterPortraitOptions = GenerateMessageImageOptions & {
+  note?: string;
+  includeStoryContext?: boolean;
+};
+
+export type GenerateCharacterPortraitResult = {
+  playthrough: Playthrough;
+  portrait: CharacterPortrait;
+  promptUsed: string;
+  negativeUsed: string;
+  promptDurationMs?: number;
+};
+
+/** Dry run for character portrait generation: runs the text→image-prompt side
+ *  call for a solo chest-to-head portrait from the character's sheet. */
+export function previewCharacterPortraitPrompt(
+  playthroughId: string,
+  characterId: string,
+  options?: {
+    imageProviderId?: string;
+    note?: string;
+    includeStoryContext?: boolean;
+    signal?: AbortSignal;
+  },
+): Promise<ImagePromptPreview> {
+  const body: Record<string, unknown> = {};
+  if (options?.imageProviderId) body.imageProviderId = options.imageProviderId;
+  if (options?.note !== undefined) body.note = options.note;
+  if (options?.includeStoryContext !== undefined)
+    body.includeStoryContext = options.includeStoryContext;
+
+  return request<ImagePromptPreview>(
+    `/api/playthroughs/${playthroughId}/characters/${characterId}/portrait/prompt`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+      signal: options?.signal,
+    },
+  );
+}
+
+/** Generate a solo character portrait (Medium Closeup / Chest to Head) and set
+ *  it as the character's active playthrough portrait (`character.avatarFile`). */
+export function generateCharacterPortrait(
+  playthroughId: string,
+  characterId: string,
+  opts: GenerateCharacterPortraitOptions = {},
+): Promise<GenerateCharacterPortraitResult> {
+  const body: Record<string, unknown> = {};
+  if (opts.imageProviderId) body.imageProviderId = opts.imageProviderId;
+  if (opts.promptOverride !== undefined)
+    body.promptOverride = opts.promptOverride;
+  if (opts.negativeOverride !== undefined)
+    body.negativeOverride = opts.negativeOverride;
+  if (opts.seed !== undefined) body.seed = opts.seed;
+  if (opts.promptDurationMs !== undefined)
+    body.promptDurationMs = opts.promptDurationMs;
+  if (opts.writerPrompt !== undefined) body.writerPrompt = opts.writerPrompt;
+  if (opts.writerNegative !== undefined)
+    body.writerNegative = opts.writerNegative;
+  if (opts.promptRequest !== undefined)
+    body.promptRequest = opts.promptRequest;
+  if (opts.promptResponse !== undefined)
+    body.promptResponse = opts.promptResponse;
+  if (opts.rawRequest !== undefined) body.rawRequest = opts.rawRequest;
+  if (opts.replaceFile !== undefined) body.replaceFile = opts.replaceFile;
+  if (opts.note !== undefined) body.note = opts.note;
+  if (opts.includeStoryContext !== undefined)
+    body.includeStoryContext = opts.includeStoryContext;
+
+  return request<GenerateCharacterPortraitResult>(
+    `/api/playthroughs/${playthroughId}/characters/${characterId}/portrait/generate`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+      signal: opts.signal,
+    },
+  );
+}
+
+/** Upload a custom portrait or select an existing portrait file as the
+ *  character's active playthrough portrait (`character.avatarFile`). */
+export function setOrUploadCharacterPortrait(
+  playthroughId: string,
+  characterId: string,
+  payload: {
+    file?: string;
+    dataBase64?: string;
+    fileName?: string;
+    label?: string;
+  },
+): Promise<{ playthrough: Playthrough; portrait: CharacterPortrait }> {
+  return request<{ playthrough: Playthrough; portrait: CharacterPortrait }>(
+    `/api/playthroughs/${playthroughId}/characters/${characterId}/portrait`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+/** Delete a portrait from a character's portrait history (`character.avatars`),
+ *  falling back `character.avatarFile` to the newest remaining portrait. */
+export function deleteCharacterPortrait(
+  playthroughId: string,
+  characterId: string,
+  file: string,
+): Promise<{ playthrough: Playthrough }> {
+  return request<{ playthrough: Playthrough }>(
+    `/api/playthroughs/${playthroughId}/characters/${characterId}/portraits/${encodeURIComponent(file)}`,
+    { method: "DELETE" },
   );
 }

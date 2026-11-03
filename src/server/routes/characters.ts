@@ -417,12 +417,10 @@ export const characterRoutes: FastifyPluginAsync<
     if (!template)
       return reply.code(404).send({ error: "Character not found" });
     if (template.format === "ccv2") {
-      return reply
-        .code(400)
-        .send({
-          error:
-            "Read-only CCv2 sheets cannot be reformatted — convert to BL format first",
-        });
+      return reply.code(400).send({
+        error:
+          "Read-only CCv2 sheets cannot be reformatted — convert to BL format first",
+      });
     }
 
     if (body.action === "generate") {
@@ -596,13 +594,18 @@ export const characterRoutes: FastifyPluginAsync<
         .object({ id: z.string(), characterId: z.string() })
         .parse(request.params);
       const body = z
-        .object({ mode: z.enum(["update", "newVersion"]).optional() })
+        .object({
+          mode: z.enum(["update", "newVersion"]).optional(),
+          overwritePortrait: z.boolean().optional(),
+        })
         .parse(request.body ?? {});
       const result = saveToLibraryAction(
         dataDir,
         params.id,
         params.characterId,
         body.mode ?? "update",
+        undefined,
+        { overwritePortrait: body.overwritePortrait },
       );
       if (!result.ok)
         return reply.code(result.status).send({ error: result.error });

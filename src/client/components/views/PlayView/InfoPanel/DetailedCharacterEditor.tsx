@@ -9,6 +9,8 @@ import {
   Badge,
   Button,
   Card,
+  CharacterAvatar,
+  CheckboxRow,
   CodeBlock,
   Dialog,
   FormGrid,
@@ -30,6 +32,7 @@ import {
   splitContentSections,
   type ContentSection,
 } from "../../../../../engine/characterSections";
+import { CharacterPortraitModal } from "./CharacterPortraitModal";
 import { CharacterSheetSections } from "./CharacterSheetSections";
 import { sectionProvenance } from "../../../../engine/sheetProvenance";
 
@@ -42,9 +45,12 @@ export type DetailedCharacterEditorProps = {
   originalSheet?: string | null;
   initialMode?: "view" | "edit";
   inScene?: boolean;
+  imagePromptPreview?: boolean;
+  onPlaythroughChange?: (updated: Playthrough) => void;
   onSave: (payload: CharacterEditPayload) => Promise<void>;
   onSaveToLibrary?: (
     mode: "update" | "newVersion",
+    overwritePortrait?: boolean,
   ) => Promise<{ version: number; created: boolean }>;
   onClose: () => void;
 };
@@ -130,12 +136,16 @@ export function DetailedCharacterEditor({
   originalSheet = null,
   initialMode = "edit",
   inScene,
+  imagePromptPreview = true,
+  onPlaythroughChange,
   onSave,
   onSaveToLibrary,
   onClose,
 }: DetailedCharacterEditorProps) {
+  const liveCharacter =
+    playthrough.characters.find((c) => c.id === character.id) ?? character;
   const template = playthrough.characterTemplates.find(
-    (t) => t.id === character.templateId,
+    (t) => t.id === liveCharacter.templateId,
   );
   // CCv2-backed sheets are read-only in play (D9): content + clothing are locked.
   const isReadOnlySheet = template?.format === "ccv2";
@@ -153,6 +163,8 @@ export function DetailedCharacterEditor({
   } | null>(null);
   const [saveToLib, setSaveToLib] = useState(false);
   const [libMode, setLibMode] = useState<"update" | "newVersion">("update");
+  const [overwriteLibPortrait, setOverwriteLibPortrait] = useState(false);
+  const [portraitModalOpen, setPortraitModalOpen] = useState(false);
   const [pendingDiscard, setPendingDiscard] = useState<"close" | "view" | null>(
     null,
   );
@@ -168,6 +180,7 @@ export function DetailedCharacterEditor({
     setStatus(null);
     setSaveToLib(false);
     setLibMode("update");
+    setOverwriteLibPortrait(false);
     setPendingDiscard(null);
     setShowRaw(false);
     setShowDiff(false);
@@ -288,7 +301,7 @@ export function DetailedCharacterEditor({
       if (saveToLib && onSaveToLibrary) {
         // The reader chooses: overwrite the card, or mint a version beside it. The choice only means
         // anything once the card exists and this sheet has moved on from it.
-        const result = await onSaveToLibrary(libMode);
+        const result = await onSaveToLibrary(libMode, overwriteLibPortrait);
         libMsg = result.created
           ? ` + saved to the library as v${result.version}`
           : " + library card updated";
@@ -619,6 +632,20 @@ export function DetailedCharacterEditor({
         onClose={requestClose}
         headerAction={
           <Stack direction="row" align="center" gap="xs" wrap>
+            {onPlaythroughChange ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                leftIcon="IdCard"
+                onClick={() => setPortraitModalOpen(true)}
+                title="Generate or manage playthrough portraits for this character"
+              >
+                Portrait Media
+                {(liveCharacter.avatars?.length ?? 0) > 0
+                  ? ` (${liveCharacter.avatars!.length})`
+                  : ""}
+              </Button>
+            ) : null}
             <Tabs
               tabs={modeTabs}
               activeTab={mode}
@@ -702,6 +729,69 @@ export function DetailedCharacterEditor({
               {status.text}
             </StatusMessage>
           ) : null}
+
+          <Card variant="panel" padding="sm" layout="row" fullWidth>
+            <Stack
+              direction="row"
+              align="center"
+              justify="between"
+              gap="md"
+              wrap
+              fullWidth
+            >
+              <Stack direction="row" align="center" gap="sm">
+                <CharacterAvatar
+                  template={
+                    template ?? {
+                      id: liveCharacter.templateId ?? "",
+                      name: liveCharacter.name,
+                    }
+                  }
+                  avatarFile={liveCharacter.avatarFile}
+                  playthroughId={playthrough.id}
+                  variant="grid"
+                  size={56}
+                  alt={liveCharacter.name}
+                />
+                <Stack direction="column" gap="2xs">
+                  <Stack direction="row" align="center" gap="xs" wrap>
+                    <Text size="xs" weight="semibold">
+                      Playthrough Portrait
+                    </Text>
+                    {liveCharacter.avatarFile ? (
+                      <Badge variant="accent" size="xs">
+                        Playthrough portrait active
+                      </Badge>
+                    ) : (
+                      <Badge variant="neutral" size="xs">
+                        Library default
+                      </Badge>
+                    )}
+                    {(liveCharacter.avatars?.length ?? 0) > 0 ? (
+                      <Badge variant="outline" size="xs">
+                        {liveCharacter.avatars!.length} in history
+                      </Badge>
+                    ) : null}
+                  </Stack>
+                  <Text size="xs" tone="secondary">
+                    Generate a solo chest-to-head portrait from this sheet or
+                    switch between turn-by-turn portraits.
+                  </Text>
+                </Stack>
+              </Stack>
+
+              {onPlaythroughChange ? (
+                <Button
+                  size="sm"
+                  variant="ai"
+                  leftIcon="Sparkles"
+                  onClick={() => setPortraitModalOpen(true)}
+                >
+                  Generate / Manage Portrait
+                </Button>
+              ) : null}
+            </Stack>
+          </Card>
 
           {mode === "view" ? (
             <>
@@ -1001,6 +1091,19 @@ export function DetailedCharacterEditor({
                         </Text>
                       </Stack>
                     ) : null}
+                    {saveToLib &&
+                    inLibrary &&
+                    libMode === "update" &&
+                    Boolean(liveCharacter.avatarFile) ? (
+                      <CheckboxRow
+                        checked={overwriteLibPortrait}
+                        onChange={(e) =>
+                          setOverwriteLibPortrait(e.target.checked)
+                        }
+                        title="Also overwrite library portrait"
+                        description="Replace the global Character Library card's portrait with this playthrough's current portrait."
+                      />
+                    ) : null}
                   </Stack>
                 </Card>
               ) : null}
@@ -1010,6 +1113,17 @@ export function DetailedCharacterEditor({
           {driftBlock}
         </Stack>
       </Dialog>
+
+      {portraitModalOpen && onPlaythroughChange ? (
+        <CharacterPortraitModal
+          character={liveCharacter}
+          localTemplate={template}
+          playthrough={playthrough}
+          imagePromptPreview={imagePromptPreview}
+          onPlaythroughChange={onPlaythroughChange}
+          onClose={() => setPortraitModalOpen(false)}
+        />
+      ) : null}
 
       {/* The dirty guard. It STACKS on the sheet, which is what the dialog stack is for: Escape closes
           this one and only this one, and focus stays here. */}
@@ -1027,4 +1141,3 @@ export function DetailedCharacterEditor({
     </>
   );
 }
-

@@ -11,7 +11,9 @@ type TabId = "player" | "chars" | "journal";
 
 export type InfoPanelProps = {
   playthrough: Playthrough;
-  onPlaythroughChange: (updated: Playthrough) => void;
+  onPlaythroughChange: (
+    updated: Playthrough | ((prev: Playthrough) => Playthrough),
+  ) => void;
   onViewChapter: (chapterId: string) => void;
   onCloseChapterComplete: (tokenUsage: TokenUsage) => void;
   /** Ask to revert to an archived chapter; the confirm dialog lives one level up, in PlayView. */
@@ -28,6 +30,7 @@ export type InfoPanelProps = {
   onOpenLibrary?: (templateId: string) => void;
   onOpenTimelines?: () => void;
   actionLoading: boolean;
+  imagePromptPreview?: boolean;
   className?: string;
   style?: CSSProperties;
 };
@@ -90,6 +93,7 @@ export function InfoPanel(props: InfoPanelProps) {
             playthrough={playthrough}
             onPlaythroughChange={props.onPlaythroughChange}
             onOpenLibrary={props.onOpenLibrary}
+            imagePromptPreview={props.imagePromptPreview}
           />
         </Tabs.Panel>
         <Tabs.Panel active={activeTab === "journal"}>

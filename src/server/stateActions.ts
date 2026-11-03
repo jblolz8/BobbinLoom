@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { applyStatePatch } from "../engine/engine";
 import {
   seedMemorySummary,
@@ -19,10 +20,12 @@ import type {
   Playthrough,
   PromptConfig,
 } from "../schemas";
+import { imageFilePath, IMAGES_DIR } from "./imageStore";
 import {
   getCharacterTemplate,
   getPlaythroughRecord,
   listCharacterTemplates,
+  saveCharacterAvatar,
   saveCharacterTemplateRecord,
   updatePlaythroughRecord,
 } from "./store";
@@ -555,6 +558,7 @@ export function saveToLibraryAction(
   characterId: string,
   mode: "update" | "newVersion" = "update",
   charactersDir?: string,
+  options?: { overwritePortrait?: boolean; imagesDir?: string },
 ): SaveToLibraryOutcome {
   const loaded = load(dataDir, playthroughId);
   if (isFailure(loaded)) return loaded;
@@ -577,6 +581,34 @@ export function saveToLibraryAction(
       error: "No template data for this character",
     };
 
+  const syncPlaythroughPortraitToLibrary = (
+    saved: CharacterTemplate,
+  ): CharacterTemplate => {
+    if (!character.avatarFile) return saved;
+    const resolvedPath = imageFilePath(
+      character.avatarFile,
+      options?.imagesDir ?? IMAGES_DIR,
+      dataDir,
+      playthroughId,
+    );
+    if (!resolvedPath) return saved;
+    try {
+      const bytes = readFileSync(resolvedPath);
+      const ext =
+        character.avatarFile.split(".").pop()?.toLowerCase() || "webp";
+      const withAvatar = saveCharacterAvatar(
+        saved.id,
+        "portrait",
+        bytes,
+        ext,
+        charactersDir,
+      );
+      return withAvatar ?? saved;
+    } catch {
+      return saved;
+    }
+  };
+
   if (mode === "newVersion") {
     const existing = getCharacterTemplate(local.id, charactersDir);
     if (!existing) {
@@ -591,7 +623,7 @@ export function saveToLibraryAction(
       (t) => (t.lineageId ?? t.id) === lineageId,
     );
     const nextVersion = Math.max(...family.map((t) => t.version)) + 1;
-    const template: CharacterTemplate = {
+    let template: CharacterTemplate = {
       ...structuredClone(local),
       id: `char_${randomUUID()}`,
       lineageId,
@@ -603,13 +635,20 @@ export function saveToLibraryAction(
         name: c.name,
       })),
     };
-    saveCharacterTemplateRecord(template, charactersDir);
+    template = saveCharacterTemplateRecord(template, charactersDir);
+    template = syncPlaythroughPortraitToLibrary(template);
     return { ok: true, template, created: true };
   }
 
   const existing = getCharacterTemplate(local.id, charactersDir);
-  const template: CharacterTemplate = {
+  let template: CharacterTemplate = {
     ...structuredClone(local),
+    ...(existing?.customPortrait
+      ? { customPortrait: existing.customPortrait }
+      : {}),
+    ...(existing?.avatarUpdatedAt !== undefined
+      ? { avatarUpdatedAt: existing.avatarUpdatedAt }
+      : {}),
     lineageId: existing ? (existing.lineageId ?? existing.id) : local.id,
     name: character.name,
     summary: local.summary || summaryFromContent(local.content),
@@ -618,7 +657,10 @@ export function saveToLibraryAction(
       name: c.name,
     })),
   };
-  saveCharacterTemplateRecord(template, charactersDir);
+  template = saveCharacterTemplateRecord(template, charactersDir);
+  if (!existing || options?.overwritePortrait) {
+    template = syncPlaythroughPortraitToLibrary(template);
+  }
   return { ok: true, template, created: !existing };
 }
 
@@ -854,6 +896,14 @@ export async function closeChapterAction(
   for (const evt of eventsToTag) {
     if (evt.chapterId) continue;
     evt.chapterId = chapter.id;
+  }
+
+  for (const char of loaded.characters) {
+    for (const portrait of char.avatars ?? []) {
+      if (!portrait.chapterId) {
+        portrait.chapterId = chapter.id;
+      }
+    }
   }
 
   // Append chapter and reset counter

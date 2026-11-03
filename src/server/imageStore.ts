@@ -1,13 +1,16 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  statSync,
+  unlinkSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import type { Playthrough } from "../schemas";
 import { MIME_BY_EXT } from "./imageProvider/shared";
 import { atomicWriteFile } from "./persistence";
-import {
-  listPlaythroughRecords,
-  playthroughImagesDir,
-} from "./store";
+import { listPlaythroughRecords, playthroughImagesDir } from "./store";
 
 /** Default fallback image store directory (`data/images`); primary storage is now
  *  per-playthrough (`data/playthroughs/<play_id>/images/<sha256>.<ext>`). */
@@ -56,7 +59,10 @@ export function imageFilePath(
   if (!FILE_RE.test(file)) return null;
 
   if (dataDir && playthroughId) {
-    const ptCandidate = join(playthroughImagesDir(dataDir, playthroughId), file);
+    const ptCandidate = join(
+      playthroughImagesDir(dataDir, playthroughId),
+      file,
+    );
     if (existsSync(ptCandidate)) return ptCandidate;
   }
 
@@ -90,8 +96,8 @@ export function mimeForFile(file: string): string {
   return MIME_BY_EXT[ext] ?? "application/octet-stream";
 }
 
-/** Every file name referenced by any message, gallery upload, or manual cover of any of the given
- *  playthroughs. */
+/** Every file name referenced by any message, gallery upload, character portrait, snapshot, or manual cover
+ *  of any of the given playthroughs. */
 export function collectReferencedImages(
   playthroughs: Playthrough[],
 ): Set<string> {
@@ -104,6 +110,20 @@ export function collectReferencedImages(
     }
     for (const galleryImg of playthrough.galleryImages ?? []) {
       if (galleryImg?.file) refs.add(galleryImg.file);
+    }
+    for (const char of playthrough.characters ?? []) {
+      if (char.avatarFile) refs.add(char.avatarFile);
+      for (const p of char.avatars ?? []) {
+        if (p?.file) refs.add(p.file);
+      }
+    }
+    for (const snap of Object.values(playthrough.snapshots ?? {})) {
+      for (const char of snap?.characters ?? []) {
+        if (char.avatarFile) refs.add(char.avatarFile);
+        for (const p of char.avatars ?? []) {
+          if (p?.file) refs.add(p.file);
+        }
+      }
     }
     if (playthrough.cover?.file) refs.add(playthrough.cover.file);
   }

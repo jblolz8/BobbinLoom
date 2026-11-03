@@ -29,7 +29,10 @@ import {
   adoptLocalPreferences,
   buildImageUrl,
   clearPlaythroughCover,
+  deleteCharacterPortrait,
   deleteGalleryImage,
+  getCharacterAvatarUrl,
+  setOrUploadCharacterPortrait,
   setPlaythroughCover,
   updateViewPreferences,
   uploadGalleryImage,
@@ -186,6 +189,46 @@ export function JournalTab({
     setCoverError(null);
     try {
       const res = await deleteGalleryImage(playthrough.id, file);
+      onPlaythroughChange(res.playthrough);
+    } catch (e) {
+      setCoverError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGalleryDeletingFile(null);
+    }
+  }
+
+  async function handleSelectCharacterPortrait(
+    characterId: string,
+    file: string,
+  ) {
+    setCoverSaving(true);
+    setCoverError(null);
+    try {
+      const res = await setOrUploadCharacterPortrait(
+        playthrough.id,
+        characterId,
+        { file },
+      );
+      onPlaythroughChange(res.playthrough);
+    } catch (e) {
+      setCoverError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCoverSaving(false);
+    }
+  }
+
+  async function handleDeleteCharacterPortrait(
+    characterId: string,
+    file: string,
+  ) {
+    setGalleryDeletingFile(file);
+    setCoverError(null);
+    try {
+      const res = await deleteCharacterPortrait(
+        playthrough.id,
+        characterId,
+        file,
+      );
       onPlaythroughChange(res.playthrough);
     } catch (e) {
       setCoverError(e instanceof Error ? e.message : String(e));
@@ -876,6 +919,7 @@ export function JournalTab({
           playthroughName={playthrough.name}
           media={media}
           chapters={playthrough.chapters ?? []}
+          characters={playthrough.characters}
           currentFile={playthrough.cover?.file}
           hasManualCover={Boolean(playthrough.cover)}
           saving={coverSaving}
@@ -893,6 +937,12 @@ export function JournalTab({
           }}
           onDelete={(file) => {
             void handleDeleteGalleryImage(file);
+          }}
+          onSelectCharacterPortrait={(characterId, file) => {
+            void handleSelectCharacterPortrait(characterId, file);
+          }}
+          onDeleteCharacterPortrait={(characterId, file) => {
+            void handleDeleteCharacterPortrait(characterId, file);
           }}
           onClose={() => setGalleryOpen(false)}
         />
@@ -957,10 +1007,29 @@ export function JournalTab({
               const isActive = (playthrough.activeCharacters ?? []).includes(
                 c.id,
               );
+              const localTpl = c.templateId
+                ? playthrough.characterTemplates.find(
+                    (t) => t.id === c.templateId,
+                  )
+                : undefined;
+              const avatarSrc = c.avatarFile
+                ? buildImageUrl(c.avatarFile, playthrough.id)
+                : c.templateId
+                  ? getCharacterAvatarUrl(
+                      c.templateId,
+                      "profile",
+                      localTpl?.avatarUpdatedAt,
+                    )
+                  : undefined;
               return (
                 <Card key={c.id} variant="panel" padding="sm" fullWidth>
                   <Stack direction="row" align="start" gap="sm" fullWidth>
-                    <AvatarBadge name={c.name} icon="User" size="sm" />
+                    <AvatarBadge
+                      src={avatarSrc}
+                      name={c.name}
+                      icon="User"
+                      size="sm"
+                    />
                     <Stack
                       direction="column"
                       align="stretch"
@@ -1206,12 +1275,7 @@ export function JournalTab({
                             wrap
                             fullWidth
                           >
-                            <Stack
-                              direction="row"
-                              align="center"
-                              gap="xs"
-                              wrap
-                            >
+                            <Stack direction="row" align="center" gap="xs" wrap>
                               <Badge
                                 variant={
                                   isCritical

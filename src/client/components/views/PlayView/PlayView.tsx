@@ -31,11 +31,7 @@ import {
   Text,
   TextInput,
 } from "../../base";
-import {
-  ConfirmModal,
-  PlayWorkspace,
-  RevertConfirmModal,
-} from "../../common";
+import { ConfirmModal, PlayWorkspace, RevertConfirmModal } from "../../common";
 import { PlaythroughLibrary } from "../../library/PlaythroughLibrary";
 import { TimelineModal } from "../../modals/TimelineModal";
 import { ChatPanel } from "./ChatPanel";
@@ -469,7 +465,12 @@ export function PlayView(props: PlayViewProps) {
       renderInfoPane={(paneProps) => (
         <InfoPanel
           playthrough={playthrough}
-          onPlaythroughChange={setPlaythrough}
+          onPlaythroughChange={(updater) => {
+            setPlaythrough((prev) => {
+              if (!prev) return typeof updater === "function" ? null : updater;
+              return typeof updater === "function" ? updater(prev) : updater;
+            });
+          }}
           onViewChapter={(chapterId) => {
             setViewingChapterId(chapterId);
             if (mobileTab !== "chat") setMobileTab("chat");
@@ -488,6 +489,7 @@ export function PlayView(props: PlayViewProps) {
           onOpenLibrary={(templateId) => openCharacterManager(templateId)}
           onOpenTimelines={() => setTimelinesOpen(true)}
           actionLoading={actionLoading}
+          imagePromptPreview={props.imagePromptPreview}
           {...paneProps}
         />
       )}

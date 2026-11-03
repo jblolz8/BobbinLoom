@@ -6,7 +6,9 @@ import type {
   Playthrough,
 } from "../../../../../schemas";
 import {
+  buildImageUrl,
   editCharacter,
+  generateCharacterPortrait,
   getCharacterAvatarUrl,
   listCharacters,
   fleshOutCharacter,
@@ -27,6 +29,7 @@ import {
 } from "../../../../api";
 import { DetailedCharacterEditor } from "./DetailedCharacterEditor";
 import { SimpleCharacterEditor } from "./SimpleCharacterEditor";
+import { CharacterPortraitModal } from "./CharacterPortraitModal";
 import { CharacterSheetSections } from "./CharacterSheetSections";
 import {
   Accordion,
@@ -36,6 +39,7 @@ import {
   Card,
   CharacterAvatar,
   Checkbox,
+  CheckboxRow,
   FormGrid,
   Icon,
   ModelIcon,
@@ -57,8 +61,11 @@ type SaveFeedback = { ok: boolean; text: string };
 
 export type CharsTabProps = {
   playthrough: Playthrough;
-  onPlaythroughChange: (p: Playthrough) => void;
+  onPlaythroughChange: (
+    p: Playthrough | ((prev: Playthrough) => Playthrough),
+  ) => void;
   onOpenLibrary?: (templateId: string) => void;
+  imagePromptPreview?: boolean;
 };
 
 export type CastViewMode = "portrait" | "compact";
@@ -67,6 +74,7 @@ export function CharsTab({
   playthrough,
   onPlaythroughChange,
   onOpenLibrary,
+  imagePromptPreview = true,
 }: CharsTabProps) {
   const [library, setLibrary] = useState<CharacterTemplate[]>([]);
   const [saveFeedback, setSaveFeedback] = useState<
@@ -76,9 +84,18 @@ export function CharsTab({
   const [editingChar, setEditingChar] = useState<CharacterInstance | null>(
     null,
   );
+  const [portraitModalChar, setPortraitModalChar] =
+    useState<CharacterInstance | null>(null);
+  const [confirmUpdateLibChar, setConfirmUpdateLibChar] =
+    useState<CharacterInstance | null>(null);
+  const [overwriteLibPortrait, setOverwriteLibPortrait] = useState(false);
   const [fleshingOutId, setFleshingOutId] = useState<string | null>(null);
   const fleshOutAbortRef = useRef<AbortController | null>(null);
   const [fleshOutError, setFleshOutError] = useState<string | null>(null);
+  const [generatingPortraitIds, setGeneratingPortraitIds] = useState<
+    Record<string, boolean>
+  >({});
+  const portraitAbortRefs = useRef<Record<string, AbortController>>({});
   const [textConnections, setTextConnections] = useState<ProviderConnection[]>(
     [],
   );
@@ -164,6 +181,7 @@ export function CharsTab({
   async function handleSave(
     characterId: string,
     mode: "update" | "newVersion",
+    overwritePortrait?: boolean,
   ) {
     setSavingId(characterId);
     try {
@@ -171,6 +189,7 @@ export function CharsTab({
         playthrough.id,
         characterId,
         mode,
+        overwritePortrait,
       );
       setLibrary(await listCharacters());
       const text =
@@ -330,6 +349,126 @@ export function CharsTab({
     setFleshingOutId(null);
   }
 
+  useEffect(() => {
+    return () => {
+      for (const ctrl of Object.values(portraitAbortRefs.current)) {
+        ctrl.abort();
+      }
+      portraitAbortRefs.current = {};
+    };
+  }, [playthrough.id]);
+
+  async function handleQuickGeneratePortrait(characterId: string) {
+    portraitAbortRefs.current[characterId]?.abort();
+    const controller = new AbortController();
+    portraitAbortRefs.current[characterId] = controller;
+    setGeneratingPortraitIds((prev) => ({ ...prev, [characterId]: true }));
+    setSaveFeedback((prev) => {
+      const next = { ...prev };
+      delete next[characterId];
+      return next;
+    });
+
+    try {
+      const res = await generateCharacterPortrait(playthrough.id, characterId, {
+        signal: controller.signal,
+      });
+      if (portraitAbortRefs.current[characterId] === controller) {
+        onPlaythroughChange((prev) => {
+          if (prev.id !== res.playthrough.id) return prev;
+          const updatedChar = res.playthrough.characters.find(
+            (c) => c.id === characterId,
+          );
+          if (!updatedChar) return res.playthrough;
+          return {
+            ...prev,
+            characters: prev.characters.map((c) =>
+              c.id === characterId
+                ? {
+                    ...c,
+                    avatarFile: updatedChar.avatarFile,
+                    avatars: updatedChar.avatars,
+                  }
+                : c,
+            ),
+            ...(res.playthrough.snapshots
+              ? {
+                  snapshots: Object.fromEntries(
+                    Object.entries(prev.snapshots ?? {}).map(
+                      ([msgId, snap]) => {
+                        const resSnapChar = res.playthrough.snapshots?.[
+                          msgId
+                        ]?.characters.find((c) => c.id === characterId);
+                        if (!resSnapChar) return [msgId, snap];
+                        return [
+                          msgId,
+                          {
+                            ...snap,
+                            characters: snap.characters.map((c) =>
+                              c.id === characterId
+                                ? {
+                                    ...c,
+                                    avatarFile: resSnapChar.avatarFile,
+                                    avatars: resSnapChar.avatars,
+                                  }
+                                : c,
+                            ),
+                          },
+                        ];
+                      },
+                    ),
+                  ),
+                }
+              : {}),
+          };
+        });
+        setSaveFeedback((f) => ({
+          ...f,
+          [characterId]: { ok: true, text: "✓ Portrait generated" },
+        }));
+        setTimeout(() => {
+          setSaveFeedback((f) => {
+            const next = { ...f };
+            delete next[characterId];
+            return next;
+          });
+        }, 4000);
+      }
+    } catch (e) {
+      if (
+        !(e instanceof DOMException && e.name === "AbortError") &&
+        portraitAbortRefs.current[characterId] === controller
+      ) {
+        setSaveFeedback((f) => ({
+          ...f,
+          [characterId]: {
+            ok: false,
+            text: e instanceof Error ? e.message : "Portrait generation failed",
+          },
+        }));
+      }
+    } finally {
+      if (portraitAbortRefs.current[characterId] === controller) {
+        delete portraitAbortRefs.current[characterId];
+        setGeneratingPortraitIds((prev) => {
+          const next = { ...prev };
+          delete next[characterId];
+          return next;
+        });
+      }
+    }
+  }
+
+  function handleCancelQuickPortrait(characterId: string) {
+    portraitAbortRefs.current[characterId]?.abort();
+    delete portraitAbortRefs.current[characterId];
+    setGeneratingPortraitIds((prev) => {
+      const next = { ...prev };
+      delete next[characterId];
+      return next;
+    });
+  }
+
   async function handleGenerateCharacter() {
     setIsGeneratingChar(true);
     setGenerateCharError(null);
@@ -389,12 +528,16 @@ export function CharsTab({
     onPlaythroughChange(updated);
   }
 
-  async function handleEditorSaveToLibrary(mode: "update" | "newVersion") {
+  async function handleEditorSaveToLibrary(
+    mode: "update" | "newVersion",
+    overwritePortrait?: boolean,
+  ) {
     if (!editingChar) throw new Error("No character being edited");
     const result = await saveCharacterToLibrary(
       playthrough.id,
       editingChar.id,
       mode,
+      overwritePortrait,
     );
     setLibrary(await listCharacters());
     return { version: result.template.version, created: result.created };
@@ -477,23 +620,38 @@ export function CharsTab({
             summary: libTpl.summary,
             startingClothing: libTpl.startingClothing,
           });
+      const isInLib = library.some((t) => t.id === character.templateId);
       return (
         <CharacterCard
           key={character.id}
           character={character}
+          playthroughId={playthrough.id}
           content={localTpl?.content ?? ""}
           localTemplate={localTpl}
           viewMode={castViewMode}
-          inLibrary={library.some((t) => t.id === character.templateId)}
+          inLibrary={isInLib}
           present={inScene}
           libraryStale={libraryStale}
           readOnlySheet={isCcv2}
           feedback={saveFeedback[character.id] ?? null}
           saving={savingId === character.id}
           onSave={(mode) => {
+            if (mode === "update" && isInLib && character.avatarFile) {
+              setOverwriteLibPortrait(false);
+              setConfirmUpdateLibChar(character);
+              return;
+            }
             void handleSave(character.id, mode);
           }}
           onEdit={() => setEditingChar(character)}
+          onOpenPortraitModal={() => setPortraitModalChar(character)}
+          isGeneratingPortrait={Boolean(generatingPortraitIds[character.id])}
+          onGeneratePortrait={() =>
+            void handleQuickGeneratePortrait(character.id)
+          }
+          onCancelGeneratePortrait={() =>
+            handleCancelQuickPortrait(character.id)
+          }
           onTogglePresence={() => void handleTogglePresence(character, inScene)}
           onOpenLibrary={onOpenLibrary}
           onRemoveCondition={(i) =>
@@ -718,8 +876,12 @@ export function CharsTab({
           }
           initialMode="view"
           inScene={activeCharIds.has(editingChar.id)}
+          imagePromptPreview={imagePromptPreview}
+          onPlaythroughChange={onPlaythroughChange}
           onSave={(payload) => handleEditSave(payload)}
-          onSaveToLibrary={(mode) => handleEditorSaveToLibrary(mode)}
+          onSaveToLibrary={(mode, overwritePortrait) =>
+            handleEditorSaveToLibrary(mode, overwritePortrait)
+          }
           onClose={() => setEditingChar(null)}
         />
       ) : editingChar ? (
@@ -730,6 +892,50 @@ export function CharsTab({
           onFleshOut={() => void handleFleshOut(editingChar.id)}
           onClose={() => setEditingChar(null)}
         />
+      ) : null}
+
+      {portraitModalChar ? (
+        <CharacterPortraitModal
+          character={portraitModalChar}
+          localTemplate={playthrough.characterTemplates.find(
+            (t) => t.id === portraitModalChar.templateId,
+          )}
+          playthrough={playthrough}
+          imagePromptPreview={imagePromptPreview}
+          onPlaythroughChange={onPlaythroughChange}
+          onClose={() => setPortraitModalChar(null)}
+        />
+      ) : null}
+
+      {confirmUpdateLibChar ? (
+        <ConfirmModal
+          title={`Update "${confirmUpdateLibChar.name}" in Library?`}
+          message="This will overwrite the existing Character Library card's sheet and starting clothing with this playthrough's current state."
+          confirmLabel={
+            savingId === confirmUpdateLibChar.id
+              ? "Updating…"
+              : "Update Library"
+          }
+          isLoading={savingId === confirmUpdateLibChar.id}
+          onCancel={() => {
+            setConfirmUpdateLibChar(null);
+            setOverwriteLibPortrait(false);
+          }}
+          onConfirm={async () => {
+            const targetId = confirmUpdateLibChar.id;
+            const overwrite = overwriteLibPortrait;
+            setConfirmUpdateLibChar(null);
+            setOverwriteLibPortrait(false);
+            await handleSave(targetId, "update", overwrite);
+          }}
+        >
+          <CheckboxRow
+            checked={overwriteLibPortrait}
+            onChange={(e) => setOverwriteLibPortrait(e.target.checked)}
+            title="Also overwrite library portrait"
+            description="Replace the global Character Library card's portrait with this playthrough's current portrait."
+          />
+        </ConfirmModal>
       ) : null}
 
       {generateModalOpen ? (
@@ -1158,6 +1364,7 @@ export function SimpleCharacterCard(props: {
 
 export function CharacterCard(props: {
   character: CharacterInstance;
+  playthroughId?: string;
   localTemplate?: CharacterTemplate;
   viewMode?: CastViewMode;
   inLibrary: boolean;
@@ -1165,6 +1372,10 @@ export function CharacterCard(props: {
   saving: boolean;
   onSave: (mode: "update" | "newVersion") => void;
   onEdit: () => void;
+  onOpenPortraitModal?: () => void;
+  isGeneratingPortrait?: boolean;
+  onGeneratePortrait?: () => void;
+  onCancelGeneratePortrait?: () => void;
   onTogglePresence?: () => void;
   onOpenLibrary?: (templateId: string) => void;
   content: string;
@@ -1176,6 +1387,7 @@ export function CharacterCard(props: {
 }) {
   const {
     character,
+    playthroughId,
     localTemplate,
     viewMode = "portrait",
     content,
@@ -1184,6 +1396,10 @@ export function CharacterCard(props: {
     saving,
     onSave,
     onEdit,
+    onOpenPortraitModal,
+    isGeneratingPortrait = false,
+    onGeneratePortrait,
+    onCancelGeneratePortrait,
     onTogglePresence,
     onOpenLibrary,
     present,
@@ -1196,11 +1412,13 @@ export function CharacterCard(props: {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const templateId = character.templateId ?? "";
-  const profileUrl = getCharacterAvatarUrl(
-    templateId,
-    "profile",
-    localTemplate?.avatarUpdatedAt,
-  );
+  const profileUrl = character.avatarFile
+    ? buildImageUrl(character.avatarFile, playthroughId)
+    : getCharacterAvatarUrl(
+        templateId,
+        "profile",
+        localTemplate?.avatarUpdatedAt,
+      );
 
   const cardBodyContent = (
     <>
@@ -1552,16 +1770,65 @@ export function CharacterCard(props: {
         wrap
         fullWidth
       >
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={onEdit}
-          leftIcon="FileText"
-        >
-          Full Sheet
-        </Button>
+        <Stack direction="row" align="center" gap="xs" wrap>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={onEdit}
+            leftIcon="FileText"
+          >
+            Full Sheet
+          </Button>
+          {onOpenPortraitModal ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={onOpenPortraitModal}
+              leftIcon="IdCard"
+              title="Generate or manage playthrough portraits for this character"
+            >
+              Portrait
+              {(character.avatars?.length ?? 0) > 0
+                ? ` (${character.avatars!.length})`
+                : ""}
+            </Button>
+          ) : null}
+        </Stack>
 
         <Stack direction="row" align="center" gap="xs" wrap>
+          {isGeneratingPortrait ? (
+            <>
+              <Button
+                size="sm"
+                variant="ai"
+                isLoading
+                disabled
+                leftIcon="Sparkles"
+              >
+                Generating…
+              </Button>
+              {onCancelGeneratePortrait ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={onCancelGeneratePortrait}
+                  title="Cancel portrait generation"
+                >
+                  Cancel
+                </Button>
+              ) : null}
+            </>
+          ) : onGeneratePortrait ? (
+            <Button
+              size="sm"
+              variant="ai"
+              onClick={onGeneratePortrait}
+              leftIcon="Sparkles"
+              title="Generate a portrait in the background from this character's current sheet and clothing"
+            >
+              Generate Image
+            </Button>
+          ) : null}
           {inLibrary ? (
             <>
               <Button
@@ -1625,6 +1892,8 @@ export function CharacterCard(props: {
                 name: character.name,
               }
             }
+            avatarFile={character.avatarFile}
+            playthroughId={playthroughId}
             variant="portrait"
           />
         </Card.Cover>

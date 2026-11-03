@@ -4,6 +4,7 @@ import type { FastifyPluginAsync, FastifyPluginOptions } from "fastify";
 import { z } from "zod";
 import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../../engine/imageDefaults";
 import type {
+  CharacterPortrait,
   ChatMessage,
   GalleryImage,
   ImageGenerationSettings,
@@ -33,6 +34,7 @@ import {
 import { transcodeToWebp } from "../imageTranscode";
 import type { ProviderManager } from "../providerManager";
 import {
+  buildCharacterPortraitPromptContext,
   buildImageCastBlock,
   buildImageHistoryBlock,
   buildImageStateBlock,
@@ -95,6 +97,62 @@ const GenerateImageBody = z.object({
 });
 
 const MessageParams = z.object({ id: z.string(), messageId: z.string() });
+const CharacterParams = z.object({ id: z.string(), characterId: z.string() });
+
+const GeneratePortraitBody = GenerateImageBody.extend({
+  note: z.string().optional(),
+  includeStoryContext: z.boolean().optional(),
+});
+
+/** Syncs a character's portrait state (`avatarFile` and `avatars`) onto the
+ *  playthrough's current HEAD snapshot (and, when `fromTurn` is supplied by a
+ *  background portrait generation that started at `fromTurn`, any turn snapshots
+ *  with `snap.turn >= fromTurn`), without touching earlier turn snapshots
+ *  (`snap.turn < fromTurn`). That way, generating a portrait at Turn T—even if
+ *  the user continues playing to Turn T+1 while it renders in the background—is
+ *  preserved on Turn T..T+N snapshots while branching at Turn 1..T-1 restores
+ *  the earlier portrait state. */
+function syncHeadSnapshotCharacterPortraits(
+  playthrough: Playthrough,
+  characterId: string,
+  avatarFile: string | undefined,
+  avatars: CharacterPortrait[] | undefined,
+  fromTurn?: number,
+): void {
+  const snapshots = playthrough.snapshots;
+  if (!snapshots) return;
+
+  const applyToSnapChar = (snapChar: Playthrough["characters"][number]) => {
+    if (avatarFile) snapChar.avatarFile = avatarFile;
+    else delete snapChar.avatarFile;
+    if (avatars && avatars.length > 0) {
+      snapChar.avatars = structuredClone(avatars);
+    } else {
+      delete snapChar.avatars;
+    }
+  };
+
+  if (fromTurn !== undefined) {
+    let matchedAny = false;
+    for (const snap of Object.values(snapshots)) {
+      if (snap.turn >= fromTurn) {
+        matchedAny = true;
+        const snapChar = snap.characters.find((c) => c.id === characterId);
+        if (snapChar) applyToSnapChar(snapChar);
+      }
+    }
+    if (matchedAny) return;
+  }
+
+  for (let i = playthrough.messages.length - 1; i >= 0; i -= 1) {
+    const msgId = playthrough.messages[i].id;
+    const snap = snapshots[msgId];
+    if (!snap) continue;
+    const snapChar = snap.characters.find((c) => c.id === characterId);
+    if (snapChar) applyToSnapChar(snapChar);
+    break;
+  }
+}
 
 /** The endpoint's hard prompt cap, per dialect. Applied to the COMPOSED text so
  *  a long prefix or a long user edit can never 400 the image call.
@@ -631,60 +689,57 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (
 
   // Delete an image from the playthrough's gallery AND detach it from any messages
   // or cover reference in the playthrough, then sweep unreferenced bytes on disk.
-  app.delete(
-    "/api/playthroughs/:id/gallery/:file",
-    async (request, reply) => {
-      const params = z
-        .object({ id: z.string(), file: z.string() })
-        .parse(request.params);
-      const playthrough = getPlaythroughRecord(dataDir, params.id);
-      if (!playthrough) {
-        return reply.code(404).send({ error: "Playthrough not found" });
-      }
+  app.delete("/api/playthroughs/:id/gallery/:file", async (request, reply) => {
+    const params = z
+      .object({ id: z.string(), file: z.string() })
+      .parse(request.params);
+    const playthrough = getPlaythroughRecord(dataDir, params.id);
+    if (!playthrough) {
+      return reply.code(404).send({ error: "Playthrough not found" });
+    }
 
-      let changed = false;
+    let changed = false;
 
-      if (playthrough.galleryImages) {
-        const nextGallery = playthrough.galleryImages.filter(
-          (g) => g.file !== params.file,
-        );
-        if (nextGallery.length !== playthrough.galleryImages.length) {
-          changed = true;
-          if (nextGallery.length > 0) playthrough.galleryImages = nextGallery;
-          else delete playthrough.galleryImages;
-        }
-      }
-
-      for (const msg of playthrough.messages) {
-        if (!msg.images?.length) continue;
-        const nextImages = msg.images.filter((img) => img.file !== params.file);
-        if (nextImages.length !== msg.images.length) {
-          changed = true;
-          if (nextImages.length > 0) msg.images = nextImages;
-          else delete msg.images;
-        }
-      }
-
-      if (playthrough.cover?.file === params.file) {
-        delete playthrough.cover;
+    if (playthrough.galleryImages) {
+      const nextGallery = playthrough.galleryImages.filter(
+        (g) => g.file !== params.file,
+      );
+      if (nextGallery.length !== playthrough.galleryImages.length) {
         changed = true;
+        if (nextGallery.length > 0) playthrough.galleryImages = nextGallery;
+        else delete playthrough.galleryImages;
       }
+    }
 
-      if (changed) {
-        updatePlaythroughRecord(dataDir, playthrough);
-        try {
-          sweepOrphansInDataDir(dataDir, imagesDir);
-        } catch (error) {
-          console.warn(
-            `[images] orphan sweep after deleting gallery image ${params.file} failed:`,
-            error,
-          );
-        }
+    for (const msg of playthrough.messages) {
+      if (!msg.images?.length) continue;
+      const nextImages = msg.images.filter((img) => img.file !== params.file);
+      if (nextImages.length !== msg.images.length) {
+        changed = true;
+        if (nextImages.length > 0) msg.images = nextImages;
+        else delete msg.images;
       }
+    }
 
-      return reply.send({ playthrough });
-    },
-  );
+    if (playthrough.cover?.file === params.file) {
+      delete playthrough.cover;
+      changed = true;
+    }
+
+    if (changed) {
+      updatePlaythroughRecord(dataDir, playthrough);
+      try {
+        sweepOrphansInDataDir(dataDir, imagesDir);
+      } catch (error) {
+        console.warn(
+          `[images] orphan sweep after deleting gallery image ${params.file} failed:`,
+          error,
+        );
+      }
+    }
+
+    return reply.send({ playthrough });
+  });
 
   // Attach an image (either an existing playthrough/gallery file or a new upload)
   // to any message (user or assistant). When uploading a new image, it is always
@@ -1149,6 +1204,669 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (
         negativeUsed,
         promptDurationMs,
       });
+    },
+  );
+
+  // Dry run: compose a solo character portrait prompt from their detailed character
+  // sheet (and optional pose/expression/background note + optional story context).
+  app.post(
+    "/api/playthroughs/:id/characters/:characterId/portrait/prompt",
+    async (request, reply) => {
+      const params = CharacterParams.parse(request.params);
+      const body = GeneratePortraitBody.parse(request.body ?? {});
+      const playthrough = getPlaythroughRecord(dataDir, params.id);
+      if (!playthrough) {
+        return reply.code(404).send({ error: "Playthrough not found" });
+      }
+
+      const character = playthrough.characters.find(
+        (c) => c.id === params.characterId,
+      );
+      if (!character) {
+        return reply.code(404).send({ error: "Character not found" });
+      }
+
+      const hasDetailedTemplate =
+        Boolean(character.templateId) &&
+        playthrough.characterTemplates.some(
+          (t) => t.id === character.templateId,
+        );
+      if (!hasDetailedTemplate) {
+        return reply.code(400).send({
+          error:
+            "Portrait generation is available for detailed characters with a full character sheet only.",
+        });
+      }
+
+      const imageConn = manager.imageConnection(body.imageProviderId);
+      if (!imageConn) {
+        return reply.code(400).send({
+          error:
+            "No image provider configured — add one in Settings → Provider → Images.",
+        });
+      }
+
+      const promptConfig = manager.resolveImagePromptConfig(imageConn);
+      if (!promptConfig) {
+        return reply.code(400).send({
+          error: "No text provider available to write the image prompt.",
+        });
+      }
+
+      const settings = resolveImageSettings(
+        loadPromptConfig(settingsDir).promptConfig.imageGeneration,
+      );
+      const controller = abortOnClientDisconnect(reply);
+      const promptContext = buildCharacterPortraitPromptContext(
+        playthrough,
+        character,
+        settings,
+        {
+          note: body.note,
+          includeStoryContext: body.includeStoryContext,
+        },
+      );
+
+      let prompt: string;
+      let negativePrompt: string;
+      let warnings: string[];
+      let promptTruncated: boolean;
+      let promptDurationMs: number;
+      let writerPrompt: string;
+      let writerNegative: string;
+      let promptRequest: string;
+      let promptResponse: string;
+      try {
+        const result = await generateImagePrompt(
+          promptConfig,
+          promptContext.portraitSettings,
+          promptContext.input,
+          fetchImpl,
+          controller.signal,
+        );
+        prompt = result.prompt;
+        negativePrompt = result.negativePrompt;
+        warnings = result.warnings;
+        promptTruncated = result.promptTruncated;
+        promptDurationMs = result.durationMs;
+        writerPrompt = result.writerPrompt;
+        writerNegative = result.writerNegative;
+        promptRequest = result.rawInput;
+        promptResponse = clampStoredPromptResponse(result.rawOutput);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        const reason =
+          error instanceof Error
+            ? error.message
+            : "Character portrait prompt generation failed";
+        return reply.code(502).send({ error: reason });
+      }
+      if (controller.signal.aborted) return;
+
+      const composedPrompt = clampComposed(
+        prompt,
+        promptContext.portraitSettings,
+        imageConn,
+      );
+      const composedNegative = clampNegative(negativePrompt, imageConn);
+      if (promptTruncated || composedPrompt.truncated) {
+        warnings.push(
+          `The composed prompt is longer than the ${composedLimit(promptContext.portraitSettings, imageConn)}-character limit, so it was cut at the end.`,
+        );
+      }
+
+      return {
+        prompt: composedPrompt.text,
+        negativePrompt: composedNegative,
+        warnings,
+        promptDurationMs,
+        writerPrompt,
+        writerNegative,
+        promptRequest,
+        promptResponse,
+        context: {
+          historyMessages: promptContext.historyMessages,
+          instructionMode: "scene" as const,
+        },
+      };
+    },
+  );
+
+  // Generate a solo character portrait (Medium Closeup / Chest to Head) and append
+  // it to the character's turn-aware portrait history (`character.avatars`), setting
+  // it as their active `character.avatarFile`.
+  app.post(
+    "/api/playthroughs/:id/characters/:characterId/portrait/generate",
+    async (request, reply) => {
+      const params = CharacterParams.parse(request.params);
+      const body = GeneratePortraitBody.parse(request.body ?? {});
+      const playthrough = getPlaythroughRecord(dataDir, params.id);
+      if (!playthrough) {
+        return reply.code(404).send({ error: "Playthrough not found" });
+      }
+
+      const character = playthrough.characters.find(
+        (c) => c.id === params.characterId,
+      );
+      if (!character) {
+        return reply.code(404).send({ error: "Character not found" });
+      }
+
+      const hasDetailedTemplate =
+        Boolean(character.templateId) &&
+        playthrough.characterTemplates.some(
+          (t) => t.id === character.templateId,
+        );
+      if (!hasDetailedTemplate) {
+        return reply.code(400).send({
+          error:
+            "Portrait generation is available for detailed characters with a full character sheet only.",
+        });
+      }
+
+      const imageConn = manager.imageConnection(body.imageProviderId);
+      if (!imageConn) {
+        return reply.code(400).send({
+          error:
+            "No image provider configured — add one in Settings → Provider → Images.",
+        });
+      }
+
+      const hasRaw = typeof body.rawRequest === "string";
+      if (
+        hasRaw &&
+        (typeof body.promptOverride === "string" ||
+          typeof body.negativeOverride === "string")
+      ) {
+        return reply.code(400).send({
+          error:
+            "Send either a raw request body or prompt overrides, not both.",
+        });
+      }
+      let rawBody: Record<string, unknown> | null = null;
+      if (hasRaw) {
+        rawBody = parseRawRequestBody(body.rawRequest!);
+        if (!rawBody) {
+          return reply
+            .code(400)
+            .send({ error: "The request body must be a JSON object." });
+        }
+        if (
+          body.imageProviderId &&
+          !manager.imageConnectionById(body.imageProviderId)
+        ) {
+          return reply.code(400).send({
+            error:
+              "The image connection this request body belongs to no longer exists.",
+          });
+        }
+      }
+
+      const promptConfig = manager.resolveImagePromptConfig(imageConn);
+      if (!hasRaw && !promptConfig) {
+        return reply.code(400).send({
+          error: "No text provider available to write the image prompt.",
+        });
+      }
+
+      const settings = resolveImageSettings(
+        loadPromptConfig(settingsDir).promptConfig.imageGeneration,
+      );
+      const controller = abortOnClientDisconnect(reply);
+      const imageProvider = manager.getImageProvider(body.imageProviderId);
+      const seed = body.seed ?? imageConn.seed;
+
+      const hasPrompt = typeof body.promptOverride === "string";
+      const hasNegative = typeof body.negativeOverride === "string";
+      let promptUsed: string;
+      let negativeUsed: string;
+      let promptCall: { request: string; response: string } | undefined;
+      let promptDurationMs: number | undefined = body.promptDurationMs;
+      let writerPrompt: string | undefined = body.writerPrompt
+        ? clampStoredPromptResponse(body.writerPrompt)
+        : undefined;
+      let writerNegative: string | undefined = body.writerNegative
+        ? clampStoredPromptResponse(body.writerNegative)
+        : undefined;
+
+      if (rawBody) {
+        const parsedPrompt = promptFromRawBody(rawBody);
+        promptUsed = parsedPrompt.prompt;
+        negativeUsed = parsedPrompt.negativePrompt;
+        promptDurationMs = undefined;
+        writerPrompt = undefined;
+        writerNegative = undefined;
+      } else if (hasPrompt && hasNegative) {
+        promptUsed = clampComposed(
+          body.promptOverride!,
+          settings,
+          imageConn,
+        ).text;
+        negativeUsed = clampNegative(body.negativeOverride!, imageConn);
+        if (body.promptRequest) {
+          promptCall = {
+            request: body.promptRequest,
+            response: body.promptResponse
+              ? clampStoredPromptResponse(body.promptResponse)
+              : "",
+          };
+        }
+      } else {
+        const promptContext = buildCharacterPortraitPromptContext(
+          playthrough,
+          character,
+          settings,
+          {
+            note: body.note,
+            includeStoryContext: body.includeStoryContext,
+          },
+        );
+        try {
+          const written = await generateImagePrompt(
+            promptConfig!,
+            promptContext.portraitSettings,
+            promptContext.input,
+            fetchImpl,
+            controller.signal,
+          );
+          promptUsed = clampComposed(
+            hasPrompt ? body.promptOverride! : written.prompt,
+            promptContext.portraitSettings,
+            imageConn,
+          ).text;
+          negativeUsed = clampNegative(
+            hasNegative ? body.negativeOverride! : written.negativePrompt,
+            imageConn,
+          );
+          promptCall = {
+            request: written.rawInput,
+            response: clampStoredPromptResponse(written.rawOutput),
+          };
+          promptDurationMs = written.durationMs;
+          writerPrompt = written.writerPrompt || undefined;
+          writerNegative = written.writerNegative || undefined;
+        } catch (error) {
+          if (controller.signal.aborted) return;
+          const reason =
+            error instanceof Error
+              ? error.message
+              : "Character portrait prompt generation failed";
+          return reply.code(502).send({ error: reason });
+        }
+        if (controller.signal.aborted) return;
+      }
+
+      let result;
+      try {
+        result = await imageProvider.generateImage({
+          prompt: promptUsed,
+          negativePrompt: negativeUsed || undefined,
+          size: imageConn.size,
+          aspectRatio: imageConn.aspectRatio,
+          seed,
+          variants: imageConn.variants,
+          safeMode: imageConn.safeMode,
+          stylePreset: imageConn.stylePreset,
+          hideWatermark: imageConn.hideWatermark,
+          rawBody: rawBody ?? undefined,
+          signal: controller.signal,
+          onProgress: (progress) =>
+            publishImageProgress(imageConn.id, progress),
+        });
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        const reason =
+          error instanceof Error
+            ? error.message
+            : "Character portrait generation failed";
+        return reply.code(502).send({ error: reason });
+      } finally {
+        clearImageProgress(imageConn.id);
+      }
+      if (controller.signal.aborted) return;
+
+      if (!result.images.length) {
+        return reply
+          .code(502)
+          .send({ error: "Image provider returned no image data" });
+      }
+
+      const originTurn = playthrough.turn;
+      const createdAt = new Date().toISOString();
+      const latestPlaythrough =
+        getPlaythroughRecord(dataDir, params.id) ?? playthrough;
+      const targetCharacter =
+        latestPlaythrough.characters.find((c) => c.id === params.characterId) ??
+        character;
+      const closedChapterForOrigin = (latestPlaythrough.chapters ?? []).find(
+        (ch) =>
+          originTurn >= ch.turnRange.start && originTurn <= ch.turnRange.end,
+      );
+
+      const portraits: CharacterPortrait[] = await Promise.all(
+        result.images.map(async (image) => {
+          const fallbackExt =
+            image.mime === "image/jpeg"
+              ? "jpg"
+              : image.mime === "image/webp"
+                ? "webp"
+                : "png";
+          const transcoded = await transcodeToWebp(image.bytes, fallbackExt);
+          const ptImagesDir = playthroughImagesDir(dataDir, params.id);
+          const { file } = saveImageBytes(
+            transcoded.bytes,
+            transcoded.mime,
+            ptImagesDir,
+          );
+          if (options.imagesDir) {
+            try {
+              linkOrCopyFile(
+                join(ptImagesDir, file),
+                join(options.imagesDir, file),
+              );
+            } catch {
+              /* ignore test-seam mirror failure */
+            }
+          }
+          return {
+            file,
+            turn: originTurn,
+            ...(closedChapterForOrigin
+              ? { chapterId: closedChapterForOrigin.id }
+              : {}),
+            prompt: promptUsed,
+            negativePrompt: negativeUsed || undefined,
+            providerId: result.providerId,
+            model: result.model,
+            seed: result.seed,
+            durationMs: result.durationMs,
+            promptDurationMs,
+            ...(writerPrompt
+              ? { writerPrompt, writerNegative: writerNegative || undefined }
+              : {}),
+            request: result.rawRequest,
+            ...(promptCall
+              ? {
+                  promptRequest: promptCall.request,
+                  promptResponse: promptCall.response,
+                }
+              : {}),
+            createdAt,
+          };
+        }),
+      );
+
+      const existing = targetCharacter.avatars ?? [];
+      const kept = body.replaceFile
+        ? existing.filter((p) => p.file !== body.replaceFile)
+        : existing.filter((p) => !portraits.some((np) => np.file === p.file));
+      const nextAvatars = [...kept, ...portraits];
+      targetCharacter.avatars = nextAvatars;
+      targetCharacter.avatarFile = portraits[0].file;
+
+      syncHeadSnapshotCharacterPortraits(
+        latestPlaythrough,
+        targetCharacter.id,
+        targetCharacter.avatarFile,
+        targetCharacter.avatars,
+        originTurn,
+      );
+      updatePlaythroughRecord(dataDir, latestPlaythrough);
+
+      if (body.replaceFile) {
+        try {
+          sweepOrphansInDataDir(dataDir, imagesDir);
+        } catch (error) {
+          console.warn(
+            `[images] orphan sweep after replacing portrait on ${params.characterId} failed:`,
+            error,
+          );
+        }
+      }
+
+      return reply.send({
+        playthrough: latestPlaythrough,
+        portrait: portraits[0],
+        promptUsed,
+        negativeUsed,
+        promptDurationMs,
+      });
+    },
+  );
+
+  // Upload a custom portrait OR select an existing portrait file as the character's
+  // current active playthrough portrait (`character.avatarFile`).
+  app.post(
+    "/api/playthroughs/:id/characters/:characterId/portrait",
+    { bodyLimit: 15 * 1024 * 1024 },
+    async (request, reply) => {
+      const params = CharacterParams.parse(request.params);
+      const parsedBody = z
+        .object({
+          file: z.string().optional(),
+          dataBase64: z.string().optional(),
+          fileName: z.string().optional(),
+          label: z.string().optional(),
+        })
+        .safeParse(request.body ?? {});
+      if (!parsedBody.success) {
+        return reply
+          .code(400)
+          .send({ error: "Invalid character portrait request body." });
+      }
+
+      const playthrough = getPlaythroughRecord(dataDir, params.id);
+      if (!playthrough) {
+        return reply.code(404).send({ error: "Playthrough not found" });
+      }
+
+      const character = playthrough.characters.find(
+        (c) => c.id === params.characterId,
+      );
+      if (!character) {
+        return reply.code(404).send({ error: "Character not found" });
+      }
+
+      const hasDetailedTemplate =
+        Boolean(character.templateId) &&
+        playthrough.characterTemplates.some(
+          (t) => t.id === character.templateId,
+        );
+      if (!hasDetailedTemplate) {
+        return reply.code(400).send({
+          error:
+            "Portraits are supported for detailed characters with a full character sheet only.",
+        });
+      }
+
+      const body = parsedBody.data;
+      const createdAt = new Date().toISOString();
+      const resolvedLabel = (
+        body.label?.trim() ||
+        body.fileName?.replace(/\.[^.]+$/, "").trim() ||
+        ""
+      ).trim();
+
+      let targetPortrait: CharacterPortrait;
+
+      if (body.dataBase64 && body.dataBase64.trim()) {
+        const rawBase64 = body.dataBase64.replace(/^data:[^;]+;base64,/, "");
+        const bytes = Buffer.from(rawBase64, "base64");
+        if (!bytes.length) {
+          return reply.code(400).send({ error: "Uploaded portrait is empty." });
+        }
+        const rawExt =
+          body.fileName
+            ?.split(".")
+            .pop()
+            ?.toLowerCase()
+            ?.replace(/^jpeg$/, "jpg") || "png";
+        const fallbackExt =
+          rawExt === "jpg" || rawExt === "webp" ? rawExt : "png";
+        const transcoded = await transcodeToWebp(bytes, fallbackExt);
+        const ptImagesDir = playthroughImagesDir(dataDir, params.id);
+        const saved = saveImageBytes(
+          transcoded.bytes,
+          transcoded.mime,
+          ptImagesDir,
+        );
+        if (options.imagesDir) {
+          try {
+            linkOrCopyFile(
+              join(ptImagesDir, saved.file),
+              join(options.imagesDir, saved.file),
+            );
+          } catch {
+            /* ignore test-seam mirror failure */
+          }
+        }
+
+        targetPortrait = {
+          file: saved.file,
+          turn: playthrough.turn,
+          prompt: resolvedLabel || `Uploaded portrait for ${character.name}`,
+          providerId: "",
+          model: "",
+          createdAt,
+        };
+        const existing = (character.avatars ?? []).filter(
+          (p) => p.file !== saved.file,
+        );
+        character.avatars = [...existing, targetPortrait];
+        character.avatarFile = saved.file;
+      } else if (body.file && body.file.trim()) {
+        const targetFile = body.file.trim();
+        if (!imageFilePath(targetFile, imagesDir, dataDir, params.id)) {
+          return reply.code(400).send({ error: "Unknown image file" });
+        }
+        const existingList = character.avatars ?? [];
+        const found = existingList.find((p) => p.file === targetFile);
+        if (found) {
+          targetPortrait = found;
+        } else {
+          targetPortrait = {
+            file: targetFile,
+            turn: playthrough.turn,
+            prompt: resolvedLabel || `Portrait for ${character.name}`,
+            providerId: "",
+            model: "",
+            createdAt,
+          };
+          character.avatars = [...existingList, targetPortrait];
+        }
+        character.avatarFile = targetFile;
+      } else {
+        return reply
+          .code(400)
+          .send({ error: "Provide either file or dataBase64." });
+      }
+
+      syncHeadSnapshotCharacterPortraits(
+        playthrough,
+        character.id,
+        character.avatarFile,
+        character.avatars,
+      );
+      updatePlaythroughRecord(dataDir, playthrough);
+      return reply.send({ playthrough, portrait: targetPortrait });
+    },
+  );
+
+  // Delete a portrait from a character's portrait history (`character.avatars`),
+  // falling back `character.avatarFile` to the newest remaining portrait (or clearing
+  // it if none remain), and removing references from snapshots so orphan sweep can
+  // collect the file on disk.
+  app.delete(
+    "/api/playthroughs/:id/characters/:characterId/portraits/:file",
+    async (request, reply) => {
+      const params = z
+        .object({ id: z.string(), characterId: z.string(), file: z.string() })
+        .parse(request.params);
+      const playthrough = getPlaythroughRecord(dataDir, params.id);
+      if (!playthrough) {
+        return reply.code(404).send({ error: "Playthrough not found" });
+      }
+
+      const character = playthrough.characters.find(
+        (c) => c.id === params.characterId,
+      );
+      if (!character) {
+        return reply.code(404).send({ error: "Character not found" });
+      }
+
+      let changed = false;
+      const existing = character.avatars ?? [];
+      const nextAvatars = existing.filter((p) => p.file !== params.file);
+      if (nextAvatars.length !== existing.length) {
+        changed = true;
+        if (nextAvatars.length > 0) character.avatars = nextAvatars;
+        else delete character.avatars;
+      }
+
+      if (character.avatarFile === params.file) {
+        changed = true;
+        const fallback = nextAvatars[nextAvatars.length - 1]?.file;
+        if (fallback) character.avatarFile = fallback;
+        else delete character.avatarFile;
+      }
+
+      // Also scrub from snapshots so an explicit user deletion frees the file for sweep
+      for (const snap of Object.values(playthrough.snapshots ?? {})) {
+        for (const snapChar of snap.characters) {
+          if (snapChar.id !== character.id) continue;
+          if (snapChar.avatars) {
+            const nextSnapAvatars = snapChar.avatars.filter(
+              (p) => p.file !== params.file,
+            );
+            if (nextSnapAvatars.length !== snapChar.avatars.length) {
+              changed = true;
+              if (nextSnapAvatars.length > 0)
+                snapChar.avatars = nextSnapAvatars;
+              else delete snapChar.avatars;
+            }
+          }
+          if (snapChar.avatarFile === params.file) {
+            changed = true;
+            const snapFallback =
+              snapChar.avatars?.[snapChar.avatars.length - 1]?.file;
+            if (snapFallback) snapChar.avatarFile = snapFallback;
+            else delete snapChar.avatarFile;
+          }
+        }
+      }
+
+      if (playthrough.cover?.file === params.file) {
+        const stillReferenced =
+          (playthrough.galleryImages ?? []).some(
+            (g) => g.file === params.file,
+          ) ||
+          playthrough.messages.some((m) =>
+            (m.images ?? []).some((img) => img.file === params.file),
+          ) ||
+          playthrough.characters.some(
+            (c) =>
+              c.avatarFile === params.file ||
+              (c.avatars ?? []).some((a) => a.file === params.file),
+          );
+        if (!stillReferenced) {
+          delete playthrough.cover;
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        updatePlaythroughRecord(dataDir, playthrough);
+        try {
+          sweepOrphansInDataDir(dataDir, imagesDir);
+        } catch (error) {
+          console.warn(
+            `[images] orphan sweep after deleting character portrait ${params.file} failed:`,
+            error,
+          );
+        }
+      }
+
+      return reply.send({ playthrough });
     },
   );
 };

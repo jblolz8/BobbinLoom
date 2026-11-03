@@ -68,11 +68,9 @@ export function CoverArt({
           .join(", ")}
       >
         {tiles.map((tile) => {
-          const src = getCharacterAvatarUrl(
-            tile.id,
-            "portrait",
-            tile.avatarUpdatedAt,
-          );
+          const src = tile.avatarFile
+            ? buildImageUrl(tile.avatarFile)
+            : getCharacterAvatarUrl(tile.id, "portrait", tile.avatarUpdatedAt);
           return (
             <div key={tile.id} className="cover-art-tile">
               <img
@@ -89,6 +87,7 @@ export function CoverArt({
                   name: tile.name,
                   avatarUpdatedAt: tile.avatarUpdatedAt,
                 }}
+                avatarFile={tile.avatarFile}
                 variant="cover-tile"
                 type="portrait"
                 alt={tile.name}

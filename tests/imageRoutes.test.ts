@@ -27,9 +27,11 @@ import { ProviderManager } from "../src/server/providerManager";
 import { imageRoutes } from "../src/server/routes/images";
 import { providerRoutes } from "../src/server/routes/providers";
 import {
+  getCharacterTemplate,
   getPlaythroughRecord,
   updatePlaythroughRecord,
 } from "../src/server/store";
+import { saveToLibraryAction } from "../src/server/stateActions";
 import { saveAppSettings } from "../src/server/appSettingsStore";
 import {
   cleanupTempDirs,
@@ -2260,6 +2262,419 @@ describe("Playthrough gallery upload/delete & message attach image routes", () =
     )!;
     expect(afterAssistantMsg.images).toBeUndefined();
     expect(afterDel.cover).toBeUndefined();
+  });
+});
+
+describe("Character portrait generation, upload, history, and library sync (7b)", () => {
+  function seedDetailedCharacter(pt: Playthrough) {
+    const now = new Date().toISOString();
+    const tmpl = {
+      id: "tmpl_mira",
+      name: "Mira",
+      version: 1,
+      summary: "Stoic companion",
+      content:
+        "[Species]: Human\n[Gender]: Female\n[Body]: Athletic\n[Appearance]: Silver hair, amber eyes, scar on left cheek\n[Personality]: Stoic",
+      startingClothing: [
+        { slot: "Torso", name: "Leather Tunic" },
+        { slot: "Neck", name: "Silver Locket" },
+      ],
+      createdAt: now,
+      updatedAt: now,
+    };
+    const inst = {
+      id: "char_mira",
+      playthroughId: pt.id,
+      branchId: pt.branchId,
+      templateId: tmpl.id,
+      name: "Mira",
+      storyRole: "Companion",
+      mood: "focused",
+      towardPlayer: "warm",
+      memorySummary: "",
+      conditions: [],
+      flags: [],
+      clothing: [
+        { slot: "Torso", name: "Leather Tunic" },
+        { slot: "Neck", name: "Silver Locket" },
+      ],
+      createdAt: now,
+      updatedAt: now,
+    };
+    pt.characterTemplates.push(tmpl);
+    pt.characters.push(inst);
+    pt.activeCharacters = [inst.id];
+    return inst;
+  }
+
+  it("builds a solo chest-to-head portrait prompt for a detailed character, supports optional note and story context, and rejects simple NPCs", async () => {
+    const h = harness();
+    const pt = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
+    const detailedChar = seedDetailedCharacter(pt);
+    expect(detailedChar.templateId).toBeTruthy();
+
+    // Add a simple NPC (no templateId) to verify 400 rejection
+    pt.characters.push({
+      id: "char_simple_npc",
+      playthroughId: pt.id,
+      branchId: pt.branchId,
+      name: "Simple Guard",
+      storyRole: "Guard",
+      mood: "alert",
+      towardPlayer: "neutral",
+      memorySummary: "",
+      conditions: [],
+      flags: [],
+      clothing: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    updatePlaythroughRecord(h.dataDir, pt);
+
+    const simpleRes = await post(
+      h.app,
+      `/api/playthroughs/${h.playthroughId}/characters/char_simple_npc/portrait/prompt`,
+      {},
+    );
+    expect(simpleRes.statusCode).toBe(400);
+
+    const promptRes = await post(
+      h.app,
+      `/api/playthroughs/${h.playthroughId}/characters/${detailedChar.id}/portrait/prompt`,
+      {
+        note: "arms crossed, warm tavern light",
+        includeStoryContext: true,
+      },
+    );
+    expect(promptRes.statusCode).toBe(200);
+    const body = promptRes.json() as {
+      prompt: string;
+      negativePrompt: string;
+      context: { historyMessages: number; instructionMode: string };
+    };
+    expect(body.prompt).toContain("a woman in the rain");
+    expect(body.context.instructionMode).toBe("scene");
+    expect(body.context.historyMessages).toBeGreaterThan(0);
+
+    const textCall = h.calls.find((c) => c.url.includes("/chat/completions"));
+    expect(textCall).toBeDefined();
+    const sysContent = textCall!.body.messages[0].content as string;
+    const userContent = textCall!.body.messages[1].content as string;
+    expect(sysContent).toContain("PORTRAIT MODE OVERRIDE");
+    expect(userContent).toContain("arms crossed, warm tavern light");
+    expect(userContent).toContain("STORY CONTEXT SO FAR");
+  });
+
+  it("generates, uploads, switches, and deletes character portraits while syncing head snapshot and preserving earlier turn snapshots", async () => {
+    const h = harness();
+    const pt = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
+    const detailedChar = seedDetailedCharacter(pt);
+
+    // Seed two turn snapshots: Turn 1 (earlier) and Turn 2 (head)
+    const msg1Id = pt.messages[0]!.id;
+    const msg2Id = pt.messages[2]!.id;
+    pt.turn = 2;
+    pt.snapshots = {
+      [msg1Id]: {
+        turn: 1,
+        playerCharacter: structuredClone(pt.playerCharacter),
+        characters: structuredClone(pt.characters),
+        activeCharacters: [...(pt.activeCharacters ?? [])],
+        worldState: [],
+        inventory: [],
+        memoryEvents: [],
+        lorebookIds: [],
+        characterTemplates: structuredClone(pt.characterTemplates),
+        chapters: [],
+        storyMetaSummaries: [],
+        currentChapterStartedAtTurn: 1,
+      },
+      [msg2Id]: {
+        turn: 2,
+        playerCharacter: structuredClone(pt.playerCharacter),
+        characters: structuredClone(pt.characters),
+        activeCharacters: [...(pt.activeCharacters ?? [])],
+        worldState: [],
+        inventory: [],
+        memoryEvents: [],
+        lorebookIds: [],
+        characterTemplates: structuredClone(pt.characterTemplates),
+        chapters: [],
+        storyMetaSummaries: [],
+        currentChapterStartedAtTurn: 1,
+      },
+    };
+    updatePlaythroughRecord(h.dataDir, pt);
+
+    // 1. Generate portrait at Turn 2
+    const genRes = await post(
+      h.app,
+      `/api/playthroughs/${h.playthroughId}/characters/${detailedChar.id}/portrait/generate`,
+      {
+        note: "confident smirk",
+      },
+    );
+    expect(genRes.statusCode).toBe(200);
+    const genBody = genRes.json() as {
+      playthrough: Playthrough;
+      portrait: { file: string; turn?: number };
+    };
+    const generatedFile = genBody.portrait.file;
+    expect(genBody.portrait.turn).toBe(2);
+
+    const charAfterGen = genBody.playthrough.characters.find(
+      (c) => c.id === detailedChar.id,
+    )!;
+    expect(charAfterGen.avatarFile).toBe(generatedFile);
+    expect(charAfterGen.avatars).toHaveLength(1);
+
+    // Verify Turn 2 head snapshot received the portrait, while Turn 1 snapshot stayed untouched
+    const persisted = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
+    const snap1Char = persisted.snapshots![msg1Id]!.characters.find(
+      (c) => c.id === detailedChar.id,
+    )!;
+    const snap2Char = persisted.snapshots![msg2Id]!.characters.find(
+      (c) => c.id === detailedChar.id,
+    )!;
+    expect(snap1Char.avatarFile).toBeUndefined();
+    expect(snap2Char.avatarFile).toBe(generatedFile);
+
+    // 2. Upload a custom second portrait with different bytes
+    const customPng = pngBytes("custom-portrait-2").toString("base64");
+    const upRes = await post(
+      h.app,
+      `/api/playthroughs/${h.playthroughId}/characters/${detailedChar.id}/portrait`,
+      {
+        dataBase64: customPng,
+        fileName: "alt_outfit.png",
+        label: "Winter Cloak Portrait",
+      },
+    );
+    expect(upRes.statusCode).toBe(200);
+    const upBody = upRes.json() as {
+      playthrough: Playthrough;
+      portrait: { file: string };
+    };
+    const uploadedFile = upBody.portrait.file;
+    expect(uploadedFile).not.toBe(generatedFile);
+
+    const charAfterUp = upBody.playthrough.characters.find(
+      (c) => c.id === detailedChar.id,
+    )!;
+    expect(charAfterUp.avatarFile).toBe(uploadedFile);
+    expect(charAfterUp.avatars).toHaveLength(2);
+
+    // 3. Switch active portrait back to generatedFile
+    const switchRes = await post(
+      h.app,
+      `/api/playthroughs/${h.playthroughId}/characters/${detailedChar.id}/portrait`,
+      {
+        file: generatedFile,
+      },
+    );
+    expect(switchRes.statusCode).toBe(200);
+    const charAfterSwitch = (
+      switchRes.json() as { playthrough: Playthrough }
+    ).playthrough.characters.find((c) => c.id === detailedChar.id)!;
+    expect(charAfterSwitch.avatarFile).toBe(generatedFile);
+
+    // 4. Delete generatedFile -> active portrait should fall back to uploadedFile
+    const delRes = await h.app.inject({
+      method: "DELETE",
+      url: `/api/playthroughs/${h.playthroughId}/characters/${detailedChar.id}/portraits/${encodeURIComponent(generatedFile)}`,
+    });
+    expect(delRes.statusCode).toBe(200);
+    const charAfterDel = (
+      delRes.json() as { playthrough: Playthrough }
+    ).playthrough.characters.find((c) => c.id === detailedChar.id)!;
+    expect(charAfterDel.avatarFile).toBe(uploadedFile);
+    expect(charAfterDel.avatars?.map((a) => a.file)).toEqual([uploadedFile]);
+  });
+
+  it("syncs playthrough portrait on first library save and newVersion, and honors overwritePortrait on update", async () => {
+    const h = harness();
+    const charsDir = tempDir("bobbinloom-lib-chars-");
+    const pt = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
+    const detailedChar = seedDetailedCharacter(pt);
+    updatePlaythroughRecord(h.dataDir, pt);
+
+    // Upload initial portrait A
+    const pngA = pngBytes("portrait-a").toString("base64");
+    const resA = await post(
+      h.app,
+      `/api/playthroughs/${h.playthroughId}/characters/${detailedChar.id}/portrait`,
+      { dataBase64: pngA, fileName: "a.png" },
+    );
+    expect(resA.statusCode).toBe(200);
+
+    // First save to library (!existing) -> automatically copies portrait A
+    const firstSave = saveToLibraryAction(
+      h.dataDir,
+      h.playthroughId,
+      detailedChar.id,
+      "update",
+      charsDir,
+      { imagesDir: h.imagesDir },
+    );
+    expect(firstSave.ok).toBe(true);
+    if (!firstSave.ok) return;
+    expect(firstSave.created).toBe(true);
+    expect(firstSave.template.customPortrait).toMatch(/^portrait\.(png|webp)$/);
+    const firstAvatarTs = firstSave.template.avatarUpdatedAt;
+
+    // Upload second portrait B in playthrough
+    const pngB = pngBytes("portrait-b").toString("base64");
+    await post(
+      h.app,
+      `/api/playthroughs/${h.playthroughId}/characters/${detailedChar.id}/portrait`,
+      { dataBase64: pngB, fileName: "b.png" },
+    );
+
+    // Update library WITHOUT overwritePortrait -> keeps library's existing portrait timestamp
+    await new Promise((r) => setTimeout(r, 5));
+    const updateNoPortrait = saveToLibraryAction(
+      h.dataDir,
+      h.playthroughId,
+      detailedChar.id,
+      "update",
+      charsDir,
+      { overwritePortrait: false, imagesDir: h.imagesDir },
+    );
+    expect(updateNoPortrait.ok).toBe(true);
+    if (!updateNoPortrait.ok) return;
+    expect(updateNoPortrait.template.avatarUpdatedAt).toBe(firstAvatarTs);
+
+    // Update library WITH overwritePortrait: true -> overwrites library portrait
+    await new Promise((r) => setTimeout(r, 5));
+    const updateWithPortrait = saveToLibraryAction(
+      h.dataDir,
+      h.playthroughId,
+      detailedChar.id,
+      "update",
+      charsDir,
+      { overwritePortrait: true, imagesDir: h.imagesDir },
+    );
+    expect(updateWithPortrait.ok).toBe(true);
+    if (!updateWithPortrait.ok) return;
+    expect(updateWithPortrait.template.avatarUpdatedAt).toBeGreaterThan(
+      firstAvatarTs ?? 0,
+    );
+    expect(
+      getCharacterTemplate(detailedChar.templateId!, charsDir)?.customPortrait,
+    ).toMatch(/^portrait\.(png|webp)$/);
+  });
+
+  it("preserves later story turns when a background portrait generation started at an earlier turn completes afterwards", async () => {
+    const h = harness();
+    const pt = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
+    const detailedChar = seedDetailedCharacter(pt);
+    const msg0Id = pt.messages[0]!.id;
+    const msg2Id = pt.messages[2]!.id;
+    pt.turn = 1;
+    pt.snapshots = {
+      [msg0Id]: {
+        turn: 0,
+        playerCharacter: structuredClone(pt.playerCharacter),
+        characters: structuredClone(pt.characters),
+        activeCharacters: [...(pt.activeCharacters ?? [])],
+        worldState: [],
+        inventory: [],
+        memoryEvents: [],
+        lorebookIds: [],
+        characterTemplates: structuredClone(pt.characterTemplates),
+        chapters: [],
+        storyMetaSummaries: [],
+        currentChapterStartedAtTurn: 1,
+      },
+      [msg2Id]: {
+        turn: 1,
+        playerCharacter: structuredClone(pt.playerCharacter),
+        characters: structuredClone(pt.characters),
+        activeCharacters: [...(pt.activeCharacters ?? [])],
+        worldState: [],
+        inventory: [],
+        memoryEvents: [],
+        lorebookIds: [],
+        characterTemplates: structuredClone(pt.characterTemplates),
+        chapters: [],
+        storyMetaSummaries: [],
+        currentChapterStartedAtTurn: 1,
+      },
+    };
+    updatePlaythroughRecord(h.dataDir, pt);
+
+    // Intercept manager.getImageProvider to simulate the user advancing to Turn 2 while the image renders
+    const origGetImgProv = h.manager.getImageProvider.bind(h.manager);
+    h.manager.getImageProvider = (id?: string) => {
+      const prov = origGetImgProv(id);
+      const origGen = prov.generateImage.bind(prov);
+      prov.generateImage = async (req) => {
+        const midPt = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
+        midPt.turn = 2;
+        const newMsgId = "msg_turn_2_assistant";
+        midPt.messages.push({
+          id: newMsgId,
+          role: "assistant",
+          content: "The story continues into Turn 2 while portrait renders.",
+          turn: 2,
+          createdAt: new Date().toISOString(),
+        });
+        midPt.snapshots![newMsgId] = {
+          turn: 2,
+          playerCharacter: structuredClone(midPt.playerCharacter),
+          characters: structuredClone(midPt.characters),
+          activeCharacters: [...(midPt.activeCharacters ?? [])],
+          worldState: [],
+          inventory: [],
+          memoryEvents: [],
+          lorebookIds: [],
+          characterTemplates: structuredClone(midPt.characterTemplates),
+          chapters: [],
+          storyMetaSummaries: [],
+          currentChapterStartedAtTurn: 1,
+        };
+        updatePlaythroughRecord(h.dataDir, midPt);
+        return origGen(req);
+      };
+      return prov;
+    };
+
+    const genRes = await post(
+      h.app,
+      `/api/playthroughs/${h.playthroughId}/characters/${detailedChar.id}/portrait/generate`,
+      {},
+    );
+    expect(genRes.statusCode).toBe(200);
+    const body = genRes.json() as {
+      playthrough: Playthrough;
+      portrait: { file: string; turn?: number };
+    };
+
+    // Portrait is stamped with Turn 1 (when generation started)
+    expect(body.portrait.turn).toBe(1);
+    // Turn 2 message and turn counter are NOT clobbered
+    expect(body.playthrough.turn).toBe(2);
+    expect(
+      body.playthrough.messages.some((m) => m.id === "msg_turn_2_assistant"),
+    ).toBe(true);
+
+    // Turn 0 snapshot stays untouched, while Turn 1 and Turn 2 snapshots have the portrait
+    const persisted = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
+    expect(
+      persisted.snapshots![msg0Id]!.characters.find(
+        (c) => c.id === detailedChar.id,
+      )?.avatarFile,
+    ).toBeUndefined();
+    expect(
+      persisted.snapshots![msg2Id]!.characters.find(
+        (c) => c.id === detailedChar.id,
+      )?.avatarFile,
+    ).toBe(body.portrait.file);
+    expect(
+      persisted.snapshots!["msg_turn_2_assistant"]!.characters.find(
+        (c) => c.id === detailedChar.id,
+      )?.avatarFile,
+    ).toBe(body.portrait.file);
   });
 });
 

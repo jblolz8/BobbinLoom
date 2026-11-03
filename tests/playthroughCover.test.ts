@@ -441,3 +441,37 @@ describe("removing the image that IS the cover", () => {
     expect(getPlaythroughRecord(h.dataDir, pt.id)?.cover?.file).toBe(kept);
   });
 });
+
+describe("cast collage cover with playthrough-local character avatarFile (7b)", () => {
+  it("includes a present character with a playthrough-local avatarFile in the cast collage even without a global library portrait", async () => {
+    const h = harness();
+    const cyn = createCharacterTemplateRecord("Cyn", h.charactersDir); // BL-native: no global library art
+    const pt = createBlankPlaythrough("LocalCastPortrait", undefined, [cyn]);
+    const avatarHash = storeImage(
+      join(h.dataDir, pt.id, "images"),
+      "local-char-portrait",
+    );
+    pt.characters[0]!.avatarFile = avatarHash;
+    pt.activeCharacters = [pt.characters[0]!.id];
+    updatePlaythroughRecord(h.dataDir, pt);
+
+    const list = await h.app.inject({
+      method: "GET",
+      url: "/api/playthroughs",
+    });
+    expect(list.statusCode).toBe(200);
+    const listed = (
+      list.json() as {
+        playthroughs: {
+          id: string;
+          cover: {
+            source: string;
+            characters?: { id: string; name: string; avatarFile?: string }[];
+          } | null;
+        }[];
+      }
+    ).playthroughs.find((p) => p.id === pt.id);
+    expect(listed?.cover?.source).toBe("cast");
+    expect(listed?.cover?.characters?.[0]?.avatarFile).toBe(avatarHash);
+  });
+});

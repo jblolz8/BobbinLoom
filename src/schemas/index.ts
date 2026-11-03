@@ -125,6 +125,29 @@ export const ItemSchema = z.object({
 });
 export type Item = z.infer<typeof ItemSchema>;
 
+export const CharacterPortraitSchema = z.object({
+  /** "<sha256>.<ext>" — content-addressed file under data/playthroughs/<id>/images/. */
+  file: z.string(),
+  /** Story turn when this portrait was generated or uploaded. */
+  turn: z.number().optional(),
+  /** Chapter ID if generated/uploaded during a chapter that was later closed, or active chapter context. */
+  chapterId: z.string().optional(),
+  prompt: z.string().default(""),
+  negativePrompt: z.string().optional(),
+  providerId: z.string().default(""),
+  model: z.string().default(""),
+  seed: z.number().optional(),
+  durationMs: z.number().int().nonnegative().optional(),
+  promptDurationMs: z.number().int().nonnegative().optional(),
+  writerPrompt: z.string().optional(),
+  writerNegative: z.string().optional(),
+  request: z.string().optional(),
+  promptRequest: z.string().optional(),
+  promptResponse: z.string().optional(),
+  createdAt: z.string(),
+});
+export type CharacterPortrait = z.infer<typeof CharacterPortraitSchema>;
+
 export const CharacterInstanceSchema = z.object({
   id: z.string(),
   templateId: z.string().optional(),
@@ -141,6 +164,12 @@ export const CharacterInstanceSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   clothing: z.array(ClothingItemSchema).default([]),
+  /** Active playthrough-local portrait file ("<sha256>.<ext>") in data/playthroughs/<id>/images/.
+   *  Overrides the global library template avatar for this playthrough timeline. */
+  avatarFile: z.string().optional(),
+  /** Chronological history of portraits generated or uploaded for this character in this timeline.
+   *  Snapshotted per turn so branching or reverting restores the character's portrait state at that turn. */
+  avatars: z.array(CharacterPortraitSchema).optional(),
 });
 export type CharacterInstance = z.infer<typeof CharacterInstanceSchema>;
 
@@ -979,6 +1008,8 @@ export const PlaythroughCoverViewSchema = z.object({
         id: z.string(),
         name: z.string().default(""),
         avatarUpdatedAt: z.number().optional(),
+        /** Playthrough-local portrait file ("<sha256>.<ext>") when the character has a story portrait. */
+        avatarFile: z.string().optional(),
       }),
     )
     .optional(),

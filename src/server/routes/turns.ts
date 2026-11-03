@@ -4,6 +4,7 @@ import { getPlaythroughRecord, updatePlaythroughRecord } from "../store";
 import {
   editChatMessage,
   executeTurn,
+  mergeConcurrentCharacterPortraits,
   retryAssistantTurn,
   revertAction,
   truncateChat,
@@ -97,6 +98,7 @@ export const turnRoutes: FastifyPluginAsync<TurnRoutesOptions> = async (
 
     if (controller.signal.aborted) return;
 
+    mergeConcurrentCharacterPortraits(dataDir, result.state);
     updatePlaythroughRecord(dataDir, result.state);
 
     return {

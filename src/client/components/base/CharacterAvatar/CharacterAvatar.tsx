@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import type { CharacterTemplate } from "../../../../schemas";
-import { getCharacterAvatarUrl, getPersonaAvatarUrl } from "../../../api";
+import {
+  buildImageUrl,
+  getCharacterAvatarUrl,
+  getPersonaAvatarUrl,
+} from "../../../api";
 import { displayTitle } from "../../../../engine/characterCards";
 import "./CharacterAvatar.css";
 
@@ -27,6 +31,9 @@ export type CharacterAvatarProps = {
     name?: string;
     avatarUpdatedAt?: number;
   };
+  /** Optional playthrough-local portrait file ("<sha256>.<ext>") that overrides the global library avatar. */
+  avatarFile?: string;
+  playthroughId?: string;
   variant?: CharacterAvatarVariant;
   type?: "portrait" | "profile" | "original";
   className?: string;
@@ -47,6 +54,8 @@ export type CharacterAvatarProps = {
 export function CharacterAvatar({
   template,
   persona,
+  avatarFile,
+  playthroughId,
   variant = "portrait",
   type,
   className = "",
@@ -78,7 +87,7 @@ export function CharacterAvatar({
     ? persona.name || "Persona"
     : template
       ? displayTitle(template as CharacterTemplate)
-      : "?";
+      : alt || "?";
   const fallbackLetter = displayName.charAt(0).toUpperCase() || "?";
   const entityId = persona?.id ?? template?.id ?? "";
   const entityUpdatedAt = persona?.avatarUpdatedAt ?? template?.avatarUpdatedAt;
@@ -86,11 +95,11 @@ export function CharacterAvatar({
   // Reset fallback if template/persona or avatar timestamp changes
   useEffect(() => {
     setFailed(false);
-  }, [entityId, entityUpdatedAt, effectiveType]);
+  }, [entityId, entityUpdatedAt, effectiveType, avatarFile, playthroughId]);
 
   const style = size !== undefined ? { width: size, height: size } : undefined;
 
-  if (failed || (!persona && !template)) {
+  if (failed || (!persona && !template && !avatarFile)) {
     return (
       <div
         className={`avatar-placeholder ${combinedClass}`}
@@ -108,11 +117,13 @@ export function CharacterAvatar({
         effectiveType === "original" ? "portrait" : effectiveType,
         persona.avatarUpdatedAt,
       )
-    : getCharacterAvatarUrl(
-        template!.id,
-        effectiveType,
-        template!.avatarUpdatedAt,
-      );
+    : avatarFile
+      ? buildImageUrl(avatarFile, playthroughId)
+      : getCharacterAvatarUrl(
+          template!.id,
+          effectiveType,
+          template!.avatarUpdatedAt,
+        );
 
   return (
     <img

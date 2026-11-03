@@ -1,5 +1,7 @@
 import type {
+  CharacterInstance,
   ChatMessage,
+  ImageGenerationSettings,
   ImageInstructionMode,
   Playthrough,
   PlayerCharacter,
@@ -341,4 +343,158 @@ export function previousWriterAnswer(
     }
   }
   return undefined;
+}
+
+const PORTRAIT_IDENTITY_CHARS = 1200;
+
+function buildPortraitSheetIdentity(templateContent: string): string {
+  const parts: string[] = [];
+  for (const section of pickSections(templateContent, CAST_IDENTITY_SECTIONS)) {
+    if (isStubSection(section)) continue;
+    const body = section.body
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .join("; ");
+    if (body) parts.push(`${section.header}: ${body}`);
+  }
+  return clampChars(parts.join(" | "), PORTRAIT_IDENTITY_CHARS);
+}
+
+/** Builds the prompt-writing context and adjusted settings for a SOLO character
+ *  portrait ("Medium Closeup / Chest to Head").
+ *
+ *  Deliberately isolates ONLY the target character's sheet and current state so
+ *  other cast members and the player never leak into the portrait. When
+ *  `includeStoryContext` is enabled, recent story messages and setting are
+ *  included under a strict guardrail for ambient lighting, background, and
+ *  expression context only. */
+export function buildCharacterPortraitPromptContext(
+  playthrough: Playthrough,
+  character: CharacterInstance,
+  settings: ImageGenerationSettings,
+  options?: { note?: string; includeStoryContext?: boolean },
+): {
+  input: {
+    messageContent: string;
+    history?: string;
+    stateSummary?: string;
+    castSummary: string;
+  };
+  portraitSettings: ImageGenerationSettings;
+  historyMessages: number;
+} {
+  const template =
+    playthrough.characterTemplates.find((t) => t.id === character.templateId) ??
+    playthrough.characterTemplates.find((t) => t.name === character.name);
+
+  const playerName = playthrough.playerCharacter.name;
+  const clothing = character.clothing.length
+    ? `wearing ${character.clothing.map((item) => item.name).join(", ")}`
+    : "clothing unspecified";
+  const conditions = character.conditions.length
+    ? `, ${character.conditions.join(", ")}`
+    : "";
+  const mood = character.mood.replace(/_/g, " ").trim() || "neutral";
+
+  const castLines: string[] = [
+    `${character.name} — ${clothing}, ${mood}${conditions}`,
+  ];
+  const hair = template ? castHair(template.content) : "";
+  if (hair) {
+    castLines.push(
+      `${character.name}'s hair — ${expandMacros(hair, character.name, playerName)}`,
+    );
+  }
+  const identity = template ? buildPortraitSheetIdentity(template.content) : "";
+  if (identity) {
+    castLines.push(
+      `${character.name}'s sheet — ${expandMacros(identity, character.name, playerName)}`,
+    );
+  }
+
+  const trimmedNote = options?.note?.trim();
+  const messageLines = [
+    `Solo character portrait (medium close-up, chest-to-head / upper-body bust framing) of ${character.name}.`,
+    `Current expression / mood: ${mood}${conditions}.`,
+    `Current attire: ${clothing}.`,
+    trimmedNote
+      ? `Pose / expression / background note: ${trimmedNote}`
+      : "Framing: solo subject, chest-to-head medium close-up, clear facial features, hair, and upper-body attire with a fitting atmospheric background.",
+  ];
+
+  let historyText: string | undefined;
+  let historyCount = 0;
+  let stateSummary: string | undefined;
+
+  if (options?.includeStoryContext) {
+    if (playthrough.scenarioDescription) {
+      stateSummary = `Setting (for background/lighting context only): ${playthrough.scenarioDescription}`;
+    }
+    const maxCount =
+      settings.historyMessages > 0 ? settings.historyMessages : 4;
+    const newestFirst: ChatMessage[] = [];
+    for (
+      let i = playthrough.messages.length - 1;
+      i >= 0 && newestFirst.length < maxCount;
+      i -= 1
+    ) {
+      const candidate = playthrough.messages[i];
+      if (candidate.role === "system" || candidate.hidden) continue;
+      if (!candidate.content.trim()) continue;
+      newestFirst.push(candidate);
+    }
+    if (newestFirst.length > 0) {
+      let chars = newestFirst.reduce(
+        (total, entry) => total + entry.content.length,
+        0,
+      );
+      while (newestFirst.length > 1 && chars > IMAGE_HISTORY_CHARS) {
+        chars -= newestFirst[newestFirst.length - 1].content.length;
+        newestFirst.pop();
+      }
+      const lines = [...newestFirst].reverse().map((entry) => {
+        const body =
+          entry.content.length > IMAGE_HISTORY_CHARS
+            ? `…[earlier text omitted] ${entry.content.trim().slice(-IMAGE_HISTORY_CHARS)}`
+            : entry.content.trim();
+        return `${entry.role === "user" ? "User" : "Assistant"}: ${body}`;
+      });
+      historyText = [
+        `STORY CONTEXT SO FAR (use ONLY for ambient lighting, background setting, and ${character.name}'s emotional state — do NOT include other characters, the player, or multi-person scene actions; keep the frame a solo chest-to-head portrait of ${character.name}):`,
+        ...lines,
+      ].join("\n");
+      historyCount = newestFirst.length;
+    }
+  }
+
+  const portraitOverrideBlock = [
+    "",
+    "PORTRAIT MODE OVERRIDE (HIGHEST PRIORITY):",
+    `- Write a SOLO CHARACTER PORTRAIT tag line for ONE subject only: ${character.name}.`,
+    "- Framing MUST be a Medium Closeup (chest-to-head / bust portrait): include `solo`, appropriate character count (`1girl` or `1boy`), `upper body` or `cowboy shot` / `medium close-up`, and focus on face, hair, expression, and upper-body clothing.",
+    '- NEVER include the player, NEVER include a second character, NEVER use `" | "` multi-character region groups, and NEVER use `pov`, `male pov`, `female pov`, or `viewer` tags.',
+    "- Reproduce all physical identity traits from the character's sheet (species, hair color/style, eye color, skin/body traits, ears/tail/horns if any, and current upper-body clothing).",
+    "- If STORY CONTEXT SO FAR is provided, use it strictly for lighting, atmosphere, background location, and facial expression — never add other people from the story.",
+  ].join("\n");
+
+  const portraitSettings: ImageGenerationSettings = {
+    ...settings,
+    instructionMode: "scene",
+    includeCast: true,
+    includeState: Boolean(options?.includeStoryContext),
+    includePreviousAnswer: false,
+    instruction: `${settings.instruction}${portraitOverrideBlock}`,
+  };
+
+  return {
+    input: {
+      messageContent: messageLines.join("\n"),
+      history: historyText,
+      stateSummary,
+      castSummary: castLines.join("\n"),
+    },
+    portraitSettings,
+    historyMessages: historyCount,
+  };
 }

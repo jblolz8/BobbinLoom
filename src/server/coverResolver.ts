@@ -57,10 +57,7 @@ export function resolvePlaythroughCover(
     const images = message.images ?? [];
     for (let imageIndex = images.length - 1; imageIndex >= 0; imageIndex -= 1) {
       const file = images[imageIndex]?.file;
-      if (
-        file &&
-        imageFilePath(file, options.imagesDir, options.dataDir, p.id)
-      )
+      if (file && imageFilePath(file, options.imagesDir, options.dataDir, p.id))
         return { source: "latest", file };
     }
   }
@@ -75,33 +72,64 @@ export function resolvePlaythroughCover(
 
   // Cast order, not recency: a cover's job is recognition, and re-ordering it by who spoke
   // last would reshuffle the shelf mid-scene.
+  // A playthrough-local `character.avatarFile` takes precedence over the global library portrait
+  // so story-generated characters (and characters whose portrait evolved in play) appear in the collage.
   const activeSet = new Set(p.activeCharacters ?? []);
   const present = p.characters.filter((character) =>
     activeSet.has(character.id),
   );
-  const portraits = resolveCharacterPortraits(
-    present
-      .map((character) => character.templateId)
-      .filter((id): id is string => Boolean(id)),
-    options.charactersDir,
+  const libraryPortraits = new Map(
+    resolveCharacterPortraits(
+      present
+        .map((character) => character.templateId)
+        .filter((id): id is string => Boolean(id)),
+      options.charactersDir,
+    ).map((entry) => [entry.id, entry]),
   );
-  if (portraits.length > 0) {
-    const nameById = new Map(
-      present.map((character) => [
-        character.templateId ?? character.id,
-        character.name,
-      ]),
-    );
+
+  const resolvedCast: Array<{
+    id: string;
+    name: string;
+    avatarUpdatedAt?: number;
+    avatarFile?: string;
+  }> = [];
+
+  for (const character of present) {
+    if (
+      character.avatarFile &&
+      imageFilePath(
+        character.avatarFile,
+        options.imagesDir,
+        options.dataDir,
+        p.id,
+      )
+    ) {
+      resolvedCast.push({
+        id: character.templateId ?? character.id,
+        name: character.name,
+        avatarFile: character.avatarFile,
+      });
+      continue;
+    }
+    if (character.templateId) {
+      const libPortrait = libraryPortraits.get(character.templateId);
+      if (libPortrait) {
+        resolvedCast.push({
+          id: libPortrait.id,
+          name: character.name,
+          ...(libPortrait.avatarUpdatedAt === undefined
+            ? {}
+            : { avatarUpdatedAt: libPortrait.avatarUpdatedAt }),
+        });
+      }
+    }
+  }
+
+  if (resolvedCast.length > 0) {
     return {
       source: "cast",
-      characterCount: portraits.length,
-      characters: portraits.slice(0, COVER_COLLAGE_LIMIT).map((portrait) => ({
-        id: portrait.id,
-        name: nameById.get(portrait.id) ?? "",
-        ...(portrait.avatarUpdatedAt === undefined
-          ? {}
-          : { avatarUpdatedAt: portrait.avatarUpdatedAt }),
-      })),
+      characterCount: resolvedCast.length,
+      characters: resolvedCast.slice(0, COVER_COLLAGE_LIMIT),
     };
   }
 

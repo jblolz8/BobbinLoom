@@ -92,6 +92,65 @@ export type TurnOptions = {
   signal?: AbortSignal;
 };
 
+/** If a background character portrait generation finished and saved to disk while
+ *  an LLM turn was in flight, merge the newly saved `avatarFile` and `avatars`
+ *  into `nextState` before `nextState` is written to disk so neither operation
+ *  clobbers the other. */
+export function mergeConcurrentCharacterPortraits(
+  dataDir: string,
+  nextState: Playthrough,
+): void {
+  const onDisk = getPlaythroughRecord(dataDir, nextState.id);
+  if (!onDisk) return;
+
+  for (const diskChar of onDisk.characters) {
+    if (!diskChar.avatarFile && !(diskChar.avatars && diskChar.avatars.length)) {
+      continue;
+    }
+    const nextChar = nextState.characters.find((c) => c.id === diskChar.id);
+    if (!nextChar) continue;
+
+    const nextFiles = new Set((nextChar.avatars ?? []).map((a) => a.file));
+    const addedFromDisk = (diskChar.avatars ?? []).filter(
+      (a) => !nextFiles.has(a.file),
+    );
+
+    if (
+      addedFromDisk.length === 0 &&
+      diskChar.avatarFile === nextChar.avatarFile
+    ) {
+      continue;
+    }
+
+    const mergedAvatars = [...(nextChar.avatars ?? []), ...addedFromDisk];
+    if (mergedAvatars.length > 0) {
+      nextChar.avatars = mergedAvatars;
+    }
+    if (diskChar.avatarFile) {
+      nextChar.avatarFile = diskChar.avatarFile;
+    }
+
+    const minTurn =
+      addedFromDisk.length > 0
+        ? Math.min(...addedFromDisk.map((a) => a.turn ?? nextState.turn))
+        : nextState.turn;
+
+    if (nextState.snapshots) {
+      for (const snap of Object.values(nextState.snapshots)) {
+        if (snap.turn >= minTurn) {
+          const snapChar = snap.characters.find((c) => c.id === nextChar.id);
+          if (snapChar) {
+            if (nextChar.avatarFile) snapChar.avatarFile = nextChar.avatarFile;
+            if (nextChar.avatars && nextChar.avatars.length > 0) {
+              snapChar.avatars = structuredClone(nextChar.avatars);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 /**
  * Runs one full turn against an in-memory playthrough: provider call,
  * state patch, message append, and pre-turn snapshot storage.
@@ -548,6 +607,7 @@ export async function retryAssistantTurn(
 
   // No snapshot pruning here any more: `deleteFrom` already dropped the snapshots of the messages it
   // deleted, and the regenerated turn brings its own.
+  mergeConcurrentCharacterPortraits(dataDir, result.state);
   updatePlaythroughRecord(dataDir, result.state);
 
   // Same ordering rule as truncateChat and revertAction: record first, images second — and only on

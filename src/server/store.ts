@@ -158,6 +158,20 @@ export function collectPlaythroughImageRefs(
   for (const galleryImg of playthrough.galleryImages ?? []) {
     if (galleryImg?.file) refs.add(galleryImg.file);
   }
+  for (const char of playthrough.characters ?? []) {
+    if (char.avatarFile) refs.add(char.avatarFile);
+    for (const p of char.avatars ?? []) {
+      if (p?.file) refs.add(p.file);
+    }
+  }
+  for (const snap of Object.values(playthrough.snapshots ?? {})) {
+    for (const char of snap?.characters ?? []) {
+      if (char.avatarFile) refs.add(char.avatarFile);
+      for (const p of char.avatars ?? []) {
+        if (p?.file) refs.add(p.file);
+      }
+    }
+  }
   if (playthrough.cover?.file) refs.add(playthrough.cover.file);
   return refs;
 }
