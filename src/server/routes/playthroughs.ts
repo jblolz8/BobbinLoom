@@ -30,7 +30,9 @@ import {
 import {
   closeChapterAction,
   fleshOutCharacterAction,
+  fleshOutCharacterDraftAction,
   generateNewCharacterAction,
+  revertToSimpleCharacterAction,
   worldStateAction,
   resummarizeChapterAction,
 } from "../stateActions";
@@ -655,6 +657,13 @@ export const playthroughRoutes: FastifyPluginAsync<
               },
               preset?.characterFormat,
             ).state;
+            const startingChar = fleshed.characters.find(
+              (c) => c.id === char.id,
+            );
+            if (startingChar) {
+              delete startingChar.fleshedOutAtTurn;
+              delete startingChar.preFleshOutState;
+            }
           } catch (error) {
             console.warn(
               `Failed to flesh out starting cast member ${char.name}`,
@@ -835,6 +844,62 @@ export const playthroughRoutes: FastifyPluginAsync<
         },
       );
       if (controller.signal.aborted) return;
+      if (!result.ok)
+        return reply.code(result.status).send({ error: result.error });
+      return result.state;
+    },
+  );
+
+  app.post(
+    "/api/playthroughs/:id/characters/:characterId/flesh-out/draft",
+    async (request, reply) => {
+      const { id, characterId } = z
+        .object({ id: z.string(), characterId: z.string() })
+        .parse(request.params);
+      const body = z
+        .object({
+          scope: CharacterContextScopeSchema.optional(),
+          recentCount: z.number().int().min(1).max(50).optional(),
+        })
+        .parse(request.body ?? {});
+
+      const controller = abortOnClientDisconnect(reply);
+      const result = await fleshOutCharacterDraftAction(
+        dataDir,
+        id,
+        characterId,
+        manager.getProvider(manager.characterTextProviderId() ?? undefined),
+        manager.getMaxTokens(manager.characterTextProviderId() ?? undefined),
+        controller.signal,
+        loadPromptConfig(settingsDir).promptConfig,
+        {
+          scope: body.scope,
+          recentCount: body.recentCount,
+        },
+      );
+      if (controller.signal.aborted) return;
+      if (!result.ok)
+        return reply.code(result.status).send({ error: result.error });
+      return {
+        character: result.character,
+        content: result.content,
+        storyContext: result.storyContext,
+      };
+    },
+  );
+
+  app.post(
+    "/api/playthroughs/:id/characters/:characterId/revert-to-simple",
+    async (request, reply) => {
+      const { id, characterId } = z
+        .object({ id: z.string(), characterId: z.string() })
+        .parse(request.params);
+      const result = revertToSimpleCharacterAction(
+        dataDir,
+        id,
+        characterId,
+        imagesDir,
+      );
       if (!result.ok)
         return reply.code(result.status).send({ error: result.error });
       return result.state;

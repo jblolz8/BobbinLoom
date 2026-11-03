@@ -1036,6 +1036,15 @@ export function applyStatePatch(
         summary: "",
         startingClothing: [],
       };
+      character.preFleshOutState = {
+        ...(character.description !== undefined
+          ? { description: character.description }
+          : {}),
+        storyRole: character.storyRole,
+        memorySummary: character.memorySummary,
+        clothing: clone(character.clothing ?? []),
+      };
+      character.fleshedOutAtTurn = next.turn;
       character.templateId = templateId;
       if (memorySummary) {
         character.memorySummary = memorySummary;

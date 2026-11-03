@@ -206,12 +206,16 @@ export const CAST_PREFERENCE_DEFAULTS: ResolvedCastPreferences = {
   viewMode: "portrait",
   contextScope: "chapter",
   recentCount: 8,
+  reviewFleshOut: false,
+  autoPortraitOnFleshOut: false,
 };
 
 export type ResolvedCastPreferences = {
   viewMode: "portrait" | "compact";
   contextScope: CharacterContextScope;
   recentCount: number;
+  reviewFleshOut: boolean;
+  autoPortraitOnFleshOut: boolean;
 };
 
 export function resolveCastPreferences(

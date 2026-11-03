@@ -6,6 +6,7 @@ import {
   closeChapterAction,
   fleshOutCharacterAction,
   fleshOutCharacterDraftAction,
+  revertToSimpleCharacterAction,
   worldStateAction,
 } from "../src/server/stateActions";
 import { applyStatePatch, takeTurnSnapshot } from "../src/engine/engine";
@@ -266,6 +267,135 @@ describe("fleshOutCharacterDraftAction", () => {
     expect(template?.content).toContain("[Species]: Human");
     expect(template?.content).toContain("[Personality]\n- Cheerful");
     expect(template?.content).toContain("[Dislikes]\n(not established)");
+  });
+
+  it("rejects empty or plain-text refusal sheets without [Section] headers", async () => {
+    const dir = tempDir();
+    const pt = createPlaythroughRecord(dir, "Refusal Guard Test");
+    const withChar = applyStatePatch(pt, {
+      characterAddSimple: [
+        {
+          name: "Guard",
+          description: "A stern gatekeeper.",
+          storyRole: "Gatekeeper",
+        },
+      ],
+    });
+    updatePlaythroughRecord(dir, withChar.state);
+    const charId = withChar.state.characters.find((c) => c.name === "Guard")!.id;
+
+    const refusalProvider = {
+      generateCharacterSheet: async () =>
+        "I'm sorry, I cannot fulfill this request.",
+    } as unknown as TurnProvider;
+
+    const draftOut = await fleshOutCharacterDraftAction(
+      dir,
+      withChar.state.id,
+      charId,
+      refusalProvider,
+      4000,
+    );
+    expect(draftOut.ok).toBe(false);
+    if (!draftOut.ok) expect(draftOut.status).toBe(502);
+
+    const commitOut = await fleshOutCharacterAction(
+      dir,
+      withChar.state.id,
+      charId,
+      refusalProvider,
+      undefined,
+      4000,
+    );
+    expect(commitOut.ok).toBe(false);
+    if (!commitOut.ok) expect(commitOut.status).toBe(502);
+
+    // Character remains a Simple NPC
+    const stored = getPlaythroughRecord(dir, withChar.state.id);
+    const guard = stored?.characters.find((c) => c.id === charId);
+    expect(guard?.templateId).toBeUndefined();
+  });
+
+  it("reverts a fleshed-out character back to Simple NPC on the same turn and rejects after turn advances", async () => {
+    const dir = tempDir();
+    const pt = createPlaythroughRecord(dir, "Revert Simple Test");
+    pt.turn = 3;
+    const withChar = applyStatePatch(pt, {
+      characterAddSimple: [
+        {
+          name: "Shopkeep",
+          description: "A friendly shopkeeper.",
+          storyRole: "Merchant",
+        },
+      ],
+    });
+    updatePlaythroughRecord(dir, withChar.state);
+    const charId = withChar.state.characters.find(
+      (c) => c.name === "Shopkeep",
+    )!.id;
+
+    const provider = new MockProviderShim();
+    const fleshedOut = await fleshOutCharacterAction(
+      dir,
+      withChar.state.id,
+      charId,
+      provider,
+      undefined,
+      4000,
+    );
+    expect(fleshedOut.ok).toBe(true);
+    if (!fleshedOut.ok) return;
+
+    const promoted = fleshedOut.state.characters.find((c) => c.id === charId);
+    expect(promoted?.templateId).toBe(`tmpl_fleshed_${charId}`);
+    expect(promoted?.fleshedOutAtTurn).toBe(3);
+    expect(promoted?.preFleshOutState?.description).toBe(
+      "A friendly shopkeeper.",
+    );
+
+    // Same-turn revert succeeds
+    const reverted = revertToSimpleCharacterAction(
+      dir,
+      withChar.state.id,
+      charId,
+    );
+    expect(reverted.ok).toBe(true);
+    if (!reverted.ok) return;
+
+    const simpleAgain = reverted.state.characters.find((c) => c.id === charId);
+    expect(simpleAgain?.templateId).toBeUndefined();
+    expect(simpleAgain?.fleshedOutAtTurn).toBeUndefined();
+    expect(simpleAgain?.preFleshOutState).toBeUndefined();
+    expect(simpleAgain?.description).toBe("A friendly shopkeeper.");
+    expect(simpleAgain?.storyRole).toBe("Merchant");
+    expect(
+      reverted.state.characterTemplates.some(
+        (t) => t.id === `tmpl_fleshed_${charId}`,
+      ),
+    ).toBe(false);
+
+    // Flesh out again on turn 3, then advance turn to 4 -> revert is rejected
+    const fleshedAgain = await fleshOutCharacterAction(
+      dir,
+      withChar.state.id,
+      charId,
+      provider,
+      undefined,
+      4000,
+    );
+    expect(fleshedAgain.ok).toBe(true);
+    if (!fleshedAgain.ok) return;
+
+    fleshedAgain.state.turn = 4;
+    updatePlaythroughRecord(dir, fleshedAgain.state);
+
+    const lateRevert = revertToSimpleCharacterAction(
+      dir,
+      withChar.state.id,
+      charId,
+    );
+    expect(lateRevert.ok).toBe(false);
+    if (!lateRevert.ok) expect(lateRevert.status).toBe(400);
   });
 });
 describe("closeChapterAction — NPC staleness pruning (Phase E)", () => {

@@ -339,13 +339,31 @@ export function generatePlaythroughCharacter(
 export function fleshOutCharacterDraft(
   playthroughId: string,
   characterId: string,
-  signal?: AbortSignal,
+  options?: FleshOutOptions | AbortSignal,
 ): Promise<FleshOutDraftResult> {
+  const opts: FleshOutOptions =
+    options instanceof AbortSignal ? { signal: options } : (options ?? {});
   return request<FleshOutDraftResult>(
     `/api/playthroughs/${playthroughId}/characters/${characterId}/flesh-out/draft`,
     {
       method: "POST",
-      signal,
+      body: JSON.stringify({
+        ...(opts.scope ? { scope: opts.scope } : {}),
+        ...(opts.recentCount ? { recentCount: opts.recentCount } : {}),
+      }),
+      signal: opts.signal,
+    },
+  );
+}
+
+export function revertCharacterToSimple(
+  playthroughId: string,
+  characterId: string,
+): Promise<Playthrough> {
+  return request<Playthrough>(
+    `/api/playthroughs/${playthroughId}/characters/${characterId}/revert-to-simple`,
+    {
+      method: "POST",
     },
   );
 }

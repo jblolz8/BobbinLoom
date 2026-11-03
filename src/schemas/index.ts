@@ -170,6 +170,19 @@ export const CharacterInstanceSchema = z.object({
   /** Chronological history of portraits generated or uploaded for this character in this timeline.
    *  Snapshotted per turn so branching or reverting restores the character's portrait state at that turn. */
   avatars: z.array(CharacterPortraitSchema).optional(),
+  /** Story turn on which this character was promoted from a Simple NPC to a Detailed Character.
+   *  Used to display the same-turn "Revert to Simple" failsafe button while `playthrough.turn === fleshedOutAtTurn`. */
+  fleshedOutAtTurn: z.number().int().nonnegative().optional(),
+  /** Snapshot of the Simple NPC's state right before promotion so a same-turn "Revert to Simple"
+   *  can restore their exact pre-flesh-out memorySummary, description, storyRole, and clothing. */
+  preFleshOutState: z
+    .object({
+      description: z.string().optional(),
+      storyRole: z.string(),
+      memorySummary: z.string(),
+      clothing: z.array(ClothingItemSchema),
+    })
+    .optional(),
 });
 export type CharacterInstance = z.infer<typeof CharacterInstanceSchema>;
 
@@ -636,6 +649,8 @@ export const ViewPreferencesSchema = z.object({
       viewMode: z.enum(["portrait", "compact"]).optional(),
       contextScope: CharacterContextScopeSchema.optional(),
       recentCount: z.number().int().min(1).max(50).optional(),
+      reviewFleshOut: z.boolean().optional(),
+      autoPortraitOnFleshOut: z.boolean().optional(),
     })
     .optional(),
   /** Provider-list sort, one leaf per kind: the text and image lists sit side by side, and one shared

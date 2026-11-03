@@ -7,6 +7,7 @@ import {
 } from "../engine/characterSections";
 import {
   ensureAllSections,
+  normalizedContentSectionNames,
   resolveCharacterFormat,
 } from "../engine/characterFormat";
 import { expandUserMacro } from "../engine/macros";
@@ -20,7 +21,11 @@ import type {
   Playthrough,
   PromptConfig,
 } from "../schemas";
-import { imageFilePath, IMAGES_DIR } from "./imageStore";
+import {
+  imageFilePath,
+  IMAGES_DIR,
+  sweepOrphansInDataDir,
+} from "./imageStore";
 import {
   getCharacterTemplate,
   getPlaythroughRecord,
@@ -326,6 +331,19 @@ export async function fleshOutCharacterAction(
     return { ok: false, status: 499, error: "Request aborted by the client" };
   }
 
+  if (
+    !content ||
+    !content.trim() ||
+    normalizedContentSectionNames(content).length === 0
+  ) {
+    return {
+      ok: false,
+      status: 502,
+      error:
+        "The AI provider returned an empty or invalid character sheet (no [Section] headers found). Try again or switch Character AI Provider.",
+    };
+  }
+
   // 2) Post-process: fill the target format's sections, seed memory
   content = ensureAllSections(content, format);
   const memorySummary = seedMemorySummary(character.name, content);
@@ -336,6 +354,17 @@ export async function fleshOutCharacterAction(
     { characterFleshOut: { characterId, content, memorySummary } },
     promptConfig?.characterFormat,
   );
+  // Sync head snapshot so same-turn state stays consistent
+  const snapshotsList = Object.values(result.state.snapshots ?? {});
+  const headSnap =
+    snapshotsList.find((s) => s.turn === result.state.turn) ??
+    snapshotsList[snapshotsList.length - 1];
+  if (headSnap) {
+    headSnap.characters = structuredClone(result.state.characters);
+    headSnap.characterTemplates = structuredClone(
+      result.state.characterTemplates,
+    );
+  }
   result.state.updatedAt = new Date().toISOString();
   updatePlaythroughRecord(dataDir, result.state);
   return {
@@ -409,8 +438,121 @@ export async function fleshOutCharacterDraftAction(
       error: `Failed to generate character sheet: ${message}`,
     };
   }
+  if (signal?.aborted) {
+    return { ok: false, status: 499, error: "Request aborted by the client" };
+  }
+  if (
+    !content ||
+    !content.trim() ||
+    normalizedContentSectionNames(content).length === 0
+  ) {
+    return {
+      ok: false,
+      status: 502,
+      error:
+        "The AI provider returned an empty or invalid character sheet (no [Section] headers found). Try again or switch Character AI Provider.",
+    };
+  }
   content = ensureAllSections(content, format);
   return { ok: true, character, content, storyContext };
+}
+
+export function revertToSimpleCharacterAction(
+  dataDir: string,
+  playthroughId: string,
+  characterId: string,
+  imagesDir?: string,
+): StateActionOutcome {
+  const loaded = load(dataDir, playthroughId);
+  if (isFailure(loaded)) return loaded;
+
+  const character = loaded.characters.find((c) => c.id === characterId);
+  if (!character) {
+    return { ok: false, status: 404, error: "Character not found" };
+  }
+  if (!character.templateId) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Character is already a simple character",
+    };
+  }
+  if (
+    character.fleshedOutAtTurn === undefined ||
+    character.fleshedOutAtTurn !== loaded.turn
+  ) {
+    return {
+      ok: false,
+      status: 400,
+      error:
+        "Character can only be reverted to simple on the same turn it was fleshed out",
+    };
+  }
+
+  const oldTemplateId = character.templateId;
+  const hadAvatar =
+    Boolean(character.avatarFile) || (character.avatars?.length ?? 0) > 0;
+
+  if (character.preFleshOutState) {
+    if (character.preFleshOutState.description !== undefined) {
+      character.description = character.preFleshOutState.description;
+    } else {
+      delete character.description;
+    }
+    character.storyRole = character.preFleshOutState.storyRole;
+    character.memorySummary = character.preFleshOutState.memorySummary;
+    character.clothing = structuredClone(
+      character.preFleshOutState.clothing ?? [],
+    );
+  } else {
+    character.clothing = [];
+  }
+
+  delete character.templateId;
+  delete character.fleshedOutAtTurn;
+  delete character.preFleshOutState;
+  delete character.avatarFile;
+  delete character.avatars;
+
+  const stillReferenced = loaded.characters.some(
+    (c) => c.id !== character.id && c.templateId === oldTemplateId,
+  );
+  if (!stillReferenced) {
+    loaded.characterTemplates = loaded.characterTemplates.filter(
+      (t) => t.id !== oldTemplateId,
+    );
+  }
+
+  const now = new Date().toISOString();
+  character.updatedAt = now;
+  loaded.updatedAt = now;
+
+  const snapshotsList = Object.values(loaded.snapshots ?? {});
+  const headSnap =
+    snapshotsList.find((s) => s.turn === loaded.turn) ??
+    snapshotsList[snapshotsList.length - 1];
+  if (headSnap) {
+    headSnap.characters = structuredClone(loaded.characters);
+    headSnap.characterTemplates = structuredClone(loaded.characterTemplates);
+  }
+
+  updatePlaythroughRecord(dataDir, loaded);
+
+  if (hadAvatar) {
+    try {
+      sweepOrphansInDataDir(dataDir, imagesDir ?? IMAGES_DIR);
+    } catch {
+      // Best-effort orphan sweep
+    }
+  }
+
+  return {
+    ok: true,
+    state: loaded,
+    applied: [`character reverted to simple: ${character.name}`],
+    rejected: [],
+    warnings: [],
+  };
 }
 
 export type GenerateNewCharacterOutcome =

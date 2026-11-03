@@ -12,7 +12,9 @@ import {
   getCharacterAvatarUrl,
   listCharacters,
   fleshOutCharacter,
+  fleshOutCharacterDraft,
   generatePlaythroughCharacter,
+  revertCharacterToSimple,
   saveCharacterToLibrary,
 } from "../../../../api";
 import {
@@ -112,6 +114,21 @@ export function CharsTab({
   const [recentCount, setRecentCountState] = useState<number>(
     CAST_PREFERENCE_DEFAULTS.recentCount,
   );
+  const [reviewFleshOut, setReviewFleshOutState] = useState<boolean>(
+    CAST_PREFERENCE_DEFAULTS.reviewFleshOut,
+  );
+  const [autoPortraitOnFleshOut, setAutoPortraitOnFleshOutState] =
+    useState<boolean>(CAST_PREFERENCE_DEFAULTS.autoPortraitOnFleshOut);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [revertingId, setRevertingId] = useState<string | null>(null);
+  const [reviewDraft, setReviewDraft] = useState<{
+    characterId: string;
+    characterName: string;
+    content: string;
+  } | null>(null);
+  const [reviewDraftError, setReviewDraftError] = useState<string | null>(null);
+  const [isRegeneratingDraft, setIsRegeneratingDraft] = useState(false);
+  const [isCommittingDraft, setIsCommittingDraft] = useState(false);
 
   // New character generation modal state
   const [generateModalOpen, setGenerateModalOpen] = useState(false);
@@ -153,6 +170,22 @@ export function CharsTab({
     );
   };
 
+  const setReviewFleshOut = (enabled: boolean) => {
+    castTouchedRef.current = true;
+    setReviewFleshOutState(enabled);
+    void updateViewPreferences({ cast: { reviewFleshOut: enabled } }).catch(
+      () => {},
+    );
+  };
+
+  const setAutoPortraitOnFleshOut = (enabled: boolean) => {
+    castTouchedRef.current = true;
+    setAutoPortraitOnFleshOutState(enabled);
+    void updateViewPreferences({
+      cast: { autoPortraitOnFleshOut: enabled },
+    }).catch(() => {});
+  };
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -162,6 +195,8 @@ export function CharsTab({
       setCastViewModeState(resolved.viewMode);
       setContextScopeState(resolved.contextScope);
       setRecentCountState(resolved.recentCount);
+      setReviewFleshOutState(resolved.reviewFleshOut);
+      setAutoPortraitOnFleshOutState(resolved.autoPortraitOnFleshOut);
     })().catch(() => {
       /* A failed read leaves the default; the next load tries again. */
     });
@@ -317,6 +352,27 @@ export function CharsTab({
     setFleshingOutId(characterId);
     setFleshOutError(null);
     try {
+      if (reviewFleshOut) {
+        const draft = await fleshOutCharacterDraft(
+          playthrough.id,
+          characterId,
+          {
+            scope: contextScope,
+            recentCount,
+            signal: controller.signal,
+          },
+        );
+        if (fleshOutAbortRef.current === controller) {
+          setReviewDraftError(null);
+          setReviewDraft({
+            characterId,
+            characterName: draft.character.name,
+            content: draft.content,
+          });
+        }
+        return;
+      }
+
       const updated = await fleshOutCharacter(
         playthrough.id,
         characterId,
@@ -325,6 +381,9 @@ export function CharsTab({
       );
       if (fleshOutAbortRef.current === controller) {
         onPlaythroughChange(updated);
+        if (autoPortraitOnFleshOut) {
+          void handleQuickGeneratePortrait(characterId);
+        }
       }
     } catch (e) {
       if (
@@ -340,6 +399,79 @@ export function CharsTab({
         fleshOutAbortRef.current = null;
         setFleshingOutId(null);
       }
+    }
+  }
+
+  async function handleRegenerateDraft() {
+    if (!reviewDraft) return;
+    setIsRegeneratingDraft(true);
+    setReviewDraftError(null);
+    try {
+      const draft = await fleshOutCharacterDraft(
+        playthrough.id,
+        reviewDraft.characterId,
+        {
+          scope: contextScope,
+          recentCount,
+        },
+      );
+      setReviewDraft((prev) =>
+        prev ? { ...prev, content: draft.content } : null,
+      );
+    } catch (e) {
+      setReviewDraftError(
+        e instanceof Error
+          ? e.message
+          : "Failed to re-generate character sheet draft",
+      );
+    } finally {
+      setIsRegeneratingDraft(false);
+    }
+  }
+
+  async function handleCommitDraft() {
+    if (!reviewDraft) return;
+    const targetCharacterId = reviewDraft.characterId;
+    setIsCommittingDraft(true);
+    setReviewDraftError(null);
+    try {
+      const updated = await fleshOutCharacter(playthrough.id, targetCharacterId, {
+        content: reviewDraft.content,
+        scope: contextScope,
+        recentCount,
+      });
+      onPlaythroughChange(updated);
+      setReviewDraft(null);
+      if (autoPortraitOnFleshOut) {
+        void handleQuickGeneratePortrait(targetCharacterId);
+      }
+    } catch (e) {
+      setReviewDraftError(
+        e instanceof Error ? e.message : "Failed to commit character sheet",
+      );
+    } finally {
+      setIsCommittingDraft(false);
+    }
+  }
+
+  async function handleRevertToSimple(characterId: string) {
+    setRevertingId(characterId);
+    setFleshOutError(null);
+    handleCancelQuickPortrait(characterId);
+    try {
+      const updated = await revertCharacterToSimple(
+        playthrough.id,
+        characterId,
+      );
+      onPlaythroughChange(updated);
+    } catch (e) {
+      setFleshOutError(
+        e instanceof Error
+          ? e.message
+          : "Failed to revert character to simple",
+      );
+    } finally {
+      setRevertingId((prev) => (prev === characterId ? null : prev));
     }
   }
 
@@ -652,6 +784,12 @@ export function CharsTab({
           onCancelGeneratePortrait={() =>
             handleCancelQuickPortrait(character.id)
           }
+          canRevertToSimple={
+            character.fleshedOutAtTurn !== undefined &&
+            character.fleshedOutAtTurn === playthrough.turn
+          }
+          isRevertingToSimple={revertingId === character.id}
+          onRevertToSimple={() => void handleRevertToSimple(character.id)}
           onTogglePresence={() => void handleTogglePresence(character, inScene)}
           onOpenLibrary={onOpenLibrary}
           onRemoveCondition={(i) =>
@@ -711,47 +849,72 @@ export function CharsTab({
           </Button>
         </Stack>
 
-        <Stack direction="column" align="stretch" gap="xs" fullWidth>
-          <SimpleSelect
-            id="char-provider-select"
-            label="AI Provider"
-            size="xs"
-            variant="filled"
-            fullWidth
-            value={characterProviderId}
-            onChange={handleCharacterProviderChange}
-            options={characterProviderOptions}
-            placeholder="Current active text provider"
-            aria-label="Character creator AI provider"
-          />
-
-          <SimpleSelect
-            id="char-scope-select"
-            label="Context Scope"
-            size="xs"
-            variant="filled"
-            fullWidth
-            value={contextScope}
-            onChange={(val) => setContextScope(val as CharacterContextScope)}
-            options={contextScopeOptions}
-            aria-label="Story context scope for character operations"
-          />
-
-          {contextScope === "recent" ? (
-            <TextInput
-              type="number"
-              size="sm"
-              min={1}
-              max={50}
-              label="Recent Messages Count"
-              value={recentCount}
-              onChange={(e) =>
-                setRecentCount(parseInt(e.target.value, 10) || 8)
-              }
-              aria-label="Number of recent messages"
+        <Accordion
+          variant="panel"
+          size="sm"
+          icon="Settings"
+          title="AI & Flesh Out Settings"
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+        >
+          <Stack direction="column" align="stretch" gap="xs" fullWidth>
+            <SimpleSelect
+              id="char-provider-select"
+              label="AI Provider"
+              size="xs"
+              variant="filled"
+              fullWidth
+              value={characterProviderId}
+              onChange={handleCharacterProviderChange}
+              options={characterProviderOptions}
+              placeholder="Current active text provider"
+              aria-label="Character creator AI provider"
             />
-          ) : null}
-        </Stack>
+
+            <SimpleSelect
+              id="char-scope-select"
+              label="Context Scope"
+              size="xs"
+              variant="filled"
+              fullWidth
+              value={contextScope}
+              onChange={(val) => setContextScope(val as CharacterContextScope)}
+              options={contextScopeOptions}
+              aria-label="Story context scope for character operations"
+            />
+
+            {contextScope === "recent" ? (
+              <TextInput
+                type="number"
+                size="sm"
+                min={1}
+                max={50}
+                label="Recent Messages Count"
+                value={recentCount}
+                onChange={(e) =>
+                  setRecentCount(parseInt(e.target.value, 10) || 8)
+                }
+                aria-label="Number of recent messages"
+              />
+            ) : null}
+
+            <Separator spacing="none" />
+
+            <CheckboxRow
+              checked={reviewFleshOut}
+              onChange={(e) => setReviewFleshOut(e.target.checked)}
+              title="Review fleshed-out sheet before committing"
+              description="Inspect, edit, or re-roll the generated character sheet in a modal before promoting the Simple NPC."
+            />
+
+            <CheckboxRow
+              checked={autoPortraitOnFleshOut}
+              onChange={(e) => setAutoPortraitOnFleshOut(e.target.checked)}
+              title="Auto-generate portrait on flesh out"
+              description="Automatically start background portrait generation as soon as a Simple NPC is fleshed out into a Detailed Character."
+            />
+          </Stack>
+        </Accordion>
       </Card>
 
       {fleshOutError ? (
@@ -935,6 +1098,81 @@ export function CharsTab({
             title="Also overwrite library portrait"
             description="Replace the global Character Library card's portrait with this playthrough's current portrait."
           />
+        </ConfirmModal>
+      ) : null}
+
+      {reviewDraft ? (
+        <ConfirmModal
+          title={`Review Fleshed-Out Sheet — ${reviewDraft.characterName}`}
+          confirmLabel={
+            isCommittingDraft ? "Committing…" : "Commit Sheet"
+          }
+          cancelLabel="Cancel"
+          isLoading={isCommittingDraft}
+          confirmDisabled={
+            isCommittingDraft ||
+            isRegeneratingDraft ||
+            !reviewDraft.content.trim()
+          }
+          onConfirm={() => void handleCommitDraft()}
+          onCancel={() => {
+            if (!isCommittingDraft && !isRegeneratingDraft) {
+              setReviewDraft(null);
+              setReviewDraftError(null);
+            }
+          }}
+          maxWidth={680}
+        >
+          <Stack direction="column" align="stretch" gap="md" fullWidth>
+            <Stack
+              direction="row"
+              align="center"
+              justify="between"
+              gap="sm"
+              wrap
+              fullWidth
+            >
+              <Text as="p" size="xs" tone="secondary" leading="relaxed">
+                Review or edit{" "}
+                <strong>{reviewDraft.characterName}</strong>&apos;s generated
+                sheet before promoting them to a Detailed Character.
+              </Text>
+              <Button
+                size="xs"
+                variant="secondary"
+                leftIcon="RotateCcw"
+                isLoading={isRegeneratingDraft}
+                disabled={isCommittingDraft || isRegeneratingDraft}
+                onClick={() => void handleRegenerateDraft()}
+                title="Re-roll the character sheet draft with the AI provider"
+              >
+                {isRegeneratingDraft ? "Re-generating…" : "Re-generate Draft"}
+              </Button>
+            </Stack>
+
+            {reviewDraftError ? (
+              <StatusMessage
+                variant="banner"
+                tone="err"
+                onDismiss={() => setReviewDraftError(null)}
+              >
+                {reviewDraftError}
+              </StatusMessage>
+            ) : null}
+
+            <TextArea
+              id="flesh-out-draft-textarea"
+              label="Character Sheet ([Section] Format)"
+              rows={16}
+              value={reviewDraft.content}
+              onChange={(e) =>
+                setReviewDraft((prev) =>
+                  prev ? { ...prev, content: e.target.value } : null,
+                )
+              }
+              disabled={isCommittingDraft || isRegeneratingDraft}
+            />
+          </Stack>
         </ConfirmModal>
       ) : null}
 
@@ -1376,6 +1614,9 @@ export function CharacterCard(props: {
   isGeneratingPortrait?: boolean;
   onGeneratePortrait?: () => void;
   onCancelGeneratePortrait?: () => void;
+  canRevertToSimple?: boolean;
+  isRevertingToSimple?: boolean;
+  onRevertToSimple?: () => void;
   onTogglePresence?: () => void;
   onOpenLibrary?: (templateId: string) => void;
   content: string;
@@ -1400,6 +1641,9 @@ export function CharacterCard(props: {
     isGeneratingPortrait = false,
     onGeneratePortrait,
     onCancelGeneratePortrait,
+    canRevertToSimple = false,
+    isRevertingToSimple = false,
+    onRevertToSimple,
     onTogglePresence,
     onOpenLibrary,
     present,
@@ -1791,6 +2035,19 @@ export function CharacterCard(props: {
               {(character.avatars?.length ?? 0) > 0
                 ? ` (${character.avatars!.length})`
                 : ""}
+            </Button>
+          ) : null}
+          {canRevertToSimple && onRevertToSimple ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              leftIcon="RotateCcw"
+              isLoading={isRevertingToSimple}
+              disabled={isRevertingToSimple}
+              onClick={onRevertToSimple}
+              title="Revert this character back to a Simple NPC (available during the turn it was fleshed out)"
+            >
+              Revert to Simple
             </Button>
           ) : null}
         </Stack>

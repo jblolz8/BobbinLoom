@@ -26,7 +26,10 @@ import {
   updatePlaythroughRecord,
 } from "./store";
 import { buildFleshOutStoryContext } from "./stateActions";
-import { ensureAllSections } from "../engine/characterFormat";
+import {
+  ensureAllSections,
+  normalizedContentSectionNames,
+} from "../engine/characterFormat";
 import { seedMemorySummary } from "../engine/characterSections";
 import { sweepOrphansInDataDir } from "./imageStore";
 import { clampCalibration } from "./provider/promptBuilder";
@@ -220,6 +223,15 @@ export async function executeTurn(
             options?.signal,
             promptConfig?.characterFormat,
           );
+          if (
+            !content ||
+            !content.trim() ||
+            normalizedContentSectionNames(content).length === 0
+          ) {
+            throw new Error(
+              "The AI provider returned an empty or invalid character sheet",
+            );
+          }
         }
         content = ensureAllSections(content, promptConfig?.characterFormat);
         const memorySummary = seedMemorySummary(character.name, content);
@@ -254,6 +266,15 @@ export async function executeTurn(
 
   next.turn += 1;
   const currentTurn = next.turn;
+
+  if (assistantTurn.statePatch?.characterFleshOut?.characterId) {
+    const fleshedChar = next.characters.find(
+      (c) => c.id === assistantTurn.statePatch?.characterFleshOut?.characterId,
+    );
+    if (fleshedChar && fleshedChar.fleshedOutAtTurn !== undefined) {
+      fleshedChar.fleshedOutAtTurn = currentTurn;
+    }
+  }
 
   // ── Isolate turn assignment and embeddings strictly to NEW memory events ──
   const newMemoryEvents = next.memoryEvents.filter(
