@@ -2156,3 +2156,110 @@ describe("POST /api/playthroughs/:id/messages/:messageId/image WebP transcode", 
   });
 });
 
+describe("Playthrough gallery upload/delete & message attach image routes", () => {
+  it("uploads a custom image to galleryImages and protects it from orphan sweep", async () => {
+    const h = harness();
+    const res = await post(h.app, `/api/playthroughs/${h.playthroughId}/gallery`, {
+      dataBase64: PNG_B64,
+      fileName: "character_portrait.png",
+      label: "Custom Portrait",
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json() as {
+      playthrough: Playthrough;
+      image: { file: string; label?: string; createdAt: string };
+    };
+    expect(body.image.file).toMatch(/^[a-f0-9]{64}\.(png|webp)$/);
+    expect(body.image.label).toBe("Custom Portrait");
+    expect(body.playthrough.galleryImages).toHaveLength(1);
+    expect(body.playthrough.galleryImages?.[0].file).toBe(body.image.file);
+  });
+
+  it("attaches a newly uploaded image to a user message, adds it to galleryImages, and sets playthrough cover when useAsCover is true", async () => {
+    const h = harness();
+    const res = await post(
+      h.app,
+      `/api/playthroughs/${h.playthroughId}/messages/${h.userMessageId}/images/attach`,
+      {
+        dataBase64: PNG_B64,
+        fileName: "scene_ref.png",
+        label: "User Scene Ref",
+        useAsCover: true,
+      },
+    );
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      playthrough: Playthrough;
+      image: MessageImage;
+    };
+    expect(body.image.providerId).toBe("");
+    expect(body.image.model).toBe("");
+    expect(body.image.prompt).toBe("User Scene Ref");
+    const userMsg = body.playthrough.messages.find(
+      (m) => m.id === h.userMessageId,
+    )!;
+    expect(userMsg.images).toHaveLength(1);
+    expect(userMsg.images?.[0].file).toBe(body.image.file);
+    expect(body.playthrough.galleryImages).toHaveLength(1);
+    expect(body.playthrough.galleryImages?.[0].file).toBe(body.image.file);
+    expect(body.playthrough.cover?.file).toBe(body.image.file);
+  });
+
+  it("attaches an existing gallery image to an assistant message and deletes it across gallery + messages + cover when deleted from gallery", async () => {
+    const h = harness();
+    const upRes = await post(
+      h.app,
+      `/api/playthroughs/${h.playthroughId}/gallery`,
+      {
+        dataBase64: PNG_B64,
+        fileName: "shared.png",
+        label: "Shared Gallery Image",
+      },
+    );
+    expect(upRes.statusCode).toBe(201);
+    const uploadedFile = (upRes.json() as { image: { file: string } }).image
+      .file;
+
+    // Attach existing gallery image to assistant message
+    const attachRes = await post(
+      h.app,
+      `/api/playthroughs/${h.playthroughId}/messages/${h.assistantMessageId}/images/attach`,
+      {
+        file: uploadedFile,
+      },
+    );
+    expect(attachRes.statusCode).toBe(200);
+    const attachedPt = (attachRes.json() as { playthrough: Playthrough })
+      .playthrough;
+    const assistantMsg = attachedPt.messages.find(
+      (m) => m.id === h.assistantMessageId,
+    )!;
+    expect(assistantMsg.images?.map((i) => i.file)).toContain(uploadedFile);
+
+    // Set it as cover as well
+    const currentPt = getPlaythroughRecord(h.dataDir, h.playthroughId)!;
+    currentPt.cover = {
+      file: uploadedFile,
+      updatedAt: new Date().toISOString(),
+    };
+    updatePlaythroughRecord(h.dataDir, currentPt);
+
+    // Now delete from gallery -> should remove from galleryImages, detach from assistant message, and clear cover
+    const delRes = await h.app.inject({
+      method: "DELETE",
+      url: `/api/playthroughs/${h.playthroughId}/gallery/${encodeURIComponent(uploadedFile)}`,
+    });
+    expect(delRes.statusCode).toBe(200);
+    const afterDel = (delRes.json() as { playthrough: Playthrough })
+      .playthrough;
+    expect(afterDel.galleryImages ?? []).toEqual([]);
+    const afterAssistantMsg = afterDel.messages.find(
+      (m) => m.id === h.assistantMessageId,
+    )!;
+    expect(afterAssistantMsg.images).toBeUndefined();
+    expect(afterDel.cover).toBeUndefined();
+  });
+});
+

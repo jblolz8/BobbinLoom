@@ -65,6 +65,14 @@ export function resolvePlaythroughCover(
     }
   }
 
+  const gallery = p.galleryImages ?? [];
+  for (let index = gallery.length - 1; index >= 0; index -= 1) {
+    const file = gallery[index]?.file;
+    if (file && imageFilePath(file, options.imagesDir, options.dataDir, p.id)) {
+      return { source: "latest", file };
+    }
+  }
+
   // Cast order, not recency: a cover's job is recognition, and re-ordering it by who spoke
   // last would reshuffle the shelf mid-scene.
   const activeSet = new Set(p.activeCharacters ?? []);

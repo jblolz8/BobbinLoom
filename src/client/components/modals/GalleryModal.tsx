@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import type { Chapter } from "../../../schemas";
 import { buildImageUrl } from "../../api";
 import { groupCoverMedia, type CoverMediaItem } from "../../engine/coverMedia";
@@ -26,7 +26,12 @@ import {
   StatusMessage,
   Text,
 } from "../base";
-import { ImageViewer } from "../common";
+import { ConfirmModal, ImageViewer } from "../common";
+
+export type GalleryUploadFile = {
+  dataBase64: string;
+  fileName: string;
+};
 
 export type GalleryModalProps = {
   playthroughName: string;
@@ -42,6 +47,8 @@ export type GalleryModalProps = {
   currentFile?: string;
   hasManualCover: boolean;
   saving?: boolean;
+  uploading?: boolean;
+  deletingFile?: string | null;
   /** Why the last write failed, shown in place — this modal is the only error surface the
    *  journal has. */
   errorMessage?: string;
@@ -49,6 +56,8 @@ export type GalleryModalProps = {
    *  choice, so the choice is only ever which file. */
   onPick: (file: string) => void;
   onClear: () => void;
+  onUpload?: (files: GalleryUploadFile[]) => Promise<void> | void;
+  onDelete?: (file: string) => Promise<void> | void;
   onClose: () => void;
 };
 
@@ -86,15 +95,22 @@ export function GalleryModal({
   currentFile,
   hasManualCover,
   saving = false,
+  uploading = false,
+  deletingFile = null,
   errorMessage,
   onPick,
   onClear,
+  onUpload,
+  onDelete,
   onClose,
 }: GalleryModalProps) {
   const titleId = useId();
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
   /** File path of the image currently opened in the full-screen viewer. */
   const [viewingFile, setViewingFile] = useState<string | null>(null);
-  /** "all", "current", or a chapter id. */
+  const [confirmDeleteItem, setConfirmDeleteItem] =
+    useState<CoverMediaItem | null>(null);
+  /** "all", "uploaded", "current", or a chapter id. */
   const [selected, setSelected] = useState("all");
   const [search, setSearch] = useState("");
   const [rawPage, setRawPage] = useState(1);
@@ -102,24 +118,31 @@ export function GalleryModal({
 
   const nav = useSideNavMode({ respectWorkspaceWidth: false });
 
+  const uploadedItems = useMemo(
+    () => media.filter((item) => item.isUploaded),
+    [media],
+  );
+
   const groups = useMemo(
     () => groupCoverMedia(media, chapters),
     [media, chapters],
   );
-  const visible = useMemo(
-    () =>
-      selected === "all"
-        ? media
-        : (groups.find((group) => group.chapterId === selected)?.items ??
-          (selected === "current" ? (groups[0]?.items ?? []) : media)),
-    [selected, media, groups],
-  );
+  const visible = useMemo(() => {
+    if (selected === "all") return media;
+    if (selected === "uploaded") return uploadedItems;
+    return (
+      groups.find((group) => group.chapterId === selected)?.items ??
+      (selected === "current" ? (groups[0]?.items ?? []) : media)
+    );
+  }, [selected, media, uploadedItems, groups]);
 
   const selectedName =
     selected === "all"
       ? "All images"
-      : (groups.find((group) => group.chapterId === selected)?.name ??
-        "Images");
+      : selected === "uploaded"
+        ? "Uploaded / Custom"
+        : (groups.find((group) => group.chapterId === selected)?.name ??
+          "Images");
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -163,6 +186,19 @@ export function GalleryModal({
             </Badge>
           ),
         },
+        ...(uploadedItems.length > 0 || selected === "uploaded"
+          ? [
+              {
+                id: "uploaded",
+                label: "Uploaded / Custom",
+                meta: (
+                  <Badge variant="neutral" size="xs" pill>
+                    {uploadedItems.length}
+                  </Badge>
+                ),
+              },
+            ]
+          : []),
       ],
     },
     {
@@ -180,6 +216,35 @@ export function GalleryModal({
         })),
     },
   ];
+
+  async function handleUploadInputChange(
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0 || !onUpload) return;
+    const filesArray = Array.from(fileList);
+    e.target.value = "";
+    const encoded: GalleryUploadFile[] = [];
+    for (const f of filesArray) {
+      const dataBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const res = String(reader.result ?? "");
+          const comma = res.indexOf(",");
+          resolve(comma >= 0 ? res.slice(comma + 1) : res);
+        };
+        reader.onerror = () =>
+          reject(new Error(`Failed to read file ${f.name}`));
+        reader.readAsDataURL(f);
+      });
+      if (dataBase64) {
+        encoded.push({ dataBase64, fileName: f.name });
+      }
+    }
+    if (encoded.length > 0) {
+      await onUpload(encoded);
+    }
+  }
 
   function choose(id: string) {
     setSelected(id);
@@ -217,10 +282,25 @@ export function GalleryModal({
 
   return (
     <>
+      {onUpload ? (
+        <input
+          ref={uploadInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          multiple
+          hidden
+          onChange={(e) => {
+            void handleUploadInputChange(e);
+          }}
+        />
+      ) : null}
+
       <Modal
         open
         onClose={onClose}
-        dismissDisabled={nav.drawerOpen || viewing !== null}
+        dismissDisabled={
+          nav.drawerOpen || viewing !== null || confirmDeleteItem !== null
+        }
         size="wide"
         fullScreenMobile
         ariaLabel="Gallery media"
@@ -235,6 +315,18 @@ export function GalleryModal({
           bordered
           actions={
             <Stack direction="row" align="center" gap="xs" wrap>
+              {onUpload ? (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  leftIcon="Upload"
+                  disabled={uploading || saving}
+                  isLoading={uploading}
+                  onClick={() => uploadInputRef.current?.click()}
+                >
+                  {uploading ? "Uploading…" : "Upload Image"}
+                </Button>
+              ) : null}
               {hasManualCover ? (
                 <Button
                   variant="secondary"
@@ -268,11 +360,26 @@ export function GalleryModal({
               ) : null}
 
               {media.length === 0 ? (
-                <StatusMessage variant="inline" tone="neutral" icon="Images">
-                  Images generated from the chat are collected here, newest
-                  first and grouped by chapter. Generate one from an assistant
-                  message and it becomes both a cover and a choice.
-                </StatusMessage>
+                <Stack direction="column" gap="sm" align="start" fullWidth>
+                  <StatusMessage variant="inline" tone="neutral" icon="Images">
+                    Images generated from the chat or uploaded directly are
+                    collected here, newest first and grouped by chapter.
+                    Generate one from an assistant message or upload an image to
+                    use it as a cover or chat attachment.
+                  </StatusMessage>
+                  {onUpload ? (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      leftIcon="Upload"
+                      disabled={uploading || saving}
+                      isLoading={uploading}
+                      onClick={() => uploadInputRef.current?.click()}
+                    >
+                      {uploading ? "Uploading…" : "Upload First Image"}
+                    </Button>
+                  ) : null}
+                </Stack>
               ) : (
                 <SideNav.Layout minHeight="md">
                   <SideNav
@@ -413,6 +520,11 @@ export function GalleryModal({
                                         gap="2xs"
                                         wrap
                                       >
+                                        {item.isUploaded ? (
+                                          <Badge variant="info" size="xs">
+                                            Uploaded
+                                          </Badge>
+                                        ) : null}
                                         {item.chapterName ? (
                                           <Badge variant="neutral" size="xs">
                                             {item.chapterName}
@@ -449,16 +561,42 @@ export function GalleryModal({
                                       wrap
                                       fullWidth
                                     >
-                                      <Button
-                                        variant="ghost"
-                                        size="xs"
-                                        leftIcon="Maximize2"
-                                        onClick={() =>
-                                          setViewingFile(item.file)
-                                        }
+                                      <Stack
+                                        direction="row"
+                                        align="center"
+                                        gap="2xs"
+                                        wrap
                                       >
-                                        View
-                                      </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="xs"
+                                          leftIcon="Maximize2"
+                                          onClick={() =>
+                                            setViewingFile(item.file)
+                                          }
+                                        >
+                                          View
+                                        </Button>
+                                        {onDelete ? (
+                                          <Button
+                                            variant="ghost"
+                                            size="xs"
+                                            leftIcon="Trash2"
+                                            disabled={
+                                              saving ||
+                                              uploading ||
+                                              deletingFile === item.file
+                                            }
+                                            onClick={() =>
+                                              setConfirmDeleteItem(item)
+                                            }
+                                          >
+                                            {deletingFile === item.file
+                                              ? "Deleting…"
+                                              : "Delete"}
+                                          </Button>
+                                        ) : null}
+                                      </Stack>
                                       <Button
                                         variant={
                                           isCurrentCover
@@ -538,18 +676,69 @@ export function GalleryModal({
         }
         actions={
           viewing ? (
-            <Button
-              variant={currentFile === viewing.file ? "secondary" : "primary"}
-              size="xs"
-              leftIcon={currentFile === viewing.file ? "Check" : "Image"}
-              disabled={saving || currentFile === viewing.file}
-              onClick={() => onPick(viewing.file)}
-            >
-              {currentFile === viewing.file ? "Current cover" : "Use as cover"}
-            </Button>
+            <Stack direction="row" align="center" gap="xs" wrap>
+              {onDelete ? (
+                <Button
+                  variant="danger"
+                  size="xs"
+                  leftIcon="Trash2"
+                  disabled={saving || deletingFile === viewing.file}
+                  isLoading={deletingFile === viewing.file}
+                  onClick={() => setConfirmDeleteItem(viewing)}
+                >
+                  Delete
+                </Button>
+              ) : null}
+              <Button
+                variant={currentFile === viewing.file ? "secondary" : "primary"}
+                size="xs"
+                leftIcon={currentFile === viewing.file ? "Check" : "Image"}
+                disabled={saving || currentFile === viewing.file}
+                onClick={() => onPick(viewing.file)}
+              >
+                {currentFile === viewing.file
+                  ? "Current cover"
+                  : "Use as cover"}
+              </Button>
+            </Stack>
           ) : undefined
         }
       />
+
+      {confirmDeleteItem && onDelete ? (
+        <ConfirmModal
+          title="Delete Image from Playthrough?"
+          message={
+            confirmDeleteItem.turn !== undefined ||
+            confirmDeleteItem.chapterName
+              ? `This will permanently delete this image from the playthrough gallery and detach it from ${[
+                  confirmDeleteItem.chapterName,
+                  confirmDeleteItem.turn !== undefined
+                    ? `Turn ${confirmDeleteItem.turn}`
+                    : undefined,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}.`
+              : "This will permanently delete this image from the playthrough gallery."
+          }
+          confirmLabel={
+            deletingFile === confirmDeleteItem.file
+              ? "Deleting…"
+              : "Delete Image"
+          }
+          danger
+          isLoading={deletingFile === confirmDeleteItem.file}
+          onCancel={() => setConfirmDeleteItem(null)}
+          onConfirm={async () => {
+            const targetFile = confirmDeleteItem.file;
+            await onDelete(targetFile);
+            if (viewingFile === targetFile) {
+              setViewingFile(null);
+            }
+            setConfirmDeleteItem(null);
+          }}
+        />
+      ) : null}
     </>
   );
 }

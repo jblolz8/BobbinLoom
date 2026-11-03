@@ -90,7 +90,7 @@ export function mimeForFile(file: string): string {
   return MIME_BY_EXT[ext] ?? "application/octet-stream";
 }
 
-/** Every file name referenced by any message — or by a manual cover — of any of the given
+/** Every file name referenced by any message, gallery upload, or manual cover of any of the given
  *  playthroughs. */
 export function collectReferencedImages(
   playthroughs: Playthrough[],
@@ -101,6 +101,9 @@ export function collectReferencedImages(
       for (const image of message.images ?? []) {
         if (image?.file) refs.add(image.file);
       }
+    }
+    for (const galleryImg of playthrough.galleryImages ?? []) {
+      if (galleryImg?.file) refs.add(galleryImg.file);
     }
     if (playthrough.cover?.file) refs.add(playthrough.cover.file);
   }

@@ -1,5 +1,6 @@
 import { request } from "./client";
 import type {
+  GalleryImage,
   ImageInstructionMode,
   MessageImage,
   Playthrough,
@@ -7,7 +8,7 @@ import type {
 
 /** The persisted message attachment, straight from the schema (one source of
  *  truth shared with the server). */
-export type { MessageImage };
+export type { GalleryImage, MessageImage };
 
 /**
  * URL of the served bytes for a content-addressed image file
@@ -208,5 +209,62 @@ export function deleteMessageImage(
   return request<{ playthrough: Playthrough }>(
     `/api/playthroughs/${playthroughId}/messages/${messageId}/images/${encodeURIComponent(file)}`,
     { method: "DELETE" },
+  );
+}
+
+/** Upload a custom image directly into a playthrough's gallery pool. */
+export function uploadGalleryImage(
+  playthroughId: string,
+  payload: {
+    dataBase64: string;
+    fileName?: string;
+    label?: string;
+  },
+): Promise<{ playthrough: Playthrough; image: GalleryImage }> {
+  return request<{ playthrough: Playthrough; image: GalleryImage }>(
+    `/api/playthroughs/${playthroughId}/gallery`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+/** Delete an image from a playthrough's gallery AND detach it from any messages
+ *  or cover reference in the playthrough, then sweep unreferenced bytes on disk. */
+export function deleteGalleryImage(
+  playthroughId: string,
+  file: string,
+): Promise<{ playthrough: Playthrough }> {
+  return request<{ playthrough: Playthrough }>(
+    `/api/playthroughs/${playthroughId}/gallery/${encodeURIComponent(file)}`,
+    { method: "DELETE" },
+  );
+}
+
+export type AttachMessageImagePayload = {
+  /** Existing playthrough/gallery image file hash ("<sha256>.<ext>"). */
+  file?: string;
+  /** Base64 bytes when uploading a new image file directly onto the message. */
+  dataBase64?: string;
+  fileName?: string;
+  label?: string;
+  /** Whether to also set the attached image as the playthrough's manual cover. */
+  useAsCover?: boolean;
+};
+
+/** Attach an image (either an existing gallery/story file or a new upload) to
+ *  any user or assistant message. */
+export function attachMessageImage(
+  playthroughId: string,
+  messageId: string,
+  payload: AttachMessageImagePayload,
+): Promise<{ playthrough: Playthrough; image: MessageImage }> {
+  return request<{ playthrough: Playthrough; image: MessageImage }>(
+    `/api/playthroughs/${playthroughId}/messages/${messageId}/images/attach`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
   );
 }

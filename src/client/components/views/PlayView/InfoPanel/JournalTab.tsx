@@ -29,15 +29,20 @@ import {
   adoptLocalPreferences,
   buildImageUrl,
   clearPlaythroughCover,
+  deleteGalleryImage,
   setPlaythroughCover,
   updateViewPreferences,
+  uploadGalleryImage,
 } from "../../../../api";
 import { buildCoverMedia } from "../../../../engine/coverMedia";
 import {
   chapterStaleSignature,
   chapterSummaryIsStale,
 } from "../../../../../engine/chapterLifecycle";
-import { GalleryModal } from "../../../modals/GalleryModal";
+import {
+  GalleryModal,
+  type GalleryUploadFile,
+} from "../../../modals/GalleryModal";
 import { CloseChapterModal } from "../../../modals/CloseChapterModal";
 
 export function JournalTab({
@@ -81,6 +86,10 @@ export function JournalTab({
   );
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [coverSaving, setCoverSaving] = useState(false);
+  const [galleryUploading, setGalleryUploading] = useState(false);
+  const [galleryDeletingFile, setGalleryDeletingFile] = useState<string | null>(
+    null,
+  );
   const [coverError, setCoverError] = useState<string | null>(null);
   /** Which chapter's stale-summary note was dismissed, and for which edit signature. Keyed on the
    *  chapter PLUS the signature, so a later edit warns again instead of being silenced for good.
@@ -148,6 +157,40 @@ export function JournalTab({
       setCoverError(e instanceof Error ? e.message : String(e));
     } finally {
       setCoverSaving(false);
+    }
+  }
+
+  async function handleUploadGallery(files: GalleryUploadFile[]) {
+    if (!files.length) return;
+    setGalleryUploading(true);
+    setCoverError(null);
+    try {
+      let latest = playthrough;
+      for (const f of files) {
+        const res = await uploadGalleryImage(playthrough.id, {
+          dataBase64: f.dataBase64,
+          fileName: f.fileName,
+        });
+        latest = res.playthrough;
+      }
+      onPlaythroughChange(latest);
+    } catch (e) {
+      setCoverError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGalleryUploading(false);
+    }
+  }
+
+  async function handleDeleteGalleryImage(file: string) {
+    setGalleryDeletingFile(file);
+    setCoverError(null);
+    try {
+      const res = await deleteGalleryImage(playthrough.id, file);
+      onPlaythroughChange(res.playthrough);
+    } catch (e) {
+      setCoverError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGalleryDeletingFile(null);
     }
   }
 
@@ -741,11 +784,23 @@ export function JournalTab({
         </Stack>
 
         {media.length === 0 ? (
-          <StatusMessage variant="inline" tone="neutral" icon="Image">
-            No generated images yet. An image on an assistant message becomes
-            this story&apos;s cover, and every image from every chapter can be
-            chosen by hand here.
-          </StatusMessage>
+          <Stack direction="column" align="stretch" gap="sm" fullWidth>
+            <StatusMessage variant="inline" tone="neutral" icon="Image">
+              No images yet. An image on a message or uploaded to the gallery
+              becomes this story&apos;s cover, and every image can be chosen or
+              managed here.
+            </StatusMessage>
+            <Stack direction="row" justify="end" fullWidth>
+              <Button
+                variant="secondary"
+                size="sm"
+                leftIcon="Images"
+                onClick={() => setGalleryOpen(true)}
+              >
+                Open Gallery Media
+              </Button>
+            </Stack>
+          </Stack>
         ) : (
           <Stack direction="column" align="stretch" gap="sm" fullWidth>
             <FormGrid cols={2} gap="xs" keepColumnsOnMobile>
@@ -824,12 +879,20 @@ export function JournalTab({
           currentFile={playthrough.cover?.file}
           hasManualCover={Boolean(playthrough.cover)}
           saving={coverSaving}
+          uploading={galleryUploading}
+          deletingFile={galleryDeletingFile}
           errorMessage={coverError ?? undefined}
           onPick={(file) => {
             void handlePickCover(file);
           }}
           onClear={() => {
             void handleClearCover();
+          }}
+          onUpload={(files) => {
+            void handleUploadGallery(files);
+          }}
+          onDelete={(file) => {
+            void handleDeleteGalleryImage(file);
           }}
           onClose={() => setGalleryOpen(false)}
         />

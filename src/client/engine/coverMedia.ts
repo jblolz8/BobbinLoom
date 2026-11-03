@@ -12,6 +12,8 @@ export type CoverMediaItem = {
   chapterName?: string;
   /** The same chapter's id, so grouping never depends on a display name. */
   chapterId?: string;
+  /** True when the image belongs to `playthrough.galleryImages` (custom upload). */
+  isUploaded?: boolean;
 };
 
 /**
@@ -37,7 +39,12 @@ export function buildCoverMedia(playthrough: Playthrough): CoverMediaItem[] {
   const chapterNameById = new Map(
     playthrough.chapters.map((chapter) => [chapter.id, chapter.name]),
   );
-  const items: CoverMediaItem[] = [];
+  const galleryByFile = new Map(
+    (playthrough.galleryImages ?? [])
+      .filter((g) => Boolean(g?.file))
+      .map((g) => [g.file, g]),
+  );
+  const messageItems: CoverMediaItem[] = [];
   const seen = new Set<string>();
 
   for (let index = playthrough.messages.length - 1; index >= 0; index -= 1) {
@@ -48,20 +55,36 @@ export function buildCoverMedia(playthrough: Playthrough): CoverMediaItem[] {
       if (!image?.file || seen.has(image.file)) continue;
       seen.add(image.file);
       const chapterId = message.chapterId;
-      items.push({
+      const galleryEntry = galleryByFile.get(image.file);
+      messageItems.push({
         file: image.file,
-        prompt: image.prompt ?? "",
+        prompt: image.prompt || galleryEntry?.label || "",
         createdAt: image.createdAt,
         ...(message.turn === undefined ? {} : { turn: message.turn }),
         ...(chapterId ? { chapterId } : {}),
         ...(chapterId && chapterNameById.has(chapterId)
           ? { chapterName: chapterNameById.get(chapterId) }
           : {}),
+        ...(galleryEntry ? { isUploaded: true } : {}),
       });
     }
   }
 
-  return items;
+  const standaloneGalleryItems: CoverMediaItem[] = [];
+  const galleryList = playthrough.galleryImages ?? [];
+  for (let index = galleryList.length - 1; index >= 0; index -= 1) {
+    const entry = galleryList[index];
+    if (!entry?.file || seen.has(entry.file)) continue;
+    seen.add(entry.file);
+    standaloneGalleryItems.push({
+      file: entry.file,
+      prompt: entry.label ?? "",
+      createdAt: entry.createdAt,
+      isUploaded: true,
+    });
+  }
+
+  return [...messageItems, ...standaloneGalleryItems];
 }
 
 /** One section of the gallery: a chapter's images, or the running chapter's own. */

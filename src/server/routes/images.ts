@@ -5,6 +5,7 @@ import { z } from "zod";
 import { DEFAULT_IMAGE_GENERATION_SETTINGS } from "../../engine/imageDefaults";
 import type {
   ChatMessage,
+  GalleryImage,
   ImageGenerationSettings,
   MessageImage,
   Playthrough,
@@ -517,9 +518,18 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (
         if (remaining.length) message.images = remaining;
         else delete message.images;
         // A cover is a SECOND kind of reference to these bytes. When this is the image the card
-        // wears, the pointer goes in the same write that drops the ref, so the card falls back
-        // down the chain instead of holding a pointer at a file that is about to be swept.
-        if (playthrough.cover?.file === params.file) delete playthrough.cover;
+        // wears and nothing else in the playthrough (another message or the gallery pool) still
+        // holds it, the pointer goes in the same write that drops the ref.
+        const stillReferenced =
+          (playthrough.galleryImages ?? []).some(
+            (g) => g.file === params.file,
+          ) ||
+          playthrough.messages.some((m) =>
+            (m.images ?? []).some((img) => img.file === params.file),
+          );
+        if (!stillReferenced && playthrough.cover?.file === params.file) {
+          delete playthrough.cover;
+        }
         updatePlaythroughRecord(dataDir, playthrough);
         // Best-effort, like the playthrough-delete and truncate sites: the
         // reference is ALREADY gone from the persisted record, so a failed sweep
@@ -536,6 +546,285 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (
         }
       }
       return reply.send({ playthrough });
+    },
+  );
+
+  // Upload a custom image directly into the playthrough's gallery pool.
+  app.post(
+    "/api/playthroughs/:id/gallery",
+    { bodyLimit: 15 * 1024 * 1024 },
+    async (request, reply) => {
+      const params = z.object({ id: z.string() }).parse(request.params);
+      const parsedBody = z
+        .object({
+          dataBase64: z.string().min(1),
+          fileName: z.string().optional(),
+          label: z.string().optional(),
+        })
+        .safeParse(request.body ?? {});
+      if (!parsedBody.success) {
+        return reply
+          .code(400)
+          .send({ error: "A valid base64 image payload is required." });
+      }
+      const playthrough = getPlaythroughRecord(dataDir, params.id);
+      if (!playthrough) {
+        return reply.code(404).send({ error: "Playthrough not found" });
+      }
+
+      const rawBase64 = parsedBody.data.dataBase64.replace(
+        /^data:[^;]+;base64,/,
+        "",
+      );
+      const bytes = Buffer.from(rawBase64, "base64");
+      if (!bytes.length) {
+        return reply.code(400).send({ error: "Uploaded image is empty." });
+      }
+
+      const rawExt =
+        parsedBody.data.fileName
+          ?.split(".")
+          .pop()
+          ?.toLowerCase()
+          ?.replace(/^jpeg$/, "jpg") || "png";
+      const fallbackExt =
+        rawExt === "jpg" || rawExt === "webp" ? rawExt : "png";
+      const transcoded = await transcodeToWebp(bytes, fallbackExt);
+      const ptImagesDir = playthroughImagesDir(dataDir, params.id);
+      const { file } = saveImageBytes(
+        transcoded.bytes,
+        transcoded.mime,
+        ptImagesDir,
+      );
+      if (options.imagesDir) {
+        try {
+          linkOrCopyFile(
+            join(ptImagesDir, file),
+            join(options.imagesDir, file),
+          );
+        } catch {
+          /* ignore test-seam mirror failure */
+        }
+      }
+
+      const cleanLabel = (
+        parsedBody.data.label?.trim() ||
+        parsedBody.data.fileName?.replace(/\.[^.]+$/, "").trim() ||
+        ""
+      ).trim();
+      const createdAt = new Date().toISOString();
+      const entry: GalleryImage = {
+        file,
+        ...(cleanLabel ? { label: cleanLabel } : {}),
+        createdAt,
+      };
+
+      const existing = (playthrough.galleryImages ?? []).filter(
+        (g) => g.file !== file,
+      );
+      playthrough.galleryImages = [...existing, entry];
+      updatePlaythroughRecord(dataDir, playthrough);
+
+      return reply.code(201).send({ playthrough, image: entry });
+    },
+  );
+
+  // Delete an image from the playthrough's gallery AND detach it from any messages
+  // or cover reference in the playthrough, then sweep unreferenced bytes on disk.
+  app.delete(
+    "/api/playthroughs/:id/gallery/:file",
+    async (request, reply) => {
+      const params = z
+        .object({ id: z.string(), file: z.string() })
+        .parse(request.params);
+      const playthrough = getPlaythroughRecord(dataDir, params.id);
+      if (!playthrough) {
+        return reply.code(404).send({ error: "Playthrough not found" });
+      }
+
+      let changed = false;
+
+      if (playthrough.galleryImages) {
+        const nextGallery = playthrough.galleryImages.filter(
+          (g) => g.file !== params.file,
+        );
+        if (nextGallery.length !== playthrough.galleryImages.length) {
+          changed = true;
+          if (nextGallery.length > 0) playthrough.galleryImages = nextGallery;
+          else delete playthrough.galleryImages;
+        }
+      }
+
+      for (const msg of playthrough.messages) {
+        if (!msg.images?.length) continue;
+        const nextImages = msg.images.filter((img) => img.file !== params.file);
+        if (nextImages.length !== msg.images.length) {
+          changed = true;
+          if (nextImages.length > 0) msg.images = nextImages;
+          else delete msg.images;
+        }
+      }
+
+      if (playthrough.cover?.file === params.file) {
+        delete playthrough.cover;
+        changed = true;
+      }
+
+      if (changed) {
+        updatePlaythroughRecord(dataDir, playthrough);
+        try {
+          sweepOrphansInDataDir(dataDir, imagesDir);
+        } catch (error) {
+          console.warn(
+            `[images] orphan sweep after deleting gallery image ${params.file} failed:`,
+            error,
+          );
+        }
+      }
+
+      return reply.send({ playthrough });
+    },
+  );
+
+  // Attach an image (either an existing playthrough/gallery file or a new upload)
+  // to any message (user or assistant). When uploading a new image, it is always
+  // added to playthrough.galleryImages so Gallery Media reflects every present file.
+  app.post(
+    "/api/playthroughs/:id/messages/:messageId/images/attach",
+    { bodyLimit: 15 * 1024 * 1024 },
+    async (request, reply) => {
+      const params = MessageParams.parse(request.params);
+      const parsedBody = z
+        .object({
+          file: z.string().optional(),
+          dataBase64: z.string().optional(),
+          fileName: z.string().optional(),
+          label: z.string().optional(),
+          useAsCover: z.boolean().optional(),
+        })
+        .safeParse(request.body ?? {});
+      if (!parsedBody.success) {
+        return reply
+          .code(400)
+          .send({ error: "Invalid image attachment request body." });
+      }
+
+      const playthrough = getPlaythroughRecord(dataDir, params.id);
+      if (!playthrough) {
+        return reply.code(404).send({ error: "Playthrough not found" });
+      }
+
+      const message = playthrough.messages.find(
+        (m) => m.id === params.messageId,
+      );
+      if (!message) {
+        return reply.code(404).send({ error: "Message not found" });
+      }
+
+      const body = parsedBody.data;
+      const createdAt = new Date().toISOString();
+      let targetFile: string;
+      let resolvedLabel = (
+        body.label?.trim() ||
+        body.fileName?.replace(/\.[^.]+$/, "").trim() ||
+        ""
+      ).trim();
+
+      if (body.dataBase64 && body.dataBase64.trim()) {
+        const rawBase64 = body.dataBase64.replace(/^data:[^;]+;base64,/, "");
+        const bytes = Buffer.from(rawBase64, "base64");
+        if (!bytes.length) {
+          return reply.code(400).send({ error: "Uploaded image is empty." });
+        }
+        const rawExt =
+          body.fileName
+            ?.split(".")
+            .pop()
+            ?.toLowerCase()
+            ?.replace(/^jpeg$/, "jpg") || "png";
+        const fallbackExt =
+          rawExt === "jpg" || rawExt === "webp" ? rawExt : "png";
+        const transcoded = await transcodeToWebp(bytes, fallbackExt);
+        const ptImagesDir = playthroughImagesDir(dataDir, params.id);
+        const saved = saveImageBytes(
+          transcoded.bytes,
+          transcoded.mime,
+          ptImagesDir,
+        );
+        targetFile = saved.file;
+        if (options.imagesDir) {
+          try {
+            linkOrCopyFile(
+              join(ptImagesDir, targetFile),
+              join(options.imagesDir, targetFile),
+            );
+          } catch {
+            /* ignore test-seam mirror failure */
+          }
+        }
+
+        const entry: GalleryImage = {
+          file: targetFile,
+          ...(resolvedLabel ? { label: resolvedLabel } : {}),
+          createdAt,
+        };
+        const existingGallery = (playthrough.galleryImages ?? []).filter(
+          (g) => g.file !== targetFile,
+        );
+        playthrough.galleryImages = [...existingGallery, entry];
+      } else if (body.file && body.file.trim()) {
+        targetFile = body.file.trim();
+        if (!imageFilePath(targetFile, imagesDir, dataDir, params.id)) {
+          return reply.code(400).send({ error: "Unknown image file" });
+        }
+        if (!resolvedLabel) {
+          const fromGallery = (playthrough.galleryImages ?? []).find(
+            (g) => g.file === targetFile,
+          )?.label;
+          let fromMessages: string | undefined;
+          for (let i = playthrough.messages.length - 1; i >= 0; i -= 1) {
+            const match = (playthrough.messages[i].images ?? []).find(
+              (img) => img.file === targetFile && img.prompt,
+            );
+            if (match?.prompt) {
+              fromMessages = match.prompt;
+              break;
+            }
+          }
+          resolvedLabel = fromGallery || fromMessages || "";
+        }
+      } else {
+        return reply
+          .code(400)
+          .send({ error: "Provide either file or dataBase64 to attach." });
+      }
+
+      const existingImages = message.images ?? [];
+      const alreadyOnMessage = existingImages.find(
+        (img) => img.file === targetFile,
+      );
+      const imageRef: MessageImage = alreadyOnMessage ?? {
+        file: targetFile,
+        prompt: resolvedLabel,
+        providerId: "",
+        model: "",
+        createdAt,
+      };
+      if (!alreadyOnMessage) {
+        message.images = [...existingImages, imageRef];
+      } else if (body.label !== undefined && resolvedLabel) {
+        alreadyOnMessage.prompt = resolvedLabel;
+      }
+
+      if (body.useAsCover) {
+        playthrough.cover = {
+          file: targetFile,
+          updatedAt: createdAt,
+        };
+      }
+
+      updatePlaythroughRecord(dataDir, playthrough);
+      return reply.send({ playthrough, image: imageRef });
     },
   );
 

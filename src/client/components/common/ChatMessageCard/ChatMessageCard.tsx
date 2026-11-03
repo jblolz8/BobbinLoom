@@ -486,6 +486,7 @@ export interface ChatMessageCardProps {
   imageProgress?: ImageGenerationProgress | null;
   progressDisplay: { label: string; percent: number } | null;
   onGenerateImage?: (msg: ChatMessage) => void;
+  onAttachImage?: (msg: ChatMessage) => void;
   onCancelImage?: () => void;
   onDeleteImage?: (msg: ChatMessage, file: string) => void;
   onRetryImage?: (msg: ChatMessage, file: string) => void;
@@ -527,6 +528,7 @@ export function ChatMessageCard({
   imageProgress,
   progressDisplay,
   onGenerateImage,
+  onAttachImage,
   onCancelImage,
   onDeleteImage,
   onRetryImage,
@@ -693,209 +695,229 @@ export function ChatMessageCard({
         <MarkdownView content={msg.content} />
       )}
 
-      {msg.role === "assistant" ? (
-        <>
-          <Separator spacing="xs" />
-          {msg.images && msg.images.length > 0 ? (
-            <div className="message-images">
-              {msg.images.map((img) => {
-                const imageActionBusy =
-                  imageDeletingId === msg.id ||
-                  imageGeneratingId === msg.id ||
-                  imagePreviewMessageId === msg.id;
-                return (
-                  <div key={img.file} className="message-image-block">
-                    <figure className="message-image">
-                      <button
-                        type="button"
-                        className="message-image-open"
-                        title="View full screen"
-                        aria-label="View this image full screen"
-                        onClick={() =>
-                          onOpenViewer({
-                            src: buildImageUrl(img.file),
-                            alt: img.prompt.slice(0, 120),
-                            title: img.prompt,
-                            caption: imageCaption(img),
-                          })
-                        }
-                      >
-                        <img
-                          src={buildImageUrl(img.file)}
-                          alt={img.prompt.slice(0, 120)}
-                          title={img.prompt}
-                          loading="lazy"
-                        />
-                      </button>
-                      <IconButton
-                        className="message-image-remove"
-                        variant="overlay"
-                        size="xs"
-                        round
-                        icon="X"
-                        busy={imageDeletingId === msg.id}
-                        label="Remove this image"
-                        title="Remove this image? The file is deleted if nothing else uses it."
-                        onClick={() => onDeleteImage?.(msg, img.file)}
-                        disabled={
-                          imageDeletingId === msg.id ||
-                          imageGeneratingId === msg.id
-                        }
-                      />
-                      <figcaption title={img.prompt}>
-                        {imageCaption(img)}
-                      </figcaption>
-                    </figure>
+      <Separator spacing="xs" />
 
-                    {img.request ? (
-                      <div className="message-image-actions">
-                        <Button
-                          size="xs"
-                          variant="ghost"
-                          className="message-image-retry"
-                          disabled={imageActionBusy}
-                          onClick={() => onRetryImage?.(msg, img.file)}
-                          leftIcon={<Icon name="RefreshCw" size={11} />}
-                          title="Send this image's request body again — no text model, and the same seed, size and checkpoint it used. It replaces this image."
-                        >
-                          Retry
-                        </Button>
-                        <Button
-                          size="xs"
-                          variant="ghost"
-                          className="message-image-edit-request"
-                          disabled={imageActionBusy}
-                          onClick={() => onEditImageRequest?.(msg, img.file)}
-                          leftIcon={<Icon name="Pencil" size={11} />}
-                          title="Edit the JSON body that went to the image provider, then send it again"
-                        >
-                          Edit request
-                        </Button>
-                      </div>
-                    ) : null}
-
-                    {img.request ? (
-                      <ImageRequestDisclosure
-                        request={img.request}
-                        durationMs={img.durationMs}
-                      />
-                    ) : null}
-                    {img.promptRequest ? (
-                      <ImagePromptCallDisclosure
-                        request={img.promptRequest}
-                        response={img.promptResponse}
-                        promptDurationMs={img.promptDurationMs}
-                      />
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          ) : null}
-
-          <div className="message-footer">
-            {imageGeneratingId === msg.id ? (
-              <>
-                <span className="message-image-status">
-                  <Icon name="Loader" size={12} className="animate-spin" />{" "}
-                  Generating image…
-                  {renderElapsedMs !== null ? (
-                    <span className="message-image-elapsed">
-                      {formatDuration(renderElapsedMs)}
-                    </span>
-                  ) : null}
-                </span>
-                {progressDisplay ? (
-                  <span
-                    className="message-image-progress"
-                    role="progressbar"
-                    aria-valuenow={progressDisplay.percent}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-label="Image generation progress"
-                    title={
-                      imageProgress?.etaSeconds !== undefined &&
-                      imageProgress.etaSeconds > 0
-                        ? `${progressDisplay.label} · about ${Math.round(imageProgress.etaSeconds)}s left`
-                        : progressDisplay.label
+      {msg.images && msg.images.length > 0 ? (
+        <div className="message-images">
+          {msg.images.map((img) => {
+            const imageActionBusy =
+              imageDeletingId === msg.id ||
+              imageGeneratingId === msg.id ||
+              imagePreviewMessageId === msg.id;
+            const captionText = imageCaption(img) || img.prompt;
+            return (
+              <div key={img.file} className="message-image-block">
+                <figure className="message-image">
+                  <button
+                    type="button"
+                    className="message-image-open"
+                    title="View full screen"
+                    aria-label="View this image full screen"
+                    onClick={() =>
+                      onOpenViewer({
+                        src: buildImageUrl(img.file),
+                        alt: img.prompt.slice(0, 120),
+                        title: img.prompt,
+                        caption: captionText,
+                      })
                     }
                   >
-                    <span
-                      className="message-image-progress-bar"
-                      aria-hidden="true"
+                    <img
+                      src={buildImageUrl(img.file)}
+                      alt={img.prompt.slice(0, 120)}
+                      title={img.prompt}
+                      loading="lazy"
+                    />
+                  </button>
+                  <IconButton
+                    className="message-image-remove"
+                    variant="overlay"
+                    size="xs"
+                    round
+                    icon="X"
+                    busy={imageDeletingId === msg.id}
+                    label="Remove this image"
+                    title="Remove this image? The file is deleted if nothing else uses it."
+                    onClick={() => onDeleteImage?.(msg, img.file)}
+                    disabled={
+                      imageDeletingId === msg.id ||
+                      imageGeneratingId === msg.id
+                    }
+                  />
+                  {captionText ? (
+                    <figcaption title={img.prompt}>{captionText}</figcaption>
+                  ) : null}
+                </figure>
+
+                {img.request ? (
+                  <div className="message-image-actions">
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      className="message-image-retry"
+                      disabled={imageActionBusy}
+                      onClick={() => onRetryImage?.(msg, img.file)}
+                      leftIcon={<Icon name="RefreshCw" size={11} />}
+                      title="Send this image's request body again — no text model, and the same seed, size and checkpoint it used. It replaces this image."
                     >
-                      <span
-                        className="message-image-progress-fill"
-                        style={{
-                          width: `${progressDisplay.percent}%`,
-                        }}
-                      />
-                    </span>
-                    <span className="message-image-progress-text">
-                      {progressDisplay.label}
-                    </span>
+                      Retry
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      className="message-image-edit-request"
+                      disabled={imageActionBusy}
+                      onClick={() => onEditImageRequest?.(msg, img.file)}
+                      leftIcon={<Icon name="Pencil" size={11} />}
+                      title="Edit the JSON body that went to the image provider, then send it again"
+                    >
+                      Edit request
+                    </Button>
+                  </div>
+                ) : null}
+
+                {img.request ? (
+                  <ImageRequestDisclosure
+                    request={img.request}
+                    durationMs={img.durationMs}
+                  />
+                ) : null}
+                {img.promptRequest ? (
+                  <ImagePromptCallDisclosure
+                    request={img.promptRequest}
+                    response={img.promptResponse}
+                    promptDurationMs={img.promptDurationMs}
+                  />
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
+      <div className="message-footer">
+        {msg.role === "assistant" ? (
+          imageGeneratingId === msg.id ? (
+            <>
+              <span className="message-image-status">
+                <Icon name="Loader" size={12} className="animate-spin" />{" "}
+                Generating image…
+                {renderElapsedMs !== null ? (
+                  <span className="message-image-elapsed">
+                    {formatDuration(renderElapsedMs)}
                   </span>
                 ) : null}
-                <Button
-                  size="xs"
-                  variant="danger"
-                  className="message-action cancel-image"
-                  onClick={onCancelImage}
-                  leftIcon={<Icon name="Square" size={11} />}
+              </span>
+              {progressDisplay ? (
+                <span
+                  className="message-image-progress"
+                  role="progressbar"
+                  aria-valuenow={progressDisplay.percent}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="Image generation progress"
+                  title={
+                    imageProgress?.etaSeconds !== undefined &&
+                    imageProgress.etaSeconds > 0
+                      ? `${progressDisplay.label} · about ${Math.round(imageProgress.etaSeconds)}s left`
+                      : progressDisplay.label
+                  }
                 >
-                  Cancel
-                </Button>
-              </>
-            ) : imagePreviewMessageId === msg.id ? (
-              <>
-                <span className="message-image-status">
-                  <Icon name="Loader" size={12} className="animate-spin" />{" "}
-                  Writing image prompt…
-                  {promptElapsedMs !== null ? (
-                    <span className="message-image-elapsed">
-                      {formatDuration(promptElapsedMs)}
-                    </span>
-                  ) : null}
+                  <span
+                    className="message-image-progress-bar"
+                    aria-hidden="true"
+                  >
+                    <span
+                      className="message-image-progress-fill"
+                      style={{
+                        width: `${progressDisplay.percent}%`,
+                      }}
+                    />
+                  </span>
+                  <span className="message-image-progress-text">
+                    {progressDisplay.label}
+                  </span>
                 </span>
-                <Button
-                  size="xs"
-                  variant="danger"
-                  className="message-action cancel-image"
-                  onClick={onCancelImage}
-                  leftIcon={<Icon name="Square" size={11} />}
-                >
-                  Cancel
-                </Button>
-              </>
-            ) : (
+              ) : null}
               <Button
                 size="xs"
-                variant="ghost"
-                className="message-action message-image-generate"
-                onClick={() => onGenerateImage?.(msg)}
-                disabled={
-                  !hasImageProvider ||
-                  actionLoading ||
-                  loading ||
-                  imageDeletingId === msg.id
-                }
-                title={
-                  !hasImageProvider
-                    ? "No image provider configured — add one in Settings → Provider → Images"
-                    : actionLoading || loading
-                      ? "Another action is in progress"
-                      : "Generate an image for this message"
-                }
-                leftIcon={<Icon name="Image" size={11} />}
+                variant="danger"
+                className="message-action cancel-image"
+                onClick={onCancelImage}
+                leftIcon={<Icon name="Square" size={11} />}
               >
-                {msg.images && msg.images.length > 0
-                  ? "Generate another"
-                  : "Generate Image"}
+                Cancel
               </Button>
-            )}
-          </div>
-        </>
-      ) : null}
+            </>
+          ) : imagePreviewMessageId === msg.id ? (
+            <>
+              <span className="message-image-status">
+                <Icon name="Loader" size={12} className="animate-spin" />{" "}
+                Writing image prompt…
+                {promptElapsedMs !== null ? (
+                  <span className="message-image-elapsed">
+                    {formatDuration(promptElapsedMs)}
+                  </span>
+                ) : null}
+              </span>
+              <Button
+                size="xs"
+                variant="danger"
+                className="message-action cancel-image"
+                onClick={onCancelImage}
+                leftIcon={<Icon name="Square" size={11} />}
+              >
+                Cancel
+              </Button>
+            </>
+          ) : (
+            <Button
+              size="xs"
+              variant="ghost"
+              className="message-action message-image-generate"
+              onClick={() => onGenerateImage?.(msg)}
+              disabled={
+                !hasImageProvider ||
+                actionLoading ||
+                loading ||
+                imageDeletingId === msg.id
+              }
+              title={
+                !hasImageProvider
+                  ? "No image provider configured — add one in Settings → Provider → Images"
+                  : actionLoading || loading
+                    ? "Another action is in progress"
+                    : "Generate an image for this message"
+              }
+              leftIcon={<Icon name="Image" size={11} />}
+            >
+              {msg.images && msg.images.length > 0
+                ? "Generate another"
+                : "Generate Image"}
+            </Button>
+          )
+        ) : null}
+
+        {onAttachImage ? (
+          <Button
+            size="xs"
+            variant="ghost"
+            className="message-action message-image-attach"
+            onClick={() => onAttachImage(msg)}
+            disabled={
+              actionLoading ||
+              loading ||
+              imageDeletingId === msg.id ||
+              imageGeneratingId === msg.id ||
+              imagePreviewMessageId === msg.id
+            }
+            title="Upload a custom image or pick one from the playthrough gallery to attach to this message"
+            leftIcon={<Icon name="ImagePlus" size={11} />}
+          >
+            Attach Image
+          </Button>
+        ) : null}
+      </div>
     </article>
   );
 }

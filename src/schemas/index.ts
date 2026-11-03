@@ -781,7 +781,7 @@ export const ChatMessageSchema = z.object({
   /** Marks the assistant message that opens a new chapter after the previous
    *  chapter was archived. Drives the "Re-summarize previous chapter" action. */
   chapterOpening: z.boolean().optional(),
-  /** Generated images attached to this message (assistant messages only).
+  /** Generated or attached images on this message (user or assistant messages).
    *  OPTIONAL so every record written before this feature parses untouched. */
   images: z.array(MessageImageSchema).optional(),
   /** What this turn's statePatch actually did, recorded by executeTurn.
@@ -875,6 +875,18 @@ export const PlaythroughCoverSchema = z.object({
 });
 export type PlaythroughCover = z.infer<typeof PlaythroughCoverSchema>;
 
+/** One custom-uploaded image in a playthrough's gallery pool. Stored on the
+ *  playthrough record so uploaded reference art and attachments survive orphan
+ *  sweeps even when not attached to a specific chat message. */
+export const GalleryImageSchema = z.object({
+  /** "<sha256>.<ext>" — content-addressed file under data/playthroughs/<id>/images/. */
+  file: z.string(),
+  /** Optional user-provided label or original filename. */
+  label: z.string().optional(),
+  createdAt: z.string(),
+});
+export type GalleryImage = z.infer<typeof GalleryImageSchema>;
+
 export const PlaythroughSchema = z.object({
   schemaVersion: z.number().int().min(1).default(2),
   id: z.string(),
@@ -916,6 +928,9 @@ export const PlaythroughSchema = z.object({
    *  `.default()`: an additive optional field needs no `dataMigrations` entry and
    *  every record written before covers existed parses untouched. */
   cover: PlaythroughCoverSchema.optional(),
+  /** Custom-uploaded images in this playthrough's gallery pool. Optional with no
+   *  `.default()` so existing records and typed literals parse untouched. */
+  galleryImages: z.array(GalleryImageSchema).optional(),
   /** Optional VNDB-inspired playthrough tags (themes, settings, tropes, general).
    *  Additive optional field so existing playthrough files parse untouched. */
   tags: z.array(z.string()).optional(),

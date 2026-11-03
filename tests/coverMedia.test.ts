@@ -250,3 +250,56 @@ describe("groupCoverMedia", () => {
     expect(groups[0].items.map((item) => item.file)).toEqual(["orphan.png"]);
   });
 });
+
+describe("buildCoverMedia with galleryImages", () => {
+  it("includes standalone galleryImages newest-first and marks uploaded files with isUploaded", () => {
+    const pt = createBlankPlaythrough("Gallery Uploads");
+    pt.messages = [
+      message("m1", [image("gen.png")]),
+      {
+        id: "u1",
+        role: "user",
+        content: "User message with attached upload",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        images: [image("attached_upload.webp")],
+      },
+    ];
+    pt.galleryImages = [
+      {
+        file: "attached_upload.webp",
+        label: "Attached Upload",
+        createdAt: "2026-01-01T01:00:00.000Z",
+      },
+      {
+        file: "standalone_old.webp",
+        label: "Standalone Old",
+        createdAt: "2026-01-01T02:00:00.000Z",
+      },
+      {
+        file: "standalone_new.webp",
+        label: "Standalone New",
+        createdAt: "2026-01-01T03:00:00.000Z",
+      },
+    ];
+
+    const items = buildCoverMedia(pt);
+    expect(items.map((item) => item.file)).toEqual([
+      "attached_upload.webp",
+      "gen.png",
+      "standalone_new.webp",
+      "standalone_old.webp",
+    ]);
+    expect(items[0].isUploaded).toBe(true);
+    expect(items[1].isUploaded).toBeUndefined();
+    expect(items[2]).toMatchObject({
+      file: "standalone_new.webp",
+      prompt: "Standalone New",
+      isUploaded: true,
+    });
+    expect(items[3]).toMatchObject({
+      file: "standalone_old.webp",
+      prompt: "Standalone Old",
+      isUploaded: true,
+    });
+  });
+});

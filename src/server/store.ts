@@ -155,6 +155,9 @@ export function collectPlaythroughImageRefs(
       if (image?.file) refs.add(image.file);
     }
   }
+  for (const galleryImg of playthrough.galleryImages ?? []) {
+    if (galleryImg?.file) refs.add(galleryImg.file);
+  }
   if (playthrough.cover?.file) refs.add(playthrough.cover.file);
   return refs;
 }
@@ -2139,10 +2142,18 @@ export function toPlaythroughSummary(
   options: PlaythroughSummaryOptions = {},
 ): PlaythroughSummary {
   const visible = p.messages.filter((m) => !m.hidden);
-  const imageCount = visible.reduce(
-    (sum, m) => sum + (m.images?.length ?? 0),
-    0,
-  );
+  const visibleFiles = new Set<string>();
+  for (const m of visible) {
+    for (const img of m.images ?? []) {
+      if (img?.file) visibleFiles.add(img.file);
+    }
+  }
+  const extraGalleryCount = (p.galleryImages ?? []).filter(
+    (g) => g?.file && !visibleFiles.has(g.file),
+  ).length;
+  const imageCount =
+    visible.reduce((sum, m) => sum + (m.images?.length ?? 0), 0) +
+    extraGalleryCount;
   return {
     id: p.id,
     name: p.name,

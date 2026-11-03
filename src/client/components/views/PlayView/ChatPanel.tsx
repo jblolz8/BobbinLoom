@@ -12,7 +12,12 @@ import type {
   ChatMessage,
   Playthrough,
 } from "../../../../schemas";
-import type { ImageGenerationProgress, TokenUsage } from "../../../api";
+import {
+  attachMessageImage,
+  type AttachMessageImagePayload,
+  type ImageGenerationProgress,
+  type TokenUsage,
+} from "../../../api";
 import { useElapsed } from "../../../hooks/useElapsed";
 import type {
   FailedResponseNotice,
@@ -33,10 +38,12 @@ import {
   OptimisticUserMessage,
   PromptComposer,
 } from "../../common";
+import { AttachImageModal } from "./AttachImageModal";
 import { ImagePromptModal } from "./ImagePromptModal";
 
 export type ChatPanelProps = {
   playthrough: Playthrough;
+  onPlaythroughChange?: (updated: Playthrough) => void;
   input: string;
   onInputChange: (value: string) => void;
   onSend: () => void;
@@ -111,6 +118,7 @@ export type ChatPanelProps = {
 export function ChatPanel(props: ChatPanelProps) {
   const {
     playthrough,
+    onPlaythroughChange,
     input,
     onInputChange,
     onSend,
@@ -175,6 +183,31 @@ export function ChatPanel(props: ChatPanelProps) {
   } = props;
 
   const [viewerImage, setViewerImage] = useState<ImageViewerImage | null>(null);
+  const [attachTarget, setAttachTarget] = useState<ChatMessage | null>(null);
+  const [attachingImage, setAttachingImage] = useState(false);
+  const [attachError, setAttachError] = useState<string | null>(null);
+
+  const handleAttachImage = useCallback(
+    async (payload: AttachMessageImagePayload) => {
+      if (!attachTarget) return;
+      setAttachingImage(true);
+      setAttachError(null);
+      try {
+        const res = await attachMessageImage(
+          playthrough.id,
+          attachTarget.id,
+          payload,
+        );
+        onPlaythroughChange?.(res.playthrough);
+        setAttachTarget(null);
+      } catch (e) {
+        setAttachError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setAttachingImage(false);
+      }
+    },
+    [attachTarget, playthrough.id, onPlaythroughChange],
+  );
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -512,6 +545,10 @@ export function ChatPanel(props: ChatPanelProps) {
                   imageProgress={imageProgress}
                   progressDisplay={progressDisplay}
                   onGenerateImage={onGenerateImage}
+                  onAttachImage={(targetMsg) => {
+                    setAttachError(null);
+                    setAttachTarget(targetMsg);
+                  }}
                   onCancelImage={onCancelImage}
                   onDeleteImage={onDeleteImage}
                   onRetryImage={onRetryImage}
@@ -587,6 +624,24 @@ export function ChatPanel(props: ChatPanelProps) {
           onClose={() => onImagePromptClose?.()}
           promptElapsedMs={promptElapsedMs}
           promptDurationMs={imagePromptRequest.promptDurationMs}
+        />
+      ) : null}
+
+      {attachTarget ? (
+        <AttachImageModal
+          playthrough={playthrough}
+          message={attachTarget}
+          attaching={attachingImage}
+          errorMessage={attachError}
+          onAttach={(payload) => {
+            void handleAttachImage(payload);
+          }}
+          onClose={() => {
+            if (!attachingImage) {
+              setAttachTarget(null);
+              setAttachError(null);
+            }
+          }}
         />
       ) : null}
 

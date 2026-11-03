@@ -383,6 +383,7 @@ export function PlayView(props: PlayViewProps) {
       renderChatPane={(paneProps) => (
         <ChatPanel
           playthrough={playthrough}
+          onPlaythroughChange={setPlaythrough}
           input={input}
           onInputChange={setInput}
           onSend={() => {
