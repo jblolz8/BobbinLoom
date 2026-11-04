@@ -3,6 +3,7 @@ import type { RevertTarget } from "../../../../engine/chapterRevert";
 import type {
   AutoScrollBehavior,
   ChatMessage,
+  MessageFontSize,
   Playthrough,
 } from "../../../../schemas";
 import {
@@ -60,6 +61,8 @@ export type PlayViewProps = {
   setShowMessageNumbers?: (val: boolean) => void;
   autoScrollBehavior?: AutoScrollBehavior;
   setAutoScrollBehavior?: (val: AutoScrollBehavior) => void;
+  messageFontSize?: MessageFontSize;
+  setMessageFontSize?: (val: MessageFontSize) => void;
   choices: string[];
   input: string;
   setInput: (val: string) => void;
@@ -188,6 +191,7 @@ export function PlayView(props: PlayViewProps) {
     showModelName = true,
     showMessageNumbers = true,
     autoScrollBehavior = "start",
+    messageFontSize = "standard",
     choices,
     input,
     setInput,
@@ -396,6 +400,7 @@ export function PlayView(props: PlayViewProps) {
           showModelName={showModelName}
           showMessageNumbers={showMessageNumbers}
           autoScrollBehavior={autoScrollBehavior}
+          messageFontSize={messageFontSize}
           canContinue={canContinue}
           onChoiceSelect={setInput}
           editingMessageId={editingMessageId}

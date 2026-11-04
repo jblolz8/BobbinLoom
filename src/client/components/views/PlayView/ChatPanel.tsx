@@ -10,6 +10,7 @@ import {
 import type {
   AutoScrollBehavior,
   ChatMessage,
+  MessageFontSize,
   Playthrough,
 } from "../../../../schemas";
 import {
@@ -58,6 +59,7 @@ export type ChatPanelProps = {
   showModelName?: boolean;
   showMessageNumbers?: boolean;
   autoScrollBehavior?: AutoScrollBehavior;
+  messageFontSize?: MessageFontSize;
   canContinue: boolean;
   onChoiceSelect: (choice: string) => void;
   editingMessageId: string | null;
@@ -133,6 +135,7 @@ export function ChatPanel(props: ChatPanelProps) {
     showModelName = true,
     showMessageNumbers = true,
     autoScrollBehavior = "start",
+    messageFontSize = "standard",
     canContinue,
     onChoiceSelect,
     editingMessageId,
@@ -453,6 +456,7 @@ export function ChatPanel(props: ChatPanelProps) {
   return (
     <section
       className={`chat-panel${className ? ` ${className}` : ""}`}
+      data-message-font-size={messageFontSize}
       style={props.style}
     >
       <div className="messages-wrap">

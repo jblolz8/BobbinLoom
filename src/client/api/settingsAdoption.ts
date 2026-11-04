@@ -248,6 +248,18 @@ export const ADOPTION_SOURCES: readonly LocalAdoptionSource[] = [
     parse: fromChatBlobOneOf("autoScrollBehavior", ["start", "bottom", "none"]),
   },
   {
+    key: CHAT_KEY,
+    group: "chat",
+    leaf: "messageFontSize",
+    parse: fromChatBlobOneOf("messageFontSize", [
+      "sm",
+      "standard",
+      "md",
+      "lg",
+      "xl",
+    ]),
+  },
+  {
     key: LIBRARY_KEYS.viewMode,
     group: "library",
     leaf: "viewMode",

@@ -95,6 +95,8 @@
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   padding-right: 4px;
+  container-type: inline-size;
+  container-name: workspace;
 }
 
 .base-modal__content > [hidden] {

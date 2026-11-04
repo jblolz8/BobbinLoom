@@ -394,6 +394,8 @@ export default function App() {
           setShowMessageNumbers={playthroughHook.setShowMessageNumbers}
           autoScrollBehavior={playthroughHook.autoScrollBehavior}
           setAutoScrollBehavior={playthroughHook.setAutoScrollBehavior}
+          messageFontSize={playthroughHook.messageFontSize}
+          setMessageFontSize={playthroughHook.setMessageFontSize}
           choices={playthroughHook.choices}
           input={playthroughHook.input}
           setInput={playthroughHook.setInput}
@@ -548,6 +550,8 @@ export default function App() {
         setImagePromptPreview={playthroughHook.setImagePromptPreview}
         autoScrollBehavior={playthroughHook.autoScrollBehavior}
         setAutoScrollBehavior={playthroughHook.setAutoScrollBehavior}
+        messageFontSize={playthroughHook.messageFontSize}
+        setMessageFontSize={playthroughHook.setMessageFontSize}
       />
 
       <PersonaLibrary

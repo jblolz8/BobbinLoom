@@ -565,6 +565,15 @@ export const PageSizeSchema = z.union([
 export const AutoScrollBehaviorSchema = z.enum(["start", "bottom", "none"]);
 export type AutoScrollBehavior = z.infer<typeof AutoScrollBehaviorSchema>;
 
+export const MessageFontSizeSchema = z.enum([
+  "sm",
+  "standard",
+  "md",
+  "lg",
+  "xl",
+]);
+export type MessageFontSize = z.infer<typeof MessageFontSizeSchema>;
+
 export const CharacterContextScopeSchema = z.enum([
   "chapter",
   "timeline",
@@ -592,6 +601,7 @@ export const ViewPreferencesSchema = z.object({
       autoImageAfterTurn: z.boolean().optional(),
       alwaysDiscardOldImage: z.boolean().optional(),
       autoScrollBehavior: AutoScrollBehaviorSchema.optional(),
+      messageFontSize: MessageFontSizeSchema.optional(),
     })
     .optional(),
   library: z

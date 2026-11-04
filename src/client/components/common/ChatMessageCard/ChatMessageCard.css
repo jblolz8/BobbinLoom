@@ -9,6 +9,22 @@
   overflow: hidden;
 }
 
+.chat-panel[data-message-font-size="sm"] {
+  --chat-message-font-size: 0.78rem;
+}
+.chat-panel[data-message-font-size="standard"] {
+  --chat-message-font-size: 0.82rem;
+}
+.chat-panel[data-message-font-size="md"] {
+  --chat-message-font-size: 0.88rem;
+}
+.chat-panel[data-message-font-size="lg"] {
+  --chat-message-font-size: 0.92rem;
+}
+.chat-panel[data-message-font-size="xl"] {
+  --chat-message-font-size: 1rem;
+}
+
 .messages-wrap {
   flex: 1;
   display: flex;
@@ -123,7 +139,8 @@
 }
 
 .generating-placeholder {
-  font-size: 0.92rem;
+  font-size: var(--chat-message-font-size, 0.82rem);
+  line-height: 1.55;
   font-style: italic;
   margin: 0;
   color: var(--text-muted);
@@ -325,6 +342,12 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.edit-area .base-form-textarea.edit-draft-textarea,
+.edit-area .edit-draft-textarea {
+  font-size: var(--chat-message-font-size, 0.82rem);
+  line-height: 1.55;
 }
 
 .edit-actions {

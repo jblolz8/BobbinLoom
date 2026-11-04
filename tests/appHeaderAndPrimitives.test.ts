@@ -28,8 +28,10 @@ import {
   CardFamilyModal,
   EditTagsModal,
 } from "../src/client/components/common";
+import { TimelineModal } from "../src/client/components/modals/TimelineModal";
 import { DocsView } from "../src/client/components/views/DocsView";
 import {
+  CastStepPanel,
   CreateNewPlaythroughView,
   defaultSetupForm,
   SettingStepPanel,
@@ -247,6 +249,11 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
       "base-card base-card--elevated base-card--pad-xs base-card--active base-card--hoverable",
     );
     expect(html).toContain("base-badge base-badge--accent base-badge--xs");
+    expect(html).toContain("Message Font Size");
+    expect(html).toContain(
+      "Adjust the text size for User and AI messages, inline Edit Mode, and the chat composer.",
+    );
+    expect(html).toContain("0.82rem");
     expect(html).toContain("Top of Message");
     expect(html).not.toContain("autoscroll-option-card");
     expect(html).not.toContain("chat-settings-section");
@@ -1604,5 +1611,110 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
 
     expect(expandedSettingHtml).toContain("base-accordion--open");
     expect(expandedSettingHtml).toContain("base-pagination");
+
+    const sampleCastTemplate = {
+      id: "char_1",
+      name: "Lyra",
+      version: 1,
+      content: "Mage",
+      summary: "",
+      startingClothing: [],
+      tags: ["magic"],
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+
+    const castStepHtml = renderToStaticMarkup(
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(CastStepPanel, {
+          castLibraryCount: 1,
+          filteredCastCount: 1,
+          paginatedCastGroups: [
+            {
+              key: "char_1",
+              versions: [sampleCastTemplate],
+            },
+          ],
+          selectedCastIds: ["char_1"],
+          selectedCastTemplates: [sampleCastTemplate],
+          onToggleCastId: noop,
+          onSelectAllFilteredCast: noop,
+          onClearCast: noop,
+          castSearch: "",
+          onChangeCastSearch: noop,
+          sortBy: "name",
+          onChangeSortBy: noop,
+          sortDirection: "asc",
+          onToggleSortDirection: noop,
+          viewMode: "portrait",
+          onChangeViewMode: noop,
+          taxonomyConfig: null,
+          allTagCounts: [{ tag: "magic", count: 1 }],
+          activeFilterTags: [],
+          onToggleTag: noop,
+          onRemoveFilterTag: noop,
+          sidebarViewMode: "grouped",
+          onChangeSidebarViewMode: noop,
+          collapsedCategories: new Set<string>(),
+          onToggleCategoryCollapse: noop,
+          page: 1,
+          pageSize: 12,
+          totalItems: 1,
+          totalPages: 1,
+          onPageChange: noop,
+          onPageSizeChange: noop,
+          onCommitCustomPageSize: () => true,
+        }),
+      ),
+    );
+
+    expect(castStepHtml).toContain("base-stack--scrollable-sm");
+    expect(castStepHtml).toContain("base-form-grid--cols-portrait");
+
+    const timelineHtml = renderToStaticMarkup(
+      createElement(
+        RadixTooltip.Provider,
+        null,
+        createElement(TimelineModal, {
+          open: true,
+          onClose: noop,
+          activePlaythrough: {
+            id: "pt_1",
+            schemaVersion: 1,
+            name: "Main Branch",
+            branchId: "branch_1",
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+            turn: 3,
+            playerCharacter: {
+              name: "Alden",
+              description: "",
+              bodyType: "",
+              appearance: "",
+              clothing: [],
+              conditions: [],
+              flags: [],
+            },
+            worldState: [],
+            characters: [],
+            activeCharacters: [],
+            characterTemplates: [],
+            inventory: [],
+            messages: [],
+            chapters: [],
+            storyMetaSummaries: [],
+            currentChapterStartedAtTurn: 1,
+            memoryEvents: [],
+            lorebookIds: [],
+          },
+          onSwitchPlaythrough: noop,
+        }),
+      ),
+    );
+
+    expect(timelineHtml).toContain("base-header--modal");
+    expect(timelineHtml).toContain("common-hierarchy-inspector");
   });
 });

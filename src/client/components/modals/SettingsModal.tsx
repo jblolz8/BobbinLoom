@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import type { AutoScrollBehavior, ProviderKind } from "../../../schemas";
+import type {
+  AutoScrollBehavior,
+  MessageFontSize,
+  ProviderKind,
+} from "../../../schemas";
 import {
   UI_PREFERENCE_DEFAULTS,
   adoptLocalPreferences,
@@ -94,6 +98,8 @@ export type SettingsModalProps = {
   setImagePromptPreview?: (show: boolean) => void;
   autoScrollBehavior?: AutoScrollBehavior;
   setAutoScrollBehavior?: (behavior: AutoScrollBehavior) => void;
+  messageFontSize?: MessageFontSize;
+  setMessageFontSize?: (size: MessageFontSize) => void;
 };
 
 export function SettingsModal(props: SettingsModalProps) {
@@ -122,6 +128,8 @@ export function SettingsModal(props: SettingsModalProps) {
     setImagePromptPreview,
     autoScrollBehavior = "start",
     setAutoScrollBehavior,
+    messageFontSize = "standard",
+    setMessageFontSize,
   } = props;
 
   const titleId = useId();
@@ -387,6 +395,8 @@ export function SettingsModal(props: SettingsModalProps) {
                 setAlwaysDiscardOldImage={setAlwaysDiscardOldImage}
                 autoScrollBehavior={autoScrollBehavior}
                 setAutoScrollBehavior={setAutoScrollBehavior}
+                messageFontSize={messageFontSize}
+                setMessageFontSize={setMessageFontSize}
               />
             )}
           </Tabs.Panel>

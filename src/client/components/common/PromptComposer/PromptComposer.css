@@ -52,8 +52,8 @@
   box-shadow: none;
   padding: 0.25rem 0.35rem;
   color: var(--input-text);
-  font-size: 0.92rem;
-  line-height: 1.45;
+  font-size: var(--chat-message-font-size, 0.82rem);
+  line-height: 1.55;
   resize: none;
 }
 

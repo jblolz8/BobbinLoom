@@ -246,7 +246,6 @@ export function SettingStepPanel({
                             align="center"
                             gap="xs"
                             flex1
-                            fullWidth
                           >
                             <Icon name="BookOpen" size={14} />
                             <Text

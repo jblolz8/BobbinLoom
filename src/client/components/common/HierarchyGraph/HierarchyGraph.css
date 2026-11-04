@@ -186,7 +186,7 @@
   background: var(--timeline-node-bg, var(--bg-surface-elevated));
   border: 1px solid var(--timeline-node-border, var(--border-main));
   border-radius: var(--radius-lg);
-  padding: 0.65rem 0.75rem;
+  padding: 0.6rem 0.72rem;
   cursor: pointer;
   box-shadow: var(--shadow-card);
   transition:
@@ -196,7 +196,10 @@
   color: var(--text-primary);
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  justify-content: space-between;
+  gap: 0.35rem;
+  box-sizing: border-box;
+  overflow: hidden;
   user-select: none;
   z-index: 3;
 }
@@ -241,6 +244,14 @@
 .common-hierarchy-node__preview-role {
   color: var(--accent-highlight, var(--status-info));
   font-weight: 600;
+}
+
+.common-hierarchy-inspector {
+  flex-shrink: 0;
+  max-height: 44%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .common-hierarchy-inspector-preview {
@@ -367,6 +378,15 @@
 }
 
 @media (max-width: 640px) {
+  .common-hierarchy-graph--fill {
+    min-height: 180px;
+  }
+
+  .common-hierarchy-graph--compact {
+    height: 260px;
+    min-height: 220px;
+  }
+
   .common-hierarchy-graph__toolbar {
     top: 0.45rem;
     left: 0.45rem;
@@ -379,5 +399,9 @@
     bottom: 0.45rem;
     right: 0.45rem;
     padding: 0.15rem 0.25rem;
+  }
+
+  .common-hierarchy-inspector {
+    max-height: 46%;
   }
 }

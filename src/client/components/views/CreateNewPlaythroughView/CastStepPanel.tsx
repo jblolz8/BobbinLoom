@@ -243,7 +243,7 @@ export function CastStepPanel({
               align="center"
               gap="xs"
               wrap
-              scrollable
+              scrollable="sm"
               fullWidth
             >
               {selectedCastTemplates.map((t) => (
@@ -313,43 +313,54 @@ export function CastStepPanel({
                 aria-label="Search cast"
               />
 
-              <Button
-                variant="secondary"
-                size="xs"
-                onClick={onSelectAllFilteredCast}
-                disabled={filteredCastCount === 0}
-                title="Select all filtered characters"
+              <Stack
+                direction="row"
+                align="center"
+                justify="between"
+                gap="xs"
+                wrap
+                flex1
               >
-                Select All
-              </Button>
+                <Stack direction="row" align="center" gap="xs" wrap>
+                  <Button
+                    variant="secondary"
+                    size="xs"
+                    onClick={onSelectAllFilteredCast}
+                    disabled={filteredCastCount === 0}
+                    title="Select all filtered characters"
+                  >
+                    Select All
+                  </Button>
 
-              <SortSelect<CharacterSortOption>
-                value={sortBy}
-                onChange={onChangeSortBy}
-                direction={sortDirection}
-                onToggleDirection={onToggleSortDirection}
-                options={[
-                  { value: "name", label: "Name" },
-                  { value: "createdAt", label: "Created Date" },
-                  { value: "updatedAt", label: "Updated Date" },
-                ]}
-                size="sm"
-                groupAriaLabel="Sort cast"
-                aria-label="Sort cast by"
-              />
+                  <SortSelect<CharacterSortOption>
+                    value={sortBy}
+                    onChange={onChangeSortBy}
+                    direction={sortDirection}
+                    onToggleDirection={onToggleSortDirection}
+                    options={[
+                      { value: "name", label: "Name" },
+                      { value: "createdAt", label: "Created Date" },
+                      { value: "updatedAt", label: "Updated Date" },
+                    ]}
+                    size="sm"
+                    groupAriaLabel="Sort cast"
+                    aria-label="Sort cast by"
+                  />
+                </Stack>
 
-              <Tabs<ViewMode>
-                variant="segmented"
-                size="sm"
-                activeTab={viewMode}
-                onChange={onChangeViewMode}
-                ariaLabel="Cast view mode"
-                tabs={[
-                  { id: "portrait", label: "Portrait", icon: "IdCard" },
-                  { id: "list", label: "List", icon: "List" },
-                  { id: "grid", label: "Grid", icon: "LayoutGrid" },
-                ]}
-              />
+                <Tabs<ViewMode>
+                  variant="segmented"
+                  size="sm"
+                  activeTab={viewMode}
+                  onChange={onChangeViewMode}
+                  ariaLabel="Cast view mode"
+                  tabs={[
+                    { id: "portrait", label: "Portrait", icon: "IdCard" },
+                    { id: "list", label: "List", icon: "List" },
+                    { id: "grid", label: "Grid", icon: "LayoutGrid" },
+                  ]}
+                />
+              </Stack>
             </Stack>
           </Card>
 
@@ -582,7 +593,6 @@ export function CastStepPanel({
                           align="stretch"
                           gap="xs"
                           flex1
-                          fullWidth
                         >
                           <Stack
                             direction="row"

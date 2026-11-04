@@ -414,11 +414,13 @@ export function HierarchyGraph<T = unknown>({
     const rect = vp.getBoundingClientRect();
     const vpWidth = rect.width || 760;
     const vpHeight = rect.height || 420;
-    const isCompactViewport = vpWidth < 560;
+    const isCompactViewport =
+      vpWidth < 640 ||
+      (typeof window !== "undefined" && window.innerWidth <= 640);
 
     const topReserve = showDirectionToggle || toolbarExtra ? 52 : 24;
     const bottomReserve = isCompactViewport ? 48 : 28;
-    const padX = isCompactViewport ? 20 : 52;
+    const padX = isCompactViewport ? 18 : 48;
 
     const availW = Math.max(140, vpWidth - padX * 2);
     const availH = Math.max(120, vpHeight - topReserve - bottomReserve);
@@ -454,6 +456,31 @@ export function HierarchyGraph<T = unknown>({
     });
     return () => cancelAnimationFrame(raf);
   }, [itemsSignature, loading, items.length, fitView]);
+
+  useEffect(() => {
+    const vp = viewportRef.current;
+    if (!vp || loading || items.length === 0) return;
+    if (typeof ResizeObserver === "undefined") return;
+
+    let lastW = Math.round(vp.getBoundingClientRect().width);
+    let lastH = Math.round(vp.getBoundingClientRect().height);
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const nextW = Math.round(entry.contentRect.width);
+      const nextH = Math.round(entry.contentRect.height);
+      if (nextW <= 0 || nextH <= 0) return;
+      if (Math.abs(nextW - lastW) > 4 || Math.abs(nextH - lastH) > 4) {
+        lastW = nextW;
+        lastH = nextH;
+        fitView();
+      }
+    });
+
+    observer.observe(vp);
+    return () => observer.disconnect();
+  }, [loading, items.length, fitView]);
 
   const handleWheel = useCallback((e: ReactWheelEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -728,15 +755,10 @@ export function HierarchyGraph<T = unknown>({
           <div
             className="common-hierarchy-graph__pan-layer"
             style={{
-              transform: `translate(${Math.round(transform.x)}px, ${Math.round(transform.y)}px)`,
+              transform: `translate(${Math.round(transform.x)}px, ${Math.round(transform.y)}px) scale(${transform.zoom})`,
             }}
           >
-            <div
-              className="common-hierarchy-graph__stage"
-              style={{
-                zoom: transform.zoom,
-              }}
-            >
+            <div className="common-hierarchy-graph__stage">
               {/* SVG Connector Layer */}
               <svg
                 className="common-hierarchy-graph__edges"
@@ -807,7 +829,7 @@ export function HierarchyGraph<T = unknown>({
                     className={classes}
                     style={{
                       width: `${nodeWidth}px`,
-                      minHeight: `${nodeHeight}px`,
+                      height: `${nodeHeight}px`,
                       left: `${pos.x}px`,
                       top: `${pos.y}px`,
                     }}

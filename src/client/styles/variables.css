@@ -10,6 +10,7 @@
 
   --avatar-badge-radius: 8px;
   --workspace-max-width: 80%;
+  --chat-message-font-size: 0.82rem;
 
   /* ── 0. Shape & Radius Tokens ── */
   --radius-xs: 4px;
@@ -218,6 +219,22 @@
 }
 :root[data-avatar-shape="circle"] {
   --avatar-badge-radius: 50%;
+}
+
+:root[data-message-font-size="sm"] {
+  --chat-message-font-size: 0.78rem;
+}
+:root[data-message-font-size="standard"] {
+  --chat-message-font-size: 0.82rem;
+}
+:root[data-message-font-size="md"] {
+  --chat-message-font-size: 0.88rem;
+}
+:root[data-message-font-size="lg"] {
+  --chat-message-font-size: 0.92rem;
+}
+:root[data-message-font-size="xl"] {
+  --chat-message-font-size: 1rem;
 }
 
 /* ── Light Mode Palette ── */

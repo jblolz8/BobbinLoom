@@ -6,6 +6,7 @@ import type {
   CoverAspect,
   CustomThemeColors,
   ExportFormat,
+  MessageFontSize,
   TagTaxonomyConfig,
   ThemeMode,
   ViewPreferences,
@@ -19,7 +20,13 @@ import {
 } from "../../engine/theme";
 import { request } from "./client";
 
-export type { ThemeMode, CustomThemeColors, ChapterOpeningMode, ExportFormat };
+export type {
+  ThemeMode,
+  CustomThemeColors,
+  ChapterOpeningMode,
+  ExportFormat,
+  MessageFontSize,
+};
 
 /**
  * The reader's display preferences as stored — only what was chosen.
@@ -80,6 +87,8 @@ export const CHAT_PREFERENCE_DEFAULTS = {
   alwaysDiscardOldImage: false,
   /** Behavior when receiving a new AI message turn: start of message (default), bottom, or none. */
   autoScrollBehavior: "start" as AutoScrollBehavior,
+  /** Font size preset for chat messages, inline edit mode, and the prompt composer. */
+  messageFontSize: "standard" as MessageFontSize,
 } as const;
 
 export type ResolvedChatPreferences = {
@@ -94,6 +103,7 @@ export type ResolvedChatPreferences = {
   autoImageAfterTurn: boolean;
   alwaysDiscardOldImage: boolean;
   autoScrollBehavior: AutoScrollBehavior;
+  messageFontSize: MessageFontSize;
 };
 
 /** The chat toggles with defaults filled. An absent leaf means "never chosen", so defaults are applied
@@ -453,6 +463,27 @@ export function applyWorkspaceWidth(percent: number) {
   );
 }
 
+/** CSS `font-size` values for each chat message font size preset. */
+export const MESSAGE_FONT_SIZE_VALUES: Record<MessageFontSize, string> = {
+  sm: "0.78rem",
+  standard: "0.82rem",
+  md: "0.88rem",
+  lg: "0.92rem",
+  xl: "1rem",
+};
+
+/** Applies the chat message font size CSS variable and attribute globally on the root element. */
+export function applyMessageFontSize(size: MessageFontSize) {
+  if (typeof document === "undefined") return;
+  const resolved: MessageFontSize =
+    size in MESSAGE_FONT_SIZE_VALUES ? size : "standard";
+  document.documentElement.setAttribute("data-message-font-size", resolved);
+  document.documentElement.style.setProperty(
+    "--chat-message-font-size",
+    MESSAGE_FONT_SIZE_VALUES[resolved],
+  );
+}
+
 /** Applies CSS variables, data-theme attribute, and custom colors globally. The tokens come from the
  *  shared compiler (`src/engine/theme.ts`), which the server also uses to paint the first frame — the two
  *  must agree leaf for leaf, or a reload would visibly correct itself. */
@@ -484,7 +515,8 @@ export function applyTheme(settings: {
       prop.startsWith("--") &&
       prop !== "--avatar-badge-radius" &&
       prop !== "--cover-art-aspect" &&
-      prop !== "--workspace-max-width"
+      prop !== "--workspace-max-width" &&
+      prop !== "--chat-message-font-size"
     ) {
       propsToRemove.push(prop);
     }

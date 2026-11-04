@@ -68,7 +68,7 @@ export function PersonaStepPanel({
           </Stack>
         </Card>
       ) : (
-        <FormGrid cols={3} gap="sm">
+        <FormGrid cols="cards" gap="sm">
           {personas.map((p) => {
             const isSelected = selectedPersonaId === p.id;
             return (
@@ -97,13 +97,7 @@ export function PersonaStepPanel({
                   gap="sm"
                   fullWidth
                 >
-                  <Stack
-                    direction="row"
-                    align="center"
-                    gap="sm"
-                    flex1
-                    fullWidth
-                  >
+                  <Stack direction="row" align="center" gap="sm" flex1>
                     <AvatarBadge
                       src={getPersonaAvatarUrl(
                         p.id,
@@ -114,7 +108,7 @@ export function PersonaStepPanel({
                       name={p.name}
                       size="sm"
                     />
-                    <Stack direction="row" align="center" gap="xs" wrap flex1>
+                    <Stack direction="row" align="center" gap="xs" flex1>
                       <Text size="sm" weight="semibold" truncate>
                         {p.name}
                       </Text>

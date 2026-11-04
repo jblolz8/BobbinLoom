@@ -1,4 +1,5 @@
-import type { AutoScrollBehavior } from "../../../schemas";
+import type { AutoScrollBehavior, MessageFontSize } from "../../../schemas";
+import { MESSAGE_FONT_SIZE_VALUES } from "../../api";
 import {
   Badge,
   Card,
@@ -10,6 +11,38 @@ import {
   Text,
   type IconName,
 } from "../base";
+
+const MESSAGE_FONT_SIZE_OPTIONS: Array<{
+  id: MessageFontSize;
+  title: string;
+  desc: string;
+}> = [
+  {
+    id: "sm",
+    title: "Small",
+    desc: "Compact prose density for fitting more dialogue on screen",
+  },
+  {
+    id: "standard",
+    title: "Standard",
+    desc: "Matches standard UI and inline editor text size (Default)",
+  },
+  {
+    id: "md",
+    title: "Medium",
+    desc: "Slightly larger prose for relaxed reading",
+  },
+  {
+    id: "lg",
+    title: "Large",
+    desc: "Spacious story text for high readability",
+  },
+  {
+    id: "xl",
+    title: "Extra Large",
+    desc: "Maximum text size for effortless long-form reading",
+  },
+];
 
 const AUTOSCROLL_OPTIONS: Array<{
   id: AutoScrollBehavior;
@@ -60,6 +93,8 @@ export interface ChatSettingsPanelProps {
   setAlwaysDiscardOldImage?: (always: boolean) => void;
   autoScrollBehavior?: AutoScrollBehavior;
   setAutoScrollBehavior?: (behavior: AutoScrollBehavior) => void;
+  messageFontSize?: MessageFontSize;
+  setMessageFontSize?: (size: MessageFontSize) => void;
 }
 
 export function ChatSettingsPanel({
@@ -85,6 +120,8 @@ export function ChatSettingsPanel({
   setAlwaysDiscardOldImage,
   autoScrollBehavior = "start",
   setAutoScrollBehavior,
+  messageFontSize = "standard",
+  setMessageFontSize,
 }: ChatSettingsPanelProps) {
   return (
     <Stack direction="column" align="stretch" gap="md">
@@ -137,6 +174,70 @@ export function ChatSettingsPanel({
           checked={showContextUsage}
           onChange={(e) => setShowContextUsage(e.target.checked)}
         />
+      </Stack>
+
+      <Stack direction="column" align="stretch" gap="2xs">
+        <Header
+          variant="section"
+          icon="Type"
+          title="Message Font Size"
+          subtitle="Adjust the text size for User and AI messages, inline Edit Mode, and the chat composer."
+        />
+        <FormGrid cols="compact" gap="xs">
+          {MESSAGE_FONT_SIZE_OPTIONS.map((opt) => {
+            const isSelected = messageFontSize === opt.id;
+            const cssSize = MESSAGE_FONT_SIZE_VALUES[opt.id];
+            return (
+              <Card
+                key={opt.id}
+                as="button"
+                type="button"
+                variant="elevated"
+                padding="xs"
+                active={isSelected}
+                hoverable
+                onClick={() => setMessageFontSize?.(opt.id)}
+                aria-pressed={isSelected}
+              >
+                <Stack direction="column" align="stretch" gap="2xs">
+                  <Stack
+                    direction="row"
+                    align="center"
+                    justify="between"
+                    gap="xs"
+                  >
+                    <Stack direction="row" align="center" gap="xs">
+                      <Text as="span" tone="accent">
+                        <Icon name="Type" size={14} />
+                      </Text>
+                      <Text
+                        as="strong"
+                        size="xs"
+                        weight="semibold"
+                        tone="primary"
+                      >
+                        {opt.title}
+                      </Text>
+                    </Stack>
+                    <Stack direction="row" align="center" gap="2xs">
+                      <Badge variant="neutral" size="xs">
+                        {cssSize}
+                      </Badge>
+                      {isSelected && (
+                        <Badge variant="accent" size="xs">
+                          Active
+                        </Badge>
+                      )}
+                    </Stack>
+                  </Stack>
+                  <Text as="p" variant="caption" tone="secondary">
+                    {opt.desc}
+                  </Text>
+                </Stack>
+              </Card>
+            );
+          })}
+        </FormGrid>
       </Stack>
 
       <Stack direction="column" align="stretch" gap="2xs">

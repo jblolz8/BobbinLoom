@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Playthrough } from "../../../schemas";
 import {
   deletePlaythrough,
@@ -62,10 +62,20 @@ export function TimelineModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedPlaythrough, setSelectedPlaythrough] =
-    useState<Playthrough | null>(null);
+    useState<Playthrough | null>(() =>
+      activePlaythrough && activePlaythrough.id === effectiveTargetId
+        ? activePlaythrough
+        : null,
+    );
   const [direction, setDirection] = useState<HierarchyGraphDirection>(() =>
     typeof window !== "undefined" && window.innerWidth < 640 ? "TB" : "LR",
   );
+  const userToggledDirectionRef = useRef(false);
+
+  const handleDirectionChange = useCallback((next: HierarchyGraphDirection) => {
+    userToggledDirectionRef.current = true;
+    setDirection(next);
+  }, []);
 
   const [renameTarget, setRenameTarget] = useState<Playthrough | null>(null);
   const [renameSaving, setRenameSaving] = useState(false);
@@ -103,6 +113,9 @@ export function TimelineModal({
 
   useEffect(() => {
     if (open && effectiveTargetId) {
+      if (!userToggledDirectionRef.current && typeof window !== "undefined") {
+        setDirection(window.innerWidth < 640 ? "TB" : "LR");
+      }
       if (activePlaythrough && activePlaythrough.id === effectiveTargetId) {
         setSelectedPlaythrough(activePlaythrough);
       } else {
@@ -404,7 +417,8 @@ export function TimelineModal({
       ariaLabel="Timeline Branches Viewer"
     >
       <Header
-        variant="section"
+        variant="modal"
+        bordered
         icon="GitFork"
         title="Timelines & Branches"
         subtitle={`Explore and switch between ${playthroughs.length || 1} timeline ${playthroughs.length === 1 ? "branch" : "branches"} for "${effectiveTargetName}".`}
@@ -431,7 +445,7 @@ export function TimelineModal({
           renderNode={renderTimelineNode}
           onSelectItem={handleSelectItem}
           direction={direction}
-          onDirectionChange={setDirection}
+          onDirectionChange={handleDirectionChange}
           nodeWidth={256}
           nodeHeight={168}
           size="fill"
@@ -448,14 +462,14 @@ export function TimelineModal({
             variant="elevated"
             padding="sm"
             fullWidth
-            style={{ flexShrink: 0 }}
+            className="common-hierarchy-inspector"
           >
             <Stack direction="column" align="stretch" gap="xs" fullWidth>
               <Stack
                 direction="row"
                 align="center"
                 justify="between"
-                gap="md"
+                gap="sm"
                 wrap
                 fullWidth
               >
@@ -464,23 +478,12 @@ export function TimelineModal({
                   align="start"
                   gap="2xs"
                   flex1
-                  style={{ minWidth: "min(220px, 100%)" }}
+                  style={{ minWidth: "min(200px, 100%)" }}
                 >
                   <Stack direction="row" align="center" gap="xs" wrap>
                     <Text size="md" weight="bold">
                       {selectedPlaythrough.name}
                     </Text>
-                    <IconButton
-                      icon="Pencil"
-                      size="xs"
-                      variant="ghost"
-                      label="Rename timeline"
-                      title="Rename timeline"
-                      onClick={() => {
-                        setRenameError(null);
-                        setRenameTarget(selectedPlaythrough);
-                      }}
-                    />
                     {selectedIsActive ? (
                       <Badge variant="accent" size="xs">
                         CURRENT TIMELINE
@@ -495,6 +498,8 @@ export function TimelineModal({
                         variant="neutral"
                         size="xs"
                         leftIcon="GitFork"
+                        truncate
+                        maxWidth={220}
                         style={{ cursor: "pointer" }}
                         title={`Click to select parent timeline "${parentOfSelected.name}"`}
                         onClick={() => setSelectedPlaythrough(parentOfSelected)}
@@ -556,6 +561,8 @@ export function TimelineModal({
                     variant="secondary"
                     size="sm"
                     leftIcon={<Icon name="Pencil" size={14} />}
+                    collapseBelow="sm"
+                    title="Rename timeline"
                     onClick={() => {
                       setRenameError(null);
                       setRenameTarget(selectedPlaythrough);

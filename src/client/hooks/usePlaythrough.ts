@@ -4,11 +4,13 @@ import type {
   ChatMessage,
   ImageApiStyle,
   ImageInstructionMode,
+  MessageFontSize,
   MessageImage,
   Playthrough,
 } from "../../schemas";
 import {
   adoptLocalPreferences,
+  applyMessageFontSize,
   CHAT_PREFERENCE_DEFAULTS,
   deleteMessageImage,
   editMessage,
@@ -92,6 +94,7 @@ type ChatSettings = {
    *  from, so it asks first until the user says otherwise. */
   alwaysDiscardOldImage: boolean;
   autoScrollBehavior: AutoScrollBehavior;
+  messageFontSize: MessageFontSize;
 };
 
 /** Overrides the preview modal posts back. When BOTH prompt fields are present
@@ -339,7 +342,9 @@ export function usePlaythrough() {
     void (async () => {
       const { preferences } = await adoptLocalPreferences();
       if (cancelled || chatTouchedRef.current) return;
-      setChatSettingsState(resolveChatPreferences(preferences));
+      const resolved = resolveChatPreferences(preferences);
+      setChatSettingsState(resolved);
+      applyMessageFontSize(resolved.messageFontSize);
     })().catch(() => {
       /* A failed read leaves the defaults; the next load tries again. */
     });
@@ -369,6 +374,7 @@ export function usePlaythrough() {
   const autoImageAfterTurn = chatSettings.autoImageAfterTurn;
   const alwaysDiscardOldImage = chatSettings.alwaysDiscardOldImage;
   const autoScrollBehavior = chatSettings.autoScrollBehavior;
+  const messageFontSize = chatSettings.messageFontSize;
 
   const setChoicesEnabled = (val: boolean) =>
     setChatSetting({ choicesEnabled: val });
@@ -401,6 +407,11 @@ export function usePlaythrough() {
 
   const setAutoScrollBehavior = (val: AutoScrollBehavior) =>
     setChatSetting({ autoScrollBehavior: val });
+
+  const setMessageFontSize = (val: MessageFontSize) => {
+    applyMessageFontSize(val);
+    setChatSetting({ messageFontSize: val });
+  };
   const [choices, setChoices] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1608,6 +1619,8 @@ export function usePlaythrough() {
     setAlwaysDiscardOldImage,
     autoScrollBehavior,
     setAutoScrollBehavior,
+    messageFontSize,
+    setMessageFontSize,
     imagePromptRequest,
     imageProgress,
     handleGenerateImage,

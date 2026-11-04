@@ -216,7 +216,7 @@ export function CardFamilyModal({
       return (
         <Stack direction="column" align="stretch" gap="xs" fullWidth>
           <Stack direction="row" align="center" gap="xs" fullWidth>
-            <CharacterAvatar template={card} variant="list" />
+            <CharacterAvatar template={card} variant="custom" size={40} />
             <Stack
               direction="column"
               align="start"
@@ -605,7 +605,7 @@ export function CardFamilyModal({
                   direction={graphDirection}
                   onDirectionChange={setGraphDirection}
                   nodeWidth={256}
-                  nodeHeight={136}
+                  nodeHeight={156}
                   size="compact"
                   ariaLabel={`Card Family Tree Graph for ${displayTitle(family.focus)}`}
                 />

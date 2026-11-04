@@ -102,6 +102,12 @@
   padding-right: 4px;
 }
 
+.base-stack--scrollable-sm {
+  max-height: 112px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
 .base-stack--scrollable-md {
   max-height: 420px;
 }
@@ -193,7 +199,7 @@
     display: inline-flex;
   }
 
-  .base-stack--scrollable {
+  .base-stack--scrollable:not(.base-stack--scrollable-sm) {
     max-height: none;
     overflow-y: visible;
     padding-right: 0;
@@ -218,7 +224,7 @@
     display: inline-flex;
   }
 
-  .base-stack--scrollable {
+  .base-stack--scrollable:not(.base-stack--scrollable-sm) {
     max-height: none;
     overflow-y: visible;
     padding-right: 0;

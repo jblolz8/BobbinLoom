@@ -497,15 +497,17 @@ export function CreateNewPlaythroughView(props: CreateNewPlaythroughViewProps) {
                 icon: "User",
                 label: "1. Persona",
                 badge: selectedPersona ? (
-                  <Badge
-                    variant="accent"
-                    size="xs"
-                    pill
-                    truncate
-                    maxWidth={120}
-                  >
-                    {selectedPersona.name}
-                  </Badge>
+                  <Stack inline hideBelow="sm">
+                    <Badge
+                      variant="accent"
+                      size="xs"
+                      pill
+                      truncate
+                      maxWidth={110}
+                    >
+                      {selectedPersona.name}
+                    </Badge>
+                  </Stack>
                 ) : undefined,
               },
               {
@@ -518,7 +520,7 @@ export function CreateNewPlaythroughView(props: CreateNewPlaythroughViewProps) {
                     size="xs"
                     pill
                   >
-                    {selectedCastCount} Selected
+                    {selectedCastCount}
                   </Badge>
                 ),
               },
@@ -529,7 +531,7 @@ export function CreateNewPlaythroughView(props: CreateNewPlaythroughViewProps) {
                 badge:
                   selectedLorebookCount > 0 ? (
                     <Badge variant="accent" size="xs" pill>
-                      {selectedLorebookCount} Lorebooks
+                      {selectedLorebookCount}
                     </Badge>
                   ) : undefined,
               },

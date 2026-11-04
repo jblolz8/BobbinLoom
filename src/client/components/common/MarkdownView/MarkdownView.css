@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
-  font-size: 0.92rem;
+  font-size: var(--chat-message-font-size, 0.82rem);
   line-height: 1.55;
   color: var(--story-text, var(--chat-ai-text, var(--text-primary)));
 }
@@ -129,20 +129,20 @@
 }
 
 .message-heading--1 {
-  font-size: 1.12rem;
+  font-size: 1.22em;
   padding-bottom: 0.2rem;
   border-bottom: 1px solid var(--border-subtle);
 }
 
 .message-heading--2 {
-  font-size: 1.03rem;
+  font-size: 1.12em;
 }
 
 .message-heading--3,
 .message-heading--4,
 .message-heading--5,
 .message-heading--6 {
-  font-size: 0.96rem;
+  font-size: 1.04em;
 }
 
 .message-list {
@@ -194,7 +194,7 @@
   width: 100%;
   border-collapse: collapse;
   margin: 0;
-  font-size: 0.82rem;
+  font-size: 0.95em;
   line-height: 1.45;
 }
 

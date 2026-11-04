@@ -73,12 +73,20 @@
   .base-form-grid--cols-sidebar-right {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .base-form-grid--cols-3:not(.base-form-grid--keep-cols) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @container workspace (max-width: 860px) {
   .base-form-grid--cols-sidebar-left,
   .base-form-grid--cols-sidebar-right {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .base-form-grid--cols-3:not(.base-form-grid--keep-cols) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -93,6 +101,14 @@
   .base-form-grid--cols-4:not(.base-form-grid--keep-cols) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .base-form-grid--cols-portrait:not(.base-form-grid--keep-cols) {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+  }
+
+  .base-form-grid--cols-compact:not(.base-form-grid--keep-cols) {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 130px), 1fr));
+  }
 }
 
 @container workspace (max-width: 640px) {
@@ -105,6 +121,14 @@
 
   .base-form-grid--cols-4:not(.base-form-grid--keep-cols) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .base-form-grid--cols-portrait:not(.base-form-grid--keep-cols) {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+  }
+
+  .base-form-grid--cols-compact:not(.base-form-grid--keep-cols) {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 130px), 1fr));
   }
 }
 
