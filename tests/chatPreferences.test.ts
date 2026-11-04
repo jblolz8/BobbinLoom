@@ -62,8 +62,8 @@ describe("the chat toggles, resolved", () => {
   });
 
   it("covers every leaf the chat preferences carry", () => {
-    // 11 leaves: 10 toggles + autoScrollBehavior
-    expect(Object.keys(CHAT_PREFERENCE_DEFAULTS)).toHaveLength(11);
+    // 12 leaves: 10 toggles + autoScrollBehavior + messageFontSize
+    expect(Object.keys(CHAT_PREFERENCE_DEFAULTS)).toHaveLength(12);
   });
 });
 
@@ -138,11 +138,11 @@ describe("adopting the chat blob", () => {
   });
 
   it("reads every leaf through the real registry", () => {
-    // The registry is the contract with the hook: all nine leaves, one key.
+    // The registry is the contract with the hook: all twelve leaves, one key.
     const chatSources = ADOPTION_SOURCES.filter(
       (source) => source.group === "chat",
     );
-    expect(chatSources).toHaveLength(11);
+    expect(chatSources).toHaveLength(12);
     expect(new Set(chatSources.map((source) => source.key))).toEqual(
       new Set(["bobbinloom_chat_settings"]),
     );

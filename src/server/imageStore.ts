@@ -133,14 +133,16 @@ export function collectReferencedImages(
 function sweepDirReturningRemoved(
   referenced: Set<string>,
   dir: string,
-): Set<string> {
-  const removed = new Set<string>();
+): Map<string, number> {
+  const removed = new Map<string, number>();
   if (!existsSync(dir)) return removed;
   for (const entry of readdirSync(dir)) {
     if (!FILE_RE.test(entry) || referenced.has(entry)) continue;
+    const fullPath = join(dir, entry);
     try {
-      unlinkSync(join(dir, entry));
-      removed.add(entry);
+      const sz = statSync(fullPath).size;
+      unlinkSync(fullPath);
+      removed.set(entry, sz);
     } catch {
       // Raced with another sweep (or already gone) — not a failure.
     }
@@ -158,6 +160,47 @@ export function sweepOrphanImages(
   return sweepDirReturningRemoved(referenced, dir).size;
 }
 
+/** Detailed sweep helper returning both unique removed file count and total freed bytes. */
+export function sweepOrphansWithStats(
+  dataDir: string,
+  imagesDir: string = IMAGES_DIR,
+): { removed: number; freedBytes: number } {
+  const { playthroughs } = listPlaythroughRecords(dataDir, {
+    includeTimelineBranches: true,
+  });
+  const removedByFile = new Map<string, number>();
+
+  for (const pt of playthroughs) {
+    const ptDir = playthroughImagesDir(dataDir, pt.id);
+    if (existsSync(ptDir) && statSync(ptDir).isDirectory()) {
+      const ptRefs = collectReferencedImages([pt]);
+      const res = sweepDirReturningRemoved(ptRefs, ptDir);
+      for (const [file, bytes] of res) {
+        if (!removedByFile.has(file)) {
+          removedByFile.set(file, bytes);
+        }
+      }
+    }
+  }
+
+  if (existsSync(imagesDir)) {
+    const allRefs = collectReferencedImages(playthroughs);
+    const res = sweepDirReturningRemoved(allRefs, imagesDir);
+    for (const [file, bytes] of res) {
+      if (!removedByFile.has(file)) {
+        removedByFile.set(file, bytes);
+      }
+    }
+  }
+
+  let freedBytes = 0;
+  for (const bytes of removedByFile.values()) {
+    freedBytes += bytes;
+  }
+
+  return { removed: removedByFile.size, freedBytes };
+}
+
 /** Sweep helper for call sites that have the playthroughs data directory.
  *  Sweeps each playthrough's dedicated `<dataDir>/<id>/images/` folder against that
  *  playthrough's own references, plus any shared/legacy `imagesDir` when present. */
@@ -165,27 +208,5 @@ export function sweepOrphansInDataDir(
   dataDir: string,
   imagesDir: string = IMAGES_DIR,
 ): number {
-  const { playthroughs } = listPlaythroughRecords(dataDir, {
-    includeTimelineBranches: true,
-  });
-  const removedFiles = new Set<string>();
-
-  for (const pt of playthroughs) {
-    const ptDir = playthroughImagesDir(dataDir, pt.id);
-    if (existsSync(ptDir) && statSync(ptDir).isDirectory()) {
-      const ptRefs = collectReferencedImages([pt]);
-      for (const file of sweepDirReturningRemoved(ptRefs, ptDir)) {
-        removedFiles.add(file);
-      }
-    }
-  }
-
-  if (existsSync(imagesDir)) {
-    const allRefs = collectReferencedImages(playthroughs);
-    for (const file of sweepDirReturningRemoved(allRefs, imagesDir)) {
-      removedFiles.add(file);
-    }
-  }
-
-  return removedFiles.size;
+  return sweepOrphansWithStats(dataDir, imagesDir).removed;
 }

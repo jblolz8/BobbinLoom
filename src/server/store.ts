@@ -2657,3 +2657,627 @@ export function deleteLorebook(id: string, dir?: string): boolean {
   unlinkSync(path);
   return true;
 }
+
+// ── Storage Breakdown & Maintenance ──
+
+export type StorageCategoryStat = {
+  bytes: number;
+  count: number;
+};
+
+export type StorageBackupItem = {
+  name: string;
+  category: "playthroughs" | "characters" | "personas" | "lorebooks" | "settings" | "images";
+  kind: "file" | "folder";
+  bytes: number;
+};
+
+export type StoragePlaythroughItem = {
+  id: string;
+  name: string;
+  turn: number;
+  isTimelineBranch: boolean;
+  jsonBytes: number;
+  imageBytes: number;
+  imageCount: number;
+  totalBytes: number;
+  updatedAt: string;
+};
+
+export type StorageCharacterItem = {
+  id: string;
+  name: string;
+  slug: string;
+  versionCount: number;
+  hasCcv2Card: boolean;
+  format: "bl" | "ccv2";
+  jsonBytes: number;
+  imageBytes: number;
+  totalBytes: number;
+  updatedAt?: string;
+};
+
+export type StorageBreakdown = {
+  totalBytes: number;
+  categories: {
+    playthroughsJson: StorageCategoryStat;
+    playthroughsImages: StorageCategoryStat;
+    characters: StorageCategoryStat;
+    personas: StorageCategoryStat;
+    lorebooks: StorageCategoryStat;
+    settingsAndPresets: StorageCategoryStat;
+    orphanImages: StorageCategoryStat;
+    backups: StorageCategoryStat & { items: StorageBackupItem[] };
+  };
+  largestPlaythroughs: StoragePlaythroughItem[];
+  largestCharacters: StorageCharacterItem[];
+};
+
+export type StorageDirs = {
+  playthroughsDir?: string;
+  imagesDir?: string;
+  charactersDir?: string;
+  personasDir?: string;
+  lorebooksDir?: string;
+  settingsDir?: string;
+};
+
+const HASH_IMAGE_FILE_RE = /^[a-f0-9]{64}\.(png|jpg|webp)$/;
+
+function isBackupEntryName(name: string): boolean {
+  return name.endsWith(".bak") || /\.bak\.[^/\\]+$/.test(name);
+}
+
+function isTempEntryName(name: string): boolean {
+  return /\.tmp\.\d+\.[a-z0-9]+$/i.test(name);
+}
+
+function measurePathBytesRecursive(targetPath: string): number {
+  try {
+    const st = statSync(targetPath);
+    if (st.isFile()) return st.size;
+    if (!st.isDirectory()) return 0;
+    let total = 0;
+    for (const entry of readdirSync(targetPath, { withFileTypes: true })) {
+      total += measurePathBytesRecursive(join(targetPath, entry.name));
+    }
+    return total;
+  } catch {
+    return 0;
+  }
+}
+
+function collectBackupEntriesInDir(
+  dirPath: string,
+  category: StorageBackupItem["category"],
+  recurseSubdirs: boolean,
+  seenPaths: Set<string>,
+  out: Array<StorageBackupItem & { fullPath: string }>,
+): void {
+  if (!existsSync(dirPath)) return;
+  let entries;
+  try {
+    entries = readdirSync(dirPath, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const fullPath = join(dirPath, entry.name);
+    if (seenPaths.has(fullPath)) continue;
+    if (isBackupEntryName(entry.name)) {
+      seenPaths.add(fullPath);
+      const bytes = measurePathBytesRecursive(fullPath);
+      out.push({
+        name: entry.name,
+        category,
+        kind: entry.isDirectory() ? "folder" : "file",
+        bytes,
+        fullPath,
+      });
+      continue;
+    }
+    if (recurseSubdirs && entry.isDirectory()) {
+      collectBackupEntriesInDir(fullPath, category, true, seenPaths, out);
+    }
+  }
+}
+
+function resolveStorageDirs(dirs?: StorageDirs) {
+  const playthroughsDir =
+    dirs?.playthroughsDir ?? join(process.cwd(), "data", "playthroughs");
+  const settingsDir =
+    dirs?.settingsDir ??
+    (dirs?.playthroughsDir
+      ? dirname(dirs.playthroughsDir)
+      : join(process.cwd(), "data"));
+  const imagesDir = dirs?.imagesDir ?? join(settingsDir, "images");
+  const charactersDir = dirs?.charactersDir ?? join(settingsDir, "characters");
+  const personasDir = dirs?.personasDir ?? join(settingsDir, "personas");
+  const lorebooksDir = dirs?.lorebooksDir ?? join(settingsDir, "lorebooks");
+  return {
+    playthroughsDir,
+    settingsDir,
+    imagesDir,
+    charactersDir,
+    personasDir,
+    lorebooksDir,
+  };
+}
+
+export function computeStorageBreakdown(dirs?: StorageDirs): StorageBreakdown {
+  const {
+    playthroughsDir,
+    settingsDir,
+    imagesDir,
+    charactersDir,
+    personasDir,
+    lorebooksDir,
+  } = resolveStorageDirs(dirs);
+
+  // 1) Collect all .bak / .bak.<timestamp> files & folders across categories
+  const seenBackupPaths = new Set<string>();
+  const discoveredBackups: Array<StorageBackupItem & { fullPath: string }> = [];
+  collectBackupEntriesInDir(
+    playthroughsDir,
+    "playthroughs",
+    true,
+    seenBackupPaths,
+    discoveredBackups,
+  );
+  collectBackupEntriesInDir(
+    charactersDir,
+    "characters",
+    true,
+    seenBackupPaths,
+    discoveredBackups,
+  );
+  collectBackupEntriesInDir(
+    personasDir,
+    "personas",
+    true,
+    seenBackupPaths,
+    discoveredBackups,
+  );
+  collectBackupEntriesInDir(
+    lorebooksDir,
+    "lorebooks",
+    true,
+    seenBackupPaths,
+    discoveredBackups,
+  );
+  collectBackupEntriesInDir(
+    imagesDir,
+    "images",
+    true,
+    seenBackupPaths,
+    discoveredBackups,
+  );
+  collectBackupEntriesInDir(
+    settingsDir,
+    "settings",
+    false,
+    seenBackupPaths,
+    discoveredBackups,
+  );
+
+  let backupsBytes = 0;
+  const backupItems: StorageBackupItem[] = discoveredBackups.map(
+    ({ fullPath: _fp, ...item }) => {
+      backupsBytes += item.bytes;
+      return item;
+    },
+  );
+
+  // 2) Playthroughs (JSON + deduplicated physical images + orphan images)
+  const { playthroughs } = existsSync(playthroughsDir)
+    ? listPlaythroughRecords(playthroughsDir, { includeTimelineBranches: true })
+    : { playthroughs: [] as Playthrough[] };
+
+  let playthroughsJsonBytes = 0;
+  const uniqueReferencedImages = new Map<string, number>();
+  const allReferencedFiles = new Set<string>();
+  const orphanImagesByFile = new Map<string, number>();
+  const playthroughItems: StoragePlaythroughItem[] = [];
+
+  for (const pt of playthroughs) {
+    const folderJson = playthroughPath(playthroughsDir, pt.id);
+    const flatJson = legacyFlatPlaythroughPath(playthroughsDir, pt.id);
+    let jsonBytes = 0;
+    try {
+      if (existsSync(folderJson)) jsonBytes = statSync(folderJson).size;
+      else if (existsSync(flatJson)) jsonBytes = statSync(flatJson).size;
+    } catch {
+      /* ignore */
+    }
+    playthroughsJsonBytes += jsonBytes;
+
+    const ptRefs = collectPlaythroughImageRefs(pt);
+    const ptImgDir = playthroughImagesDir(playthroughsDir, pt.id);
+    let ptImageBytes = 0;
+    let ptImageCount = 0;
+
+    for (const refFile of ptRefs) {
+      allReferencedFiles.add(refFile);
+      const inPtDir = join(ptImgDir, refFile);
+      const inSharedDir = join(imagesDir, refFile);
+      let fileSize = 0;
+      try {
+        if (existsSync(inPtDir)) fileSize = statSync(inPtDir).size;
+        else if (existsSync(inSharedDir)) fileSize = statSync(inSharedDir).size;
+      } catch {
+        /* ignore */
+      }
+      if (fileSize > 0) {
+        ptImageBytes += fileSize;
+        ptImageCount += 1;
+        if (!uniqueReferencedImages.has(refFile)) {
+          uniqueReferencedImages.set(refFile, fileSize);
+        }
+      }
+    }
+
+    // Check for unreferenced hash images inside this playthrough's images/ dir
+    if (existsSync(ptImgDir)) {
+      try {
+        for (const entry of readdirSync(ptImgDir)) {
+          if (!HASH_IMAGE_FILE_RE.test(entry) || ptRefs.has(entry)) continue;
+          const full = join(ptImgDir, entry);
+          const sz = statSync(full).size;
+          if (!orphanImagesByFile.has(entry)) {
+            orphanImagesByFile.set(entry, sz);
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const isBranch = Boolean(
+      pt.isTimelineBranch ||
+        (pt.rootPlaythroughId && pt.rootPlaythroughId !== pt.id),
+    );
+    playthroughItems.push({
+      id: pt.id,
+      name: pt.name,
+      turn: pt.turn,
+      isTimelineBranch: isBranch,
+      jsonBytes,
+      imageBytes: ptImageBytes,
+      imageCount: ptImageCount,
+      totalBytes: jsonBytes + ptImageBytes,
+      updatedAt: pt.updatedAt,
+    });
+  }
+
+  // Also check shared/legacy imagesDir for unreferenced hash images
+  if (existsSync(imagesDir)) {
+    try {
+      for (const entry of readdirSync(imagesDir)) {
+        if (!HASH_IMAGE_FILE_RE.test(entry) || allReferencedFiles.has(entry)) {
+          continue;
+        }
+        const full = join(imagesDir, entry);
+        const sz = statSync(full).size;
+        if (!orphanImagesByFile.has(entry)) {
+          orphanImagesByFile.set(entry, sz);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  let playthroughsImagesBytes = 0;
+  for (const sz of uniqueReferencedImages.values()) {
+    playthroughsImagesBytes += sz;
+  }
+
+  let orphanImagesBytes = 0;
+  for (const sz of orphanImagesByFile.values()) {
+    orphanImagesBytes += sz;
+  }
+
+  playthroughItems.sort(
+    (a, b) => b.totalBytes - a.totalBytes || b.updatedAt.localeCompare(a.updatedAt),
+  );
+
+  // 3) Characters (folder-per-character in charactersDir)
+  let charactersBytes = 0;
+  let charactersCount = 0;
+  const characterItems: StorageCharacterItem[] = [];
+
+  if (existsSync(charactersDir)) {
+    const templates = listCharacterTemplates(charactersDir);
+    let charFolders: string[] = [];
+    try {
+      charFolders = readdirSync(charactersDir, { withFileTypes: true })
+        .filter((e) => e.isDirectory() && !isBackupEntryName(e.name))
+        .map((e) => e.name)
+        .sort();
+    } catch {
+      charFolders = [];
+    }
+
+    for (const slug of charFolders) {
+      const folderPath = join(charactersDir, slug);
+      let entries: string[] = [];
+      try {
+        entries = readdirSync(folderPath);
+      } catch {
+        continue;
+      }
+
+      let jsonBytes = 0;
+      let imageBytes = 0;
+      let versionFilesCount = 0;
+
+      for (const file of entries) {
+        if (isBackupEntryName(file) || isTempEntryName(file)) continue;
+        const full = join(folderPath, file);
+        let sz = 0;
+        try {
+          const st = statSync(full);
+          if (!st.isFile()) continue;
+          sz = st.size;
+        } catch {
+          continue;
+        }
+        const lower = file.toLowerCase();
+        if (lower.endsWith(".json")) {
+          jsonBytes += sz;
+          if (!lower.endsWith(".card.json") && !lower.endsWith("brainstorm.json")) {
+            versionFilesCount += 1;
+          }
+        } else if (
+          lower.endsWith(".png") ||
+          lower.endsWith(".jpg") ||
+          lower.endsWith(".jpeg") ||
+          lower.endsWith(".webp")
+        ) {
+          imageBytes += sz;
+        } else {
+          jsonBytes += sz;
+        }
+      }
+
+      const totalFolderBytes = jsonBytes + imageBytes;
+      if (totalFolderBytes === 0 && versionFilesCount === 0) continue;
+
+      // Match templates living in this folder
+      const folderTemplates = templates.filter((t) => {
+        const expectedSlug = slugify(displayTitle(t));
+        if (expectedSlug === slug) return true;
+        return folderContainsId(folderPath, t.id);
+      });
+      const latestTemplate = folderTemplates.sort(
+        (a, b) => (b.version ?? 1) - (a.version ?? 1),
+      )[0];
+
+      charactersBytes += totalFolderBytes;
+      charactersCount += 1;
+
+      characterItems.push({
+        id: latestTemplate?.id ?? slug,
+        name: latestTemplate ? displayTitle(latestTemplate) : slug,
+        slug,
+        versionCount: Math.max(1, folderTemplates.length || versionFilesCount),
+        hasCcv2Card: Boolean(latestTemplate?.cardRef),
+        format: latestTemplate?.format === "ccv2" ? "ccv2" : "bl",
+        jsonBytes,
+        imageBytes,
+        totalBytes: totalFolderBytes,
+        updatedAt: latestTemplate?.updatedAt,
+      });
+    }
+  }
+
+  characterItems.sort(
+    (a, b) => b.totalBytes - a.totalBytes || a.name.localeCompare(b.name),
+  );
+
+  // 4) Personas
+  let personasBytes = 0;
+  let personasCount = 0;
+  if (existsSync(personasDir)) {
+    try {
+      const folders = readdirSync(personasDir, { withFileTypes: true }).filter(
+        (e) => e.isDirectory() && !isBackupEntryName(e.name),
+      );
+      for (const folder of folders) {
+        const folderPath = join(personasDir, folder.name);
+        let folderBytes = 0;
+        for (const file of readdirSync(folderPath)) {
+          if (isBackupEntryName(file) || isTempEntryName(file)) continue;
+          try {
+            const st = statSync(join(folderPath, file));
+            if (st.isFile()) folderBytes += st.size;
+          } catch {
+            /* ignore */
+          }
+        }
+        if (folderBytes > 0) {
+          personasBytes += folderBytes;
+          personasCount += 1;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // 5) Lorebooks
+  let lorebooksBytes = 0;
+  let lorebooksCount = 0;
+  if (existsSync(lorebooksDir)) {
+    try {
+      const files = readdirSync(lorebooksDir, { withFileTypes: true }).filter(
+        (e) =>
+          e.isFile() &&
+          e.name.endsWith(".json") &&
+          !isBackupEntryName(e.name) &&
+          !isTempEntryName(e.name),
+      );
+      for (const file of files) {
+        try {
+          lorebooksBytes += statSync(join(lorebooksDir, file.name)).size;
+          lorebooksCount += 1;
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // 6) Settings & Presets (top-level .json files in settingsDir)
+  let settingsBytes = 0;
+  let settingsCount = 0;
+  if (existsSync(settingsDir)) {
+    try {
+      const files = readdirSync(settingsDir, { withFileTypes: true }).filter(
+        (e) =>
+          e.isFile() &&
+          e.name.endsWith(".json") &&
+          !isBackupEntryName(e.name) &&
+          !isTempEntryName(e.name),
+      );
+      for (const file of files) {
+        try {
+          settingsBytes += statSync(join(settingsDir, file.name)).size;
+          settingsCount += 1;
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const totalBytes =
+    playthroughsJsonBytes +
+    playthroughsImagesBytes +
+    charactersBytes +
+    personasBytes +
+    lorebooksBytes +
+    settingsBytes +
+    orphanImagesBytes +
+    backupsBytes;
+
+  return {
+    totalBytes,
+    categories: {
+      playthroughsJson: {
+        bytes: playthroughsJsonBytes,
+        count: playthroughs.length,
+      },
+      playthroughsImages: {
+        bytes: playthroughsImagesBytes,
+        count: uniqueReferencedImages.size,
+      },
+      characters: {
+        bytes: charactersBytes,
+        count: charactersCount,
+      },
+      personas: {
+        bytes: personasBytes,
+        count: personasCount,
+      },
+      lorebooks: {
+        bytes: lorebooksBytes,
+        count: lorebooksCount,
+      },
+      settingsAndPresets: {
+        bytes: settingsBytes,
+        count: settingsCount,
+      },
+      orphanImages: {
+        bytes: orphanImagesBytes,
+        count: orphanImagesByFile.size,
+      },
+      backups: {
+        bytes: backupsBytes,
+        count: backupItems.length,
+        items: backupItems,
+      },
+    },
+    largestPlaythroughs: playthroughItems.slice(0, 10),
+    largestCharacters: characterItems.slice(0, 10),
+  };
+}
+
+export function cleanupBackupFiles(dirs?: StorageDirs): {
+  removed: number;
+  freedBytes: number;
+} {
+  const {
+    playthroughsDir,
+    settingsDir,
+    imagesDir,
+    charactersDir,
+    personasDir,
+    lorebooksDir,
+  } = resolveStorageDirs(dirs);
+
+  const seenBackupPaths = new Set<string>();
+  const discoveredBackups: Array<StorageBackupItem & { fullPath: string }> = [];
+  collectBackupEntriesInDir(
+    playthroughsDir,
+    "playthroughs",
+    true,
+    seenBackupPaths,
+    discoveredBackups,
+  );
+  collectBackupEntriesInDir(
+    charactersDir,
+    "characters",
+    true,
+    seenBackupPaths,
+    discoveredBackups,
+  );
+  collectBackupEntriesInDir(
+    personasDir,
+    "personas",
+    true,
+    seenBackupPaths,
+    discoveredBackups,
+  );
+  collectBackupEntriesInDir(
+    lorebooksDir,
+    "lorebooks",
+    true,
+    seenBackupPaths,
+    discoveredBackups,
+  );
+  collectBackupEntriesInDir(
+    imagesDir,
+    "images",
+    true,
+    seenBackupPaths,
+    discoveredBackups,
+  );
+  collectBackupEntriesInDir(
+    settingsDir,
+    "settings",
+    false,
+    seenBackupPaths,
+    discoveredBackups,
+  );
+
+  let removed = 0;
+  let freedBytes = 0;
+
+  for (const item of discoveredBackups) {
+    try {
+      rmSync(item.fullPath, { recursive: true, force: true });
+      removed += 1;
+      freedBytes += item.bytes;
+    } catch {
+      /* ignore individual removal race */
+    }
+  }
+
+  invalidatePlaythroughCache();
+  return { removed, freedBytes };
+}

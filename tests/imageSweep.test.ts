@@ -313,7 +313,8 @@ describe("POST /api/settings/images/sweep", () => {
     const first = await sweep(h.app);
 
     expect(first.statusCode).toBe(200);
-    expect(first.json()).toEqual({ removed: 2 });
+    expect(first.json()).toMatchObject({ removed: 2 });
+    expect(first.json().freedBytes).toBeGreaterThan(0);
     expect(storedFiles(h.imagesDir)).toEqual([referenced]);
     expect(storedFiles(h.imagesDir)).not.toContain(orphanA);
     expect(storedFiles(h.imagesDir)).not.toContain(orphanB);
@@ -322,7 +323,7 @@ describe("POST /api/settings/images/sweep", () => {
     const second = await sweep(h.app);
 
     expect(second.statusCode).toBe(200);
-    expect(second.json()).toEqual({ removed: 0 });
+    expect(second.json()).toEqual({ removed: 0, freedBytes: 0 });
     expect(storedFiles(h.imagesDir)).toEqual([referenced]);
   });
 
@@ -332,7 +333,7 @@ describe("POST /api/settings/images/sweep", () => {
     const res = await sweep(h.app);
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ removed: 0 });
+    expect(res.json()).toEqual({ removed: 0, freedBytes: 0 });
     expect(storedFiles(h.imagesDir)).toEqual([]);
   });
 

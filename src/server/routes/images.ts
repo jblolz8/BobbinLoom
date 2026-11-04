@@ -29,6 +29,7 @@ import {
   mimeForFile,
   saveImageBytes,
   sweepOrphansInDataDir,
+  sweepOrphansWithStats,
   IMAGES_DIR,
 } from "../imageStore";
 import { transcodeToWebp } from "../imageTranscode";
@@ -43,6 +44,8 @@ import {
 import type { ImagePromptInput } from "../provider/imagePrompt";
 import { generateImagePrompt } from "../provider/imagePrompt";
 import {
+  cleanupBackupFiles,
+  computeStorageBreakdown,
   getPlaythroughRecord,
   linkOrCopyFile,
   playthroughImagesDir,
@@ -62,6 +65,9 @@ export type ImageRoutesOptions = FastifyPluginOptions & {
   dataDir?: string;
   imagesDir?: string;
   settingsDir?: string;
+  charactersDir?: string;
+  personasDir?: string;
+  lorebooksDir?: string;
   manager?: ProviderManager;
   fetchImpl?: typeof fetch;
 };
@@ -483,13 +489,52 @@ export const imageRoutes: FastifyPluginAsync<ImageRoutesOptions> = async (
 
   // Manual sweep: no record change drives this one — the user asked for it, so a
   // failure is REPORTED (500) instead of swallowed like the two best-effort call
-  // sites. The count is the whole answer: how many unreferenced files went away.
+  // sites. Returns both removed count and freedBytes.
   app.post("/api/settings/images/sweep", async (request, reply) => {
     try {
-      return { removed: sweepOrphansInDataDir(dataDir, imagesDir) };
+      return sweepOrphansWithStats(dataDir, imagesDir);
     } catch (error) {
       const reason =
         error instanceof Error ? error.message : "Image sweep failed";
+      return reply.code(500).send({ error: reason });
+    }
+  });
+
+  // Storage breakdown across playthroughs, images, characters, personas, lorebooks,
+  // settings/presets, orphan images, and .bak quarantine files.
+  app.get("/api/settings/storage", async (request, reply) => {
+    try {
+      return computeStorageBreakdown({
+        playthroughsDir: dataDir,
+        imagesDir: options.imagesDir,
+        settingsDir: options.settingsDir,
+        charactersDir: options.charactersDir,
+        personasDir: options.personasDir,
+        lorebooksDir: options.lorebooksDir,
+      });
+    } catch (error) {
+      const reason =
+        error instanceof Error
+          ? error.message
+          : "Failed to compute storage breakdown";
+      return reply.code(500).send({ error: reason });
+    }
+  });
+
+  // Remove all .bak and .bak.<timestamp> backup/quarantine files and folders.
+  app.post("/api/settings/storage/cleanup-backups", async (request, reply) => {
+    try {
+      return cleanupBackupFiles({
+        playthroughsDir: dataDir,
+        imagesDir: options.imagesDir,
+        settingsDir: options.settingsDir,
+        charactersDir: options.charactersDir,
+        personasDir: options.personasDir,
+        lorebooksDir: options.lorebooksDir,
+      });
+    } catch (error) {
+      const reason =
+        error instanceof Error ? error.message : "Backup cleanup failed";
       return reply.code(500).send({ error: reason });
     }
   });

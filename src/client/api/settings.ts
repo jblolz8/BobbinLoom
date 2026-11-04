@@ -284,6 +284,100 @@ export function resolveStoragePreferences(
   return resolveGroup(STORAGE_PREFERENCE_DEFAULTS, stored?.storage);
 }
 
+export type StorageCategoryStat = {
+  bytes: number;
+  count: number;
+};
+
+export type StorageBackupItem = {
+  name: string;
+  category:
+    | "playthroughs"
+    | "characters"
+    | "personas"
+    | "lorebooks"
+    | "settings"
+    | "images";
+  kind: "file" | "folder";
+  bytes: number;
+};
+
+export type StoragePlaythroughItem = {
+  id: string;
+  name: string;
+  turn: number;
+  isTimelineBranch: boolean;
+  jsonBytes: number;
+  imageBytes: number;
+  imageCount: number;
+  totalBytes: number;
+  updatedAt: string;
+};
+
+export type StorageCharacterItem = {
+  id: string;
+  name: string;
+  slug: string;
+  versionCount: number;
+  hasCcv2Card: boolean;
+  format: "bl" | "ccv2";
+  jsonBytes: number;
+  imageBytes: number;
+  totalBytes: number;
+  updatedAt?: string;
+};
+
+export type StorageBreakdown = {
+  totalBytes: number;
+  categories: {
+    playthroughsJson: StorageCategoryStat;
+    playthroughsImages: StorageCategoryStat;
+    characters: StorageCategoryStat;
+    personas: StorageCategoryStat;
+    lorebooks: StorageCategoryStat;
+    settingsAndPresets: StorageCategoryStat;
+    orphanImages: StorageCategoryStat;
+    backups: StorageCategoryStat & { items: StorageBackupItem[] };
+  };
+  largestPlaythroughs: StoragePlaythroughItem[];
+  largestCharacters: StorageCharacterItem[];
+};
+
+export function getStorageBreakdown(): Promise<StorageBreakdown> {
+  return request<StorageBreakdown>("/api/settings/storage");
+}
+
+export function sweepOrphanImages(): Promise<{
+  removed: number;
+  freedBytes: number;
+}> {
+  return request<{ removed: number; freedBytes: number }>(
+    "/api/settings/images/sweep",
+    { method: "POST" },
+  );
+}
+
+export function cleanupStorageBackups(): Promise<{
+  removed: number;
+  freedBytes: number;
+}> {
+  return request<{ removed: number; freedBytes: number }>(
+    "/api/settings/storage/cleanup-backups",
+    { method: "POST" },
+  );
+}
+
+export function formatStorageBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb < 10 ? kb.toFixed(1) : Math.round(kb)} KB`;
+  const mb = kb / 1024;
+  if (mb < 1024) return `${mb < 10 ? mb.toFixed(2) : mb.toFixed(1)} MB`;
+  const gb = mb / 1024;
+  return `${gb.toFixed(2)} GB`;
+}
+
 export const UI_PREFERENCE_DEFAULTS: ResolvedUiPreferences = {
   settingsTab: "provider",
   settingsProviderKind: "text",

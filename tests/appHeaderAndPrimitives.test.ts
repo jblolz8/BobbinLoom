@@ -1,4 +1,7 @@
 import { createElement } from "react";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as RadixTooltip from "@radix-ui/react-tooltip";
 import { describe, expect, it } from "vitest";
@@ -39,7 +42,17 @@ import {
 import { SettingsModal } from "../src/client/components/modals/SettingsModal";
 import { AppearanceSettingsPanel } from "../src/client/components/settings/AppearanceSettingsPanel";
 import { ChatSettingsPanel } from "../src/client/components/settings/ChatSettingsPanel";
+import { FilesStorageSettingsPanel } from "../src/client/components/settings/FilesStorageSettingsPanel";
 import { InterfaceSettingsPanel } from "../src/client/components/settings/InterfaceSettingsPanel";
+import {
+  cleanupBackupFiles,
+  computeStorageBreakdown,
+  createCharacterTemplateRecord,
+  createPlaythroughRecord,
+  playthroughImagesDir,
+  updatePlaythroughRecord,
+} from "../src/server/store";
+import { sweepOrphansWithStats } from "../src/server/imageStore";
 import {
   formatEqual,
   imageEqual,
@@ -1716,5 +1729,201 @@ describe("AppHeader and base primitives (Header, Text, Stack, Button)", () => {
 
     expect(timelineHtml).toContain("base-header--modal");
     expect(timelineHtml).toContain("common-hierarchy-inspector");
+  });
+
+  it("computes storage breakdown, deduplicating shared branch images, and cleans up .bak backups and orphan images", () => {
+    const tmpRoot = mkdtempSync(join(tmpdir(), "bl-storage-test-"));
+    try {
+      const playthroughsDir = join(tmpRoot, "playthroughs");
+      const charactersDir = join(tmpRoot, "characters");
+      const personasDir = join(tmpRoot, "personas");
+      const lorebooksDir = join(tmpRoot, "lorebooks");
+      const imagesDir = join(tmpRoot, "images");
+      mkdirSync(playthroughsDir, { recursive: true });
+      mkdirSync(charactersDir, { recursive: true });
+      mkdirSync(personasDir, { recursive: true });
+      mkdirSync(lorebooksDir, { recursive: true });
+      mkdirSync(imagesDir, { recursive: true });
+
+      const pt1 = createPlaythroughRecord(playthroughsDir, "Chronicles Alpha");
+      const refHash = `${"a".repeat(64)}.webp`;
+      const orphanHash = `${"b".repeat(64)}.webp`;
+      pt1.galleryImages = [
+        { file: refHash, createdAt: "2026-01-01T00:00:00.000Z" },
+      ];
+      updatePlaythroughRecord(playthroughsDir, pt1);
+
+      const pt1ImgDir = playthroughImagesDir(playthroughsDir, pt1.id);
+      mkdirSync(pt1ImgDir, { recursive: true });
+      writeFileSync(join(pt1ImgDir, refHash), Buffer.alloc(2048, 1));
+      writeFileSync(join(pt1ImgDir, orphanHash), Buffer.alloc(1024, 2));
+
+      // Second playthrough referencing the SAME content-addressed image hash
+      const pt2 = createPlaythroughRecord(playthroughsDir, "Chronicles Branch");
+      pt2.isTimelineBranch = true;
+      pt2.rootPlaythroughId = pt1.id;
+      pt2.galleryImages = [
+        { file: refHash, createdAt: "2026-01-01T00:00:00.000Z" },
+      ];
+      updatePlaythroughRecord(playthroughsDir, pt2);
+      const pt2ImgDir = playthroughImagesDir(playthroughsDir, pt2.id);
+      mkdirSync(pt2ImgDir, { recursive: true });
+      writeFileSync(join(pt2ImgDir, refHash), Buffer.alloc(2048, 1));
+
+      // Create a character + a quarantined .bak folder
+      createCharacterTemplateRecord("Seraphina", charactersDir);
+      const bakFolder = join(charactersDir, "deleted-hero.bak");
+      mkdirSync(bakFolder, { recursive: true });
+      writeFileSync(join(bakFolder, "deleted-hero.json"), Buffer.alloc(512, 3));
+
+      // Top-level settings file + a .bak.<timestamp> file
+      writeFileSync(join(tmpRoot, "user-settings.json"), '{"theme":"dark"}');
+      writeFileSync(
+        join(tmpRoot, "user-settings.json.bak.20260101T000000Z"),
+        Buffer.alloc(256, 4),
+      );
+
+      const breakdown = computeStorageBreakdown({
+        playthroughsDir,
+        charactersDir,
+        personasDir,
+        lorebooksDir,
+        imagesDir,
+        settingsDir: tmpRoot,
+      });
+
+      // Deduplicated physical playthrough images: refHash counted once (2048 B)
+      expect(breakdown.categories.playthroughsImages.count).toBe(1);
+      expect(breakdown.categories.playthroughsImages.bytes).toBe(2048);
+      expect(breakdown.categories.playthroughsJson.count).toBe(2);
+      expect(breakdown.categories.orphanImages.count).toBe(1);
+      expect(breakdown.categories.orphanImages.bytes).toBe(1024);
+      expect(breakdown.categories.backups.count).toBe(2);
+      expect(breakdown.categories.backups.bytes).toBe(512 + 256);
+      expect(breakdown.largestPlaythroughs.length).toBe(2);
+      expect(breakdown.largestCharacters.length).toBe(1);
+      expect(breakdown.largestCharacters[0].name).toBe("Seraphina");
+
+      // Sweep orphans and verify freed bytes
+      const sweepRes = sweepOrphansWithStats(playthroughsDir, imagesDir);
+      expect(sweepRes.removed).toBe(1);
+      expect(sweepRes.freedBytes).toBe(1024);
+
+      // Clean up .bak files and verify freed bytes
+      const backupRes = cleanupBackupFiles({
+        playthroughsDir,
+        charactersDir,
+        personasDir,
+        lorebooksDir,
+        imagesDir,
+        settingsDir: tmpRoot,
+      });
+      expect(backupRes.removed).toBe(2);
+      expect(backupRes.freedBytes).toBe(768);
+
+      const afterBreakdown = computeStorageBreakdown({
+        playthroughsDir,
+        charactersDir,
+        personasDir,
+        lorebooksDir,
+        imagesDir,
+        settingsDir: tmpRoot,
+      });
+      expect(afterBreakdown.categories.orphanImages.count).toBe(0);
+      expect(afterBreakdown.categories.backups.count).toBe(0);
+    } finally {
+      rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("renders FilesStorageSettingsPanel with Storage Overview, Storage Maintenance, Largest Items tabs, and Individual Export Format below", () => {
+    const sampleStorage = {
+      totalBytes: 5 * 1024 * 1024,
+      categories: {
+        playthroughsJson: { bytes: 512 * 1024, count: 3 },
+        playthroughsImages: { bytes: 3 * 1024 * 1024, count: 14 },
+        characters: { bytes: 1024 * 1024, count: 6 },
+        personas: { bytes: 128 * 1024, count: 2 },
+        lorebooks: { bytes: 64 * 1024, count: 1 },
+        settingsAndPresets: { bytes: 32 * 1024, count: 4 },
+        orphanImages: { bytes: 160 * 1024, count: 2 },
+        backups: {
+          bytes: 96 * 1024,
+          count: 1,
+          items: [
+            {
+              name: "old-char.bak",
+              category: "characters" as const,
+              kind: "folder" as const,
+              bytes: 96 * 1024,
+            },
+          ],
+        },
+      },
+      largestPlaythroughs: [
+        {
+          id: "play_1",
+          name: "Velvet Citadel",
+          turn: 42,
+          isTimelineBranch: false,
+          jsonBytes: 300 * 1024,
+          imageBytes: 2 * 1024 * 1024,
+          imageCount: 9,
+          totalBytes: 2348 * 1024,
+          updatedAt: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+      largestCharacters: [
+        {
+          id: "char_1",
+          name: "Evelyn Thorne",
+          slug: "evelyn-thorne",
+          versionCount: 3,
+          hasCcv2Card: true,
+          format: "bl" as const,
+          jsonBytes: 48 * 1024,
+          imageBytes: 640 * 1024,
+          totalBytes: 688 * 1024,
+          updatedAt: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+    };
+
+    const playthroughsTabHtml = renderToStaticMarkup(
+      createElement(FilesStorageSettingsPanel, {
+        initialStorage: sampleStorage,
+        initialLargestTab: "playthroughs",
+      }),
+    );
+
+    expect(playthroughsTabHtml).toContain("Storage Overview");
+    expect(playthroughsTabHtml).toContain("base-storage-bar");
+    expect(playthroughsTabHtml).toContain("Playthrough Media");
+    expect(playthroughsTabHtml).toContain("Storage Maintenance");
+    expect(playthroughsTabHtml).toContain("Sweep Orphaned Images");
+    expect(playthroughsTabHtml).toContain("Clean Up .bak Backups");
+    expect(playthroughsTabHtml).toContain("Largest Items");
+    expect(playthroughsTabHtml).toContain("Velvet Citadel");
+    expect(playthroughsTabHtml).toContain("Turn 42");
+    expect(playthroughsTabHtml).toContain("Individual Export Format");
+
+    // Verify section ordering: Storage Overview -> Storage Maintenance -> Largest Items -> Individual Export Format
+    const overviewIdx = playthroughsTabHtml.indexOf("Storage Overview");
+    const maintenanceIdx = playthroughsTabHtml.indexOf("Storage Maintenance");
+    const largestIdx = playthroughsTabHtml.indexOf("Largest Items");
+    const exportIdx = playthroughsTabHtml.indexOf("Individual Export Format");
+    expect(overviewIdx).toBeLessThan(maintenanceIdx);
+    expect(maintenanceIdx).toBeLessThan(largestIdx);
+    expect(largestIdx).toBeLessThan(exportIdx);
+
+    const charactersTabHtml = renderToStaticMarkup(
+      createElement(FilesStorageSettingsPanel, {
+        initialStorage: sampleStorage,
+        initialLargestTab: "characters",
+      }),
+    );
+    expect(charactersTabHtml).toContain("Evelyn Thorne");
+    expect(charactersTabHtml).toContain("3 versions");
+    expect(charactersTabHtml).toContain("Original Card Kept");
   });
 });
